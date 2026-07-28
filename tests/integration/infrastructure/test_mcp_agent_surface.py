@@ -83,8 +83,19 @@ async def _capture_surface(state_dir: Path) -> dict[str, Any]:
                 "browse": _normalize_discovery(json.loads(browsed.content[0].text)),
                 "exact": {
                     "kind": exact_payload["kind"],
+                    "view": exact_payload["view"],
                     "capability_id": exact_payload["capability"]["capability_id"],
-                    "invocations": exact_payload["invocations"],
+                    "input_schema_summary": exact_payload["capability"][
+                        "input_schema_summary"
+                    ],
+                    "output_schema_summary": exact_payload["capability"][
+                        "output_schema_summary"
+                    ],
+                    "has_invocation_examples": exact_payload["capability"][
+                        "has_invocation_examples"
+                    ],
+                    "scope_rule": exact_payload["scope_rule"],
+                    "next_views": exact_payload["next_views"],
                 },
             },
         }

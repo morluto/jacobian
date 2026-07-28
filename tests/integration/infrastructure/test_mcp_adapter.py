@@ -750,7 +750,10 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
 
             materialize_description = await client.call_tool(
                 "capability.describe",
-                {"capability_id": "sat.cnf.materialize"},
+                {
+                    "capability_id": "sat.cnf.materialize",
+                    "view": "CONTRACT",
+                },
             )
             materialize = json.loads(materialize_description.content[0].text)
             assert materialize["invocations"][0]["name"] == "finite-coloring-cnf"

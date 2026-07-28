@@ -152,3 +152,76 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
     )
 
     assert set(installation.checker_ids.values()) == {None}
+
+
+def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
+    tmp_path: Path,
+) -> None:
+    polynomial = _installed(
+        (
+            PolynomialGcdRequest,
+            PolynomialResultantRequest,
+            PolynomialDiscriminantRequest,
+            PolynomialSquareFreeRequest,
+        ),
+        (
+            "polynomial.compute.gcd",
+            "polynomial.compute.resultant",
+            "polynomial.compute.discriminant",
+            "polynomial.compute.square_free_decomposition",
+        ),
+        character="e",
+    )
+    matrix = _installed(
+        (
+            RationalMatrixRequest,
+            SquareRationalMatrixRequest,
+            IntegerMatrixRequest,
+        ),
+        (
+            "matrix.normal_form.rref.compute",
+            "matrix.nullspace.compute",
+            "matrix.characteristic_polynomial.compute",
+            "matrix.normal_form.smith.compute",
+        ),
+        character="f",
+    )
+    graph = _installed(
+        (GraphOptimizationRequest,),
+        ("graph.induced_tree.maximum.compute",),
+        character="7",
+    )
+    graph_invariants = _installed(
+        (GraphInvariantRequest,),
+        ("graph.invariant.maximum_matching.compute",),
+        character="8",
+    )
+
+    for name, optional_bundles, expected_graph_id in (
+        (
+            "optimization-only",
+            {"graph": graph},
+            "graph.induced_tree.maximum.compute",
+        ),
+        (
+            "invariants-only",
+            {"graph_invariants": graph_invariants},
+            "graph.invariant.maximum_matching.compute",
+        ),
+    ):
+        registry_path = tmp_path / name / "checkers.sqlite3"
+        registry_path.parent.mkdir()
+        installation = install_exact_domain_checkers(
+            CheckerRegistry(registry_path),
+            polynomial=polynomial,
+            matrix=matrix,
+            authorize=True,
+            **optional_bundles,
+        )
+
+        graph_ids = {
+            capability_id
+            for capability_id in installation.checker_ids
+            if capability_id.startswith("graph.")
+        }
+        assert graph_ids == {expected_graph_id}

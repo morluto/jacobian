@@ -102,20 +102,9 @@ def install_exact_domain_checkers(
     for installed, declaration in (
         *((polynomial, item) for item in POLYNOMIAL_EXACT_REPLAY_CHECKERS),
         *((matrix, item) for item in MATRIX_EXACT_REPLAY_CHECKERS),
-        *(
-            ()
-            if graph is None and graph_invariants is None
-            else tuple(
-                (
-                    _graph_declaration_bundle(
-                        item,
-                        graph=graph,
-                        graph_invariants=graph_invariants,
-                    ),
-                    item,
-                )
-                for item in GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS
-            )
+        *_available_graph_declaration_bundles(
+            graph=graph,
+            graph_invariants=graph_invariants,
         ),
     ):
         declarations_by_id[declaration.capability_id] = declaration
@@ -203,20 +192,15 @@ def install_exact_domain_verification(
         _installed_declaration(matrix, declaration, installation)
         for declaration in MATRIX_EXACT_REPLAY_CHECKERS
     )
-    graph_declarations = (
-        ()
-        if graph is None and graph_invariants is None
-        else tuple(
-            _installed_declaration(
-                _graph_declaration_bundle(
-                    declaration,
-                    graph=graph,
-                    graph_invariants=graph_invariants,
-                ),
-                declaration,
-                installation,
-            )
-            for declaration in GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS
+    graph_declarations = tuple(
+        _installed_declaration(
+            bundle,
+            declaration,
+            installation,
+        )
+        for bundle, declaration in _available_graph_declaration_bundles(
+            graph=graph,
+            graph_invariants=graph_invariants,
         )
     )
     graph_adapters: tuple[CapabilityAdapter, ...] = tuple(
@@ -294,22 +278,21 @@ def _verification_metadata(
     )
 
 
-def _graph_declaration_bundle(
-    declaration: ExactReplayCheckerDeclaration,
+def _available_graph_declaration_bundles(
     *,
     graph: InstalledDomainBundle | None,
     graph_invariants: InstalledDomainBundle | None,
-) -> InstalledDomainBundle:
-    bundle = (
-        graph_invariants
-        if declaration.capability_id.startswith("graph.invariant.")
-        else graph
-    )
-    if bundle is None:
-        raise ValueError(
-            f"missing installed domain bundle for {declaration.capability_id}"
+) -> tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]:
+    available: list[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration]] = []
+    for declaration in GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS:
+        bundle = (
+            graph_invariants
+            if declaration.capability_id.startswith("graph.invariant.")
+            else graph
         )
-    return bundle
+        if bundle is not None:
+            available.append((bundle, declaration))
+    return tuple(available)
 
 
 def _installed_declaration(

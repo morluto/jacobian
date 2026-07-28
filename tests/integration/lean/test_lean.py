@@ -281,7 +281,7 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
         ) as client:
             described = await client.call_tool(
                 "capability.describe",
-                {"capability_id": "lean.check"},
+                {"capability_id": "lean.check", "view": "CONTRACT"},
             )
             descriptor = json.loads(described.content[0].text)
             assert descriptor["invocations"][0]["name"] == "finite-witness-let"

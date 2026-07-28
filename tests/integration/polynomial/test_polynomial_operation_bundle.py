@@ -197,9 +197,13 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
     assert len(groebner_result.artifact_uris) == 3
     obligation = kernel.store.get(groebner_result.artifact_uris[2])
     assert obligation.payload["verification_status"] == "UNVERIFIED"
-    assert obligation.manifest.parents == (
-        groebner_result.artifact_uris[0],
-        groebner_result.artifact_uris[1],
+    assert obligation.manifest.parents == tuple(
+        sorted(
+            (
+                groebner_result.artifact_uris[0],
+                groebner_result.artifact_uris[1],
+            )
+        )
     )
 
     for result in (

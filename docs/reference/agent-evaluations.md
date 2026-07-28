@@ -478,8 +478,11 @@ only after reviewing it:
 ```sh
 uv run python benchmarks/agent_ab.py \
   --case ERDOS-STRAUS-AB-001 \
+  --repetitions 3 \
+  --model gpt-5.6-sol \
+  --reasoning-effort xhigh \
   --execute \
-  --max-model-runs 2
+  --max-model-runs 6
 ```
 
 The initial public case is an executable harness check, not a sufficient

@@ -42,6 +42,27 @@ def test_agent_eval_requires_explicit_case_selection() -> None:
         main([])
 
 
+def test_agent_eval_plan_accepts_xhigh_reasoning(
+    capsys: Any,
+) -> None:
+    main = benchmark.main
+
+    assert (
+        main(
+            [
+                "--case",
+                "ERDOS-STRAUS-AB-001",
+                "--reasoning-effort",
+                "xhigh",
+            ]
+        )
+        == 0
+    )
+
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["reasoning_effort"] == "xhigh"
+
+
 def test_agent_eval_requires_sufficient_manual_run_budget(tmp_path: Path) -> None:
     main = benchmark.main
     case_path = _write_private_case(tmp_path)

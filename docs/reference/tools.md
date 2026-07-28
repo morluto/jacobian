@@ -139,18 +139,29 @@ or mathematical strategy. Start with five results, inspect only the strongest
 one or two relevant contracts, then search again only when useful.
 
 Call `capability.describe` again with one returned `capability_id` to receive
-the default `COMPACT` exact projection. It includes the complete
-validation-equivalent input schema (annotation/default and discriminator
-routing metadata are omitted), a concise output-schema summary, provider
-identity and availability, supported modes, and descriptor-owned invocation
-examples:
+the default `SUMMARY` exact projection. It is for judging fit and contains the
+one-line outcome, modes, tags, provider availability, input/output field
+summaries, and whether descriptor-owned invocation examples are available:
 
 ```json
 {"capability_id": "universal_algebra.search.countermodel"}
 ```
 
-Use `view: "FULL"` when complete output schema, provider configuration,
-licensing, or other audit metadata is required:
+Once the outcome fits, request `view: "CONTRACT"` before invoking. It adds the
+complete validation-equivalent input schema (annotation/default and
+discriminator routing metadata are omitted), concise output/runtime summaries,
+related operations, and descriptor-owned validated invocation examples:
+
+```json
+{
+  "capability_id": "universal_algebra.search.countermodel",
+  "view": "CONTRACT"
+}
+```
+
+`view: "COMPACT"` is retained as a compatibility alias for the previous
+contract projection. Use `view: "FULL"` when complete output schema, provider
+configuration, licensing, or other audit metadata is required:
 
 ```json
 {
@@ -168,6 +179,13 @@ Published invocation examples are validated against the descriptor schema when
 the capability is installed. Domain-owned examples may additionally be
 constructed through the complete Pydantic request model. They illustrate valid
 calls; they do not prescribe a research workflow.
+
+Every exact projection includes a scope rule. An invocation covers only its
+exact supplied input or claim. Additional finite or bounded invocations remain
+finite evidence and do not establish an all-orders, all-parameters, or
+otherwise unbounded conclusion. A supplied claim may itself be universal—for
+example, a formally checked theorem—but bounded examples do not silently widen
+their own scope.
 
 Read `capability://catalog` when a client or operator needs the complete
 machine-readable inventory in one response. Do not infer current installation

@@ -2883,7 +2883,9 @@ def _polynomial_error(
             message=message,
             hint=(
                 "Use the advertised sparse QQ schema with reduced rationals, "
-                "descending monomial order, and matching dimensions."
+                "matching dimensions, unique exponent vectors in descending "
+                "monomial order, and no zero-coefficient terms. Combine duplicate "
+                "exponent vectors before invoking."
             ),
         )
     )

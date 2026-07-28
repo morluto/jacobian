@@ -1,0 +1,386 @@
+{
+  "schema_version": "1",
+  "suite_id": "jacobian.public_postdoc.frontier",
+  "suite_version": "1",
+  "title": "Jacobian public postdoc frontier and capability-gap supplement",
+  "purpose": "PUBLIC_ANSWER_VISIBLE_DIAGNOSTIC",
+  "scored": false,
+  "knowledge_cutoff": "2026-07-28",
+  "portfolio_snapshot": {
+    "catalog_version": "1",
+    "catalog_digest": "sha256:1f5587402bd3b71038ff42d5c2e533eaf05150435dd07fe77a113ebb4a170eeb",
+    "capability_count": 256,
+    "captured_at": "2026-07-28"
+  },
+  "source_inventory": {
+    "local_lead_file": "Math conjecture resources - Resources.tsv",
+    "sha256": "8ba22660e79d39d16020187edf7bf3a603160951ca8d940dad8bd1ba83d572ab",
+    "row_count_including_header": 707,
+    "redistribution": "NOT_REDISTRIBUTED_REFERENCE_ONLY",
+    "selection_method": "The local TSV supplied research leads. Every selected statement and answer-visible oracle was rechecked against an author-maintained paper, pinned formal artifact, or maintained problem record. The supplement deliberately mixes current-portfolio closure cases with cases expected to expose missing symbolic, finite-combinatorial, certificate, or formal-environment operations."
+  },
+  "cases": [
+    {
+      "challenge_id": "jcb-postdoc-013",
+      "title": "Erdős Problem 397: a parametric family of central-binomial collisions",
+      "tier": "COMPOSITIONAL_STRETCH",
+      "domains": [
+        "enumerative combinatorics",
+        "number theory",
+        "symbolic identities"
+      ],
+      "research_context": "Erdős asked whether products of distinct central binomial coefficients can coincide in only finitely many ways. An explicit one-parameter family gives infinitely many collisions and is a sharp test of whether finite exact checks are kept separate from a proof for every parameter.",
+      "problem_statement": "For an integer a >= 2, set c = 8a^2 + 8a + 1. Prove the identity C(2a,a) C(4a+4,2a+2) C(2c,c) = C(2a+2,a+1) C(4a,2a) C(2c+2,c+1). Prove also that the six central-binomial indices a, 2a+2, c, a+1, 2a, c+1 are distinct. Conclude that the conjecture that there are only finitely many such product collisions is false.",
+      "prompt": "Use Jacobian MCP, and do not use web search or external knowledge retrieval, to solve this research-level exact-identity problem. For every integer a >= 2 let c = 8a^2 + 8a + 1. Prove C(2a,a) C(4a+4,2a+2) C(2c,c) = C(2a+2,a+1) C(4a,2a) C(2c+2,c+1), prove that the six indices occurring on the two sides are distinct, and explain why this yields infinitely many collisions. Use Jacobian for exact computation or identity checking where it genuinely helps, preserve exact scope and assurance, and do not present finitely many tested values as the proof for all a.",
+      "sources": [
+        {
+          "url": "https://www.erdosproblems.com/397",
+          "kind": "PRIMARY_PROBLEM",
+          "role": "ORACLE",
+          "accessed": "2026-07-28",
+          "revision": "problem page last edited 2026-01-12, accessed 2026-07-28",
+          "license": "UNKNOWN; REFERENCE ONLY"
+        }
+      ],
+      "oracle": {
+        "answer_visible": true,
+        "expected_conclusion": "DISPROVED",
+        "evidence_class": [
+          "EXACT_COMPUTATION",
+          "HUMAN_SOLUTION"
+        ],
+        "summary": "The displayed identity holds for every a >= 2 after reducing ratios of adjacent central binomial coefficients and substituting c = 8a^2 + 8a + 1. The indices satisfy a < a+1 < 2a < 2a+2 < c < c+1, so varying a gives infinitely many collisions."
+      },
+      "jacobian_fit": {
+        "classification": "PARTIAL",
+        "relevant_capabilities": [
+          "combinatorics.compute.central_binomial",
+          "combinatorics.compute.binomial",
+          "polynomial.expression.normalize",
+          "polynomial.expression_normalization.verify",
+          "polynomial.identity.verify"
+        ],
+        "expected_strength": "Jacobian can compute exact finite instances and can verify a correctly encoded cleared-denominator polynomial identity.",
+        "known_boundary": "The portfolio does not currently own a symbolic central-binomial ratio or hypergeometric-identity outcome. Repeating concrete a values does not establish the parameterized identity."
+      },
+      "success_criteria": [
+        "Derive the identity symbolically for arbitrary a >= 2.",
+        "Use exact finite computations only as corroboration and label their finite scope.",
+        "Prove the strict ordering of all six indices.",
+        "Separate COMPUTED or VERIFIED tool evidence from the agent-authored universal argument."
+      ],
+      "fail_closed_conditions": [
+        "No finite list of checked a values proves the all-a identity.",
+        "A polynomial normalization verifies only the exact encoded relation and does not by itself justify the binomial-ratio reduction.",
+        "Timeout, term-budget exhaustion, or failure to encode the symbolic relation is a non-conclusion."
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE"
+    },
+    {
+      "challenge_id": "jcb-postdoc-014",
+      "title": "Nine-line counterexample to combinatorial determination of Jacobian-relation degree",
+      "tier": "CAPABILITY_GAP_PROBE",
+      "domains": [
+        "algebraic geometry",
+        "commutative algebra",
+        "exact linear algebra"
+      ],
+      "research_context": "Two rational arrangements of nine projective lines have isomorphic intersection lattices but different minimal degrees of Jacobian relations. The decisive computation is an exact graded-kernel calculation, close to Jacobian's polynomial and rational-linear portfolio but not currently exposed as one domain-owned operation.",
+      "problem_statement": "Over Q[x,y,z], let f=(y-z)(y+2z)(2y+z)(x-2y-z)(x-y-2z)(x-y+z)(x+y-z)(x+y+2z)(2x-y-2z) and g=x(x-y)(x+y)(x-y-z)(y+z)z(x-z)(x+y+2z)(x-2y-z). For a homogeneous h of degree 9 define mdr(h) as the least q for which there are degree-q homogeneous polynomials A,B,C, not all zero, with A h_x + B h_y + C h_z = 0. Verify that the labelled line arrangements have the same non-double flats {1,2,3}, {1,4,5}, {1,6,7}, {2,4,6}, {3,5,7}, {3,6,8}, {4,7,9}, {2,5,8,9}, but mdr(f)=4 and mdr(g)=5. Conclude that the stated generalized Terao-type conjecture is false.",
+      "prompt": "Use Jacobian MCP, and do not use web search or external knowledge retrieval, to analyze this exact algebraic-geometry counterexample over Q[x,y,z]. Let f=(y-z)(y+2z)(2y+z)(x-2y-z)(x-y-2z)(x-y+z)(x+y-z)(x+y+2z)(2x-y-2z) and g=x(x-y)(x+y)(x-y-z)(y+z)z(x-z)(x+y+2z)(x-2y-z). For a homogeneous degree-nine h, define mdr(h) as the least q for which degree-q homogeneous A,B,C, not all zero, satisfy A h_x+B h_y+C h_z=0. Verify that the labelled arrangements have the same non-double flats {1,2,3}, {1,4,5}, {1,6,7}, {2,4,6}, {3,5,7}, {3,6,8}, {4,7,9}, {2,5,8,9}, and establish mdr(f)=4 and mdr(g)=5 by exact reasoning or exact graded linear algebra. Explain precisely which parts Jacobian can certify today and which require an agent-authored bridge or a missing capability; do not turn a failed witness search into injectivity or minimality.",
+      "sources": [
+        {
+          "url": "https://arxiv.org/abs/2607.01985",
+          "kind": "PAPER",
+          "role": "ORACLE",
+          "accessed": "2026-07-28",
+          "revision": "arXiv:2607.01985v1",
+          "license": "CC BY 4.0"
+        }
+      ],
+      "oracle": {
+        "answer_visible": true,
+        "expected_conclusion": "DISPROVED",
+        "evidence_class": [
+          "EXACT_COMPUTATION",
+          "HUMAN_SOLUTION"
+        ],
+        "summary": "Both arrangements have non-double flats exactly as listed and weak combinatorics (n2,n3,n4)=(9,7,1). The graded maps Phi_h,q:(Q[x,y,z]_q)^3 -> Q[x,y,z]_(q+8) are injective through q=3 for both; Phi_f,4 has one-dimensional kernel while Phi_g,4 is injective and Phi_g,5 has four-dimensional kernel. Thus mdr(f)=4 and mdr(g)=5."
+      },
+      "jacobian_fit": {
+        "classification": "MISSING",
+        "relevant_capabilities": [
+          "polynomial.expression.normalize",
+          "polynomial.expression_normalization.verify",
+          "matrix.rank.compute",
+          "matrix.rank.verify",
+          "linear.rational_solution.find",
+          "linear.rational_inconsistency.find"
+        ],
+        "expected_strength": "Existing operations can normalize bounded polynomial expressions and check finite rational matrices once the coefficient maps are explicitly constructed.",
+        "known_boundary": "There is no domain-owned multivariate homogeneous-component materializer or Jacobian-syzygy/minimal-degree capability that constructs Phi_h,q, preserves its grading semantics, and certifies the first nonzero kernel."
+      },
+      "success_criteria": [
+        "Check the concurrency pattern from exact 3 by 3 determinants or an equivalent exact argument.",
+        "Establish both existence of the degree-four f syzygy and nonexistence at lower degrees.",
+        "Establish injectivity for g through degree four and a nonzero degree-five kernel.",
+        "Identify a concrete capability gap rather than claiming that generic matrix rank automatically carries the graded polynomial semantics."
+      ],
+      "fail_closed_conditions": [
+        "Failure to find a syzygy is not proof that the graded map is injective.",
+        "A rank claim over floating-point arithmetic is insufficient.",
+        "A generic matrix certificate is not bound to mdr unless the polynomial-to-matrix construction and degree basis are also exact and inspectable."
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE"
+    },
+    {
+      "challenge_id": "jcb-postdoc-015",
+      "title": "Erdős Problem 707: a Sidon set forbidden in every finite perfect difference set",
+      "tier": "CAPABILITY_GAP_PROBE",
+      "domains": [
+        "additive combinatorics",
+        "finite geometry",
+        "modular arithmetic"
+      ],
+      "research_context": "The conjecture that every finite Sidon set extends to a finite perfect difference set was a long-standing Erdős prize problem. The five-element Mian-Chowla prefix is a counterexample, with a reproducible Lean artifact, but Jacobian currently has only low-level finite-set and modular primitives rather than the required design-theoretic obstruction.",
+      "problem_statement": "A finite set A of integers is Sidon if all differences a-b with a,b in A and a != b are distinct. A finite set B is a perfect difference set modulo n if its ordered differences represent every nonzero residue modulo n exactly once. Prove that A={1,2,4,8,13} is Sidon but is not contained in any perfect difference set modulo any positive integer n.",
+      "prompt": "Use Jacobian MCP, and do not use web search or external knowledge retrieval, to investigate the following additive-combinatorics statement. Prove that A={1,2,4,8,13} is Sidon and that for no positive modulus n is A contained in a perfect difference set modulo n. Use exact modular or finite evidence where available. If the installed portfolio cannot certify the universal obstruction, state the missing mathematical operation or formal environment precisely and do not generalize from a bounded modulus search.",
+      "sources": [
+        {
+          "url": "https://arxiv.org/abs/2510.19804",
+          "kind": "PAPER",
+          "role": "ORACLE",
+          "accessed": "2026-07-28",
+          "revision": "arXiv:2510.19804v2",
+          "license": "arXiv license; reference only"
+        },
+        {
+          "url": "https://arxiv.org/abs/2510.19804",
+          "kind": "FORMAL_ARTIFACT",
+          "role": "FORMALIZATION",
+          "accessed": "2026-07-28",
+          "revision": "Erdos707.lean ancillary file in arXiv:2510.19804v2",
+          "license": "arXiv ancillary-file terms; reference only"
+        }
+      ],
+      "oracle": {
+        "answer_visible": true,
+        "expected_conclusion": "DISPROVED",
+        "evidence_class": [
+          "FORMAL_PROOF",
+          "HUMAN_SOLUTION"
+        ],
+        "summary": "The five-element set is Sidon and cannot occur inside a perfect difference set for any modulus. The source gives a projective-plane/polarity obstruction and a reproducible Lean proof; checking finitely many moduli is not the universal argument."
+      },
+      "jacobian_fit": {
+        "classification": "MISSING",
+        "relevant_capabilities": [
+          "finite_set.compute.difference",
+          "finite_set.compute.left_cardinality",
+          "finite_set.decide.subset",
+          "integer.compute.gcd",
+          "lean.check"
+        ],
+        "expected_strength": "Jacobian can check the finite Sidon witness and elementary exact modular facts for supplied moduli.",
+        "known_boundary": "The installed portfolio lacks perfect-difference-set semantics, cyclic-projective-plane constructions, the universal obstruction checker, and the paper's pinned Lean environment."
+      },
+      "success_criteria": [
+        "Verify the Sidon property exactly.",
+        "Give a valid universal obstruction or honestly report that the current portfolio cannot certify it.",
+        "Distinguish a bounded search over n from a theorem for every positive n.",
+        "Name inspectable candidate operations for perfect-difference-set materialization and obstruction checking."
+      ],
+      "fail_closed_conditions": [
+        "No finite upper bound on tested moduli proves non-extendability for all n.",
+        "An unavailable Lean environment or failed elaboration is not evidence for or against the theorem.",
+        "A generic finite-set result does not authorize perfect-difference-set semantics."
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE"
+    },
+    {
+      "challenge_id": "jcb-postdoc-016",
+      "title": "Erdős Problem 364: kernel-checked finite range versus an unbounded powerful-number conjecture",
+      "tier": "CAPABILITY_GAP_PROBE",
+      "domains": [
+        "computational number theory",
+        "formal verification",
+        "bounded exhaustive search"
+      ],
+      "research_context": "The conjecture that three consecutive powerful numbers do not exist remains open, while a separate artifact kernel-checks the finite range through 10^14. This is an unusually clean test of bounded-certificate ingestion, exact scope, and resistance to promoting massive finite verification into an unbounded theorem.",
+      "problem_statement": "Call n powerful when every prime p dividing n also satisfies p^2 divides n. The global conjecture states that no n,n+1,n+2 are all powerful. A public Lean artifact verifies the bounded statement for every n with n+2 <= 10^14. Determine what the installed Jacobian portfolio can independently establish about this bounded statement and explain exactly what, if anything, follows about the unbounded conjecture.",
+      "prompt": "Use Jacobian MCP, and do not use web search or external knowledge retrieval, to assess the powerful-number problem. A number n is powerful if each prime divisor p of n has p^2 dividing n. The public reference result is a kernel-checked proof that no three consecutive powerful numbers occur with n+2 <= 10^14; the unbounded conjecture remains open. Use current capabilities to obtain any honest exact bounded evidence you can, identify what certificate or environment would be required to replay the 10^14 claim, and state explicitly whether the global conjecture has been proved.",
+      "sources": [
+        {
+          "url": "https://github.com/google-deepmind/formal-conjectures/issues/4600",
+          "kind": "FORMAL_ARTIFACT",
+          "role": "REVIEW",
+          "accessed": "2026-07-28",
+          "revision": "issue state observed 2026-07-28 against formal-conjectures e923379",
+          "license": "Apache-2.0 repository"
+        },
+        {
+          "url": "https://github.com/ibrahimmian36/Optio",
+          "kind": "FORMAL_ARTIFACT",
+          "role": "CERTIFICATE",
+          "accessed": "2026-07-28",
+          "revision": "9608da90a9e26be6a41487ec6452c6fa7102f792",
+          "license": "Apache-2.0"
+        }
+      ],
+      "oracle": {
+        "answer_visible": true,
+        "expected_conclusion": "NO_GLOBAL_CONCLUSION_EXPECTED",
+        "evidence_class": [
+          "FORMAL_PROOF",
+          "CHECKABLE_CERTIFICATE",
+          "BOUNDED_NEGATIVE_SEARCH"
+        ],
+        "summary": "The exact bounded statement through 10^14 is kernel-checked by the referenced artifact. Its scope is finite. The global no-three-consecutive-powerful-numbers conjecture remains open, and current Jacobian does not install the artifact's environment or its chunk-certificate replay."
+      },
+      "jacobian_fit": {
+        "classification": "MISSING",
+        "relevant_capabilities": [
+          "integer.compute.prime_factorization",
+          "number_theory.compute.factorial_valuation",
+          "finite.coverage.verify",
+          "lean.check"
+        ],
+        "expected_strength": "Jacobian can classify individually supplied small integers from exact factorizations and understands bounded finite-coverage semantics.",
+        "known_boundary": "It lacks a powerful-number predicate/batch enumerator, the 3,524-chunk certificate format and checker, and the pinned external Lean environment. More finite checks cannot increase the conclusion beyond their declared bound."
+      },
+      "success_criteria": [
+        "Keep the 10^14 result and the global conjecture as separate claims.",
+        "Report only exact finite evidence actually produced or replayed.",
+        "Identify the certificate format, checker, or environment gap blocking independent replay.",
+        "Do not label the global conjecture proved."
+      ],
+      "fail_closed_conditions": [
+        "The bounded theorem does not imply the unbounded conjecture.",
+        "An uncertified computation beyond 10^14 does not supersede the kernel-checked scope.",
+        "Timeout, incomplete enumeration, or unavailable external artifacts remain non-conclusions."
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE"
+    },
+    {
+      "challenge_id": "jcb-postdoc-017",
+      "title": "Exact LP certificate for the pairwise-independent correlation-gap counterexample",
+      "tier": "CLOSURE_CANDIDATE",
+      "domains": [
+        "submodular optimization",
+        "probability",
+        "exact linear programming"
+      ],
+      "research_context": "A five-element coverage function and rational marginal vector violate a proposed 4/3 upper bound. The counterexample has a tiny primal witness and a 32-constraint exact dual certificate, making it suitable for current rational optimization and finite-coverage capabilities.",
+      "problem_statement": "Let N={1,2,3,4,5}. Elements cover E1={A,B}, E2={A,B,C,D}, E3={C,D}, E4={A,C}, E5={B,D}, and f(S) is the number of covered features. Let x=(3/10,7/20,3/10,7/20,7/20). For distributions with these marginals let f+(x) be the maximum E[f(S)]; for pairwise-independent distributions add constraints P(i,j in S)=x_i x_j and call the optimum f++(x). Verify f+(x)=4 using masses 3/10 on {1,3}, 7/20 on {2}, and 7/20 on {4,5}. Verify the dual upper certificate lambda0=1/2; lambda1=lambda3=lambda4=lambda5=3/2; lambda2=7/2; lambda12=lambda23=-1; lambda24=lambda25=-3/2; lambda13=lambda45=1/2; lambda14=lambda15=lambda34=lambda35=-1/2; all unspecified pair coefficients zero. Prove lambda(S)>=f(S) for all 32 subsets, compute its objective 479/160, and conclude f+(x)/f++(x) >= 640/479 > 4/3.",
+      "prompt": "Use Jacobian MCP, and do not use web search or external knowledge retrieval, to verify this exact five-element correlation-gap counterexample. Check the primal distribution and its marginals, check every one of the 32 dual subset inequalities with exact rationals, compute the dual objective 479/160, and prove 640/479 > 4/3. Use exact optimization or finite-coverage capabilities where useful, preserve the binding between the listed coverage function and the LP, and report assurance and any remaining agent-authored semantic bridge.",
+      "sources": [
+        {
+          "url": "https://arxiv.org/abs/2606.19663",
+          "kind": "PAPER",
+          "role": "ORACLE",
+          "accessed": "2026-07-28",
+          "revision": "arXiv:2606.19663v1",
+          "license": "CC BY 4.0"
+        }
+      ],
+      "oracle": {
+        "answer_visible": true,
+        "expected_conclusion": "DISPROVED",
+        "evidence_class": [
+          "EXACT_COMPUTATION",
+          "CHECKABLE_CERTIFICATE",
+          "HUMAN_SOLUTION"
+        ],
+        "summary": "The three primal masses have the required marginals and every support set covers all four features, so f+=4. The listed quadratic dual dominates f on all 32 subsets and has objective 479/160. Therefore the ratio is at least 640/479, which is strictly larger than 4/3."
+      },
+      "jacobian_fit": {
+        "classification": "DIRECT",
+        "relevant_capabilities": [
+          "optimization.linear.rational_optimum.compute",
+          "linear.rational_solution.verify",
+          "finite.coverage.verify",
+          "rational.decide.less_than"
+        ],
+        "expected_strength": "The instance is finite and rational; current exact LP, rational comparison, and finite-coverage operations should produce decisive intermediate evidence.",
+        "known_boundary": "Generic LP evidence still needs an inspectable encoding that binds variables and constraints to the coverage-function and pairwise-independence semantics. Solver status alone is not VERIFIED."
+      },
+      "success_criteria": [
+        "Check the three-point primal distribution and exact marginals.",
+        "Check all 32 dual inequalities without sampling subsets.",
+        "Compute 479/160 and the strict comparison 640/479 > 4/3 exactly.",
+        "Keep generic LP verification and the domain-level counterexample binding distinct."
+      ],
+      "fail_closed_conditions": [
+        "Floating-point feasibility or objective values are insufficient.",
+        "Checking fewer than all 32 subsets does not certify dual feasibility.",
+        "A generic LP certificate does not by itself prove that the encoded objective equals the stated correlation-gap quantity."
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE"
+    },
+    {
+      "challenge_id": "jcb-postdoc-018",
+      "title": "WOWII Conjecture 18: detect a semantic mismatch between two graph invariants",
+      "tier": "COMPOSITIONAL_STRETCH",
+      "domains": [
+        "extremal graph theory",
+        "formalization auditing",
+        "exact graph invariants"
+      ],
+      "research_context": "A solved graph conjecture was formalized with set eccentricity in place of the source's maximum distance among maximum-degree vertices. A six-vertex graph falsifies the formalized statement while satisfying the intended one. This tests whether capability descriptions and outputs preserve the exact invariant being computed.",
+      "problem_statement": "Let G have vertices {0,1,2,3,4,5} and edges {03,04,14,24,34,35}. Let M be the maximum-degree vertices. Define dist_max(M)=max{dist(u,v):u,v in M}, with value 0 for a singleton, and eccSet(M)=max{dist(v,M):v in V}. Let alpha(G) be the independence number and b(G) the maximum order of an induced bipartite subgraph. Compute M, alpha(G), b(G), dist_max(M), and eccSet(M). Decide the truth of alpha(G)+ceil(sqrt(eccSet(M))) <= b(G) and alpha(G)+ceil(sqrt(dist_max(M))) <= b(G).",
+      "prompt": "Use Jacobian MCP, and do not use web search or external knowledge retrieval, to audit this exact six-vertex graph statement. Construct G from edges 03,04,14,24,34,35; compute the maximum-degree set M, alpha(G), the maximum induced-bipartite order b(G), dist_max(M), and set eccentricity eccSet(M). Evaluate both inequalities exactly and explain why substituting eccSet for dist_max changes the theorem. Use only capabilities whose published semantics match the requested invariant; if one invariant is missing, bridge it transparently rather than relabeling a nearby result.",
+      "sources": [
+        {
+          "url": "https://github.com/google-deepmind/formal-conjectures/issues/4601",
+          "kind": "FORMAL_ARTIFACT",
+          "role": "REVIEW",
+          "accessed": "2026-07-28",
+          "revision": "issue state observed 2026-07-28",
+          "license": "Apache-2.0 repository"
+        },
+        {
+          "url": "https://github.com/google-deepmind/formal-conjectures/pull/4602",
+          "kind": "FORMAL_ARTIFACT",
+          "role": "FORMALIZATION",
+          "accessed": "2026-07-28",
+          "revision": "0f51b2f8f11ffa6688952b2158eb3a8f1d6d02e6",
+          "license": "Apache-2.0"
+        }
+      ],
+      "oracle": {
+        "answer_visible": true,
+        "expected_conclusion": "DISPROVED",
+        "evidence_class": [
+          "EXPLICIT_WITNESS",
+          "EXACT_COMPUTATION",
+          "FORMAL_PROOF"
+        ],
+        "summary": "The graph has M={4}, alpha(G)=4, b(G)=5, eccSet(M)=2, and dist_max(M)=0. Thus 4+ceil(sqrt(2))=6 is not <=5, while 4+ceil(sqrt(0))=4 is <=5. The counterexample targets the misformalized invariant, not the intended solved conjecture."
+      },
+      "jacobian_fit": {
+        "classification": "PARTIAL",
+        "relevant_capabilities": [
+          "graph.construct.explicit",
+          "graph.compute.properties",
+          "graph.invariant.independence_number.compute",
+          "graph.induced_bipartite.maximum.compute",
+          "graph.invariant.diameter.compute"
+        ],
+        "expected_strength": "Current graph capabilities can materialize the exact graph and compute the two extremal orders with witnesses.",
+        "known_boundary": "There is no dedicated set-eccentricity or dist_max-on-a-designated-set capability. A graph radius or diameter result must not be relabeled as either requested invariant."
+      },
+      "success_criteria": [
+        "Materialize the exact labelled graph rather than an unbound isomorphic substitute.",
+        "Produce witnesses for alpha=4 and b=5 or equivalent exhaustive evidence.",
+        "Compute both set-based distance invariants under their exact definitions.",
+        "State that the false formalized inequality and the true intended inequality are different claims."
+      ],
+      "fail_closed_conditions": [
+        "Graph diameter, radius, set eccentricity, and maximum internal distance are not interchangeable.",
+        "A witness of size four or five alone does not prove optimality.",
+        "A formal counterexample to the wrong statement does not disprove the corrected source theorem."
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE"
+    }
+  ]
+}

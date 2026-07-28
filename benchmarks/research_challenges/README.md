@@ -4,7 +4,21 @@ This directory contains answer-visible, research-level diagnostic cases for
 testing how an agent uses Jacobian. The cases are deliberately public and
 must not be reported as held-out model evaluations.
 
-`public_postdoc_v1.json` is the first curated suite. Each case contains:
+`public_postdoc_v1.json` is the first curated suite.
+`public_postdoc_frontier_v1.json` adds six cross-domain cases selected after the
+portfolio-hardening runs:
+
+- one current-portfolio closure candidate;
+- two compositional stretches; and
+- three deliberate capability-gap probes.
+
+The frontier supplement includes parameterized identities, exact graded
+syzygies, finite design obstructions, bounded formal certificates, exact
+probabilistic LP evidence, and graph-formalization semantic auditing. It is a
+separate versioned suite so the original twelve-case sample and its recorded
+runs remain stable.
+
+Each case contains:
 
 - a self-contained mathematical statement and copy-ready prompt;
 - primary-source provenance, including immutable revisions when available;

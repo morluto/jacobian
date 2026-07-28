@@ -3091,7 +3091,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--model")
     parser.add_argument(
         "--reasoning-effort",
-        choices=("low", "medium", "high"),
+        choices=("low", "medium", "high", "xhigh"),
         default="medium",
     )
     parser.add_argument("--codex-command", default="codex")

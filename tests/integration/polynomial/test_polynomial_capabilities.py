@@ -188,6 +188,39 @@ def test_polynomial_identity_verifies_a_difference(tmp_path: Path) -> None:
     assert record.payload["relation_id"] is None
 
 
+def test_polynomial_identity_duplicate_terms_return_actionable_recovery(
+    tmp_path: Path,
+) -> None:
+    kernel = JacobianKernel(tmp_path, install_references=True)
+
+    result = kernel.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input={
+                "variables": ["x"],
+                "left": {
+                    "terms": [
+                        {
+                            "coefficient": {"num": "1", "den": "1"},
+                            "exponents": [1],
+                        },
+                        {
+                            "coefficient": {"num": "-1", "den": "1"},
+                            "exponents": [1],
+                        },
+                    ]
+                },
+                "right": {"terms": []},
+            },
+        )
+    )
+
+    assert result.execution.status.value == "ERROR"
+    assert result.diagnostics[0].code == "INVALID_POLYNOMIAL_IDENTITY_REQUEST"
+    assert "Combine duplicate exponent vectors" in result.diagnostics[0].hint
+
+
 def test_polynomial_identity_preserves_checker_rejection_as_unknown(
     tmp_path: Path,
 ) -> None:

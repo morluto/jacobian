@@ -490,10 +490,11 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             described = await client.call_tool(
-                "capability.describe", {"capability_id": "knowledge.search"}
+                "capability.describe",
+                {"capability_id": "knowledge.search", "view": "CONTRACT"},
             )
             contract = json.loads(described.content[0].text)
-            assert contract["view"] == "COMPACT"
+            assert contract["view"] == "CONTRACT"
             assert contract["capability"]["capability_id"] == "knowledge.search"
             assert contract["capability"]["provider_runtime"]["digest"].startswith(
                 "sha256:"
@@ -519,7 +520,10 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
 
             matching_description = await client.call_tool(
                 "capability.describe",
-                {"capability_id": ("graph.invariant.maximum_matching.compute")},
+                {
+                    "capability_id": ("graph.invariant.maximum_matching.compute"),
+                    "view": "CONTRACT",
+                },
             )
             matching_contract = json.loads(matching_description.content[0].text)
             assert matching_contract["capability"]["version"] == "2"
@@ -550,16 +554,30 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
-def test_mcp_exact_description_defaults_to_compact_with_full_audit_view(
+def test_mcp_exact_description_layers_summary_contract_and_full_views(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            compact_result = await client.call_tool(
+            summary_result = await client.call_tool(
                 "capability.describe",
                 {"capability_id": "polynomial.expression.normalize"},
+            )
+            contract_result = await client.call_tool(
+                "capability.describe",
+                {
+                    "capability_id": "polynomial.expression.normalize",
+                    "view": "CONTRACT",
+                },
+            )
+            compact_result = await client.call_tool(
+                "capability.describe",
+                {
+                    "capability_id": "polynomial.expression.normalize",
+                    "view": "COMPACT",
+                },
             )
             full_result = await client.call_tool(
                 "capability.describe",
@@ -568,27 +586,41 @@ def test_mcp_exact_description_defaults_to_compact_with_full_audit_view(
                     "view": "FULL",
                 },
             )
+            summary = json.loads(summary_result.content[0].text)
+            contract = json.loads(contract_result.content[0].text)
             compact = json.loads(compact_result.content[0].text)
             full = json.loads(full_result.content[0].text)
 
+            assert summary["view"] == "SUMMARY"
+            assert "input_schema" not in summary["capability"]
+            assert summary["capability"]["input_schema_summary"]["type"] == "object"
+            assert summary["capability"]["has_invocation_examples"] is True
+            assert "invocations" not in summary
+            assert "CONTRACT" in summary["next_views"]
+            assert "all-orders" in summary["scope_rule"]["bounded_repetition"]
+            assert contract["view"] == "CONTRACT"
+            assert contract["capability"]["input_schema"]["type"] == "object"
+            assert contract["invocations"]
             assert compact["view"] == "COMPACT"
-            assert compact["capability"]["input_schema"]["type"] == "object"
-            assert compact["invocations"]
-            assert compact["invocations"][0]["name"]
+            assert compact["capability"] == contract["capability"]
+            assert compact["invocations"] == contract["invocations"]
             assert full["view"] == "FULL"
             assert "output_schema" in full["capability"]
             assert "configuration" in full["capability"]["provider_runtime"]
             CapabilityDescriptor.model_validate(full["capability"])
-            payload = compact["invocations"][0]["arguments"]["payload"]
-            compact_validator = Draft202012Validator(
-                compact["capability"]["input_schema"]
+            payload = contract["invocations"][0]["arguments"]["payload"]
+            contract_validator = Draft202012Validator(
+                contract["capability"]["input_schema"]
             )
             full_validator = Draft202012Validator(full["capability"]["input_schema"])
-            assert compact_validator.is_valid(payload)
+            assert contract_validator.is_valid(payload)
             assert full_validator.is_valid(payload)
-            assert not compact_validator.is_valid({})
+            assert not contract_validator.is_valid({})
             assert not full_validator.is_valid({})
-            assert len(compact_result.content[0].text) * 100 < (
+            assert len(summary_result.content[0].text) * 100 < (
+                len(contract_result.content[0].text) * 40
+            )
+            assert len(contract_result.content[0].text) * 100 < (
                 len(full_result.content[0].text) * 51
             )
 

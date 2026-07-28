@@ -11,6 +11,8 @@ REPO_ROOT = Path(__file__).parents[2]
 CORPUS_DIR = REPO_ROOT / "benchmarks" / "research_challenges"
 SCHEMA_PATH = CORPUS_DIR / "public_postdoc.schema.json"
 SUITE_PATH = CORPUS_DIR / "public_postdoc_v1.json"
+FRONTIER_SUITE_PATH = CORPUS_DIR / "public_postdoc_frontier_v1.json"
+SUITE_PATHS = (SUITE_PATH, FRONTIER_SUITE_PATH)
 PROMPT_PREFIX = (
     "Use Jacobian MCP, and do not use web search or external knowledge retrieval,"
 )
@@ -22,43 +24,52 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def test_public_postdoc_suite_conforms_to_its_schema() -> None:
     schema = _read_json(SCHEMA_PATH)
-    suite = _read_json(SUITE_PATH)
     Draft202012Validator.check_schema(schema)
 
-    errors = sorted(
-        Draft202012Validator(
-            schema,
-            format_checker=FormatChecker(),
-        ).iter_errors(suite),
-        key=lambda error: tuple(str(part) for part in error.absolute_path),
-    )
+    for suite_path in SUITE_PATHS:
+        errors = sorted(
+            Draft202012Validator(
+                schema,
+                format_checker=FormatChecker(),
+            ).iter_errors(_read_json(suite_path)),
+            key=lambda error: tuple(str(part) for part in error.absolute_path),
+        )
 
-    assert not errors, "\n".join(
-        f"{'/'.join(str(part) for part in error.absolute_path)}: {error.message}"
-        for error in errors
-    )
+        assert not errors, f"{suite_path.name}\n" + "\n".join(
+            f"{'/'.join(str(part) for part in error.absolute_path)}: {error.message}"
+            for error in errors
+        )
 
 
 def test_public_postdoc_suite_is_explicitly_answer_visible_and_unscored() -> None:
-    suite = _read_json(SUITE_PATH)
+    for suite_path in SUITE_PATHS:
+        suite = _read_json(suite_path)
 
-    assert suite["purpose"] == "PUBLIC_ANSWER_VISIBLE_DIAGNOSTIC"
-    assert suite["scored"] is False
-    assert all(case["oracle"]["answer_visible"] for case in suite["cases"])
-    assert all(
-        case["contamination"] == "PUBLIC_ANSWER_VISIBLE" for case in suite["cases"]
-    )
+        assert suite["purpose"] == "PUBLIC_ANSWER_VISIBLE_DIAGNOSTIC"
+        assert suite["scored"] is False
+        assert all(case["oracle"]["answer_visible"] for case in suite["cases"])
+        assert all(
+            case["contamination"] == "PUBLIC_ANSWER_VISIBLE" for case in suite["cases"]
+        )
 
 
 def test_public_postdoc_prompts_do_not_disclose_evaluator_sources() -> None:
-    suite = _read_json(SUITE_PATH)
+    for suite_path in SUITE_PATHS:
+        suite = _read_json(suite_path)
+
+        for case in suite["cases"]:
+            prompt = case["prompt"]
+            assert prompt.startswith(PROMPT_PREFIX)
+            assert "http://" not in prompt
+            assert "https://" not in prompt
+            assert all(source["url"] not in prompt for source in case["sources"])
+
+
+def test_public_postdoc_frontier_prompts_do_not_require_hidden_context() -> None:
+    suite = _read_json(FRONTIER_SUITE_PATH)
 
     for case in suite["cases"]:
-        prompt = case["prompt"]
-        assert prompt.startswith(PROMPT_PREFIX)
-        assert "http://" not in prompt
-        assert "https://" not in prompt
-        assert all(source["url"] not in prompt for source in case["sources"])
+        assert "given in the problem statement" not in case["prompt"].lower()
 
 
 def test_public_postdoc_case_ids_and_tier_mix_are_stable() -> None:
@@ -72,6 +83,20 @@ def test_public_postdoc_case_ids_and_tier_mix_are_stable() -> None:
         "CLOSURE_CANDIDATE": 3,
         "COMPOSITIONAL_STRETCH": 4,
         "CAPABILITY_GAP_PROBE": 5,
+    }
+
+
+def test_public_postdoc_frontier_ids_and_tier_mix_are_stable() -> None:
+    suite = _read_json(FRONTIER_SUITE_PATH)
+    cases = suite["cases"]
+    ids = [case["challenge_id"] for case in cases]
+
+    assert ids == [f"jcb-postdoc-{number:03d}" for number in range(13, 19)]
+    assert len({case["title"] for case in cases}) == len(cases)
+    assert Counter(case["tier"] for case in cases) == {
+        "CLOSURE_CANDIDATE": 1,
+        "COMPOSITIONAL_STRETCH": 2,
+        "CAPABILITY_GAP_PROBE": 3,
     }
 
 

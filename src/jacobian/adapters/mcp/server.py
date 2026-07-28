@@ -64,6 +64,15 @@ from jacobian.contracts.workspaces import (
 
 _LOGGER = logging.getLogger(__name__)
 CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
+CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "COMPACT", "FULL"]
+_CAPABILITY_SCOPE_RULE = {
+    "conclusion_scope": "Only the exact supplied input or claim is covered.",
+    "bounded_repetition": (
+        "Additional finite or bounded invocations remain finite evidence; they do "
+        "not establish an all-orders, all-parameters, or otherwise unbounded "
+        "conclusion."
+    ),
+}
 
 _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
     "sat.cnf.materialize": (
@@ -194,14 +203,50 @@ def _output_schema_summary(schema: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
+def _input_schema_summary(schema: dict[str, Any]) -> dict[str, Any]:
+    properties = schema.get("properties")
+    return {
+        "type": schema.get("type"),
+        "required": schema.get("required", []),
+        "property_names": sorted(properties) if isinstance(properties, dict) else [],
+    }
+
+
 def _capability_descriptor_view(
     descriptor: CapabilityDescriptor,
     *,
-    view: Literal["COMPACT", "FULL"],
+    view: CapabilityDescriptionView,
 ) -> dict[str, Any]:
     if view == "FULL":
         return descriptor.model_dump(mode="json")
     runtime = descriptor.provider_runtime
+    if view == "SUMMARY":
+        runtime_summary = (
+            runtime.model_dump(
+                mode="json",
+                exclude_none=True,
+                include={
+                    "availability",
+                    "version",
+                    "diagnostic",
+                },
+            )
+            if runtime is not None
+            else None
+        )
+        return {
+            "capability_id": descriptor.capability_id,
+            "version": descriptor.version,
+            "title": descriptor.title,
+            "description": descriptor.description,
+            "provider": descriptor.provider,
+            "provider_runtime": runtime_summary,
+            "modes": [mode.value for mode in descriptor.modes],
+            "tags": list(descriptor.tags),
+            "input_schema_summary": _input_schema_summary(descriptor.input_schema),
+            "output_schema_summary": _output_schema_summary(descriptor.output_schema),
+            "has_invocation_examples": bool(descriptor.invocation_examples),
+        }
     runtime_summary = (
         runtime.model_dump(
             mode="json",
@@ -786,16 +831,19 @@ def create_server(
             ),
         ] = None,
         view: Annotated[
-            Literal["COMPACT", "FULL"],
+            CapabilityDescriptionView,
             Field(
                 description=(
-                    "Exact-lookup projection. COMPACT is the agent-facing default "
-                    "with the complete input schema and a concise output/runtime "
-                    "summary. FULL returns the complete installed descriptor for "
-                    "audit or client generation. Omit for discovery."
+                    "Exact-lookup projection. SUMMARY is the small agent-facing "
+                    "default for judging fit. CONTRACT adds the validation-equivalent "
+                    "input schema, runtime identity, related operations, and validated "
+                    "invocation examples; request it before invoking. COMPACT is the "
+                    "legacy alias for the previous contract projection. FULL returns "
+                    "the complete installed descriptor for audit or client generation. "
+                    "Omit for discovery."
                 )
             ),
-        ] = "COMPACT",
+        ] = "SUMMARY",
         ctx: Context[AppState, Any] | None = None,
     ) -> dict[str, Any]:
         active_kernel = _kernel(ctx)
@@ -848,7 +896,21 @@ def create_server(
             "policy_profile": capability_catalog.policy_profile,
             "policy_digest": capability_catalog.policy_digest,
             "capability": _capability_descriptor_view(descriptor, view=view),
-            "invocations": [
+            "scope_rule": _CAPABILITY_SCOPE_RULE,
+        }
+        if view == "SUMMARY":
+            response["next_views"] = {
+                "CONTRACT": (
+                    "Request before invocation for the validation-equivalent input "
+                    "schema and validated examples."
+                ),
+                "FULL": (
+                    "Request only for complete output schema, provider configuration, "
+                    "licensing, or audit metadata."
+                ),
+            }
+        else:
+            response["invocations"] = [
                 {
                     "name": example.name,
                     **(
@@ -866,10 +928,15 @@ def create_server(
                     },
                 }
                 for example in descriptor.invocation_examples
-            ],
-        }
-        response.update(_capability_inspection_extensions(capability_id, descriptors))
-        if capability_id == "lean.check" and active_kernel.lean_checkers:
+            ]
+            response.update(
+                _capability_inspection_extensions(capability_id, descriptors)
+            )
+        if (
+            view != "SUMMARY"
+            and capability_id == "lean.check"
+            and active_kernel.lean_checkers
+        ):
             response["cache"] = {
                 "key": "exact content-addressed certificate and active checker digest",
                 "max_entries": 128,

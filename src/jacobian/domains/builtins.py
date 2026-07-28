@@ -14,6 +14,7 @@ from jacobian.domains.number_theory import NUMBER_THEORY_BUNDLE
 from jacobian.domains.optimization import RATIONAL_OPTIMIZATION_BUNDLE
 from jacobian.domains.polynomial import POLYNOMIAL_BUNDLE
 from jacobian.domains.probability import FINITE_PROBABILITY_BUNDLE
+from jacobian.domains.projective_geometry import PROJECTIVE_GEOMETRY_BUNDLE
 from jacobian.domains.sequences import SEQUENCE_BUNDLE
 
 BUILTIN_DOMAIN_BUNDLES = (
@@ -23,6 +24,7 @@ BUILTIN_DOMAIN_BUNDLES = (
     FINITE_SET_BUNDLE,
     SEQUENCE_BUNDLE,
     GEOMETRY_BUNDLE,
+    PROJECTIVE_GEOMETRY_BUNDLE,
     GRAPH_OPTIMIZATION_BUNDLE,
     GRAPH_INVARIANT_BUNDLE,
     MATRIX_BUNDLE,

@@ -106,6 +106,7 @@ class ComputedOperationFactory:
         operation: Callable[[ContractModel], ContractModel],
         *tags: str,
         invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+        relation_id: str | None = None,
     ) -> ComputedOperation[RequestT, ResultT]:
         def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
             try:
@@ -120,7 +121,7 @@ class ComputedOperationFactory:
             request_model=request_model,
             result_model=result_model,
             implementation=implementation,
-            relation_id=_relation_id(capability_id),
+            relation_id=relation_id or _relation_id(capability_id),
             tags=tags,
             invocation_examples=invocation_examples,
         )

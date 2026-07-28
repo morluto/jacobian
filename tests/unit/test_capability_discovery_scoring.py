@@ -34,8 +34,8 @@ def test_discovery_phrase_matching_respects_token_boundaries() -> None:
         output_schema={"type": "object"},
     )
 
-    graph_score, graph_matches, _ = _discovery_relevance(descriptor, "graph")
-    phrase_score, phrase_matches, _ = _discovery_relevance(
+    graph_score, graph_matches, *_ = _discovery_relevance(descriptor, "graph")
+    phrase_score, phrase_matches, *_ = _discovery_relevance(
         descriptor,
         "paragraph of structured text",
     )

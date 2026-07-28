@@ -135,7 +135,13 @@ stable ID order. Each response includes stable catalog and operator-policy
 digests and is bounded to 16 KiB; when `next_cursor` is present, pass it back
 with the same filters and limit to continue. Results report `matched_on` and
 `matched_terms`; their deterministic ranking is retrieval, not a recommendation
-or mathematical strategy. Start with five results, inspect only the strongest
+or mathematical strategy. Query results also report a deterministic
+`relevance_score`, `query_coverage_milli`, and per-match `lexical_fit`. The
+result-level `portfolio_fit` distinguishes strong candidates, only weak lexical
+matches, and no lexical matches. These are transparent descriptor-retrieval
+signals, not a proof that an operation is mathematically suitable or absent.
+In particular, top-N ordering among `WEAK_LEXICAL_MATCH` entries must not be
+treated as capability fit. Start with five results, inspect only the strongest
 one or two relevant contracts, then search again only when useful.
 
 Call `capability.describe` again with one returned `capability_id` to receive

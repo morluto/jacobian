@@ -41,6 +41,7 @@ def polynomial_operation[
     operation: Callable[[ContractModel], ContractModel],
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    relation_id: str | None = None,
 ) -> ComputedOperation[RequestT, ResultT]:
     """Declare an exact polynomial operation with bounded-output failure semantics."""
 
@@ -53,6 +54,7 @@ def polynomial_operation[
         operation,
         *tags,
         invocation_examples=invocation_examples,
+        relation_id=relation_id,
     )
     implementation = declared.implementation
 

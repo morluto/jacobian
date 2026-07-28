@@ -331,7 +331,14 @@ class CapabilityService:
                 normalized_domain,
             ):
                 continue
-            score, matched_on, matched_terms = _discovery_relevance(
+            (
+                score,
+                matched_on,
+                matched_terms,
+                query_term_count,
+                query_coverage_milli,
+                lexical_fit,
+            ) = _discovery_relevance(
                 descriptor,
                 request.query,
             )
@@ -349,6 +356,10 @@ class CapabilityService:
                         matched_on=matched_on,
                         matched_terms=matched_terms,
                         has_invocation_examples=bool(descriptor.invocation_examples),
+                        relevance_score=score,
+                        query_term_count=query_term_count,
+                        query_coverage_milli=query_coverage_milli,
+                        lexical_fit=lexical_fit,
                     ),
                 )
             )
@@ -375,6 +386,36 @@ class CapabilityService:
             if page and start + len(page) < total_matches
             else None
         )
+        portfolio_fit: Literal[
+            "UNFILTERED",
+            "STRONG_CANDIDATES_FOUND",
+            "ONLY_WEAK_LEXICAL_MATCHES",
+            "NO_LEXICAL_MATCHES",
+        ]
+        if request.query is None:
+            portfolio_fit = "UNFILTERED"
+            portfolio_fit_basis = (
+                "No query was supplied; results are an unranked installed-portfolio "
+                "listing and make no suitability claim."
+            )
+        elif not ranked:
+            portfolio_fit = "NO_LEXICAL_MATCHES"
+            portfolio_fit_basis = (
+                "No installed descriptor shared a meaningful query term. This is "
+                "not proof that the mathematical outcome is impossible."
+            )
+        elif any(match.lexical_fit == "STRONG_CANDIDATE" for _, match in ranked):
+            portfolio_fit = "STRONG_CANDIDATES_FOUND"
+            portfolio_fit_basis = (
+                "At least one installed descriptor has substantial lexical query "
+                "coverage; inspect its contract before treating it as suitable."
+            )
+        else:
+            portfolio_fit = "ONLY_WEAK_LEXICAL_MATCHES"
+            portfolio_fit_basis = (
+                "Installed results share only weak lexical evidence with the query. "
+                "Do not infer capability fit from top-N ordering alone."
+            )
         return CapabilityDiscoveryResult(
             query=request.query,
             domain=normalized_domain,
@@ -384,6 +425,8 @@ class CapabilityService:
             truncated=next_cursor is not None,
             next_cursor=next_cursor,
             available_domains=available_domains,
+            portfolio_fit=portfolio_fit,
+            portfolio_fit_basis=portfolio_fit_basis,
         )
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
@@ -772,12 +815,19 @@ def _token_set(value: str) -> frozenset[str]:
 def _discovery_relevance(
     descriptor: CapabilityDescriptor,
     query: str | None,
-) -> tuple[int, tuple[str, ...], tuple[str, ...]]:
+) -> tuple[
+    int,
+    tuple[str, ...],
+    tuple[str, ...],
+    int,
+    int,
+    Literal["STRONG_CANDIDATE", "WEAK_LEXICAL_MATCH"],
+]:
     if query is None:
-        return 0, (), ()
+        return 0, (), (), 0, 0, "WEAK_LEXICAL_MATCH"
     query_terms = _discovery_terms(query)
     if not query_terms:
-        return 0, (), ()
+        return 0, (), (), 0, 0, "WEAK_LEXICAL_MATCH"
     identifier_terms = _token_set(descriptor.capability_id)
     tag_terms = frozenset(term for tag in descriptor.tags for term in _token_set(tag))
     title_terms = _token_set(descriptor.title)
@@ -803,7 +853,23 @@ def _discovery_relevance(
     if normalized_query and f"-{normalized_query}-" in f"-{normalized_text}-":
         score += 20
         matched_on.append("phrase")
-    return score, tuple(matched_on), tuple(sorted(matched_terms))
+    query_term_count = len(query_terms)
+    query_coverage_milli = (
+        1000 * len(matched_terms) // query_term_count if query_term_count else 0
+    )
+    strong = "phrase" in matched_on or (
+        query_coverage_milli >= 500
+        and (len(matched_terms) >= 2 or query_term_count == 1)
+        and any(label in matched_on for label in ("capability_id", "tags", "title"))
+    )
+    return (
+        score,
+        tuple(matched_on),
+        tuple(sorted(matched_terms)),
+        query_term_count,
+        query_coverage_milli,
+        "STRONG_CANDIDATE" if strong else "WEAK_LEXICAL_MATCH",
+    )
 
 
 def _normalize_domain(value: str) -> str:

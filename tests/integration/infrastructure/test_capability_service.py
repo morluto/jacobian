@@ -380,9 +380,49 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
     assert first.matches[0].matched_on == ("tags",)
     assert first.matches[0].matched_terms == ("counterexample",)
     assert first.matches[0].has_invocation_examples is True
+    assert first.matches[0].lexical_fit == "WEAK_LEXICAL_MATCH"
+    assert first.portfolio_fit == "ONLY_WEAK_LEXICAL_MATCHES"
     assert first.domain == "fixture_algebra"
     assert "fixture_algebra" in first.available_domains
     assert "fixture_graph" in first.available_domains
+
+
+def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
+    tmp_path: Path,
+) -> None:
+    kernel = JacobianKernel(tmp_path)
+
+    strong = kernel.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="graded Jacobian syzygy minimum degree",
+            limit=3,
+        )
+    )
+    assert strong.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert strong.matches[0].capability_id == (
+        "polynomial.jacobian_syzygy.minimum_degree.compute"
+    )
+    assert strong.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert strong.matches[0].query_coverage_milli == 1000
+
+    weak = kernel.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="continuous Gaussian Wick moments all orders",
+            limit=3,
+        )
+    )
+    assert weak.matches
+    assert weak.portfolio_fit == "ONLY_WEAK_LEXICAL_MATCHES"
+    assert all(match.lexical_fit == "WEAK_LEXICAL_MATCH" for match in weak.matches)
+
+    absent = kernel.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="quuxonium frobnicator",
+            limit=3,
+        )
+    )
+    assert absent.matches == ()
+    assert absent.portfolio_fit == "NO_LEXICAL_MATCHES"
 
 
 def test_capability_registration_rejects_an_invalid_invocation_example(

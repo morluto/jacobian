@@ -34,10 +34,10 @@ registration. Kernel registration still applies configured exclusions and
 provider health checks uniformly.
 
 The current built-in domains cover arithmetic, number theory, combinatorics,
-finite sets, sequences, geometry, graph optimization and invariants, matrices,
-lattices, polynomials, validated real analysis, finite probability, and
-rational optimization. Catalog membership remains the authority for actual
-availability.
+finite sets, sequences, Euclidean and projective geometry, graph optimization
+and invariants, matrices, lattices, polynomials, validated real analysis,
+finite probability, and rational optimization. Catalog membership remains the
+authority for actual availability.
 
 ## Computed operations
 
@@ -97,7 +97,7 @@ authorization.
 
 ## Independent exact replay
 
-Some polynomial, matrix, and geometry results have a separate verification
+Some polynomial, matrix, graph, and geometry results have a separate verification
 capability. The producer first returns a result artifact in `EXPLORE` mode. A
 verification request then supplies that exact `result_uri` to the matching
 `VERIFY` capability.
@@ -127,6 +127,31 @@ Use `capability.describe` on the producer and candidate verification capability
 before invocation. Do not infer a verifier ID or payload from naming
 conventions: checker availability depends on operator authorization and the
 installed runtime.
+
+Two bounded portfolio examples show the intended boundary:
+
+- `graph.hamiltonian_path.decide` returns either a complete spanning path
+  witness or a negative decision after exhausting its order-18 state space.
+  `graph.hamiltonian_path.verify` checks a positive witness directly and
+  independently exhausts negative instances.
+- `polynomial.jacobian_syzygy.minimum_degree.compute` constructs the graded
+  maps from degree zero through the first kernel or a declared finite bound.
+  The source can be a canonical sparse polynomial or a labelled product of
+  rational linear forms; the latter keeps factor-to-expansion provenance inside
+  the producer and checker boundary.
+  Its compact default exposes bases, map digests, ranks, nonzero minors, and a
+  kernel witness; full sparse entries are opt-in.
+  `polynomial.jacobian_syzygy.minimum_degree.verify` reconstructs the maps with
+  a standard-library rational checker independent of the SymPy producer.
+
+`geometry.projective_line_arrangement.flats.materialize` is a complete finite
+materializer rather than a theorem prover. It normalizes labelled rational
+projective lines, groups every pair intersection, recovers all incidences, and
+reports multiplicity and pair accounting at `COMPUTED` assurance. When the
+operator authorizes it,
+`geometry.projective_line_arrangement.flats.verify` independently replays all
+of those finite incidence obligations and returns the bound verification
+record.
 
 ## Adding an operation
 

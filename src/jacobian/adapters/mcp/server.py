@@ -108,6 +108,42 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
             "produce a matching witness and Tutte-Berge certificate",
         ),
     ),
+    "graph.hamiltonian_path.decide": (
+        (
+            "graph.hamiltonian_path.verify",
+            "independently verify the stored positive or negative decision",
+        ),
+    ),
+    "graph.hamiltonian_path.verify": (
+        (
+            "graph.hamiltonian_path.decide",
+            "produce a complete bounded decision and optional path witness",
+        ),
+    ),
+    "polynomial.jacobian_syzygy.minimum_degree.compute": (
+        (
+            "polynomial.jacobian_syzygy.minimum_degree.verify",
+            "independently rebuild the graded maps, ranks, minors, and first kernel",
+        ),
+    ),
+    "polynomial.jacobian_syzygy.minimum_degree.verify": (
+        (
+            "polynomial.jacobian_syzygy.minimum_degree.compute",
+            "produce the provenance-bound graded rank ledger and kernel witness",
+        ),
+    ),
+    "geometry.projective_line_arrangement.flats.materialize": (
+        (
+            "geometry.projective_line_arrangement.flats.verify",
+            "independently rebuild all projective flats and pair accounting",
+        ),
+    ),
+    "geometry.projective_line_arrangement.flats.verify": (
+        (
+            "geometry.projective_line_arrangement.flats.materialize",
+            "materialize normalized lines, exact flats, incidences and multiplicities",
+        ),
+    ),
 }
 
 if TYPE_CHECKING:

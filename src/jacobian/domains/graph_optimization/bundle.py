@@ -9,6 +9,9 @@ from jacobian.domains.graph_optimization.chromatic_number import (
 from jacobian.domains.graph_optimization.finite_optimization import (
     FINITE_GRAPH_OPTIMIZATION_CAPABILITIES,
 )
+from jacobian.domains.graph_optimization.hamiltonian_path import (
+    HAMILTONIAN_PATH_CAPABILITY,
+)
 from jacobian.domains.graph_optimization.invariants import (
     BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
 )
@@ -51,6 +54,9 @@ GRAPH_OPTIMIZATION_BUNDLE = DomainBundle(
                     "nonempty connected acyclic; empty source has optimum zero"
                 ),
                 "induced_bipartite": "empty induced graph allowed",
+                "hamiltonian_path": (
+                    "spanning simple path; empty graph has the empty path"
+                ),
                 "clique_number": "maximum complete vertex subset",
                 "independence_number": "maximum edge-free vertex subset",
             },
@@ -89,6 +95,7 @@ GRAPH_OPTIMIZATION_BUNDLE = DomainBundle(
     capabilities=(
         CHROMATIC_NUMBER_CAPABILITY,
         *FINITE_GRAPH_OPTIMIZATION_CAPABILITIES,
+        HAMILTONIAN_PATH_CAPABILITY,
         *BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
     ),
     diagnostics=DomainDiagnostics(

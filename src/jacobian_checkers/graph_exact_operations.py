@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from itertools import combinations
+from functools import cache
+from itertools import combinations, pairwise
 from typing import Any
 
 from jacobian_checkers.bound_artifacts import bound_request
@@ -27,6 +28,17 @@ def _accept(detail: str) -> dict[str, Any]:
         "arithmetic": "EXACT_INTEGER",
         "method": "DIRECT_WITNESS",
         "coverage": "NOT_APPLICABLE",
+        "detail": detail,
+    }
+
+
+def _accept_exhaustive(detail: str) -> dict[str, Any]:
+    return {
+        "accepted": True,
+        "conclusion": "TRUE",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "EXHAUSTIVE_FINITE",
+        "coverage": "EXHAUSTIVE",
         "detail": detail,
     }
 
@@ -179,6 +191,102 @@ def check_graph_induced_tree_maximum(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _hamiltonian_path(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    vertices, normalized_edges, adjacency = _finite_simple_graph(
+        source,
+        maximum_order=18,
+    )
+    if set(result) != {
+        "result_schema_version",
+        "decision",
+        "order",
+        "path",
+        "convention",
+        "completion",
+        "verification_capability_id",
+        "verification_input_field",
+    }:
+        return False
+    if (
+        result["result_schema_version"] != "1"
+        or result["order"] != len(vertices)
+        or result["convention"] != "EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"
+        or result["completion"] != "COMPLETE"
+        or result["verification_capability_id"] != "graph.hamiltonian_path.verify"
+        or result["verification_input_field"] != "result_uri"
+        or not isinstance(result["path"], list)
+        or not all(isinstance(vertex, str) for vertex in result["path"])
+    ):
+        return False
+    decision = result["decision"]
+    path = result["path"]
+    vertex_set = set(vertices)
+    if decision == "EXISTS":
+        return (
+            len(path) == len(vertices)
+            and len(path) == len(set(path))
+            and set(path) == vertex_set
+            and all(
+                tuple(sorted((left, right))) in normalized_edges
+                for left, right in pairwise(path)
+            )
+        )
+    if decision != "DOES_NOT_EXIST" or path:
+        return False
+    if not vertices:
+        return False
+
+    index = {vertex: position for position, vertex in enumerate(vertices)}
+    adjacency_masks = tuple(
+        sum(1 << index[neighbor] for neighbor in adjacency[vertex])
+        for vertex in vertices
+    )
+    full_mask = (1 << len(vertices)) - 1
+
+    @cache
+    def can_finish(last: int, visited: int) -> bool:
+        if visited == full_mask:
+            return True
+        available = adjacency_masks[last] & ~visited
+        while available:
+            bit = available & -available
+            if can_finish(bit.bit_length() - 1, visited | bit):
+                return True
+            available ^= bit
+        return False
+
+    exists = any(can_finish(start, 1 << start) for start in range(len(vertices)))
+    return not exists
+
+
+def check_graph_hamiltonian_path(request: dict[str, Any]) -> dict[str, Any]:
+    try:
+        source, result = bound_request(
+            request,
+            operation_id="graph.hamiltonian_path.decide",
+            witness_format="graph.hamiltonian-path.exhaustive-replay",
+        )
+        if not _hamiltonian_path(source, result):
+            return _reject(
+                "declared result does not match independent finite "
+                "Hamiltonian-path replay"
+            )
+        detail = (
+            "independent finite Hamiltonian-path replay accepted "
+            "graph.hamiltonian_path.decide"
+        )
+        return (
+            _accept_exhaustive(detail)
+            if result.get("decision") == "DOES_NOT_EXIST"
+            else _accept(detail)
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return _reject("malformed, unsupported, or mismatched checker request")
+
+
 def _maximum_matching(
     source: dict[str, Any],
     result: dict[str, Any],
@@ -287,6 +395,7 @@ def check_graph_maximum_matching(request: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "check_graph_hamiltonian_path",
     "check_graph_induced_tree_maximum",
     "check_graph_maximum_matching",
 ]

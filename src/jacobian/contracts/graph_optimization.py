@@ -43,6 +43,48 @@ class GraphOptimizationRequest(ContractModel):
         return self
 
 
+class GraphHamiltonianPathRequest(ContractModel):
+    """One finite simple graph inside the complete decision/checker scope."""
+
+    graph: ChromaticGraph
+
+    @model_validator(mode="after")
+    def enforce_complete_decision_scope(self) -> Self:
+        if len(self.graph.vertices) > 18:
+            raise ValueError(
+                "Hamiltonian-path decision supports graphs of order at most 18"
+            )
+        return self
+
+
+class GraphHamiltonianPathResult(ContractModel):
+    """Complete spanning simple-path decision on the supplied finite graph."""
+
+    result_schema_version: Literal["1"] = "1"
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    order: StrictInt = Field(ge=0, le=18)
+    path: tuple[GraphVertex, ...] = Field(max_length=18)
+    convention: Literal["EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"] = (
+        "EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"
+    )
+    completion: Literal["COMPLETE"] = "COMPLETE"
+    verification_capability_id: Literal["graph.hamiltonian_path.verify"] = (
+        "graph.hamiltonian_path.verify"
+    )
+    verification_input_field: Literal["result_uri"] = "result_uri"
+
+    @model_validator(mode="after")
+    def bind_decision_and_path(self) -> Self:
+        if len(set(self.path)) != len(self.path):
+            raise ValueError("Hamiltonian path vertices must be unique")
+        if self.decision == "EXISTS":
+            if len(self.path) != self.order:
+                raise ValueError("EXISTS requires one spanning path witness")
+        elif self.path:
+            raise ValueError("DOES_NOT_EXIST must not carry a path witness")
+        return self
+
+
 class OptimizationSearchStep(ContractModel):
     """One threshold-feasibility decision."""
 

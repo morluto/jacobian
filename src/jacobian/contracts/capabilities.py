@@ -79,6 +79,12 @@ class CapabilityDiscoveryMatch(ContractModel):
     matched_on: tuple[str, ...] = ()
     matched_terms: tuple[str, ...] = ()
     has_invocation_examples: bool = False
+    relevance_score: int = Field(default=0, ge=0, strict=True)
+    query_term_count: int = Field(default=0, ge=0, strict=True)
+    query_coverage_milli: int = Field(default=0, ge=0, le=1000, strict=True)
+    lexical_fit: Literal["STRONG_CANDIDATE", "WEAK_LEXICAL_MATCH"] = (
+        "WEAK_LEXICAL_MATCH"
+    )
 
 
 class CapabilityDiscoveryResult(ContractModel):
@@ -93,6 +99,13 @@ class CapabilityDiscoveryResult(ContractModel):
     truncated: bool
     next_cursor: CapabilityId | None = None
     available_domains: tuple[str, ...] = ()
+    portfolio_fit: Literal[
+        "UNFILTERED",
+        "STRONG_CANDIDATES_FOUND",
+        "ONLY_WEAK_LEXICAL_MATCHES",
+        "NO_LEXICAL_MATCHES",
+    ] = "UNFILTERED"
+    portfolio_fit_basis: str = Field(min_length=1, max_length=512)
 
 
 class CapabilityInstallTier(StrEnum):

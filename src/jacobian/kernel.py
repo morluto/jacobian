@@ -946,6 +946,7 @@ class JacobianKernel:
         matrix = self.domain_bundles.get("matrix")
         graph = self.domain_bundles.get("graph_optimization")
         graph_invariants = self.domain_bundles.get("graph_invariants")
+        projective_geometry = self.domain_bundles.get("projective_geometry")
         if polynomial is None or matrix is None:
             return
         adapters, self.exact_domain_checkers = install_exact_domain_verification(
@@ -958,6 +959,7 @@ class JacobianKernel:
             matrix=matrix,
             graph=graph,
             graph_invariants=graph_invariants,
+            projective_geometry=projective_geometry,
             authorize=authorize,
         )
         for adapter in adapters:

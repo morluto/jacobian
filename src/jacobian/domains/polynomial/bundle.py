@@ -11,6 +11,9 @@ from jacobian.domains.polynomial.groebner import POLYNOMIAL_GROEBNER_CAPABILITY
 from jacobian.domains.polynomial.invariants import (
     POLYNOMIAL_INVARIANT_CAPABILITIES,
 )
+from jacobian.domains.polynomial.jacobian_syzygy import (
+    GRADED_JACOBIAN_SYZYGY_CAPABILITY,
+)
 from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import known_provider_runtime
 
@@ -36,6 +39,10 @@ POLYNOMIAL_BUNDLE = DomainBundle(
             "elementary_rational_polynomials": (
                 "sparse descending-lexicographic terms over QQ"
             ),
+            "graded_jacobian_syzygies": (
+                "three-variable homogeneous coefficient maps use descending "
+                "lexicographic monomial bases and bounded exact rank search"
+            ),
             "assurance": "computed; no independent checker",
         },
     ),
@@ -47,6 +54,7 @@ POLYNOMIAL_BUNDLE = DomainBundle(
     capabilities=(
         *POLYNOMIAL_INVARIANT_CAPABILITIES,
         POLYNOMIAL_GROEBNER_CAPABILITY,
+        GRADED_JACOBIAN_SYZYGY_CAPABILITY,
         *INTEGER_POLYNOMIAL_CAPABILITIES,
         *RATIONAL_POLYNOMIAL_CAPABILITIES,
     ),

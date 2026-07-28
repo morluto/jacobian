@@ -1140,7 +1140,99 @@ def graph_exact_checker_provider_runtime(
         features=(
             "clean-process-replay",
             "finite-subset-exhaustive-replay",
+            "hamiltonian-path-exhaustive-replay",
             "tutte-berge-barrier-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
+def graded_syzygy_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the standard-library graded-syzygy checker source."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.graded-syzygy-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The graded-syzygy checker source could not be identified.",
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.graded-syzygy-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.jacobian_syzygy:check_graded_jacobian_syzygy"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=(
+                "clean-process-replay",
+                "exact-rational",
+                "standard-library-only",
+            ),
+        )
+    return composite_provider_runtime(
+        "jacobian.graded-syzygy-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "graded-coefficient-map-reconstruction",
+            "exact-rational-rank-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
+def projective_arrangement_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the standard-library projective-arrangement checker source."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.projective-arrangement-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic=(
+                "The projective-arrangement checker source could not be identified."
+            ),
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.projective-arrangement-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.projective_arrangements:"
+                "check_projective_line_arrangement_flats"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=(
+                "clean-process-replay",
+                "exact-rational",
+                "standard-library-only",
+            ),
+        )
+    return composite_provider_runtime(
+        "jacobian.projective-arrangement-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "projective-pair-incidence-exhaustive-replay",
+            "exact-rational",
             "standard-library-only",
         ),
         checker_ids=checker_ids,

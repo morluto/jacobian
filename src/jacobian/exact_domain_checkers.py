@@ -42,10 +42,15 @@ from jacobian.domains.graph_optimization.checkers import (
 )
 from jacobian.domains.matrix_lattice.checkers import MATRIX_EXACT_REPLAY_CHECKERS
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
+from jacobian.domains.projective_geometry.checkers import (
+    PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
+)
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.provider_runtime import (
     exact_domain_checker_provider_runtime,
+    graded_syzygy_checker_provider_runtime,
     graph_exact_checker_provider_runtime,
+    projective_arrangement_checker_provider_runtime,
 )
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_schema
@@ -76,6 +81,10 @@ def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
         return "python-flint"
     if declaration.entrypoint_module == "jacobian_checkers.graph_exact_operations":
         return "finite-graph"
+    if declaration.entrypoint_module == "jacobian_checkers.jacobian_syzygy":
+        return "graded-syzygy"
+    if declaration.entrypoint_module == "jacobian_checkers.projective_arrangements":
+        return "projective-arrangement"
     raise ValueError(
         "exact replay checker declaration uses an unsupported provider runtime"
     )
@@ -88,6 +97,7 @@ def install_exact_domain_checkers(
     matrix: InstalledDomainBundle,
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
+    projective_geometry: InstalledDomainBundle | None = None,
     authorize: bool,
 ) -> ExactDomainCheckerInstallation:
     """Install independent exact replay against dynamically registered schemas."""
@@ -96,6 +106,8 @@ def install_exact_domain_checkers(
     provider_runtimes = {
         "python-flint": exact_domain_checker_provider_runtime(),
         "finite-graph": graph_exact_checker_provider_runtime(),
+        "graded-syzygy": graded_syzygy_checker_provider_runtime(),
+        "projective-arrangement": (projective_arrangement_checker_provider_runtime()),
     }
     checker_ids: dict[str, str | None] = {}
     declarations_by_id: dict[str, ExactReplayCheckerDeclaration] = {}
@@ -105,6 +117,11 @@ def install_exact_domain_checkers(
         *_available_graph_declaration_bundles(
             graph=graph,
             graph_invariants=graph_invariants,
+        ),
+        *(
+            (projective_geometry, item)
+            for item in PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS
+            if projective_geometry is not None
         ),
     ):
         declarations_by_id[declaration.capability_id] = declaration
@@ -145,6 +162,14 @@ def install_exact_domain_checkers(
             "finite-graph": graph_exact_checker_provider_runtime(
                 checker_ids=authorized_ids["finite-graph"]
             ),
+            "graded-syzygy": graded_syzygy_checker_provider_runtime(
+                checker_ids=authorized_ids["graded-syzygy"]
+            ),
+            "projective-arrangement": (
+                projective_arrangement_checker_provider_runtime(
+                    checker_ids=authorized_ids["projective-arrangement"]
+                )
+            ),
         },
     )
 
@@ -160,6 +185,7 @@ def install_exact_domain_verification(
     matrix: InstalledDomainBundle,
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
+    projective_geometry: InstalledDomainBundle | None = None,
     authorize: bool,
 ) -> tuple[tuple[CapabilityAdapter, ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose domain-owned verification capabilities."""
@@ -170,6 +196,7 @@ def install_exact_domain_verification(
         matrix=matrix,
         graph=graph,
         graph_invariants=graph_invariants,
+        projective_geometry=projective_geometry,
         authorize=authorize,
     )
     witness_schema_uri = schemas.register_model(
@@ -186,10 +213,15 @@ def install_exact_domain_verification(
         checker_id is not None for checker_id in installation.checker_ids.values()
     ):
         return (), installation
-    polynomial_declarations = tuple(
+    all_polynomial_declarations = tuple(
         _installed_declaration(polynomial, declaration, installation)
         for declaration in POLYNOMIAL_EXACT_REPLAY_CHECKERS
         if installation.checker_ids.get(declaration.capability_id) is not None
+    )
+    polynomial_declarations = tuple(
+        declaration
+        for declaration in all_polynomial_declarations
+        if declaration.declaration.verification_capability_id is None
     )
     matrix_declarations = tuple(
         _installed_declaration(matrix, declaration, installation)
@@ -208,7 +240,29 @@ def install_exact_domain_verification(
         )
         if installation.checker_ids.get(declaration.capability_id) is not None
     )
-    graph_adapters: tuple[CapabilityAdapter, ...] = tuple(
+    projective_declarations = (
+        tuple(
+            _installed_declaration(
+                projective_geometry,
+                declaration,
+                installation,
+            )
+            for declaration in PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS
+            if installation.checker_ids.get(declaration.capability_id) is not None
+        )
+        if projective_geometry is not None
+        else ()
+    )
+    dedicated_declarations = (
+        *(
+            declaration
+            for declaration in all_polynomial_declarations
+            if declaration.declaration.verification_capability_id is not None
+        ),
+        *graph_declarations,
+        *projective_declarations,
+    )
+    dedicated_adapters: tuple[CapabilityAdapter, ...] = tuple(
         ExactDomainResultVerificationAdapter(
             capability_id=_verification_metadata(declaration)[0],
             title=_verification_metadata(declaration)[1],
@@ -220,9 +274,11 @@ def install_exact_domain_verification(
             verification=verification,
             declarations=(declaration,),
             witness_schema_uri=witness_schema_uri,
-            provider_runtime=installation.provider_runtimes["finite-graph"],
+            provider_runtime=installation.provider_runtimes[
+                _provider_runtime_key(declaration.declaration)
+            ],
         )
-        for declaration in graph_declarations
+        for declaration in dedicated_declarations
     )
     adapters: list[CapabilityAdapter] = []
     if polynomial_declarations:
@@ -263,7 +319,7 @@ def install_exact_domain_verification(
                 provider_runtime=installation.provider_runtimes["python-flint"],
             )
         )
-    adapters.extend(graph_adapters)
+    adapters.extend(dedicated_adapters)
     return tuple(adapters), installation
 
 
@@ -602,17 +658,29 @@ class ExactDomainResultVerificationAdapter:
 
 
 def _checker_supports(operation_id: str, payload: object) -> bool:
-    if operation_id == "graph.induced_tree.maximum.compute":
+    if operation_id in {
+        "graph.hamiltonian_path.decide",
+        "graph.induced_tree.maximum.compute",
+    }:
+        maximum_order = 18 if operation_id == "graph.hamiltonian_path.decide" else 16
         return (
             isinstance(payload, dict)
             and isinstance(payload.get("graph"), dict)
             and isinstance(payload["graph"].get("vertices"), list)
-            and len(payload["graph"]["vertices"]) <= 16
+            and len(payload["graph"]["vertices"]) <= maximum_order
+        )
+    if operation_id == "geometry.projective_line_arrangement.flats.materialize":
+        return (
+            isinstance(payload, dict)
+            and isinstance(payload.get("lines"), list)
+            and len(payload["lines"]) <= 64
         )
     if not operation_id.startswith("polynomial."):
         return True
     if not isinstance(payload, dict):
         return False
+    if operation_id == "polynomial.jacobian_syzygy.minimum_degree.compute":
+        return True
     polynomial_fields = {
         "polynomial.compute.gcd": ("left", "right"),
         "polynomial.compute.resultant": ("left", "right"),

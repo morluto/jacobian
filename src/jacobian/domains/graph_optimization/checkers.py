@@ -2,11 +2,38 @@
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
-from jacobian.contracts.graph_optimization import GraphOptimizationRequest
+from jacobian.contracts.graph_optimization import (
+    GraphHamiltonianPathRequest,
+    GraphOptimizationRequest,
+)
 
 _GRAPH_ENTRYPOINT = "jacobian_checkers.graph_exact_operations"
 
 GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "graph.hamiltonian_path.decide",
+        GraphHamiltonianPathRequest,
+        "check_graph_hamiltonian_path",
+        "graph.hamiltonian-path.exhaustive-replay",
+        entrypoint_module=_GRAPH_ENTRYPOINT,
+        replay_method="finite Hamiltonian-path exhaustive replay",
+        reason=(
+            "operator-authorized standard-library checker independent of the "
+            "producer's dynamic-programming implementation"
+        ),
+        verification_capability_id="graph.hamiltonian_path.verify",
+        verification_title="Verify a Hamiltonian-path decision",
+        verification_description=(
+            "Independently verify a spanning path witness or exhaust the bounded "
+            "finite path state space for one stored negative decision."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "graph",
+            "hamiltonian-path",
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "graph.induced_tree.maximum.compute",
         GraphOptimizationRequest,

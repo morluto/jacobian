@@ -1106,6 +1106,47 @@ def exact_domain_checker_provider_runtime(
     )
 
 
+def graph_exact_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the independent finite-graph checker source without FLINT."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.graph-exact-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The finite-graph checker source could not be identified.",
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.graph-exact-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.graph_exact_operations:"
+                "check_graph_induced_tree_maximum"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=("clean-process-replay", "standard-library-only"),
+        )
+    return composite_provider_runtime(
+        "jacobian.graph-exact-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "finite-subset-exhaustive-replay",
+            "tutte-berge-barrier-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
 def python_flint_hnf_provider_runtime(
     *,
     refresh: bool = False,

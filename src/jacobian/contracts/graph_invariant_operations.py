@@ -78,14 +78,33 @@ class GraphSpanningTreeCountResult(ContractModel):
     connected: StrictBool
 
 
+class GraphTutteBergeCertificate(ContractModel):
+    certificate_schema_version: Literal["1"] = "1"
+    kind: Literal["TUTTE_BERGE_BARRIER"] = "TUTTE_BERGE_BARRIER"
+    barrier_vertices: tuple[GraphVertex, ...] = Field(max_length=32)
+    odd_component_count: StrictInt = Field(ge=0, le=32)
+    upper_bound: StrictInt = Field(ge=0, le=16)
+
+    @model_validator(mode="after")
+    def require_canonical_barrier(self) -> Self:
+        if tuple(sorted(self.barrier_vertices)) != self.barrier_vertices or len(
+            set(self.barrier_vertices)
+        ) != len(self.barrier_vertices):
+            raise ValueError("Tutte-Berge barrier vertices must be unique and sorted")
+        return self
+
+
 class GraphMaximumMatchingResult(ContractModel):
     maximum_matching_cardinality: StrictInt = Field(ge=0, le=16)
     witness_edges: tuple[tuple[GraphVertex, GraphVertex], ...]
+    certificate: GraphTutteBergeCertificate
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
         if len(self.witness_edges) != self.maximum_matching_cardinality:
             raise ValueError("matching witness cardinality must match the result")
+        if self.certificate.upper_bound != self.maximum_matching_cardinality:
+            raise ValueError("Tutte-Berge upper bound must match the result")
         if (
             any(left >= right for left, right in self.witness_edges)
             or tuple(sorted(self.witness_edges)) != self.witness_edges

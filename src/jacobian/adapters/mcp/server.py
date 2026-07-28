@@ -87,6 +87,18 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
             "prefer named Boolean CNF for finite colorings and forbidden patterns",
         ),
     ),
+    "graph.invariant.maximum_matching.compute": (
+        (
+            "graph.invariant.maximum_matching.verify",
+            "independently replay the stored Tutte-Berge certificate",
+        ),
+    ),
+    "graph.invariant.maximum_matching.verify": (
+        (
+            "graph.invariant.maximum_matching.compute",
+            "produce a matching witness and Tutte-Berge certificate",
+        ),
+    ),
 }
 
 if TYPE_CHECKING:
@@ -255,6 +267,27 @@ def _argument_digest(arguments: dict[str, Any]) -> str:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
+def _request_trace_digest(ctx: Any | None) -> tuple[str, str]:
+    """Return a bounded correlation digest without retaining caller identifiers."""
+
+    if ctx is None:
+        return "none", "none"
+    headers = getattr(ctx, "headers", None)
+    if headers is not None:
+        traceparent = headers.get("traceparent")
+        if isinstance(traceparent, str) and 0 < len(traceparent) <= 256:
+            digest = hashlib.sha256(traceparent.encode("utf-8")).hexdigest()[:8]
+            return digest, "traceparent"
+    try:
+        request_id = str(ctx.request_id)
+    except (AttributeError, TypeError, ValueError):
+        return "none", "none"
+    if not request_id or len(request_id) > 256:
+        return "none", "none"
+    digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()[:8]
+    return digest, "request_id"
+
+
 def _response_size(value: Any) -> int:
     try:
         if hasattr(value, "model_dump_json"):
@@ -269,6 +302,122 @@ def _response_size(value: Any) -> int:
         )
     except (TypeError, ValueError):
         return -1
+
+
+def _log_capability_attempt(
+    *,
+    capability_id: str,
+    mode: CapabilityMode,
+    started: float,
+    argument_digest: str,
+    trace_digest: str,
+    trace_source: str,
+    result: CapabilityResult | None = None,
+    execution_status: str | None = None,
+    diagnostic_codes: tuple[str, ...] = (),
+) -> None:
+    if result is not None:
+        execution_status = result.execution.status.value
+        diagnostic_codes = tuple(item.code for item in result.diagnostics)
+        capability_version = result.capability_version
+        assurance = result.assurance.level.value
+        operation_runtime_ms = result.execution.runtime_ms
+        response_bytes = _response_size(result)
+    else:
+        capability_version = "unknown"
+        assurance = "none"
+        operation_runtime_ms = None
+        response_bytes = 0
+    codes = ",".join(diagnostic_codes[:8]) or "none"
+    _LOGGER.info(
+        "MCP capability attempt trace_digest=%s trace_source=%s "
+        "capability_id=%s capability_version=%s mode=%s "
+        "execution_status=%s assurance=%s diagnostic_codes=%s "
+        "attempt_duration_ms=%.3f operation_runtime_ms=%s "
+        "response_bytes=%d argument_digest=%s",
+        trace_digest,
+        trace_source,
+        capability_id,
+        capability_version,
+        mode.value,
+        execution_status or "ERROR",
+        assurance,
+        codes,
+        (time.monotonic() - started) * 1000,
+        "none" if operation_runtime_ms is None else operation_runtime_ms,
+        response_bytes,
+        argument_digest,
+    )
+
+
+async def _invoke_capability_attempt(
+    kernel: Any,
+    *,
+    capability_id: str,
+    payload: dict[str, Any],
+    mode: CapabilityMode,
+    ctx: Any | None,
+) -> CapabilityResult:
+    started = time.monotonic()
+    argument_digest = _argument_digest(
+        {
+            "capability_id": capability_id,
+            "mode": mode.value,
+            "payload": payload,
+        }
+    )
+    trace_digest, trace_source = _request_trace_digest(ctx)
+    cancellation_event = threading.Event()
+    worker = asyncio.create_task(
+        asyncio.to_thread(
+            _invoke_capability_with_cancellation,
+            kernel,
+            CapabilityRequest(
+                capability_id=capability_id,
+                mode=mode,
+                input=payload,
+            ),
+            cancellation_event,
+        )
+    )
+    try:
+        result = await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        cancellation_event.set()
+        worker.add_done_callback(_consume_cancelled_worker_result)
+        _log_capability_attempt(
+            capability_id=capability_id,
+            mode=mode,
+            started=started,
+            argument_digest=argument_digest,
+            trace_digest=trace_digest,
+            trace_source=trace_source,
+            execution_status="CANCELLED",
+            diagnostic_codes=("CLIENT_CANCELLED",),
+        )
+        raise
+    except Exception:
+        _log_capability_attempt(
+            capability_id=capability_id,
+            mode=mode,
+            started=started,
+            argument_digest=argument_digest,
+            trace_digest=trace_digest,
+            trace_source=trace_source,
+            execution_status="ERROR",
+            diagnostic_codes=("INVOCATION_EXCEPTION",),
+        )
+        raise
+    _log_capability_attempt(
+        capability_id=capability_id,
+        mode=mode,
+        started=started,
+        argument_digest=argument_digest,
+        trace_digest=trace_digest,
+        trace_source=trace_source,
+        result=result,
+    )
+    return result
 
 
 def _catalog_digest(
@@ -449,6 +598,7 @@ def create_server(
     install_references: bool = True,
     tenant_isolation: bool = False,
     allow_anonymous: bool = False,
+    anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
     auth: Any | None = None,
     capability_adapter_entrypoints: tuple[str, ...] = (),
@@ -541,6 +691,7 @@ def create_server(
             configured_root,
             install_references=install_references,
             allow_anonymous=allow_anonymous,
+            anonymous_tenant_id=anonymous_tenant_id,
             capability_adapter_entrypoints=capability_adapter_entrypoints,
             capability_policy=capability_policy,
             max_tenant_kernels=(
@@ -745,29 +896,13 @@ def create_server(
         ctx: Context[AppState, Any] | None = None,
     ) -> CapabilityResult:
         active_kernel = _kernel(ctx)
-        cancellation_event = threading.Event()
-        worker = asyncio.create_task(
-            asyncio.to_thread(
-                _invoke_capability_with_cancellation,
-                active_kernel,
-                CapabilityRequest(
-                    capability_id=capability_id,
-                    mode=mode,
-                    input=payload,
-                ),
-                cancellation_event,
-            )
+        return await _invoke_capability_attempt(
+            active_kernel,
+            capability_id=capability_id,
+            payload=payload,
+            mode=mode,
+            ctx=ctx,
         )
-        try:
-            return await asyncio.shield(worker)
-        except asyncio.CancelledError:
-            cancellation_event.set()
-            worker.add_done_callback(_consume_cancelled_worker_result)
-            _LOGGER.info(
-                "MCP capability invocation cancelled capability_id=%s",
-                capability_id,
-            )
-            raise
 
     @server.tool(
         name="workspace.open",
@@ -1441,6 +1576,14 @@ def main() -> None:
         help="development only: permit unauthenticated remote requests",
     )
     parser.add_argument(
+        "--anonymous-tenant-id",
+        default="anonymous",
+        help=(
+            "fixed operator-chosen tenant namespace for anonymous mode; use a "
+            "different value for each isolated test endpoint"
+        ),
+    )
+    parser.add_argument(
         "--capability-adapter",
         action="append",
         default=[],
@@ -1501,6 +1644,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.max_tenant_kernels < 1:
         parser.error("--max-tenant-kernels must be positive")
+    if args.anonymous_tenant_id != "anonymous" and not args.allow_anonymous:
+        parser.error("--anonymous-tenant-id requires --allow-anonymous")
     args.path = args.path if args.path.startswith("/") else f"/{args.path}"
     capability_policy = CapabilityPolicy(
         profile=args.capability_policy_profile,
@@ -1514,7 +1659,11 @@ def main() -> None:
         denied_modes=frozenset(CapabilityMode(value) for value in args.deny_mode),
     )
     if args.transport == "stdio":
-        if args.auth_tokens_file is not None or args.allow_anonymous:
+        if (
+            args.auth_tokens_file is not None
+            or args.allow_anonymous
+            or args.anonymous_tenant_id != "anonymous"
+        ):
             parser.error("remote authentication options cannot be used with stdio")
         create_server(
             state_dir=args.state_dir,
@@ -1552,6 +1701,7 @@ def main() -> None:
         state_dir=args.state_dir,
         tenant_isolation=True,
         allow_anonymous=args.allow_anonymous,
+        anonymous_tenant_id=args.anonymous_tenant_id,
         token_verifier=token_verifier,
         auth=auth,
         capability_adapter_entrypoints=tuple(args.capability_adapter),

@@ -66,6 +66,7 @@ expectations.
 - [Exact rational linear-system evidence](reference/linear-rational-solutions.md)
 - [Exact rational matrix determinants](reference/matrix-rational-determinant.md)
 - [Graph counterexample shrinking](reference/graph-counterexample-shrinking.md)
+- [Maximum-matching certificate and verification](reference/graph-maximum-matching.md)
 - [Integer matrix Hermite normal form](reference/matrix-hermite-normal-form.md)
 - [Typed polynomial expression normalization](reference/polynomial-expression-normalization.md)
 - [Polynomial-map inverse verification](reference/polynomial-map-inverse-verification.md)

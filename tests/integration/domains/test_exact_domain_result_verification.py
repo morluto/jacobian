@@ -247,6 +247,86 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     assert rejected.output["verification_record_uri"] is None
 
 
+def test_maximum_matching_result_uses_independent_tutte_berge_replay(
+    tmp_path: Path,
+) -> None:
+    kernel = JacobianKernel(tmp_path, install_references=True)
+    computed = kernel.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input={
+                "graph": {
+                    "vertices": ["center", "x", "y", "z"],
+                    "edges": [
+                        ["center", "x"],
+                        ["center", "y"],
+                        ["center", "z"],
+                    ],
+                }
+            },
+        )
+    )
+    result_uri = computed.artifact_uris[1]
+
+    verified = kernel.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": result_uri},
+        )
+    )
+
+    assert computed.capability_version == "2"
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.output["operation_id"] == (
+        "graph.invariant.maximum_matching.compute"
+    )
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.execution.detail == (
+        "independent Tutte-Berge barrier replay accepted "
+        "graph.invariant.maximum_matching.compute"
+    )
+    runtime = next(
+        descriptor.provider_runtime
+        for descriptor in kernel.capabilities.catalog().capabilities
+        if descriptor.capability_id == "graph.invariant.maximum_matching.verify"
+    )
+    assert runtime is not None
+    assert runtime.provider == "jacobian.graph-exact-checkers"
+    assert {
+        component["provider"] for component in runtime.configuration["components"]
+    } == {"jacobian.graph-exact-checker-source"}
+
+    result_artifact = kernel.store.get(result_uri)
+    false_result = kernel.artifacts.put(
+        schema_uri=result_artifact.manifest.schema_uri,
+        semantics_uri=result_artifact.manifest.semantics_uri,
+        parents=result_artifact.manifest.parents,
+        payload={
+            "maximum_matching_cardinality": 0,
+            "witness_edges": [],
+            "certificate": {
+                **result_artifact.payload["certificate"],
+                "upper_bound": 0,
+            },
+        },
+        summary="adversarial feasible but nonmaximum matching result",
+    )
+    rejected = kernel.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": false_result.artifact_uri},
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.output["verification_record_uri"] is None
+
+
 def test_operator_can_leave_exact_result_verification_unavailable(
     tmp_path: Path,
 ) -> None:

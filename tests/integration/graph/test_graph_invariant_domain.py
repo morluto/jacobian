@@ -75,6 +75,34 @@ def test_graph_invariant_family_boundaries_and_witnesses(tmp_path: Path) -> None
     assert matching.output["result"] == {
         "maximum_matching_cardinality": 2,
         "witness_edges": [["a", "b"], ["c", "d"]],
+        "certificate": {
+            "certificate_schema_version": "1",
+            "kind": "TUTTE_BERGE_BARRIER",
+            "barrier_vertices": [],
+            "odd_component_count": 0,
+            "upper_bound": 2,
+        },
+    }
+    assert matching.capability_version == "2"
+
+    star = kernel.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input={
+                "graph": _graph(
+                    ["center", "x", "y", "z"],
+                    [["center", "x"], ["center", "y"], ["center", "z"]],
+                )
+            },
+        )
+    )
+    assert star.output["result"]["maximum_matching_cardinality"] == 1
+    assert star.output["result"]["certificate"] == {
+        "certificate_schema_version": "1",
+        "kind": "TUTTE_BERGE_BARRIER",
+        "barrier_vertices": ["center"],
+        "odd_component_count": 3,
+        "upper_bound": 1,
     }
 
 

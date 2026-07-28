@@ -79,15 +79,22 @@ class TenantKernelRouter:
         *,
         install_references: bool = True,
         allow_anonymous: bool = False,
+        anonymous_tenant_id: str = "anonymous",
         capability_adapter_entrypoints: tuple[str, ...] = (),
         capability_policy: CapabilityPolicy | None = None,
         max_tenant_kernels: int = DEFAULT_MAX_TENANT_KERNELS,
     ) -> None:
         if max_tenant_kernels < 1:
             raise ValueError("max_tenant_kernels must be positive")
+        if not _TENANT_PATTERN.fullmatch(anonymous_tenant_id):
+            raise ValueError(
+                "anonymous_tenant_id must start with a letter or digit, contain only "
+                "letters, digits, '.', '_', or '-', and be at most 128 characters"
+            )
         self.root = Path(root)
         self.install_references = install_references
         self.allow_anonymous = allow_anonymous
+        self.anonymous_tenant_id = anonymous_tenant_id
         self.capability_adapter_entrypoints = capability_adapter_entrypoints
         self.capability_policy = capability_policy
         self.max_tenant_kernels = max_tenant_kernels
@@ -102,7 +109,7 @@ class TenantKernelRouter:
                     "Authentication is required for this server. "
                     "Authenticate with a configured bearer token and retry."
                 )
-            tenant = "anonymous"
+            tenant = self.anonymous_tenant_id
         if not _TENANT_PATTERN.fullmatch(tenant):
             raise AuthenticationError(
                 "The authenticated subject cannot be used for tenant isolation. "

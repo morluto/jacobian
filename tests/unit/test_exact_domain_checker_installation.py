@@ -4,6 +4,8 @@ from pathlib import Path
 
 from tests.helpers.artifacts import artifact_uri as _uri
 
+from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
+from jacobian.contracts.graph_optimization import GraphOptimizationRequest
 from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
     RationalMatrixRequest,
@@ -54,6 +56,10 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
         "matrix.characteristic_polynomial.compute",
         "matrix.normal_form.smith.compute",
     )
+    graph_ids = (
+        "graph.induced_tree.maximum.compute",
+        "graph.invariant.maximum_matching.compute",
+    )
     registry = CheckerRegistry(tmp_path / "checkers.sqlite3")
 
     installation = install_exact_domain_checkers(
@@ -77,17 +83,35 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             matrix_ids,
             character="f",
         ),
+        graph=_installed(
+            (GraphOptimizationRequest,),
+            (graph_ids[0],),
+            character="7",
+        ),
+        graph_invariants=_installed(
+            (GraphInvariantRequest,),
+            (graph_ids[1],),
+            character="8",
+        ),
         authorize=True,
     )
 
-    assert set(installation.checker_ids) == set(polynomial_ids + matrix_ids)
+    assert set(installation.checker_ids) == set(polynomial_ids + matrix_ids + graph_ids)
     assert all(installation.checker_ids.values())
-    for checker_id in installation.checker_ids.values():
+    for capability_id, checker_id in installation.checker_ids.items():
         assert checker_id is not None
         registration = registry.require_active(checker_id)
-        assert registration.entrypoint.startswith(
-            "jacobian_checkers.exact_domain_operations:"
+        expected_module = (
+            "jacobian_checkers.graph_exact_operations:"
+            if capability_id.startswith("graph.")
+            else "jacobian_checkers.exact_domain_operations:"
         )
+        assert registration.entrypoint.startswith(expected_module)
+    graph_runtime = installation.provider_runtimes["finite-graph"]
+    assert graph_runtime.provider == "jacobian.graph-exact-checkers"
+    assert {
+        component["provider"] for component in graph_runtime.configuration["components"]
+    } == {"jacobian.graph-exact-checker-source"}
 
 
 def test_installer_preserves_operator_control(tmp_path: Path) -> None:

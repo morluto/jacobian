@@ -17,17 +17,46 @@ class ExactReplayCheckerDeclaration:
     request_model: type[ContractModel]
     function: str
     format_id: str
+    entrypoint_module: str = "jacobian_checkers.exact_domain_operations"
+    replay_method: str = "Python-FLINT exact replay"
+    reason: str = (
+        "operator-authorized Python-FLINT exact replay independent of the "
+        "SymPy producer"
+    )
+    verification_capability_id: str | None = None
+    verification_title: str | None = None
+    verification_description: str | None = None
+    verification_tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for field, value in {
             "capability_id": self.capability_id,
             "function": self.function,
             "format_id": self.format_id,
+            "entrypoint_module": self.entrypoint_module,
+            "replay_method": self.replay_method,
+            "reason": self.reason,
         }.items():
             if not value.strip():
                 raise ValueError(
                     f"exact replay checker declaration {field} must not be empty"
                 )
+        verification_fields = (
+            self.verification_capability_id,
+            self.verification_title,
+            self.verification_description,
+        )
+        if any(value is not None for value in verification_fields) and not all(
+            isinstance(value, str) and value.strip() for value in verification_fields
+        ):
+            raise ValueError(
+                "verification capability ID, title, and description must be "
+                "declared together"
+            )
+        if self.verification_tags and self.verification_capability_id is None:
+            raise ValueError(
+                "verification tags require verification capability metadata"
+            )
 
 
 @dataclass(frozen=True, slots=True)

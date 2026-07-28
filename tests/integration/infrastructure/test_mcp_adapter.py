@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from jacobian.adapters.mcp.guidance import OPERATING_GUIDE
 from jacobian.adapters.mcp.server import (
     WORKSPACE_TOOL_NAMES,
     _public_tool_error,
+    _request_trace_digest,
     create_server,
 )
 from jacobian.capabilities import CapabilityPolicy
@@ -22,6 +24,22 @@ from jacobian.contracts.capabilities import CapabilityDescriptor
 
 CAPABILITY_TOOL_NAMES = {"capability.describe", "capability.invoke"}
 MCP_TOOL_NAMES = CAPABILITY_TOOL_NAMES | WORKSPACE_TOOL_NAMES
+
+
+def test_mcp_trace_correlation_hashes_headers_without_retaining_them() -> None:
+    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+    class RequestContext:
+        def __init__(self) -> None:
+            self.headers = {"traceparent": traceparent}
+            self.request_id = "private-request-id"
+
+    digest, source = _request_trace_digest(RequestContext())
+
+    assert digest == hashlib.sha256(traceparent.encode()).hexdigest()[:8]
+    assert source == "traceparent"
+    assert traceparent not in digest
+    assert "private-request-id" not in digest
 
 
 def test_mcp_exposes_capability_and_workspace_tools_with_read_only_resources(
@@ -493,6 +511,22 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert response["provider"] == contract["capability"]["provider"]
             assert response["provider_digest"] == runtime["digest"]
 
+            matching_description = await client.call_tool(
+                "capability.describe",
+                {"capability_id": ("graph.invariant.maximum_matching.compute")},
+            )
+            matching_contract = json.loads(matching_description.content[0].text)
+            assert matching_contract["capability"]["version"] == "2"
+            assert matching_contract["invocations"][0]["name"] == ("triangle_with_tail")
+            assert matching_contract["related_capabilities"] == [
+                {
+                    "capability_id": ("graph.invariant.maximum_matching.verify"),
+                    "relationship": (
+                        "independently replay the stored Tutte-Berge certificate"
+                    ),
+                }
+            ]
+
             unknown = await client.call_tool(
                 "capability.invoke",
                 {
@@ -733,6 +767,16 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
                 "capability.describe",
                 {"query": "private-query-marker"},
             )
+            failed = await client.call_tool(
+                "capability.invoke",
+                {
+                    "capability_id": "missing.capability",
+                    "mode": "EXPLORE",
+                    "payload": {"private": "private-payload-marker"},
+                },
+            )
+            response = json.loads(failed.content[0].text)
+            assert response["execution"]["status"] == "ERROR"
 
     asyncio.run(scenario())
 
@@ -746,6 +790,17 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     assert "response_bytes=" in metric
     assert "argument_digest=sha256:" in metric
     assert "private-query-marker" not in metric
+    attempt = next(
+        message
+        for message in messages
+        if "MCP capability attempt" in message
+        and "capability_id=missing.capability" in message
+    )
+    assert "execution_status=ERROR" in attempt
+    assert "diagnostic_codes=UNKNOWN_CAPABILITY" in attempt
+    assert "trace_digest=" in attempt
+    assert "argument_digest=sha256:" in attempt
+    assert "private-payload-marker" not in attempt
 
 
 def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None:

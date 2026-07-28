@@ -1,0 +1,56 @@
+{
+	admin 127.0.0.1:20243
+
+	# Runtime/module logs are separate from HTTP access logs. Reverse-proxy
+	# warnings can carry a structured request object, so redact both layers.
+	log default {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+				request>headers>X-Openai-Session delete
+				request>headers>X-Openai-Subject delete
+				request>headers>Tailscale-User-Login delete
+				request>headers>Tailscale-User-Name delete
+				request>headers>Tailscale-User-Profile-Pic delete
+				request>headers>Traceparent hash
+				headers>Set-Cookie delete
+				response>headers>Set-Cookie delete
+			}
+		}
+	}
+}
+
+http://:8766 {
+	bind 127.0.0.1
+
+	@mcp path /mcp /mcp/*
+	handle @mcp {
+		reverse_proxy 127.0.0.1:8765 {
+			header_up Host 127.0.0.1:8765
+		}
+	}
+	handle {
+		respond 404
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+				request>headers>X-Openai-Session delete
+				request>headers>X-Openai-Subject delete
+				request>headers>Tailscale-User-Login delete
+				request>headers>Tailscale-User-Name delete
+				request>headers>Tailscale-User-Profile-Pic delete
+				request>headers>Traceparent hash
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
+}

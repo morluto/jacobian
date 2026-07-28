@@ -59,10 +59,41 @@ For a disposable local transport test only:
 uv run jacobian-mcp \
   --transport streamable-http \
   --max-tenant-kernels 32 \
-  --allow-anonymous
+  --allow-anonymous \
+  --anonymous-tenant-id local-smoke-2026-07
 ```
 
-Do not expose anonymous mode to a network.
+`--anonymous-tenant-id` is fixed by the operator, never selected from a request.
+Give every independently operated anonymous test endpoint a different value so
+their workspaces, research episodes, and artifacts do not share one state
+directory. This is namespace isolation, not authentication: every caller that
+can reach the same endpoint still shares that endpoint's tenant. Do not expose
+anonymous mode to an untrusted network.
+
+## Filter reverse-proxy logs
+
+Access-log filtering does not cover a reverse proxy's own warning and error
+logs. Those records can include a structured copy of request headers when an
+upstream disconnects or times out. Configure both the proxy's global/runtime
+logger and its access logger.
+
+The checked-in [Caddyfile](../../deploy/caddy/Caddyfile) is the deployment
+baseline for the localhost ports used by the hosted test service. It deletes
+authorization, cookie, OpenAI session/subject, and Tailscale identity headers
+from both log paths. `Traceparent` is reduced to Caddy's eight-hex-character
+SHA-256 correlation digest; Jacobian emits the same digest in its bounded
+`MCP capability attempt` record.
+
+Validate and reload a copied configuration before changing live traffic:
+
+```sh
+caddy validate --config /etc/caddy-jacobian/Caddyfile --adapter caddyfile
+caddy reload --config /etc/caddy-jacobian/Caddyfile --adapter caddyfile
+```
+
+Do not enable Caddy's `debug` or `log_credentials` options on a hosted
+connector. Retention and downstream log aggregation must preserve the same
+field-deletion boundary.
 
 ## Warm the Mathlib profile when serving `lean.check`
 
@@ -120,3 +151,7 @@ subject to the same tenant-routing interface.
   larger searches instead of holding one HTTP request open.
 - Do not interpret HTTP success, solver completion, or an MCP response as a
   verified mathematical result.
+- Use the one-line `MCP capability attempt` records for operational counts.
+  Completed research episodes intentionally omit failed attempts, while the
+  attempt record distinguishes `COMPLETED`, `TIMEOUT`, `CANCELLED`, and `ERROR`
+  and retains only bounded status/provenance fields and argument digests.

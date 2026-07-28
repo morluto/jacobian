@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import subprocess
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -11,7 +13,6 @@ from tests.helpers.rationals import rational_payload as _q
 
 import jacobian_checkers.exact_domain_operations as checker_module
 from jacobian_checkers.exact_domain_operations import (
-    check_graph_induced_tree_maximum,
     check_matrix_characteristic_polynomial,
     check_matrix_nullspace,
     check_matrix_rref,
@@ -20,6 +21,10 @@ from jacobian_checkers.exact_domain_operations import (
     check_polynomial_gcd,
     check_polynomial_resultant,
     check_polynomial_square_free,
+)
+from jacobian_checkers.graph_exact_operations import (
+    check_graph_induced_tree_maximum,
+    check_graph_maximum_matching,
 )
 
 
@@ -293,6 +298,35 @@ _CASES: tuple[
             },
         ),
     ),
+    (
+        check_graph_maximum_matching,
+        _request(
+            "graph.invariant.maximum_matching.compute",
+            "graph.maximum-matching.tutte-berge-v1",
+            {
+                "graph": {
+                    "graph_schema_version": "1",
+                    "vertices": ["center", "x", "y", "z"],
+                    "edges": [
+                        ["center", "x"],
+                        ["center", "y"],
+                        ["center", "z"],
+                    ],
+                }
+            },
+            {
+                "maximum_matching_cardinality": 1,
+                "witness_edges": [["center", "x"]],
+                "certificate": {
+                    "certificate_schema_version": "1",
+                    "kind": "TUTTE_BERGE_BARRIER",
+                    "barrier_vertices": ["center"],
+                    "odd_component_count": 3,
+                    "upper_bound": 1,
+                },
+            },
+        ),
+    ),
 )
 
 
@@ -400,7 +434,7 @@ def test_exact_domain_checker_rejects_changed_flint_runtime(
 
 
 def test_graph_checker_reports_its_actual_exhaustive_replay_method() -> None:
-    checker, checker_request = _CASES[-1]
+    checker, checker_request = _CASES[-2]
 
     decision = checker(checker_request)
 
@@ -415,13 +449,85 @@ def test_graph_checker_reports_its_actual_exhaustive_replay_method() -> None:
 def test_graph_checker_does_not_require_the_unrelated_flint_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    checker, checker_request = _CASES[-1]
+    checker, checker_request = _CASES[-2]
     monkeypatch.setattr(checker_module.flint, "__version__", "unexpected")
 
     decision = checker(checker_request)
 
     assert decision["accepted"] is True
     assert decision["conclusion"] == "TRUE"
+
+
+def test_graph_checker_import_boundary_excludes_producer_and_flint_modules() -> None:
+    script = """
+import builtins
+real_import = builtins.__import__
+blocked = {"flint", "networkx", "sympy", "jacobian"}
+def guarded(name, *args, **kwargs):
+    if name.split(".", 1)[0] in blocked:
+        raise RuntimeError(f"forbidden checker import: {name}")
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded
+import jacobian_checkers.graph_exact_operations
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda result: result.update(
+            {
+                "maximum_matching_cardinality": 0,
+                "witness_edges": [],
+                "certificate": {
+                    **result["certificate"],
+                    "upper_bound": 0,
+                },
+            }
+        ),
+        lambda result: result.update(witness_edges=[["x", "y"]]),
+        lambda result: result["certificate"].update(barrier_vertices=["outside"]),
+        lambda result: result["certificate"].update(odd_component_count=1),
+        lambda result: result["certificate"].update(upper_bound=0),
+    ),
+)
+def test_maximum_matching_checker_rejects_false_or_rebound_certificates(
+    mutate: Callable[[dict[str, Any]], object],
+) -> None:
+    checker, checker_request = _CASES[-1]
+    adversarial = copy.deepcopy(checker_request)
+    mutate(adversarial["candidate"]["payload"])
+    adversarial["candidate"]["payload_digest"] = _digest(
+        adversarial["candidate"]["payload"]
+    )
+
+    decision = checker(adversarial)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_maximum_matching_checker_reports_tutte_berge_replay() -> None:
+    checker, checker_request = _CASES[-1]
+
+    decision = checker(checker_request)
+
+    assert decision["accepted"] is True
+    assert decision["detail"] == (
+        "independent Tutte-Berge barrier replay accepted "
+        "graph.invariant.maximum_matching.compute"
+    )
+    assert decision["arithmetic"] == "EXACT_INTEGER"
 
 
 def test_square_free_checker_normalizes_flint_factors_to_monic_contract() -> None:

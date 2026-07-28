@@ -6,36 +6,17 @@ SymPy nor Jacobian code; only passive JSON values cross the checker boundary.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Callable
 from fractions import Fraction
-from itertools import combinations
 from typing import Any
 
 import flint
 from flint import fmpq, fmpq_mat, fmpq_poly, fmpz_mat
 
-_ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
-_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+from jacobian_checkers.bound_artifacts import bound_request as _bound_request
+
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
-_ARTIFACT_KEYS = {
-    "artifact_uri",
-    "object_digest",
-    "payload_digest",
-    "schema_uri",
-    "semantics_uri",
-    "parents",
-    "payload",
-}
-_BINDING_KEYS = {
-    "claim_digest",
-    "semantics_digest",
-    "candidate_digest",
-    "scope_digest",
-    "encoding_digest",
-}
 _PYTHON_FLINT_VERSION = "0.9.0"
 _FLINT_VERSION = "3.6.0"
 
@@ -60,117 +41,6 @@ def _accept(detail: str) -> dict[str, Any]:
         "coverage": "NOT_APPLICABLE",
         "detail": detail,
     }
-
-
-def _digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _artifact(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != _ARTIFACT_KEYS:
-        raise ValueError("artifact metadata is malformed")
-    if not all(
-        isinstance(value[key], str) and pattern.fullmatch(value[key]) is not None
-        for key, pattern in (
-            ("artifact_uri", _ARTIFACT_URI),
-            ("object_digest", _DIGEST),
-            ("payload_digest", _DIGEST),
-            ("schema_uri", _ARTIFACT_URI),
-            ("semantics_uri", _ARTIFACT_URI),
-        )
-    ):
-        raise ValueError("artifact identifiers are malformed")
-    parents = value["parents"]
-    if (
-        not isinstance(parents, list)
-        or len(parents) != len(set(parents))
-        or not all(
-            isinstance(parent, str) and _ARTIFACT_URI.fullmatch(parent)
-            for parent in parents
-        )
-    ):
-        raise ValueError("artifact lineage is malformed")
-    if value["payload_digest"] != _digest(value["payload"]):
-        raise ValueError("artifact payload digest does not match")
-    return value
-
-
-def _bound_request(
-    request: object, *, operation_id: str, witness_format: str
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(request, dict) or set(request) != {
-        "request_version",
-        "claim",
-        "candidate",
-        "semantics",
-        "scope",
-        "witness",
-        "expected_bindings",
-    }:
-        raise ValueError("checker request is malformed")
-    if request["request_version"] != "1" or request["scope"] is not None:
-        raise ValueError("checker request version or scope is unsupported")
-    claim = _artifact(request["claim"])
-    candidate = _artifact(request["candidate"])
-    semantics = _artifact(request["semantics"])
-    witness = _artifact(request["witness"])
-    if (
-        len(candidate["parents"]) != 1
-        or candidate["parents"][0] != claim["artifact_uri"]
-    ):
-        raise ValueError("candidate is not bound to the input artifact")
-    if (
-        claim["semantics_uri"] != candidate["semantics_uri"]
-        or claim["semantics_uri"] != witness["semantics_uri"]
-    ):
-        raise ValueError("artifacts use different semantics")
-    bindings = request["expected_bindings"]
-    if (
-        not isinstance(bindings, dict)
-        or set(bindings) != _BINDING_KEYS
-        or bindings["scope_digest"] is not None
-        or bindings["encoding_digest"] is not None
-        or bindings["claim_digest"] != claim["object_digest"]
-        or bindings["candidate_digest"] != candidate["object_digest"]
-        or bindings["semantics_digest"] != semantics["object_digest"]
-        or semantics["artifact_uri"] != claim["semantics_uri"]
-    ):
-        raise ValueError("evidence bindings are malformed or mismatched")
-    envelope = witness["payload"]
-    if (
-        not isinstance(envelope, dict)
-        or set(envelope)
-        != {
-            "evidence_schema_version",
-            "witness_format",
-            "format_version",
-            "role",
-            "bindings",
-            "payload",
-        }
-        or envelope["evidence_schema_version"] != "1"
-        or envelope["witness_format"] != witness_format
-        or envelope["format_version"] != "1"
-        or envelope["role"] != "SUPPORTS_CLAIM"
-        or envelope["bindings"] != bindings
-        or envelope["payload"]
-        != {
-            "operation_id": operation_id,
-            "input_uri": claim["artifact_uri"],
-            "result_uri": candidate["artifact_uri"],
-        }
-        or len(witness["parents"]) != 2
-        or set(witness["parents"]) != {claim["artifact_uri"], candidate["artifact_uri"]}
-    ):
-        raise ValueError("witness is not exactly bound to the operation artifacts")
-    return claim["payload"], candidate["payload"]
 
 
 def _integer(value: object) -> int:
@@ -311,11 +181,9 @@ def _run(
     operation_id: str,
     witness_format: str,
     replay: Callable[[dict[str, Any], dict[str, Any]], bool],
-    replay_method: str = "Python-FLINT replay",
-    requires_python_flint: bool = True,
 ) -> dict[str, Any]:
     try:
-        if requires_python_flint and (
+        if (
             flint.__version__ != _PYTHON_FLINT_VERSION
             or flint.__FLINT_VERSION__ != _FLINT_VERSION
         ):
@@ -327,9 +195,9 @@ def _run(
         )
         if not replay(source, result):
             return _reject(
-                f"declared result does not match independent {replay_method}"
+                "declared result does not match independent Python-FLINT replay"
             )
-        return _accept(f"independent {replay_method} accepted {operation_id}")
+        return _accept(f"independent Python-FLINT replay accepted {operation_id}")
     except (KeyError, TypeError, ValueError, ZeroDivisionError, OverflowError):
         return _reject("malformed, unsupported, or mismatched checker request")
 
@@ -641,115 +509,7 @@ def check_matrix_smith_normal_form(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _induced_tree_maximum(
-    source: dict[str, Any],
-    result: dict[str, Any],
-) -> bool:
-    graph = source.get("graph")
-    if not isinstance(graph, dict):
-        raise ValueError("graph optimization input is malformed")
-    vertices = graph.get("vertices")
-    edges = graph.get("edges")
-    if (
-        graph.get("graph_schema_version") != "1"
-        or not isinstance(vertices, list)
-        or len(vertices) > 16
-        or not all(isinstance(vertex, str) and vertex for vertex in vertices)
-        or len(vertices) != len(set(vertices))
-        or not isinstance(edges, list)
-    ):
-        raise ValueError("graph lies outside the exhaustive checker scope")
-    vertex_set = set(vertices)
-    normalized_edges: set[tuple[str, str]] = set()
-    for edge in edges:
-        if (
-            not isinstance(edge, list)
-            or len(edge) != 2
-            or not all(isinstance(endpoint, str) for endpoint in edge)
-            or edge[0] == edge[1]
-            or edge[0] not in vertex_set
-            or edge[1] not in vertex_set
-        ):
-            raise ValueError("graph edge payload is malformed")
-        normalized_edges.add(tuple(sorted((edge[0], edge[1]))))
-    if len(normalized_edges) != len(edges):
-        raise ValueError("graph edge payload contains duplicates")
-
-    adjacency = {vertex: set[str]() for vertex in vertices}
-    for left, right in normalized_edges:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
-
-    def is_induced_tree(candidate: tuple[str, ...]) -> bool:
-        if not candidate:
-            return False
-        selected = set(candidate)
-        edge_count = sum(
-            1
-            for left, right in normalized_edges
-            if left in selected and right in selected
-        )
-        if edge_count != len(candidate) - 1:
-            return False
-        reached = {candidate[0]}
-        frontier = [candidate[0]]
-        while frontier:
-            current = frontier.pop()
-            for neighbor in adjacency[current] & selected:
-                if neighbor not in reached:
-                    reached.add(neighbor)
-                    frontier.append(neighbor)
-        return len(reached) == len(candidate)
-
-    claimed = result.get("optimum_value")
-    witness = result.get("witness_vertices")
-    if (
-        result.get("status") != "EXACT"
-        or result.get("convention") != "NONEMPTY_CONNECTED_ACYCLIC_EMPTY_SOURCE_ZERO"
-        or type(claimed) is not int
-        or claimed < 0
-        or claimed > len(vertices)
-        or result.get("order") != len(vertices)
-        or result.get("incumbent_value") != claimed
-        or result.get("lower_bound") != claimed
-        or result.get("upper_bound") != claimed
-        or not isinstance(witness, list)
-        or len(witness) != claimed
-        or not all(isinstance(vertex, str) for vertex in witness)
-        or len(witness) != len(set(witness))
-        or any(vertex not in vertex_set for vertex in witness)
-    ):
-        return False
-    if claimed == 0:
-        if vertices or witness:
-            return False
-    elif not is_induced_tree(tuple(witness)):
-        return False
-
-    actual = 0
-    for cardinality in range(len(vertices), 0, -1):
-        if any(
-            is_induced_tree(candidate)
-            for candidate in combinations(vertices, cardinality)
-        ):
-            actual = cardinality
-            break
-    return actual == claimed
-
-
-def check_graph_induced_tree_maximum(request: dict[str, Any]) -> dict[str, Any]:
-    return _run(
-        request,
-        operation_id="graph.induced_tree.maximum.compute",
-        witness_format="graph.induced-tree.maximum.exhaustive-replay",
-        replay=_induced_tree_maximum,
-        replay_method="finite-subset exhaustive replay",
-        requires_python_flint=False,
-    )
-
-
 __all__ = [
-    "check_graph_induced_tree_maximum",
     "check_matrix_characteristic_polynomial",
     "check_matrix_nullspace",
     "check_matrix_rref",

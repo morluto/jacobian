@@ -73,5 +73,5 @@ GRAPH_INVARIANT_BUNDLE = DomainBundle(
     completeness_basis=(
         "maintained exact algorithms covered the complete finite graph"
     ),
-    assurance_basis=("NetworkX/SymPy/Z3 computation; no independent checker invoked"),
+    assurance_basis=("NetworkX/SymPy computation; no independent checker invoked"),
 )

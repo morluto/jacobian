@@ -163,6 +163,34 @@ def test_tenant_router_isolates_artifact_stores(tmp_path: Path) -> None:
         beta.store.get(stored)
 
 
+def test_anonymous_tenant_namespace_is_fixed_by_the_operator(tmp_path: Path) -> None:
+    first = TenantKernelRouter(
+        tmp_path,
+        install_references=False,
+        allow_anonymous=True,
+        anonymous_tenant_id="test-endpoint-a",
+    )
+    second = TenantKernelRouter(
+        tmp_path,
+        install_references=False,
+        allow_anonymous=True,
+        anonymous_tenant_id="test-endpoint-b",
+    )
+
+    first_kernel = first.kernel_for(None)
+    second_kernel = second.kernel_for(None)
+
+    assert first_kernel.store.root != second_kernel.store.root
+    assert first.kernel_for(None) is first_kernel
+    with pytest.raises(ValueError, match="anonymous_tenant_id must start"):
+        TenantKernelRouter(
+            tmp_path,
+            install_references=False,
+            allow_anonymous=True,
+            anonymous_tenant_id="caller controlled",
+        )
+
+
 def test_tenant_router_isolates_epistemic_workspaces(tmp_path: Path) -> None:
     router = TenantKernelRouter(tmp_path, install_references=False)
     alpha = router.kernel_for("alpha")
@@ -220,6 +248,26 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
     )
     assert completed.returncode != 0
     assert "require --auth-tokens-file" in completed.stderr
+
+    named_without_anonymous = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "jacobian.adapters.mcp.server",
+            "--transport",
+            "streamable-http",
+            "--anonymous-tenant-id",
+            "test-endpoint-a",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert named_without_anonymous.returncode != 0
+    assert "--anonymous-tenant-id requires --allow-anonymous" in (
+        named_without_anonymous.stderr
+    )
 
 
 @pytest.mark.subprocess

@@ -11,7 +11,10 @@ from typing import Any, cast
 import networkx as nx
 import sympy
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.capabilities import (
+    CapabilityDiagnostic,
+    CapabilityInvocationExample,
+)
 from jacobian.contracts.graph_invariant_operations import (
     GraphCardinalityMaximumObligation,
     GraphCliqueNumberResult,
@@ -27,6 +30,7 @@ from jacobian.contracts.graph_invariant_operations import (
     GraphRadiusResult,
     GraphSpanningTreeCountResult,
     GraphTriangleCountResult,
+    GraphTutteBergeCertificate,
     GraphVertexConnectivityResult,
 )
 from jacobian.contracts.graph_optimization import (
@@ -35,6 +39,7 @@ from jacobian.contracts.graph_optimization import (
     OptimizationTermination,
 )
 from jacobian.contracts.results import ContractModel
+from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.operations import (
     BoundedSearchIncomplete,
@@ -65,6 +70,7 @@ def _computed[
     operation: Callable[[nx.Graph[str]], ResultT],
     *tags: str,
     version: str = "1",
+    invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
 ) -> ComputedOperation[GraphInvariantRequest, ResultT]:
     def implementation(
         request: GraphInvariantRequest,
@@ -93,6 +99,7 @@ def _computed[
         tags=("graph", "invariant", *tags),
         invalid_request=_INVALID_REQUEST,
         version=version,
+        invocation_examples=invocation_examples,
     )
 
 
@@ -174,9 +181,35 @@ def _maximum_matching(graph: nx.Graph[str]) -> GraphMaximumMatchingResult:
             for left, right in raw
         )
     )
+    cardinality = len(edges)
+    exposed_vertices: set[str] = set()
+    for vertex in graph:
+        reduced = graph.copy()
+        reduced.remove_node(vertex)
+        if len(nx.max_weight_matching(reduced, maxcardinality=True)) == cardinality:
+            exposed_vertices.add(str(vertex))
+    barrier = tuple(
+        sorted(
+            {
+                str(neighbor)
+                for vertex in exposed_vertices
+                for neighbor in graph.neighbors(vertex)
+                if str(neighbor) not in exposed_vertices
+            }
+        )
+    )
+    reduced = graph.subgraph(set(graph) - set(barrier))
+    odd_component_count = sum(
+        len(component) % 2 for component in nx.connected_components(reduced)
+    )
     return GraphMaximumMatchingResult(
-        maximum_matching_cardinality=len(edges),
+        maximum_matching_cardinality=cardinality,
         witness_edges=edges,
+        certificate=GraphTutteBergeCertificate(
+            barrier_vertices=barrier,
+            odd_component_count=odd_component_count,
+            upper_bound=cardinality,
+        ),
     )
 
 
@@ -532,6 +565,24 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         "matching",
         "maximum",
         "exact",
+        version="2",
+        invocation_examples=(
+            example(
+                "triangle_with_tail",
+                "Compute and certify a maximum matching of a triangle with one tail.",
+                {
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["b", "c"],
+                            ["c", "d"],
+                        ],
+                    }
+                },
+            ),
+        ),
     ),
 )
 

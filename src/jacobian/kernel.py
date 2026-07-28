@@ -886,6 +886,7 @@ class JacobianKernel:
         polynomial = self.domain_bundles.get("polynomial")
         matrix = self.domain_bundles.get("matrix")
         graph = self.domain_bundles.get("graph_optimization")
+        graph_invariants = self.domain_bundles.get("graph_invariants")
         if polynomial is None or matrix is None:
             return
         adapters, self.exact_domain_checkers = install_exact_domain_verification(
@@ -897,6 +898,7 @@ class JacobianKernel:
             polynomial=polynomial,
             matrix=matrix,
             graph=graph,
+            graph_invariants=graph_invariants,
             authorize=authorize,
         )
         for adapter in adapters:

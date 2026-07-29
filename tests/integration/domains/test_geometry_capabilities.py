@@ -1,3 +1,5 @@
+import pytest
+
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityRequest,
@@ -10,6 +12,8 @@ from jacobian.contracts.geometry import (
     PointSetRequest,
     PointTripleRequest,
     PolygonRequest,
+    SegmentIntersectionRequest,
+    SimplePolygonPointRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import GEOMETRY_BUNDLE
@@ -21,6 +25,20 @@ P0 = {"x": ZERO, "y": ZERO}
 PX = {"x": TWO, "y": ZERO}
 PY = {"x": ZERO, "y": TWO}
 PXY = {"x": TWO, "y": TWO}
+
+
+def _point(x: int, y: int) -> dict[str, dict[str, str]]:
+    return {
+        "x": {"num": str(x), "den": "1"},
+        "y": {"num": str(y), "den": "1"},
+    }
+
+
+def _segment(
+    start: dict[str, object],
+    end: dict[str, object],
+) -> dict[str, object]:
+    return {"start": start, "end": end}
 
 
 def test_segment_midpoint_example_is_directly_invocable(runtime) -> None:
@@ -70,10 +88,18 @@ def test_geometry_capabilities_are_distinct_and_every_contract_completes(
         PointLineRequest: {"point": PXY, "line": line_x},
         PolygonRequest: {"points": [P0, PX, PY]},
         PointSetRequest: {"points": [P0, PX, PY, PXY]},
+        SegmentIntersectionRequest: {
+            "first": _segment(P0, PXY),
+            "second": _segment(PX, PY),
+        },
+        SimplePolygonPointRequest: {
+            "polygon": {"points": [P0, PX, PXY, PY]},
+            "point": {"x": ONE, "y": ONE},
+        },
     }
     ids = [operation.capability_id for operation in GEOMETRY_BUNDLE.capabilities]
 
-    assert len(ids) == 13
+    assert len(ids) == 16
     assert len(ids) == len(set(ids))
     for operation in GEOMETRY_BUNDLE.capabilities:
         result = runtime.core.capabilities.invoke(
@@ -175,3 +201,194 @@ def test_degenerate_geometry_fails_before_artifact_writes(runtime) -> None:
     assert collinear_circle.diagnostics[0].code == "GEOMETRY_OPERATION_NOT_APPLICABLE"
     assert invalid_line.artifact_uris == ()
     assert collinear_circle.artifact_uris == ()
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "expected"),
+    (
+        (
+            _segment(_point(0, 0), _point(2, 2)),
+            _segment(_point(0, 2), _point(2, 0)),
+            {
+                "status": "POINT",
+                "point": _point(1, 1),
+                "contact_kind": "PROPER",
+                "overlap": None,
+            },
+        ),
+        (
+            _segment(_point(0, 0), _point(2, 0)),
+            _segment(_point(2, 0), _point(2, 2)),
+            {
+                "status": "POINT",
+                "point": _point(2, 0),
+                "contact_kind": "ENDPOINT_TOUCH",
+                "overlap": None,
+            },
+        ),
+        (
+            _segment(_point(0, 0), _point(3, 0)),
+            _segment(_point(1, 0), _point(2, 0)),
+            {
+                "status": "OVERLAP",
+                "point": None,
+                "contact_kind": None,
+                "overlap": _segment(_point(1, 0), _point(2, 0)),
+            },
+        ),
+        (
+            _segment(_point(0, 0), _point(0, 0)),
+            _segment(_point(-1, 0), _point(1, 0)),
+            {
+                "status": "POINT",
+                "point": _point(0, 0),
+                "contact_kind": "DEGENERATE_TOUCH",
+                "overlap": None,
+            },
+        ),
+        (
+            _segment(_point(0, 0), _point(1, 0)),
+            _segment(_point(2, 0), _point(3, 0)),
+            {
+                "status": "DISJOINT",
+                "point": None,
+                "contact_kind": None,
+                "overlap": None,
+            },
+        ),
+    ),
+)
+def test_closed_segment_intersection_preserves_degenerate_classification(
+    runtime,
+    first: dict[str, object],
+    second: dict[str, object],
+    expected: dict[str, object],
+) -> None:
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.segments.intersection.compute",
+            input={"first": first, "second": second},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == expected
+    assert len(result.artifact_uris) == 2
+
+
+@pytest.mark.parametrize(
+    ("points", "is_simple", "witness_status"),
+    (
+        (
+            [_point(0, 0), _point(2, 0), _point(2, 2), _point(0, 2)],
+            True,
+            None,
+        ),
+        (
+            [_point(0, 0), _point(2, 2), _point(0, 2), _point(2, 0)],
+            False,
+            "POINT",
+        ),
+        (
+            [_point(0, 0), _point(3, 0), _point(1, 0), _point(1, 2)],
+            False,
+            "OVERLAP",
+        ),
+    ),
+)
+def test_simple_polygon_decision_exposes_first_exact_violation(
+    runtime,
+    points: list[dict[str, object]],
+    is_simple: bool,
+    witness_status: str | None,
+) -> None:
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.simple.decide",
+            input={"points": points},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["is_simple"] is is_simple
+    witness = result.output["result"]["witness"]
+    assert (None if witness is None else witness["intersection"]["status"]) == (
+        witness_status
+    )
+
+
+@pytest.mark.parametrize(
+    ("point", "classification"),
+    (
+        (_point(1, 1), "INSIDE"),
+        (_point(2, 1), "BOUNDARY"),
+        (_point(3, 1), "OUTSIDE"),
+    ),
+)
+def test_simple_polygon_point_classification_is_exact_and_boundary_aware(
+    runtime,
+    point: dict[str, object],
+    classification: str,
+) -> None:
+    polygon = [_point(0, 0), _point(2, 0), _point(2, 2), _point(0, 2)]
+    forward = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.point.classify",
+            input={"polygon": {"points": polygon}, "point": point},
+        )
+    )
+    reverse = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.point.classify",
+            input={"polygon": {"points": list(reversed(polygon))}, "point": point},
+        )
+    )
+
+    assert forward.output["result"]["classification"] == classification
+    assert reverse.output["result"] == forward.output["result"]
+
+
+def test_point_classification_rejects_non_simple_polygon_before_writes(runtime) -> None:
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.point.classify",
+            input={
+                "polygon": {
+                    "points": [
+                        _point(0, 0),
+                        _point(2, 2),
+                        _point(0, 2),
+                        _point(2, 0),
+                    ]
+                },
+                "point": _point(1, 1),
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_GEOMETRY_REQUEST"
+    assert result.artifact_uris == ()
+
+
+@pytest.mark.parametrize(
+    "points",
+    (
+        [_point(0, 0), _point(2, 0), _point(0, 2), _point(0, 0)],
+        [_point(0, 0), _point(2, 0), _point(2, 0), _point(0, 2)],
+    ),
+)
+def test_polygon_ring_rejects_repeated_closure_or_zero_edge_before_writes(
+    runtime,
+    points: list[dict[str, object]],
+) -> None:
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.simple.decide",
+            input={"points": points},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_GEOMETRY_REQUEST"
+    assert result.artifact_uris == ()

@@ -28,7 +28,11 @@ from jacobian.contracts.geometry import (
     GeometryVerificationOutput,
     GeometryVerificationRequest,
     PointPairRequest,
+    PointSetRequest,
     PointTripleRequest,
+    PolygonRequest,
+    SegmentIntersectionRequest,
+    SimplePolygonPointRequest,
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
 from jacobian.operation_installation import InstalledDomainBundle
@@ -39,8 +43,12 @@ from jacobian.store import ArtifactStore, StoredArtifact, StoreError
 from jacobian.verification import VerificationService
 
 _OPERATION_MODELS = {
+    "geometry.points.compute.convex_hull": PointSetRequest,
     "geometry.points.compute.squared_distance": PointPairRequest,
     "geometry.segment.compute.midpoint": PointPairRequest,
+    "geometry.segments.intersection.compute": SegmentIntersectionRequest,
+    "geometry.polygon.simple.decide": PolygonRequest,
+    "geometry.polygon.point.classify": SimplePolygonPointRequest,
     "geometry.triangle.compute.orientation": PointTripleRequest,
     "geometry.triangle.compute.centroid": PointTripleRequest,
 }
@@ -165,8 +173,8 @@ class GeometryResultVerificationAdapter:
             version="1",
             title="Verify an exact rational geometry result",
             description=(
-                "Independently replay selected point and triangle identities "
-                "over exact rational coordinates."
+                "Independently replay selected point, segment, polygon, hull, "
+                "and triangle outcomes over exact rational coordinates."
             ),
             provider="jacobian.exact-geometry-checker",
             provider_runtime=known_provider_runtime(

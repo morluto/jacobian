@@ -15,6 +15,13 @@ def _point(x: int, y: int) -> dict[str, dict[str, str]]:
     return {"x": _rational(x), "y": _rational(y)}
 
 
+def _segment(
+    start: dict[str, object],
+    end: dict[str, object],
+) -> dict[str, object]:
+    return {"start": start, "end": end}
+
+
 def _artifact(
     *,
     uri_character: str,
@@ -52,9 +59,79 @@ def _request(
     if operation_id == "geometry.points.compute.squared_distance":
         claim_payload = {"first": _point(1, 2), "second": _point(4, 6)}
         candidate_payload = {"value": _rational(25)}
+    elif operation_id == "geometry.points.compute.convex_hull":
+        claim_payload = {
+            "points": [
+                _point(1, 1),
+                _point(0, 0),
+                _point(2, 0),
+                _point(2, 2),
+                _point(0, 2),
+            ]
+        }
+        candidate_payload = {
+            "points": [
+                _point(0, 0),
+                _point(2, 0),
+                _point(2, 2),
+                _point(0, 2),
+            ]
+        }
     elif operation_id == "geometry.segment.compute.midpoint":
         claim_payload = {"first": _point(1, 2), "second": _point(5, 8)}
         candidate_payload = {"point": _point(3, 5)}
+    elif operation_id == "geometry.segments.intersection.compute":
+        claim_payload = {
+            "first": _segment(_point(0, 0), _point(2, 2)),
+            "second": _segment(_point(0, 2), _point(2, 0)),
+        }
+        candidate_payload = {
+            "status": "POINT",
+            "point": _point(1, 1),
+            "contact_kind": "PROPER",
+            "overlap": None,
+        }
+    elif operation_id == "geometry.polygon.simple.decide":
+        claim_payload = {
+            "points": [
+                _point(0, 0),
+                _point(2, 2),
+                _point(0, 2),
+                _point(2, 0),
+            ]
+        }
+        candidate_payload = {
+            "vertex_count": 4,
+            "is_simple": False,
+            "checked_edge_pairs": 2,
+            "witness": {
+                "first_edge_index": 0,
+                "second_edge_index": 2,
+                "intersection": {
+                    "status": "POINT",
+                    "point": _point(1, 1),
+                    "contact_kind": "PROPER",
+                    "overlap": None,
+                },
+            },
+        }
+    elif operation_id == "geometry.polygon.point.classify":
+        claim_payload = {
+            "polygon": {
+                "points": [
+                    _point(0, 0),
+                    _point(2, 0),
+                    _point(2, 2),
+                    _point(0, 2),
+                ]
+            },
+            "point": _point(1, 1),
+        }
+        candidate_payload = {
+            "polygon_vertex_count": 4,
+            "classification": "INSIDE",
+            "boundary_edge_index": None,
+        }
     elif operation_id == "geometry.triangle.compute.orientation":
         claim_payload = {
             "first": _point(0, 0),
@@ -131,7 +208,11 @@ def _refresh(artifact: dict[str, Any]) -> None:
     "operation_id",
     [
         "geometry.points.compute.squared_distance",
+        "geometry.points.compute.convex_hull",
         "geometry.segment.compute.midpoint",
+        "geometry.segments.intersection.compute",
+        "geometry.polygon.simple.decide",
+        "geometry.polygon.point.classify",
         "geometry.triangle.compute.orientation",
         "geometry.triangle.compute.centroid",
     ],
@@ -147,6 +228,46 @@ def test_checker_accepts_selected_exact_geometry_results(operation_id: str) -> N
 def test_checker_rejects_candidate_mutation_with_fresh_digest() -> None:
     request = _request()
     request["candidate"]["payload"]["value"] = _rational(24)
+    _refresh(request["candidate"])
+
+    decision = check_exact_geometry(request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    ("operation_id", "mutation"),
+    (
+        (
+            "geometry.points.compute.convex_hull",
+            lambda payload: payload["points"].pop(),
+        ),
+        (
+            "geometry.segments.intersection.compute",
+            lambda payload: payload.update(contact_kind="ENDPOINT_TOUCH"),
+        ),
+        (
+            "geometry.polygon.simple.decide",
+            lambda payload: payload.update(
+                vertex_count=4,
+                is_simple=True,
+                checked_edge_pairs=6,
+                witness=None,
+            ),
+        ),
+        (
+            "geometry.polygon.point.classify",
+            lambda payload: payload.update(classification="OUTSIDE"),
+        ),
+    ),
+)
+def test_checker_rejects_planar_mutation_with_fresh_digest(
+    operation_id: str,
+    mutation: Any,
+) -> None:
+    request = _request(operation_id)
+    mutation(request["candidate"]["payload"])
     _refresh(request["candidate"])
 
     decision = check_exact_geometry(request)

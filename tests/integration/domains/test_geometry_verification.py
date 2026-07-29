@@ -94,6 +94,28 @@ def test_geometry_checker_availability_does_not_grant_authority(
             {"first": P0, "second": PXY},
         ),
         (
+            "geometry.points.compute.convex_hull",
+            {"points": [PXY, P0, PY, PX, {"x": ONE, "y": ONE}]},
+        ),
+        (
+            "geometry.segments.intersection.compute",
+            {
+                "first": {"start": P0, "end": PXY},
+                "second": {"start": PX, "end": PY},
+            },
+        ),
+        (
+            "geometry.polygon.simple.decide",
+            {"points": [P0, PXY, PY, PX]},
+        ),
+        (
+            "geometry.polygon.point.classify",
+            {
+                "polygon": {"points": [P0, PX, PXY, PY]},
+                "point": {"x": ONE, "y": ONE},
+            },
+        ),
+        (
             "geometry.triangle.compute.orientation",
             {"first": P0, "second": PX, "third": PY},
         ),
@@ -159,6 +181,45 @@ def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
     )
 
     assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert rejected.assurance.verification_record_uri is None
+
+
+def test_schema_valid_false_simple_polygon_decision_is_rejected(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime_with_geometry_checker(tmp_path)
+    computed = runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.simple.decide",
+            input={"points": [P0, PXY, PY, PX]},
+        )
+    )
+    mutated = runtime.artifacts.put(
+        schema_uri=runtime.geometry.result_schema_uris[
+            "geometry.polygon.simple.decide"
+        ],
+        semantics_uri=runtime.geometry.semantics_uri,
+        payload={
+            "vertex_count": 4,
+            "is_simple": True,
+            "checked_edge_pairs": 6,
+            "witness": None,
+        },
+        parents=(computed.output["input_uri"],),
+        summary="adversarial false simple-polygon decision",
+    )
+
+    rejected = runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.result.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": mutated.artifact_uri},
+        )
+    )
+
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED

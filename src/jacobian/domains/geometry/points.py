@@ -2,7 +2,7 @@
 
 from jacobian.contracts.geometry import (
     GeometryBooleanResult,
-    GeometryPointSetResult,
+    GeometryConvexHullResult,
     GeometryRationalResult,
     PointPairRequest,
     PointQuadrupleRequest,
@@ -114,7 +114,7 @@ POINT_CAPABILITIES = (
         "Construct planar convex hull",
         "Construct the exact convex hull vertices of a finite rational point set.",
         PointSetRequest,
-        GeometryPointSetResult,
+        GeometryConvexHullResult,
         convex_hull_points,
         "geometry",
         "convexity",

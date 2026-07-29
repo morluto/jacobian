@@ -1,0 +1,611 @@
+{
+  "schema_version": "2",
+  "manifest_id": "jacobian.public_postdoc.status",
+  "manifest_version": "2",
+  "title": "Current Jacobian portfolio status and four-domain capability gates for public postdoc v1",
+  "purpose": "CURRENT_PORTFOLIO_STATUS_AND_PUBLIC_EVALUATION",
+  "evaluation_class": "PUBLIC_ANSWER_VISIBLE_DIAGNOSTIC",
+  "scored": false,
+  "captured_at": "2026-07-29",
+  "source_suite": {
+    "path": "benchmarks/research_challenges/public_postdoc_v1.json",
+    "sha256": "sha256:cb025baf444d4a21482f4582afac066bb515aded105fd380cbd10ec4b78483ec",
+    "snapshot_semantics": "IMMUTABLE_HISTORICAL_INPUT"
+  },
+  "portfolio_snapshot": {
+    "repository_commit": "081834c979ec8f1c3b3995ebb86908bd82333a07",
+    "snapshot_basis": "PRE_MANIFEST_ENVIRONMENT_AT_REPOSITORY_COMMIT",
+    "catalog_version": "1",
+    "catalog_digest": "sha256:50dbb1584ffd1780498edcd61e2d858b253e13ff03e8635661e8f31468c37af6",
+    "capability_count": 269,
+    "policy_profile": "DEFAULT",
+    "policy_digest": "sha256:870a92b83d3e522e4015b6bb1cabda33086906f9de1c3c36e466251ea7ed1957",
+    "captured_at": "2026-07-29"
+  },
+  "evaluation_portfolio_snapshot": {
+    "repository_commit": "081834c979ec8f1c3b3995ebb86908bd82333a07",
+    "snapshot_basis": "PRE_MANIFEST_ENVIRONMENT_AT_REPOSITORY_COMMIT",
+    "catalog_version": "1",
+    "catalog_digest": "sha256:22343c82df3655e8f7b69bd9c70e05dd83d703f42ea7fa57cf61a43602ca25cb",
+    "capability_count": 266,
+    "policy_profile": "COMPUTE_VERIFY_NO_RETRIEVAL",
+    "policy_digest": "sha256:3c8655dcbcecf1965b7727a9333e0f6905b5e1dc7b1e750bd9840223292acddf",
+    "captured_at": "2026-07-29"
+  },
+  "evaluation_protocol": {
+    "runner": "benchmarks/research_challenge.py",
+    "prompt_handling": "PASS_PUBLISHED_PROMPT_UNCHANGED",
+    "source_urls_withheld": true,
+    "capability_policy_profile": "COMPUTE_VERIFY_NO_RETRIEVAL",
+    "retrieval_capabilities_available": false,
+    "minimum_repetitions_for_comparison": 3,
+    "false_certification_first": true,
+    "held_out_claims_allowed": false
+  },
+  "move_ledger": [
+    {
+      "episode_id": "finite-rational-distribution-transform-foundation",
+      "source": "Current finite raw-moment contract, public cases jcb-postdoc-005 and jcb-postdoc-011, and maintained exact-rational probability systems",
+      "mathematical_move": "Select an event, renormalize on that event, map atoms, or combine two independent finite rational variables while retaining every exact mass contribution.",
+      "required_input": "One or two normalized finite rational distributions plus an explicit finite event or total lookup map.",
+      "output_artifact": "A bound exact probability or normalized finite rational distribution with a canonical contribution ledger.",
+      "trust_boundary": "A producer may use python-flint, while an operator-authorized checker independently replays every contribution with standard-library rational arithmetic.",
+      "recurrence_signal": "Exact finite-distribution transformations are fundamental primitives shared by conditional expectation, finite Markov, reliability, and public Gaussian/percolation diagnostics; the catalog currently exposes only one raw moment.",
+      "candidate_ids": [
+        "roadmap.finite-rational-distribution-transforms"
+      ],
+      "disposition": "SPLIT"
+    },
+    {
+      "episode_id": "finite-poset-certificate-foundation",
+      "source": "Maintained NetworkX DAG operations, Sage finite-poset contracts, and current graph/finite-set portfolio gaps",
+      "mathematical_move": "Materialize a finite partial order and compute an extremal or incidence outcome while preserving Hasse, closure, antichain, chain-cover, or recurrence evidence.",
+      "required_input": "A bounded labelled finite carrier and either cover relations or comparable pairs under an explicit interpretation.",
+      "output_artifact": "A canonical finite-poset artifact and one separately inspectable width, linear-extension-count, or Möbius-function result.",
+      "trust_boundary": "NetworkX may produce DAG and matching results, while independent closure, chain/antichain, recurrence, and Möbius replay binds the exact poset.",
+      "recurrence_signal": "Finite posets are a fundamental discrete structure with downstream order, lattice, incidence, scheduling, and extremal-combinatorics leverage; no poset-owned capability exists.",
+      "candidate_ids": [
+        "roadmap.finite-poset-foundation"
+      ],
+      "disposition": "PROMOTED"
+    },
+    {
+      "episode_id": "exact-planar-degeneracy-foundation",
+      "source": "Current exact-rational geometry bundle, exact-kernel documentation, and the public unit-distance construction workflow",
+      "mathematical_move": "Classify exact intersections and closed-set membership while preserving endpoint, overlap, boundary, and invalid-polygon distinctions.",
+      "required_input": "Bounded rational line segments, polygon rings, or a rational query point.",
+      "output_artifact": "A discriminated segment-intersection, polygon-simplicity, or inside-boundary-outside result with determinant evidence.",
+      "trust_boundary": "The producer may reuse SymPy exact rationals, while an independent Fraction-based checker replays determinants, interval containment, and all required edge pairs.",
+      "recurrence_signal": "Exact degeneracy handling recurs throughout the existing geometry portfolio and public exact-coordinate constructions; current line and convex-hull operations do not expose segment overlap or polygon membership.",
+      "candidate_ids": [
+        "roadmap.exact-planar-geometry-foundation"
+      ],
+      "disposition": "PROMOTED"
+    },
+    {
+      "episode_id": "finite-simplicial-homology-foundation",
+      "source": "Maintained finite-simplicial-complex systems and the absence of topology-owned artifacts in the current catalog",
+      "mathematical_move": "Close a finite facet list under faces, orient its boundary matrices, and compute homology over one bounded prime field.",
+      "required_input": "A bounded finite facet list, canonical vertex labels, an explicit reduced/unreduced convention, and a prime coefficient field.",
+      "output_artifact": "A canonical simplicial complex, chain complex, and separately inspectable finite-field homology basis with cycle and rank evidence.",
+      "trust_boundary": "A producer may use maintained linear algebra, while an independent modular checker reconstructs faces and boundaries, verifies boundary-square-zero, and replays kernel/image quotient obligations.",
+      "recurrence_signal": "Finite simplicial complexes and field homology are fundamental topology primitives with clear reuse and strong replay semantics; the catalog has no topology capability.",
+      "candidate_ids": [
+        "roadmap.finite-simplicial-homology-foundation"
+      ],
+      "disposition": "SPLIT"
+    }
+  ],
+  "cases": [
+    {
+      "challenge_id": "jcb-postdoc-001",
+      "historical_fit": "DIRECT",
+      "current_status": "COVERED",
+      "current_capabilities": [
+        "polynomial.map.compute_jacobian",
+        "polynomial.map.evaluate",
+        "polynomial.map.collision.verify"
+      ],
+      "repository_evidence": [
+        "tests/integration/polynomial/test_polynomial_collision_verify.py::test_direct_collision_verifier_promotes_only_independent_replay",
+        "tests/integration/polynomial/test_polynomial_collision_verify.py::test_direct_collision_verifier_fails_closed_for_wrong_image"
+      ],
+      "current_boundary": "The exact map, Jacobian, images, and collision have a domain-owned independent replay path; the public mathematical construction remains answer-visible and is not a held-out performance result.",
+      "evaluation_status": "REGRESSION_COVERED",
+      "next_action": "Keep the public collision as a no-retrieval regression and preserve producer/checker separation."
+    },
+    {
+      "challenge_id": "jcb-postdoc-002",
+      "historical_fit": "DIRECT",
+      "current_status": "COVERED",
+      "current_capabilities": [
+        "graph.construct.compose",
+        "graph.hamiltonian_path.decide",
+        "graph.hamiltonian_path.verify",
+        "graph.induced_tree.maximum.compute",
+        "graph.induced_tree.maximum.verify"
+      ],
+      "repository_evidence": [
+        "tests/integration/domains/test_frontier_capabilities.py::test_hamiltonian_path_decision_has_independent_replay",
+        "tests/integration/domains/test_frontier_capabilities.py::test_hamiltonian_checker_rejects_a_forged_negative_decision"
+      ],
+      "current_boundary": "The historical suite correctly recorded the older portfolio, but the current catalog now includes bounded Hamiltonian-path decision and independent replay through order 18, covering the 14-vertex obstruction without rewriting v1.",
+      "evaluation_status": "REGRESSION_COVERED",
+      "next_action": "Add the exact 14-vertex public object as a stable regression only if its redistribution and fixture size remain appropriate."
+    },
+    {
+      "challenge_id": "jcb-postdoc-003",
+      "historical_fit": "DIRECT",
+      "current_status": "COVERED",
+      "current_capabilities": [
+        "universal_algebra.search.countermodel",
+        "universal_algebra.evaluate_laws"
+      ],
+      "repository_evidence": [
+        "tests/integration/domains/test_universal_algebra_capabilities.py::test_countermodel_search_composes_with_independent_law_replay",
+        "tests/unit/test_research_challenge_corpus.py::test_magma_implication_oracle_replays_the_minimal_order_two_model"
+      ],
+      "current_boundary": "The bounded countermodel search and separate exact law evaluation expose the decisive model while retaining finite-scope semantics.",
+      "evaluation_status": "REGRESSION_COVERED",
+      "next_action": "Keep the order-two oracle and bounded no-witness behavior as separate regression obligations."
+    },
+    {
+      "challenge_id": "jcb-postdoc-004",
+      "historical_fit": "PARTIAL",
+      "current_status": "PARTIAL",
+      "current_capabilities": [
+        "graph.construct.compose",
+        "graph.hamiltonian_path.decide",
+        "graph.invariant.independence_number.compute",
+        "graph.compute.neighborhood_independence"
+      ],
+      "repository_evidence": [
+        "tests/integration/domains/test_frontier_capabilities.py::test_hamiltonian_path_decision_has_independent_replay"
+      ],
+      "current_boundary": "A proposed 18-vertex graph can now receive a bounded Hamiltonian decision, but construction strategy and the invariant-guided search remain agent-owned.",
+      "evaluation_status": "RUNNABLE_PUBLIC_REPRODUCTION",
+      "next_action": "Run the unchanged public prompt to inspect composition and discovery; do not add an opaque counterexample-search workflow."
+    },
+    {
+      "challenge_id": "jcb-postdoc-005",
+      "historical_fit": "PARTIAL",
+      "current_status": "PARTIAL",
+      "current_capabilities": [
+        "polynomial.expression.normalize",
+        "polynomial.identity.verify",
+        "probability.finite_distribution.raw_moment.compute"
+      ],
+      "repository_evidence": [],
+      "current_boundary": "Finite rational raw moments do not express Gaussian Wick contraction or certify an identity for every exponent m; bounded checks remain non-conclusive for the public theorem.",
+      "evaluation_status": "BLOCKED_ON_INTERVENTION",
+      "next_action": "Implement and evaluate finite-distribution foundations separately; retain bounded Gaussian polynomial moments and all-m symbolic identities as later candidates."
+    },
+    {
+      "challenge_id": "jcb-postdoc-006",
+      "historical_fit": "PARTIAL",
+      "current_status": "PARTIAL",
+      "current_capabilities": [
+        "graph.construct.compose",
+        "graph.induced_forest.maximum.compute",
+        "graph.induced_bipartite.maximum.compute",
+        "integer.compute.floor_square_root"
+      ],
+      "repository_evidence": [
+        "tests/integration/graph/test_finite_graph_optimization.py::test_order_budget_fails_before_artifact_writes"
+      ],
+      "current_boundary": "Graph construction supports larger explicit objects, but exact induced-subgraph optimization retains an operation-specific order bound of 32 and cannot certify the full 123-vertex case.",
+      "evaluation_status": "RUNNABLE_PUBLIC_REPRODUCTION",
+      "next_action": "Use the public run to audit structural decomposition and fail-closed scale handling; do not raise a JSON bound without algorithmic and certificate evidence."
+    },
+    {
+      "challenge_id": "jcb-postdoc-007",
+      "historical_fit": "PARTIAL",
+      "current_status": "PARTIAL",
+      "current_capabilities": [
+        "universal_algebra.search.countermodel",
+        "universal_algebra.evaluate_laws"
+      ],
+      "repository_evidence": [
+        "src/jacobian/universal_algebra_capabilities.py"
+      ],
+      "current_boundary": "The current contract advertises maximum order 8, matching the public witness order, but the exact Equation 834 reproduction is not yet a committed regression and bounded search failure would still be a non-conclusion.",
+      "evaluation_status": "RUNNABLE_PUBLIC_REPRODUCTION",
+      "next_action": "Reproduce the exact public law pair under the current order-eight contract before changing this status to covered."
+    },
+    {
+      "challenge_id": "jcb-postdoc-008",
+      "historical_fit": "MISSING",
+      "current_status": "OPEN_GAP",
+      "current_capabilities": [
+        "integer.decide.squarefree",
+        "integer.compute.mobius",
+        "modular.solve.chinese_remainder"
+      ],
+      "repository_evidence": [],
+      "current_boundary": "The catalog still lacks a domain-owned asymptotic-density or sieve result with explicit hypotheses, local factors, convergence obligations, and quantitative error terms.",
+      "evaluation_status": "BLOCKED_ON_INTERVENTION",
+      "next_action": "Return to discovery only after repeated sieve workflows isolate one bounded typed outcome and independent replay boundary."
+    },
+    {
+      "challenge_id": "jcb-postdoc-009",
+      "historical_fit": "MISSING",
+      "current_status": "OPEN_GAP",
+      "current_capabilities": [
+        "matrix.determinant.compute",
+        "matrix.rank.compute",
+        "matrix.inverse.compute"
+      ],
+      "repository_evidence": [],
+      "current_boundary": "Generic matrices still do not expose weighted-tree lattice semantics, irreducibility, a decomposition artifact, or a checker binding those objects.",
+      "evaluation_status": "BLOCKED_ON_INTERVENTION",
+      "next_action": "Mine a second independent weighted-lattice workflow before proposing a domain contract."
+    },
+    {
+      "challenge_id": "jcb-postdoc-010",
+      "historical_fit": "MISSING",
+      "current_status": "OPEN_GAP",
+      "current_capabilities": [
+        "matrix.characteristic_polynomial.compute",
+        "matrix.determinant.compute",
+        "optimization.linear.rational_optimum.compute"
+      ],
+      "repository_evidence": [],
+      "current_boundary": "The catalog still lacks PSD-cone semantics, spectral-norm claims, a scalable sparse rational certificate artifact, and an independently authorized checker for the exact separation witness.",
+      "evaluation_status": "BLOCKED_ON_INTERVENTION",
+      "next_action": "Keep the exact public certificate as source evidence and define the semantic equivalence and checker obligations before implementation."
+    },
+    {
+      "challenge_id": "jcb-postdoc-011",
+      "historical_fit": "MISSING",
+      "current_status": "OPEN_GAP",
+      "current_capabilities": [
+        "graph.construct.compose",
+        "graph.compute.properties",
+        "probability.finite_distribution.raw_moment.compute"
+      ],
+      "repository_evidence": [],
+      "current_boundary": "The catalog still lacks graph-event and network-reliability artifacts, rigorous exact or interval probability evidence, compressed planar construction certificates, and 7,222-vertex scale support.",
+      "evaluation_status": "BLOCKED_ON_INTERVENTION",
+      "next_action": "Use small exact graph reliability as a later bounded candidate; do not represent the public counterexample with brute-force subset enumeration."
+    },
+    {
+      "challenge_id": "jcb-postdoc-012",
+      "historical_fit": "MISSING",
+      "current_status": "OPEN_GAP",
+      "current_capabilities": [
+        "lean.declaration.search",
+        "lean.check",
+        "lean.retrieve.premises"
+      ],
+      "repository_evidence": [],
+      "current_boundary": "General Lean access remains distinct from typed local-ring completion, descending ideal sequence, and adic-topology semantics.",
+      "evaluation_status": "BLOCKED_ON_INTERVENTION",
+      "next_action": "Route this case to commutative-algebra discovery rather than treating it as evidence for a generic topology capability."
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "area_id": "probability",
+      "capability_prefixes": [
+        "probability"
+      ],
+      "installed_capability_count": 1,
+      "representative_capabilities": [
+        "probability.finite_distribution.raw_moment.compute"
+      ],
+      "current_support": "One exact raw moment of a normalized finite rational distribution with per-atom contributions.",
+      "accepted_delta": [
+        "probability.finite_distribution.event_probability.compute",
+        "probability.finite_distribution.condition.compute",
+        "probability.finite_distribution.pushforward.compute",
+        "probability.finite_distribution.convolution.compute"
+      ],
+      "deferred_boundary": "Finite Markov chains, Gaussian polynomial Wick contraction, graph reliability, rigorous interval probability, and every all-parameter identity remain separate later gates.",
+      "decision": "ACCEPT_FOUNDATION"
+    },
+    {
+      "area_id": "discrete_math",
+      "capability_prefixes": [
+        "combinatorics",
+        "finite_set",
+        "graph",
+        "lattice",
+        "sequence"
+      ],
+      "installed_capability_count": 95,
+      "representative_capabilities": [
+        "combinatorics.compute.binomial",
+        "finite_set.compute.union",
+        "graph.invariant.maximum_matching.compute",
+        "sequence.compute.first_differences"
+      ],
+      "current_support": "Broad finite graph, integer-sequence, finite-integer-set, and named combinatorial computations, but no domain-owned finite poset artifact.",
+      "accepted_delta": [
+        "poset.finite.materialize",
+        "poset.width.compute",
+        "poset.linear_extensions.count",
+        "poset.mobius_function.compute"
+      ],
+      "deferred_boundary": "General recurrence and generating-series capabilities require a separate overlap review; nauty-backed canonicalization, matroids, hypergraphs, and permutation groups remain later gates.",
+      "decision": "ACCEPT_FOUNDATION"
+    },
+    {
+      "area_id": "computational_geometry",
+      "capability_prefixes": [
+        "geometry",
+        "polytope"
+      ],
+      "installed_capability_count": 17,
+      "representative_capabilities": [
+        "geometry.lines.compute.intersection",
+        "geometry.points.compute.convex_hull",
+        "geometry.polygon.compute.signed_area",
+        "polytope.separate"
+      ],
+      "current_support": "Exact rational two-dimensional point, line, triangle, convex-hull, and projective-arrangement outcomes plus one rational convex-hull separation result.",
+      "accepted_delta": [
+        "geometry.segments.intersection.compute",
+        "geometry.polygon.simple.decide",
+        "geometry.polygon.point.classify"
+      ],
+      "deferred_boundary": "Exact Delaunay/Voronoi and rational H/V conversion require optional-provider, degeneracy, licensing, and completeness-checker spikes.",
+      "decision": "ACCEPT_FOUNDATION"
+    },
+    {
+      "area_id": "topology",
+      "capability_prefixes": [
+        "topology"
+      ],
+      "installed_capability_count": 0,
+      "representative_capabilities": [],
+      "current_support": "No domain-owned topology capability is installed; matrix Smith form supplies only a diagonal and not the transformations needed for certified integral homology generators.",
+      "accepted_delta": [
+        "topology.simplicial_complex.materialize",
+        "topology.simplicial_complex.chain_complex.compute",
+        "topology.simplicial_homology.compute"
+      ],
+      "deferred_boundary": "Integral torsion generators wait on certified Smith transformations; persistent homology waits on exact filtration binding and a GUDHI license/provider spike; low-dimensional manifolds remain a Regina-specific later gate.",
+      "decision": "ACCEPT_FOUNDATION"
+    }
+  ],
+  "capability_candidates": [
+    {
+      "candidate_id": "roadmap.finite-rational-distribution-transforms",
+      "stage": "discovery",
+      "status": "accepted",
+      "summary": "Add four separate exact transformations over a reusable finite rational distribution artifact.",
+      "evidence": [
+        "The current 269-capability catalog contains exactly one probability operation: probability.finite_distribution.raw_moment.compute.",
+        "Public Gaussian and bunkbed diagnostics both expose missing probability-domain artifacts, although neither public theorem is itself the foundation contract.",
+        "Conditioning, pushforward, event probability, and convolution have exact finite semantics and independent rational replay."
+      ],
+      "open_gaps": [
+        "Freeze inline-versus-artifact input semantics and compatibility with the experimental raw-moment request.",
+        "Choose output-detail projection budgets for quadratic convolution ledgers.",
+        "Install operator-authorized checker declarations only after producer contracts stabilize."
+      ],
+      "missing_evidence": [],
+      "next_action": "Implement the reusable finite-distribution contract and one thin vertical slice per atomic outcome, then add an independent Fraction-based checker.",
+      "reproduction_assets": [
+        "benchmarks/research_challenges/public_postdoc_v1.json#jcb-postdoc-005",
+        "benchmarks/research_challenges/public_postdoc_v1.json#jcb-postdoc-011",
+        "tests/integration/domains/test_domain_math_capabilities.py"
+      ],
+      "provisional_capability_id": "probability.finite_distribution.event_probability.compute",
+      "provisional_capability_ids": [
+        "probability.finite_distribution.event_probability.compute",
+        "probability.finite_distribution.condition.compute",
+        "probability.finite_distribution.pushforward.compute",
+        "probability.finite_distribution.convolution.compute"
+      ],
+      "atomic_outcome": "Each capability returns either one exact event mass or one normalized finite rational distribution, never a probability workflow.",
+      "recurrence_basis": "A justified fundamental-primitive exception: these four transformations are stable finite probability objects with several downstream consumers and a single maintained exact-rational backend.",
+      "nearby_portfolio": [
+        "probability.finite_distribution.raw_moment.compute"
+      ],
+      "provider_boundary": "python-flint may compute exact rationals, but event membership, total lookup mapping, independence semantics, contribution ledgers, normalization, and bounds remain domain-owned.",
+      "verification_boundary": "An operator-authorized checker uses standard-library Fraction arithmetic, does not import the producer, and binds every atom, probability, event or map, scope, result, and artifact digest.",
+      "public_reproduction": "Generated two- to six-atom distributions cover zero-mass conditioning, colliding pushforwards, and convolution; public cases 005 and 011 remain broader answer-visible diagnostics rather than claimed closure.",
+      "evaluation_hypothesis": "The four domain-owned outcomes reduce agent-authored rational normalization and aggregation errors without increasing false VERIFIED claims relative to raw-moment-only access.",
+      "evaluation_readiness": "READY_FOR_IMPLEMENTATION",
+      "primary_sources": [
+        "https://docs.sympy.org/latest/modules/stats.html",
+        "https://python-flint.readthedocs.io/en/latest/general.html",
+        "https://arxiv.org/abs/2410.02545",
+        "https://arxiv.org/abs/2607.18186"
+      ],
+      "next_stage": "implement-math-capability",
+      "contract_ref": "docs/reference/four-domain-capability-roadmap.md#finite-rational-probability",
+      "runtime_snapshot_ref": "#/portfolio_snapshot",
+      "assurance": "Producers remain COMPUTED; VERIFIED is attainable only for the exact bounded contribution obligations replayed by a separately authorized checker.",
+      "decision": "ACCEPT the finite exact foundation; DEFER Gaussian all-m identities, large graph reliability, Markov chains, and interval probability."
+    },
+    {
+      "candidate_id": "roadmap.finite-poset-foundation",
+      "stage": "discovery",
+      "status": "accepted",
+      "summary": "Add one finite-poset artifact and separate materialization, width, linear-extension-count, and Möbius-function outcomes.",
+      "evidence": [
+        "The current catalog has graph, finite-set, sequence, combinatorics, and lattice operations but no poset-owned capability.",
+        "Maintained DAG libraries expose closure, reduction, antichains, topological sorts, and matching primitives.",
+        "Width admits a maximum-antichain lower witness and same-size chain-cover upper witness with a strong independent replay path."
+      ],
+      "open_gaps": [
+        "Freeze cover-edge versus comparable-pair input interpretation and reflexive relation policy.",
+        "Set closure-size and subset-DP budgets.",
+        "Define compact recurrence artifacts for larger exact linear-extension counts."
+      ],
+      "missing_evidence": [],
+      "next_action": "Implement finite-poset materialization first, then deliver width before count and Möbius outcomes so all consumers share one stable artifact.",
+      "reproduction_assets": [
+        "tests/integration/graph/test_graph_capabilities.py",
+        "https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.dag.transitive_reduction.html",
+        "https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/posets/posets.html"
+      ],
+      "provisional_capability_id": "poset.finite.materialize",
+      "provisional_capability_ids": [
+        "poset.finite.materialize",
+        "poset.width.compute",
+        "poset.linear_extensions.count",
+        "poset.mobius_function.compute"
+      ],
+      "atomic_outcome": "Materialize one finite poset, compute one certified width, count one bounded set of linear extensions, or compute one declared Möbius scope.",
+      "recurrence_basis": "A justified fundamental-primitive exception: finite posets are a standard mathematical object with broad downstream leverage, mature maintained backends, and exact replayable semantics.",
+      "nearby_portfolio": [
+        "finite_set.decide.subset",
+        "graph.invariant.maximum_matching.compute",
+        "graph.invariant.maximum_matching.verify"
+      ],
+      "provider_boundary": "NetworkX may compute DAG closure, reduction, and matching, while relation interpretation, canonical labels, poset validity, and mathematical certificates remain domain-owned.",
+      "verification_boundary": "Independent traversal replays closure and reduction; width checks both antichain and chain cover; count checks every declared ideal-DP recurrence; Möbius checks interval convolution identities.",
+      "public_reproduction": "Chains, antichains, diamonds, Boolean lattices, relabelings, invalid cycles, and generated small posets provide public deterministic reproductions.",
+      "evaluation_hypothesis": "A poset-owned artifact and certified width reduce graph-encoding and optimality errors while preserving the discoverability of existing graph and finite-set capabilities.",
+      "evaluation_readiness": "READY_FOR_IMPLEMENTATION",
+      "primary_sources": [
+        "https://networkx.org/documentation/stable/reference/algorithms/index.html",
+        "https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.dag.transitive_reduction.html",
+        "https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/posets/linear_extensions.html",
+        "https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/posets/posets.html"
+      ],
+      "next_stage": "implement-math-capability",
+      "contract_ref": "docs/reference/four-domain-capability-roadmap.md#finite-posets",
+      "runtime_snapshot_ref": "#/portfolio_snapshot",
+      "assurance": "Producers remain COMPUTED; width has a direct independent optimality certificate, while larger count assurance depends on complete recurrence-table replay.",
+      "decision": "ACCEPT the finite-poset foundation; DEFER matroids, hypergraphs, permutation groups, and nauty-backed canonical graph claims."
+    },
+    {
+      "candidate_id": "roadmap.exact-planar-geometry-foundation",
+      "stage": "discovery",
+      "status": "accepted",
+      "summary": "Extend the existing exact-rational geometry bundle with discriminated segment intersection and explicit polygon validity and point classification.",
+      "evidence": [
+        "The current geometry bundle has exact points, lines, triangles, convex hulls, and signed area but no segment-overlap or point-in-polygon outcome.",
+        "Public exact-coordinate constructions require boundary and incidence replay rather than floating-point proximity.",
+        "All accepted outcomes have direct rational determinant and interval-containment checks independent of the SymPy producer."
+      ],
+      "open_gaps": [
+        "Freeze zero-length segment, repeated closing vertex, and self-touching ring policies.",
+        "Resolve singular versus plural line/lines capability naming only through compatibility analysis.",
+        "Keep Delaunay, Voronoi, and polyhedral conversion out of the foundation contract."
+      ],
+      "missing_evidence": [],
+      "next_action": "Implement segment intersection first and reuse its typed discriminated result in polygon-simplicity validation before adding point classification.",
+      "reproduction_assets": [
+        "tests/integration/domains/test_geometry_capabilities.py",
+        "tests/checkers/test_exact_geometry_checker.py",
+        "https://arxiv.org/abs/2605.20695"
+      ],
+      "provisional_capability_id": "geometry.segments.intersection.compute",
+      "provisional_capability_ids": [
+        "geometry.segments.intersection.compute",
+        "geometry.polygon.simple.decide",
+        "geometry.polygon.point.classify"
+      ],
+      "atomic_outcome": "Return one exact discriminated segment intersection, one polygon-simplicity decision, or one inside-boundary-outside classification.",
+      "recurrence_basis": "A justified fundamental-primitive exception backed by the existing exact geometry portfolio and repeated incidence/boundary needs in exact-coordinate workflows.",
+      "nearby_portfolio": [
+        "geometry.lines.compute.intersection",
+        "geometry.points.compute.convex_hull",
+        "geometry.polygon.compute.signed_area",
+        "geometry.result.verify"
+      ],
+      "provider_boundary": "SymPy may supply exact rational primitives, while closed-set semantics, degeneracy classes, canonical endpoints, ring validity, scope, and evidence remain domain-owned.",
+      "verification_boundary": "An independent Fraction-based checker replays orientations, exact interval containment, maximal overlap, all required nonadjacent edge pairs, and boundary classification.",
+      "public_reproduction": "A deterministic suite spans proper crossings, endpoint touches, collinear overlaps, disjoint segments, simple and self-intersecting rings, and inside/boundary/outside points.",
+      "evaluation_hypothesis": "Discriminated exact geometry outcomes reduce boundary and degeneracy mistakes without encouraging agents to treat floating-point constructions as exact evidence.",
+      "evaluation_readiness": "READY_FOR_IMPLEMENTATION",
+      "primary_sources": [
+        "https://doc.cgal.org/latest/Kernel_23/index.html",
+        "https://docs.sympy.org/latest/modules/geometry/index.html",
+        "https://arxiv.org/abs/2605.20695"
+      ],
+      "next_stage": "implement-math-capability",
+      "contract_ref": "docs/reference/four-domain-capability-roadmap.md#exact-planar-geometry",
+      "runtime_snapshot_ref": "#/portfolio_snapshot",
+      "assurance": "Producers remain COMPUTED; exact bounded predicates can reach VERIFIED only through independent rational replay bound to every input and degeneracy convention.",
+      "decision": "ACCEPT exact planar foundations; REVISE optional CGAL Delaunay and cddlib H/V conversion after provider and completeness spikes."
+    },
+    {
+      "candidate_id": "roadmap.finite-simplicial-homology-foundation",
+      "stage": "discovery",
+      "status": "accepted",
+      "summary": "Create the topology bundle around finite simplicial complexes, oriented chain complexes, and exact homology over one bounded prime field.",
+      "evidence": [
+        "The current 269-capability catalog has no topology-prefixed operation.",
+        "Finite facet closure, oriented boundaries, boundary-square-zero, and modular rank/kernel/image obligations are exact and independently replayable.",
+        "The installed Smith-normal-form producer returns a diagonal without the transformations needed to bind integral homology generators."
+      ],
+      "open_gaps": [
+        "Freeze empty-simplex, isolated-vertex, reduced/unreduced, and orientation conventions.",
+        "Set closure-size, dimension, matrix, and prime-field bounds.",
+        "Keep persistent and integral homology outside the first contract."
+      ],
+      "missing_evidence": [],
+      "next_action": "Implement simplicial-complex materialization, then chain-complex construction, then finite-field homology with a separate modular checker.",
+      "reproduction_assets": [
+        "tests/integration/matrix/test_matrix_lattice_domain.py",
+        "https://gudhi.inria.fr/python/latest/simplex_tree_ref.html",
+        "https://doc.sagemath.org/html/en/reference/topology/index.html"
+      ],
+      "provisional_capability_id": "topology.simplicial_complex.materialize",
+      "provisional_capability_ids": [
+        "topology.simplicial_complex.materialize",
+        "topology.simplicial_complex.chain_complex.compute",
+        "topology.simplicial_homology.compute"
+      ],
+      "atomic_outcome": "Materialize one finite simplicial complex, compute one oriented chain complex, or compute homology over one declared finite prime field.",
+      "recurrence_basis": "A justified fundamental-primitive exception: finite simplicial complexes and field homology are foundational, highly reusable, bounded exact outcomes with mature backend references and independent replay.",
+      "nearby_portfolio": [
+        "matrix.normal_form.smith.compute",
+        "matrix.rank.compute"
+      ],
+      "provider_boundary": "The foundation may use maintained exact linear algebra, while face closure, orientation, coefficient semantics, quotient evidence, and all artifact relationships remain topology-owned.",
+      "verification_boundary": "An independent modular checker reconstructs every face and boundary, verifies boundary-square-zero, recomputes ranks, and checks cycle representatives modulo boundaries.",
+      "public_reproduction": "Points, disjoint points, a circle, filled triangle, tetrahedron boundary, torus, projective plane, cones, and relabelings provide public deterministic regressions over selected primes.",
+      "evaluation_hypothesis": "A topology-owned finite-complex and field-homology foundation lets agents obtain inspectable cycle evidence while reducing unsupported black-box topological claims.",
+      "evaluation_readiness": "READY_FOR_IMPLEMENTATION",
+      "primary_sources": [
+        "https://gudhi.inria.fr/python/latest/simplex_tree_ref.html",
+        "https://gudhi.inria.fr/licensing/",
+        "https://doc.sagemath.org/html/en/reference/topology/index.html"
+      ],
+      "next_stage": "implement-math-capability",
+      "contract_ref": "docs/reference/four-domain-capability-roadmap.md#finite-simplicial-topology",
+      "runtime_snapshot_ref": "#/portfolio_snapshot",
+      "assurance": "Producers remain COMPUTED; finite-field homology may reach VERIFIED after independent modular quotient replay. Integral and persistent claims remain open.",
+      "decision": "ACCEPT finite simplicial and prime-field homology foundations; DEFER integral torsion generators, persistence, and low-dimensional manifold recognition."
+    }
+  ],
+  "deferred_workflows": [
+    {
+      "workflow": "All-parameter Gaussian polynomial identities",
+      "decision": "DEFER",
+      "reason": "Finite moment calculations cannot establish an identity for every exponent, and the symbolic certificate format has not been frozen.",
+      "revisit_gate": "Two independent workflows with the same Wick or generating-function artifact and an independent symbolic identity replay path."
+    },
+    {
+      "workflow": "Large graph reliability and percolation counterexamples",
+      "decision": "DEFER",
+      "reason": "The public 7,222-vertex case requires compressed graph, symmetry, planarity, and probability certificates rather than unstructured subset enumeration.",
+      "revisit_gate": "A bounded small-graph reliability contract plus a second compressed-structure episode and a checker design that separates soundness from completeness."
+    },
+    {
+      "workflow": "Integral simplicial homology with torsion generators",
+      "decision": "DEFER",
+      "reason": "The current Smith-normal-form result does not expose left and right unimodular transformations that bind generators to the original chain bases.",
+      "revisit_gate": "A certified Smith-normal-form transformation artifact or an independent integral-homology checker with adversarial generator-binding tests."
+    },
+    {
+      "workflow": "Persistent homology through GUDHI",
+      "decision": "DEFER",
+      "reason": "GUDHI exposes floating filtration values and module-specific licensing; exact rational filtration identities and independent pairing replay are not yet frozen.",
+      "revisit_gate": "A pinned provider spike that returns simplex identities rather than trusted floats, passes a module-level license review, and admits independent modular reduction replay."
+    },
+    {
+      "workflow": "Delaunay, Voronoi, and rational polyhedral conversion",
+      "decision": "DEFER",
+      "reason": "Exact construction, degeneracy, C++ or GPL deployment, and completeness certificates are provider-specific and do not belong in the core planar foundation.",
+      "revisit_gate": "Separate CGAL and cddlib provider spikes with pinned versions, absence isolation, license decisions, and explicit checker obligations."
+    }
+  ]
+}

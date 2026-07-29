@@ -28,6 +28,15 @@ The catalog snapshots describe the pre-manifest environment at their named
 repository commit; provider availability remains installation-specific. Future
 status changes create a new overlay version; they do not rewrite v1.
 
+`public_postdoc_status_v2.json` applies the same immutable-input rule to the
+original twelve-case suite. It records the 269-capability portfolio at commit
+`081834c979ec8f1c3b3995ebb86908bd82333a07`, corrects current boundaries such
+as the later Hamiltonian-path capability without editing historical labels,
+and freezes the probability, discrete-mathematics, computational-geometry, and
+topology coverage matrix used by the four-domain capability roadmap. Its four
+accepted discovery records are implementation handoffs, not claims that the
+capabilities already exist.
+
 Each case contains:
 
 - a self-contained mathematical statement and copy-ready prompt;

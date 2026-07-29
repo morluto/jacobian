@@ -142,6 +142,12 @@
         "$ref": "#/$defs/candidate"
       }
     },
+    "coverage_matrix": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coverageArea"
+      }
+    },
     "deferred_workflows": {
       "type": "array",
       "items": {
@@ -396,7 +402,39 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9_.-]+$"
         },
+        "provisional_capability_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]+$"
+          }
+        },
         "atomic_outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime_snapshot_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assurance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missing_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "decision": {
           "type": "string",
           "minLength": 1
         },
@@ -449,6 +487,70 @@
             "implement-math-capability",
             "implement-math-capability-checker",
             "discover-math-capabilities"
+          ]
+        }
+      }
+    },
+    "coverageArea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "area_id",
+        "capability_prefixes",
+        "installed_capability_count",
+        "representative_capabilities",
+        "current_support",
+        "accepted_delta",
+        "deferred_boundary",
+        "decision"
+      ],
+      "properties": {
+        "area_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]+$"
+        },
+        "capability_prefixes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        },
+        "installed_capability_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "representative_capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]+$"
+          }
+        },
+        "current_support": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_delta": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]+$"
+          }
+        },
+        "deferred_boundary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "enum": [
+            "ACCEPT_FOUNDATION",
+            "REVISE",
+            "DEFER"
           ]
         }
       }

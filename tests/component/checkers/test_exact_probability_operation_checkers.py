@@ -15,6 +15,7 @@ from jacobian_checkers.exact_probability_operations import (
     check_finite_event_probability,
     check_finite_pushforward,
     check_finite_raw_moment,
+    check_gaussian_polynomial_moment,
 )
 
 _META = {
@@ -30,6 +31,19 @@ _BIT = {
         {"value": _q(1), "probability": _q(1, 2)},
     ]
 }
+_GAUSSIAN_META = {
+    "gaussian_model": "INDEPENDENT_STANDARD_REAL",
+    "completeness": "COMPLETE_BOUNDED_EXPANSION",
+    "exactness": "EXACT_COMPLEX_RATIONAL",
+    "determinism": "DETERMINISTIC",
+    "backend": "python-flint",
+    "backend_version": "0.9.0",
+    "verification": "UNVERIFIED",
+}
+
+
+def _c(real: int, imaginary: int = 0) -> dict[str, dict[str, str]]:
+    return {"real": _q(real), "imaginary": _q(imaginary)}
 
 
 def _artifact(
@@ -215,6 +229,53 @@ _CASES: tuple[
             },
         ),
     ),
+    (
+        check_gaussian_polynomial_moment,
+        _request(
+            "probability.gaussian_polynomial.moment.compute",
+            "probability.gaussian-polynomial-moment.fraction-replay",
+            {
+                "polynomial": {
+                    "variable_count": 1,
+                    "terms": [
+                        {"coefficient": _c(1), "exponents": [0]},
+                        {"coefficient": _c(0, 1), "exponents": [1]},
+                    ],
+                },
+                "order": 2,
+            },
+            {
+                "order": 2,
+                "moment": _c(0),
+                "expansion_path_count": 4,
+                "expanded_monomial_count": 3,
+                "contractions": [
+                    {
+                        "exponents": [0],
+                        "expanded_coefficient": _c(1),
+                        "variable_moment_factors": ["1"],
+                        "gaussian_moment_factor": "1",
+                        "contribution": _c(1),
+                    },
+                    {
+                        "exponents": [1],
+                        "expanded_coefficient": _c(0, 2),
+                        "variable_moment_factors": ["0"],
+                        "gaussian_moment_factor": "0",
+                        "contribution": _c(0),
+                    },
+                    {
+                        "exponents": [2],
+                        "expanded_coefficient": _c(-1),
+                        "variable_moment_factors": ["1"],
+                        "gaussian_moment_factor": "1",
+                        "contribution": _c(-1),
+                    },
+                ],
+                **_GAUSSIAN_META,
+            },
+        ),
+    ),
 )
 
 
@@ -246,9 +307,22 @@ def test_probability_checkers_reject_payload_substitution_with_fresh_digest(
 
 
 def test_convolution_checker_rejects_missing_pair_with_fresh_digest() -> None:
-    checker, case_request = _CASES[-1]
+    checker, case_request = _CASES[-2]
     forged = copy.deepcopy(case_request)
     forged["candidate"]["payload"]["contributions"].pop()
+    forged["candidate"]["payload_digest"] = _digest(forged["candidate"]["payload"])
+
+    checked = checker(forged)
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"
+
+
+def test_gaussian_checker_rejects_forged_contraction_with_fresh_digest() -> None:
+    checker, case_request = _CASES[-1]
+    forged = copy.deepcopy(case_request)
+    forged["candidate"]["payload"]["contractions"][2]["contribution"] = _c(0)
+    forged["candidate"]["payload"]["moment"] = _c(1)
     forged["candidate"]["payload_digest"] = _digest(forged["candidate"]["payload"])
 
     checked = checker(forged)

@@ -6,15 +6,21 @@ from fractions import Fraction
 from itertools import pairwise
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
 from jacobian.contracts.results import ContractModel
 
 MAX_FINITE_DISTRIBUTION_ATOMS = 256
 MAX_FINITE_CONVOLUTION_PAIRS = 4096
 MAX_INPUT_RATIONAL_DIGITS = 128
 MAX_RESULT_RATIONAL_DIGITS = 512
+MAX_GAUSSIAN_VARIABLES = 8
+MAX_GAUSSIAN_POLYNOMIAL_TERMS = 16
+MAX_GAUSSIAN_TERM_DEGREE = 8
+MAX_GAUSSIAN_MOMENT_ORDER = 16
+MAX_GAUSSIAN_EXPANSION_PATHS = 4096
+MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS = 4096
 
 
 def _require_bounded_fraction(
@@ -52,6 +58,184 @@ def _require_strictly_increasing(
     if any(left >= right for left, right in pairwise(fractions)):
         raise ValueError(f"{label} must be strictly increasing")
     return fractions
+
+
+def _gaussian_univariate_moment(exponent: int) -> int:
+    if exponent % 2:
+        return 0
+    result = 1
+    for factor in range(1, exponent, 2):
+        result *= factor
+    return result
+
+
+class ExactComplexRational(ContractModel):
+    """One exact element of Q(i), encoded without floating-point values."""
+
+    real: CanonicalRational
+    imaginary: CanonicalRational
+
+    def as_fractions(self) -> tuple[Fraction, Fraction]:
+        return self.real.as_fraction(), self.imaginary.as_fraction()
+
+    @model_validator(mode="after")
+    def require_bounded_components(self) -> Self:
+        for label, value in (
+            ("complex real component", self.real),
+            ("complex imaginary component", self.imaginary),
+        ):
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS,
+                label=label,
+            )
+        return self
+
+
+class GaussianPolynomialTerm(ContractModel):
+    coefficient: ExactComplexRational
+    exponents: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_GAUSSIAN_VARIABLES,
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_nonzero_term(self) -> Self:
+        if any(
+            type(exponent) is not int or exponent < 0 for exponent in self.exponents
+        ):
+            raise ValueError(
+                "Gaussian polynomial exponents must be nonnegative integers"
+            )
+        if sum(self.exponents) > MAX_GAUSSIAN_TERM_DEGREE:
+            raise ValueError(
+                "Gaussian polynomial term exceeds the "
+                f"{MAX_GAUSSIAN_TERM_DEGREE}-degree bound"
+            )
+        if self.coefficient.as_fractions() == (Fraction(), Fraction()):
+            raise ValueError("Gaussian polynomial terms must have nonzero coefficients")
+        for component in (self.coefficient.real, self.coefficient.imaginary):
+            _require_bounded_rational(
+                component,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="Gaussian polynomial input coefficient",
+            )
+        return self
+
+
+class GaussianPolynomial(ContractModel):
+    """A canonical sparse polynomial in independent standard real Gaussians."""
+
+    variable_count: StrictInt = Field(ge=1, le=MAX_GAUSSIAN_VARIABLES)
+    terms: tuple[GaussianPolynomialTerm, ...] = Field(
+        min_length=1,
+        max_length=MAX_GAUSSIAN_POLYNOMIAL_TERMS,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_sparse_polynomial(self) -> Self:
+        exponents = tuple(term.exponents for term in self.terms)
+        if any(len(item) != self.variable_count for item in exponents):
+            raise ValueError(
+                "every Gaussian polynomial exponent vector must match variable_count"
+            )
+        if any(left >= right for left, right in pairwise(exponents)):
+            raise ValueError(
+                "Gaussian polynomial terms must use strictly increasing exponent order"
+            )
+        return self
+
+
+class GaussianPolynomialMomentRequest(ContractModel):
+    polynomial: GaussianPolynomial
+    order: StrictInt = Field(ge=0, le=MAX_GAUSSIAN_MOMENT_ORDER)
+
+    @model_validator(mode="after")
+    def require_bounded_complete_expansion(self) -> Self:
+        expansion_paths = len(self.polynomial.terms) ** self.order
+        if expansion_paths > MAX_GAUSSIAN_EXPANSION_PATHS:
+            raise ValueError(
+                "Gaussian polynomial power exceeds the "
+                f"{MAX_GAUSSIAN_EXPANSION_PATHS}-path expansion bound"
+            )
+        return self
+
+
+class GaussianMomentContraction(ContractModel):
+    exponents: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_GAUSSIAN_VARIABLES,
+    )
+    expanded_coefficient: ExactComplexRational
+    variable_moment_factors: tuple[CanonicalInteger, ...] = Field(
+        min_length=1,
+        max_length=MAX_GAUSSIAN_VARIABLES,
+    )
+    gaussian_moment_factor: CanonicalInteger
+    contribution: ExactComplexRational
+
+    @model_validator(mode="after")
+    def bind_gaussian_contraction(self) -> Self:
+        if len(self.exponents) != len(self.variable_moment_factors):
+            raise ValueError("Gaussian contraction dimensions disagree")
+        expected_factors = tuple(
+            _gaussian_univariate_moment(exponent) for exponent in self.exponents
+        )
+        actual_factors = tuple(int(value) for value in self.variable_moment_factors)
+        if actual_factors != expected_factors:
+            raise ValueError("Gaussian variable moment factors are invalid")
+        expected_factor = 1
+        for factor in expected_factors:
+            expected_factor *= factor
+        if int(self.gaussian_moment_factor) != expected_factor:
+            raise ValueError("Gaussian moment factor does not match its variables")
+        coefficient = self.expanded_coefficient.as_fractions()
+        contribution = self.contribution.as_fractions()
+        if contribution != (
+            coefficient[0] * expected_factor,
+            coefficient[1] * expected_factor,
+        ):
+            raise ValueError("Gaussian contraction contribution is invalid")
+        return self
+
+
+class GaussianPolynomialMomentResult(ContractModel):
+    order: StrictInt = Field(ge=0, le=MAX_GAUSSIAN_MOMENT_ORDER)
+    moment: ExactComplexRational
+    expansion_path_count: StrictInt = Field(ge=1, le=MAX_GAUSSIAN_EXPANSION_PATHS)
+    expanded_monomial_count: StrictInt = Field(ge=1, le=MAX_GAUSSIAN_EXPANSION_PATHS)
+    contractions: tuple[GaussianMomentContraction, ...] = Field(
+        min_length=1,
+        max_length=MAX_GAUSSIAN_EXPANSION_PATHS,
+    )
+    gaussian_model: Literal["INDEPENDENT_STANDARD_REAL"] = "INDEPENDENT_STANDARD_REAL"
+    completeness: Literal["COMPLETE_BOUNDED_EXPANSION"] = "COMPLETE_BOUNDED_EXPANSION"
+    exactness: Literal["EXACT_COMPLEX_RATIONAL"] = "EXACT_COMPLEX_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_complete_contraction_ledger(self) -> Self:
+        if self.expanded_monomial_count != len(self.contractions):
+            raise ValueError("expanded monomial count does not match the ledger")
+        exponents = tuple(item.exponents for item in self.contractions)
+        if any(left >= right for left, right in pairwise(exponents)):
+            raise ValueError(
+                "Gaussian contractions must use strictly increasing exponent order"
+            )
+        if any(len(item) != len(exponents[0]) for item in exponents):
+            raise ValueError("Gaussian contraction dimensions disagree")
+        total_real = Fraction()
+        total_imaginary = Fraction()
+        for item in self.contractions:
+            real, imaginary = item.contribution.as_fractions()
+            total_real += real
+            total_imaginary += imaginary
+        if self.moment.as_fractions() != (total_real, total_imaginary):
+            raise ValueError("Gaussian polynomial moment does not match its ledger")
+        return self
 
 
 class FiniteDistributionAtom(ContractModel):
@@ -487,6 +671,12 @@ class FiniteConvolutionResult(ContractModel):
 __all__ = [
     "MAX_FINITE_CONVOLUTION_PAIRS",
     "MAX_FINITE_DISTRIBUTION_ATOMS",
+    "MAX_GAUSSIAN_EXPANSION_PATHS",
+    "MAX_GAUSSIAN_MOMENT_ORDER",
+    "MAX_GAUSSIAN_POLYNOMIAL_TERMS",
+    "MAX_GAUSSIAN_TERM_DEGREE",
+    "MAX_GAUSSIAN_VARIABLES",
+    "ExactComplexRational",
     "FiniteConditionResult",
     "FiniteConditionalContribution",
     "FiniteConvolutionContribution",
@@ -500,5 +690,10 @@ __all__ = [
     "FinitePushforwardRequest",
     "FinitePushforwardResult",
     "FiniteRationalDistribution",
+    "GaussianMomentContraction",
+    "GaussianPolynomial",
+    "GaussianPolynomialMomentRequest",
+    "GaussianPolynomialMomentResult",
+    "GaussianPolynomialTerm",
     "require_input_distribution",
 ]

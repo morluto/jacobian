@@ -21,6 +21,15 @@ _META = {
     "backend_version": "0.9.0",
     "verification": "UNVERIFIED",
 }
+_GAUSSIAN_META = {
+    "gaussian_model": "INDEPENDENT_STANDARD_REAL",
+    "completeness": "COMPLETE_BOUNDED_EXPANSION",
+    "exactness": "EXACT_COMPLEX_RATIONAL",
+    "determinism": "DETERMINISTIC",
+    "backend": "python-flint",
+    "backend_version": "0.9.0",
+    "verification": "UNVERIFIED",
+}
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -64,6 +73,31 @@ def _fraction(value: object) -> Fraction:
     result = Fraction(numerator, denominator)
     if (result.numerator, result.denominator) != (numerator, denominator):
         raise ValueError("rational is not reduced")
+    return result
+
+
+def _complex_fraction(value: object) -> tuple[Fraction, Fraction]:
+    if not isinstance(value, dict) or set(value) != {"real", "imaginary"}:
+        raise ValueError("exact complex rational is malformed")
+    return _fraction(value["real"]), _fraction(value["imaginary"])
+
+
+def _complex_multiply(
+    left: tuple[Fraction, Fraction],
+    right: tuple[Fraction, Fraction],
+) -> tuple[Fraction, Fraction]:
+    return (
+        left[0] * right[0] - left[1] * right[1],
+        left[0] * right[1] + left[1] * right[0],
+    )
+
+
+def _gaussian_univariate_moment(exponent: int) -> int:
+    if exponent % 2:
+        return 0
+    result = 1
+    for factor in range(1, exponent, 2):
+        result *= factor
     return result
 
 
@@ -299,6 +333,138 @@ def _replay_convolution(source: dict[str, Any], result: dict[str, Any]) -> bool:
     )
 
 
+def _replay_gaussian_polynomial_moment(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    if set(source) != {"polynomial", "order"} or set(result) != {
+        "order",
+        "moment",
+        "expansion_path_count",
+        "expanded_monomial_count",
+        "contractions",
+        *_GAUSSIAN_META,
+    }:
+        return False
+    if any(result.get(key) != value for key, value in _GAUSSIAN_META.items()):
+        return False
+    order = source["order"]
+    if type(order) is not int or not 0 <= order <= 16 or result["order"] != order:
+        return False
+    polynomial = source["polynomial"]
+    if not isinstance(polynomial, dict) or set(polynomial) != {
+        "variable_count",
+        "terms",
+    }:
+        return False
+    variable_count = polynomial["variable_count"]
+    terms = polynomial["terms"]
+    if (
+        type(variable_count) is not int
+        or not 1 <= variable_count <= 8
+        or not isinstance(terms, list)
+        or not 1 <= len(terms) <= 16
+        or len(terms) ** order > 4096
+    ):
+        return False
+    base: list[tuple[tuple[int, ...], tuple[Fraction, Fraction]]] = []
+    previous_exponents: tuple[int, ...] | None = None
+    for term in terms:
+        if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
+            return False
+        raw_exponents = term["exponents"]
+        if (
+            not isinstance(raw_exponents, list)
+            or len(raw_exponents) != variable_count
+            or any(
+                type(exponent) is not int or exponent < 0 for exponent in raw_exponents
+            )
+            or sum(raw_exponents) > 8
+        ):
+            return False
+        exponents = tuple(raw_exponents)
+        if previous_exponents is not None and exponents <= previous_exponents:
+            return False
+        previous_exponents = exponents
+        coefficient = _complex_fraction(term["coefficient"])
+        if coefficient == (Fraction(), Fraction()):
+            return False
+        base.append((exponents, coefficient))
+
+    expanded: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
+        (0,) * variable_count: (Fraction(1), Fraction())
+    }
+    for _ in range(order):
+        next_expanded: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {}
+        for left_exponents, left_coefficient in sorted(expanded.items()):
+            for right_exponents, right_coefficient in base:
+                exponents = tuple(
+                    left + right
+                    for left, right in zip(
+                        left_exponents,
+                        right_exponents,
+                        strict=True,
+                    )
+                )
+                product = _complex_multiply(left_coefficient, right_coefficient)
+                previous = next_expanded.get(
+                    exponents,
+                    (Fraction(), Fraction()),
+                )
+                next_expanded[exponents] = (
+                    previous[0] + product[0],
+                    previous[1] + product[1],
+                )
+        expanded = {
+            exponents: coefficient
+            for exponents, coefficient in next_expanded.items()
+            if coefficient != (Fraction(), Fraction())
+        }
+
+    contractions = result["contractions"]
+    if (
+        result["expansion_path_count"] != len(base) ** order
+        or result["expanded_monomial_count"] != len(expanded)
+        or not isinstance(contractions, list)
+        or len(contractions) != len(expanded)
+    ):
+        return False
+    total = (Fraction(), Fraction())
+    for item, (exponents, coefficient) in zip(
+        contractions,
+        sorted(expanded.items()),
+        strict=True,
+    ):
+        if not isinstance(item, dict) or set(item) != {
+            "exponents",
+            "expanded_coefficient",
+            "variable_moment_factors",
+            "gaussian_moment_factor",
+            "contribution",
+        }:
+            return False
+        factors = tuple(_gaussian_univariate_moment(exponent) for exponent in exponents)
+        gaussian_factor = 1
+        for factor in factors:
+            gaussian_factor *= factor
+        contribution = (
+            coefficient[0] * gaussian_factor,
+            coefficient[1] * gaussian_factor,
+        )
+        raw_factors = item["variable_moment_factors"]
+        if (
+            item["exponents"] != list(exponents)
+            or _complex_fraction(item["expanded_coefficient"]) != coefficient
+            or not isinstance(raw_factors, list)
+            or tuple(_integer(value) for value in raw_factors) != factors
+            or _integer(item["gaussian_moment_factor"]) != gaussian_factor
+            or _complex_fraction(item["contribution"]) != contribution
+        ):
+            return False
+        total = (total[0] + contribution[0], total[1] + contribution[1])
+    return _complex_fraction(result["moment"]) == total
+
+
 def check_finite_raw_moment(request: object) -> dict[str, Any]:
     return _run(
         request,
@@ -344,10 +510,20 @@ def check_finite_convolution(request: object) -> dict[str, Any]:
     )
 
 
+def check_gaussian_polynomial_moment(request: object) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="probability.gaussian_polynomial.moment.compute",
+        witness_format="probability.gaussian-polynomial-moment.fraction-replay",
+        replay=_replay_gaussian_polynomial_moment,
+    )
+
+
 __all__ = [
     "check_finite_condition",
     "check_finite_convolution",
     "check_finite_event_probability",
     "check_finite_pushforward",
     "check_finite_raw_moment",
+    "check_gaussian_polynomial_moment",
 ]

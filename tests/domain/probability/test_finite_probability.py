@@ -27,6 +27,16 @@ def _rational(num: int, den: int = 1) -> dict[str, str]:
     return {"num": str(num), "den": str(den)}
 
 
+def _complex(
+    real: int,
+    imaginary: int = 0,
+) -> dict[str, dict[str, str]]:
+    return {
+        "real": _rational(real),
+        "imaginary": _rational(imaginary),
+    }
+
+
 def _distribution(
     *atoms: tuple[int, int, int],
 ) -> dict[str, list[dict[str, dict[str, str]]]]:
@@ -264,6 +274,121 @@ def test_incomplete_pushforward_mapping_fails_before_artifact_writes(
                 "mapping": [
                     {"source": _rational(0), "target": _rational(1)},
                 ],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_FINITE_PROBABILITY_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_gaussian_polynomial_moment_preserves_complete_complex_contraction(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.gaussian_polynomial.moment.compute",
+            input={
+                "polynomial": {
+                    "variable_count": 1,
+                    "terms": [
+                        {"coefficient": _complex(1), "exponents": [0]},
+                        {"coefficient": _complex(0, 1), "exponents": [1]},
+                    ],
+                },
+                "order": 2,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    computed = result.output["result"]
+    assert computed["moment"] == _complex(0)
+    assert computed["expansion_path_count"] == 4
+    assert computed["expanded_monomial_count"] == 3
+    assert [item["exponents"] for item in computed["contractions"]] == [
+        [0],
+        [1],
+        [2],
+    ]
+    assert [item["gaussian_moment_factor"] for item in computed["contractions"]] == [
+        "1",
+        "0",
+        "1",
+    ]
+    assert [item["contribution"] for item in computed["contractions"]] == [
+        _complex(1),
+        _complex(0),
+        _complex(-1),
+    ]
+    assert computed["completeness"] == "COMPLETE_BOUNDED_EXPANSION"
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert len(result.artifact_uris) == 2
+
+
+def test_multivariate_gaussian_polynomial_moment_uses_independence(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.gaussian_polynomial.moment.compute",
+            input={
+                "polynomial": {
+                    "variable_count": 2,
+                    "terms": [
+                        {"coefficient": _complex(1), "exponents": [0, 1]},
+                        {"coefficient": _complex(1), "exponents": [1, 0]},
+                    ],
+                },
+                "order": 4,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["moment"] == _complex(12)
+    assert result.output["result"]["expansion_path_count"] == 16
+    assert result.output["result"]["expanded_monomial_count"] == 5
+
+
+def test_gaussian_polynomial_zero_order_is_the_constant_one(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.gaussian_polynomial.moment.compute",
+            input={
+                "polynomial": {
+                    "variable_count": 1,
+                    "terms": [{"coefficient": _complex(7, -3), "exponents": [5]}],
+                },
+                "order": 0,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["moment"] == _complex(1)
+    assert result.output["result"]["contractions"][0]["exponents"] == [0]
+
+
+def test_gaussian_expansion_above_bound_fails_before_artifact_writes(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.gaussian_polynomial.moment.compute",
+            input={
+                "polynomial": {
+                    "variable_count": 1,
+                    "terms": [
+                        {"coefficient": _complex(1), "exponents": [0]},
+                        {"coefficient": _complex(1), "exponents": [1]},
+                        {"coefficient": _complex(1), "exponents": [2]},
+                    ],
+                },
+                "order": 8,
             },
         )
     )

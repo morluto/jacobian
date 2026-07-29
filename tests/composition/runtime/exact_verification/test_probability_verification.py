@@ -18,6 +18,19 @@ _FAIR_BIT = {
         {"value": _q(1), "probability": _q(1, 2)},
     ]
 }
+_GAUSSIAN_POLYNOMIAL = {
+    "variable_count": 1,
+    "terms": [
+        {
+            "coefficient": {"real": _q(1), "imaginary": _q(0)},
+            "exponents": [0],
+        },
+        {
+            "coefficient": {"real": _q(0), "imaginary": _q(1)},
+            "exponents": [1],
+        },
+    ],
+}
 
 
 @pytest.mark.parametrize(
@@ -48,6 +61,10 @@ _FAIR_BIT = {
         (
             "probability.finite_distribution.convolution.compute",
             {"left": _FAIR_BIT, "right": _FAIR_BIT},
+        ),
+        (
+            "probability.gaussian_polynomial.moment.compute",
+            {"polynomial": _GAUSSIAN_POLYNOMIAL, "order": 2},
         ),
     ),
 )

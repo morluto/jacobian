@@ -408,15 +408,20 @@ def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
     assert strong.matches[0].lexical_fit == "STRONG_CANDIDATE"
     assert strong.matches[0].query_coverage_milli == 1000
 
-    weak = runtime.core.capabilities.discover(
+    gaussian = runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(
-            query="continuous Gaussian Wick moments all orders",
+            query="exact fixed order Gaussian polynomial moment Wick contraction",
             limit=3,
         )
     )
-    assert weak.matches
-    assert weak.portfolio_fit == "ONLY_WEAK_LEXICAL_MATCHES"
-    assert all(match.lexical_fit == "WEAK_LEXICAL_MATCH" for match in weak.matches)
+    assert gaussian.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert gaussian.matches[0].capability_id == (
+        "probability.gaussian_polynomial.moment.compute"
+    )
+    assert gaussian.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert "does not establish an identity for every order" in (
+        gaussian.matches[0].description
+    )
 
     absent = runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(

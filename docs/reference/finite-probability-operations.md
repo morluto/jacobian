@@ -49,6 +49,8 @@ that exact bound candidate returns `VERIFIED`. Malformed artifacts, substituted
 sources, altered ledgers, missing convolution pairs, and mathematically false
 but schema-valid candidates are rejected without a verification record.
 
-This foundation does not cover predicate-defined events, approximate or
-continuous distributions, Gaussian identities, Markov chains, graph
-reliability, or probabilistic inference strategy.
+This finite-distribution foundation does not cover predicate-defined events,
+approximate distributions, all-order Gaussian identities, Markov chains,
+graph reliability, or probabilistic inference strategy. The same probability
+bundle separately exposes one
+[bounded Gaussian polynomial moment](gaussian-polynomial-moments.md) outcome.

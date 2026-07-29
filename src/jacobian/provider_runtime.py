@@ -1050,7 +1050,7 @@ def python_flint_probability_provider_runtime(
     *,
     refresh: bool = False,
 ) -> CapabilityProviderRuntime:
-    """Identify the pinned exact-rational API used by finite probability."""
+    """Identify the pinned exact-rational API used by probability producers."""
 
     runtime = python_distribution_provider_runtime(
         "python-flint",
@@ -1065,6 +1065,7 @@ def python_flint_probability_provider_runtime(
             "finite-conditioning",
             "finite-pushforward",
             "finite-convolution",
+            "gaussian-polynomial-complex-rational-moments",
         ),
         refresh=refresh,
     )
@@ -1078,7 +1079,7 @@ def python_flint_probability_provider_runtime(
             license_id="MIT AND LGPL-3.0-or-later",
             diagnostic=(
                 "Python-FLINT is installed but does not match the pinned "
-                f"{PYTHON_FLINT_VERSION} finite-probability profile."
+                f"{PYTHON_FLINT_VERSION} exact-probability profile."
             ),
         )
     return runtime
@@ -1199,6 +1200,7 @@ def probability_exact_checker_provider_runtime(
         features=(
             "clean-process-replay",
             "finite-rational-probability-replay",
+            "gaussian-polynomial-coefficient-contraction",
             "standard-library-only",
         ),
         checker_ids=checker_ids,

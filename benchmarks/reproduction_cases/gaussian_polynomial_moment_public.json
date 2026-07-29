@@ -1,0 +1,119 @@
+{
+  "suite_id": "GAUSSIAN-POLYNOMIAL-MOMENT-PUBLIC-001",
+  "version": "1",
+  "scored": false,
+  "purpose": "Answer-visible bounded exact reproductions only; never hidden evaluation and never evidence for an all-order identity",
+  "cases": [
+    {
+      "case_id": "STANDARD-REAL-SIXTH-MOMENT-001",
+      "source": "https://arxiv.org/abs/2607.18186, equation (5)",
+      "request": {
+        "polynomial": {
+          "variable_count": 1,
+          "terms": [
+            {
+              "coefficient": {
+                "real": {"num": "1", "den": "1"},
+                "imaginary": {"num": "0", "den": "1"}
+              },
+              "exponents": [1]
+            }
+          ]
+        },
+        "order": 6
+      },
+      "expected_moment": {
+        "real": {"num": "15", "den": "1"},
+        "imaginary": {"num": "0", "den": "1"}
+      }
+    },
+    {
+      "case_id": "COMPLEX-CANCELLATION-001",
+      "source": "Jacobian synthetic public contraction regression",
+      "request": {
+        "polynomial": {
+          "variable_count": 1,
+          "terms": [
+            {
+              "coefficient": {
+                "real": {"num": "1", "den": "1"},
+                "imaginary": {"num": "0", "den": "1"}
+              },
+              "exponents": [0]
+            },
+            {
+              "coefficient": {
+                "real": {"num": "0", "den": "1"},
+                "imaginary": {"num": "1", "den": "1"}
+              },
+              "exponents": [1]
+            }
+          ]
+        },
+        "order": 2
+      },
+      "expected_moment": {
+        "real": {"num": "0", "den": "1"},
+        "imaginary": {"num": "0", "den": "1"}
+      }
+    },
+    {
+      "case_id": "TWO-GAUSSIAN-SUM-FOURTH-MOMENT-001",
+      "source": "Jacobian synthetic public independence regression",
+      "request": {
+        "polynomial": {
+          "variable_count": 2,
+          "terms": [
+            {
+              "coefficient": {
+                "real": {"num": "1", "den": "1"},
+                "imaginary": {"num": "0", "den": "1"}
+              },
+              "exponents": [0, 1]
+            },
+            {
+              "coefficient": {
+                "real": {"num": "1", "den": "1"},
+                "imaginary": {"num": "0", "den": "1"}
+              },
+              "exponents": [1, 0]
+            }
+          ]
+        },
+        "order": 4
+      },
+      "expected_moment": {
+        "real": {"num": "12", "den": "1"},
+        "imaginary": {"num": "0", "den": "1"}
+      }
+    }
+  ],
+  "attack_coverage": [
+    {
+      "variant": "mutated expanded coefficient with a recomputed artifact digest",
+      "expected": "REJECTED with UNKNOWN conclusion and no verification record"
+    },
+    {
+      "variant": "omitted odd contraction or forged Gaussian moment factor",
+      "expected": "REJECTED with UNKNOWN conclusion and no verification record"
+    },
+    {
+      "variant": "a finite list of zero moments presented as an all-order identity",
+      "expected": "outside capability scope; no such conclusion is emitted"
+    }
+  ],
+  "held_out_evaluation": {
+    "status": "READY_NOT_RUN",
+    "case_source": "Freeze generated sparse polynomials after this public suite is excluded",
+    "independent_oracle": "separate standard-library Fraction coefficient contraction",
+    "control": "catalog without probability.gaussian_polynomial.moment.compute",
+    "treatment": "catalog with the producer and operator-authorized probability.result.verify",
+    "primary_metrics": [
+      "exact fixed-order answer correctness",
+      "checker-bound completion",
+      "false all-order generalization",
+      "false VERIFIED rate"
+    ],
+    "minimum_repetitions": 3
+  }
+}

@@ -13,14 +13,16 @@ FINITE_PROBABILITY_BUNDLE = DomainBundle(
     schema_namespace="jacobian.validated-analysis",
     semantics=DomainSemantics(
         name="jacobian.probability",
-        version="2",
+        version="3",
         definition={
-            "description": "bounded exact finite rational probability operations",
+            "description": "bounded exact rational probability operations",
             "scope": (
                 "raw moments, explicit event mass and conditioning, total "
-                "pushforwards, and independent finite convolutions"
+                "pushforwards, independent finite convolutions, and one fixed-order "
+                "moment of a sparse complex-rational polynomial in independent "
+                "standard real Gaussian variables"
             ),
-            "failure": "invalid distributions fail before computation",
+            "failure": "invalid bounded probability inputs fail before computation",
         },
     ),
     provider_runtime=python_flint_probability_provider_runtime(),
@@ -30,14 +32,18 @@ FINITE_PROBABILITY_BUNDLE = DomainBundle(
         invalid_request=CapabilityDiagnostic(
             code="INVALID_FINITE_PROBABILITY_REQUEST",
             stage="finite_probability_input_validation",
-            message="Input does not satisfy the finite-probability contract.",
-            hint="Use bounded rational atoms whose probabilities sum exactly to one.",
+            message="Input does not satisfy the bounded exact-probability contract.",
+            hint=(
+                "Use a bounded normalized finite distribution or a canonical "
+                "bounded Gaussian polynomial and fixed moment order."
+            ),
         )
     ),
-    scope_description="one bounded exact finite-rational probability operation",
+    scope_description="one bounded exact rational probability operation",
     completeness_basis=(
         "Python-FLINT produced every selected atom, source-map contribution, "
-        "or bounded product-measure pair required by the request"
+        "bounded product-measure pair, or coefficient contraction required by "
+        "the request"
     ),
     assurance_basis="pinned maintained-backend exact rational computation",
 )

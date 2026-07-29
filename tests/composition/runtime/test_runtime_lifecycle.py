@@ -2,9 +2,9 @@
 
 These tests pin the runtime ownership contract: explicit ``close``,
 idempotence, context-manager semantics, partial-bootstrap failure cleanup,
-and use-after-close behavior. The runtime delegates storage ownership to
-:class:`ArtifactStore`; these tests verify that delegation closes the store
-and that construction failures release every owned resource.
+and use-after-close behavior. The runtime quiesces application-owned workers
+before delegating storage teardown to :class:`ArtifactStore`; these tests
+verify that ordering and that construction failures release every resource.
 
 The contract is verified through observable use-after-close behavior rather
 than private ``_closed`` flags wherever possible.
@@ -12,12 +12,15 @@ than private ``_closed`` flags wherever possible.
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import RuntimeClosedError
+from jacobian.search import SearchError, SearchService
 from jacobian.store import StoreClosedError
 
 pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
@@ -70,6 +73,85 @@ def test_context_manager_exit_suppresses_no_exception(tmp_path: Path) -> None:
             version="1",
             definition={"type": "object"},
         )
+
+
+def test_close_quiesces_search_workers_before_closing_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(tmp_path)
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+    worker_finished = threading.Event()
+    worker_errors: list[BaseException] = []
+
+    def blocked_run(service: SearchService, _experiment_uri: str) -> None:
+        worker_started.set()
+        release_worker.wait(timeout=2)
+        try:
+            service.store.register_descriptor(
+                kind="schema",
+                name="search-worker-during-close",
+                version="1",
+                definition={"type": "object"},
+            )
+        except BaseException as exc:
+            worker_errors.append(exc)
+        finally:
+            worker_finished.set()
+
+    monkeypatch.setattr(SearchService, "_run", blocked_run)
+    runtime.services.search._launch("experiment://runtime-close-regression")
+    assert worker_started.wait(timeout=1)
+
+    def release_after_close_begins() -> None:
+        time.sleep(0.05)
+        release_worker.set()
+
+    releaser = threading.Thread(target=release_after_close_begins)
+    releaser.start()
+    runtime.close()
+    releaser.join(timeout=1)
+
+    assert worker_finished.is_set()
+    assert worker_errors == []
+    with pytest.raises(StoreClosedError):
+        runtime.core.store.register_descriptor(
+            kind="schema",
+            name="after-worker-close",
+            version="1",
+            definition={"type": "object"},
+        )
+
+
+def test_search_close_timeout_keeps_store_open_for_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(tmp_path)
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+
+    def blocked_run(_service: SearchService, _experiment_uri: str) -> None:
+        worker_started.set()
+        release_worker.wait(timeout=2)
+
+    monkeypatch.setattr(SearchService, "_run", blocked_run)
+    runtime.services.search._launch("experiment://runtime-close-timeout")
+    assert worker_started.wait(timeout=1)
+
+    with pytest.raises(SearchError, match="did not quiesce"):
+        runtime.services.search.close(timeout_seconds=0)
+
+    runtime.core.store.register_descriptor(
+        kind="schema",
+        name="store-remains-open-after-search-close-timeout",
+        version="1",
+        definition={"type": "object"},
+    )
+    release_worker.set()
+    runtime.services.search.close(timeout_seconds=1)
+    runtime.close()
 
 
 def test_partial_initialize_failure_releases_owned_store(

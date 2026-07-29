@@ -83,6 +83,11 @@ class ApplicationServices:
     shrinking: ShrinkService
     reference_installer: ReferenceInstaller
 
+    def close(self) -> None:
+        """Quiesce application-owned workers before foundational teardown."""
+
+        self.search.close()
+
 
 def build_application_services(core: CoreServices) -> ApplicationServices:
     """Build the capability-independent application service graph."""

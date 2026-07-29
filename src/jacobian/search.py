@@ -126,6 +126,8 @@ class SearchService:
         self._clock = clock
         self._threads: dict[str, threading.Thread] = {}
         self._thread_lock = threading.Lock()
+        self._closing = False
+        self._closed = False
         self.semantics_uri = store.register_descriptor(
             kind="semantics",
             name="jacobian.search-experiment",
@@ -157,6 +159,38 @@ class SearchService:
             schema=model_schema(EvaluationBatchResult),
         )
         self._initialize_database()
+
+    def close(self, *, timeout_seconds: float = 30) -> None:
+        """Quiesce runtime-owned workers before their shared store is closed."""
+
+        if timeout_seconds < 0:
+            raise ValueError("timeout_seconds must be non-negative")
+        deadline = time.monotonic() + timeout_seconds
+        with self._thread_lock:
+            if self._closed:
+                return
+            self._closing = True
+        while True:
+            with self._thread_lock:
+                active = tuple(
+                    thread for thread in self._threads.values() if thread.is_alive()
+                )
+                if not active:
+                    self._closed = True
+                    self._closing = False
+                    return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SearchError(
+                    "search workers did not quiesce before runtime shutdown"
+                )
+            for thread in active:
+                thread.join(timeout=min(remaining, 0.05))
+
+    def _require_open(self) -> None:
+        with self._thread_lock:
+            if self._closing or self._closed:
+                raise SearchError("search service is closing")
 
     def _connect(self) -> sqlite3.Connection:
         return open_experiment_database(self.store.db_path)
@@ -385,6 +419,7 @@ class SearchService:
     ) -> ExperimentHandle:
         """Commit one idempotent search request and launch it locally."""
 
+        self._require_open()
         selected = SearchRunRequest.model_validate(request)
         request_digest = _digest(selected.model_dump(mode="json"))
         with self._connect() as connection:
@@ -635,6 +670,7 @@ class SearchService:
     def resume(self, experiment_uri: str) -> ExperimentControlResult:
         """Resume the same invocation from its immutable checkpoint."""
 
+        self._require_open()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             snapshot = self._read_snapshot(connection, experiment_uri)
@@ -743,6 +779,8 @@ class SearchService:
 
     def _launch(self, experiment_uri: str) -> None:
         with self._thread_lock:
+            if self._closing or self._closed:
+                raise SearchError("search service is closing")
             current = self._threads.get(experiment_uri)
             if current is not None and current.is_alive():
                 return

@@ -44,6 +44,7 @@ class JacobianRuntime:
 
         if self._closed:
             return
+        self.services.close()
         self.core.close()
         self._closed = True
 

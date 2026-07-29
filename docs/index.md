@@ -62,6 +62,7 @@ expectations.
 - [Finite probability operations](reference/finite-probability-operations.md)
 - [Exact planar geometry](reference/exact-planar-geometry.md)
 - [Finite simplicial topology](reference/finite-simplicial-topology.md)
+- [Finite posets](reference/finite-posets.md)
 - [Provider runtime contract](reference/provider-runtime.md)
 - [Lean declaration discovery](reference/lean-declaration-discovery.md)
 - [Lean formal intermediates](reference/lean-formal-intermediates.md)

@@ -45,6 +45,7 @@ from jacobian.domains.number_theory.checkers import (
     NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
+from jacobian.domains.posets.checkers import FINITE_POSET_EXACT_REPLAY_CHECKERS
 from jacobian.domains.probability.checkers import PROBABILITY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.projective_geometry.checkers import (
     PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
@@ -55,6 +56,7 @@ from jacobian.provider_runtime import (
     exact_domain_checker_provider_runtime,
     graded_syzygy_checker_provider_runtime,
     graph_exact_checker_provider_runtime,
+    poset_exact_checker_provider_runtime,
     probability_exact_checker_provider_runtime,
     projective_arrangement_checker_provider_runtime,
     topology_exact_checker_provider_runtime,
@@ -99,6 +101,8 @@ def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
         return "projective-arrangement"
     if declaration.entrypoint_module == "jacobian_checkers.simplicial_topology":
         return "topology"
+    if declaration.entrypoint_module == "jacobian_checkers.finite_posets":
+        return "poset"
     raise ValueError(
         "exact replay checker declaration uses an unsupported provider runtime"
     )
@@ -113,6 +117,7 @@ def install_exact_domain_checkers(
     graph_invariants: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
     probability: InstalledDomainBundle | None = None,
+    poset: InstalledDomainBundle | None = None,
     projective_geometry: InstalledDomainBundle | None = None,
     topology: InstalledDomainBundle | None = None,
     authorize: bool,
@@ -124,6 +129,7 @@ def install_exact_domain_checkers(
         "python-flint": exact_domain_checker_provider_runtime(),
         "finite-graph": graph_exact_checker_provider_runtime(),
         "finite-probability": probability_exact_checker_provider_runtime(),
+        "poset": poset_exact_checker_provider_runtime(),
         "graded-syzygy": graded_syzygy_checker_provider_runtime(),
         "projective-arrangement": (projective_arrangement_checker_provider_runtime()),
         "topology": topology_exact_checker_provider_runtime(),
@@ -151,6 +157,11 @@ def install_exact_domain_checkers(
             (projective_geometry, item)
             for item in PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS
             if projective_geometry is not None
+        ),
+        *(
+            (poset, item)
+            for item in FINITE_POSET_EXACT_REPLAY_CHECKERS
+            if poset is not None
         ),
         *(
             (topology, item)
@@ -199,6 +210,9 @@ def install_exact_domain_checkers(
             "finite-probability": probability_exact_checker_provider_runtime(
                 checker_ids=authorized_ids["finite-probability"]
             ),
+            "poset": poset_exact_checker_provider_runtime(
+                checker_ids=authorized_ids["poset"]
+            ),
             "graded-syzygy": graded_syzygy_checker_provider_runtime(
                 checker_ids=authorized_ids["graded-syzygy"]
             ),
@@ -227,6 +241,7 @@ def install_exact_domain_verification(
     graph_invariants: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
     probability: InstalledDomainBundle | None = None,
+    poset: InstalledDomainBundle | None = None,
     projective_geometry: InstalledDomainBundle | None = None,
     topology: InstalledDomainBundle | None = None,
     authorize: bool,
@@ -241,6 +256,7 @@ def install_exact_domain_verification(
         graph_invariants=graph_invariants,
         number_theory=number_theory,
         probability=probability,
+        poset=poset,
         projective_geometry=projective_geometry,
         topology=topology,
         authorize=authorize,
@@ -336,6 +352,19 @@ def install_exact_domain_verification(
             if installation.checker_ids.get(declaration.capability_id) is not None
         )
         if topology is not None
+        else ()
+    )
+    poset_declarations = (
+        tuple(
+            _installed_declaration(
+                poset,
+                declaration,
+                installation,
+            )
+            for declaration in FINITE_POSET_EXACT_REPLAY_CHECKERS
+            if installation.checker_ids.get(declaration.capability_id) is not None
+        )
+        if poset is not None
         else ()
     )
     dedicated_declarations = (
@@ -446,6 +475,30 @@ def install_exact_domain_verification(
                 declarations=topology_declarations,
                 witness_schema_uri=witness_schema_uri,
                 provider_runtime=installation.provider_runtimes["topology"],
+            )
+        )
+    if poset_declarations:
+        adapters.append(
+            ExactDomainResultVerificationAdapter(
+                capability_id="poset.result.verify",
+                title="Verify an exact finite-poset result",
+                description=(
+                    "Independently reconstruct one finite poset and replay its "
+                    "closure, Dilworth witnesses, ideal recurrence, or Möbius values."
+                ),
+                tags=(
+                    "verification",
+                    "exact",
+                    "poset",
+                    "partial-order",
+                ),
+                store=store,
+                schemas=schemas,
+                artifacts=artifacts,
+                verification=verification,
+                declarations=poset_declarations,
+                witness_schema_uri=witness_schema_uri,
+                provider_runtime=installation.provider_runtimes["poset"],
             )
         )
     adapters.extend(dedicated_adapters)
@@ -573,7 +626,7 @@ class ExactDomainResultVerificationAdapter:
                     hint=(
                         "Pass a result_uri returned by one supported exact "
                         "polynomial, matrix, graph, probability, projective-"
-                        "geometry, or topology producer."
+                        "geometry, topology, or poset producer."
                     ),
                 )
             ) from exc

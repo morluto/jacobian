@@ -13,6 +13,7 @@ from jacobian.domains.matrix_lattice import LATTICE_BUNDLE, MATRIX_BUNDLE
 from jacobian.domains.number_theory import NUMBER_THEORY_BUNDLE
 from jacobian.domains.optimization import RATIONAL_OPTIMIZATION_BUNDLE
 from jacobian.domains.polynomial import POLYNOMIAL_BUNDLE
+from jacobian.domains.posets import FINITE_POSET_BUNDLE
 from jacobian.domains.probability import FINITE_PROBABILITY_BUNDLE
 from jacobian.domains.projective_geometry import PROJECTIVE_GEOMETRY_BUNDLE
 from jacobian.domains.sequences import SEQUENCE_BUNDLE
@@ -35,6 +36,7 @@ BUILTIN_DOMAIN_BUNDLES = (
     FINITE_PROBABILITY_BUNDLE,
     RATIONAL_OPTIMIZATION_BUNDLE,
     TOPOLOGY_BUNDLE,
+    FINITE_POSET_BUNDLE,
 )
 
 __all__ = ["BUILTIN_DOMAIN_BUNDLES"]

@@ -1247,6 +1247,48 @@ def topology_exact_checker_provider_runtime(
     )
 
 
+def poset_exact_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the independent finite-poset checker source without NetworkX."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.poset-exact-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The finite-poset checker source could not be identified.",
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.poset-exact-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.finite_posets:check_finite_poset_materialization"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=("clean-process-replay", "standard-library-only"),
+        )
+    return composite_provider_runtime(
+        "jacobian.poset-exact-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "finite-poset-closure-replay",
+            "dilworth-dual-certificate-replay",
+            "complete-ideal-dp-replay",
+            "mobius-convolution-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
 def graded_syzygy_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),

@@ -39,7 +39,9 @@ and invariants, matrices, lattices, polynomials, validated real analysis,
 finite probability, and rational optimization. Catalog membership remains the
 authority for actual availability. The current portfolio also includes finite
 simplicial-complex materialization, oriented chain complexes, and prime-field
-homology under the `topology` domain.
+homology under the `topology` domain, plus canonical finite partial orders,
+Dilworth width certificates, complete ideal recurrences, and Möbius values
+under the `poset` domain.
 
 ## Computed operations
 

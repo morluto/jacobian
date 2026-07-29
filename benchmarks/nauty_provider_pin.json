@@ -1,0 +1,47 @@
+{
+  "archive_sha256": "sha256:9fc4edae04f88a0f5883985be3b39cf7f898fd6cc96e96b9ee25452743cc1b5b",
+  "canonicalization": {
+    "command": [
+      "labelg",
+      "-q"
+    ],
+    "expected_output_graph6": [
+      "CR",
+      "CR"
+    ],
+    "expected_output_sha256": "sha256:817bc1213291c8fbe5bd1c0301c12caca9388bbe1c8c65e1cdd519114e3c0a55",
+    "input_graph6": [
+      "Ch",
+      "CU"
+    ]
+  },
+  "contract": "jacobian.nauty-provider-spike/v1",
+  "download_url": "https://users.cecs.anu.edu.au/~bdm/nauty/nauty2_9_3.tar.gz",
+  "license_id": "Apache-2.0",
+  "manual_url": "https://users.cecs.anu.edu.au/~bdm/nauty/nug29.pdf",
+  "provider": "nauty-traces",
+  "reproduction": {
+    "command": [
+      "geng",
+      "-q",
+      "4"
+    ],
+    "expected_graph6": [
+      "C?",
+      "CC",
+      "CE",
+      "CF",
+      "CQ",
+      "CU",
+      "CT",
+      "CV",
+      "C]",
+      "C^",
+      "C~"
+    ],
+    "expected_output_sha256": "sha256:b809c405cd3b8fb3cc836a9e7471658a8cf02cbc258029bddbecc9f2caf2ea32",
+    "scope": "all simple undirected graphs on exactly four vertices, one representative per isomorphism class",
+    "vertex_count": 4
+  },
+  "version": "2.9.3"
+}

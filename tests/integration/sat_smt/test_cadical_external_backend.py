@@ -21,8 +21,8 @@ pytestmark = [
 def test_pinned_cadical_produces_a_model_and_text_drat_proof(
     runtime,
 ) -> None:
-    runtime = cadical_provider_runtime()
-    if runtime.version != CADICAL_VERSION:
+    provider_runtime = cadical_provider_runtime()
+    if provider_runtime.version != CADICAL_VERSION:
         pytest.skip(f"requires pinned CaDiCaL {CADICAL_VERSION}")
     capability_ids = {
         descriptor.capability_id

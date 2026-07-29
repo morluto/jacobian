@@ -50,6 +50,7 @@ def test_domain_dry_run_reports_connector_without_requiring_root() -> None:
     assert completed.returncode == 0, completed.stderr
     assert "mode:        domain" in completed.stdout
     assert "connector:   https://math.example.org/mcp" in completed.stdout
+    assert "python:      /opt/jacobian/python" in completed.stdout
     assert "caddy:       enabled" in completed.stdout
     assert "funnel:      disabled" in completed.stdout
 
@@ -106,3 +107,32 @@ def test_local_mode_rejects_an_unusable_domain_option() -> None:
 
     assert completed.returncode != 0
     assert "--domain is only valid with --mode domain" in completed.stderr
+
+
+def test_release_environment_is_built_at_its_final_path() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    release_block = source[
+        source.index('log "installing immutable release') : source.index(
+            'log "installing authentication configuration"'
+        )
+    ]
+
+    assert 'cd "${RELEASE_DIR}"' in release_block
+    assert 'UV_PYTHON_INSTALL_DIR="${PYTHON_INSTALL_ROOT}"' in release_block
+    assert "--managed-python" in release_block
+    assert "--link-mode copy" in release_block
+    assert 'mv "${RELEASE_CANDIDATE}" "${RELEASE_DIR}"' not in release_block
+    assert '"${FLOCK_BIN}" --nonblock 9' in release_block
+
+
+def test_release_runtime_is_checked_before_current_symlink_is_changed() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    validation = source.index('validate_release_runtime "${RELEASE_DIR}"')
+    revision_marker = source.index(
+        'printf \'%s\\n\' "${REVISION}" >"${RELEASE_DIR}/.git-revision"'
+    )
+    current_link = source.index('ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"')
+
+    assert validation < revision_marker < current_link
+    assert '"${RUNUSER_BIN}" --user jacobian -- "${entrypoint}" --version' in source

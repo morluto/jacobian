@@ -25,17 +25,19 @@ BACKEND_PORT=8765
 INGRESS_PORT=8766
 RELEASE_ROOT="/opt/jacobian/releases"
 CURRENT_LINK="/opt/jacobian/current"
+PYTHON_INSTALL_ROOT="/opt/jacobian/python"
 CONFIG_ROOT="/etc/jacobian-mcp"
 CADDY_CONFIG_ROOT="/etc/caddy-jacobian"
 SYSTEMD_ROOT="/etc/systemd/system"
 TOKEN_DESTINATION="${CONFIG_ROOT}/tokens.json"
 TAILSCALE_STATUS=""
 RENDER_ROOT=""
-RELEASE_CANDIDATE=""
+RELEASE_BUILD_DIR=""
+RELEASE_WAS_BUILT=0
 
 cleanup() {
-    if [[ -n "${RELEASE_CANDIDATE}" && -d "${RELEASE_CANDIDATE}" ]]; then
-        rm -rf "${RELEASE_CANDIDATE}"
+    if [[ -n "${RELEASE_BUILD_DIR}" && -d "${RELEASE_BUILD_DIR}" ]]; then
+        rm -rf -- "${RELEASE_BUILD_DIR}"
     fi
     if [[ -n "${RENDER_ROOT}" && -d "${RENDER_ROOT}" ]]; then
         rm -rf "${RENDER_ROOT}"
@@ -121,6 +123,32 @@ validate_domain() {
     [[ ${#value} -le 253 ]] || die "domain must be at most 253 characters"
     [[ "${value}" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] || die \
         "domain must be a fully qualified DNS name such as math.example.org"
+}
+
+validate_release_runtime() {
+    local release_dir="$1"
+    local entrypoint="${release_dir}/.venv/bin/jacobian-mcp"
+    local expected_shebang="#!${release_dir}/.venv/bin/python"
+    local python_target
+    local shebang
+
+    [[ -x "${entrypoint}" ]] || die \
+        "release entrypoint is not executable: ${entrypoint}"
+    shebang="$(head -n 1 "${entrypoint}")"
+    [[ "${shebang}" == "${expected_shebang}" ]] || die \
+        "release entrypoint is not bound to its final path: ${shebang}"
+    python_target="$(
+        readlink -f "${release_dir}/.venv/bin/python" 2>/dev/null || true
+    )"
+    [[ -n "${python_target}" && -x "${python_target}" ]] || die \
+        "release Python is not executable: ${python_target:-unresolved}"
+    case "${python_target}" in
+        "${PYTHON_INSTALL_ROOT}"/*) ;;
+        *) die \
+            "release Python must resolve below ${PYTHON_INSTALL_ROOT}, got ${python_target}" ;;
+    esac
+    "${RUNUSER_BIN}" --user jacobian -- "${entrypoint}" --version >/dev/null \
+        || die "release entrypoint is not executable by the jacobian service user"
 }
 
 while (($#)); do
@@ -261,6 +289,7 @@ if ((DRY_RUN)); then
 Jacobian deployment plan
   revision:    ${REVISION}
   release:     ${RELEASE_DIR}
+  python:      ${PYTHON_INSTALL_ROOT}
   mode:        ${MODE}
   connector:   ${CONNECTOR_URL}
   auth:        ${AUTH_DESCRIPTION}
@@ -288,7 +317,10 @@ fi
 
 SYSTEMCTL_BIN="$(find_executable systemctl /usr/bin/systemctl || true)"
 SYSTEMD_ANALYZE_BIN="$(find_executable systemd-analyze /usr/bin/systemd-analyze || true)"
-[[ -n "${SYSTEMCTL_BIN}" && -n "${SYSTEMD_ANALYZE_BIN}" ]] || die \
+RUNUSER_BIN="$(find_executable runuser /usr/sbin/runuser /usr/bin/runuser || true)"
+FLOCK_BIN="$(find_executable flock /usr/bin/flock || true)"
+[[ -n "${SYSTEMCTL_BIN}" && -n "${SYSTEMD_ANALYZE_BIN}" \
+    && -n "${RUNUSER_BIN}" && -n "${FLOCK_BIN}" ]] || die \
     "this installer requires a systemd host"
 
 CADDY_BIN=""
@@ -316,23 +348,42 @@ if [[ "${MODE}" != "local" ]]; then
 fi
 
 log "installing immutable release ${SHORT_REVISION}"
-install -d -m 0755 "${RELEASE_ROOT}"
+install -d -m 0755 "${RELEASE_ROOT}" "${PYTHON_INSTALL_ROOT}"
+exec 9>"$(dirname -- "${RELEASE_ROOT}")/.install.lock"
+"${FLOCK_BIN}" --nonblock 9 || die "another Jacobian deployment is in progress"
+if [[ -e "${RELEASE_DIR}" && ! -d "${RELEASE_DIR}" ]]; then
+    die "release path exists and is not a directory: ${RELEASE_DIR}"
+fi
+if [[ -d "${RELEASE_DIR}" && ! -f "${RELEASE_DIR}/.git-revision" ]]; then
+    ACTIVE_RELEASE="$(readlink -f "${CURRENT_LINK}" 2>/dev/null || true)"
+    [[ "${ACTIVE_RELEASE}" != "${RELEASE_DIR}" ]] || die \
+        "active release is incomplete and will not be removed: ${RELEASE_DIR}"
+    log "removing incomplete inactive release ${SHORT_REVISION}"
+    rm -rf -- "${RELEASE_DIR}"
+fi
 if [[ ! -d "${RELEASE_DIR}" ]]; then
-    RELEASE_CANDIDATE="${RELEASE_ROOT}/.${SHORT_REVISION}.new.$$"
-    [[ ! -e "${RELEASE_CANDIDATE}" ]] || die \
-        "temporary release path already exists: ${RELEASE_CANDIDATE}"
-    install -d -m 0755 "${RELEASE_CANDIDATE}"
-    "${GIT[@]}" archive --format=tar HEAD | tar -xf - -C "${RELEASE_CANDIDATE}"
-    printf '%s\n' "${REVISION}" >"${RELEASE_CANDIDATE}/.git-revision"
+    RELEASE_BUILD_DIR="${RELEASE_DIR}"
+    install -d -m 0755 "${RELEASE_BUILD_DIR}"
+    "${GIT[@]}" archive --format=tar HEAD | tar -xf - -C "${RELEASE_BUILD_DIR}"
     (
-        cd "${RELEASE_CANDIDATE}"
-        "${UV_BIN}" sync --locked --no-dev --all-extras
+        cd "${RELEASE_DIR}"
+        UV_PYTHON_INSTALL_DIR="${PYTHON_INSTALL_ROOT}" \
+            "${UV_BIN}" sync \
+            --locked \
+            --no-dev \
+            --all-extras \
+            --managed-python \
+            --link-mode copy
     )
-    chown -R root:root "${RELEASE_CANDIDATE}"
-    mv "${RELEASE_CANDIDATE}" "${RELEASE_DIR}"
-    RELEASE_CANDIDATE=""
+    chown -R root:root "${RELEASE_DIR}" "${PYTHON_INSTALL_ROOT}"
+    RELEASE_WAS_BUILT=1
 elif [[ "$(cat "${RELEASE_DIR}/.git-revision" 2>/dev/null || true)" != "${REVISION}" ]]; then
     die "existing release directory is not bound to revision ${REVISION}"
+fi
+validate_release_runtime "${RELEASE_DIR}"
+if ((RELEASE_WAS_BUILT)); then
+    printf '%s\n' "${REVISION}" >"${RELEASE_DIR}/.git-revision"
+    RELEASE_BUILD_DIR=""
 fi
 
 if [[ -e "${CURRENT_LINK}" && ! -L "${CURRENT_LINK}" ]]; then

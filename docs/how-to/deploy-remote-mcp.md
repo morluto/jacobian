@@ -163,6 +163,13 @@ The corresponding maintained files are:
 
 The installer is the default clone-to-host path. The units remain reviewable
 templates for operators who need to integrate with existing provisioning.
+It builds each environment at its final
+`/opt/jacobian/releases/<revision>/.venv` path so console scripts and local
+project references never retain a temporary build path. uv-managed Python
+runtimes live under `/opt/jacobian/python`, outside root's home directory. The
+installer checks the final console-script shebang, resolved Python path, and
+execution as the `jacobian` service user before atomically selecting the
+release through `/opt/jacobian/current`.
 Before copying them manually, replace `math-tools.example.org`, verify the
 service accounts, Caddy binary, and `/opt/jacobian/current` checkout, and decide
 between the static-token baseline and the anonymous test override. Keep each

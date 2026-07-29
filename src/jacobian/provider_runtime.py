@@ -1059,7 +1059,13 @@ def python_flint_probability_provider_runtime(
         required_attributes=("fmpq",),
         install_tier=CapabilityInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
-        features=("exact-rational-moments",),
+        features=(
+            "exact-rational-moments",
+            "finite-event-probability",
+            "finite-conditioning",
+            "finite-pushforward",
+            "finite-convolution",
+        ),
         refresh=refresh,
     )
     if (
@@ -1152,6 +1158,47 @@ def graph_exact_checker_provider_runtime(
             "finite-subset-exhaustive-replay",
             "hamiltonian-path-exhaustive-replay",
             "tutte-berge-barrier-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
+def probability_exact_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the independent finite-probability checker source without FLINT."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.probability-exact-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic=(
+                "The finite-probability checker source could not be identified."
+            ),
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.probability-exact-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.exact_probability_operations:check_finite_raw_moment"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=("clean-process-replay", "standard-library-only"),
+        )
+    return composite_provider_runtime(
+        "jacobian.probability-exact-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "finite-rational-probability-replay",
             "standard-library-only",
         ),
         checker_ids=checker_ids,

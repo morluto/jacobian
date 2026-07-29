@@ -1,0 +1,499 @@
+"""Bounded exact finite-probability contracts."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from itertools import pairwise
+from typing import Literal, Self
+
+from pydantic import Field, model_validator
+
+from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.results import ContractModel
+
+MAX_FINITE_DISTRIBUTION_ATOMS = 256
+MAX_FINITE_CONVOLUTION_PAIRS = 4096
+MAX_INPUT_RATIONAL_DIGITS = 128
+MAX_RESULT_RATIONAL_DIGITS = 512
+
+
+def _require_bounded_fraction(
+    value: Fraction,
+    *,
+    max_digits: int,
+    label: str,
+) -> None:
+    if (
+        len(str(abs(value.numerator))) > max_digits
+        or len(str(value.denominator)) > max_digits
+    ):
+        raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+
+
+def _require_bounded_rational(
+    value: CanonicalRational,
+    *,
+    max_digits: int,
+    label: str,
+) -> None:
+    _require_bounded_fraction(
+        value.as_fraction(),
+        max_digits=max_digits,
+        label=label,
+    )
+
+
+def _require_strictly_increasing(
+    values: tuple[CanonicalRational, ...],
+    *,
+    label: str,
+) -> tuple[Fraction, ...]:
+    fractions = tuple(value.as_fraction() for value in values)
+    if any(left >= right for left, right in pairwise(fractions)):
+        raise ValueError(f"{label} must be strictly increasing")
+    return fractions
+
+
+class FiniteDistributionAtom(ContractModel):
+    value: CanonicalRational
+    probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_nonnegative_probability(self) -> Self:
+        _require_bounded_rational(
+            self.value,
+            max_digits=MAX_RESULT_RATIONAL_DIGITS,
+            label="finite-distribution atom",
+        )
+        _require_bounded_rational(
+            self.probability,
+            max_digits=MAX_RESULT_RATIONAL_DIGITS,
+            label="finite-distribution probability",
+        )
+        if self.probability.as_fraction() < 0:
+            raise ValueError("finite-distribution probabilities must be nonnegative")
+        return self
+
+
+class FiniteRationalDistribution(ContractModel):
+    atoms: tuple[FiniteDistributionAtom, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_probability_distribution(self) -> Self:
+        _require_strictly_increasing(
+            tuple(atom.value for atom in self.atoms),
+            label="finite-distribution support values",
+        )
+        if (
+            sum(
+                (atom.probability.as_fraction() for atom in self.atoms),
+                start=Fraction(),
+            )
+            != 1
+        ):
+            raise ValueError("finite-distribution probabilities must sum exactly to 1")
+        return self
+
+
+def require_input_distribution(
+    atoms: tuple[FiniteDistributionAtom, ...],
+    *,
+    require_canonical: bool,
+) -> tuple[Fraction, ...]:
+    values = tuple(atom.value.as_fraction() for atom in atoms)
+    if len(values) != len(set(values)):
+        raise ValueError("finite-distribution support values must be unique")
+    if require_canonical and any(left >= right for left, right in pairwise(values)):
+        raise ValueError(
+            "finite-distribution support values must be strictly increasing"
+        )
+    for atom in atoms:
+        _require_bounded_rational(
+            atom.value,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+            label="finite-distribution input atom",
+        )
+        _require_bounded_rational(
+            atom.probability,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+            label="finite-distribution input probability",
+        )
+    if (
+        sum(
+            (atom.probability.as_fraction() for atom in atoms),
+            start=Fraction(),
+        )
+        != 1
+    ):
+        raise ValueError("finite-distribution probabilities must sum exactly to 1")
+    return values
+
+
+class FiniteEventRequest(ContractModel):
+    distribution: FiniteRationalDistribution
+    event_values: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS
+    )
+
+    @model_validator(mode="after")
+    def require_explicit_support_subset(self) -> Self:
+        support = set(
+            require_input_distribution(
+                self.distribution.atoms,
+                require_canonical=True,
+            )
+        )
+        event = _require_strictly_increasing(
+            self.event_values,
+            label="finite event values",
+        )
+        for value in self.event_values:
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="finite event value",
+            )
+        if not set(event).issubset(support):
+            raise ValueError("finite event values must belong to the distribution")
+        event_mass = sum(
+            (
+                atom.probability.as_fraction()
+                for atom in self.distribution.atoms
+                if atom.value.as_fraction() in set(event)
+            ),
+            start=Fraction(),
+        )
+        _require_bounded_fraction(
+            event_mass,
+            max_digits=MAX_RESULT_RATIONAL_DIGITS,
+            label="finite event probability",
+        )
+        return self
+
+
+class FiniteEventProbabilityResult(ContractModel):
+    event_probability: CanonicalRational
+    selected_atoms: tuple[FiniteDistributionAtom, ...] = Field(
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_selected_atom_contributions(self) -> Self:
+        _require_strictly_increasing(
+            tuple(atom.value for atom in self.selected_atoms),
+            label="selected finite-event atoms",
+        )
+        total = sum(
+            (atom.probability.as_fraction() for atom in self.selected_atoms),
+            start=Fraction(),
+        )
+        if self.event_probability.as_fraction() != total:
+            raise ValueError("event probability does not equal selected atom mass")
+        return self
+
+
+class FiniteConditionalContribution(ContractModel):
+    value: CanonicalRational
+    source_probability: CanonicalRational
+    conditioned_probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_nonnegative_masses(self) -> Self:
+        for label, value in (
+            ("conditional value", self.value),
+            ("conditional source probability", self.source_probability),
+            ("conditioned probability", self.conditioned_probability),
+        ):
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label=label,
+            )
+        if (
+            self.source_probability.as_fraction() < 0
+            or self.conditioned_probability.as_fraction() < 0
+        ):
+            raise ValueError("conditional contribution masses must be nonnegative")
+        return self
+
+
+class FiniteConditionResult(ContractModel):
+    event_probability: CanonicalRational
+    distribution: FiniteRationalDistribution
+    contributions: tuple[FiniteConditionalContribution, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_normalized_contributions(self) -> Self:
+        event_probability = self.event_probability.as_fraction()
+        if event_probability <= 0:
+            raise ValueError("conditional distribution requires positive event mass")
+        values = tuple(item.value for item in self.contributions)
+        _require_strictly_increasing(
+            values,
+            label="conditional contribution values",
+        )
+        expected_atoms: list[tuple[Fraction, Fraction]] = []
+        source_total = Fraction()
+        for item in self.contributions:
+            source = item.source_probability.as_fraction()
+            conditioned = item.conditioned_probability.as_fraction()
+            if source < 0 or conditioned != source / event_probability:
+                raise ValueError("conditioned probability does not match source mass")
+            source_total += source
+            expected_atoms.append((item.value.as_fraction(), conditioned))
+        if source_total != event_probability:
+            raise ValueError("conditional contributions do not equal event mass")
+        actual_atoms = [
+            (atom.value.as_fraction(), atom.probability.as_fraction())
+            for atom in self.distribution.atoms
+        ]
+        if actual_atoms != expected_atoms:
+            raise ValueError("conditional distribution does not match contributions")
+        return self
+
+
+class FinitePushforwardMapEntry(ContractModel):
+    source: CanonicalRational
+    target: CanonicalRational
+
+
+class FinitePushforwardRequest(ContractModel):
+    distribution: FiniteRationalDistribution
+    mapping: tuple[FinitePushforwardMapEntry, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+    )
+
+    @model_validator(mode="after")
+    def require_total_canonical_lookup(self) -> Self:
+        source_values = require_input_distribution(
+            self.distribution.atoms,
+            require_canonical=True,
+        )
+        mapping_sources = tuple(item.source.as_fraction() for item in self.mapping)
+        if mapping_sources != source_values:
+            raise ValueError(
+                "pushforward mapping must cover each source atom in canonical order"
+            )
+        aggregated: dict[Fraction, Fraction] = {}
+        for atom, item in zip(self.distribution.atoms, self.mapping, strict=True):
+            _require_bounded_rational(
+                item.source,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="pushforward source",
+            )
+            _require_bounded_rational(
+                item.target,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="pushforward target",
+            )
+            target = item.target.as_fraction()
+            aggregated[target] = (
+                aggregated.get(target, Fraction()) + atom.probability.as_fraction()
+            )
+        for target, probability in aggregated.items():
+            _require_bounded_fraction(
+                target,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="pushforward target",
+            )
+            _require_bounded_fraction(
+                probability,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="pushforward probability",
+            )
+        return self
+
+
+class FinitePushforwardContribution(ContractModel):
+    source: CanonicalRational
+    target: CanonicalRational
+    probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_nonnegative_mass(self) -> Self:
+        for label, value in (
+            ("pushforward source", self.source),
+            ("pushforward target", self.target),
+            ("pushforward probability", self.probability),
+        ):
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label=label,
+            )
+        if self.probability.as_fraction() < 0:
+            raise ValueError("pushforward contribution mass must be nonnegative")
+        return self
+
+
+class FinitePushforwardResult(ContractModel):
+    distribution: FiniteRationalDistribution
+    contributions: tuple[FinitePushforwardContribution, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_aggregated_pushforward(self) -> Self:
+        _require_strictly_increasing(
+            tuple(item.source for item in self.contributions),
+            label="pushforward contribution sources",
+        )
+        aggregated: dict[Fraction, Fraction] = {}
+        for item in self.contributions:
+            target = item.target.as_fraction()
+            probability = item.probability.as_fraction()
+            aggregated[target] = aggregated.get(target, Fraction()) + probability
+        expected = sorted(aggregated.items())
+        actual = [
+            (atom.value.as_fraction(), atom.probability.as_fraction())
+            for atom in self.distribution.atoms
+        ]
+        if actual != expected:
+            raise ValueError("pushforward distribution does not match contributions")
+        return self
+
+
+class FiniteConvolutionRequest(ContractModel):
+    left: FiniteRationalDistribution
+    right: FiniteRationalDistribution
+
+    @model_validator(mode="after")
+    def require_bounded_pair_product(self) -> Self:
+        require_input_distribution(self.left.atoms, require_canonical=True)
+        require_input_distribution(self.right.atoms, require_canonical=True)
+        pair_count = len(self.left.atoms) * len(self.right.atoms)
+        if pair_count > MAX_FINITE_CONVOLUTION_PAIRS:
+            raise ValueError(
+                "finite convolution exceeds the "
+                f"{MAX_FINITE_CONVOLUTION_PAIRS}-pair bound"
+            )
+        aggregated: dict[Fraction, Fraction] = {}
+        for left in self.left.atoms:
+            for right in self.right.atoms:
+                value = left.value.as_fraction() + right.value.as_fraction()
+                probability = (
+                    left.probability.as_fraction() * right.probability.as_fraction()
+                )
+                aggregated[value] = aggregated.get(value, Fraction()) + probability
+        for value, probability in aggregated.items():
+            _require_bounded_fraction(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="convolution atom",
+            )
+            _require_bounded_fraction(
+                probability,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="convolution probability",
+            )
+        return self
+
+
+class FiniteConvolutionContribution(ContractModel):
+    left_value: CanonicalRational
+    right_value: CanonicalRational
+    sum_value: CanonicalRational
+    probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_nonnegative_mass(self) -> Self:
+        for label, value in (
+            ("convolution left value", self.left_value),
+            ("convolution right value", self.right_value),
+            ("convolution sum value", self.sum_value),
+            ("convolution probability", self.probability),
+        ):
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label=label,
+            )
+        if self.probability.as_fraction() < 0:
+            raise ValueError("convolution contribution mass must be nonnegative")
+        return self
+
+
+class FiniteConvolutionResult(ContractModel):
+    distribution: FiniteRationalDistribution
+    contributions: tuple[FiniteConvolutionContribution, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_CONVOLUTION_PAIRS,
+    )
+    independence: Literal["PRODUCT_MEASURE"] = "PRODUCT_MEASURE"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_aggregated_pairs(self) -> Self:
+        aggregated: dict[Fraction, Fraction] = {}
+        previous: tuple[Fraction, Fraction] | None = None
+        for item in self.contributions:
+            left = item.left_value.as_fraction()
+            right = item.right_value.as_fraction()
+            pair = (left, right)
+            if previous is not None and pair <= previous:
+                raise ValueError(
+                    "convolution contributions must use canonical pair order"
+                )
+            previous = pair
+            value = item.sum_value.as_fraction()
+            if value != left + right:
+                raise ValueError("convolution sum value does not match its pair")
+            probability = item.probability.as_fraction()
+            aggregated[value] = aggregated.get(value, Fraction()) + probability
+        expected = sorted(aggregated.items())
+        actual = [
+            (atom.value.as_fraction(), atom.probability.as_fraction())
+            for atom in self.distribution.atoms
+        ]
+        if actual != expected:
+            raise ValueError(
+                "convolution distribution does not match pair contributions"
+            )
+        return self
+
+
+__all__ = [
+    "MAX_FINITE_CONVOLUTION_PAIRS",
+    "MAX_FINITE_DISTRIBUTION_ATOMS",
+    "FiniteConditionResult",
+    "FiniteConditionalContribution",
+    "FiniteConvolutionContribution",
+    "FiniteConvolutionRequest",
+    "FiniteConvolutionResult",
+    "FiniteDistributionAtom",
+    "FiniteEventProbabilityResult",
+    "FiniteEventRequest",
+    "FinitePushforwardContribution",
+    "FinitePushforwardMapEntry",
+    "FinitePushforwardRequest",
+    "FinitePushforwardResult",
+    "FiniteRationalDistribution",
+    "require_input_distribution",
+]

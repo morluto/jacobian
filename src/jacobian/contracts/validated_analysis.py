@@ -9,6 +9,10 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.probability import (
+    FiniteDistributionAtom,
+    require_input_distribution,
+)
 from jacobian.contracts.results import ContractModel
 
 MAX_RATIONAL_DIGITS = 128
@@ -123,19 +127,6 @@ class ArbPointEnclosureObligation(ContractModel):
     )
 
 
-class FiniteDistributionAtom(ContractModel):
-    value: CanonicalRational
-    probability: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_bounded_nonnegative_probability(self) -> Self:
-        _require_bounded_rational(self.value)
-        _require_bounded_rational(self.probability)
-        if self.probability.as_fraction() < 0:
-            raise ValueError("finite-distribution probabilities must be nonnegative")
-        return self
-
-
 class FiniteRawMomentRequest(ContractModel):
     atoms: tuple[FiniteDistributionAtom, ...] = Field(
         min_length=1,
@@ -145,17 +136,7 @@ class FiniteRawMomentRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_probability_distribution(self) -> Self:
-        values = tuple(atom.value.as_fraction() for atom in self.atoms)
-        if len(values) != len(set(values)):
-            raise ValueError("finite-distribution support values must be unique")
-        if (
-            sum(
-                (atom.probability.as_fraction() for atom in self.atoms),
-                start=0,
-            )
-            != 1
-        ):
-            raise ValueError("finite-distribution probabilities must sum exactly to 1")
+        require_input_distribution(self.atoms, require_canonical=False)
         return self
 
 

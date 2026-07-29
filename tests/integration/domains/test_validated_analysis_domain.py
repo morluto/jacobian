@@ -32,6 +32,20 @@ def _rational(num: int, den: int = 1) -> dict[str, str]:
     return {"num": str(num), "den": str(den)}
 
 
+def _distribution(
+    *atoms: tuple[int, int, int],
+) -> dict[str, list[dict[str, dict[str, str]]]]:
+    return {
+        "atoms": [
+            {
+                "value": _rational(value),
+                "probability": _rational(numerator, denominator),
+            }
+            for value, numerator, denominator in atoms
+        ]
+    }
+
+
 @pytest.fixture(scope="module")
 def analysis_runtime(tmp_path_factory: pytest.TempPathFactory) -> _Runtime:
     store = ArtifactStore(tmp_path_factory.mktemp("validated-analysis"))
@@ -77,7 +91,13 @@ def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> Non
         "probability": (
             "python-flint",
             "jacobian.validated-analysis",
-            ("probability.finite_distribution.raw_moment.compute",),
+            (
+                "probability.finite_distribution.raw_moment.compute",
+                "probability.finite_distribution.event_probability.compute",
+                "probability.finite_distribution.condition.compute",
+                "probability.finite_distribution.pushforward.compute",
+                "probability.finite_distribution.convolution.compute",
+            ),
         ),
         "optimization": (
             "jacobian.sympy",
@@ -218,6 +238,161 @@ def test_invalid_finite_distribution_fails_before_artifact_writes(
                     {"value": _rational(1), "probability": _rational(1, 3)},
                 ],
                 "order": 1,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_FINITE_PROBABILITY_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_finite_event_probability_preserves_selected_atom_contributions(
+    analysis_runtime: _Runtime,
+) -> None:
+    result = analysis_runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=("probability.finite_distribution.event_probability.compute"),
+            input={
+                "distribution": _distribution(
+                    (-1, 1, 4),
+                    (0, 1, 2),
+                    (2, 1, 4),
+                ),
+                "event_values": [_rational(-1), _rational(2)],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["event_probability"] == _rational(1, 2)
+    assert result.output["result"]["selected_atoms"] == [
+        {
+            "value": _rational(-1),
+            "probability": _rational(1, 4),
+        },
+        {
+            "value": _rational(2),
+            "probability": _rational(1, 4),
+        },
+    ]
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert len(result.artifact_uris) == 2
+
+
+def test_finite_conditioning_returns_one_normalized_distribution(
+    analysis_runtime: _Runtime,
+) -> None:
+    result = analysis_runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.finite_distribution.condition.compute",
+            input={
+                "distribution": _distribution(
+                    (-1, 1, 6),
+                    (0, 1, 3),
+                    (2, 1, 2),
+                ),
+                "event_values": [_rational(-1), _rational(2)],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["event_probability"] == _rational(2, 3)
+    assert result.output["result"]["distribution"] == _distribution(
+        (-1, 1, 4),
+        (2, 3, 4),
+    )
+    assert [
+        contribution["conditioned_probability"]
+        for contribution in result.output["result"]["contributions"]
+    ] == [_rational(1, 4), _rational(3, 4)]
+
+
+def test_zero_mass_conditioning_is_a_non_conclusion_without_artifacts(
+    analysis_runtime: _Runtime,
+) -> None:
+    result = analysis_runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.finite_distribution.condition.compute",
+            input={
+                "distribution": _distribution(
+                    (0, 0, 1),
+                    (1, 1, 1),
+                ),
+                "event_values": [_rational(0)],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "FINITE_CONDITIONING_ZERO_MASS"
+    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
+    assert result.completeness.status is CapabilityCompletenessStatus.NOT_APPLICABLE
+    assert result.artifact_uris == ()
+    assert result.episode_uri is None
+
+
+def test_finite_pushforward_collapses_equal_target_atoms(
+    analysis_runtime: _Runtime,
+) -> None:
+    result = analysis_runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.finite_distribution.pushforward.compute",
+            input={
+                "distribution": _distribution(
+                    (-1, 1, 4),
+                    (0, 1, 2),
+                    (1, 1, 4),
+                ),
+                "mapping": [
+                    {"source": _rational(-1), "target": _rational(1)},
+                    {"source": _rational(0), "target": _rational(0)},
+                    {"source": _rational(1), "target": _rational(1)},
+                ],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["distribution"] == _distribution(
+        (0, 1, 2),
+        (1, 1, 2),
+    )
+    assert len(result.output["result"]["contributions"]) == 3
+
+
+def test_finite_convolution_aggregates_all_independent_pairs(
+    analysis_runtime: _Runtime,
+) -> None:
+    fair_bit = _distribution((0, 1, 2), (1, 1, 2))
+    result = analysis_runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.finite_distribution.convolution.compute",
+            input={"left": fair_bit, "right": fair_bit},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["distribution"] == _distribution(
+        (0, 1, 4),
+        (1, 1, 2),
+        (2, 1, 4),
+    )
+    assert len(result.output["result"]["contributions"]) == 4
+
+
+def test_incomplete_pushforward_mapping_fails_before_artifact_writes(
+    analysis_runtime: _Runtime,
+) -> None:
+    result = analysis_runtime.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.finite_distribution.pushforward.compute",
+            input={
+                "distribution": _distribution((0, 1, 2), (1, 1, 2)),
+                "mapping": [
+                    {"source": _rational(0), "target": _rational(1)},
+                ],
             },
         )
     )

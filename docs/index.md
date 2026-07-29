@@ -59,6 +59,7 @@ expectations.
 
 - [Tool surface](reference/tools.md)
 - [Domain operation library](reference/domain-operation-library.md)
+- [Finite probability operations](reference/finite-probability-operations.md)
 - [Provider runtime contract](reference/provider-runtime.md)
 - [Lean declaration discovery](reference/lean-declaration-discovery.md)
 - [Lean formal intermediates](reference/lean-formal-intermediates.md)

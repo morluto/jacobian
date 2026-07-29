@@ -233,6 +233,7 @@ class CoreApplicationInstaller:
             graph=result.domain_bundles.get("graph_optimization"),
             graph_invariants=result.domain_bundles.get("graph_invariants"),
             number_theory=result.domain_bundles.get("number_theory"),
+            probability=result.domain_bundles.get("probability"),
             projective_geometry=result.domain_bundles.get("projective_geometry"),
             authorize=ctx.authorizes_bundled_checkers,
         )

@@ -1,8 +1,26 @@
 """Exact finite probability operations backed by Python-FLINT."""
 
+from __future__ import annotations
+
+from fractions import Fraction
 from typing import Any
 
+from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.probability import (
+    FiniteConditionalContribution,
+    FiniteConditionResult,
+    FiniteConvolutionContribution,
+    FiniteConvolutionRequest,
+    FiniteConvolutionResult,
+    FiniteDistributionAtom,
+    FiniteEventProbabilityResult,
+    FiniteEventRequest,
+    FinitePushforwardContribution,
+    FinitePushforwardRequest,
+    FinitePushforwardResult,
+    FiniteRationalDistribution,
+)
 from jacobian.contracts.validated_analysis import (
     FiniteRawMomentContribution,
     FiniteRawMomentRequest,
@@ -10,6 +28,7 @@ from jacobian.contracts.validated_analysis import (
 )
 from jacobian.domains._examples import example
 from jacobian.operations import (
+    ComputedNotApplicable,
     ComputedOperation,
     ComputedOutcome,
     ComputedSuccess,
@@ -20,6 +39,27 @@ def _wire(value: Any) -> CanonicalRational:
     return CanonicalRational(num=str(value.p), den=str(value.q))
 
 
+def _fmpq(value: CanonicalRational) -> Any:
+    from flint import fmpq
+
+    return fmpq(int(value.num), int(value.den))
+
+
+def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
+    return FiniteRationalDistribution(
+        atoms=tuple(
+            FiniteDistributionAtom(
+                value=CanonicalRational(
+                    num=str(value.numerator),
+                    den=str(value.denominator),
+                ),
+                probability=_wire(probability),
+            )
+            for value, probability in sorted(values.items())
+        )
+    )
+
+
 def _raw_moment(
     request: FiniteRawMomentRequest,
 ) -> ComputedOutcome[FiniteRawMomentResult]:
@@ -28,11 +68,8 @@ def _raw_moment(
     contributions: list[FiniteRawMomentContribution] = []
     total = fmpq(0)
     for atom in request.atoms:
-        value = fmpq(int(atom.value.num), int(atom.value.den))
-        probability = fmpq(
-            int(atom.probability.num),
-            int(atom.probability.den),
-        )
+        value = _fmpq(atom.value)
+        probability = _fmpq(atom.probability)
         powered = value**request.order
         contribution = probability * powered
         total += contribution
@@ -53,7 +90,152 @@ def _raw_moment(
     )
 
 
-FINITE_MOMENT_CAPABILITIES = (
+def _event_probability(
+    request: FiniteEventRequest,
+) -> ComputedOutcome[FiniteEventProbabilityResult]:
+    from flint import fmpq
+
+    selected_values = {value.as_fraction() for value in request.event_values}
+    selected = tuple(
+        atom
+        for atom in request.distribution.atoms
+        if atom.value.as_fraction() in selected_values
+    )
+    total = fmpq(0)
+    for atom in selected:
+        total += _fmpq(atom.probability)
+    return ComputedSuccess(
+        FiniteEventProbabilityResult(
+            event_probability=_wire(total),
+            selected_atoms=selected,
+        )
+    )
+
+
+def _condition(
+    request: FiniteEventRequest,
+) -> ComputedOutcome[FiniteConditionResult]:
+    from flint import fmpq
+
+    selected_values = {value.as_fraction() for value in request.event_values}
+    selected = tuple(
+        atom
+        for atom in request.distribution.atoms
+        if atom.value.as_fraction() in selected_values
+    )
+    event_probability = fmpq(0)
+    for atom in selected:
+        event_probability += _fmpq(atom.probability)
+    if event_probability == 0:
+        return ComputedNotApplicable(
+            CapabilityDiagnostic(
+                code="FINITE_CONDITIONING_ZERO_MASS",
+                stage="finite_probability_conditioning",
+                message="The selected finite event has exact probability zero.",
+                hint="Condition only on an explicitly selected positive-mass event.",
+            )
+        )
+    contributions = tuple(
+        FiniteConditionalContribution(
+            value=atom.value,
+            source_probability=atom.probability,
+            conditioned_probability=_wire(_fmpq(atom.probability) / event_probability),
+        )
+        for atom in selected
+    )
+    return ComputedSuccess(
+        FiniteConditionResult(
+            event_probability=_wire(event_probability),
+            distribution=FiniteRationalDistribution(
+                atoms=tuple(
+                    FiniteDistributionAtom(
+                        value=item.value,
+                        probability=item.conditioned_probability,
+                    )
+                    for item in contributions
+                )
+            ),
+            contributions=contributions,
+        )
+    )
+
+
+def _pushforward(
+    request: FinitePushforwardRequest,
+) -> ComputedOutcome[FinitePushforwardResult]:
+    from flint import fmpq
+
+    aggregated: dict[Fraction, Any] = {}
+    contributions: list[FinitePushforwardContribution] = []
+    for atom, mapping in zip(
+        request.distribution.atoms,
+        request.mapping,
+        strict=True,
+    ):
+        target = mapping.target.as_fraction()
+        probability = _fmpq(atom.probability)
+        aggregated[target] = aggregated.get(target, fmpq(0)) + probability
+        contributions.append(
+            FinitePushforwardContribution(
+                source=atom.value,
+                target=mapping.target,
+                probability=atom.probability,
+            )
+        )
+    return ComputedSuccess(
+        FinitePushforwardResult(
+            distribution=_distribution(aggregated),
+            contributions=tuple(contributions),
+        )
+    )
+
+
+def _convolution(
+    request: FiniteConvolutionRequest,
+) -> ComputedOutcome[FiniteConvolutionResult]:
+    from flint import fmpq
+
+    aggregated: dict[Fraction, Any] = {}
+    contributions: list[FiniteConvolutionContribution] = []
+    for left in request.left.atoms:
+        for right in request.right.atoms:
+            sum_value = left.value.as_fraction() + right.value.as_fraction()
+            probability = _fmpq(left.probability) * _fmpq(right.probability)
+            aggregated[sum_value] = aggregated.get(sum_value, fmpq(0)) + probability
+            contributions.append(
+                FiniteConvolutionContribution(
+                    left_value=left.value,
+                    right_value=right.value,
+                    sum_value=CanonicalRational(
+                        num=str(sum_value.numerator),
+                        den=str(sum_value.denominator),
+                    ),
+                    probability=_wire(probability),
+                )
+            )
+    return ComputedSuccess(
+        FiniteConvolutionResult(
+            distribution=_distribution(aggregated),
+            contributions=tuple(contributions),
+        )
+    )
+
+
+_FAIR_BIT = {
+    "atoms": [
+        {
+            "value": {"num": "0", "den": "1"},
+            "probability": {"num": "1", "den": "2"},
+        },
+        {
+            "value": {"num": "1", "den": "1"},
+            "probability": {"num": "1", "den": "2"},
+        },
+    ]
+}
+
+
+FINITE_PROBABILITY_CAPABILITIES = (
     ComputedOperation(
         capability_id="probability.finite_distribution.raw_moment.compute",
         title="Exact finite-distribution raw moment",
@@ -71,21 +253,124 @@ FINITE_MOMENT_CAPABILITIES = (
                 "fair_bit_second_moment",
                 "Compute the second raw moment of a fair distribution on 0 and 1.",
                 {
-                    "atoms": [
-                        {
-                            "value": {"num": "0", "den": "1"},
-                            "probability": {"num": "1", "den": "2"},
-                        },
-                        {
-                            "value": {"num": "1", "den": "1"},
-                            "probability": {"num": "1", "den": "2"},
-                        },
-                    ],
+                    "atoms": _FAIR_BIT["atoms"],
                     "order": 2,
                 },
             ),
         ),
     ),
+    ComputedOperation(
+        capability_id="probability.finite_distribution.event_probability.compute",
+        title="Exact finite-event probability",
+        description=(
+            "Sum the exact mass of one explicit subset of a canonical finite "
+            "rational distribution and preserve every selected atom."
+        ),
+        request_model=FiniteEventRequest,
+        result_model=FiniteEventProbabilityResult,
+        implementation=_event_probability,
+        relation_id="probability.finite_distribution.event_probability.relation",
+        tags=("probability", "event", "finite", "exact", "python-flint"),
+        invocation_examples=(
+            example(
+                "fair_bit_is_one",
+                "Compute the exact probability that a fair bit equals one.",
+                {
+                    "distribution": _FAIR_BIT,
+                    "event_values": [{"num": "1", "den": "1"}],
+                },
+            ),
+        ),
+    ),
+    ComputedOperation(
+        capability_id="probability.finite_distribution.condition.compute",
+        title="Condition an exact finite distribution",
+        description=(
+            "Normalize one explicit positive-mass event of a canonical finite "
+            "rational distribution, preserving each source contribution."
+        ),
+        request_model=FiniteEventRequest,
+        result_model=FiniteConditionResult,
+        implementation=_condition,
+        relation_id="probability.finite_distribution.condition.relation",
+        tags=("probability", "conditioning", "finite", "exact", "python-flint"),
+        invocation_examples=(
+            example(
+                "fair_bit_given_one",
+                "Condition a fair bit on the positive-mass event that it equals one.",
+                {
+                    "distribution": _FAIR_BIT,
+                    "event_values": [{"num": "1", "den": "1"}],
+                },
+            ),
+        ),
+    ),
+    ComputedOperation(
+        capability_id="probability.finite_distribution.pushforward.compute",
+        title="Push forward an exact finite distribution",
+        description=(
+            "Apply one explicit total rational lookup map and exactly aggregate "
+            "all source masses with the same target."
+        ),
+        request_model=FinitePushforwardRequest,
+        result_model=FinitePushforwardResult,
+        implementation=_pushforward,
+        relation_id="probability.finite_distribution.pushforward.relation",
+        tags=("probability", "pushforward", "finite", "exact", "python-flint"),
+        invocation_examples=(
+            example(
+                "collapse_fair_bit",
+                "Map both atoms of a fair bit to one exact target.",
+                {
+                    "distribution": _FAIR_BIT,
+                    "mapping": [
+                        {
+                            "source": {"num": "0", "den": "1"},
+                            "target": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "source": {"num": "1", "den": "1"},
+                            "target": {"num": "0", "den": "1"},
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
+    ComputedOperation(
+        capability_id="probability.finite_distribution.convolution.compute",
+        title="Convolve two exact finite distributions",
+        description=(
+            "Compute the bounded product-measure distribution of the sum of "
+            "two independent finite rational random variables."
+        ),
+        request_model=FiniteConvolutionRequest,
+        result_model=FiniteConvolutionResult,
+        implementation=_convolution,
+        relation_id="probability.finite_distribution.convolution.relation",
+        tags=(
+            "probability",
+            "convolution",
+            "independence",
+            "finite",
+            "exact",
+            "python-flint",
+        ),
+        invocation_examples=(
+            example(
+                "two_fair_bits",
+                "Compute the exact distribution of the sum of two fair bits.",
+                {"left": _FAIR_BIT, "right": _FAIR_BIT},
+            ),
+        ),
+    ),
 )
 
-__all__ = ["FINITE_MOMENT_CAPABILITIES"]
+# Kept as a source-level alias for callers that imported the experimental tuple.
+FINITE_MOMENT_CAPABILITIES = FINITE_PROBABILITY_CAPABILITIES[:1]
+
+
+__all__ = [
+    "FINITE_MOMENT_CAPABILITIES",
+    "FINITE_PROBABILITY_CAPABILITIES",
+]

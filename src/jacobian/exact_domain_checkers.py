@@ -45,6 +45,7 @@ from jacobian.domains.number_theory.checkers import (
     NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
+from jacobian.domains.probability.checkers import PROBABILITY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.projective_geometry.checkers import (
     PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
 )
@@ -53,6 +54,7 @@ from jacobian.provider_runtime import (
     exact_domain_checker_provider_runtime,
     graded_syzygy_checker_provider_runtime,
     graph_exact_checker_provider_runtime,
+    probability_exact_checker_provider_runtime,
     projective_arrangement_checker_provider_runtime,
 )
 from jacobian.registry import CheckerRegistry
@@ -84,6 +86,11 @@ def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
         return "python-flint"
     if declaration.entrypoint_module == "jacobian_checkers.graph_exact_operations":
         return "finite-graph"
+    if (
+        declaration.entrypoint_module
+        == "jacobian_checkers.exact_probability_operations"
+    ):
+        return "finite-probability"
     if declaration.entrypoint_module == "jacobian_checkers.jacobian_syzygy":
         return "graded-syzygy"
     if declaration.entrypoint_module == "jacobian_checkers.projective_arrangements":
@@ -101,6 +108,7 @@ def install_exact_domain_checkers(
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
+    probability: InstalledDomainBundle | None = None,
     projective_geometry: InstalledDomainBundle | None = None,
     authorize: bool,
 ) -> ExactDomainCheckerInstallation:
@@ -110,6 +118,7 @@ def install_exact_domain_checkers(
     provider_runtimes = {
         "python-flint": exact_domain_checker_provider_runtime(),
         "finite-graph": graph_exact_checker_provider_runtime(),
+        "finite-probability": probability_exact_checker_provider_runtime(),
         "graded-syzygy": graded_syzygy_checker_provider_runtime(),
         "projective-arrangement": (projective_arrangement_checker_provider_runtime()),
     }
@@ -126,6 +135,11 @@ def install_exact_domain_checkers(
             (number_theory, item)
             for item in NUMBER_THEORY_EXACT_REPLAY_CHECKERS
             if number_theory is not None
+        ),
+        *(
+            (probability, item)
+            for item in PROBABILITY_EXACT_REPLAY_CHECKERS
+            if probability is not None
         ),
         *(
             (projective_geometry, item)
@@ -171,6 +185,9 @@ def install_exact_domain_checkers(
             "finite-graph": graph_exact_checker_provider_runtime(
                 checker_ids=authorized_ids["finite-graph"]
             ),
+            "finite-probability": probability_exact_checker_provider_runtime(
+                checker_ids=authorized_ids["finite-probability"]
+            ),
             "graded-syzygy": graded_syzygy_checker_provider_runtime(
                 checker_ids=authorized_ids["graded-syzygy"]
             ),
@@ -195,6 +212,7 @@ def install_exact_domain_verification(
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
+    probability: InstalledDomainBundle | None = None,
     projective_geometry: InstalledDomainBundle | None = None,
     authorize: bool,
 ) -> tuple[tuple[CapabilityAdapter, ...], ExactDomainCheckerInstallation]:
@@ -207,6 +225,7 @@ def install_exact_domain_verification(
         graph=graph,
         graph_invariants=graph_invariants,
         number_theory=number_theory,
+        probability=probability,
         projective_geometry=projective_geometry,
         authorize=authorize,
     )
@@ -277,6 +296,19 @@ def install_exact_domain_verification(
         if projective_geometry is not None
         else ()
     )
+    probability_declarations = (
+        tuple(
+            _installed_declaration(
+                probability,
+                declaration,
+                installation,
+            )
+            for declaration in PROBABILITY_EXACT_REPLAY_CHECKERS
+            if installation.checker_ids.get(declaration.capability_id) is not None
+        )
+        if probability is not None
+        else ()
+    )
     dedicated_declarations = (
         *(
             declaration
@@ -342,6 +374,25 @@ def install_exact_domain_verification(
                 declarations=matrix_declarations,
                 witness_schema_uri=witness_schema_uri,
                 provider_runtime=installation.provider_runtimes["python-flint"],
+            )
+        )
+    if probability_declarations:
+        adapters.append(
+            ExactDomainResultVerificationAdapter(
+                capability_id="probability.result.verify",
+                title="Verify an exact finite-probability result",
+                description=(
+                    "Independently replay one supported stored finite-probability "
+                    "result against its exact input lineage."
+                ),
+                tags=("verification", "exact", "probability", "finite"),
+                store=store,
+                schemas=schemas,
+                artifacts=artifacts,
+                verification=verification,
+                declarations=probability_declarations,
+                witness_schema_uri=witness_schema_uri,
+                provider_runtime=installation.provider_runtimes["finite-probability"],
             )
         )
     adapters.extend(dedicated_adapters)

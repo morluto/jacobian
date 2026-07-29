@@ -16,6 +16,7 @@ from jacobian.domains.polynomial import POLYNOMIAL_BUNDLE
 from jacobian.domains.probability import FINITE_PROBABILITY_BUNDLE
 from jacobian.domains.projective_geometry import PROJECTIVE_GEOMETRY_BUNDLE
 from jacobian.domains.sequences import SEQUENCE_BUNDLE
+from jacobian.domains.topology import TOPOLOGY_BUNDLE
 
 BUILTIN_DOMAIN_BUNDLES = (
     ARITHMETIC_BUNDLE,
@@ -33,6 +34,7 @@ BUILTIN_DOMAIN_BUNDLES = (
     REAL_ANALYSIS_BUNDLE,
     FINITE_PROBABILITY_BUNDLE,
     RATIONAL_OPTIMIZATION_BUNDLE,
+    TOPOLOGY_BUNDLE,
 )
 
 __all__ = ["BUILTIN_DOMAIN_BUNDLES"]

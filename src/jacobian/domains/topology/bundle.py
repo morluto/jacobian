@@ -1,0 +1,63 @@
+"""Explicit bundle for exact finite simplicial topology."""
+
+from __future__ import annotations
+
+from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domains.topology.operations import TOPOLOGY_CAPABILITIES
+from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.provider_runtime import known_provider_runtime
+
+TOPOLOGY_BUNDLE = DomainBundle(
+    domain_id="topology",
+    schema_namespace="jacobian.topology",
+    semantics=DomainSemantics(
+        name="jacobian.finite-simplicial-topology",
+        version="1",
+        definition={
+            "description": (
+                "bounded finite abstract simplicial complexes, oriented chain "
+                "complexes, and homology over bounded prime fields"
+            ),
+            "vertices": "canonical ASCII labels in lexicographic order",
+            "orientation": "the increasing vertex order orients every simplex",
+            "faces": "the empty simplex is not stored",
+            "isolated_vertices": "represented by singleton maximal facets",
+            "homology": "reduced or unreduced convention is explicit",
+            "integral_homology": "not provided",
+            "persistent_homology": "not provided",
+        },
+    ),
+    provider_runtime=known_provider_runtime(
+        "jacobian.topology",
+        features=(
+            "finite-simplicial-complex",
+            "oriented-boundary-matrices",
+            "prime-field-homology",
+            "exact-modular-elimination",
+        ),
+    ),
+    backend_version="jacobian.topology/1",
+    capabilities=TOPOLOGY_CAPABILITIES,
+    diagnostics=DomainDiagnostics(
+        invalid_request=CapabilityDiagnostic(
+            code="INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST",
+            stage="finite_simplicial_topology_input_validation",
+            message="Input does not satisfy the bounded simplicial-topology contract.",
+            hint=(
+                "Use unique declared vertices, distinct maximal facets, and a "
+                "bounded prime when requesting F_p homology."
+            ),
+        )
+    ),
+    scope_description="the complete supplied bounded finite simplicial complex",
+    completeness_basis=(
+        "the finite facet closure, every oriented boundary entry, and every "
+        "requested finite-field chain dimension were computed exactly"
+    ),
+    assurance_basis=(
+        "exact deterministic finite computation; independent verification is "
+        "available through topology.result.verify"
+    ),
+)
+
+__all__ = ["TOPOLOGY_BUNDLE"]

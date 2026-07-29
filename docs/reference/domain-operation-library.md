@@ -37,7 +37,9 @@ The current built-in domains cover arithmetic, number theory, combinatorics,
 finite sets, sequences, Euclidean and projective geometry, graph optimization
 and invariants, matrices, lattices, polynomials, validated real analysis,
 finite probability, and rational optimization. Catalog membership remains the
-authority for actual availability.
+authority for actual availability. The current portfolio also includes finite
+simplicial-complex materialization, oriented chain complexes, and prime-field
+homology under the `topology` domain.
 
 ## Computed operations
 

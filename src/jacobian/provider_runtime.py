@@ -1205,6 +1205,48 @@ def probability_exact_checker_provider_runtime(
     )
 
 
+def topology_exact_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the independent finite-simplicial-topology checker source."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.topology-exact-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The simplicial-topology checker source could not be identified.",
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.topology-exact-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.simplicial_topology:"
+                "check_simplicial_complex_materialization"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=("clean-process-replay", "standard-library-only"),
+        )
+    return composite_provider_runtime(
+        "jacobian.topology-exact-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "finite-face-closure-replay",
+            "oriented-boundary-replay",
+            "prime-field-quotient-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
 def graded_syzygy_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),

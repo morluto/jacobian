@@ -235,6 +235,7 @@ class CoreApplicationInstaller:
             number_theory=result.domain_bundles.get("number_theory"),
             probability=result.domain_bundles.get("probability"),
             projective_geometry=result.domain_bundles.get("projective_geometry"),
+            topology=result.domain_bundles.get("topology"),
             authorize=ctx.authorizes_bundled_checkers,
         )
         for adapter in adapters:

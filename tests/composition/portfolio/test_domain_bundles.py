@@ -21,6 +21,8 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.combinatorics import (
     FibonacciPairRequest,
     IntegerPartitionEnumerationRequest,
+    LinearRecurrenceEvaluationRequest,
+    RationalGeneratingFunctionCoefficientsRequest,
 )
 from jacobian.contracts.combinatorics import (
     IntegerListRequest as CombIntegerListRequest,
@@ -85,6 +87,8 @@ EXPECTED_IDS: frozenset[str] = frozenset(
         "combinatorics.compute.fibonacci",
         "combinatorics.compute.fibonacci_pair",
         "combinatorics.compute.lucas",
+        "combinatorics.generating_function.coefficients.compute",
+        "combinatorics.recurrence.linear.evaluate",
         "combinatorics.compute.motzkin",
         "combinatorics.compute.multinomial",
         "combinatorics.compute.partition_number",
@@ -209,6 +213,38 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (CombNonnegPairRequest, {"n": 5, "k": 2}),
     (CombIntegerListRequest, {"values": ["2", "1", "1"]}),
     (IntegerPartitionEnumerationRequest, {"n": 5, "max_parts": 3}),
+    (
+        LinearRecurrenceEvaluationRequest,
+        {
+            "coefficients": [
+                {"num": "1", "den": "1"},
+                {"num": "1", "den": "1"},
+            ],
+            "initial_values": [
+                {"num": "0", "den": "1"},
+                {"num": "1", "den": "1"},
+            ],
+            "coefficient_convention": (
+                "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
+            ),
+            "scope": "PREFIX",
+            "term_count": 6,
+            "indices": [],
+        },
+    ),
+    (
+        RationalGeneratingFunctionCoefficientsRequest,
+        {
+            "numerator": [{"num": "1", "den": "1"}],
+            "denominator": [
+                {"num": "1", "den": "1"},
+                {"num": "-1", "den": "1"},
+            ],
+            "coefficient_convention": "ASCENDING_POWERS_OF_X",
+            "expansion_point": "0",
+            "truncation_order": 6,
+        },
+    ),
     (
         FiniteSetPairRequest,
         {"left": {"elements": ["1", "2"]}, "right": {"elements": ["2", "3"]}},

@@ -4,7 +4,11 @@ from jacobian.contracts.combinatorics import (
     FibonacciPairRequest,
     FibonacciPairResult,
     IntegerResult,
+    LinearRecurrenceEvaluationRequest,
+    LinearRecurrenceEvaluationResult,
     NonnegativeIntegerRequest,
+    RationalGeneratingFunctionCoefficientsRequest,
+    RationalGeneratingFunctionCoefficientsResult,
     RationalResult,
 )
 from jacobian.domains._examples import example
@@ -16,6 +20,10 @@ from jacobian.domains.combinatorics.operations import (
     fibonacci,
     fibonacci_pair,
     lucas,
+)
+from jacobian.domains.combinatorics.recurrence_series_operations import (
+    compute_rational_generating_function_coefficients,
+    evaluate_linear_recurrence,
 )
 
 RECURRENCE_CAPABILITIES = (
@@ -74,6 +82,79 @@ RECURRENCE_CAPABILITIES = (
         "sequence",
         invocation_examples=(
             example("bernoulli_4", "Compute the fourth Bernoulli number.", {"n": 4}),
+        ),
+    ),
+    combinatorics_operation(
+        "combinatorics.recurrence.linear.evaluate",
+        "Evaluate an exact linear recurrence",
+        (
+            "Evaluate requested terms of one bounded constant-coefficient rational "
+            "recurrence and preserve the complete replay prefix through the "
+            "greatest requested index."
+        ),
+        LinearRecurrenceEvaluationRequest,
+        LinearRecurrenceEvaluationResult,
+        evaluate_linear_recurrence,
+        "combinatorics",
+        "recurrence",
+        "linear-recurrence",
+        "exact-rational",
+        invocation_examples=(
+            example(
+                "generic_fibonacci_prefix",
+                "Evaluate the first eight terms of the Fibonacci recurrence.",
+                {
+                    "coefficients": [
+                        {"num": "1", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "initial_values": [
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "coefficient_convention": (
+                        "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
+                    ),
+                    "scope": "PREFIX",
+                    "term_count": 8,
+                    "indices": [],
+                },
+            ),
+        ),
+        relation_id="combinatorics.recurrence.linear.evaluation.relation",
+    ),
+    combinatorics_operation(
+        "combinatorics.generating_function.coefficients.compute",
+        "Compute a rational generating-function coefficient prefix",
+        (
+            "Expand one exact rational function N(x)/D(x) at zero through a "
+            "bounded finite truncation and expose the residual congruence."
+        ),
+        RationalGeneratingFunctionCoefficientsRequest,
+        RationalGeneratingFunctionCoefficientsResult,
+        compute_rational_generating_function_coefficients,
+        "combinatorics",
+        "generating-function",
+        "rational-series",
+        "exact-rational",
+        invocation_examples=(
+            example(
+                "geometric_series_prefix",
+                "Expand 1/(1-x) through six coefficients.",
+                {
+                    "numerator": [{"num": "1", "den": "1"}],
+                    "denominator": [
+                        {"num": "1", "den": "1"},
+                        {"num": "-1", "den": "1"},
+                    ],
+                    "coefficient_convention": "ASCENDING_POWERS_OF_X",
+                    "expansion_point": "0",
+                    "truncation_order": 6,
+                },
+            ),
+        ),
+        relation_id=(
+            "combinatorics.generating_function.coefficient_truncation.relation"
         ),
     ),
 )

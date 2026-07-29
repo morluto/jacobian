@@ -1,0 +1,60 @@
+{
+  "suite_id": "RECURRENCE-SERIES-OVERLAP-PUBLIC-001",
+  "version": "1",
+  "scored": false,
+  "purpose": "Deterministic public catalog and checker harness validation; not a model-in-the-loop comparative performance claim",
+  "control_catalog": {
+    "named_capabilities": [
+      "combinatorics.compute.fibonacci",
+      "combinatorics.compute.fibonacci_pair",
+      "combinatorics.compute.lucas"
+    ],
+    "generic_capabilities": []
+  },
+  "treatment_catalog_delta": {
+    "added": [
+      "combinatorics.recurrence.linear.evaluate",
+      "combinatorics.generating_function.coefficients.compute",
+      "combinatorics.result.verify"
+    ],
+    "removed": [],
+    "renamed": []
+  },
+  "discovery_cases": [
+    {
+      "query": "compute the Fibonacci number at index n",
+      "expected_first": "combinatorics.compute.fibonacci",
+      "overlap_class": "named sequence preserved"
+    },
+    {
+      "query": "compute the Lucas number at index n",
+      "expected_first": "combinatorics.compute.lucas",
+      "overlap_class": "named sequence preserved"
+    },
+    {
+      "query": "evaluate requested indices of a constant coefficient linear recurrence",
+      "expected_first": "combinatorics.recurrence.linear.evaluate",
+      "overlap_class": "generic recurrence"
+    },
+    {
+      "query": "exact coefficient prefix of a rational generating function at zero",
+      "expected_first": "combinatorics.generating_function.coefficients.compute",
+      "overlap_class": "generic rational series"
+    }
+  ],
+  "checker_attacks": [
+    {
+      "variant": "contract-valid mutated recurrence term and matching projection",
+      "expected": "REJECTED with UNKNOWN conclusion and no verification record"
+    },
+    {
+      "variant": "contract-valid mutated rational-series coefficient with declared zero residuals",
+      "expected": "REJECTED with UNKNOWN conclusion and no verification record"
+    }
+  ],
+  "decision": "keep named sequence capabilities and add the two bounded generic operations",
+  "open_obligations": [
+    "No autonomous model control-versus-treatment runs were executed or claimed.",
+    "Revisit ranking only if model-in-the-loop traces show recurring intent confusion."
+  ]
+}

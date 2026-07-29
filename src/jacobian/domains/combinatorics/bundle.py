@@ -20,11 +20,17 @@ COMBINATORICS_BUNDLE = DomainBundle(
     schema_namespace="jacobian.combinatorics",
     semantics=DomainSemantics(
         name="jacobian.exact-combinatorics",
-        version="1",
+        version="2",
         definition={
-            "description": "Exact finite combinatorics over bounded non-negative integers",
-            "arithmetic": "exact integer via maintained SymPy and stdlib APIs",
-            "assurance": "computed; no independent checker",
+            "description": (
+                "Exact finite combinatorics, bounded linear recurrences, and "
+                "finite rational-series truncations"
+            ),
+            "arithmetic": "exact integer and rational via maintained SymPy and stdlib APIs",
+            "assurance": (
+                "producers are computed; declared recurrence and rational-series "
+                "results may be submitted to an operator-authorized independent checker"
+            ),
         },
     ),
     provider_runtime=known_provider_runtime(
@@ -48,7 +54,10 @@ COMBINATORICS_BUNDLE = DomainBundle(
     scope_description="the complete supplied bounded combinatorics input",
     completeness_basis=(
         "exact SymPy and stdlib computation covered the supplied bounded input; "
-        "not independently verified"
+        "producer completion is not independent verification"
     ),
-    assurance_basis="exact SymPy and stdlib combinatorics; no independent checker invoked",
+    assurance_basis=(
+        "exact SymPy and stdlib combinatorics; independent verification requires "
+        "an explicit domain-owned verifier invocation"
+    ),
 )

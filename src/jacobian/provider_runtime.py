@@ -1205,6 +1205,46 @@ def probability_exact_checker_provider_runtime(
     )
 
 
+def combinatorics_exact_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind recurrence and rational-series checker source without SymPy."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.combinatorics-exact-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The exact combinatorics checker source could not be identified.",
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.combinatorics-exact-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.recurrence_series:check_linear_recurrence_evaluation"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=("clean-process-replay", "standard-library-only"),
+        )
+    return composite_provider_runtime(
+        "jacobian.combinatorics-exact-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "linear-recurrence-replay",
+            "rational-series-residual-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
 def topology_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),

@@ -37,6 +37,9 @@ from jacobian.contracts.results import (
     ExecutionStatus,
     Verification,
 )
+from jacobian.domains.combinatorics.checkers import (
+    COMBINATORICS_EXACT_REPLAY_CHECKERS,
+)
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
 )
@@ -53,6 +56,7 @@ from jacobian.domains.projective_geometry.checkers import (
 from jacobian.domains.topology.checkers import TOPOLOGY_EXACT_REPLAY_CHECKERS
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.provider_runtime import (
+    combinatorics_exact_checker_provider_runtime,
     exact_domain_checker_provider_runtime,
     graded_syzygy_checker_provider_runtime,
     graph_exact_checker_provider_runtime,
@@ -95,6 +99,8 @@ def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
         == "jacobian_checkers.exact_probability_operations"
     ):
         return "finite-probability"
+    if declaration.entrypoint_module == "jacobian_checkers.recurrence_series":
+        return "combinatorics"
     if declaration.entrypoint_module == "jacobian_checkers.jacobian_syzygy":
         return "graded-syzygy"
     if declaration.entrypoint_module == "jacobian_checkers.projective_arrangements":
@@ -115,6 +121,7 @@ def install_exact_domain_checkers(
     matrix: InstalledDomainBundle | None = None,
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
+    combinatorics: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
     probability: InstalledDomainBundle | None = None,
     poset: InstalledDomainBundle | None = None,
@@ -129,6 +136,7 @@ def install_exact_domain_checkers(
         "python-flint": exact_domain_checker_provider_runtime(),
         "finite-graph": graph_exact_checker_provider_runtime(),
         "finite-probability": probability_exact_checker_provider_runtime(),
+        "combinatorics": combinatorics_exact_checker_provider_runtime(),
         "poset": poset_exact_checker_provider_runtime(),
         "graded-syzygy": graded_syzygy_checker_provider_runtime(),
         "projective-arrangement": (projective_arrangement_checker_provider_runtime()),
@@ -150,6 +158,11 @@ def install_exact_domain_checkers(
         *_available_graph_declaration_bundles(
             graph=graph,
             graph_invariants=graph_invariants,
+        ),
+        *(
+            (combinatorics, item)
+            for item in COMBINATORICS_EXACT_REPLAY_CHECKERS
+            if combinatorics is not None
         ),
         *(
             (number_theory, item)
@@ -218,6 +231,9 @@ def install_exact_domain_checkers(
             "finite-probability": probability_exact_checker_provider_runtime(
                 checker_ids=authorized_ids["finite-probability"]
             ),
+            "combinatorics": combinatorics_exact_checker_provider_runtime(
+                checker_ids=authorized_ids["combinatorics"]
+            ),
             "poset": poset_exact_checker_provider_runtime(
                 checker_ids=authorized_ids["poset"]
             ),
@@ -247,6 +263,7 @@ def install_exact_domain_verification(
     matrix: InstalledDomainBundle | None = None,
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
+    combinatorics: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
     probability: InstalledDomainBundle | None = None,
     poset: InstalledDomainBundle | None = None,
@@ -262,6 +279,7 @@ def install_exact_domain_verification(
         matrix=matrix,
         graph=graph,
         graph_invariants=graph_invariants,
+        combinatorics=combinatorics,
         number_theory=number_theory,
         probability=probability,
         poset=poset,
@@ -355,6 +373,19 @@ def install_exact_domain_verification(
             if installation.checker_ids.get(declaration.capability_id) is not None
         )
         if probability is not None
+        else ()
+    )
+    combinatorics_declarations = (
+        tuple(
+            _installed_declaration(
+                combinatorics,
+                declaration,
+                installation,
+            )
+            for declaration in COMBINATORICS_EXACT_REPLAY_CHECKERS
+            if installation.checker_ids.get(declaration.capability_id) is not None
+        )
+        if combinatorics is not None
         else ()
     )
     topology_declarations = (
@@ -467,6 +498,32 @@ def install_exact_domain_verification(
                 declarations=probability_declarations,
                 witness_schema_uri=witness_schema_uri,
                 provider_runtime=installation.provider_runtimes["finite-probability"],
+            )
+        )
+    if combinatorics_declarations:
+        adapters.append(
+            ExactDomainResultVerificationAdapter(
+                capability_id="combinatorics.result.verify",
+                title="Verify an exact recurrence or rational-series result",
+                description=(
+                    "Independently replay one stored bounded linear recurrence or "
+                    "rational generating-function coefficient result against its "
+                    "exact input lineage."
+                ),
+                tags=(
+                    "verification",
+                    "exact",
+                    "combinatorics",
+                    "recurrence",
+                    "generating-function",
+                ),
+                store=store,
+                schemas=schemas,
+                artifacts=artifacts,
+                verification=verification,
+                declarations=combinatorics_declarations,
+                witness_schema_uri=witness_schema_uri,
+                provider_runtime=installation.provider_runtimes["combinatorics"],
             )
         )
     if topology_declarations:
@@ -642,7 +699,7 @@ class ExactDomainResultVerificationAdapter:
                     hint=(
                         "Pass a result_uri returned by one supported exact "
                         "polynomial, matrix, graph, probability, projective-"
-                        "geometry, topology, or poset producer."
+                        "geometry, topology, poset, or combinatorics producer."
                     ),
                 )
             ) from exc

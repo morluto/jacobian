@@ -101,10 +101,10 @@ authorization.
 
 ## Independent exact replay
 
-Some polynomial, matrix, graph, and geometry results have a separate verification
-capability. The producer first returns a result artifact in `EXPLORE` mode. A
-verification request then supplies that exact `result_uri` to the matching
-`VERIFY` capability.
+Some polynomial, matrix, graph, geometry, probability, topology, poset, and
+combinatorics results have a separate verification capability. The producer
+first returns a result artifact in `EXPLORE` mode. A verification request then
+supplies that exact `result_uri` to the matching `VERIFY` capability.
 
 Domain-owned `ExactReplayCheckerDeclaration` values name the request model,
 certificate format, and checker function, but they carry no authority.

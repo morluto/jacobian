@@ -1,0 +1,33 @@
+{
+  "adapter_source_sha256": "sha256:7f063945328bf766d981c3a55df07de4adb659d2c86fde9653179c7644112886",
+  "archive_sha256": "sha256:f75d2b2486842fb47222c780c7241c262d392802d0811143c4e9b539972ee55b",
+  "contract": "jacobian.cgal-delaunay-spike/v1",
+  "download_url": "https://github.com/CGAL/cgal/releases/download/v6.2/CGAL-6.2-library.tar.xz",
+  "license": {
+    "commercial_alternative": true,
+    "open_source_id": "GPL-3.0-or-later",
+    "package": "2D Triangulations"
+  },
+  "manual_url": "https://doc.cgal.org/latest/Triangulation_2/index.html",
+  "provider": "cgal",
+  "reproductions": {
+    "cocircular": {
+      "command": [
+        "--cocircular"
+      ],
+      "expected_output": "contract jacobian.cgal-delaunay-spike/v1\ncgal_version 6.2\nkernel Exact_predicates_exact_constructions_kernel\nsemantics REQUIRE_UNIQUE\napplicable false\nreason COCIRCULAR\n",
+      "expected_output_sha256": "sha256:4260fdbc095751f5a880778590d0b0d5217f1042a61e14eb212320c390213372"
+    },
+    "unique": {
+      "command": [
+        "--unique"
+      ],
+      "expected_output": "contract jacobian.cgal-delaunay-spike/v1\ncgal_version 6.2\nkernel Exact_predicates_exact_constructions_kernel\nsemantics REQUIRE_UNIQUE\napplicable true\nvalid true\nsite_count 6\ntriangle 0 1 5\ntriangle 0 5 4\ntriangle 1 2 5\ntriangle 2 3 5\ntriangle 3 4 5\nedge 0 1\nedge 0 4\nedge 0 5\nedge 1 2\nedge 1 5\nedge 2 3\nedge 2 5\nedge 3 4\nedge 3 5\nedge 4 5\nhull_edge 0 1\nhull_edge 0 4\nhull_edge 1 2\nhull_edge 2 3\nhull_edge 3 4\n",
+      "expected_output_sha256": "sha256:a1cecc8c3781dfd8626e62da3d2ff4a4f974b31a3cb19c4baa23db0d11741ce9",
+      "scope": "six distinct rational sites in two dimensions with no four cocircular",
+      "site_count": 6
+    }
+  },
+  "supported_gnu_compiler_minimum": "13.3.0",
+  "version": "6.2"
+}

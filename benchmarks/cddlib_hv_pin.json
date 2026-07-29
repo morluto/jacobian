@@ -1,0 +1,265 @@
+{
+  "adapter_source_sha256": "sha256:e6510a3b4b02d565241376149cde58dcd27e8d1c6860f0a3224beef89319433b",
+  "contract": "jacobian.cddlib-hv-spike/v1",
+  "provider": "cddlib/pycddlib",
+  "reproduction": {
+    "cases": [
+      {
+        "ambient_dimension": 2,
+        "case_id": "h_to_v_affine_ray",
+        "expected_output": {
+          "homogeneous_rows": [
+            [
+              "0",
+              "1",
+              "0"
+            ],
+            [
+              "1",
+              "1/2",
+              "1/3"
+            ]
+          ],
+          "linearity_rows": [],
+          "representation": "V"
+        },
+        "input": {
+          "homogeneous_rows": [
+            [
+              "-1/2",
+              "1",
+              "0"
+            ],
+            [
+              "-1/3",
+              "0",
+              "1"
+            ]
+          ],
+          "linearity_rows": [
+            1
+          ],
+          "representation": "H"
+        }
+      },
+      {
+        "ambient_dimension": 2,
+        "case_id": "h_to_v_strip_lineality",
+        "expected_output": {
+          "homogeneous_rows": [
+            [
+              "0",
+              "0",
+              "1"
+            ],
+            [
+              "1",
+              "0",
+              "0"
+            ],
+            [
+              "1",
+              "3/2",
+              "0"
+            ]
+          ],
+          "linearity_rows": [
+            0
+          ],
+          "representation": "V"
+        },
+        "input": {
+          "homogeneous_rows": [
+            [
+              "0",
+              "1",
+              "0"
+            ],
+            [
+              "3/2",
+              "-1",
+              "0"
+            ]
+          ],
+          "linearity_rows": [],
+          "representation": "H"
+        }
+      },
+      {
+        "ambient_dimension": 2,
+        "case_id": "v_to_h_affine_ray",
+        "expected_output": {
+          "homogeneous_rows": [
+            [
+              "-1/3",
+              "0",
+              "1"
+            ],
+            [
+              "-1",
+              "2",
+              "0"
+            ]
+          ],
+          "linearity_rows": [
+            0
+          ],
+          "representation": "H"
+        },
+        "input": {
+          "homogeneous_rows": [
+            [
+              "1",
+              "1/2",
+              "1/3"
+            ],
+            [
+              "0",
+              "1",
+              "0"
+            ]
+          ],
+          "linearity_rows": [],
+          "representation": "V"
+        }
+      },
+      {
+        "ambient_dimension": 2,
+        "case_id": "v_to_h_strip_lineality",
+        "expected_output": {
+          "homogeneous_rows": [
+            [
+              "3/2",
+              "-1",
+              "0"
+            ],
+            [
+              "0",
+              "1",
+              "0"
+            ]
+          ],
+          "linearity_rows": [],
+          "representation": "H"
+        },
+        "input": {
+          "homogeneous_rows": [
+            [
+              "1",
+              "0",
+              "0"
+            ],
+            [
+              "1",
+              "3/2",
+              "0"
+            ],
+            [
+              "0",
+              "0",
+              "1"
+            ]
+          ],
+          "linearity_rows": [
+            2
+          ],
+          "representation": "V"
+        }
+      }
+    ],
+    "exact_arithmetic_probe": "1208925819614629174706177/2288818359375",
+    "expected_mathematical_output_sha256": "sha256:46bc8c4f78c39fe5ddecd1731f6a1effc3351042e96f1a9d85f7fa97fae8acb4",
+    "scope": {
+      "ambient_dimension": 2,
+      "case_count": 4,
+      "covers": [
+        "H_TO_V",
+        "V_TO_H",
+        "AFFINE_DIMENSION",
+        "EQUALITY",
+        "INEQUALITY",
+        "VERTEX",
+        "RAY",
+        "LINEALITY",
+        "HOMOGENEOUS_NORMALIZATION"
+      ],
+      "exact_input": "fractions.Fraction through cdd.gmp",
+      "max_homogeneous_rows_per_case": 3
+    }
+  },
+  "sources": {
+    "cddlib": {
+      "archive_sha256": "sha256:b87ee07ba2c1d0ab92a3e4eccacdf568f981a095a392e3b9efd7e7e4a9e125b1",
+      "download_url": "https://github.com/cddlib/cddlib/releases/download/0.94n/cddlib-0.94n.tar.gz",
+      "identity_members": {
+        "cddlib-0.94n/COPYING": {
+          "max_bytes": 32768,
+          "required_ascii_markers": [
+            "GNU GENERAL PUBLIC LICENSE",
+            "Version 2, June 1991",
+            "any later version."
+          ],
+          "sha256": "sha256:91df39d1816bfb17a4dda2d3d2c83b1f6f2d38d53e53e41e8f97ad5ac46a0cad"
+        },
+        "cddlib-0.94n/lib-src/cddmp.h": {
+          "max_bytes": 65536,
+          "required_ascii_markers": [
+            "GMPRATIONAL",
+            "mpq_t"
+          ],
+          "sha256": "sha256:31bb10537de5f6442412f250f93a620857f02cb0a79297e94a89aaf7b03571e5"
+        }
+      },
+      "license_id": "GPL-2.0-or-later",
+      "tag": "0.94n",
+      "tag_commit": "86dfe60811ec879a46e73d488719acaa754536e4"
+    },
+    "pycddlib": {
+      "archive_sha256": "sha256:50f43f039818ab97c8cb44345eed9a365dae66789ce11cc8c95a74134a8907a7",
+      "download_url": "https://files.pythonhosted.org/packages/d2/25/85e2e17491a4d51f796f7212a13cef7d6d3b2967dfba104627a465224f06/pycddlib-3.0.2.tar.gz",
+      "identity_members": {
+        "pycddlib-3.0.2/LICENSE.md": {
+          "max_bytes": 32768,
+          "required_ascii_markers": [
+            "GNU GENERAL PUBLIC LICENSE",
+            "Version 2, June 1991",
+            "any later version."
+          ],
+          "sha256": "sha256:5d05a329bdd65bc1212fda57942ea90a2a810ff7ce192dc38d7042a55caa4a28"
+        },
+        "pycddlib-3.0.2/cython/_cddgmp.pyx": {
+          "max_bytes": 65536,
+          "required_ascii_markers": [
+            "NumberType = Fraction",
+            "include \"mytype_gmp.pxi\""
+          ],
+          "sha256": "sha256:9c9133f91062c00f123e36d8a8eb2063375e95b43a281e12c181c0810a0bbc54"
+        },
+        "pycddlib-3.0.2/cython/mytype_gmp.pxi": {
+          "max_bytes": 65536,
+          "required_ascii_markers": [
+            "from fractions import Fraction",
+            "cdef _get_mytype",
+            "cdef _set_mytype"
+          ],
+          "sha256": "sha256:1bd46a82f6cc0e3e71bbab8324d5e0a5cbd5cc379ec288ddc2af2bc4073e8b15"
+        },
+        "pycddlib-3.0.2/setup.py": {
+          "max_bytes": 16384,
+          "required_ascii_markers": [
+            "name=\"cdd.gmp\"",
+            "libraries=[\"cddgmp\", \"gmp\"]"
+          ],
+          "sha256": "sha256:90f98b2848d711d19decf5ee43922c73e02a67921d98b79a5d1a3291a97d09c6"
+        }
+      },
+      "license_id": "GPL-2.0-or-later",
+      "tag": "3.0.2",
+      "tag_commit": "2227de7b848014e634a81b8815327bc4de9a079a"
+    }
+  },
+  "versions": {
+    "cddlib": "0.94n",
+    "pycddlib": "3.0.2"
+  }
+}

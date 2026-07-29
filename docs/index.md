@@ -130,6 +130,9 @@ degeneracy semantics, and independent geometry-checker obligations.
 The [GUDHI persistent-homology optional-provider spike](contributing/gudhi-persistence-provider-spike.md)
 records exact-rank transport, selected-module licensing, bounded pairing
 reproduction, and independent modular-reduction obligations.
+The [cddlib exact H/V optional-provider spike](contributing/cddlib-hv-provider-spike.md)
+records the GPL source-build boundary, exact GMP-rational reproduction,
+homogeneous representation semantics, and the unresolved completeness gate.
 
 Recurring agent work is encoded in the repository-local skills under
 `.agents/skills/`. Start with `develop-math-capabilities` for a complete

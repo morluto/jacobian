@@ -127,6 +127,9 @@ decision, and unresolved checker gates without registering a capability.
 The [CGAL exact-Delaunay optional-provider spike](contributing/cgal-delaunay-provider-spike.md)
 records the exact-kernel reproduction, GPL/commercial deployment boundary,
 degeneracy semantics, and independent geometry-checker obligations.
+The [GUDHI persistent-homology optional-provider spike](contributing/gudhi-persistence-provider-spike.md)
+records exact-rank transport, selected-module licensing, bounded pairing
+reproduction, and independent modular-reduction obligations.
 
 Recurring agent work is encoded in the repository-local skills under
 `.agents/skills/`. Start with `develop-math-capabilities` for a complete

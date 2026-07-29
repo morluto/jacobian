@@ -1,0 +1,258 @@
+{
+  "adapter_source_sha256": "sha256:1b3a6aedc33fc017abb7300ba500f6debcfe662de0e9b90b08b0fd5b2750b2fc",
+  "contract": "jacobian.gudhi-persistence-spike/v1",
+  "documentation_url": "https://gudhi.inria.fr/python/3.13.0/simplex_tree_ref.html",
+  "licensing_url": "https://gudhi.inria.fr/licensing/",
+  "provider": "gudhi",
+  "reproduction": {
+    "coefficient_prime": 2,
+    "expected_mathematical_output_sha256": "sha256:f57b4969027b4dd6ab6c6ff66b841d9dda3348f5eb00f04d200b38e6a02b17e9",
+    "expected_provider_output": {
+      "contract": "jacobian.gudhi-persistence-spike/v1",
+      "filtration": [
+        {
+          "rank": 0,
+          "simplex_id": "v0"
+        },
+        {
+          "rank": 1,
+          "simplex_id": "v1"
+        },
+        {
+          "rank": 2,
+          "simplex_id": "v2"
+        },
+        {
+          "rank": 3,
+          "simplex_id": "v3"
+        },
+        {
+          "rank": 4,
+          "simplex_id": "e01"
+        },
+        {
+          "rank": 5,
+          "simplex_id": "e12"
+        },
+        {
+          "rank": 6,
+          "simplex_id": "e23"
+        },
+        {
+          "rank": 7,
+          "simplex_id": "e03"
+        },
+        {
+          "rank": 8,
+          "simplex_id": "e02"
+        },
+        {
+          "rank": 9,
+          "simplex_id": "t012"
+        },
+        {
+          "rank": 10,
+          "simplex_id": "t023"
+        }
+      ],
+      "pairs": [
+        {
+          "birth_exact_value": "-2/3",
+          "birth_rank": 0,
+          "birth_simplex_id": "v0",
+          "death": {
+            "kind": "INFINITE"
+          },
+          "dimension": 0
+        },
+        {
+          "birth_exact_value": "1/7",
+          "birth_rank": 1,
+          "birth_simplex_id": "v1",
+          "death": {
+            "exact_value": "5/11",
+            "kind": "FINITE",
+            "rank": 4,
+            "simplex_id": "e01"
+          },
+          "dimension": 0
+        },
+        {
+          "birth_exact_value": "2/7",
+          "birth_rank": 2,
+          "birth_simplex_id": "v2",
+          "death": {
+            "exact_value": "7/13",
+            "kind": "FINITE",
+            "rank": 5,
+            "simplex_id": "e12"
+          },
+          "dimension": 0
+        },
+        {
+          "birth_exact_value": "1/3",
+          "birth_rank": 3,
+          "birth_simplex_id": "v3",
+          "death": {
+            "exact_value": "3/5",
+            "kind": "FINITE",
+            "rank": 6,
+            "simplex_id": "e23"
+          },
+          "dimension": 0
+        },
+        {
+          "birth_exact_value": "2/3",
+          "birth_rank": 7,
+          "birth_simplex_id": "e03",
+          "death": {
+            "exact_value": "8/9",
+            "kind": "FINITE",
+            "rank": 10,
+            "simplex_id": "t023"
+          },
+          "dimension": 1
+        },
+        {
+          "birth_exact_value": "5/7",
+          "birth_rank": 8,
+          "birth_simplex_id": "e02",
+          "death": {
+            "exact_value": "11/13",
+            "kind": "FINITE",
+            "rank": 9,
+            "simplex_id": "t012"
+          },
+          "dimension": 1
+        }
+      ],
+      "provider": "gudhi",
+      "version": "3.13.0"
+    },
+    "scope": "eleven simplices of a filtered triangulated square over F_2 with unique exact rational filtration values",
+    "simplices": [
+      {
+        "exact_value": "-2/3",
+        "rank": 0,
+        "simplex_id": "v0",
+        "vertices": [
+          0
+        ]
+      },
+      {
+        "exact_value": "1/7",
+        "rank": 1,
+        "simplex_id": "v1",
+        "vertices": [
+          1
+        ]
+      },
+      {
+        "exact_value": "2/7",
+        "rank": 2,
+        "simplex_id": "v2",
+        "vertices": [
+          2
+        ]
+      },
+      {
+        "exact_value": "1/3",
+        "rank": 3,
+        "simplex_id": "v3",
+        "vertices": [
+          3
+        ]
+      },
+      {
+        "exact_value": "5/11",
+        "rank": 4,
+        "simplex_id": "e01",
+        "vertices": [
+          0,
+          1
+        ]
+      },
+      {
+        "exact_value": "7/13",
+        "rank": 5,
+        "simplex_id": "e12",
+        "vertices": [
+          1,
+          2
+        ]
+      },
+      {
+        "exact_value": "3/5",
+        "rank": 6,
+        "simplex_id": "e23",
+        "vertices": [
+          2,
+          3
+        ]
+      },
+      {
+        "exact_value": "2/3",
+        "rank": 7,
+        "simplex_id": "e03",
+        "vertices": [
+          0,
+          3
+        ]
+      },
+      {
+        "exact_value": "5/7",
+        "rank": 8,
+        "simplex_id": "e02",
+        "vertices": [
+          0,
+          2
+        ]
+      },
+      {
+        "exact_value": "11/13",
+        "rank": 9,
+        "simplex_id": "t012",
+        "vertices": [
+          0,
+          1,
+          2
+        ]
+      },
+      {
+        "exact_value": "8/9",
+        "rank": 10,
+        "simplex_id": "t023",
+        "vertices": [
+          0,
+          2,
+          3
+        ]
+      }
+    ]
+  },
+  "source": {
+    "archive_sha256": "sha256:7640d716d6a118b7787602826e4144bfa1ad5903a31f4a760a7f3a1e68cfdc02",
+    "download_url": "https://github.com/GUDHI/gudhi-devel/archive/refs/tags/tags/gudhi-release-3.13.0.tar.gz",
+    "module_licenses": {
+      "persistent_cohomology": {
+        "header_sha256": "sha256:609291768ea884def951198f9a6f7d03acebbcbaae36eadf577b32881bf75680",
+        "license_id": "MIT"
+      },
+      "simplex_tree": {
+        "header_sha256": "sha256:81f7e4c1d21107afd62fa7f9e97f4cb6c2a3a238ad315fd9412b10b1bab356ce",
+        "license_id": "MIT"
+      }
+    },
+    "tag": "tags/gudhi-release-3.13.0",
+    "tag_commit": "5dbe510bed5d8d700ec7243fd915769fb67964a2"
+  },
+  "version": "3.13.0",
+  "wheel": {
+    "download_url": "https://files.pythonhosted.org/packages/02/fb/fad8db68c325617708b8033f196c09633fea0962c0878ccc73571ce889b2/gudhi-3.13.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "filename": "gudhi-3.13.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "license_member": "gudhi-3.13.0.dist-info/licenses/LICENSE",
+    "license_sha256": "sha256:ff415502301c693d016ef554143fdae8a2489e73f1ca06ad336dc2867d6ef544",
+    "metadata_member": "gudhi-3.13.0.dist-info/METADATA",
+    "sha256": "sha256:d7ce52905d147a7e599607758843c7f37525c98e7aeaca87cbbbcbd3adb71598"
+  }
+}

@@ -66,6 +66,22 @@ _GAUSSIAN_POLYNOMIAL = {
             "probability.gaussian_polynomial.moment.compute",
             {"polynomial": _GAUSSIAN_POLYNOMIAL, "order": 2},
         ),
+        (
+            "probability.graph_reliability.connection_probability.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b"],
+                    "edges": [["a", "b"]],
+                },
+                "edge_probabilities": [
+                    {
+                        "edge": ["a", "b"],
+                        "open_probability": _q(1, 3),
+                    }
+                ],
+                "terminals": ["a", "b"],
+            },
+        ),
     ),
 )
 def test_probability_results_are_independently_replayed(
@@ -128,3 +144,49 @@ def test_probability_checker_rejects_forged_event_mass(
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
     assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
+
+
+def test_probability_checker_rejects_forged_graph_reliability(
+    authorized_complete_runtime,
+) -> None:
+    computed = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "probability.graph_reliability.connection_probability.compute"
+            ),
+            input={
+                "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+                "edge_probabilities": [
+                    {"edge": ["a", "b"], "open_probability": _q(1, 3)}
+                ],
+                "terminals": ["a", "b"],
+            },
+        )
+    )
+    result_artifact = authorized_complete_runtime.core.store.get(
+        computed.output["result_uri"]
+    )
+    false_payload = dict(result_artifact.payload)
+    false_states = [dict(state) for state in false_payload["states"]]
+    false_states[0]["terminals_connected"] = True
+    false_payload["states"] = false_states
+    false_payload["connection_probability"] = _q(1)
+    false_result = authorized_complete_runtime.core.artifacts.put(
+        schema_uri=result_artifact.manifest.schema_uri,
+        semantics_uri=result_artifact.manifest.semantics_uri,
+        parents=result_artifact.manifest.parents,
+        payload=false_payload,
+        summary="adversarial false graph reliability",
+    )
+
+    rejected = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.result.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": false_result.artifact_uri},
+        )
+    )
+
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.output["verification_record_uri"] is None

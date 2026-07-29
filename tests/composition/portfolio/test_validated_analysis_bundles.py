@@ -33,6 +33,7 @@ def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> Non
                 "probability.finite_distribution.pushforward.compute",
                 "probability.finite_distribution.convolution.compute",
                 "probability.gaussian_polynomial.moment.compute",
+                "probability.graph_reliability.connection_probability.compute",
             ),
         ),
         "optimization": (

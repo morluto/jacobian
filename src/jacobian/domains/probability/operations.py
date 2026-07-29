@@ -24,6 +24,9 @@ from jacobian.contracts.probability import (
     GaussianMomentContraction,
     GaussianPolynomialMomentRequest,
     GaussianPolynomialMomentResult,
+    GraphConnectionProbabilityRequest,
+    GraphConnectionProbabilityResult,
+    GraphReliabilityState,
 )
 from jacobian.contracts.validated_analysis import (
     FiniteRawMomentContribution,
@@ -326,6 +329,74 @@ def _gaussian_polynomial_moment(
     )
 
 
+def _terminals_connected(
+    vertices: tuple[str, ...],
+    open_edges: tuple[tuple[str, str], ...],
+    terminals: tuple[str, str],
+) -> bool:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
+    for left, right in open_edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    seen = {terminals[0]}
+    pending = [terminals[0]]
+    while pending:
+        vertex = pending.pop()
+        for neighbor in adjacency[vertex] - seen:
+            if neighbor == terminals[1]:
+                return True
+            seen.add(neighbor)
+            pending.append(neighbor)
+    return terminals[1] in seen
+
+
+def _graph_connection_probability(
+    request: GraphConnectionProbabilityRequest,
+) -> ComputedOutcome[GraphConnectionProbabilityResult]:
+    from flint import fmpq
+
+    probabilities = tuple(
+        _fmpq(item.open_probability) for item in request.edge_probabilities
+    )
+    states: list[GraphReliabilityState] = []
+    connection_probability = fmpq(0)
+    for state_index in range(1 << len(request.graph.edges)):
+        open_edges = tuple(
+            edge
+            for index, edge in enumerate(request.graph.edges)
+            if state_index & (1 << index)
+        )
+        state_probability = fmpq(1)
+        for index, probability in enumerate(probabilities):
+            state_probability *= (
+                probability if state_index & (1 << index) else 1 - probability
+            )
+        connected = _terminals_connected(
+            request.graph.vertices,
+            open_edges,
+            request.terminals,
+        )
+        if connected:
+            connection_probability += state_probability
+        states.append(
+            GraphReliabilityState(
+                state_index=state_index,
+                open_edges=open_edges,
+                terminals_connected=connected,
+                state_probability=_wire(state_probability),
+            )
+        )
+    return ComputedSuccess(
+        GraphConnectionProbabilityResult(
+            terminals=request.terminals,
+            connection_probability=_wire(connection_probability),
+            edge_count=len(request.graph.edges),
+            visited_states=len(states),
+            states=tuple(states),
+        )
+    )
+
+
 _FAIR_BIT = {
     "atoms": [
         {
@@ -518,6 +589,57 @@ FINITE_PROBABILITY_CAPABILITIES = (
                         ],
                     },
                     "order": 2,
+                },
+            ),
+        ),
+    ),
+    ComputedOperation(
+        capability_id="probability.graph_reliability.connection_probability.compute",
+        title="Exact small-graph terminal connection probability",
+        description=(
+            "Compute the exact probability that two explicit terminals are "
+            "connected in one bounded undirected graph with independent rational "
+            "edge-open probabilities, preserving the complete edge-subset ledger."
+        ),
+        request_model=GraphConnectionProbabilityRequest,
+        result_model=GraphConnectionProbabilityResult,
+        implementation=_graph_connection_probability,
+        relation_id="probability.graph_reliability.connection_probability.relation",
+        tags=(
+            "probability",
+            "graph",
+            "reliability",
+            "percolation",
+            "connection",
+            "terminals",
+            "exact",
+            "bounded",
+            "python-flint",
+        ),
+        invocation_examples=(
+            example(
+                "triangle_terminal_reliability",
+                "Compute the exact terminal connection probability in a fair-edge triangle.",
+                {
+                    "graph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                    },
+                    "edge_probabilities": [
+                        {
+                            "edge": ["a", "b"],
+                            "open_probability": {"num": "1", "den": "2"},
+                        },
+                        {
+                            "edge": ["a", "c"],
+                            "open_probability": {"num": "1", "den": "2"},
+                        },
+                        {
+                            "edge": ["b", "c"],
+                            "open_probability": {"num": "1", "den": "2"},
+                        },
+                    ],
+                    "terminals": ["a", "c"],
                 },
             ),
         ),

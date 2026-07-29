@@ -423,6 +423,17 @@ def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
         gaussian.matches[0].description
     )
 
+    reliability = runtime.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="exact small graph reliability terminal connection probability",
+            limit=3,
+        )
+    )
+    assert reliability.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert reliability.matches[0].capability_id == (
+        "probability.graph_reliability.connection_probability.compute"
+    )
+
     absent = runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="quuxonium frobnicator",

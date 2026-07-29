@@ -53,4 +53,5 @@ This finite-distribution foundation does not cover predicate-defined events,
 approximate distributions, all-order Gaussian identities, Markov chains,
 graph reliability, or probabilistic inference strategy. The same probability
 bundle separately exposes one
-[bounded Gaussian polynomial moment](gaussian-polynomial-moments.md) outcome.
+[bounded Gaussian polynomial moment](gaussian-polynomial-moments.md) and one
+[small exact graph reliability](graph-reliability.md) outcome.

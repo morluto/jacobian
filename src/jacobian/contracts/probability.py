@@ -9,6 +9,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.results import ContractModel
 
 MAX_FINITE_DISTRIBUTION_ATOMS = 256
@@ -21,6 +22,9 @@ MAX_GAUSSIAN_TERM_DEGREE = 8
 MAX_GAUSSIAN_MOMENT_ORDER = 16
 MAX_GAUSSIAN_EXPANSION_PATHS = 4096
 MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS = 4096
+MAX_GRAPH_RELIABILITY_VERTICES = 16
+MAX_GRAPH_RELIABILITY_EDGES = 12
+MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
 
 
 def _require_bounded_fraction(
@@ -235,6 +239,116 @@ class GaussianPolynomialMomentResult(ContractModel):
             total_imaginary += imaginary
         if self.moment.as_fractions() != (total_real, total_imaginary):
             raise ValueError("Gaussian polynomial moment does not match its ledger")
+        return self
+
+
+class GraphReliabilityEdgeProbability(ContractModel):
+    edge: tuple[str, str]
+    open_probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_canonical_bounded_probability(self) -> Self:
+        if len(self.edge) != 2 or self.edge[0] >= self.edge[1]:
+            raise ValueError("reliability edge must contain two ordered vertices")
+        _require_bounded_rational(
+            self.open_probability,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+            label="graph reliability edge probability",
+        )
+        if not 0 <= self.open_probability.as_fraction() <= 1:
+            raise ValueError("graph reliability probabilities must lie in [0, 1]")
+        return self
+
+
+class GraphConnectionProbabilityRequest(ContractModel):
+    graph: SimpleUndirectedGraph
+    edge_probabilities: tuple[GraphReliabilityEdgeProbability, ...] = Field(
+        max_length=MAX_GRAPH_RELIABILITY_EDGES
+    )
+    terminals: tuple[str, str]
+    event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
+
+    @model_validator(mode="after")
+    def require_bounded_fully_weighted_graph(self) -> Self:
+        if len(self.graph.vertices) > MAX_GRAPH_RELIABILITY_VERTICES:
+            raise ValueError(
+                "graph reliability exceeds the "
+                f"{MAX_GRAPH_RELIABILITY_VERTICES}-vertex bound"
+            )
+        if len(self.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
+            raise ValueError(
+                "graph reliability exceeds the "
+                f"{MAX_GRAPH_RELIABILITY_EDGES}-edge bound"
+            )
+        if tuple(item.edge for item in self.edge_probabilities) != self.graph.edges:
+            raise ValueError(
+                "edge probabilities must cover graph edges in canonical graph order"
+            )
+        if (
+            len(self.terminals) != 2
+            or self.terminals[0] == self.terminals[1]
+            or any(terminal not in self.graph.vertices for terminal in self.terminals)
+        ):
+            raise ValueError("terminals must be two distinct declared graph vertices")
+        return self
+
+
+class GraphReliabilityState(ContractModel):
+    state_index: StrictInt = Field(ge=0, lt=MAX_GRAPH_RELIABILITY_STATES)
+    open_edges: tuple[tuple[str, str], ...] = Field(
+        max_length=MAX_GRAPH_RELIABILITY_EDGES
+    )
+    terminals_connected: bool
+    state_probability: CanonicalRational
+
+
+class GraphConnectionProbabilityResult(ContractModel):
+    terminals: tuple[str, str]
+    connection_probability: CanonicalRational
+    edge_count: StrictInt = Field(ge=0, le=MAX_GRAPH_RELIABILITY_EDGES)
+    visited_states: StrictInt = Field(ge=1, le=MAX_GRAPH_RELIABILITY_STATES)
+    states: tuple[GraphReliabilityState, ...] = Field(
+        min_length=1,
+        max_length=MAX_GRAPH_RELIABILITY_STATES,
+    )
+    event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
+    edge_independence: Literal["INDEPENDENT_BERNOULLI"] = "INDEPENDENT_BERNOULLI"
+    enumeration: Literal["COMPLETE_EDGE_SUBSETS"] = "COMPLETE_EDGE_SUBSETS"
+    completeness: Literal["COMPLETE"] = "COMPLETE"
+    truncated: Literal[False] = False
+    termination_reason: Literal["EXHAUSTED"] = "EXHAUSTED"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_complete_state_mass(self) -> Self:
+        if self.visited_states != 1 << self.edge_count:
+            raise ValueError("visited state count is not the full edge powerset")
+        if len(self.states) != self.visited_states:
+            raise ValueError("state ledger length does not match visited states")
+        if tuple(item.state_index for item in self.states) != tuple(
+            range(self.visited_states)
+        ):
+            raise ValueError("state ledger indices must be complete and canonical")
+        total = sum(
+            (item.state_probability.as_fraction() for item in self.states),
+            start=Fraction(),
+        )
+        connected = sum(
+            (
+                item.state_probability.as_fraction()
+                for item in self.states
+                if item.terminals_connected
+            ),
+            start=Fraction(),
+        )
+        if total != 1:
+            raise ValueError("graph reliability state probabilities must sum to one")
+        if self.connection_probability.as_fraction() != connected:
+            raise ValueError("connection probability does not match connected states")
         return self
 
 
@@ -676,6 +790,9 @@ __all__ = [
     "MAX_GAUSSIAN_POLYNOMIAL_TERMS",
     "MAX_GAUSSIAN_TERM_DEGREE",
     "MAX_GAUSSIAN_VARIABLES",
+    "MAX_GRAPH_RELIABILITY_EDGES",
+    "MAX_GRAPH_RELIABILITY_STATES",
+    "MAX_GRAPH_RELIABILITY_VERTICES",
     "ExactComplexRational",
     "FiniteConditionResult",
     "FiniteConditionalContribution",
@@ -695,5 +812,9 @@ __all__ = [
     "GaussianPolynomialMomentRequest",
     "GaussianPolynomialMomentResult",
     "GaussianPolynomialTerm",
+    "GraphConnectionProbabilityRequest",
+    "GraphConnectionProbabilityResult",
+    "GraphReliabilityEdgeProbability",
+    "GraphReliabilityState",
     "require_input_distribution",
 ]

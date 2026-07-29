@@ -13,14 +13,15 @@ FINITE_PROBABILITY_BUNDLE = DomainBundle(
     schema_namespace="jacobian.validated-analysis",
     semantics=DomainSemantics(
         name="jacobian.probability",
-        version="3",
+        version="4",
         definition={
             "description": "bounded exact rational probability operations",
             "scope": (
                 "raw moments, explicit event mass and conditioning, total "
                 "pushforwards, independent finite convolutions, and one fixed-order "
                 "moment of a sparse complex-rational polynomial in independent "
-                "standard real Gaussian variables"
+                "standard real Gaussian variables, and exact small-graph terminal "
+                "connection reliability"
             ),
             "failure": "invalid bounded probability inputs fail before computation",
         },
@@ -35,7 +36,7 @@ FINITE_PROBABILITY_BUNDLE = DomainBundle(
             message="Input does not satisfy the bounded exact-probability contract.",
             hint=(
                 "Use a bounded normalized finite distribution or a canonical "
-                "bounded Gaussian polynomial and fixed moment order."
+                "bounded Gaussian polynomial, or a fully weighted small graph."
             ),
         )
     ),
@@ -43,7 +44,7 @@ FINITE_PROBABILITY_BUNDLE = DomainBundle(
     completeness_basis=(
         "Python-FLINT produced every selected atom, source-map contribution, "
         "bounded product-measure pair, or coefficient contraction required by "
-        "the request"
+        "the request, or exhausted every bounded graph edge subset"
     ),
     assurance_basis="pinned maintained-backend exact rational computation",
 )

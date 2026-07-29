@@ -61,6 +61,7 @@ expectations.
 - [Domain operation library](reference/domain-operation-library.md)
 - [Finite probability operations](reference/finite-probability-operations.md)
 - [Bounded Gaussian polynomial moments](reference/gaussian-polynomial-moments.md)
+- [Small exact graph reliability](reference/graph-reliability.md)
 - [Exact planar geometry](reference/exact-planar-geometry.md)
 - [Finite simplicial topology](reference/finite-simplicial-topology.md)
 - [Finite posets](reference/finite-posets.md)

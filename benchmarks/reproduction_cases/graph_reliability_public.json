@@ -1,0 +1,88 @@
+{
+  "suite_id": "SMALL-GRAPH-RELIABILITY-PUBLIC-001",
+  "version": "1",
+  "scored": false,
+  "purpose": "Answer-visible small exact reliability regressions only; never hidden evaluation and never evidence for the 7222-vertex bunkbed counterexample",
+  "cases": [
+    {
+      "case_id": "SINGLE-EDGE-001",
+      "source": "Jacobian synthetic public boundary",
+      "request": {
+        "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+        "edge_probabilities": [
+          {
+            "edge": ["a", "b"],
+            "open_probability": {"num": "1", "den": "3"}
+          }
+        ],
+        "terminals": ["a", "b"]
+      },
+      "expected_probability": {"num": "1", "den": "3"},
+      "expected_states": 2
+    },
+    {
+      "case_id": "TRIANGLE-FAIR-001",
+      "source": "Jacobian synthetic public parallel-path regression",
+      "request": {
+        "graph": {
+          "vertices": ["a", "b", "c"],
+          "edges": [["a", "b"], ["a", "c"], ["b", "c"]]
+        },
+        "edge_probabilities": [
+          {
+            "edge": ["a", "b"],
+            "open_probability": {"num": "1", "den": "2"}
+          },
+          {
+            "edge": ["a", "c"],
+            "open_probability": {"num": "1", "den": "2"}
+          },
+          {
+            "edge": ["b", "c"],
+            "open_probability": {"num": "1", "den": "2"}
+          }
+        ],
+        "terminals": ["a", "c"]
+      },
+      "expected_probability": {"num": "5", "den": "8"},
+      "expected_states": 8
+    },
+    {
+      "case_id": "SERIES-PATH-001",
+      "source": "Jacobian synthetic public heterogeneous-edge regression",
+      "request": {
+        "graph": {
+          "vertices": ["a", "b", "c"],
+          "edges": [["a", "b"], ["b", "c"]]
+        },
+        "edge_probabilities": [
+          {
+            "edge": ["a", "b"],
+            "open_probability": {"num": "1", "den": "2"}
+          },
+          {
+            "edge": ["b", "c"],
+            "open_probability": {"num": "2", "den": "3"}
+          }
+        ],
+        "terminals": ["a", "c"]
+      },
+      "expected_probability": {"num": "1", "den": "3"},
+      "expected_states": 4
+    }
+  ],
+  "held_out_evaluation": {
+    "status": "READY_NOT_RUN",
+    "control": "catalog without the graph reliability capability",
+    "treatment": "catalog with producer and operator-authorized probability.result.verify",
+    "case_source": "freeze generated labelled graphs with 0-10 edges after excluding this public suite",
+    "independent_oracle": "separate Fraction powerset enumeration and BFS",
+    "primary_metrics": [
+      "exact probability correctness",
+      "checker-bound completion",
+      "false completeness claims",
+      "false VERIFIED rate"
+    ],
+    "minimum_repetitions": 3
+  }
+}

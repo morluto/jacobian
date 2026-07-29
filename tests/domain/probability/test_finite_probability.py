@@ -396,3 +396,86 @@ def test_gaussian_expansion_above_bound_fails_before_artifact_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_FINITE_PROBABILITY_REQUEST"
     assert result.artifact_uris == ()
+
+
+def test_graph_reliability_exhausts_all_edge_states_exactly(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "probability.graph_reliability.connection_probability.compute"
+            ),
+            input={
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                },
+                "edge_probabilities": [
+                    {"edge": edge, "open_probability": _rational(1, 2)}
+                    for edge in (["a", "b"], ["a", "c"], ["b", "c"])
+                ],
+                "terminals": ["a", "c"],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    computed = result.output["result"]
+    assert computed["connection_probability"] == _rational(5, 8)
+    assert computed["visited_states"] == 8
+    assert len(computed["states"]) == 8
+    assert computed["completeness"] == "COMPLETE"
+    assert computed["truncated"] is False
+    assert computed["termination_reason"] == "EXHAUSTED"
+    assert sum(1 for state in computed["states"] if state["terminals_connected"]) == 5
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+
+
+def test_graph_reliability_disconnected_terminals_have_zero_probability(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "probability.graph_reliability.connection_probability.compute"
+            ),
+            input={
+                "graph": {"vertices": ["a", "b"], "edges": []},
+                "edge_probabilities": [],
+                "terminals": ["a", "b"],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["connection_probability"] == _rational(0)
+    assert result.output["result"]["visited_states"] == 1
+
+
+def test_graph_reliability_rejects_incomplete_edge_probability_binding(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "probability.graph_reliability.connection_probability.compute"
+            ),
+            input={
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "edge_probabilities": [
+                    {
+                        "edge": ["a", "b"],
+                        "open_probability": _rational(1, 2),
+                    }
+                ],
+                "terminals": ["a", "c"],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.artifact_uris == ()

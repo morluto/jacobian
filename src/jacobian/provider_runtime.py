@@ -1066,6 +1066,7 @@ def python_flint_probability_provider_runtime(
             "finite-pushforward",
             "finite-convolution",
             "gaussian-polynomial-complex-rational-moments",
+            "small-graph-exact-reliability",
         ),
         refresh=refresh,
     )
@@ -1201,6 +1202,7 @@ def probability_exact_checker_provider_runtime(
             "clean-process-replay",
             "finite-rational-probability-replay",
             "gaussian-polynomial-coefficient-contraction",
+            "small-graph-reliability-exhaustive-replay",
             "standard-library-only",
         ),
         checker_ids=checker_ids,

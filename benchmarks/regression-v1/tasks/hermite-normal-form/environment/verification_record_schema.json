@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerificationRecord payload",
+  "description": "The bare verification-record payload stored in evidence/verification-record.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_schema_version",
+    "checker_id",
+    "checker_digest",
+    "evidence_kind",
+    "evidence_uri",
+    "bindings",
+    "conclusion",
+    "arithmetic",
+    "method",
+    "coverage",
+    "request_digest",
+    "environment_digest",
+    "relation_id",
+    "relationship_source_artifact_uris",
+    "relationship_target_artifact_uris",
+    "obligation_uri"
+  ],
+  "properties": {
+    "record_schema_version": {"const": "1"},
+    "checker_id": {
+      "type": "string",
+      "pattern": "^checker://sha256/[0-9a-f]{64}$"
+    },
+    "checker_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "evidence_kind": {"type": "string"},
+    "evidence_uri": {
+      "type": "string",
+      "pattern": "^artifact://sha256/[0-9a-f]{64}$"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_digest",
+        "semantics_digest",
+        "candidate_digest",
+        "scope_digest",
+        "encoding_digest"
+      ],
+      "properties": {
+        "claim_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "semantics_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "candidate_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "scope_digest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "encoding_digest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "conclusion": {"type": "string"},
+    "arithmetic": {"type": "string"},
+    "method": {"type": "string"},
+    "coverage": {"type": "string"},
+    "request_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "environment_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relation_id": {"type": ["string", "null"]},
+    "relationship_source_artifact_uris": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^artifact://sha256/[0-9a-f]{64}$"
+      }
+    },
+    "relationship_target_artifact_uris": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^artifact://sha256/[0-9a-f]{64}$"
+      }
+    },
+    "obligation_uri": {
+      "type": ["string", "null"],
+      "pattern": "^artifact://sha256/[0-9a-f]{64}$"
+    }
+  }
+}

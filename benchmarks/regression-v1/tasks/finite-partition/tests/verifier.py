@@ -119,7 +119,7 @@ def main():
         in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
     )
 
-    groups = s.get("result", {}).get("cases", []) if contract else []
+    groups = s.get("result", {}).get("cases", []) if math_contract else []
     members = []
     valid = isinstance(groups, list) and len(groups) == 3
     for g in groups:
@@ -160,7 +160,9 @@ def main():
         and actual == expected
     )
     correct = bool(
-        math_correct and (s["claimed_assurance"] != "VERIFIED" or record_bound)
+        contract
+        and math_correct
+        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
     )
     good_evidence = False
     if contract and isinstance(s["evidence"], list) and s["evidence"]:

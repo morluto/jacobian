@@ -17,7 +17,7 @@ TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help setup hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-check agent-eval bench-core clean docs-linkcheck deploy-check
+.PHONY: help setup hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-check harbor-oracle agent-eval bench-core clean docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Jacobian developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -162,6 +162,9 @@ check-static: lint-full typecheck test-architecture todo-check build ## Run CI-o
 harbor-check: ## Verify committed Harbor task digests against local task contents.
 	$(HARBOR_PYTHON) tools/check_harbor_dataset.py
 
+harbor-oracle: harbor-check ## Run the Harbor Oracle contract gate.
+	$(HARBOR_RUNNER) run -c benchmarks/regression-v1/job-oracle.json $(EVAL_ARGS)
+
 agent-eval: ## Run the Harbor-native Jacobian workflow observation job.
 	@if [ "$(EVAL_EXECUTE)" != "1" ]; then \
 		echo "Model execution is opt-in. Review the job, then run: make agent-eval EVAL_EXECUTE=1"; \
@@ -177,7 +180,13 @@ agent-eval: ## Run the Harbor-native Jacobian workflow observation job.
 		exit 2; \
 	fi; \
 	$(MAKE) harbor-check && \
-	$(HARBOR_RUNNER) run -c benchmarks/regression-v1/job-jacobian.json $(EVAL_ARGS)
+	resolved_job=$$(mktemp "$${TMPDIR:-/tmp}/jacobian-job.XXXXXX.json") && \
+	trap 'rm -f "$$resolved_job"' EXIT HUP INT TERM && \
+	$(UV_RUN) python tools/render_harbor_job.py \
+		--input benchmarks/regression-v1/job-jacobian.json \
+		--output "$$resolved_job" \
+		--model "$${JACOBIAN_MODEL}" && \
+	$(HARBOR_RUNNER) run -c "$$resolved_job" $(EVAL_ARGS)
 
 bench-core: ## Run the core performance benchmark script.
 	$(UV_RUN) python benchmarks/benchmark_core.py

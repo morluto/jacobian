@@ -1,6 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 LABEL jacobian.task="finite-partition" \
-      jacobian.checksum="6d9ffb6b87f144a523ecc0ef4464cb066f95bfcd3984a30c262310c742eea706"
-COPY . /tests
-COPY input.json /app/input.json
-RUN chmod +x /tests/test.sh
+      jacobian.checksum="b5faacbd7026229ec70d96bfed809eda1e2fc95a96f3e46dc56ec3226164e4be"
+COPY authorized_record.json expected.json finite-partition-input.json test.sh verifier.py /tests/
+COPY finite-partition-input.json /app/input.json
+RUN chmod +x /tests/test.sh && \
+    python -c 'import json; assert json.load(open("/tests/expected.json"))["task_id"] == "finite-partition"'

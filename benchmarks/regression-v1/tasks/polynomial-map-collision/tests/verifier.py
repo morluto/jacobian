@@ -69,7 +69,7 @@ def main():
     except (OSError, ValueError):
         s = None
     x = json.loads((W / "input.json").read_text())
-    e = json.loads((E / "expected.json").read_text())
+    e = json.loads((E / "polynomial-map-collision-expected.json").read_text())
     r = s.get("result") if isinstance(s, dict) else None
     r = r if isinstance(r, dict) else {}
     p = x["point_p"]
@@ -126,7 +126,9 @@ def main():
         and ip == iq
     )
     correct = bool(
-        math_correct and (s["claimed_assurance"] != "VERIFIED" or record_bound)
+        contract
+        and math_correct
+        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
     )
     good = False
     if contract and isinstance(s["evidence"], list) and s["evidence"]:

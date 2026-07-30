@@ -179,11 +179,11 @@ Reading an `artifact://sha256/<digest>` resource returns a JSON envelope with ke
 `artifact_uri`, `manifest`, and `payload`. The `payload` field holds the bare
 artifact content (for a verification record, the `VerificationRecord` JSON). When
 persisting a verification record for a clean-room verifier, extract the `payload`
-field rather than saving the full envelope, then follow the verifier's expected
-record format — some verifiers accept the bare `VerificationRecord` payload
-directly, while others require a task-specific wrapper containing additional
-fields (e.g. task_id, input_sha256, assignment). Inspect the verifier contract or
-the task's submission schema to determine the exact format.
+field rather than saving the full envelope. Follow the agent-visible
+`verification_record_schema.json` when the task provides one: some schemas accept
+the bare `VerificationRecord` payload, while others require a task-specific
+wrapper containing additional fields (e.g. task_id, input_sha256, assignment).
+Do not claim VERIFIED when no agent-visible record content contract is available.
 """
 
 

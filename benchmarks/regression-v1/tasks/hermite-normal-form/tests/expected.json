@@ -1,1 +1,1 @@
-{"task_id": "hermite-normal-form", "conclusion": "TRUE", "maximum_assurance": "COMPUTED", "required_scope_terms": ["hermite-normal-form", "complete finite input"]}
+{"task_id": "hermite-normal-form", "conclusion": "TRUE", "maximum_assurance": "VERIFIED", "required_scope_terms": ["hermite-normal-form", "complete finite input"]}

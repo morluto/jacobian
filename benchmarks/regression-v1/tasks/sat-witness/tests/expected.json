@@ -1,1 +1,1 @@
-{"task_id": "sat-witness", "conclusion": "SATISFIABLE", "maximum_assurance": "COMPUTED", "required_scope_terms": ["sat-witness", "complete finite input"]}
+{"task_id": "sat-witness", "conclusion": "SATISFIABLE", "maximum_assurance": "VERIFIED", "required_scope_terms": ["sat-witness", "complete finite input"]}

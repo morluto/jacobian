@@ -7,13 +7,10 @@
     "task_id": {"const": "rational-linear-solution"},
     "conclusion": {"const": "UNIQUE_SOLUTION"},
     "result": {"type": "object", "additionalProperties": false, "required": ["solution"], "properties": {"solution": {"type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": {"x": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"}, "y": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"}}}}},
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED"]},
     "scope": {"const": "rational-linear-solution complete finite input"},
     "completeness": {"const": "COMPLETE"},
     "evidence": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "verification_record_uri": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/verification-record.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}},
     "limitations": {"type": "array", "items": {"type": "string"}}
-  },
-  "if": {"properties": {"claimed_assurance": {"const": "VERIFIED"}}},
-  "then": {"required": ["verification_record_uri"]}
+  }
 }

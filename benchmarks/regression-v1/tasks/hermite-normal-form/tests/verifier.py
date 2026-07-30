@@ -149,7 +149,9 @@ def main():
     record_bound = verification_record_is_bound(s) if isinstance(s, dict) else False
     math_correct = bool(math_contract and valid)
     correct = bool(
-        math_correct and (s["claimed_assurance"] != "VERIFIED" or record_bound)
+        contract
+        and math_correct
+        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
     )
     good = False
     if contract and isinstance(s["evidence"], list) and s["evidence"]:

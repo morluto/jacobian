@@ -79,7 +79,7 @@ def main():
     except (OSError, ValueError):
         s = None
     x = json.loads((W / "input.json").read_text())
-    e = json.loads((E / "expected.json").read_text())
+    e = json.loads((E / "polynomial-normalization-expected.json").read_text())
     r = s.get("result") if isinstance(s, dict) else None
     r = r if isinstance(r, dict) else {}
     terms = r.get("terms", [])
@@ -151,7 +151,9 @@ def main():
     record_bound = verification_record_is_bound(s) if isinstance(s, dict) else False
     math_correct = bool(math_contract and got == want and all(len(k) == 2 for k in got))
     correct = bool(
-        math_correct and (s["claimed_assurance"] != "VERIFIED" or record_bound)
+        contract
+        and math_correct
+        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
     )
     good = False
     if contract and isinstance(s["evidence"], list) and s["evidence"]:

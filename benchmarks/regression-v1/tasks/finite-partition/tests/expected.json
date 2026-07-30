@@ -1,1 +1,1 @@
-{"task_id": "finite-partition", "conclusion": "TRUE", "maximum_assurance": "COMPUTED", "required_scope_terms": ["finite-partition", "complete finite input"]}
+{"task_id": "finite-partition", "conclusion": "TRUE", "maximum_assurance": "VERIFIED", "required_scope_terms": ["finite-partition", "complete finite input"]}

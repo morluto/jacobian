@@ -1,0 +1,1 @@
+{"task_id":"sat-witness","variables":["a","b","c","d"],"clauses":[[1,2],[-1,3],[-2,3],[-3,4],[-4,1]],"literal_encoding":"positive means true; negative means false"}

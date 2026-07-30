@@ -16,14 +16,18 @@ TOPOLOGY_BUNDLE = DomainBundle(
         definition={
             "description": (
                 "bounded finite abstract simplicial complexes, oriented chain "
-                "complexes, and homology over bounded prime fields"
+                "complexes, homology over bounded prime fields, and bounded "
+                "transformation-certified integral homology"
             ),
             "vertices": "canonical ASCII labels in lexicographic order",
             "orientation": "the increasing vertex order orients every simplex",
             "faces": "the empty simplex is not stored",
             "isolated_vertices": "represented by singleton maximal facets",
             "homology": "reduced or unreduced convention is explicit",
-            "integral_homology": "not provided",
+            "integral_homology": (
+                "free rank, torsion invariant factors, simplex-basis generators, "
+                "bounding chains, and full Smith transformation certificates"
+            ),
             "persistent_homology": "not provided",
         },
     ),
@@ -33,6 +37,9 @@ TOPOLOGY_BUNDLE = DomainBundle(
             "finite-simplicial-complex",
             "oriented-boundary-matrices",
             "prime-field-homology",
+            "integral-homology",
+            "torsion-invariant-factors",
+            "smith-transformation-certificates",
             "exact-modular-elimination",
         ),
     ),
@@ -45,18 +52,22 @@ TOPOLOGY_BUNDLE = DomainBundle(
             message="Input does not satisfy the bounded simplicial-topology contract.",
             hint=(
                 "Use unique declared vertices, distinct maximal facets, and a "
-                "bounded prime when requesting F_p homology."
+                "bounded prime when requesting F_p homology; integral homology "
+                "has tighter 16-simplex-per-chain-group and total-chain-rank-32 "
+                "bounds."
             ),
         )
     ),
     scope_description="the complete supplied bounded finite simplicial complex",
     completeness_basis=(
         "the finite facet closure, every oriented boundary entry, and every "
-        "requested finite-field chain dimension were computed exactly"
+        "requested finite-field or bounded integral chain dimension were "
+        "computed exactly"
     ),
     assurance_basis=(
         "exact deterministic finite computation; independent verification is "
-        "available through topology.result.verify"
+        "available through topology.result.verify or the dedicated integral "
+        "homology verifier"
     ),
 )
 

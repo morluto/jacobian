@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.contracts.certified_snf import (
+    CertifiedIntegerMatrix,
+    CertifiedSmithNormalFormRequest,
+    SmithNormalFormCertificate,
+)
+
+
+def _matrix(entries: list[list[int | str]]) -> dict[str, object]:
+    return {
+        "row_count": len(entries),
+        "column_count": len(entries[0]),
+        "entries": [[str(value) for value in row] for row in entries],
+    }
+
+
+def test_certified_smith_request_accepts_a_bounded_integer_rectangle() -> None:
+    request = CertifiedSmithNormalFormRequest.model_validate(
+        {"matrix": _matrix([[2, 4, 6], [8, 10, 12]])}
+    )
+
+    assert request.matrix.row_count == 2
+    assert request.matrix.column_count == 3
+
+
+def test_certified_smith_request_rejects_large_input_scalars() -> None:
+    with pytest.raises(ValidationError, match="at most 32 decimal digits"):
+        CertifiedSmithNormalFormRequest.model_validate(
+            {"matrix": _matrix([["1" * 33]])}
+        )
+
+
+def test_certificate_contract_requires_a_canonical_divisibility_diagonal() -> None:
+    source = CertifiedIntegerMatrix.model_validate(_matrix([[2, 0], [0, 6]]))
+    identity = CertifiedIntegerMatrix.model_validate(_matrix([[1, 0], [0, 1]]))
+
+    with pytest.raises(ValidationError, match="positive divisibility diagonal"):
+        SmithNormalFormCertificate(
+            source=source,
+            diagonal=source,
+            left_transformation=identity,
+            right_transformation=identity,
+            rank=2,
+            invariant_factors=("2", "3"),
+            left_determinant="1",
+            right_determinant="1",
+        )
+
+
+def test_zero_dimensional_matrices_remain_explicit_for_chain_boundaries() -> None:
+    matrix = CertifiedIntegerMatrix(
+        row_count=0,
+        column_count=3,
+        entries=(),
+    )
+
+    assert matrix.model_dump(mode="json")["entries"] == []
+    assert matrix.column_count == 3

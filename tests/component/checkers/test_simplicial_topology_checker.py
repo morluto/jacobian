@@ -14,15 +14,18 @@ from jacobian.contracts.topology import (
     ChainCoefficientRing,
     ChainComplexRequest,
     HomologyConvention,
+    IntegralSimplicialHomologyRequest,
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
 )
 from jacobian.domains.topology.operations import (
     _chain_result,
     _homology,
+    _integral_homology,
     _materialize,
 )
 from jacobian_checkers.simplicial_topology import (
+    check_integral_simplicial_homology,
     check_simplicial_chain_complex,
     check_simplicial_complex_materialization,
     check_simplicial_homology,
@@ -125,6 +128,10 @@ _REDUCED_HOMOLOGY_REQUEST = SimplicialHomologyRequest(
     prime=3,
     convention=HomologyConvention.REDUCED,
 )
+_INTEGRAL_HOMOLOGY_REQUEST = IntegralSimplicialHomologyRequest(
+    complex=_COMPLEX,
+    convention=HomologyConvention.UNREDUCED,
+)
 _HOMOLOGY_CASE = _request(
     "topology.simplicial_homology.compute",
     "topology.simplicial-homology.modular-replay",
@@ -175,6 +182,17 @@ _CASES: tuple[
             _homology(_REDUCED_HOMOLOGY_REQUEST).value.model_dump(mode="json"),
         ),
     ),
+    (
+        check_integral_simplicial_homology,
+        _request(
+            "topology.simplicial_homology.integral.compute",
+            "topology.simplicial-homology.integral-smith-certificate-v1",
+            _INTEGRAL_HOMOLOGY_REQUEST.model_dump(mode="json"),
+            _integral_homology(_INTEGRAL_HOMOLOGY_REQUEST).value.model_dump(
+                mode="json"
+            ),
+        ),
+    ),
 )
 
 
@@ -218,6 +236,26 @@ def test_homology_checker_rejects_a_noncycle_representative() -> None:
     candidate["payload_digest"] = _digest(candidate["payload"])
 
     checked = check_simplicial_homology(forged)
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"
+
+
+def test_integral_homology_checker_rejects_a_forged_unimodular_transform() -> None:
+    case = next(
+        request
+        for checker, request in _CASES
+        if checker is check_integral_simplicial_homology
+    )
+    forged = copy.deepcopy(case)
+    candidate = forged["candidate"]
+    transformation = candidate["payload"]["groups"][1]["outgoing_smith_certificate"][
+        "right_transformation"
+    ]["entries"]
+    transformation[0][0] = str(int(transformation[0][0]) + 1)
+    candidate["payload_digest"] = _digest(candidate["payload"])
+
+    checked = check_integral_simplicial_homology(forged)
 
     assert checked["accepted"] is False
     assert checked["conclusion"] == "UNKNOWN"

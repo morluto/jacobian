@@ -110,6 +110,82 @@ def test_topology_checker_rejects_forged_cycle_evidence(
     assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
+def test_integral_homology_has_a_dedicated_independent_verifier(
+    authorized_complete_runtime,
+) -> None:
+    materialized = _computed_results(authorized_complete_runtime)[0]
+    computed = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={
+                "complex": materialized.output["result"]["complex"],
+                "convention": "UNREDUCED",
+            },
+        )
+    )
+    verified = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": computed.output["result_uri"]},
+        )
+    )
+
+    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.output["verification_record_uri"] in verified.artifact_uris
+
+
+def test_integral_homology_checker_rejects_a_forged_free_generator(
+    authorized_complete_runtime,
+) -> None:
+    materialized = _computed_results(authorized_complete_runtime)[0]
+    computed = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={
+                "complex": materialized.output["result"]["complex"],
+                "convention": "UNREDUCED",
+            },
+        )
+    )
+    artifact = authorized_complete_runtime.core.store.get(computed.output["result_uri"])
+    payload = dict(artifact.payload)
+    groups = [dict(group) for group in payload["groups"]]
+    group = dict(groups[1])
+    generators = [dict(item) for item in group["free_generators"]]
+    cycle = dict(generators[0]["cycle"])
+    coefficients = list(cycle["coefficients"])
+    coefficients[0] = str(int(coefficients[0]) + 1)
+    cycle["coefficients"] = coefficients
+    generators[0]["cycle"] = cycle
+    group["free_generators"] = generators
+    groups[1] = group
+    payload["groups"] = groups
+    forged = authorized_complete_runtime.core.artifacts.put(
+        schema_uri=artifact.manifest.schema_uri,
+        semantics_uri=artifact.manifest.semantics_uri,
+        parents=artifact.manifest.parents,
+        payload=payload,
+        summary="adversarial integral-homology free generator",
+    )
+    rejected = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": forged.artifact_uri},
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.output["verification_record_uri"] is None
+    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
+
+
 def test_topology_checker_runtime_binds_only_independent_source(
     authorized_complete_runtime,
 ) -> None:

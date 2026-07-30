@@ -9,11 +9,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Sequence
 from itertools import combinations
 from typing import Any
 
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
+from jacobian_checkers.certified_snf import (
+    ParsedMatrix,
+    ParsedSmithCertificate,
+)
+from jacobian_checkers.certified_snf import (
+    parse_matrix as _parse_integer_matrix,
+)
+from jacobian_checkers.certified_snf import (
+    validate_certificate as _validate_smith_certificate,
+)
 
 _MAX_VERTICES = 64
 _MAX_FACETS = 128
@@ -22,6 +33,11 @@ _MAX_FACES = 2048
 _MAX_CHAIN_GROUP = 512
 _MAX_MATRIX_CELLS = 131_072
 _MAX_PRIME = 251
+_MAX_INTEGRAL_CHAIN_GROUP = 16
+_MAX_INTEGRAL_TOTAL_CHAIN_RANK = 32
+_MAX_INTEGRAL_MATRIX_CELLS = 256
+_MAX_INTEGER_DIGITS = 256
+_INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 _LABEL_CHARACTERS = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.:-"
 )
@@ -500,6 +516,93 @@ def _vectors(
     return vectors
 
 
+def _integer(value: object) -> int:
+    if (
+        not isinstance(value, str)
+        or _INTEGER.fullmatch(value) is None
+        or len(value.lstrip("-")) > _MAX_INTEGER_DIGITS
+    ):
+        raise ValueError("integral homology coefficient is noncanonical")
+    return int(value)
+
+
+def _integer_vector(value: object, *, length: int) -> list[int]:
+    if not isinstance(value, dict) or set(value) != {"coefficients"}:
+        raise ValueError("integral homology vector is malformed")
+    coefficients = value["coefficients"]
+    if not isinstance(coefficients, list) or len(coefficients) != length:
+        raise ValueError("integral homology vector has the wrong coordinate length")
+    return [_integer(coefficient) for coefficient in coefficients]
+
+
+def _parsed_matrix(
+    entries: list[list[int]], *, rows: int, columns: int
+) -> ParsedMatrix:
+    if len(entries) != rows or any(len(row) != columns for row in entries):
+        raise ValueError("reconstructed integer matrix has the wrong shape")
+    return ParsedMatrix(rows=rows, columns=columns, entries=entries)
+
+
+def _integer_matvec(matrix: ParsedMatrix, vector: Sequence[int]) -> list[int]:
+    if matrix.columns != len(vector):
+        raise ValueError("integer matrix and vector are not composable")
+    return [
+        sum(
+            matrix.entries[row][column] * vector[column]
+            for column in range(matrix.columns)
+        )
+        for row in range(matrix.rows)
+    ]
+
+
+def _integer_matmul(left: ParsedMatrix, right: ParsedMatrix) -> ParsedMatrix:
+    if left.columns != right.rows:
+        raise ValueError("integer matrices are not composable")
+    return ParsedMatrix(
+        rows=left.rows,
+        columns=right.columns,
+        entries=[
+            [
+                sum(
+                    left.entries[row][middle] * right.entries[middle][column]
+                    for middle in range(left.columns)
+                )
+                for column in range(right.columns)
+            ]
+            for row in range(left.rows)
+        ],
+    )
+
+
+def _matrix_tail_columns(matrix: ParsedMatrix, *, start: int) -> ParsedMatrix:
+    return ParsedMatrix(
+        rows=matrix.rows,
+        columns=matrix.columns - start,
+        entries=[row[start:] for row in matrix.entries],
+    )
+
+
+def _certificate_within_integral_digit_budget(
+    certificate: ParsedSmithCertificate,
+) -> bool:
+    matrices = (
+        certificate.source,
+        certificate.diagonal,
+        certificate.left,
+        certificate.right,
+    )
+    return all(
+        len(str(abs(value))) <= _MAX_INTEGER_DIGITS
+        for matrix in matrices
+        for row in matrix.entries
+        for value in row
+    )
+
+
+def _unit_vector(length: int, index: int) -> list[int]:
+    return [1 if position == index else 0 for position in range(length)]
+
+
 def _replay_materialization(source: dict[str, Any], result: dict[str, Any]) -> bool:
     expected_complex = _complex_from_request(source)
     return result == {
@@ -673,6 +776,219 @@ def _replay_homology(source: dict[str, Any], result: dict[str, Any]) -> bool:
     return True
 
 
+def _replay_integral_homology(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    if set(source) != {"complex", "convention"}:
+        return False
+    complex_ = _parse_complex(source["complex"])
+    _require_linear_bounds(complex_)
+    if (
+        any(size > _MAX_INTEGRAL_CHAIN_GROUP for size in complex_["f_vector"])
+        or sum(complex_["f_vector"]) > _MAX_INTEGRAL_TOTAL_CHAIN_RANK
+        or any(
+            rows * columns > _MAX_INTEGRAL_MATRIX_CELLS
+            for rows, columns in zip(
+                (0, *complex_["f_vector"][:-1]),
+                complex_["f_vector"],
+                strict=True,
+            )
+        )
+    ):
+        return False
+    convention = source["convention"]
+    if convention not in {"REDUCED", "UNREDUCED"}:
+        return False
+    result_fields = {
+        *_META,
+        "complex_digest",
+        "coefficient_ring",
+        "convention",
+        "orientation_convention",
+        "dimension_range",
+        "groups",
+        "completeness",
+        "decomposition",
+    }
+    if (
+        set(result) != result_fields
+        or any(result[key] != value for key, value in _META.items())
+        or result["complex_digest"] != complex_["complex_digest"]
+        or result["coefficient_ring"] != "ZZ"
+        or result["convention"] != convention
+        or result["orientation_convention"] != "LEXICOGRAPHIC_VERTEX_ORDER"
+        or result["dimension_range"] != [0, complex_["dimension"]]
+        or result["completeness"] != "FREE_TORSION_AND_BOUND_GENERATORS"
+        or result["decomposition"] != "DIRECT_SUM_Z_AND_FINITE_CYCLIC_FACTORS"
+        or not isinstance(result["groups"], list)
+        or len(result["groups"]) != complex_["dimension"] + 1
+    ):
+        return False
+    raw_boundaries = [
+        _boundary(complex_, dimension, ring="INTEGER", prime=None)
+        for dimension in range(complex_["dimension"] + 1)
+    ]
+    boundaries = [_dense(matrix, prime=None) for matrix in raw_boundaries]
+    augmentation_raw = _augmentation(len(complex_["vertices"]))
+    augmentation = _dense(augmentation_raw, prime=None)
+    group_fields = {
+        "dimension",
+        "chain_dimension",
+        "incoming_chain_dimension",
+        "outgoing_boundary_rank",
+        "cycle_rank",
+        "incoming_boundary_rank",
+        "betti_number",
+        "torsion_coefficients",
+        "free_generators",
+        "torsion_generators",
+        "outgoing_smith_certificate",
+        "boundary_in_cycle_coordinates",
+        "incoming_smith_certificate",
+        "generator_basis",
+    }
+    for dimension, group in enumerate(result["groups"]):
+        if not isinstance(group, dict) or set(group) != group_fields:
+            return False
+        chain_dimension = complex_["f_vector"][dimension]
+        if dimension == 0 and convention == "REDUCED":
+            outgoing_entries = augmentation
+            outgoing_rows = 1
+        else:
+            outgoing_entries = boundaries[dimension]
+            outgoing_rows = raw_boundaries[dimension]["rows"]
+        outgoing = _parsed_matrix(
+            outgoing_entries,
+            rows=outgoing_rows,
+            columns=chain_dimension,
+        )
+        outgoing_certificate = _validate_smith_certificate(
+            group["outgoing_smith_certificate"]
+        )
+        if (
+            not _certificate_within_integral_digit_budget(outgoing_certificate)
+            or outgoing_certificate.source != outgoing
+        ):
+            return False
+        outgoing_rank = outgoing_certificate.rank
+        cycle_rank = chain_dimension - outgoing_rank
+        cycle_basis = _matrix_tail_columns(
+            outgoing_certificate.right,
+            start=outgoing_rank,
+        )
+        if dimension < complex_["dimension"]:
+            incoming_entries = boundaries[dimension + 1]
+            incoming_chain_dimension = complex_["f_vector"][dimension + 1]
+        else:
+            incoming_chain_dimension = 0
+            incoming_entries = [[] for _ in range(chain_dimension)]
+        incoming = _parsed_matrix(
+            incoming_entries,
+            rows=chain_dimension,
+            columns=incoming_chain_dimension,
+        )
+        coordinates = _parse_integer_matrix(
+            group["boundary_in_cycle_coordinates"],
+            maximum_digits=_MAX_INTEGER_DIGITS,
+        )
+        if (
+            coordinates.rows != cycle_rank
+            or coordinates.columns != incoming_chain_dimension
+            or _integer_matmul(cycle_basis, coordinates) != incoming
+        ):
+            return False
+        incoming_certificate = _validate_smith_certificate(
+            group["incoming_smith_certificate"]
+        )
+        if (
+            not _certificate_within_integral_digit_budget(incoming_certificate)
+            or incoming_certificate.source != coordinates
+        ):
+            return False
+        incoming_rank = incoming_certificate.rank
+        betti_number = cycle_rank - incoming_rank
+        torsion_positions = [
+            (index, factor)
+            for index, factor in enumerate(incoming_certificate.factors)
+            if factor > 1
+        ]
+        if (
+            group["dimension"] != dimension
+            or group["chain_dimension"] != chain_dimension
+            or group["incoming_chain_dimension"] != incoming_chain_dimension
+            or group["outgoing_boundary_rank"] != outgoing_rank
+            or group["cycle_rank"] != cycle_rank
+            or group["incoming_boundary_rank"] != incoming_rank
+            or group["betti_number"] != betti_number
+            or group["torsion_coefficients"]
+            != [str(factor) for _, factor in torsion_positions]
+            or group["generator_basis"]
+            != "CANONICAL_SIMPLEX_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+            or not isinstance(group["free_generators"], list)
+            or len(group["free_generators"]) != betti_number
+            or not isinstance(group["torsion_generators"], list)
+            or len(group["torsion_generators"]) != len(torsion_positions)
+        ):
+            return False
+        for offset, item in enumerate(group["free_generators"]):
+            if not isinstance(item, dict) or set(item) != {
+                "cycle",
+                "cycle_coordinates",
+            }:
+                return False
+            coordinate = _integer_vector(
+                item["cycle_coordinates"],
+                length=cycle_rank,
+            )
+            cycle = _integer_vector(item["cycle"], length=chain_dimension)
+            smith_index = incoming_rank + offset
+            if (
+                _integer_matvec(incoming_certificate.left, coordinate)
+                != _unit_vector(cycle_rank, smith_index)
+                or _integer_matvec(cycle_basis, coordinate) != cycle
+                or any(_integer_matvec(outgoing, cycle))
+            ):
+                return False
+        for item, (smith_index, factor) in zip(
+            group["torsion_generators"],
+            torsion_positions,
+            strict=True,
+        ):
+            if not isinstance(item, dict) or set(item) != {
+                "order",
+                "cycle",
+                "cycle_coordinates",
+                "bounding_chain",
+            }:
+                return False
+            coordinate = _integer_vector(
+                item["cycle_coordinates"],
+                length=cycle_rank,
+            )
+            cycle = _integer_vector(item["cycle"], length=chain_dimension)
+            bounding = _integer_vector(
+                item["bounding_chain"],
+                length=incoming_chain_dimension,
+            )
+            expected_bounding = [
+                incoming_certificate.right.entries[row][smith_index]
+                for row in range(incoming_chain_dimension)
+            ]
+            if (
+                item["order"] != str(factor)
+                or _integer_matvec(incoming_certificate.left, coordinate)
+                != _unit_vector(cycle_rank, smith_index)
+                or _integer_matvec(cycle_basis, coordinate) != cycle
+                or any(_integer_matvec(outgoing, cycle))
+                or bounding != expected_bounding
+                or _integer_matvec(incoming, bounding)
+                != [factor * value for value in cycle]
+            ):
+                return False
+    return True
+
+
 def _run(
     request: object,
     *,
@@ -720,7 +1036,17 @@ def check_simplicial_homology(request: object) -> dict[str, Any]:
     )
 
 
+def check_integral_simplicial_homology(request: object) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="topology.simplicial_homology.integral.compute",
+        witness_format="topology.simplicial-homology.integral-smith-certificate-v1",
+        replay=_replay_integral_homology,
+    )
+
+
 __all__ = [
+    "check_integral_simplicial_homology",
     "check_simplicial_chain_complex",
     "check_simplicial_complex_materialization",
     "check_simplicial_homology",

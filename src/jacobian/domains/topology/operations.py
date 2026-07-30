@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from jacobian.contracts.certified_snf import CertifiedIntegerMatrix
 from jacobian.contracts.topology import (
     BoundarySquareLedgerEntry,
     ChainCoefficientRing,
@@ -13,6 +14,12 @@ from jacobian.contracts.topology import (
     FiniteSimplicialComplex,
     HomologyConvention,
     HomologyGroupResult,
+    IntegralFreeGenerator,
+    IntegralHomologyGroupResult,
+    IntegralSimplicialHomologyRequest,
+    IntegralSimplicialHomologyResult,
+    IntegralTorsionGenerator,
+    IntegralVector,
     ModularVector,
     SimplexBasis,
     SimplicialComplexMaterializationResult,
@@ -23,6 +30,14 @@ from jacobian.contracts.topology import (
     SparseMatrixEntry,
     face_closure,
     simplicial_complex_digest,
+)
+from jacobian.domains._certified_snf import (
+    certificate_from_reduction,
+    inverse_unimodular,
+    matrix_columns,
+    matrix_multiply,
+    matrix_vector_multiply,
+    smith_reduce,
 )
 from jacobian.domains._examples import example
 from jacobian.operations import ComputedOperation, ComputedSuccess
@@ -459,6 +474,160 @@ def _homology(
     )
 
 
+def _integer_matrix(
+    entries: list[list[int]],
+    *,
+    rows: int,
+    columns: int,
+) -> CertifiedIntegerMatrix:
+    return CertifiedIntegerMatrix(
+        row_count=rows,
+        column_count=columns,
+        entries=tuple(tuple(str(value) for value in row) for row in entries),
+    )
+
+
+def _integral_vector(values: list[int]) -> IntegralVector:
+    return IntegralVector(coefficients=tuple(str(value) for value in values))
+
+
+def _integral_homology(
+    request: IntegralSimplicialHomologyRequest,
+) -> ComputedSuccess[IntegralSimplicialHomologyResult]:
+    chain = _chain_result(
+        ChainComplexRequest(
+            complex=request.complex,
+            coefficient_ring=ChainCoefficientRing.INTEGER,
+            convention=request.convention,
+        )
+    )
+    boundaries = tuple(
+        _dense(matrix, modulus=None) for matrix in chain.boundary_matrices
+    )
+    groups: list[IntegralHomologyGroupResult] = []
+    for dimension, basis in enumerate(chain.simplex_bases):
+        chain_dimension = len(basis.simplices)
+        if dimension == 0 and chain.augmentation is not None:
+            outgoing = _dense(chain.augmentation, modulus=None)
+            outgoing_rows = 1
+        else:
+            outgoing = boundaries[dimension]
+            outgoing_rows = chain.boundary_matrices[dimension].rows
+        outgoing_reduction = smith_reduce(
+            outgoing,
+            row_count=outgoing_rows,
+            column_count=chain_dimension,
+        )
+        outgoing_rank = outgoing_reduction.rank
+        cycle_rank = chain_dimension - outgoing_rank
+        cycle_basis = matrix_columns(
+            outgoing_reduction.right,
+            start=outgoing_rank,
+        )
+        right_inverse = inverse_unimodular(outgoing_reduction.right)
+
+        if dimension < request.complex.dimension:
+            incoming = boundaries[dimension + 1]
+            incoming_chain_dimension = len(chain.simplex_bases[dimension + 1].simplices)
+        else:
+            incoming_chain_dimension = 0
+            incoming = [[] for _ in range(chain_dimension)]
+        all_cycle_coordinates = matrix_multiply(
+            right_inverse,
+            incoming,
+            right_columns_if_empty=incoming_chain_dimension,
+        )
+        if any(
+            value != 0 for row in all_cycle_coordinates[:outgoing_rank] for value in row
+        ):
+            raise ArithmeticError("incoming boundary is not in the outgoing kernel")
+        incoming_coordinates = all_cycle_coordinates[outgoing_rank:]
+        incoming_reduction = smith_reduce(
+            incoming_coordinates,
+            row_count=cycle_rank,
+            column_count=incoming_chain_dimension,
+        )
+        incoming_rank = incoming_reduction.rank
+        incoming_left_inverse = inverse_unimodular(incoming_reduction.left)
+
+        free_generators: list[IntegralFreeGenerator] = []
+        for index in range(incoming_rank, cycle_rank):
+            coordinate = [
+                incoming_left_inverse[row][index] for row in range(cycle_rank)
+            ]
+            free_generators.append(
+                IntegralFreeGenerator(
+                    cycle=_integral_vector(
+                        matrix_vector_multiply(cycle_basis, coordinate)
+                    ),
+                    cycle_coordinates=_integral_vector(coordinate),
+                )
+            )
+
+        torsion_generators: list[IntegralTorsionGenerator] = []
+        for index, factor in enumerate(incoming_reduction.invariant_factors):
+            if factor == 1:
+                continue
+            coordinate = [
+                incoming_left_inverse[row][index] for row in range(cycle_rank)
+            ]
+            cycle = matrix_vector_multiply(cycle_basis, coordinate)
+            bounding_chain = [
+                incoming_reduction.right[row][index]
+                for row in range(incoming_chain_dimension)
+            ]
+            if matrix_vector_multiply(incoming, bounding_chain) != [
+                factor * value for value in cycle
+            ]:
+                raise ArithmeticError("torsion bounding-chain relation is invalid")
+            torsion_generators.append(
+                IntegralTorsionGenerator(
+                    order=str(factor),
+                    cycle=_integral_vector(cycle),
+                    cycle_coordinates=_integral_vector(coordinate),
+                    bounding_chain=_integral_vector(bounding_chain),
+                )
+            )
+
+        groups.append(
+            IntegralHomologyGroupResult(
+                dimension=dimension,
+                chain_dimension=chain_dimension,
+                incoming_chain_dimension=incoming_chain_dimension,
+                outgoing_boundary_rank=outgoing_rank,
+                cycle_rank=cycle_rank,
+                incoming_boundary_rank=incoming_rank,
+                betti_number=cycle_rank - incoming_rank,
+                torsion_coefficients=tuple(
+                    str(factor)
+                    for factor in incoming_reduction.invariant_factors
+                    if factor > 1
+                ),
+                free_generators=tuple(free_generators),
+                torsion_generators=tuple(torsion_generators),
+                outgoing_smith_certificate=certificate_from_reduction(
+                    outgoing_reduction
+                ),
+                boundary_in_cycle_coordinates=_integer_matrix(
+                    incoming_coordinates,
+                    rows=cycle_rank,
+                    columns=incoming_chain_dimension,
+                ),
+                incoming_smith_certificate=certificate_from_reduction(
+                    incoming_reduction
+                ),
+            )
+        )
+    return ComputedSuccess(
+        IntegralSimplicialHomologyResult(
+            complex_digest=request.complex.complex_digest,
+            convention=request.convention,
+            dimension_range=(0, request.complex.dimension),
+            groups=tuple(groups),
+        )
+    )
+
+
 _CIRCLE = {
     "vertices": ["a", "b", "c"],
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -530,6 +699,68 @@ TOPOLOGY_CAPABILITIES = (
             "cycle-basis",
             "prime-field",
             "exact",
+        ),
+    ),
+    ComputedOperation(
+        capability_id="topology.simplicial_homology.integral.compute",
+        title="Compute transformation-certified integral simplicial homology",
+        description=(
+            "Compute the free rank, torsion invariant factors, and simplex-basis "
+            "cycle generators of every integral homology group, with explicit "
+            "Smith transformations and bounding chains."
+        ),
+        request_model=IntegralSimplicialHomologyRequest,
+        result_model=IntegralSimplicialHomologyResult,
+        implementation=_integral_homology,
+        relation_id="topology.simplicial_homology.integral.relation",
+        tags=(
+            "topology",
+            "simplicial-homology",
+            "integer-homology",
+            "torsion",
+            "betti-number",
+            "cycle-generator",
+            "smith-normal-form",
+            "certificate",
+            "exact",
+        ),
+        invocation_examples=(
+            example(
+                "integral_circle_homology",
+                "Compute H_0 and H_1 over the integers for a triangle boundary.",
+                {
+                    "complex": {
+                        "vertices": ["a", "b", "c"],
+                        "maximal_simplices": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["b", "c"],
+                        ],
+                        "faces_by_dimension": [
+                            {
+                                "dimension": 0,
+                                "faces": [["a"], ["b"], ["c"]],
+                            },
+                            {
+                                "dimension": 1,
+                                "faces": [
+                                    ["a", "b"],
+                                    ["a", "c"],
+                                    ["b", "c"],
+                                ],
+                            },
+                        ],
+                        "dimension": 1,
+                        "f_vector": [3, 3],
+                        "closure_size": 6,
+                        "complex_digest": (
+                            "sha256:"
+                            "6f797991bac967e2a8e572707df487061655df0f094c"
+                            "bde0f52f82c5401fc043"
+                        ),
+                    }
+                },
+            ),
         ),
     ),
 )

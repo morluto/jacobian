@@ -7,15 +7,18 @@
 - Producer backend: Jacobian standard-library exact finite and modular arithmetic
 - Checker backend: isolated standard-library replay with no producer imports
 
-The topology bundle exposes three atomic outcomes over bounded finite abstract
+The topology bundle exposes four atomic outcomes over bounded finite abstract
 simplicial complexes:
 
 - `topology.simplicial_complex.materialize`
 - `topology.simplicial_complex.chain_complex.compute`
 - `topology.simplicial_homology.compute`
+- `topology.simplicial_homology.integral.compute`
 
-Each producer remains `COMPUTED`. An operator-authorized
-`topology.result.verify` replay is the only path in this family to `VERIFIED`.
+Each producer remains `COMPUTED`. Operator-authorized independent replay is
+the only path in this family to `VERIFIED`. The first three outcomes use
+`topology.result.verify`; integral homology has the dedicated
+`topology.simplicial_homology.integral.verify` capability.
 
 ## Canonical finite complexes
 
@@ -83,6 +86,16 @@ bounded prime field. For every dimension it preserves:
 The operation supports explicit `REDUCED` and `UNREDUCED` conventions. Its
 dimension range always covers every chain group of the supplied complex.
 
+## Integral homology
+
+`topology.simplicial_homology.integral.compute` exposes every free rank,
+torsion invariant factor, simplex-basis cycle generator, torsion bounding
+chain, and the two full Smith transformation certificates used in each
+dimension. It supports the same explicit reduced and unreduced conventions but
+has tighter certificate-size limits than prime-field homology. See
+[Certified Smith normal form and integral homology](certified-smith-integral-homology.md)
+for the exact relations, bounds, and independent checker obligations.
+
 ## Bounds
 
 Version 1 uses these fail-closed limits:
@@ -96,6 +109,10 @@ Version 1 uses these fail-closed limits:
 | One chain group used for linear algebra | 512 |
 | One dense boundary shape | 131,072 cells |
 | Coefficient prime | 251 |
+
+Integral homology further limits one chain group to 16 simplices, the sum of
+all chain ranks to 32, one dense boundary to 256 cells, and result integers to
+256 decimal digits.
 
 A complex can be materialized when it fits the closure bound but still be
 rejected by chain or homology computation when a linear-algebra bound is
@@ -121,7 +138,8 @@ The regression suite includes:
 | Six-vertex real projective plane | `(6, 15, 10)` | `(1, 1, 1)` over \(F_2\); `(1, 0, 0)` over \(F_3\) |
 
 The same suite covers disjoint unions, reduced \(H_0\), vertex relabeling,
-caller simplex order, boundary signs, and forged cycle evidence.
+caller simplex order, boundary signs, forged cycle evidence, integral
+\(H_1(\mathbb{RP}^2)\cong\mathbb Z/2\), and torsion bounding chains.
 
 ## Independent verification
 
@@ -141,7 +159,10 @@ candidate digest, witness format, and checker identity. A malformed,
 interrupted, unsupported, or false replay returns no opposite mathematical
 conclusion and creates no verification record.
 
-Integral homology, torsion generators, persistent homology, and
-low-dimensional manifold recognition remain outside this contract. Integral
-generators require certified Smith transformations; persistence requires a
-separate exact-filtration and GUDHI provider gate.
+The integral checker additionally replays both Smith relations per dimension,
+the incoming-boundary factorization through the certified kernel basis, every
+free and torsion generator, and every torsion bounding-chain equation.
+
+Persistent homology, homology rings, and low-dimensional manifold recognition
+remain outside this contract. Persistence requires a separate exact-filtration
+and GUDHI provider gate.

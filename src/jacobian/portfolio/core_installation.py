@@ -223,6 +223,7 @@ class CoreApplicationInstaller:
         exact_bundles = {
             "polynomial": polynomial,
             "matrix": matrix,
+            "certified_snf": result.domain_bundles.get("certified_snf"),
             "graph": result.domain_bundles.get("graph_optimization"),
             "graph_invariants": result.domain_bundles.get("graph_invariants"),
             "graph_symmetry": result.domain_bundles.get("graph_symmetry"),
@@ -243,6 +244,7 @@ class CoreApplicationInstaller:
             ctx.checkers,
             polynomial=polynomial,
             matrix=matrix,
+            certified_snf=exact_bundles["certified_snf"],
             graph=exact_bundles["graph"],
             graph_invariants=exact_bundles["graph_invariants"],
             graph_symmetry=exact_bundles["graph_symmetry"],

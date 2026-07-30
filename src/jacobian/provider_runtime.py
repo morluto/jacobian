@@ -1286,6 +1286,49 @@ def topology_exact_checker_provider_runtime(
             "finite-face-closure-replay",
             "oriented-boundary-replay",
             "prime-field-quotient-replay",
+            "integral-smith-certificate-replay",
+            "free-and-torsion-generator-replay",
+            "standard-library-only",
+        ),
+        checker_ids=checker_ids,
+    )
+
+
+def certified_snf_checker_provider_runtime(
+    *,
+    checker_ids: tuple[str, ...] = (),
+) -> CapabilityProviderRuntime:
+    """Bind the independent transformation-certified Smith checker source."""
+
+    try:
+        version, _, license_files = _jacobian_identity()
+    except ProviderRuntimeError:
+        source = _unavailable_runtime(
+            provider="jacobian.certified-snf-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The certified-Smith checker source could not be identified.",
+        )
+    else:
+        source = source_provider_runtime(
+            "jacobian.certified-snf-checker-source",
+            version=version,
+            entrypoint=(
+                "jacobian_checkers.certified_snf:check_certified_smith_normal_form"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=("clean-process-replay", "standard-library-only"),
+        )
+    return composite_provider_runtime(
+        "jacobian.certified-snf-checkers",
+        components=(source,),
+        features=(
+            "clean-process-replay",
+            "full-transformation-relation-replay",
+            "bareiss-unimodularity-replay",
+            "smith-divisibility-chain-replay",
             "standard-library-only",
         ),
         checker_ids=checker_ids,

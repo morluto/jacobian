@@ -65,6 +65,7 @@ expectations.
 - [Declared graph-symmetry orbits](reference/graph-symmetry-orbits.md)
 - [Exact planar geometry](reference/exact-planar-geometry.md)
 - [Finite simplicial topology](reference/finite-simplicial-topology.md)
+- [Certified Smith normal form and integral homology](reference/certified-smith-integral-homology.md)
 - [Finite posets](reference/finite-posets.md)
 - [Recurrences and rational generating series](reference/recurrences-and-generating-series.md)
 - [Provider runtime contract](reference/provider-runtime.md)

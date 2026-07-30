@@ -5,6 +5,12 @@ finite integer matrix. `matrix.normal_form.hermite.verify` independently
 checks the stored result. Computation and verification are separate trust
 boundaries.
 
+This row-Hermite outcome is distinct from the full two-sided relation
+documented in
+[Certified Smith normal form and integral homology](certified-smith-integral-homology.md).
+Neither normal form is presented as a replacement or preferred strategy for
+the other.
+
 ## Input contract
 
 The producer accepts one nonempty rectangular matrix over `ZZ`:

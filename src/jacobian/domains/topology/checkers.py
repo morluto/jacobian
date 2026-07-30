@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.topology import (
     ChainComplexRequest,
+    IntegralSimplicialHomologyRequest,
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
 )
@@ -40,6 +41,36 @@ TOPOLOGY_EXACT_REPLAY_CHECKERS = (
         entrypoint_module=_ENTRYPOINT,
         replay_method="independent modular quotient replay",
         reason=_REASON,
+    ),
+    ExactReplayCheckerDeclaration(
+        "topology.simplicial_homology.integral.compute",
+        IntegralSimplicialHomologyRequest,
+        "check_integral_simplicial_homology",
+        "topology.simplicial-homology.integral-smith-certificate-v1",
+        entrypoint_module=_ENTRYPOINT,
+        replay_method=(
+            "independent integral chain and Smith transformation-certificate replay"
+        ),
+        reason=(
+            "operator-authorized clean-process checker reconstructs every integer "
+            "boundary, validates both Smith certificates per dimension, and binds "
+            "free and torsion generators to the canonical simplex bases"
+        ),
+        verification_capability_id="topology.simplicial_homology.integral.verify",
+        verification_title="Verify integral simplicial homology",
+        verification_description=(
+            "Independently verify every free rank, torsion factor, cycle generator, "
+            "bounding chain, and embedded Smith transformation certificate."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "topology",
+            "simplicial-homology",
+            "integer",
+            "torsion",
+            "smith-normal-form",
+        ),
     ),
 )
 

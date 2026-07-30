@@ -1,0 +1,92 @@
+{
+  "suite_id": "CERTIFIED-SNF-INTEGRAL-HOMOLOGY-PUBLIC-001",
+  "version": "1",
+  "scored": false,
+  "purpose": "Answer-visible certificate and integral-homology regressions only; never hidden evaluation or evidence of model improvement",
+  "smith_cases": [
+    {
+      "case_id": "SMITH-RECTANGULAR-001",
+      "source": "Jacobian synthetic public transformation-certificate regression",
+      "matrix": {
+        "row_count": 2,
+        "column_count": 3,
+        "entries": [["2", "4", "4"], ["6", "6", "12"]]
+      },
+      "expected_rank": 2,
+      "expected_invariant_factors": ["2", "6"]
+    },
+    {
+      "case_id": "SMITH-RANK-DEFICIENT-001",
+      "source": "Jacobian synthetic public rank-deficient boundary",
+      "matrix": {
+        "row_count": 3,
+        "column_count": 2,
+        "entries": [["2", "4"], ["4", "8"], ["6", "12"]]
+      },
+      "expected_rank": 1,
+      "expected_invariant_factors": ["2"]
+    }
+  ],
+  "homology_cases": [
+    {
+      "case_id": "INTEGRAL-CIRCLE-001",
+      "source": "Triangle-boundary simplicial model of S^1",
+      "presentation": {
+        "vertices": ["a", "b", "c"],
+        "facets": [["a", "b"], ["a", "c"], ["b", "c"]]
+      },
+      "convention": "UNREDUCED",
+      "expected_free_ranks": [1, 1],
+      "expected_torsion": [[], []]
+    },
+    {
+      "case_id": "INTEGRAL-PROJECTIVE-PLANE-001",
+      "source": "Six-vertex triangulation of the real projective plane",
+      "presentation": {
+        "vertices": ["0", "1", "2", "3", "4", "5"],
+        "facets": [
+          ["0", "1", "2"],
+          ["0", "1", "3"],
+          ["0", "2", "4"],
+          ["0", "3", "5"],
+          ["0", "4", "5"],
+          ["1", "2", "5"],
+          ["1", "3", "4"],
+          ["1", "4", "5"],
+          ["2", "3", "4"],
+          ["2", "3", "5"]
+        ]
+      },
+      "convention": "UNREDUCED",
+      "expected_free_ranks": [1, 0, 0],
+      "expected_torsion": [[], ["2"], []]
+    },
+    {
+      "case_id": "REDUCED-POINT-001",
+      "source": "Jacobian synthetic reduced-homology boundary",
+      "presentation": {
+        "vertices": ["p"],
+        "facets": [["p"]]
+      },
+      "convention": "REDUCED",
+      "expected_free_ranks": [0],
+      "expected_torsion": [[]]
+    }
+  ],
+  "held_out_evaluation": {
+    "status": "READY_NOT_RUN",
+    "control": "catalog with diagonal-only Smith normal form and prime-field simplicial homology",
+    "treatment": "catalog with transformation-certified Smith normal form and dedicated integral-homology verifier",
+    "case_source": "freeze unseen bounded integer matrices and relabelled finite simplicial complexes after excluding this public suite",
+    "independent_oracle": "separate exact matrix relation, determinant, chain-boundary, and finite-abelian-group replay",
+    "primary_metrics": [
+      "correct canonical invariant factors",
+      "valid full transformation certificates",
+      "correct free and torsion decomposition",
+      "generator and bounding-chain correctness",
+      "false VERIFIED rate",
+      "diagonal-only capability selection regression"
+    ],
+    "minimum_repetitions": 3
+  }
+}

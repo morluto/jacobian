@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.contracts.topology import (
     ChainCoefficientRing,
     ChainComplexRequest,
+    IntegralSimplicialHomologyRequest,
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
 )
@@ -63,3 +64,36 @@ def test_chain_bounds_are_checked_after_materialization_but_before_computation()
     assert complex_.closure_size == 8 * 255
     with pytest.raises(ValidationError, match="chain group"):
         SimplicialHomologyRequest(complex=complex_, prime=2)
+
+
+def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
+    too_many_vertices = tuple(f"v{index}" for index in range(17))
+    vertex_complex = _materialized_complex(
+        too_many_vertices,
+        tuple((vertex,) for vertex in too_many_vertices),
+    )
+    with pytest.raises(ValidationError, match="at most 16 simplices"):
+        IntegralSimplicialHomologyRequest(complex=vertex_complex)
+
+    projective_plane_facets = (
+        ("0", "1", "2"),
+        ("0", "1", "3"),
+        ("0", "2", "4"),
+        ("0", "3", "5"),
+        ("0", "4", "5"),
+        ("1", "2", "5"),
+        ("1", "3", "4"),
+        ("1", "4", "5"),
+        ("2", "3", "4"),
+        ("2", "3", "5"),
+        ("6",),
+        ("7",),
+    )
+    total_rank_too_large = _materialized_complex(
+        tuple(str(index) for index in range(8)),
+        projective_plane_facets,
+    )
+    assert max(total_rank_too_large.f_vector) <= 16
+    assert sum(total_rank_too_large.f_vector) == 33
+    with pytest.raises(ValidationError, match="total chain rank at most 32"):
+        IntegralSimplicialHomologyRequest(complex=total_rank_too_large)

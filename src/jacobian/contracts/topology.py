@@ -10,7 +10,12 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian.canonical import canonicalize_json
+from jacobian.contracts.certified_snf import (
+    CertifiedIntegerMatrix,
+    SmithNormalFormCertificate,
+)
 from jacobian.contracts.common import Sha256Digest
+from jacobian.contracts.exact import CanonicalInteger
 from jacobian.contracts.results import ContractModel
 
 MAX_TOPOLOGY_VERTICES = 64
@@ -20,6 +25,10 @@ MAX_TOPOLOGY_FACES = 2048
 MAX_TOPOLOGY_CHAIN_GROUP = 512
 MAX_TOPOLOGY_MATRIX_CELLS = 131_072
 MAX_TOPOLOGY_PRIME = 251
+MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP = 16
+MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK = 32
+MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS = 256
+MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS = 256
 
 VertexLabel = Annotated[
     str,
@@ -485,7 +494,205 @@ class SimplicialHomologyResult(TopologyExactResult):
         return self
 
 
+class IntegralSimplicialHomologyRequest(ContractModel):
+    complex: FiniteSimplicialComplex
+    convention: HomologyConvention = HomologyConvention.UNREDUCED
+
+    @model_validator(mode="after")
+    def require_integral_certificate_bounds(self) -> Self:
+        require_linear_algebra_bounds(self.complex)
+        if any(
+            size > MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP for size in self.complex.f_vector
+        ):
+            raise ValueError(
+                "integral homology requires at most "
+                f"{MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP} simplices in each chain group"
+            )
+        if sum(self.complex.f_vector) > MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK:
+            raise ValueError(
+                "integral homology requires total chain rank at most "
+                f"{MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK}"
+            )
+        padded = (0, *self.complex.f_vector)
+        if any(
+            rows * columns > MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS
+            for rows, columns in pairwise(padded)
+        ):
+            raise ValueError(
+                "integral homology boundary exceeds the "
+                f"{MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS}-cell bound"
+            )
+        return self
+
+
+class IntegralVector(ContractModel):
+    coefficients: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+
+    @model_validator(mode="after")
+    def require_output_digit_budget(self) -> Self:
+        if any(
+            len(value.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+            for value in self.coefficients
+        ):
+            raise ValueError("integral homology vector exceeds the output digit bound")
+        return self
+
+
+class IntegralFreeGenerator(ContractModel):
+    cycle: IntegralVector
+    cycle_coordinates: IntegralVector
+
+
+class IntegralTorsionGenerator(ContractModel):
+    order: CanonicalInteger
+    cycle: IntegralVector
+    cycle_coordinates: IntegralVector
+    bounding_chain: IntegralVector
+
+    @model_validator(mode="after")
+    def require_nontrivial_bounded_order(self) -> Self:
+        if (
+            int(self.order) <= 1
+            or len(self.order.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+        ):
+            raise ValueError("torsion generator order must be a bounded integer > 1")
+        return self
+
+
+class IntegralHomologyGroupResult(ContractModel):
+    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    chain_dimension: StrictInt = Field(ge=1, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP)
+    incoming_chain_dimension: StrictInt = Field(
+        ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+    outgoing_boundary_rank: StrictInt = Field(
+        ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+    cycle_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP)
+    incoming_boundary_rank: StrictInt = Field(
+        ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+    betti_number: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP)
+    torsion_coefficients: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+    free_generators: tuple[IntegralFreeGenerator, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+    torsion_generators: tuple[IntegralTorsionGenerator, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP
+    )
+    outgoing_smith_certificate: SmithNormalFormCertificate
+    boundary_in_cycle_coordinates: CertifiedIntegerMatrix
+    incoming_smith_certificate: SmithNormalFormCertificate
+    generator_basis: Literal[
+        "CANONICAL_SIMPLEX_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+    ] = "CANONICAL_SIMPLEX_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+
+    @model_validator(mode="after")
+    def require_complete_integral_group_ledger(self) -> Self:
+        outgoing = self.outgoing_smith_certificate
+        incoming = self.incoming_smith_certificate
+        if (
+            outgoing.source.column_count != self.chain_dimension
+            or outgoing.rank != self.outgoing_boundary_rank
+            or self.cycle_rank != self.chain_dimension - self.outgoing_boundary_rank
+            or (
+                self.boundary_in_cycle_coordinates.row_count,
+                self.boundary_in_cycle_coordinates.column_count,
+            )
+            != (self.cycle_rank, self.incoming_chain_dimension)
+            or incoming.source != self.boundary_in_cycle_coordinates
+            or incoming.rank != self.incoming_boundary_rank
+            or self.betti_number != self.cycle_rank - self.incoming_boundary_rank
+            or len(self.free_generators) != self.betti_number
+        ):
+            raise ValueError("integral homology rank and certificate ledger is invalid")
+        torsion = tuple(
+            factor for factor in incoming.invariant_factors if int(factor) > 1
+        )
+        if (
+            self.torsion_coefficients != torsion
+            or tuple(item.order for item in self.torsion_generators) != torsion
+        ):
+            raise ValueError(
+                "integral homology torsion generators must match Smith factors"
+            )
+        if any(
+            len(item.cycle.coefficients) != self.chain_dimension
+            or len(item.cycle_coordinates.coefficients) != self.cycle_rank
+            for item in self.free_generators
+        ) or any(
+            len(item.cycle.coefficients) != self.chain_dimension
+            or len(item.cycle_coordinates.coefficients) != self.cycle_rank
+            or len(item.bounding_chain.coefficients) != self.incoming_chain_dimension
+            for item in self.torsion_generators
+        ):
+            raise ValueError(
+                "integral homology generators must use the declared simplex bases"
+            )
+        matrices = (
+            outgoing.source,
+            outgoing.diagonal,
+            outgoing.left_transformation,
+            outgoing.right_transformation,
+            self.boundary_in_cycle_coordinates,
+            incoming.source,
+            incoming.diagonal,
+            incoming.left_transformation,
+            incoming.right_transformation,
+        )
+        scalar_values = (
+            value for matrix in matrices for row in matrix.entries for value in row
+        )
+        if any(
+            len(value.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+            for value in scalar_values
+        ):
+            raise ValueError(
+                "integral homology certificate exceeds the output digit bound"
+            )
+        return self
+
+
+class IntegralSimplicialHomologyResult(TopologyExactResult):
+    complex_digest: Sha256Digest
+    coefficient_ring: Literal["ZZ"] = "ZZ"
+    convention: HomologyConvention
+    orientation_convention: Literal["LEXICOGRAPHIC_VERTEX_ORDER"] = (
+        "LEXICOGRAPHIC_VERTEX_ORDER"
+    )
+    dimension_range: tuple[StrictInt, StrictInt]
+    groups: tuple[IntegralHomologyGroupResult, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_DIMENSION + 1,
+    )
+    completeness: Literal["FREE_TORSION_AND_BOUND_GENERATORS"] = (
+        "FREE_TORSION_AND_BOUND_GENERATORS"
+    )
+    decomposition: Literal["DIRECT_SUM_Z_AND_FINITE_CYCLIC_FACTORS"] = (
+        "DIRECT_SUM_Z_AND_FINITE_CYCLIC_FACTORS"
+    )
+
+    @model_validator(mode="after")
+    def require_complete_integral_dimension_range(self) -> Self:
+        dimensions = tuple(group.dimension for group in self.groups)
+        if dimensions != tuple(range(len(self.groups))):
+            raise ValueError(
+                "integral homology groups must cover contiguous dimensions"
+            )
+        if self.dimension_range != (0, len(self.groups) - 1):
+            raise ValueError("integral homology dimension_range must cover every group")
+        return self
+
+
 __all__ = [
+    "MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP",
+    "MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS",
+    "MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS",
+    "MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK",
     "MAX_TOPOLOGY_CHAIN_GROUP",
     "MAX_TOPOLOGY_DIMENSION",
     "MAX_TOPOLOGY_FACES",
@@ -501,6 +708,12 @@ __all__ = [
     "FiniteSimplicialComplex",
     "HomologyConvention",
     "HomologyGroupResult",
+    "IntegralFreeGenerator",
+    "IntegralHomologyGroupResult",
+    "IntegralSimplicialHomologyRequest",
+    "IntegralSimplicialHomologyResult",
+    "IntegralTorsionGenerator",
+    "IntegralVector",
     "ModularVector",
     "Simplex",
     "SimplexBasis",

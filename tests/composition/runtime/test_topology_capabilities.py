@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
@@ -69,7 +70,7 @@ def _betti(
     return tuple(group["betti_number"] for group in result.output["result"]["groups"])
 
 
-def test_topology_bundle_exposes_three_atomic_capabilities(
+def test_topology_bundle_exposes_four_atomic_capabilities(
     fresh_complete_runtime,
 ) -> None:
     ids = tuple(operation.capability_id for operation in TOPOLOGY_BUNDLE.capabilities)
@@ -78,6 +79,7 @@ def test_topology_bundle_exposes_three_atomic_capabilities(
         "topology.simplicial_complex.materialize",
         "topology.simplicial_complex.chain_complex.compute",
         "topology.simplicial_homology.compute",
+        "topology.simplicial_homology.integral.compute",
     )
     assert "topology" in fresh_complete_runtime.portfolio.domain_bundles
     catalog_ids = {
@@ -281,6 +283,89 @@ def test_torus_and_projective_plane_distinguish_coefficient_fields(
     assert _betti(fresh_complete_runtime, torus, prime=3) == (1, 2, 1)
     assert _betti(fresh_complete_runtime, projective_plane, prime=2) == (1, 1, 1)
     assert _betti(fresh_complete_runtime, projective_plane, prime=3) == (1, 0, 0)
+
+
+def test_integral_homology_exposes_free_and_torsion_generators(
+    fresh_complete_runtime,
+) -> None:
+    circle = _materialize(fresh_complete_runtime, _CIRCLE)
+    projective_plane = _materialize(
+        fresh_complete_runtime,
+        {
+            "vertices": [str(index) for index in range(6)],
+            "facets": _PROJECTIVE_PLANE_FACETS,
+        },
+    )
+
+    circle_result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={"complex": circle, "convention": "UNREDUCED"},
+        )
+    )
+    projective_result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={"complex": projective_plane, "convention": "UNREDUCED"},
+        )
+    )
+
+    assert circle_result.execution.status is ExecutionStatus.COMPLETED
+    assert circle_result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    circle_groups = circle_result.output["result"]["groups"]
+    assert [group["betti_number"] for group in circle_groups] == [1, 1]
+    assert [group["torsion_coefficients"] for group in circle_groups] == [[], []]
+    assert all(
+        group["generator_basis"]
+        == "CANONICAL_SIMPLEX_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+        for group in circle_groups
+    )
+
+    assert projective_result.execution.status is ExecutionStatus.COMPLETED
+    projective_groups = projective_result.output["result"]["groups"]
+    assert [group["betti_number"] for group in projective_groups] == [1, 0, 0]
+    assert [group["torsion_coefficients"] for group in projective_groups] == [
+        [],
+        ["2"],
+        [],
+    ]
+    torsion = projective_groups[1]["torsion_generators"][0]
+    assert torsion["order"] == "2"
+    assert len(torsion["cycle"]["coefficients"]) == projective_plane["f_vector"][1]
+    assert (
+        len(torsion["bounding_chain"]["coefficients"])
+        == (projective_plane["f_vector"][2])
+    )
+    artifacts = [
+        fresh_complete_runtime.core.store.get(uri)
+        for uri in projective_result.artifact_uris
+    ]
+    sizes = [len(canonicalize_json(artifact.payload)) for artifact in artifacts]
+    assert all(size < 10 * 1024 * 1024 for size in sizes)
+    assert sum(sizes) < 8 * 1024 * 1024
+
+
+def test_reduced_integral_homology_uses_the_augmentation_kernel(
+    fresh_complete_runtime,
+) -> None:
+    points = _materialize(
+        fresh_complete_runtime,
+        {
+            "vertices": ["a", "b", "c"],
+            "facets": [["a"], ["b"], ["c"]],
+        },
+    )
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={"complex": points, "convention": "REDUCED"},
+        )
+    )
+
+    group = result.output["result"]["groups"][0]
+    assert group["outgoing_boundary_rank"] == 1
+    assert group["betti_number"] == 2
+    assert len(group["free_generators"]) == 2
 
 
 def test_reduced_homology_and_disjoint_union_are_explicit(

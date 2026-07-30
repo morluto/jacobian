@@ -43,6 +43,9 @@ from jacobian.domains.combinatorics.checkers import (
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
 )
+from jacobian.domains.graph_symmetry.checkers import (
+    GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
+)
 from jacobian.domains.matrix_lattice.checkers import MATRIX_EXACT_REPLAY_CHECKERS
 from jacobian.domains.number_theory.checkers import (
     NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
@@ -121,6 +124,7 @@ def install_exact_domain_checkers(
     matrix: InstalledDomainBundle | None = None,
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
+    graph_symmetry: InstalledDomainBundle | None = None,
     combinatorics: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
     probability: InstalledDomainBundle | None = None,
@@ -158,6 +162,7 @@ def install_exact_domain_checkers(
         *_available_graph_declaration_bundles(
             graph=graph,
             graph_invariants=graph_invariants,
+            graph_symmetry=graph_symmetry,
         ),
         *(
             (combinatorics, item)
@@ -263,6 +268,7 @@ def install_exact_domain_verification(
     matrix: InstalledDomainBundle | None = None,
     graph: InstalledDomainBundle | None = None,
     graph_invariants: InstalledDomainBundle | None = None,
+    graph_symmetry: InstalledDomainBundle | None = None,
     combinatorics: InstalledDomainBundle | None = None,
     number_theory: InstalledDomainBundle | None = None,
     probability: InstalledDomainBundle | None = None,
@@ -279,6 +285,7 @@ def install_exact_domain_verification(
         matrix=matrix,
         graph=graph,
         graph_invariants=graph_invariants,
+        graph_symmetry=graph_symmetry,
         combinatorics=combinatorics,
         number_theory=number_theory,
         probability=probability,
@@ -333,6 +340,7 @@ def install_exact_domain_verification(
         for bundle, declaration in _available_graph_declaration_bundles(
             graph=graph,
             graph_invariants=graph_invariants,
+            graph_symmetry=graph_symmetry,
         )
         if installation.checker_ids.get(declaration.capability_id) is not None
     )
@@ -601,12 +609,16 @@ def _available_graph_declaration_bundles(
     *,
     graph: InstalledDomainBundle | None,
     graph_invariants: InstalledDomainBundle | None,
+    graph_symmetry: InstalledDomainBundle | None,
 ) -> tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]:
     available: list[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration]] = []
-    for declaration in GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS:
+    for declaration in (
+        *GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
+        *GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
+    ):
         installed = tuple(
             bundle
-            for bundle in (graph, graph_invariants)
+            for bundle in (graph, graph_invariants, graph_symmetry)
             if bundle is not None
             and declaration.capability_id in bundle.result_schema_uris
         )

@@ -9,6 +9,7 @@ from jacobian.domains.graph_optimization import (
     GRAPH_INVARIANT_BUNDLE,
     GRAPH_OPTIMIZATION_BUNDLE,
 )
+from jacobian.domains.graph_symmetry import GRAPH_SYMMETRY_BUNDLE
 from jacobian.domains.matrix_lattice import LATTICE_BUNDLE, MATRIX_BUNDLE
 from jacobian.domains.number_theory import NUMBER_THEORY_BUNDLE
 from jacobian.domains.optimization import RATIONAL_OPTIMIZATION_BUNDLE
@@ -29,6 +30,7 @@ BUILTIN_DOMAIN_BUNDLES = (
     PROJECTIVE_GEOMETRY_BUNDLE,
     GRAPH_OPTIMIZATION_BUNDLE,
     GRAPH_INVARIANT_BUNDLE,
+    GRAPH_SYMMETRY_BUNDLE,
     MATRIX_BUNDLE,
     LATTICE_BUNDLE,
     POLYNOMIAL_BUNDLE,

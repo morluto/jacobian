@@ -135,6 +135,217 @@ def _all_sources_distance_rows(
     return tuple(rows)
 
 
+def _canonical_edge(left: str, right: str) -> tuple[str, str]:
+    return (left, right) if left < right else (right, left)
+
+
+def _orbit_partition(
+    elements: tuple[Any, ...],
+    actions: tuple[dict[Any, Any], ...],
+) -> tuple[tuple[Any, ...], ...]:
+    parent = {element: element for element in elements}
+
+    def find(element: Any) -> Any:
+        root = element
+        while parent[root] != root:
+            root = parent[root]
+        while parent[element] != element:
+            next_element = parent[element]
+            parent[element] = root
+            element = next_element
+        return root
+
+    def union(left: Any, right: Any) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    for action in actions:
+        for element in elements:
+            union(element, action[element])
+    members_by_root: dict[Any, list[Any]] = {}
+    for element in elements:
+        members_by_root.setdefault(find(element), []).append(element)
+    return tuple(
+        sorted(
+            (tuple(sorted(members)) for members in members_by_root.values()),
+            key=lambda orbit: orbit[0],
+        )
+    )
+
+
+def _graph_symmetry_generator_orbits(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    if (
+        set(source)
+        != {
+            "graph",
+            "generators",
+            "vertex_colors",
+            "edge_colors",
+            "action",
+        }
+        or source["action"] != "DECLARED_AUTOMORPHISM_GENERATORS"
+    ):
+        return False
+    vertices, normalized_edges, _ = _finite_simple_graph(
+        source,
+        maximum_order=256,
+    )
+    raw_graph = source["graph"]
+    raw_edges = raw_graph["edges"]
+    edges = tuple((edge[0], edge[1]) for edge in raw_edges)
+    if (
+        len(edges) > 4_096
+        or any(not 0 < len(vertex) <= 64 for vertex in vertices)
+        or set(edges) != normalized_edges
+    ):
+        return False
+
+    raw_vertex_colors = source["vertex_colors"]
+    if not isinstance(raw_vertex_colors, list) or len(raw_vertex_colors) not in {
+        0,
+        len(vertices),
+    }:
+        return False
+    if raw_vertex_colors:
+        if any(
+            not isinstance(item, dict)
+            or set(item) != {"vertex", "color"}
+            or item["vertex"] != vertices[index]
+            or not isinstance(item["color"], str)
+            or not 0 < len(item["color"]) <= 128
+            for index, item in enumerate(raw_vertex_colors)
+        ):
+            return False
+        vertex_colors = {item["vertex"]: item["color"] for item in raw_vertex_colors}
+    else:
+        vertex_colors = dict.fromkeys(vertices, "__UNCOLORED__")
+
+    raw_edge_colors = source["edge_colors"]
+    if not isinstance(raw_edge_colors, list) or len(raw_edge_colors) not in {
+        0,
+        len(edges),
+    }:
+        return False
+    if raw_edge_colors:
+        if any(
+            not isinstance(item, dict)
+            or set(item) != {"edge", "color"}
+            or item["edge"] != list(edges[index])
+            or not isinstance(item["color"], str)
+            or not 0 < len(item["color"]) <= 128
+            for index, item in enumerate(raw_edge_colors)
+        ):
+            return False
+        edge_colors = {
+            (item["edge"][0], item["edge"][1]): item["color"]
+            for item in raw_edge_colors
+        }
+    else:
+        edge_colors = dict.fromkeys(edges, "__UNCOLORED__")
+
+    raw_generators = source["generators"]
+    if not isinstance(raw_generators, list) or len(raw_generators) > 64:
+        return False
+    vertex_set = set(vertices)
+    generator_ids: list[str] = []
+    vertex_actions: list[dict[str, str]] = []
+    edge_actions: list[dict[tuple[str, str], tuple[str, str]]] = []
+    for generator in raw_generators:
+        if not isinstance(generator, dict) or set(generator) != {
+            "generator_id",
+            "mapping",
+        }:
+            return False
+        generator_id = generator["generator_id"]
+        mapping = generator["mapping"]
+        if (
+            not isinstance(generator_id, str)
+            or not 0 < len(generator_id) <= 64
+            or not isinstance(mapping, dict)
+            or set(mapping) != vertex_set
+            or set(mapping.values()) != vertex_set
+            or any(
+                not isinstance(source_vertex, str) or not isinstance(target_vertex, str)
+                for source_vertex, target_vertex in mapping.items()
+            )
+        ):
+            return False
+        if any(
+            vertex_colors[vertex] != vertex_colors[mapping[vertex]]
+            for vertex in vertices
+        ):
+            return False
+        edge_action = {
+            edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges
+        }
+        if set(edge_action.values()) != normalized_edges or any(
+            edge_colors[edge] != edge_colors[edge_action[edge]] for edge in edges
+        ):
+            return False
+        generator_ids.append(generator_id)
+        vertex_actions.append(mapping)
+        edge_actions.append(edge_action)
+    if len(set(generator_ids)) != len(generator_ids):
+        return False
+
+    vertex_orbits = _orbit_partition(vertices, tuple(vertex_actions))
+    edge_orbits = _orbit_partition(edges, tuple(edge_actions))
+    expected = {
+        "vertices": sorted(vertices),
+        "edges": [list(edge) for edge in sorted(edges)],
+        "generator_ids": sorted(generator_ids),
+        "generator_count": len(generator_ids),
+        "vertex_orbits": [
+            {
+                "orbit_index": index,
+                "representative": members[0],
+                "members": list(members),
+            }
+            for index, members in enumerate(vertex_orbits)
+        ],
+        "edge_orbits": [
+            {
+                "orbit_index": index,
+                "representative": list(members[0]),
+                "members": [list(edge) for edge in members],
+            }
+            for index, members in enumerate(edge_orbits)
+        ],
+        "vertex_orbit_count": len(vertex_orbits),
+        "edge_orbit_count": len(edge_orbits),
+        "vertex_color_mode": "DECLARED" if raw_vertex_colors else "UNCOLORED",
+        "edge_color_mode": "DECLARED" if raw_edge_colors else "UNCOLORED",
+        "action": "DECLARED_GENERATED_SUBGROUP",
+        "generator_validation": ("ALL_DECLARED_GENERATORS_PRESERVE_GRAPH_AND_COLORS"),
+        "orbit_completeness": "COMPLETE_FOR_DECLARED_GENERATORS",
+        "automorphism_group_completeness": ("FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"),
+        "exactness": "EXACT_COMBINATORIAL",
+        "determinism": "DETERMINISTIC",
+        "backend": "jacobian-stdlib",
+        "backend_version": "1",
+        "verification": "UNVERIFIED",
+    }
+    return result == expected
+
+
+def check_graph_symmetry_generator_orbits(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="graph.symmetry.generator_orbits.compute",
+        witness_format="graph.symmetry.generator-orbits.stdlib-replay",
+        replay=_graph_symmetry_generator_orbits,
+        replay_method="declared color-preserving generator orbit replay",
+        exhaustive=True,
+    )
+
+
 def _all_sources_eccentricities(
     vertices: tuple[str, ...],
     adjacency: dict[str, set[str]],
@@ -603,4 +814,5 @@ __all__ = [
     "check_graph_induced_tree_maximum",
     "check_graph_maximum_matching",
     "check_graph_radius",
+    "check_graph_symmetry_generator_orbits",
 ]

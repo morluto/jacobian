@@ -30,6 +30,7 @@ from jacobian_checkers.graph_exact_operations import (
     check_graph_induced_tree_maximum,
     check_graph_maximum_matching,
     check_graph_radius,
+    check_graph_symmetry_generator_orbits,
 )
 
 
@@ -381,6 +382,86 @@ _CASES: tuple[
                 "vertices": ["a", "b", "c"],
                 "distances": [[0, 1, 2], [1, 0, 1], [2, 1, 0]],
                 "connected": True,
+            },
+        ),
+    ),
+    (
+        check_graph_symmetry_generator_orbits,
+        _request(
+            "graph.symmetry.generator_orbits.compute",
+            "graph.symmetry.generator-orbits.stdlib-replay",
+            {
+                "graph": {
+                    "graph_schema_version": "1",
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [
+                        ["a", "b"],
+                        ["a", "d"],
+                        ["b", "c"],
+                        ["c", "d"],
+                    ],
+                },
+                "generators": [
+                    {
+                        "generator_id": "quarter_turn",
+                        "mapping": {
+                            "a": "b",
+                            "b": "c",
+                            "c": "d",
+                            "d": "a",
+                        },
+                    }
+                ],
+                "vertex_colors": [],
+                "edge_colors": [],
+                "action": "DECLARED_AUTOMORPHISM_GENERATORS",
+            },
+            {
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [
+                    ["a", "b"],
+                    ["a", "d"],
+                    ["b", "c"],
+                    ["c", "d"],
+                ],
+                "generator_ids": ["quarter_turn"],
+                "generator_count": 1,
+                "vertex_orbits": [
+                    {
+                        "orbit_index": 0,
+                        "representative": "a",
+                        "members": ["a", "b", "c", "d"],
+                    }
+                ],
+                "edge_orbits": [
+                    {
+                        "orbit_index": 0,
+                        "representative": ["a", "b"],
+                        "members": [
+                            ["a", "b"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["c", "d"],
+                        ],
+                    }
+                ],
+                "vertex_orbit_count": 1,
+                "edge_orbit_count": 1,
+                "vertex_color_mode": "UNCOLORED",
+                "edge_color_mode": "UNCOLORED",
+                "action": "DECLARED_GENERATED_SUBGROUP",
+                "generator_validation": (
+                    "ALL_DECLARED_GENERATORS_PRESERVE_GRAPH_AND_COLORS"
+                ),
+                "orbit_completeness": "COMPLETE_FOR_DECLARED_GENERATORS",
+                "automorphism_group_completeness": (
+                    "FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"
+                ),
+                "exactness": "EXACT_COMBINATORIAL",
+                "determinism": "DETERMINISTIC",
+                "backend": "jacobian-stdlib",
+                "backend_version": "1",
+                "verification": "UNVERIFIED",
             },
         ),
     ),

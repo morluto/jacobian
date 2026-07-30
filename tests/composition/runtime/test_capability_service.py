@@ -434,6 +434,20 @@ def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
         "probability.graph_reliability.connection_probability.compute"
     )
 
+    symmetry = runtime.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query=(
+                "declared graph automorphism generators vertex edge orbit "
+                "symmetry compression"
+            ),
+            limit=3,
+        )
+    )
+    assert symmetry.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert symmetry.matches[0].capability_id == (
+        "graph.symmetry.generator_orbits.compute"
+    )
+
     absent = runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="quuxonium frobnicator",

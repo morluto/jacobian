@@ -1160,6 +1160,7 @@ def graph_exact_checker_provider_runtime(
             "finite-subset-exhaustive-replay",
             "hamiltonian-path-exhaustive-replay",
             "tutte-berge-barrier-replay",
+            "declared-graph-symmetry-orbit-replay",
             "standard-library-only",
         ),
         checker_ids=checker_ids,

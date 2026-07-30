@@ -39,6 +39,11 @@ answer-visible motivation, not an acceptance target. Scaling that case requires
 separate compressed graph and symmetry artifacts; raising a JSON limit would
 not establish a complete calculation.
 
+The separately verified
+[declared graph-symmetry orbit](graph-symmetry-orbits.md) capability exposes
+vertex and edge compression metadata under supplied generators. It does not
+lift that action to edge states or establish a reliability identity.
+
 ## Development handoff
 
 ### Discovery and implementation

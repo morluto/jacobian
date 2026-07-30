@@ -1,0 +1,82 @@
+{
+  "suite_id": "DECLARED-GRAPH-SYMMETRY-ORBITS-PUBLIC-001",
+  "version": "1",
+  "scored": false,
+  "purpose": "Answer-visible exact subgroup-orbit regressions only; never hidden evaluation, full automorphism-group evidence, or evidence for the 7222-vertex bunkbed counterexample",
+  "cases": [
+    {
+      "case_id": "CYCLE-ROTATION-001",
+      "source": "Jacobian synthetic public cyclic-action regression",
+      "request": {
+        "graph": {
+          "vertices": ["a", "b", "c", "d"],
+          "edges": [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]]
+        },
+        "generators": [
+          {
+            "generator_id": "quarter_turn",
+            "mapping": {"a": "b", "b": "c", "c": "d", "d": "a"}
+          }
+        ]
+      },
+      "expected_vertex_orbits": [["a", "b", "c", "d"]],
+      "expected_edge_orbits": [
+        [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]]
+      ]
+    },
+    {
+      "case_id": "COLORED-PATH-REFLECTION-001",
+      "source": "Jacobian synthetic public color-preserving reflection regression",
+      "request": {
+        "graph": {
+          "vertices": ["a", "b", "c"],
+          "edges": [["a", "b"], ["b", "c"]]
+        },
+        "generators": [
+          {
+            "generator_id": "reflection",
+            "mapping": {"a": "c", "b": "b", "c": "a"}
+          }
+        ],
+        "vertex_colors": [
+          {"vertex": "a", "color": "terminal-class"},
+          {"vertex": "b", "color": "middle"},
+          {"vertex": "c", "color": "terminal-class"}
+        ],
+        "edge_colors": [
+          {"edge": ["a", "b"], "color": "p=1/2"},
+          {"edge": ["b", "c"], "color": "p=1/2"}
+        ]
+      },
+      "expected_vertex_orbits": [["a", "c"], ["b"]],
+      "expected_edge_orbits": [[["a", "b"], ["b", "c"]]]
+    },
+    {
+      "case_id": "IDENTITY-SUBGROUP-001",
+      "source": "Jacobian synthetic public empty-generator boundary",
+      "request": {
+        "graph": {
+          "vertices": ["a", "b", "c"],
+          "edges": [["a", "b"], ["b", "c"]]
+        },
+        "generators": []
+      },
+      "expected_vertex_orbits": [["a"], ["b"], ["c"]],
+      "expected_edge_orbits": [[["a", "b"]], [["b", "c"]]]
+    }
+  ],
+  "held_out_evaluation": {
+    "status": "READY_NOT_RUN",
+    "control": "catalog without graph.symmetry.generator_orbits.compute and its verifier",
+    "treatment": "catalog with the declared-generator producer and operator-authorized verifier",
+    "case_source": "freeze labelled graphs, valid and invalid generator families, and complete optional color bindings after excluding this public suite",
+    "independent_oracle": "separate permutation, adjacency, color, and orbit-closure replay",
+    "primary_metrics": [
+      "valid subgroup-orbit correctness",
+      "invalid generator rejection before artifact writes",
+      "full-group overclaim rate",
+      "false VERIFIED rate"
+    ],
+    "minimum_repetitions": 3
+  }
+}

@@ -137,6 +137,10 @@ reproduction, and independent modular-reduction obligations.
 The [cddlib exact H/V optional-provider spike](contributing/cddlib-hv-provider-spike.md)
 records the GPL source-build boundary, exact GMP-rational reproduction,
 homogeneous representation semantics, and the unresolved completeness gate.
+The [Regina low-dimensional-topology optional-provider spike](contributing/regina-outcomes-provider-spike.md)
+records the isolated GPL wheel/source boundary, bounded 3-manifold and
+normal-surface reproductions, partial independent replay, and outcome-specific
+production gates.
 
 Recurring agent work is encoded in the repository-local skills under
 `.agents/skills/`. Start with `develop-math-capabilities` for a complete

@@ -1,0 +1,70 @@
+{
+  "adapter_source_sha256": "sha256:5fbf704064e24ce68805699f20758b360a936c4483ca3a0c547b15423c958032",
+  "contract": "jacobian.regina-outcomes-spike/v1",
+  "distribution_version": "7.4.1",
+  "documentation_url": "https://regina-normal.github.io/engine-docs/",
+  "engine_version": "7.4",
+  "licensing_url": "https://regina-normal.github.io/engine-docs/#copying",
+  "provider": "regina",
+  "reproduction": {
+    "cases": [
+      {
+        "case_id": "three_sphere",
+        "iso_sig": "cPcbbbaaa",
+        "maximum_tetrahedra": 2
+      },
+      {
+        "case_id": "lens_l2_1",
+        "iso_sig": "cMcabbgqw",
+        "maximum_tetrahedra": 2
+      },
+      {
+        "case_id": "s2_cross_s1",
+        "iso_sig": "cMcabbjaj",
+        "maximum_tetrahedra": 2
+      },
+      {
+        "case_id": "three_ball",
+        "iso_sig": "baa",
+        "maximum_tetrahedra": 1
+      }
+    ],
+    "expected_mathematical_output_sha256": "sha256:5937e30dcc04370a2d7201ada568f8fdaac46906d4234d75d580fc80a68cc2a8",
+    "expected_provider_output": {"cases":[{"canonical_iso_sig":"cPcbbbaaa","case_id":"three_sphere","closed":true,"connected":true,"f_vector":[4,6,4,2],"facet_gluings":[[{"facet":0,"permutation":[0,1,2,3],"tetrahedron":1},{"facet":1,"permutation":[0,1,2,3],"tetrahedron":1},{"facet":2,"permutation":[0,1,2,3],"tetrahedron":1},{"facet":3,"permutation":[0,1,2,3],"tetrahedron":1}],[{"facet":0,"permutation":[0,1,2,3],"tetrahedron":0},{"facet":1,"permutation":[0,1,2,3],"tetrahedron":0},{"facet":2,"permutation":[0,1,2,3],"tetrahedron":0},{"facet":3,"permutation":[0,1,2,3],"tetrahedron":0}]],"homology_1":{"free_rank":0,"torsion_invariant_factors":[]},"input_iso_sig":"cPcbbbaaa","orientable":true,"recognition":{"is_three_ball":false,"is_three_sphere":true},"tetrahedra":2,"valid":true},{"canonical_iso_sig":"cMcabbgqw","case_id":"lens_l2_1","closed":true,"connected":true,"f_vector":[1,3,4,2],"facet_gluings":[[{"facet":1,"permutation":[1,0,2,3],"tetrahedron":0},{"facet":0,"permutation":[1,0,2,3],"tetrahedron":0},{"facet":2,"permutation":[0,1,2,3],"tetrahedron":1},{"facet":1,"permutation":[2,3,0,1],"tetrahedron":1}],[{"facet":3,"permutation":[3,2,0,1],"tetrahedron":1},{"facet":3,"permutation":[2,3,0,1],"tetrahedron":0},{"facet":2,"permutation":[0,1,2,3],"tetrahedron":0},{"facet":0,"permutation":[2,3,1,0],"tetrahedron":1}]],"homology_1":{"free_rank":0,"torsion_invariant_factors":["2"]},"input_iso_sig":"cMcabbgqw","orientable":true,"recognition":{"is_three_ball":false,"is_three_sphere":false},"tetrahedra":2,"valid":true},{"canonical_iso_sig":"cMcabbjaj","case_id":"s2_cross_s1","closed":true,"connected":true,"f_vector":[1,3,4,2],"facet_gluings":[[{"facet":1,"permutation":[1,2,3,0],"tetrahedron":0},{"facet":0,"permutation":[3,0,1,2],"tetrahedron":0},{"facet":2,"permutation":[0,1,2,3],"tetrahedron":1},{"facet":3,"permutation":[0,1,2,3],"tetrahedron":1}],[{"facet":1,"permutation":[1,2,3,0],"tetrahedron":1},{"facet":0,"permutation":[3,0,1,2],"tetrahedron":1},{"facet":2,"permutation":[0,1,2,3],"tetrahedron":0},{"facet":3,"permutation":[0,1,2,3],"tetrahedron":0}]],"homology_1":{"free_rank":1,"torsion_invariant_factors":[]},"input_iso_sig":"cMcabbjaj","orientable":true,"recognition":{"is_three_ball":false,"is_three_sphere":false},"tetrahedra":2,"valid":true},{"canonical_iso_sig":"baa","case_id":"three_ball","closed":false,"connected":true,"f_vector":[4,6,4,1],"facet_gluings":[[null,null,null,null]],"homology_1":{"free_rank":0,"torsion_invariant_factors":[]},"input_iso_sig":"baa","orientable":true,"recognition":{"is_three_ball":true,"is_three_sphere":false},"tetrahedra":1,"valid":true}],"contract":"jacobian.regina-outcomes-spike/v1","distribution_version":"7.4.1","normal_surfaces":{"coordinate_system":"STANDARD_7N","list_kind":"VERTEX_EMBEDDED_ONLY","observed_algorithm_flags":"0x0011","surface_count":4,"surfaces":[{"compact":true,"connected":true,"coordinates":["0","0","0","0","1","0","0","0","0","0","0","1","0","0"],"euler_characteristic":-1,"has_real_boundary":false,"orientable":false},{"compact":true,"connected":true,"coordinates":["0","0","1","1","0","0","0","0","0","0","0","1","0","0"],"euler_characteristic":1,"has_real_boundary":false,"orientable":false},{"compact":true,"connected":true,"coordinates":["1","1","0","0","1","0","0","1","1","1","1","0","0","0"],"euler_characteristic":0,"has_real_boundary":false,"orientable":true},{"compact":true,"connected":true,"coordinates":["1","1","1","1","0","0","0","1","1","1","1","0","0","0"],"euler_characteristic":2,"has_real_boundary":false,"orientable":true}],"triangulation_case_id":"lens_l2_1"},"provider":"regina"},
+    "normal_surface_case_id": "lens_l2_1",
+    "scope": "four answer-visible valid orientable 3-dimensional triangulations of at most two tetrahedra, plus standard-coordinate embedded vertex normal surfaces for L(2,1)"
+  },
+  "source": {
+    "archive_sha256": "sha256:74131014099b77083dd1d09004fd6bc972421c792d188cdf43f0fd11ca6cb2ed",
+    "download_url": "https://github.com/regina-normal/regina/releases/download/regina-7.4.1/regina-7.4.1.tar.gz",
+    "members": {
+      "core": {
+        "path": "regina-7.4.1/engine/regina-core.h",
+        "sha256": "sha256:0a2426e36fbe59aacf6632d3b0132a03fbf03a2111a234e2a5de7d632b10cfed"
+      },
+      "license": {
+        "path": "regina-7.4.1/LICENSE.txt",
+        "sha256": "sha256:5b57bb4d76ae689adfbb8edf6adf709b5cea589deebb9ac167c958b5c3283cc7"
+      },
+      "normal_surfaces": {
+        "path": "regina-7.4.1/engine/surface/normalsurfaces.h",
+        "sha256": "sha256:d5d1a0ea4dfc97b71baba5933fc529cb824bdf13731b6036cbdc0b18e878531c"
+      },
+      "triangulation": {
+        "path": "regina-7.4.1/engine/triangulation/dim3/triangulation3.h",
+        "sha256": "sha256:9e0081bfd19b454dbadb87f76acd8689dd28d5f721ff8d175410fe9aa88f753a"
+      }
+    },
+    "signed_checksums_url": "https://github.com/regina-normal/regina/releases/download/regina-7.4.1/SHA256SUMS-signed.txt"
+  },
+  "wheel": {
+    "download_url": "https://files.pythonhosted.org/packages/68/42/b4a994e393298c08c361342ee19bf240b7b16f155c492ce0631082c14e66/regina-7.4.1-cp312-cp312-manylinux_2_28_x86_64.whl",
+    "filename": "regina-7.4.1-cp312-cp312-manylinux_2_28_x86_64.whl",
+    "license_members": [],
+    "metadata_member": "regina-7.4.1.dist-info/METADATA",
+    "metadata_sha256": "sha256:e22af4f16a8a67c82831d02958999e2ae231015b2765dadb4af05a370be12a27",
+    "sha256": "sha256:d33ccc69697ec680a8dcf8f0c663428853da44f3578898ad9b908e4669e83c71",
+    "wheel_member": "regina-7.4.1.dist-info/WHEEL",
+    "wheel_sha256": "sha256:557bcd2a7ea715e08ce3918452b34b24e3bf27f7be70d269846b7dad6171c84d"
+  }
+}

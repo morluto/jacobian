@@ -7,6 +7,7 @@ from tests.unit.contracts.artifacts import artifact_uri as _uri
 from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
+    GraphMinimumSpanningTreeRequest,
     GraphOptimizationRequest,
 )
 from jacobian.contracts.jacobian_syzygy import GradedJacobianSyzygyRequest
@@ -101,6 +102,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
     graph_ids = (
         "graph.hamiltonian_path.decide",
         "graph.induced_tree.maximum.compute",
+        "graph.spanning_tree.minimum.compute",
         "graph.invariant.diameter.compute",
         "graph.invariant.radius.compute",
         "graph.invariant.maximum_matching.compute",
@@ -137,13 +139,17 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             character="f",
         ),
         graph=_installed(
-            (GraphHamiltonianPathRequest, GraphOptimizationRequest),
-            graph_ids[:2],
+            (
+                GraphHamiltonianPathRequest,
+                GraphOptimizationRequest,
+                GraphMinimumSpanningTreeRequest,
+            ),
+            graph_ids[:3],
             character="7",
         ),
         graph_invariants=_installed(
             (GraphInvariantRequest,),
-            graph_ids[2:],
+            graph_ids[3:],
             character="8",
         ),
         number_theory=_installed(
@@ -280,10 +286,15 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
         character="f",
     )
     graph = _installed(
-        (GraphHamiltonianPathRequest, GraphOptimizationRequest),
+        (
+            GraphHamiltonianPathRequest,
+            GraphOptimizationRequest,
+            GraphMinimumSpanningTreeRequest,
+        ),
         (
             "graph.hamiltonian_path.decide",
             "graph.induced_tree.maximum.compute",
+            "graph.spanning_tree.minimum.compute",
         ),
         character="7",
     )
@@ -304,6 +315,7 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
             {
                 "graph.hamiltonian_path.decide",
                 "graph.induced_tree.maximum.compute",
+                "graph.spanning_tree.minimum.compute",
             },
         ),
         (

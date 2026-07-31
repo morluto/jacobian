@@ -4,6 +4,7 @@ from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
+    GraphMinimumSpanningTreeRequest,
     GraphOptimizationRequest,
 )
 
@@ -52,6 +53,33 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "exact maximum induced-tree result and its graph binding."
         ),
         verification_tags=("verification", "exact", "graph", "induced-tree"),
+    ),
+    ExactReplayCheckerDeclaration(
+        "graph.spanning_tree.minimum.compute",
+        GraphMinimumSpanningTreeRequest,
+        "check_graph_minimum_spanning_tree",
+        "graph.minimum-spanning-tree.cycle-certificate-v1",
+        entrypoint_module=_GRAPH_ENTRYPOINT,
+        replay_method="fundamental-cycle optimality certificate replay",
+        reason=(
+            "operator-authorized standard-library exact-rational checker "
+            "independent of the NetworkX Kruskal producer"
+        ),
+        verification_capability_id="graph.spanning_tree.minimum.verify",
+        verification_title="Verify a weighted minimum spanning tree",
+        verification_description=(
+            "Independently verify source connectivity, spanning-tree feasibility, "
+            "exact total weight, and every fundamental-cycle non-improvement check "
+            "for one stored exact rational weighted-graph result."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "graph",
+            "weighted-graph",
+            "minimum-spanning-tree",
+            "cycle-property",
+        ),
     ),
     ExactReplayCheckerDeclaration(
         "graph.invariant.diameter.compute",
@@ -156,8 +184,8 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-GRAPH_SEARCH_EXACT_REPLAY_CHECKERS = GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS[:2]
-GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS = GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS[2:]
+GRAPH_SEARCH_EXACT_REPLAY_CHECKERS = GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS[:3]
+GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS = GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS[3:]
 
 __all__ = [
     "GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS",

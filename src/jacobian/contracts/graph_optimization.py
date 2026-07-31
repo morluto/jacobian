@@ -6,6 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.graph_coloring import ChromaticGraph, GraphVertex
 from jacobian.contracts.results import ContractModel
 
@@ -18,6 +19,230 @@ OptimizationTermination = Literal[
     "SOLVER_UNKNOWN",
     "SPECIAL_CASE",
 ]
+MAX_GRAPH_WEIGHT_DIGITS = 256
+
+
+def _require_bounded_weight(value: CanonicalRational) -> None:
+    if (
+        len(value.num.lstrip("-")) > MAX_GRAPH_WEIGHT_DIGITS
+        or len(value.den) > MAX_GRAPH_WEIGHT_DIGITS
+    ):
+        raise ValueError(
+            f"graph weights are limited to {MAX_GRAPH_WEIGHT_DIGITS} decimal digits"
+        )
+
+
+class RationalWeightedEdge(ContractModel):
+    """One exact rational edge of a bounded simple undirected graph."""
+
+    endpoints: tuple[GraphVertex, GraphVertex]
+    weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_distinct_endpoints_and_bounded_weight(self) -> Self:
+        if self.endpoints[0] == self.endpoints[1]:
+            raise ValueError("weighted graph edges must not contain self-loops")
+        _require_bounded_weight(self.weight)
+        return self
+
+
+class RationalWeightedGraph(ContractModel):
+    """A bounded labelled simple graph with one exact rational edge weight."""
+
+    weighted_graph_schema_version: Literal["1"] = "1"
+    vertices: tuple[GraphVertex, ...] = Field(max_length=32)
+    edges: tuple[RationalWeightedEdge, ...] = Field(max_length=496)
+
+    @model_validator(mode="after")
+    def require_simple_weighted_graph(self) -> Self:
+        vertex_set = set(self.vertices)
+        if len(vertex_set) != len(self.vertices):
+            raise ValueError("weighted graph vertices must be unique")
+        normalized_edges = {tuple(sorted(edge.endpoints)) for edge in self.edges}
+        if any(
+            endpoint not in vertex_set
+            for edge in self.edges
+            for endpoint in edge.endpoints
+        ):
+            raise ValueError("weighted graph edges must reference declared vertices")
+        if len(normalized_edges) != len(self.edges):
+            raise ValueError("weighted graph edges must be unique ignoring orientation")
+        return self
+
+
+class GraphMinimumSpanningTreeRequest(ContractModel):
+    """One complete exact minimum-spanning-tree request."""
+
+    graph: RationalWeightedGraph
+
+
+class CanonicalWeightedTreeEdge(ContractModel):
+    """One canonically oriented source edge selected for a spanning tree."""
+
+    endpoints: tuple[GraphVertex, GraphVertex]
+    weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_canonical_edge(self) -> Self:
+        if self.endpoints[0] >= self.endpoints[1]:
+            raise ValueError(
+                "tree edge endpoints must be in strict lexicographic order"
+            )
+        _require_bounded_weight(self.weight)
+        return self
+
+
+class GraphMstCycleCheck(ContractModel):
+    """One non-tree edge's fundamental-cycle non-improvement check."""
+
+    non_tree_edge: tuple[GraphVertex, GraphVertex]
+    edge_weight: CanonicalRational
+    tree_path_vertices: tuple[GraphVertex, ...] = Field(
+        min_length=2,
+        max_length=32,
+    )
+    maximum_tree_path_weight: CanonicalRational
+    condition: Literal["EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT"] = (
+        "EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT"
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_cycle_check(self) -> Self:
+        if self.non_tree_edge[0] >= self.non_tree_edge[1]:
+            raise ValueError(
+                "non-tree edge endpoints must be in strict lexicographic order"
+            )
+        if (
+            self.tree_path_vertices[0] != self.non_tree_edge[0]
+            or self.tree_path_vertices[-1] != self.non_tree_edge[1]
+            or len(set(self.tree_path_vertices)) != len(self.tree_path_vertices)
+        ):
+            raise ValueError(
+                "tree path must be simple and join the non-tree edge endpoints"
+            )
+        _require_bounded_weight(self.edge_weight)
+        _require_bounded_weight(self.maximum_tree_path_weight)
+        return self
+
+
+class GraphMstOptimalityCertificate(ContractModel):
+    """Inspectable cycle-property certificate for one selected tree."""
+
+    certificate_schema_version: Literal["1"] = "1"
+    method: Literal["ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING"] = (
+        "ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING"
+    )
+    checks: tuple[GraphMstCycleCheck, ...] = Field(max_length=496)
+    required_checks: tuple[
+        Literal[
+            "SOURCE_CONNECTIVITY",
+            "TREE_SPANNING_ACYCLIC",
+            "TOTAL_WEIGHT_EXACT",
+            "ALL_NON_TREE_EDGES_COVERED",
+            "CYCLE_NON_IMPROVEMENT",
+        ],
+        ...,
+    ] = (
+        "SOURCE_CONNECTIVITY",
+        "TREE_SPANNING_ACYCLIC",
+        "TOTAL_WEIGHT_EXACT",
+        "ALL_NON_TREE_EDGES_COVERED",
+        "CYCLE_NON_IMPROVEMENT",
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_check_order(self) -> Self:
+        edges = tuple(check.non_tree_edge for check in self.checks)
+        if edges != tuple(sorted(edges)) or len(edges) != len(set(edges)):
+            raise ValueError(
+                "cycle checks must cover unique canonically sorted non-tree edges"
+            )
+        return self
+
+
+class GraphMinimumSpanningTreeResult(ContractModel):
+    """Complete weighted spanning-tree outcome on the supplied finite graph."""
+
+    result_schema_version: Literal["1"] = "1"
+    status: Literal["EXACT", "NO_SPANNING_TREE"]
+    vertices: tuple[GraphVertex, ...] = Field(max_length=32)
+    order: StrictInt = Field(ge=0, le=32)
+    connected: bool
+    component_count: StrictInt = Field(ge=0, le=32)
+    components: tuple[tuple[GraphVertex, ...], ...] = Field(max_length=32)
+    tree_edges: tuple[CanonicalWeightedTreeEdge, ...] = Field(max_length=31)
+    total_weight: CanonicalRational | None = None
+    optimality_certificate: GraphMstOptimalityCertificate
+    convention: Literal[
+        "MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE"
+    ] = "MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE"
+    completion: Literal["COMPLETE"] = "COMPLETE"
+
+    @model_validator(mode="after")
+    def require_canonical_partition(self) -> Self:
+        if (
+            self.vertices != tuple(sorted(self.vertices))
+            or len(self.vertices) != len(set(self.vertices))
+            or self.order != len(self.vertices)
+        ):
+            raise ValueError("result vertices must be unique and canonically sorted")
+        if self.component_count != len(self.components):
+            raise ValueError("component count must match the component partition")
+        if any(
+            not component
+            or component != tuple(sorted(component))
+            or len(component) != len(set(component))
+            for component in self.components
+        ):
+            raise ValueError(
+                "components must be nonempty sets in canonical vertex order"
+            )
+        if self.components != tuple(
+            sorted(self.components, key=lambda component: component[0])
+        ):
+            raise ValueError("components must be canonically ordered")
+        partition = tuple(
+            sorted(vertex for component in self.components for vertex in component)
+        )
+        if partition != self.vertices:
+            raise ValueError("components must partition the result vertices")
+        return self
+
+    @model_validator(mode="after")
+    def bind_tree_and_status(self) -> Self:
+        tree_endpoints = tuple(edge.endpoints for edge in self.tree_edges)
+        if tree_endpoints != tuple(sorted(tree_endpoints)) or len(
+            tree_endpoints
+        ) != len(set(tree_endpoints)):
+            raise ValueError("tree edges must be unique and canonically sorted")
+        if any(
+            endpoint not in set(self.vertices)
+            for edge in self.tree_edges
+            for endpoint in edge.endpoints
+        ):
+            raise ValueError("tree edges must reference result vertices")
+        if self.status == "EXACT":
+            if (
+                not self.vertices
+                or not self.connected
+                or self.component_count != 1
+                or len(self.tree_edges) != self.order - 1
+                or self.total_weight is None
+            ):
+                raise ValueError(
+                    "exact MST result requires a connected nonempty spanning tree"
+                )
+        elif (
+            self.connected
+            or self.component_count == 1
+            or self.tree_edges
+            or self.total_weight is not None
+            or self.optimality_certificate.checks
+        ):
+            raise ValueError(
+                "no-spanning-tree result must expose only the disconnected partition"
+            )
+        return self
 
 
 class GraphOptimizationBudget(ContractModel):

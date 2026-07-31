@@ -403,18 +403,28 @@
           "capability_id": "graph.hamiltonian_path.decide",
           "availability": "AVAILABLE",
           "boundary": "Decides Hamiltonian path existence, not weighted tour optimality."
+        },
+        {
+          "capability_id": "graph.spanning_tree.minimum.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Returns one deterministic exact rational minimum-weight spanning tree, its total weight, connected components, and complete fundamental-cycle optimality checks."
+        },
+        {
+          "capability_id": "graph.spanning_tree.minimum.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently replays connectivity, tree feasibility, total weight, and the cycle-property certificate without NetworkX or producer imports."
         }
       ],
       "gap_classes": [
-        "MISSING_OPERATION"
+        "EXISTING_WORKS"
       ],
       "contamination": "PUBLIC_ANSWER_VISIBLE",
       "candidate_ids": [
         "weighted-minimum-spanning-tree",
         "bounded-metric-tsp-optimum"
       ],
-      "disposition": "ACCEPT_CANDIDATE",
-      "next_action": "Implement weighted MST first; keep exact bounded TSP deferred until independent recurrence is observed."
+      "disposition": "USE_EXISTING",
+      "next_action": "Evaluate the installed MST producer/checker on held-out weighted graph families; keep exact bounded TSP deferred until independent recurrence is observed."
     },
     {
       "task_id": "modular-cubic-obstruction",
@@ -840,7 +850,8 @@
       "subject": {
         "candidate_id": "weighted-minimum-spanning-tree",
         "capability_ids": [
-          "graph.spanning_tree.minimum.compute"
+          "graph.spanning_tree.minimum.compute",
+          "graph.spanning_tree.minimum.verify"
         ]
       },
       "evidence_refs": [
@@ -849,15 +860,16 @@
         },
         {
           "ref": "MCP capability.describe capture on 2026-07-31: spanning-tree count present, weighted minimum spanning tree absent"
+        },
+        {
+          "ref": "MCP capability.describe audit on main@ac4bd667: exact weighted MST queries returned only weak matches led by spanning-tree count"
         }
       ],
-      "contract_ref": "planned:graph.spanning_tree.minimum.compute",
+      "contract_ref": "capability:graph.spanning_tree.minimum.compute@1",
       "runtime_snapshot": "#/runtime_snapshot",
       "assurance": "DISCOVERY_EVIDENCE_ONLY",
       "open_obligations": [
-        "Freeze weighted labelled graph semantics, disconnected outcomes, parallel-edge policy, and deterministic tie handling.",
-        "Return an inspectable tree, total exact weight, scope, and optimality obligation at COMPUTED assurance.",
-        "Choose an independent bounded exhaustive or cut/cycle-certificate checker.",
+        "Measure whether the installed producer and cycle-certificate replay improve held-out weighted graph work without increasing false certification.",
         "Add a second independent held-out family before a benefit claim."
       ],
       "missing_evidence": [
@@ -865,7 +877,7 @@
         "No held-out comparative model run has been authorized or executed."
       ],
       "decision": "IMPLEMENT",
-      "next_action": "Use the fundamental graph-optimization exception to implement MST before any exact TSP capability.",
+      "next_action": "Freeze a held-out weighted-graph comparison for the MST delta; keep exact TSP deferred until recurrence and an independent checker boundary are established.",
       "move_episodes": [
         "metric-tsp-proof-repair"
       ],

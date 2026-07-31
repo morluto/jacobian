@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from collections.abc import Callable
+from fractions import Fraction
 from functools import cache
 from itertools import combinations, pairwise
-from typing import Any
+from typing import Any, cast
 
 from jacobian_checkers.bound_artifacts import bound_request
 
@@ -115,6 +117,387 @@ def _finite_simple_graph(
         adjacency[left].add(right)
         adjacency[right].add(left)
     return tuple(vertices), normalized_edges, adjacency
+
+
+def _parse_graph_rational(payload: object) -> Fraction:
+    if not isinstance(payload, dict) or set(payload) != {"num", "den"}:
+        raise ValueError("graph weight is malformed")
+    numerator = payload["num"]
+    denominator = payload["den"]
+    if (
+        not isinstance(numerator, str)
+        or not isinstance(denominator, str)
+        or len(numerator.lstrip("-")) > 256
+        or len(denominator) > 256
+        or re.fullmatch(r"(?:0|-?[1-9][0-9]*)", numerator) is None
+        or re.fullmatch(r"[1-9][0-9]*", denominator) is None
+    ):
+        raise ValueError("graph weight lies outside the checker scope")
+    value = Fraction(int(numerator), int(denominator))
+    if str(value.numerator) != numerator or str(value.denominator) != denominator:
+        raise ValueError("graph weight is not canonical")
+    return value
+
+
+def _parse_weighted_edge(
+    raw_edge: object,
+    vertex_set: set[str],
+) -> tuple[tuple[str, str], Fraction]:
+    if not isinstance(raw_edge, dict) or set(raw_edge) != {"endpoints", "weight"}:
+        raise ValueError("weighted edge is malformed")
+    endpoints = raw_edge["endpoints"]
+    if (
+        not isinstance(endpoints, list)
+        or len(endpoints) != 2
+        or not all(isinstance(endpoint, str) for endpoint in endpoints)
+        or endpoints[0] == endpoints[1]
+        or endpoints[0] not in vertex_set
+        or endpoints[1] not in vertex_set
+    ):
+        raise ValueError("weighted edge endpoints are malformed")
+    return _canonical_edge(endpoints[0], endpoints[1]), _parse_graph_rational(
+        raw_edge["weight"]
+    )
+
+
+def _finite_weighted_graph(
+    source: dict[str, Any],
+) -> tuple[
+    tuple[str, ...],
+    dict[tuple[str, str], Fraction],
+    dict[str, set[str]],
+]:
+    if set(source) != {"graph"}:
+        raise ValueError("weighted graph request is malformed")
+    graph = source["graph"]
+    if not isinstance(graph, dict) or set(graph) != {
+        "weighted_graph_schema_version",
+        "vertices",
+        "edges",
+    }:
+        raise ValueError("weighted graph input is malformed")
+    vertices = graph["vertices"]
+    raw_edges = graph["edges"]
+    if (
+        graph["weighted_graph_schema_version"] != "1"
+        or not isinstance(vertices, list)
+        or len(vertices) > 32
+        or len(vertices) != len(set(vertices))
+        or not all(
+            isinstance(vertex, str) and 0 < len(vertex) <= 256 for vertex in vertices
+        )
+        or not isinstance(raw_edges, list)
+        or len(raw_edges) > len(vertices) * (len(vertices) - 1) // 2
+    ):
+        raise ValueError("weighted graph lies outside the checker scope")
+    vertex_set = set(vertices)
+    weights = dict(_parse_weighted_edge(raw_edge, vertex_set) for raw_edge in raw_edges)
+    if len(weights) != len(raw_edges):
+        raise ValueError("weighted graph contains parallel undirected edges")
+    adjacency = {vertex: set[str]() for vertex in vertices}
+    for left, right in weights:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    return tuple(vertices), weights, adjacency
+
+
+def _component_partition(
+    vertices: tuple[str, ...],
+    adjacency: dict[str, set[str]],
+) -> tuple[tuple[str, ...], ...]:
+    unseen = set(vertices)
+    components: list[tuple[str, ...]] = []
+    while unseen:
+        root = min(unseen)
+        unseen.remove(root)
+        component = {root}
+        frontier = [root]
+        while frontier:
+            current = frontier.pop()
+            for neighbor in adjacency[current] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                frontier.append(neighbor)
+        components.append(tuple(sorted(component)))
+    return tuple(sorted(components, key=lambda component: component[0]))
+
+
+def _fraction_payload(value: Fraction) -> dict[str, str]:
+    return {"num": str(value.numerator), "den": str(value.denominator)}
+
+
+def _no_spanning_tree_payload(
+    vertices: tuple[str, ...],
+    components: tuple[tuple[str, ...], ...],
+) -> dict[str, Any]:
+    return {
+        "result_schema_version": "1",
+        "status": "NO_SPANNING_TREE",
+        "vertices": sorted(vertices),
+        "order": len(vertices),
+        "connected": False,
+        "component_count": len(components),
+        "components": [list(component) for component in components],
+        "tree_edges": [],
+        "total_weight": None,
+        "optimality_certificate": {
+            "certificate_schema_version": "1",
+            "method": "ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING",
+            "checks": [],
+            "required_checks": [
+                "SOURCE_CONNECTIVITY",
+                "TREE_SPANNING_ACYCLIC",
+                "TOTAL_WEIGHT_EXACT",
+                "ALL_NON_TREE_EDGES_COVERED",
+                "CYCLE_NON_IMPROVEMENT",
+            ],
+        },
+        "convention": (
+            "MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE"
+        ),
+        "completion": "COMPLETE",
+    }
+
+
+def _parse_tree_edges(
+    raw_edges: object,
+    source_weights: dict[tuple[str, str], Fraction],
+    order: int,
+) -> tuple[
+    dict[tuple[str, str], Fraction],
+    dict[str, dict[str, Fraction]],
+]:
+    if not isinstance(raw_edges, list) or len(raw_edges) != order - 1:
+        raise ValueError("declared tree has the wrong edge count")
+    tree_weights: dict[tuple[str, str], Fraction] = {}
+    declared_endpoints: list[tuple[str, str]] = []
+    for raw_edge in raw_edges:
+        if not isinstance(raw_edge, dict) or set(raw_edge) != {
+            "endpoints",
+            "weight",
+        }:
+            raise ValueError("declared tree edge is malformed")
+        endpoints = raw_edge["endpoints"]
+        if (
+            not isinstance(endpoints, list)
+            or len(endpoints) != 2
+            or not all(isinstance(endpoint, str) for endpoint in endpoints)
+            or endpoints[0] >= endpoints[1]
+        ):
+            raise ValueError("declared tree edge orientation is not canonical")
+        edge = (endpoints[0], endpoints[1])
+        if edge not in source_weights or raw_edge["weight"] != _fraction_payload(
+            source_weights[edge]
+        ):
+            raise ValueError("declared tree edge does not match the source graph")
+        declared_endpoints.append(edge)
+        tree_weights[edge] = source_weights[edge]
+    if declared_endpoints != sorted(declared_endpoints) or len(tree_weights) != len(
+        raw_edges
+    ):
+        raise ValueError("declared tree edges are not unique and canonical")
+    adjacency: dict[str, dict[str, Fraction]] = {}
+    for (left, right), weight in tree_weights.items():
+        adjacency.setdefault(left, {})[right] = weight
+        adjacency.setdefault(right, {})[left] = weight
+    return tree_weights, adjacency
+
+
+def _tree_reaches_every_vertex(
+    vertices: tuple[str, ...],
+    adjacency: dict[str, dict[str, Fraction]],
+) -> bool:
+    reached = {vertices[0]}
+    frontier = [vertices[0]]
+    while frontier:
+        current = frontier.pop()
+        for neighbor in adjacency.get(current, {}):
+            if neighbor not in reached:
+                reached.add(neighbor)
+                frontier.append(neighbor)
+    return reached == set(vertices)
+
+
+def _tree_path(
+    adjacency: dict[str, dict[str, Fraction]],
+    source: str,
+    target: str,
+) -> tuple[str, ...]:
+    predecessor: dict[str, str | None] = {source: None}
+    frontier = deque([source])
+    while frontier and target not in predecessor:
+        current = frontier.popleft()
+        for neighbor in sorted(adjacency.get(current, {})):
+            if neighbor not in predecessor:
+                predecessor[neighbor] = current
+                frontier.append(neighbor)
+    if target not in predecessor:
+        raise ValueError("declared tree does not join a source edge's endpoints")
+    reversed_path = [target]
+    while predecessor[reversed_path[-1]] is not None:
+        reversed_path.append(cast(str, predecessor[reversed_path[-1]]))
+    return tuple(reversed(reversed_path))
+
+
+def _expected_mst_certificate(
+    source_weights: dict[tuple[str, str], Fraction],
+    tree_weights: dict[tuple[str, str], Fraction],
+    tree_adjacency: dict[str, dict[str, Fraction]],
+) -> dict[str, Any] | None:
+    checks: list[dict[str, Any]] = []
+    for edge in sorted(set(source_weights) - set(tree_weights)):
+        path = _tree_path(tree_adjacency, *edge)
+        maximum = max(
+            tree_adjacency[path[index]][path[index + 1]]
+            for index in range(len(path) - 1)
+        )
+        if source_weights[edge] < maximum:
+            return None
+        checks.append(
+            {
+                "non_tree_edge": list(edge),
+                "edge_weight": _fraction_payload(source_weights[edge]),
+                "tree_path_vertices": list(path),
+                "maximum_tree_path_weight": _fraction_payload(maximum),
+                "condition": "EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT",
+            }
+        )
+    return {
+        "certificate_schema_version": "1",
+        "method": "ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING",
+        "checks": checks,
+        "required_checks": [
+            "SOURCE_CONNECTIVITY",
+            "TREE_SPANNING_ACYCLIC",
+            "TOTAL_WEIGHT_EXACT",
+            "ALL_NON_TREE_EDGES_COVERED",
+            "CYCLE_NON_IMPROVEMENT",
+        ],
+    }
+
+
+def _connected_mst_result(
+    result: dict[str, Any],
+    *,
+    vertices: tuple[str, ...],
+    components: tuple[tuple[str, ...], ...],
+    source_weights: dict[tuple[str, str], Fraction],
+) -> bool:
+    if (
+        set(result)
+        != {
+            "result_schema_version",
+            "status",
+            "vertices",
+            "order",
+            "connected",
+            "component_count",
+            "components",
+            "tree_edges",
+            "total_weight",
+            "optimality_certificate",
+            "convention",
+            "completion",
+        }
+        or result["result_schema_version"] != "1"
+        or result["status"] != "EXACT"
+        or result["vertices"] != sorted(vertices)
+        or result["order"] != len(vertices)
+        or result["connected"] is not True
+        or result["component_count"] != 1
+        or result["components"] != [list(component) for component in components]
+        or result["convention"]
+        != ("MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE")
+        or result["completion"] != "COMPLETE"
+    ):
+        return False
+    tree_weights, tree_adjacency = _parse_tree_edges(
+        result["tree_edges"],
+        source_weights,
+        len(vertices),
+    )
+    if not _tree_reaches_every_vertex(vertices, tree_adjacency):
+        return False
+    if result["total_weight"] != _fraction_payload(
+        sum(tree_weights.values(), start=Fraction())
+    ):
+        return False
+    certificate = _expected_mst_certificate(
+        source_weights,
+        tree_weights,
+        tree_adjacency,
+    )
+    return certificate is not None and result["optimality_certificate"] == certificate
+
+
+def _minimum_spanning_tree(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    vertices, source_weights, adjacency = _finite_weighted_graph(source)
+    components = _component_partition(vertices, adjacency)
+    if not vertices or len(components) != 1:
+        return result == _no_spanning_tree_payload(vertices, components)
+    return _connected_mst_result(
+        result,
+        vertices=vertices,
+        components=components,
+        source_weights=source_weights,
+    )
+
+
+def _mst_decision(
+    *,
+    accepted: bool,
+    detail: str,
+    disconnected: bool = False,
+) -> dict[str, Any]:
+    return {
+        "accepted": accepted,
+        "conclusion": "TRUE" if accepted else "UNKNOWN",
+        "arithmetic": "EXACT_RATIONAL",
+        "method": "EXHAUSTIVE_FINITE" if disconnected else "CHECKED_CERTIFICATE",
+        "coverage": "EXHAUSTIVE" if disconnected else "NOT_APPLICABLE",
+        "detail": detail,
+    }
+
+
+def check_graph_minimum_spanning_tree(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        source, result = bound_request(
+            request,
+            operation_id="graph.spanning_tree.minimum.compute",
+            witness_format="graph.minimum-spanning-tree.cycle-certificate-v1",
+        )
+        if not _minimum_spanning_tree(source, result):
+            return _mst_decision(
+                accepted=False,
+                detail=(
+                    "declared result does not match independent exact rational "
+                    "spanning-tree and cycle-certificate replay"
+                ),
+            )
+        disconnected = result.get("status") == "NO_SPANNING_TREE"
+        return _mst_decision(
+            accepted=True,
+            disconnected=disconnected,
+            detail=(
+                "independent finite connectivity replay accepted "
+                "graph.spanning_tree.minimum.compute"
+                if disconnected
+                else (
+                    "independent fundamental-cycle optimality certificate replay "
+                    "accepted graph.spanning_tree.minimum.compute"
+                )
+            ),
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return _mst_decision(
+            accepted=False,
+            detail="malformed, unsupported, or mismatched checker request",
+        )
 
 
 def _all_sources_distance_rows(
@@ -813,6 +1196,7 @@ __all__ = [
     "check_graph_hamiltonian_path",
     "check_graph_induced_tree_maximum",
     "check_graph_maximum_matching",
+    "check_graph_minimum_spanning_tree",
     "check_graph_radius",
     "check_graph_symmetry_generator_orbits",
 ]

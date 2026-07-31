@@ -18,6 +18,9 @@ from jacobian.domains.graph_optimization.hamiltonian_path import (
 from jacobian.domains.graph_optimization.invariants import (
     BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
 )
+from jacobian.domains.graph_optimization.minimum_spanning_tree import (
+    MINIMUM_SPANNING_TREE_CAPABILITY,
+)
 from jacobian.operations import (
     DomainBundle,
     DomainDiagnostics,
@@ -53,6 +56,10 @@ def build_graph_optimization_bundle() -> DomainBundle:
                     "finite optimizers also bind max_order and max_solver_calls"
                 ),
                 "conventions": {
+                    "minimum_spanning_tree": (
+                        "minimum total exact rational edge weight; empty and "
+                        "disconnected graphs have no spanning tree"
+                    ),
                     "domination": "ordinary closed-neighborhood domination",
                     "saturation_number": "minimum cardinality maximal matching",
                     "induced_forest": "empty induced graph allowed",
@@ -69,6 +76,14 @@ def build_graph_optimization_bundle() -> DomainBundle:
                 "timeout_or_cancellation": (
                     "UNKNOWN partial result with preserved bounds and tested obligations"
                 ),
+                "minimum_spanning_tree_certificate": (
+                    "every non-tree edge is no lighter than the maximum-weight "
+                    "edge on its fundamental tree path"
+                ),
+                "minimum_spanning_tree_ties": (
+                    "canonical weight-and-endpoint edge insertion before maintained "
+                    "Kruskal selection"
+                ),
                 "assurance": "computed; incomplete search is never a conclusion",
             },
         ),
@@ -81,7 +96,11 @@ def build_graph_optimization_bundle() -> DomainBundle:
                 ),
                 known_provider_runtime(
                     "jacobian.networkx",
-                    features=("graph-witness-validation", "graph-approximations"),
+                    features=(
+                        "graph-witness-validation",
+                        "graph-approximations",
+                        "exact-rational-minimum-spanning-tree",
+                    ),
                 ),
                 known_provider_runtime(
                     "jacobian.sympy",
@@ -91,6 +110,7 @@ def build_graph_optimization_bundle() -> DomainBundle:
             features=(
                 "bounded-k-colorability",
                 "finite-graph-optimization",
+                "exact-rational-minimum-spanning-tree",
                 "timeout-aware",
             ),
         ),
@@ -102,6 +122,7 @@ def build_graph_optimization_bundle() -> DomainBundle:
             CHROMATIC_NUMBER_CAPABILITY,
             *FINITE_GRAPH_OPTIMIZATION_CAPABILITIES,
             HAMILTONIAN_PATH_CAPABILITY,
+            MINIMUM_SPANNING_TREE_CAPABILITY,
             *BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
         ),
         diagnostics=DomainDiagnostics(

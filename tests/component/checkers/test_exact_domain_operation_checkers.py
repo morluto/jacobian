@@ -32,6 +32,7 @@ from jacobian_checkers.graph_exact_operations import (
     check_graph_distance_matrix,
     check_graph_induced_tree_maximum,
     check_graph_maximum_matching,
+    check_graph_minimum_spanning_tree,
     check_graph_radius,
     check_graph_symmetry_generator_orbits,
 )
@@ -555,6 +556,77 @@ _CASES: tuple[
         ),
     ),
     (
+        check_graph_minimum_spanning_tree,
+        _request(
+            "graph.spanning_tree.minimum.compute",
+            "graph.minimum-spanning-tree.cycle-certificate-v1",
+            {
+                "graph": {
+                    "weighted_graph_schema_version": "1",
+                    "vertices": ["a", "b", "c"],
+                    "edges": [
+                        {
+                            "endpoints": ["a", "b"],
+                            "weight": _q(1),
+                        },
+                        {
+                            "endpoints": ["b", "c"],
+                            "weight": _q(2),
+                        },
+                        {
+                            "endpoints": ["a", "c"],
+                            "weight": _q(4),
+                        },
+                    ],
+                }
+            },
+            {
+                "result_schema_version": "1",
+                "status": "EXACT",
+                "vertices": ["a", "b", "c"],
+                "order": 3,
+                "connected": True,
+                "component_count": 1,
+                "components": [["a", "b", "c"]],
+                "tree_edges": [
+                    {
+                        "endpoints": ["a", "b"],
+                        "weight": _q(1),
+                    },
+                    {
+                        "endpoints": ["b", "c"],
+                        "weight": _q(2),
+                    },
+                ],
+                "total_weight": _q(3),
+                "optimality_certificate": {
+                    "certificate_schema_version": "1",
+                    "method": "ALL_FUNDAMENTAL_CYCLES_NON_IMPROVING",
+                    "checks": [
+                        {
+                            "non_tree_edge": ["a", "c"],
+                            "edge_weight": _q(4),
+                            "tree_path_vertices": ["a", "b", "c"],
+                            "maximum_tree_path_weight": _q(2),
+                            "condition": ("EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT"),
+                        }
+                    ],
+                    "required_checks": [
+                        "SOURCE_CONNECTIVITY",
+                        "TREE_SPANNING_ACYCLIC",
+                        "TOTAL_WEIGHT_EXACT",
+                        "ALL_NON_TREE_EDGES_COVERED",
+                        "CYCLE_NON_IMPROVEMENT",
+                    ],
+                },
+                "convention": (
+                    "MINIMUM_TOTAL_EDGE_WEIGHT_OVER_QQ_EMPTY_GRAPH_HAS_NO_SPANNING_TREE"
+                ),
+                "completion": "COMPLETE",
+            },
+        ),
+    ),
+    (
         check_graph_maximum_matching,
         _request(
             "graph.invariant.maximum_matching.compute",
@@ -757,6 +829,70 @@ def test_matrix_product_checker_rejects_oversized_source() -> None:
     assert decision["conclusion"] == "UNKNOWN"
 
 
+def _minimum_spanning_tree_checker_request() -> dict[str, Any]:
+    return copy.deepcopy(
+        next(
+            checker_request
+            for checker, checker_request in _CASES
+            if checker is check_graph_minimum_spanning_tree
+        )
+    )
+
+
+def test_minimum_spanning_tree_checker_rejects_incomplete_cycle_coverage() -> None:
+    checker_request = _minimum_spanning_tree_checker_request()
+    checker_request["candidate"]["payload"]["optimality_certificate"]["checks"] = []
+    checker_request["candidate"]["payload_digest"] = _digest(
+        checker_request["candidate"]["payload"]
+    )
+
+    decision = check_graph_minimum_spanning_tree(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_minimum_spanning_tree_checker_rejects_a_nonminimum_tree() -> None:
+    checker_request = _minimum_spanning_tree_checker_request()
+    result = checker_request["candidate"]["payload"]
+    result["tree_edges"] = [
+        {"endpoints": ["a", "b"], "weight": _q(1)},
+        {"endpoints": ["a", "c"], "weight": _q(4)},
+    ]
+    result["total_weight"] = _q(5)
+    result["optimality_certificate"]["checks"] = [
+        {
+            "non_tree_edge": ["b", "c"],
+            "edge_weight": _q(2),
+            "tree_path_vertices": ["b", "a", "c"],
+            "maximum_tree_path_weight": _q(4),
+            "condition": "EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT",
+        }
+    ]
+    checker_request["candidate"]["payload_digest"] = _digest(result)
+
+    decision = check_graph_minimum_spanning_tree(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_minimum_spanning_tree_checker_rejects_oversized_source_weight() -> None:
+    checker_request = _minimum_spanning_tree_checker_request()
+    checker_request["claim"]["payload"]["graph"]["edges"][0]["weight"] = {
+        "num": "1" * 257,
+        "den": "1",
+    }
+    checker_request["claim"]["payload_digest"] = _digest(
+        checker_request["claim"]["payload"]
+    )
+
+    decision = check_graph_minimum_spanning_tree(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
 def _modular_checker_request() -> dict[str, Any]:
     return copy.deepcopy(
         next(
@@ -902,7 +1038,9 @@ import jacobian_checkers.exact_domain_operations
 
 
 def test_graph_checker_reports_its_actual_exhaustive_replay_method() -> None:
-    checker, checker_request = _CASES[-2]
+    checker, checker_request = next(
+        case for case in _CASES if case[0] is check_graph_induced_tree_maximum
+    )
 
     decision = checker(checker_request)
 
@@ -917,7 +1055,9 @@ def test_graph_checker_reports_its_actual_exhaustive_replay_method() -> None:
 def test_graph_checker_does_not_require_the_unrelated_flint_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    checker, checker_request = _CASES[-2]
+    checker, checker_request = next(
+        case for case in _CASES if case[0] is check_graph_induced_tree_maximum
+    )
     monkeypatch.setattr(checker_module.flint, "__version__", "unexpected")
 
     decision = checker(checker_request)

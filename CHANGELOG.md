@@ -1,5 +1,70 @@
 # Changelog
 
+## [0.7.0-alpha.0](https://github.com/morluto/jacobian/compare/jacobian-v0.6.0-alpha.0...jacobian-v0.7.0-alpha.0) (2026-07-31)
+
+
+### Features
+
+* **benchmarks:** add autoformalization semantic audit ([6666594](https://github.com/morluto/jacobian/commit/6666594e7bc4435a5037f3e941f2951d9d6c66cb))
+* **benchmarks:** add curated resource-derived Harbor tasks ([4dee6b6](https://github.com/morluto/jacobian/commit/4dee6b63c2c243200f60462d55107f07f595a092))
+* **benchmarks:** add divisibility construction witness ([be22f2c](https://github.com/morluto/jacobian/commit/be22f2c9f53c707b9a0b016f518068cafa182b56))
+* **benchmarks:** add Euler-line symbolic certificate task ([fa035ab](https://github.com/morluto/jacobian/commit/fa035abb1a5b3ead36f236f28fc17002805103f7))
+* **benchmarks:** add grounded premise proof ([748699e](https://github.com/morluto/jacobian/commit/748699e1775ea8ee4b1ec26ea2a50207e84ec3e9))
+* **benchmarks:** add layered meta-verification audit ([5234cb1](https://github.com/morluto/jacobian/commit/5234cb1938dc3f5bf20ce37902f2e9a7989ddf8b))
+* **benchmarks:** add modular obstruction certificate ([f3494fb](https://github.com/morluto/jacobian/commit/f3494fb8657a8c8cca198453b2618daaa923e2a7))
+* **benchmarks:** add proof-audit Harbor tasks ([88e4c91](https://github.com/morluto/jacobian/commit/88e4c911ef0cc0b71935c287dad2f23876260ea5))
+* **benchmarks:** convert cases to Harbor-native datasets ([c6a7c01](https://github.com/morluto/jacobian/commit/c6a7c017e71acc115e1fe25e0b3fe7d817b1db4d))
+* **benchmarks:** convert cases to Harbor-native datasets ([8ddabcc](https://github.com/morluto/jacobian/commit/8ddabccdee1bee24f4b5f4314d67af2b36efb3c5))
+* **graph:** add exact weighted MST ([#284](https://github.com/morluto/jacobian/issues/284)) ([5d4c596](https://github.com/morluto/jacobian/commit/5d4c596fe38a46c05fabd0b4e99699e9deb7cfe9))
+* **graph:** record complete local minimality evidence ([71f14f5](https://github.com/morluto/jacobian/commit/71f14f520d5a11b00b5a7a09bf05a64b54605361))
+* **math:** add typed native Python API ([552b909](https://github.com/morluto/jacobian/commit/552b9099212f714ea6501625f3e212ee4e831aed))
+* **math:** add typed native Python API ([745afa1](https://github.com/morluto/jacobian/commit/745afa1d85be5045639552a2ec84ead12c788670))
+* **matrix:** add exact multiplication ([#283](https://github.com/morluto/jacobian/issues/283)) ([ac4bd66](https://github.com/morluto/jacobian/commit/ac4bd6677482eaa55e6af2c5c0b2e6652075c7ea))
+* **matrix:** expose exact rational relations ([#255](https://github.com/morluto/jacobian/issues/255)) ([b7ace44](https://github.com/morluto/jacobian/commit/b7ace445069ef7804132825f2d02367c91650297))
+* **mcp:** align adapter with released SDK ([66f83bc](https://github.com/morluto/jacobian/commit/66f83bc961da7bc3e7518b6d27c16806dc39c969))
+* **modular:** compute bounded polynomial residue images ([#249](https://github.com/morluto/jacobian/issues/249)) ([378c882](https://github.com/morluto/jacobian/commit/378c882be32cfcf63441b0f7189d837e55477f45))
+* **modular:** independently verify residue images ([#251](https://github.com/morluto/jacobian/issues/251)) ([62bdb55](https://github.com/morluto/jacobian/commit/62bdb559b6195270e168e426ccb6a9539709e341))
+* **plugins:** enforce typed request contracts ([eeae9ac](https://github.com/morluto/jacobian/commit/eeae9ac6c9f736f454a6fa8ba1592fc0ca3d6144))
+* **process:** enforce canonical worker protocols ([df7d8e6](https://github.com/morluto/jacobian/commit/df7d8e6f578d5044bf2bc5e6634f013e50f00432))
+* **provider:** separate identity and readiness checks ([fda833d](https://github.com/morluto/jacobian/commit/fda833d7aa25cc6bd2e572f6c026ce3132397e10))
+* **storage:** centralize persisted model decoding ([1bf1c3d](https://github.com/morluto/jacobian/commit/1bf1c3dbcc63dd2bac2a812a63037a4953fc4aaf))
+* **verification:** bound proof artifacts and LRAT authority ([cfd564f](https://github.com/morluto/jacobian/commit/cfd564fef764064b03e430d7e8620ae451d62894))
+
+
+### Bug Fixes
+
+* **benchmarks:** accept bounded semantic witnesses ([fec7d89](https://github.com/morluto/jacobian/commit/fec7d8999bbb4ab7dcb21bb227fb6ce23c9547e1))
+* **benchmarks:** bind Euler certificate evidence ([c006ed7](https://github.com/morluto/jacobian/commit/c006ed7ae84465b83c773e4fab227be196016b86))
+* **benchmarks:** bind Euler certificate evidence ([36ea800](https://github.com/morluto/jacobian/commit/36ea80045aaf8e66170faffc36c96f5aea152d12))
+* **benchmarks:** bind modular obstruction evidence ([c9f7c3b](https://github.com/morluto/jacobian/commit/c9f7c3b02e0563d9104e725869dbd655e7e020fe))
+* **benchmarks:** bind modular obstruction evidence ([bdd8070](https://github.com/morluto/jacobian/commit/bdd8070aa833244c66ef3dc249c362bbbedcb6e7))
+* **benchmarks:** bind pairing evidence ([f26ad0b](https://github.com/morluto/jacobian/commit/f26ad0b534f81002b731203009a2b0c7469a6df3))
+* **benchmarks:** bind semantic audit evidence ([422eeac](https://github.com/morluto/jacobian/commit/422eeac31959b4d6d393365df442af40d425a4cd))
+* **benchmarks:** bind semantic audit evidence ([fcf9904](https://github.com/morluto/jacobian/commit/fcf990486d89cd206d13f0b505e941509638bb7e))
+* **benchmarks:** enforce two-dimensional audit witnesses ([e322d12](https://github.com/morluto/jacobian/commit/e322d127ab43a5a9d7c645cf460b1f9b0f91e625))
+* **benchmarks:** harden resource-derived verifiers ([7129419](https://github.com/morluto/jacobian/commit/7129419a5160cb377970b92b5d3af482d9a1eb7c))
+* **benchmarks:** harden resource-derived verifiers ([02e7a71](https://github.com/morluto/jacobian/commit/02e7a71878dc74095b2382529420ab71a2fb86ce))
+* **benchmarks:** harden resource-derived verifiers ([919362d](https://github.com/morluto/jacobian/commit/919362d3906efb6b1192ce47dbdbc0eb10ebfc72))
+* **benchmarks:** harden verifier evidence and fixture binding ([2a8be13](https://github.com/morluto/jacobian/commit/2a8be13dd9d7a8679a8f6535bb8f26a8ba297472))
+* **benchmarks:** harden verifier evidence and fixtures ([1c4da95](https://github.com/morluto/jacobian/commit/1c4da95a6647756fc18cbc4d3634d59748435685))
+* **benchmarks:** honor rendered provider and fixture contracts ([df0d124](https://github.com/morluto/jacobian/commit/df0d124e6988820409c4671921e6ede1478b6188))
+* **benchmarks:** keep Harbor validation offline ([06904ef](https://github.com/morluto/jacobian/commit/06904efaa5e8dfb554e1e23040bb8602f5c0d082))
+* **benchmarks:** keep Harbor validation offline ([afb9e18](https://github.com/morluto/jacobian/commit/afb9e18f19178209d327ac269a9e242b19037a28))
+* **benchmarks:** keep scoring tests unique ([771b473](https://github.com/morluto/jacobian/commit/771b473229d07227fd32dfbeb2ba9a5c048b9569))
+* **benchmarks:** refresh TSP evidence digest ([1c2dace](https://github.com/morluto/jacobian/commit/1c2dacefdc524aba955b987e19a26a568db0a628))
+* **benchmarks:** refresh TSP evidence digest ([08507a8](https://github.com/morluto/jacobian/commit/08507a80a3f36fd22ce3c106942f3145e610f215))
+* **benchmarks:** validate divisibility evidence ([c0ae540](https://github.com/morluto/jacobian/commit/c0ae5400bc6ba50a9779600875667cb878b24231))
+* **benchmarks:** validate divisibility evidence ([b5ceedf](https://github.com/morluto/jacobian/commit/b5ceedfb8d0523e4ba591d2ca9d95d02d50bde66))
+* **benchmarks:** validate TSP repair evidence ([da26375](https://github.com/morluto/jacobian/commit/da2637582af61e7959c914660e039c29f66531da))
+* **benchmarks:** validate TSP repair evidence ([d1dbce1](https://github.com/morluto/jacobian/commit/d1dbce133d1ac62ce3a3b2a6f45d0226fc928515))
+* **math:** reject nested SymPy floats ([fc92842](https://github.com/morluto/jacobian/commit/fc9284203704ba81832e8436dd6b9e8810e49897))
+
+
+### Documentation
+
+* **benchmarks:** state natural proof scope ([e80a1c8](https://github.com/morluto/jacobian/commit/e80a1c83a0df300e59d04bab68dfc19778df53cf))
+* **math:** define native API boundaries ([34bab03](https://github.com/morluto/jacobian/commit/34bab035a20e09c3ecd807564dbfee26060c9328))
+
 ## [0.6.0-alpha.0](https://github.com/morluto/jacobian/compare/jacobian-v0.5.0-alpha.0...jacobian-v0.6.0-alpha.0) (2026-07-30)
 
 

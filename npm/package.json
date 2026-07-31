@@ -1,6 +1,6 @@
 {
   "name": "jacobian",
-  "version": "0.6.0-alpha.0",
+  "version": "0.7.0-alpha.0",
   "description": "Composable mathematical capabilities for AI agents, exposed through MCP and a CLI",
   "license": "MIT",
   "repository": {

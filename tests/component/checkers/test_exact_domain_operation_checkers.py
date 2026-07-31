@@ -245,6 +245,7 @@ _CASES: tuple[
             {"matrix": _qq([[1, 2, 3], [2, 4, 6]])},
             {
                 "ambient_dimension": 3,
+                "rank": 1,
                 "nullity": 2,
                 "basis_vectors": [[_q(-2), _q(1), _q(0)], [_q(-3), _q(0), _q(1)]],
                 "free_columns": [1, 2],
@@ -667,6 +668,25 @@ def test_exact_domain_checker_rejects_changed_flint_runtime(
     assert decision["accepted"] is False
     assert decision["conclusion"] == "UNKNOWN"
     assert "runtime is unavailable" in decision["detail"]
+
+
+def test_matrix_nullspace_checker_rejects_wrong_rank() -> None:
+    checker_request = copy.deepcopy(
+        next(
+            checker_request
+            for checker, checker_request in _CASES
+            if checker is check_matrix_nullspace
+        )
+    )
+    checker_request["candidate"]["payload"]["rank"] = 2
+    checker_request["candidate"]["payload_digest"] = _digest(
+        checker_request["candidate"]["payload"]
+    )
+
+    decision = check_matrix_nullspace(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
 
 
 def _modular_checker_request() -> dict[str, Any]:

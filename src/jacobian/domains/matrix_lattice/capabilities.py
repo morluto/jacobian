@@ -57,6 +57,7 @@ def matrix_operation[
     relation_id: str,
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    version: str = "1",
 ) -> ComputedOperation[RequestT, ResultT]:
     def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
         try:
@@ -89,6 +90,7 @@ def matrix_operation[
 
     return ComputedOperation(
         capability_id=capability_id,
+        version=version,
         title=title,
         description=description,
         request_model=request_model,
@@ -213,29 +215,45 @@ MATRIX_CAPABILITIES = (
     ),
     matrix_operation(
         "matrix.nullspace.compute",
-        "Compute a canonical exact nullspace basis",
-        "Compute the RREF fundamental basis of the right nullspace over QQ.",
+        "Compute a canonical exact nullspace or relation basis",
+        (
+            "Compute the RREF fundamental basis of the right nullspace over QQ. "
+            "When columns are ordered vectors, the result gives their rank and "
+            "every exact rational linear dependency coefficient."
+        ),
         RationalMatrixRequest,
         NullspaceResult,
         compute_nullspace,
         "matrix.relation.nullspace-of",
         "matrix",
         "nullspace",
+        "kernel",
+        "linear-dependence",
+        "rational-relations",
         "exact-rational",
         invocation_examples=(
             example(
-                "nullspace_two_by_two",
-                "Compute a nullspace basis for a dependent matrix.",
+                "rational_relation_among_columns",
+                ("Compute every rational relation among three ordered column vectors."),
                 {
                     "matrix": {
                         "entries": [
-                            [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
-                            [{"num": "2", "den": "1"}, {"num": "4", "den": "1"}],
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
                         ]
                     }
                 },
             ),
         ),
+        version="2",
     ),
     matrix_operation(
         "matrix.characteristic_polynomial.compute",

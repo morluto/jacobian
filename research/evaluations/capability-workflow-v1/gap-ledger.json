@@ -72,21 +72,26 @@
           "boundary": "The operation exists, but the pinned Lean runtime is absent from the current environment."
         },
         {
-          "capability_id": "linear.rational_solution.find",
+          "capability_id": "matrix.nullspace.compute",
           "availability": "AVAILABLE",
-          "boundary": "Finds one Ax=b solution; it does not return a basis of all relations among named vectors."
+          "boundary": "Returns the complete canonical basis of exact rational dependencies among ordered matrix columns; the original audit missed this installed outcome because its descriptor exposed only nullspace terminology."
+        },
+        {
+          "capability_id": "matrix.result.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently replays the complete nullspace basis with Python-FLINT, but the generic verifier is discovered after the producer rather than by relation intent."
         }
       ],
       "gap_classes": [
         "PROVIDER_UNAVAILABLE",
-        "MISSING_OPERATION"
+        "WEAK_DISCOVERY"
       ],
       "contamination": "PUBLIC_ANSWER_VISIBLE",
       "candidate_ids": [
         "rational-relation-basis"
       ],
-      "disposition": "ACCEPT_CANDIDATE",
-      "next_action": "Restore the pinned Lean profile separately; use this vector episode as one public reproduction for the rational-relation primitive."
+      "disposition": "USE_EXISTING",
+      "next_action": "Restore the pinned Lean profile separately; expose rational-relation terminology and an ordered-column example on matrix.nullspace.compute instead of adding a duplicate producer."
     },
     {
       "task_id": "calendar-good-days-audit",
@@ -159,21 +164,26 @@
           "boundary": "Can replay denominator-cleared identities but does not discover the relation coefficients."
         },
         {
-          "capability_id": "linear.rational_solution.find",
+          "capability_id": "matrix.nullspace.compute",
           "availability": "AVAILABLE",
-          "boundary": "Solves Ax=b but loses named-vector relation-basis semantics."
+          "boundary": "Returns the complete canonical coefficient basis for rational relations among ordered columns; denominator clearing and column-to-point naming remain explicit agent-owned preparation."
+        },
+        {
+          "capability_id": "matrix.result.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently checks the complete stored nullspace result but does not verify the upstream denominator-clearing transformation."
         }
       ],
       "gap_classes": [
-        "MISSING_OPERATION",
+        "WEAK_DISCOVERY",
         "MISSING_ARTIFACT_HANDOFF"
       ],
       "contamination": "PUBLIC_ANSWER_VISIBLE",
       "candidate_ids": [
         "rational-relation-basis"
       ],
-      "disposition": "ACCEPT_CANDIDATE",
-      "next_action": "Preserve polynomial identity replay and evaluate whether a relation artifact composes cleanly after denominator clearing."
+      "disposition": "USE_EXISTING",
+      "next_action": "Preserve polynomial identity replay, use ordered columns with matrix.nullspace.compute, and evaluate the still-open denominator-clearing artifact handoff."
     },
     {
       "task_id": "finite-partition",
@@ -624,26 +634,26 @@
       ],
       "current_capabilities": [
         {
-          "capability_id": "matrix.rank.compute",
+          "capability_id": "matrix.nullspace.compute",
           "availability": "AVAILABLE",
-          "boundary": "Computes a matrix rank but does not return all named-vector relations."
+          "boundary": "Returns nullity and the complete canonical basis of exact rational dependencies among ordered generator columns; rank is determined by rank-nullity."
         },
         {
-          "capability_id": "linear.rational_solution.find",
+          "capability_id": "matrix.result.verify",
           "availability": "AVAILABLE",
-          "boundary": "Returns one system solution without a canonical relation-basis artifact."
+          "boundary": "Independently replays the exact stored nullspace basis and binds a verification record to the input and result."
         }
       ],
       "gap_classes": [
-        "MISSING_OPERATION",
-        "MISSING_ARTIFACT_HANDOFF"
+        "WEAK_DISCOVERY",
+        "MODEL_REASONING"
       ],
       "contamination": "PUBLIC_ANSWER_VISIBLE",
       "candidate_ids": [
         "rational-relation-basis"
       ],
-      "disposition": "ACCEPT_CANDIDATE",
-      "next_action": "Implement the smaller named-vector relation primitive first and derive direct-sum claims through agent composition."
+      "disposition": "USE_EXISTING",
+      "next_action": "Expose relation terminology on matrix.nullspace.compute and derive direct-sum claims from ordered generator columns through agent-owned composition."
     }
   ],
   "handoffs": [
@@ -704,11 +714,12 @@
     },
     {
       "stage": "discovery",
-      "status": "accepted",
+      "status": "needs_revision",
       "subject": {
         "candidate_id": "rational-relation-basis",
         "capability_ids": [
-          "linear.rational_relations.compute"
+          "matrix.nullspace.compute",
+          "matrix.result.verify"
         ]
       },
       "evidence_refs": [
@@ -723,22 +734,25 @@
         },
         {
           "ref": "MCP capability.describe capture on 2026-07-31: only Ax=b solution and inconsistency outcomes matched"
+        },
+        {
+          "ref": "MCP exact contract and independent replay audit on main@62bdb559: matrix.nullspace.compute already covers the complete ordered-column relation basis and matrix.result.verify accepts it with a bound Python-FLINT verification record"
         }
       ],
-      "contract_ref": "planned:linear.rational_relations.compute",
+      "contract_ref": "capability:matrix.nullspace.compute@2",
       "runtime_snapshot": "#/runtime_snapshot",
       "assurance": "DISCOVERY_EVIDENCE_ONLY",
       "open_obligations": [
-        "Freeze named-vector orientation, ambient-dimension validation, canonical rational normalization, and relation-basis normalization.",
-        "Return rank, a complete relation basis, a nontrivial witness when present, and explicit scope/completeness.",
-        "Implement an independent exact row-reduction checker with reorder, rescale, omission, and substitution attacks.",
-        "Confirm direct-sum conclusions compose without losing named-subspace semantics."
+        "Expose ordered-column relation terminology, an exact rank field, and a relation-oriented invocation example without adding a duplicate capability ID.",
+        "Retain the existing independent Python-FLINT replay while versioning the expanded result contract.",
+        "Measure whether direct-sum conclusions compose from the verified ordered-column basis without losing essential named-subspace semantics."
       ],
       "missing_evidence": [
-        "No held-out comparative model run has been authorized or executed."
+        "No held-out comparative model run has been authorized or executed.",
+        "No trace shows that explicit names inside the mathematical artifact improve outcomes beyond preserving the declared column order."
       ],
-      "decision": "IMPLEMENT",
-      "next_action": "Hand the smaller relation-basis producer to implement-math-capability before considering a broader direct-sum outcome.",
+      "decision": "DEFER",
+      "next_action": "Improve and version matrix.nullspace.compute for rational-relation discovery, then evaluate the existing producer/checker pair before reconsidering a named-vector alias or broader direct-sum outcome.",
       "move_episodes": [
         "subspace-direct-sum-counterexample",
         "autoformalization-semantic-audit",
@@ -746,7 +760,7 @@
       ],
       "candidate_gate": {
         "basis": "RECURRENT",
-        "nonduplicative": true,
+        "nonduplicative": false,
         "bounded_typed_contract": true,
         "honest_failure_semantics": true,
         "maintained_backend": true,
@@ -754,7 +768,7 @@
         "public_reproduction": true,
         "held_out_hypothesis": true
       },
-      "portfolio_delta": "One linear-domain result returns rank and a canonical basis of all exact rational dependencies among named vectors.",
+      "portfolio_delta": "No new capability ID: reuse the existing exact nullspace producer/checker pair, expose ordered-column rational-relation intent, and add explicit rank to the versioned result.",
       "public_reproduction": [
         "subspace-direct-sum-counterexample",
         "autoformalization-semantic-audit",

@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from pytest import MonkeyPatch, fixture
+from pydantic import ValidationError
+from pytest import MonkeyPatch, fixture, raises
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import (
     DomainTestServices,
@@ -13,6 +14,7 @@ from tests.support.services import (
 from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
 from jacobian.contracts.matrix_operations import (
@@ -21,6 +23,7 @@ from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
     LatticeReductionRequest,
     MatrixTraceResult,
+    NullspaceResult,
     SquareIntegerMatrixRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -106,6 +109,7 @@ def test_exact_matrix_domain_results_and_lineage(
             {"matrix": _qq([[1, 2, 3], [2, 4, 6]])},
             {
                 "ambient_dimension": 3,
+                "rank": 1,
                 "nullity": 2,
                 "basis_vectors": [
                     [_q(-2), _q(1), _q(0)],
@@ -160,6 +164,63 @@ def test_exact_matrix_domain_results_and_lineage(
         assert produced.manifest.parents == (source.artifact_uri,)
         assert result.relationships[0].source_artifact_uris == (source.artifact_uri,)
         assert result.relationships[0].target_artifact_uris == (produced.artifact_uri,)
+
+
+def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
+    matrix_domain_services: DomainTestServices,
+) -> None:
+    discovered = matrix_domain_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query=(
+                "all exact rational dependencies among named vectors and a "
+                "normalized relation basis"
+            ),
+            limit=5,
+        )
+    )
+
+    assert discovered.matches[0].capability_id == "matrix.nullspace.compute"
+    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    descriptor = next(
+        descriptor
+        for descriptor in matrix_domain_services.core.capabilities.catalog().capabilities
+        if descriptor.capability_id == "matrix.nullspace.compute"
+    )
+    assert descriptor.version == "2"
+    assert descriptor.invocation_examples[0].name == ("rational_relation_among_columns")
+
+    result = matrix_domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=descriptor.capability_id,
+            input=descriptor.invocation_examples[0].input,
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == {
+        "ambient_dimension": 3,
+        "rank": 2,
+        "nullity": 1,
+        "basis_vectors": [[_q(-1), _q(-1), _q(1)]],
+        "free_columns": [2],
+        "convention": "RREF_FUNDAMENTAL_BASIS",
+    }
+
+
+def test_nullspace_result_enforces_rank_nullity() -> None:
+    with raises(ValidationError, match="rank plus nullity"):
+        NullspaceResult.model_validate(
+            {
+                "ambient_dimension": 3,
+                "rank": 2,
+                "nullity": 2,
+                "basis_vectors": [
+                    [_q(-2), _q(1), _q(0)],
+                    [_q(-3), _q(0), _q(1)],
+                ],
+                "free_columns": [1, 2],
+            }
+        )
 
 
 def test_invalid_matrix_request_fails_before_operation_artifacts(

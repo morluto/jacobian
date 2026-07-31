@@ -802,6 +802,7 @@ def _nullspace(source: dict[str, Any], result: dict[str, Any]) -> bool:
         set(result)
         != {
             "ambient_dimension",
+            "rank",
             "nullity",
             "basis_vectors",
             "free_columns",
@@ -827,6 +828,7 @@ def _nullspace(source: dict[str, Any], result: dict[str, Any]) -> bool:
     declared = [[_q(item) for item in vector] for vector in result["basis_vectors"]]
     return (
         result["ambient_dimension"] == reduced.ncols()
+        and result["rank"] == rank
         and result["nullity"] == len(free)
         and tuple(result["free_columns"]) == free
         and declared == expected

@@ -86,6 +86,7 @@ def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
         basis.append(tuple(_rational(value) for value in vector))
     return NullspaceResult(
         ambient_dimension=matrix.cols,
+        rank=len(pivot_columns),
         nullity=len(basis),
         basis_vectors=tuple(basis),
         free_columns=free_columns,

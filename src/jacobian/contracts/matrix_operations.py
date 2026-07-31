@@ -169,6 +169,7 @@ class RrefResult(ContractModel):
 
 class NullspaceResult(ContractModel):
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     nullity: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     basis_vectors: tuple[tuple[OutputRational, ...], ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
@@ -178,6 +179,8 @@ class NullspaceResult(ContractModel):
 
     @model_validator(mode="after")
     def require_basis_shape(self) -> Self:
+        if self.rank + self.nullity != self.ambient_dimension:
+            raise ValueError("rank plus nullity must equal the ambient dimension")
         if len(self.basis_vectors) != self.nullity:
             raise ValueError("basis vector count must equal nullity")
         if any(len(vector) != self.ambient_dimension for vector in self.basis_vectors):

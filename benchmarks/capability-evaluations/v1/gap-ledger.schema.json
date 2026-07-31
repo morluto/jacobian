@@ -1,0 +1,481 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/schemas/capability-gap-ledger-v1.json",
+  "title": "Jacobian public workflow capability gap ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ledger_id",
+    "captured_at",
+    "source_suite",
+    "runtime_snapshot",
+    "gap_taxonomy",
+    "tasks",
+    "handoffs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "ledger_id": {
+      "const": "jacobian.regression-v1.capability-gap-ledger"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "source_suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "task_count",
+        "manifest_sha256",
+        "contamination"
+      ],
+      "properties": {
+        "path": {
+          "const": "benchmarks/regression-v1/dataset.toml"
+        },
+        "task_count": {
+          "const": 24
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "contamination": {
+          "const": "PUBLIC_ANSWER_VISIBLE"
+        }
+      }
+    },
+    "runtime_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_commit",
+        "repository_tree",
+        "package_version",
+        "harbor_version",
+        "catalog_digest",
+        "policy_profile",
+        "policy_digest",
+        "provider_snapshots",
+        "lean_available",
+        "model_execution",
+        "oracle_evidence"
+      ],
+      "properties": {
+        "repository_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "repository_tree": {
+          "$ref": "#/$defs/sha"
+        },
+        "package_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "harbor_version": {
+          "const": "0.20.0"
+        },
+        "catalog_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "policy_profile": {
+          "const": "DEFAULT"
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "provider_snapshots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "capability_id",
+              "availability",
+              "provider",
+              "provider_version",
+              "runtime_digest"
+            ],
+            "properties": {
+              "capability_id": {
+                "$ref": "#/$defs/id"
+              },
+              "availability": {
+                "enum": [
+                  "AVAILABLE",
+                  "UNAVAILABLE"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider_version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runtime_digest": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/digest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "lean_available": {
+          "const": false
+        },
+        "model_execution": {
+          "const": "NOT_RUN"
+        },
+        "oracle_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "task_count",
+            "result_sha256",
+            "host_local_path"
+          ],
+          "properties": {
+            "task_count": {
+              "const": 24
+            },
+            "result_sha256": {
+              "$ref": "#/$defs/digest"
+            },
+            "host_local_path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "gap_taxonomy": {
+      "type": "array",
+      "minItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/gap"
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 24,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    },
+    "handoffs": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "$ref": "#/$defs/handoff"
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]+$"
+    },
+    "gap": {
+      "enum": [
+        "EXISTING_WORKS",
+        "WEAK_DISCOVERY",
+        "BAD_PARAMETERIZATION",
+        "MISSING_OPERATION",
+        "MISSING_ARTIFACT_HANDOFF",
+        "MISSING_CHECKER",
+        "PROVIDER_UNAVAILABLE",
+        "ENVIRONMENT_BUDGET_AUTH",
+        "MODEL_REASONING"
+      ]
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_id",
+        "availability",
+        "boundary"
+      ],
+      "properties": {
+        "capability_id": {
+          "$ref": "#/$defs/id"
+        },
+        "availability": {
+          "enum": [
+            "AVAILABLE",
+            "UNAVAILABLE"
+          ]
+        },
+        "boundary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "mathematical_moves",
+        "current_capabilities",
+        "gap_classes",
+        "contamination",
+        "candidate_ids",
+        "disposition",
+        "next_action"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "#/$defs/id"
+        },
+        "mathematical_moves": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "current_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        },
+        "gap_classes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/gap"
+          }
+        },
+        "contamination": {
+          "const": "PUBLIC_ANSWER_VISIBLE"
+        },
+        "candidate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "disposition": {
+          "enum": [
+            "USE_EXISTING",
+            "ACCEPT_CANDIDATE",
+            "RUNTIME_FIX",
+            "DEFER_RESEARCH",
+            "NO_NEW_CAPABILITY"
+          ]
+        },
+        "next_action": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "status",
+        "subject",
+        "evidence_refs",
+        "contract_ref",
+        "runtime_snapshot",
+        "assurance",
+        "open_obligations",
+        "missing_evidence",
+        "decision",
+        "next_action",
+        "move_episodes",
+        "candidate_gate",
+        "portfolio_delta",
+        "public_reproduction",
+        "evaluation_hypothesis"
+      ],
+      "properties": {
+        "stage": {
+          "const": "discovery"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "needs_revision"
+          ]
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_id",
+            "capability_ids"
+          ],
+          "properties": {
+            "candidate_id": {
+              "$ref": "#/$defs/id"
+            },
+            "capability_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/id"
+              }
+            }
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "contract_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime_snapshot": {
+          "const": "#/runtime_snapshot"
+        },
+        "assurance": {
+          "const": "DISCOVERY_EVIDENCE_ONLY"
+        },
+        "open_obligations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "missing_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "decision": {
+          "enum": [
+            "IMPLEMENT",
+            "DEFER"
+          ]
+        },
+        "next_action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "move_episodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "candidate_gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "basis",
+            "nonduplicative",
+            "bounded_typed_contract",
+            "honest_failure_semantics",
+            "maintained_backend",
+            "checker_or_obligation",
+            "public_reproduction",
+            "held_out_hypothesis"
+          ],
+          "properties": {
+            "basis": {
+              "enum": [
+                "RECURRENT",
+                "FUNDAMENTAL_PRIMITIVE",
+                "INSUFFICIENT"
+              ]
+            },
+            "nonduplicative": {
+              "type": "boolean"
+            },
+            "bounded_typed_contract": {
+              "type": "boolean"
+            },
+            "honest_failure_semantics": {
+              "type": "boolean"
+            },
+            "maintained_backend": {
+              "type": "boolean"
+            },
+            "checker_or_obligation": {
+              "type": "boolean"
+            },
+            "public_reproduction": {
+              "type": "boolean"
+            },
+            "held_out_hypothesis": {
+              "type": "boolean"
+            }
+          }
+        },
+        "portfolio_delta": {
+          "type": "string",
+          "minLength": 1
+        },
+        "public_reproduction": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "evaluation_hypothesis": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

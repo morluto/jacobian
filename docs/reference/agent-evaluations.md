@@ -4,11 +4,10 @@
 
 Jacobian’s current mathematical observation suite is the committed Harbor
 [`regression-v1`](../../benchmarks/regression-v1/README.md) dataset. It contains
-fifteen self-contained tasks covering graph counterexamples, graph artifact
-composition, exact finite partitions, SAT witnesses, rational linear systems,
-Hermite normal form, polynomial normalization, polynomial-map collisions,
-matrix and subspace counterexamples, polynomial-tail reasoning, exact
-logarithmic algebra, proof-audit workloads, and symbolic geometry.
+24 self-contained tasks covering exact finite enumeration and construction,
+graph workflows, matrix and linear algebra, modular and polynomial reasoning,
+SAT witnesses, proof repair, formal-semantics audits, finite probability, and
+symbolic geometry.
 
 The task bundles are agent-agnostic. A prompt says only that a mathematical
 toolbox may be available; it does not prescribe capability IDs, decomposition,
@@ -21,8 +20,8 @@ Task and verifier validation is separate from model observation. First parse and
 check the task bundles with Harbor, then run the Oracle job:
 
 ```sh
-harbor check benchmarks/regression-v1/tasks
-harbor run -c benchmarks/regression-v1/job-oracle.json
+make harbor-check
+make harbor-oracle
 ```
 
 The verifier emits `correctness`, `evidence_validity`, `scope_accuracy`,
@@ -66,3 +65,19 @@ job configuration, not in task bundles, and must reuse the exact task digests,
 agents, models, prompts, budgets, environments, and seeds. Held-out
 performance claims require a separately frozen task set and report every run;
 workflow observations must not be presented as comparative evidence.
+
+## Capability-delta scaffold
+
+The versioned
+[`capability-evaluations/v1`](../../benchmarks/capability-evaluations/v1/README.md)
+artifacts classify all 24 public cases, record accepted and deferred discovery
+handoffs, and freeze the primary comparison as current catalog C1 versus C1
+plus exactly one candidate delta C2. Its two Harbor jobs are public,
+answer-visible reproduction configurations only.
+
+The comparison remains fail closed: no held-out fixture or Oracle identity is
+committed, the treatment catalog is unset, and model execution is disabled
+until explicit authorization and a hard run budget are recorded. A future
+held-out evaluation must keep Oracle material outside the evaluated workspace
+and match task digests, model and reasoning settings, prompt, budgets, runtime,
+policy, seed, and scorer across the paired C1/C2 conditions.

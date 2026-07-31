@@ -1,0 +1,36 @@
+{
+  "jobs_dir": "benchmarks/results/capability-evaluation-v1/public-c1-current",
+  "n_attempts": 3,
+  "timeout_multiplier": 1.0,
+  "orchestrator": {
+    "type": "local",
+    "n_concurrent_trials": 1,
+    "quiet": false
+  },
+  "environment": {
+    "type": "docker",
+    "force_build": true,
+    "delete": true,
+    "extra_docker_compose": [
+      "benchmarks/capability-evaluations/v1/public-c1-current.compose.yaml"
+    ]
+  },
+  "agents": [
+    {
+      "name": "codex",
+      "model_name": "${JACOBIAN_MODEL}",
+      "mcp_servers": [
+        {
+          "name": "jacobian",
+          "transport": "streamable-http",
+          "url": "http://jacobian-auth-proxy:8080/mcp"
+        }
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "path": "benchmarks/regression-v1/tasks"
+    }
+  ]
+}

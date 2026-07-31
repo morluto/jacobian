@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/schemas/capability-comparison-plan-v1.json",
+  "title": "Jacobian C1/C2 capability comparison plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "status",
+    "captured_at",
+    "evidence_classes",
+    "public_reproduction",
+    "held_out_boundary",
+    "conditions",
+    "matched_invariants",
+    "randomization",
+    "budget_ladder",
+    "execution_gate",
+    "claim_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "plan_id": {
+      "const": "jacobian.capability-comparison.v1"
+    },
+    "status": {
+      "const": "SCAFFOLD_ONLY"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "evidence_classes": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "HARNESS_VALIDATION"
+        },
+        {
+          "const": "PUBLIC_WORKFLOW_OBSERVATION"
+        },
+        {
+          "const": "HELD_OUT_COMPARATIVE_EVALUATION"
+        }
+      ],
+      "items": false
+    },
+    "public_reproduction": {
+      "$ref": "#/$defs/fixture"
+    },
+    "held_out_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "task_manifest_digest",
+        "oracle_manifest_digest",
+        "minimum_independent_families",
+        "agent_visible",
+        "agent_forbidden",
+        "storage_rule"
+      ],
+      "properties": {
+        "status": {
+          "const": "NOT_MATERIALIZED"
+        },
+        "task_manifest_digest": {
+          "type": "null"
+        },
+        "oracle_manifest_digest": {
+          "type": "null"
+        },
+        "minimum_independent_families": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "agent_visible": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "agent_forbidden": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "storage_rule": {
+          "const": "ORACLE_OUTSIDE_EVALUATED_WORKSPACE"
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/condition"
+      }
+    },
+    "matched_invariants": {
+      "type": "array",
+      "minItems": 10,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "randomization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "strategy",
+        "seed",
+        "paired"
+      ],
+      "properties": {
+        "unit": {
+          "const": "CASE_REPETITION"
+        },
+        "strategy": {
+          "const": "BLOCK_RANDOMIZED_C1_C2_ORDER"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "paired": {
+          "const": true
+        }
+      }
+    },
+    "budget_ladder": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "$ref": "#/$defs/budget"
+      }
+    },
+    "execution_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "explicit_authorization",
+        "hard_run_budget",
+        "credentials_present",
+        "held_out_frozen",
+        "treatment_frozen",
+        "model_execution_allowed"
+      ],
+      "properties": {
+        "explicit_authorization": {
+          "const": false
+        },
+        "hard_run_budget": {
+          "type": "null"
+        },
+        "credentials_present": {
+          "const": false
+        },
+        "held_out_frozen": {
+          "const": false
+        },
+        "treatment_frozen": {
+          "const": false
+        },
+        "model_execution_allowed": {
+          "const": false
+        }
+      }
+    },
+    "claim_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_jobs_causal_claims_allowed",
+        "pilot_decision_claims_allowed",
+        "held_out_decision_requires",
+        "false_certification_rule"
+      ],
+      "properties": {
+        "public_jobs_causal_claims_allowed": {
+          "const": false
+        },
+        "pilot_decision_claims_allowed": {
+          "const": false
+        },
+        "held_out_decision_requires": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "false_certification_rule": {
+          "const": "STOP_AND_REPAIR_ON_ANY_REGRESSION"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "task_count",
+        "manifest_digest",
+        "contamination",
+        "causal_claims_allowed"
+      ],
+      "properties": {
+        "path": {
+          "const": "benchmarks/regression-v1/tasks"
+        },
+        "task_count": {
+          "const": 24
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "contamination": {
+          "const": "PUBLIC_ANSWER_VISIBLE"
+        },
+        "causal_claims_allowed": {
+          "const": false
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition_id",
+        "role",
+        "portfolio",
+        "public_job_config",
+        "image_environment_variable",
+        "catalog_digest",
+        "status"
+      ],
+      "properties": {
+        "condition_id": {
+          "enum": [
+            "C0",
+            "C1",
+            "C2"
+          ]
+        },
+        "role": {
+          "enum": [
+            "CONTEXT_ONLY",
+            "PRIMARY_CONTROL",
+            "PRIMARY_TREATMENT"
+          ]
+        },
+        "portfolio": {
+          "type": "string",
+          "minLength": 1
+        },
+        "public_job_config": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_environment_variable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "catalog_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "NOT_CONFIGURED",
+            "FROZEN",
+            "BLOCKED_PENDING_SINGLE_DELTA"
+          ]
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "cases",
+        "conditions",
+        "repetitions",
+        "model_execution",
+        "interpretation"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "SMOKE",
+            "PILOT",
+            "DECISION"
+          ]
+        },
+        "cases": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "conditions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repetitions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "model_execution": {
+          "type": "boolean"
+        },
+        "interpretation": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

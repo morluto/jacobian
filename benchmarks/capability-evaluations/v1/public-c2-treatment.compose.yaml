@@ -1,0 +1,39 @@
+services:
+  jacobian:
+    image: ${JACOBIAN_C2_IMAGE:?JACOBIAN_C2_IMAGE must be digest-pinned}
+    command:
+      - --transport
+      - streamable-http
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --auth-tokens-file
+      - /run/secrets/jacobian_tokens
+      - --stateless-http
+      - --capability-policy-profile
+      - COMPUTE_VERIFY_NO_RETRIEVAL
+      - --state-dir
+      - /state
+    secrets:
+      - jacobian_tokens
+    volumes:
+      - jacobian-state:/state
+  jacobian-auth-proxy:
+    image: caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    depends_on:
+      - jacobian
+    command:
+      - caddy
+      - reverse-proxy
+      - --from
+      - :8080
+      - --to
+      - jacobian:8000
+      - --header-up
+      - "Authorization: Bearer ${JACOBIAN_MCP_TOKEN:?JACOBIAN_MCP_TOKEN is required}"
+secrets:
+  jacobian_tokens:
+    environment: JACOBIAN_AUTH_TOKENS_JSON
+volumes:
+  jacobian-state: {}

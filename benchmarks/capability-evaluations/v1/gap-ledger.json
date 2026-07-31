@@ -1,0 +1,1001 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.regression-v1.capability-gap-ledger",
+  "captured_at": "2026-07-31",
+  "source_suite": {
+    "path": "benchmarks/regression-v1/dataset.toml",
+    "task_count": 24,
+    "manifest_sha256": "sha256:e6feea1ad0c9640670107c51ede1c7df1eb20517b01e79bc04cc04d83702d2d8",
+    "contamination": "PUBLIC_ANSWER_VISIBLE"
+  },
+  "runtime_snapshot": {
+    "repository_commit": "67a6152c54f0724883c47892987e1fa81e338057",
+    "repository_tree": "5299e06b87ff14dde793272dedb07637d791e44e",
+    "package_version": "0.6.0-alpha.0",
+    "harbor_version": "0.20.0",
+    "catalog_digest": "sha256:c9fd0f0e062312f1b466c08207b5fd1d2994bd6aee12b6a8c2f6d7bd876706bc",
+    "policy_profile": "DEFAULT",
+    "policy_digest": "sha256:870a92b83d3e522e4015b6bb1cabda33086906f9de1c3c36e466251ea7ed1957",
+    "provider_snapshots": [
+      {
+        "capability_id": "modular.enumerate.quadratic_residues",
+        "availability": "AVAILABLE",
+        "provider": "jacobian.sympy",
+        "provider_version": "1.14.0",
+        "runtime_digest": "sha256:073cc470f11e11a095f95d50f46b264145cea0598b42820321dc9005790358f9"
+      },
+      {
+        "capability_id": "linear.rational_solution.find",
+        "availability": "AVAILABLE",
+        "provider": "python-flint",
+        "provider_version": "0.9.0",
+        "runtime_digest": "sha256:8ade9b4c5c1972b029d9393bb2586e2097cc44149a84ef8ef9ef376d634c328f"
+      },
+      {
+        "capability_id": "lean.check",
+        "availability": "UNAVAILABLE",
+        "provider": "lean-runtime",
+        "provider_version": "Lean 4.31.0 required but not installed",
+        "runtime_digest": null
+      }
+    ],
+    "lean_available": false,
+    "model_execution": "NOT_RUN",
+    "oracle_evidence": {
+      "task_count": 24,
+      "result_sha256": "sha256:3c4691693d3307abc9c73375237ed5d2eaa4a8566b62885c4b7aa1a870aed14d",
+      "host_local_path": "/tmp/harbor_jobs/regression-v1-oracle-24-8ea0f33-20260731T072124Z"
+    }
+  },
+  "gap_taxonomy": [
+    "EXISTING_WORKS",
+    "WEAK_DISCOVERY",
+    "BAD_PARAMETERIZATION",
+    "MISSING_OPERATION",
+    "MISSING_ARTIFACT_HANDOFF",
+    "MISSING_CHECKER",
+    "PROVIDER_UNAVAILABLE",
+    "ENVIRONMENT_BUDGET_AUTH",
+    "MODEL_REASONING"
+  ],
+  "tasks": [
+    {
+      "task_id": "autoformalization-semantic-audit",
+      "mathematical_moves": [
+        "Compare formal statement semantics with an informal dimension and dot-product claim.",
+        "Produce exact rational vector counterexamples to two semantic substitutions."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "lean.statement.compare",
+          "availability": "UNAVAILABLE",
+          "boundary": "The operation exists, but the pinned Lean runtime is absent from the current environment."
+        },
+        {
+          "capability_id": "linear.rational_solution.find",
+          "availability": "AVAILABLE",
+          "boundary": "Finds one Ax=b solution; it does not return a basis of all relations among named vectors."
+        }
+      ],
+      "gap_classes": [
+        "PROVIDER_UNAVAILABLE",
+        "MISSING_OPERATION"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "rational-relation-basis"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Restore the pinned Lean profile separately; use this vector episode as one public reproduction for the rational-relation primitive."
+    },
+    {
+      "task_id": "calendar-good-days-audit",
+      "mathematical_moves": [
+        "Enumerate a declared finite calendar interval and test an exact digit predicate."
+      ],
+      "current_capabilities": [],
+      "gap_classes": [
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "NO_NEW_CAPABILITY",
+      "next_action": "Keep the finite enumeration in agent-owned composition; do not add a calendar-task solver."
+    },
+    {
+      "task_id": "distinct-sum-pairing-optimum",
+      "mathematical_moves": [
+        "Search for disjoint pairs with distinct bounded sums and establish finite optimality."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "optimization.linear.rational_optimum.compute",
+          "availability": "AVAILABLE",
+          "boundary": "The rational LP outcome does not encode the discrete all-different pairing semantics."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "DEFER_RESEARCH",
+      "next_action": "Mine independent finite matching or all-different episodes before proposing a reusable bounded combinatorial contract."
+    },
+    {
+      "task_id": "divisibility-construction-witness",
+      "mathematical_moves": [
+        "Evaluate polynomial divisibility conditions over a bounded integer search scope.",
+        "Return a witness with exact quotient and remainder arithmetic."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "modular.enumerate.quadratic_residues",
+          "availability": "AVAILABLE",
+          "boundary": "Enumerates squares modulo one modulus only; it cannot expose a general sparse polynomial residue image."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION",
+        "WEAK_DISCOVERY"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "modular-polynomial-residue-image"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Use this as the second structurally distinct public episode for a complete polynomial residue-image producer."
+    },
+    {
+      "task_id": "euler-line-symbolic-certificate",
+      "mathematical_moves": [
+        "Derive exact sparse rational-function coordinates.",
+        "Find and replay a nonzero linear relation among three named points."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "polynomial.identity.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Can replay denominator-cleared identities but does not discover the relation coefficients."
+        },
+        {
+          "capability_id": "linear.rational_solution.find",
+          "availability": "AVAILABLE",
+          "boundary": "Solves Ax=b but loses named-vector relation-basis semantics."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION",
+        "MISSING_ARTIFACT_HANDOFF"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "rational-relation-basis"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Preserve polynomial identity replay and evaluate whether a relation artifact composes cleanly after denominator clearing."
+    },
+    {
+      "task_id": "finite-partition",
+      "mathematical_moves": [
+        "Partition a finite universe by a residue predicate and certify disjoint exhaustive coverage."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "case.partition.finite",
+          "availability": "AVAILABLE",
+          "boundary": "Matches the finite partition and exact coverage outcome."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Use trace evidence to diagnose discovery or payload failures; do not add a duplicate producer."
+    },
+    {
+      "task_id": "graph-artifact-composition",
+      "mathematical_moves": [
+        "Compute maximum-degree vertices and distances from every vertex to that set.",
+        "Compose graph artifacts while preserving labels and aggregate scope."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "graph.compute.properties",
+          "availability": "AVAILABLE",
+          "boundary": "Provides graph properties and degrees."
+        },
+        {
+          "capability_id": "graph.distance_matrix.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Provides all-pairs distances that the agent can compose with a chosen vertex set."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Inspect model traces for artifact handoff friction before changing the portfolio."
+    },
+    {
+      "task_id": "graph-counterexample",
+      "mathematical_moves": [
+        "Search finite simple graphs and return a hypothesis-satisfying counterexample."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "graph.search.atlas",
+          "availability": "AVAILABLE",
+          "boundary": "Searches bounded graph atlases."
+        },
+        {
+          "capability_id": "graph.construct.explicit",
+          "availability": "AVAILABLE",
+          "boundary": "Materializes an inspectable labelled graph witness."
+        },
+        {
+          "capability_id": "graph.counterexample.shrink",
+          "availability": "AVAILABLE",
+          "boundary": "Shrinks an already identified graph counterexample."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Retain as a public composition regression and route any failures by trace category."
+    },
+    {
+      "task_id": "grounded-premise-proof",
+      "mathematical_moves": [
+        "Select a minimal premise set from a frozen library and replay a proof DAG."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "lean.retrieve.premises",
+          "availability": "UNAVAILABLE",
+          "boundary": "The premise operation exists but the pinned Lean runtime is not installed."
+        }
+      ],
+      "gap_classes": [
+        "PROVIDER_UNAVAILABLE"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "RUNTIME_FIX",
+      "next_action": "Build and smoke the dedicated pinned Lean evaluation profile; do not add a monolithic proof-audit capability."
+    },
+    {
+      "task_id": "hermite-normal-form",
+      "mathematical_moves": [
+        "Compute row Hermite normal form and a unimodular transformation certificate."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "matrix.normal_form.hermite",
+          "availability": "AVAILABLE",
+          "boundary": "Returns the exact normal form and transformation."
+        },
+        {
+          "capability_id": "matrix.normal_form.hermite.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently replays the normal-form certificate."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Keep as a producer-to-checker discovery and artifact-flow regression."
+    },
+    {
+      "task_id": "log-exponent-recovery",
+      "mathematical_moves": [
+        "Reduce exact logarithmic identities to integer exponents and rational reciprocal-log contributions."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "integer.compute.prime_factorization",
+          "availability": "AVAILABLE",
+          "boundary": "Supplies exact exponent data without prescribing the logarithmic derivation."
+        },
+        {
+          "capability_id": "rational.compute.sum",
+          "availability": "AVAILABLE",
+          "boundary": "Supports exact rational composition."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "NO_NEW_CAPABILITY",
+      "next_action": "Measure whether agents compose factorization and rational arithmetic correctly; do not add a task-shaped logarithm solver."
+    },
+    {
+      "task_id": "log-inequality-meta-audit",
+      "mathematical_moves": [
+        "Separate mathematical truth from instruction following and evaluation correctness.",
+        "Replay an exact rational algebraic comparison."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "rational.compute.product",
+          "availability": "AVAILABLE",
+          "boundary": "Supports the exact comparison arithmetic but not the meta-evaluation judgment."
+        },
+        {
+          "capability_id": "rational.decide.less_than",
+          "availability": "AVAILABLE",
+          "boundary": "Decides one exact rational order relation."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "NO_NEW_CAPABILITY",
+      "next_action": "Keep strategy and rubric interpretation agent-owned; diagnose arithmetic failures separately."
+    },
+    {
+      "task_id": "matrix-square-zero-counterexample",
+      "mathematical_moves": [
+        "Multiply an exact integer matrix by itself and inspect zero/nonzero conditions."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "matrix.rank.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Computes rank but cannot produce the exact matrix product."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "matrix-exact-product"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Implement the fundamental exact product primitive as a separate atomic outcome; evaluate power only after product composition is observed."
+    },
+    {
+      "task_id": "metric-tsp-proof-repair",
+      "mathematical_moves": [
+        "Compute a weighted minimum spanning tree and double-tree trace.",
+        "Distinguish a generic approximation guarantee from exact tour optimality."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "graph.invariant.spanning_tree_count.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Counts spanning trees; it does not optimize a weighted tree or return one."
+        },
+        {
+          "capability_id": "graph.hamiltonian_path.decide",
+          "availability": "AVAILABLE",
+          "boundary": "Decides Hamiltonian path existence, not weighted tour optimality."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "weighted-minimum-spanning-tree",
+        "bounded-metric-tsp-optimum"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Implement weighted MST first; keep exact bounded TSP deferred until independent recurrence is observed."
+    },
+    {
+      "task_id": "modular-cubic-obstruction",
+      "mathematical_moves": [
+        "Enumerate a complete polynomial residue image and certify that a target residue is absent."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "modular.enumerate.quadratic_residues",
+          "availability": "AVAILABLE",
+          "boundary": "Only squares modulo m are supported; cubic and multivariate sparse polynomial images are absent."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION",
+        "WEAK_DISCOVERY"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "modular-polynomial-residue-image"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Use as the primary public reproduction for a complete residue image and independent obstruction replay."
+    },
+    {
+      "task_id": "natural-subtraction-proof-repair",
+      "mathematical_moves": [
+        "Inspect an expression subtree and replay an exact rational linear combination under a side condition."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "lean.statement.compare",
+          "availability": "UNAVAILABLE",
+          "boundary": "Formal statement tooling exists but its runtime provider is absent."
+        },
+        {
+          "capability_id": "linear.rational_solution.find",
+          "availability": "AVAILABLE",
+          "boundary": "Can solve the coefficient system but does not interpret the Lean proof branch."
+        }
+      ],
+      "gap_classes": [
+        "PROVIDER_UNAVAILABLE",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "RUNTIME_FIX",
+      "next_action": "Restore Lean availability and retain exact linear arithmetic as a composable operation; do not add proof-repair policy."
+    },
+    {
+      "task_id": "nondifferentiable-maximum-construction",
+      "mathematical_moves": [
+        "Construct a continuous two-branch piecewise-linear function and compare one-sided slopes."
+      ],
+      "current_capabilities": [],
+      "gap_classes": [
+        "MISSING_OPERATION"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "piecewise-linear-local-certificate"
+      ],
+      "disposition": "DEFER_RESEARCH",
+      "next_action": "Mine independent piecewise-linear continuity and extremum episodes before fixing a domain contract."
+    },
+    {
+      "task_id": "polynomial-map-collision",
+      "mathematical_moves": [
+        "Evaluate a polynomial map at two points and replay a collision claim."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "polynomial.map.evaluate",
+          "availability": "AVAILABLE",
+          "boundary": "Evaluates the exact map at a supplied point."
+        },
+        {
+          "capability_id": "polynomial.map.collision.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently checks a supplied collision witness."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Keep as a producer/checker artifact-flow regression."
+    },
+    {
+      "task_id": "polynomial-normalization",
+      "mathematical_moves": [
+        "Combine sparse rational terms into a canonical polynomial representation."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "polynomial.expression.normalize",
+          "availability": "AVAILABLE",
+          "boundary": "Returns the required canonical sparse expression."
+        },
+        {
+          "capability_id": "polynomial.expression_normalization.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Replays normalization independently."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Use for discovery, parameterization, and checker-handoff diagnostics only."
+    },
+    {
+      "task_id": "polynomial-tail-counterexample",
+      "mathematical_moves": [
+        "Factor and evaluate exact rational polynomials beyond all listed roots.",
+        "Produce a finite counterexample to an eventual monotonicity claim."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "polynomial.factor.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Provides exact polynomial factorization."
+        },
+        {
+          "capability_id": "polynomial.rational.compute.evaluate",
+          "availability": "AVAILABLE",
+          "boundary": "Evaluates one rational polynomial at an exact point."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Observe whether agents compose factorization, root scope, and exact evaluation without inventing an eventual-tail solver."
+    },
+    {
+      "task_id": "random-function-expectation-audit",
+      "mathematical_moves": [
+        "Enumerate dependent random-mapping events and compute an exact expectation."
+      ],
+      "current_capabilities": [],
+      "gap_classes": [
+        "MISSING_OPERATION",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "dependent-random-mapping-expectation"
+      ],
+      "disposition": "DEFER_RESEARCH",
+      "next_action": "Collect another independent dependent finite-probability workflow before selecting an atomic distribution artifact."
+    },
+    {
+      "task_id": "rational-linear-solution",
+      "mathematical_moves": [
+        "Solve an exact rational linear system and replay substitution."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "linear.rational_solution.find",
+          "availability": "AVAILABLE",
+          "boundary": "Returns one exact rational solution."
+        },
+        {
+          "capability_id": "linear.rational_solution.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Checks the supplied solution but does not certify uniqueness."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS",
+        "MISSING_CHECKER"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Keep assurance capped to the checked claim; uniqueness remains an explicit open obligation, not an inferred conclusion."
+    },
+    {
+      "task_id": "sat-witness",
+      "mathematical_moves": [
+        "Decide a CNF formula and replay a complete satisfying assignment or proof artifact."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "sat.model.find",
+          "availability": "AVAILABLE",
+          "boundary": "Finds a bounded SAT model."
+        },
+        {
+          "capability_id": "sat.model.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently replays a supplied assignment."
+        },
+        {
+          "capability_id": "sat.unsat_proof.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Checks the supported unsatisfiability proof artifact."
+        }
+      ],
+      "gap_classes": [
+        "EXISTING_WORKS"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Retain as a fail-closed assurance and producer-to-checker regression."
+    },
+    {
+      "task_id": "subspace-direct-sum-counterexample",
+      "mathematical_moves": [
+        "Compute rank and a nonzero rational dependence among named subspace generators.",
+        "Separate generator-family semantics from one Ax=b solution."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "matrix.rank.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Computes a matrix rank but does not return all named-vector relations."
+        },
+        {
+          "capability_id": "linear.rational_solution.find",
+          "availability": "AVAILABLE",
+          "boundary": "Returns one system solution without a canonical relation-basis artifact."
+        }
+      ],
+      "gap_classes": [
+        "MISSING_OPERATION",
+        "MISSING_ARTIFACT_HANDOFF"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [
+        "rational-relation-basis"
+      ],
+      "disposition": "ACCEPT_CANDIDATE",
+      "next_action": "Implement the smaller named-vector relation primitive first and derive direct-sum claims through agent composition."
+    }
+  ],
+  "handoffs": [
+    {
+      "stage": "discovery",
+      "status": "accepted",
+      "subject": {
+        "candidate_id": "modular-polynomial-residue-image",
+        "capability_ids": [
+          "modular.polynomial_residue_image.compute"
+        ]
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/modular-cubic-obstruction"
+        },
+        {
+          "ref": "benchmarks/regression-v1/tasks/divisibility-construction-witness"
+        },
+        {
+          "ref": "MCP capability.describe capture on 2026-07-31: ONLY_WEAK_LEXICAL_MATCHES for a complete sparse polynomial residue image"
+        }
+      ],
+      "contract_ref": "planned:modular.polynomial_residue_image.compute",
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Validate modulus, sparse terms, variable order, finite domains, and an assignment bound before writes.",
+        "Return the complete normalized image, counts, witnesses, scope, and a table artifact while capping the producer at COMPUTED.",
+        "Implement an operator-authorized independent enumerating checker and incomplete-table attacks.",
+        "Create at least two held-out structural families before a benefit claim."
+      ],
+      "missing_evidence": [
+        "No held-out comparative model run has been authorized or executed."
+      ],
+      "decision": "IMPLEMENT",
+      "next_action": "Hand this bounded producer contract to implement-math-capability.",
+      "move_episodes": [
+        "modular-cubic-obstruction",
+        "divisibility-construction-witness"
+      ],
+      "candidate_gate": {
+        "basis": "RECURRENT",
+        "nonduplicative": true,
+        "bounded_typed_contract": true,
+        "honest_failure_semantics": true,
+        "maintained_backend": true,
+        "checker_or_obligation": true,
+        "public_reproduction": true,
+        "held_out_hypothesis": true
+      },
+      "portfolio_delta": "One modular-domain result computes the complete image of a bounded sparse integer polynomial over declared finite residue domains.",
+      "public_reproduction": [
+        "modular-cubic-obstruction",
+        "divisibility-construction-witness"
+      ],
+      "evaluation_hypothesis": "Adding the complete residue-image result reduces incomplete modular tables and unsupported obstruction claims relative to the current quadratic-residue-only catalog without increasing false VERIFIED claims."
+    },
+    {
+      "stage": "discovery",
+      "status": "accepted",
+      "subject": {
+        "candidate_id": "rational-relation-basis",
+        "capability_ids": [
+          "linear.rational_relations.compute"
+        ]
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/subspace-direct-sum-counterexample"
+        },
+        {
+          "ref": "benchmarks/regression-v1/tasks/autoformalization-semantic-audit"
+        },
+        {
+          "ref": "benchmarks/regression-v1/tasks/euler-line-symbolic-certificate"
+        },
+        {
+          "ref": "MCP capability.describe capture on 2026-07-31: only Ax=b solution and inconsistency outcomes matched"
+        }
+      ],
+      "contract_ref": "planned:linear.rational_relations.compute",
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Freeze named-vector orientation, ambient-dimension validation, canonical rational normalization, and relation-basis normalization.",
+        "Return rank, a complete relation basis, a nontrivial witness when present, and explicit scope/completeness.",
+        "Implement an independent exact row-reduction checker with reorder, rescale, omission, and substitution attacks.",
+        "Confirm direct-sum conclusions compose without losing named-subspace semantics."
+      ],
+      "missing_evidence": [
+        "No held-out comparative model run has been authorized or executed."
+      ],
+      "decision": "IMPLEMENT",
+      "next_action": "Hand the smaller relation-basis producer to implement-math-capability before considering a broader direct-sum outcome.",
+      "move_episodes": [
+        "subspace-direct-sum-counterexample",
+        "autoformalization-semantic-audit",
+        "euler-line-symbolic-certificate"
+      ],
+      "candidate_gate": {
+        "basis": "RECURRENT",
+        "nonduplicative": true,
+        "bounded_typed_contract": true,
+        "honest_failure_semantics": true,
+        "maintained_backend": true,
+        "checker_or_obligation": true,
+        "public_reproduction": true,
+        "held_out_hypothesis": true
+      },
+      "portfolio_delta": "One linear-domain result returns rank and a canonical basis of all exact rational dependencies among named vectors.",
+      "public_reproduction": [
+        "subspace-direct-sum-counterexample",
+        "autoformalization-semantic-audit",
+        "euler-line-symbolic-certificate"
+      ],
+      "evaluation_hypothesis": "A named-vector relation artifact reduces ad hoc coefficient search and semantic loss relative to Ax=b-only access while preserving exact scope and assurance calibration."
+    },
+    {
+      "stage": "discovery",
+      "status": "accepted",
+      "subject": {
+        "candidate_id": "matrix-exact-product",
+        "capability_ids": [
+          "matrix.multiply.compute"
+        ]
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/matrix-square-zero-counterexample"
+        },
+        {
+          "ref": "MCP capability.describe capture on 2026-07-31: determinant, rank, inverse, adjugate, trace, and normal forms matched but no matrix product"
+        }
+      ],
+      "contract_ref": "planned:matrix.multiply.compute",
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Bound dimensions and exact scalar representation before computation.",
+        "Return operands, shape binding, and the exact result artifact at COMPUTED assurance.",
+        "Add an independent bounded arithmetic replay before any VERIFIED path.",
+        "Evaluate whether a separate power outcome is justified after product composition traces exist."
+      ],
+      "missing_evidence": [
+        "Only one public Harbor episode currently exercises the primitive.",
+        "No held-out comparative model run has been authorized or executed."
+      ],
+      "decision": "IMPLEMENT",
+      "next_action": "Treat exact matrix multiplication as a documented fundamental-primitive exception and hand it to implement-math-capability.",
+      "move_episodes": [
+        "matrix-square-zero-counterexample"
+      ],
+      "candidate_gate": {
+        "basis": "FUNDAMENTAL_PRIMITIVE",
+        "nonduplicative": true,
+        "bounded_typed_contract": true,
+        "honest_failure_semantics": true,
+        "maintained_backend": true,
+        "checker_or_obligation": true,
+        "public_reproduction": true,
+        "held_out_hypothesis": true
+      },
+      "portfolio_delta": "One matrix-domain outcome computes the exact product of two bounded compatible matrices.",
+      "public_reproduction": [
+        "matrix-square-zero-counterexample"
+      ],
+      "evaluation_hypothesis": "An exact matrix product eliminates shell-side arithmetic for matrix identities without encouraging overbroad square-zero-specific tooling or false certification."
+    },
+    {
+      "stage": "discovery",
+      "status": "accepted",
+      "subject": {
+        "candidate_id": "weighted-minimum-spanning-tree",
+        "capability_ids": [
+          "graph.spanning_tree.minimum.compute"
+        ]
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/metric-tsp-proof-repair"
+        },
+        {
+          "ref": "MCP capability.describe capture on 2026-07-31: spanning-tree count present, weighted minimum spanning tree absent"
+        }
+      ],
+      "contract_ref": "planned:graph.spanning_tree.minimum.compute",
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Freeze weighted labelled graph semantics, disconnected outcomes, parallel-edge policy, and deterministic tie handling.",
+        "Return an inspectable tree, total exact weight, scope, and optimality obligation at COMPUTED assurance.",
+        "Choose an independent bounded exhaustive or cut/cycle-certificate checker.",
+        "Add a second independent held-out family before a benefit claim."
+      ],
+      "missing_evidence": [
+        "Only one public Harbor episode currently exercises weighted MST.",
+        "No held-out comparative model run has been authorized or executed."
+      ],
+      "decision": "IMPLEMENT",
+      "next_action": "Use the fundamental graph-optimization exception to implement MST before any exact TSP capability.",
+      "move_episodes": [
+        "metric-tsp-proof-repair"
+      ],
+      "candidate_gate": {
+        "basis": "FUNDAMENTAL_PRIMITIVE",
+        "nonduplicative": true,
+        "bounded_typed_contract": true,
+        "honest_failure_semantics": true,
+        "maintained_backend": true,
+        "checker_or_obligation": true,
+        "public_reproduction": true,
+        "held_out_hypothesis": true
+      },
+      "portfolio_delta": "One graph-domain outcome returns a minimum-weight spanning tree and exact total weight for a bounded weighted labelled graph.",
+      "public_reproduction": [
+        "metric-tsp-proof-repair"
+      ],
+      "evaluation_hypothesis": "A weighted MST artifact reduces incorrect double-tree traces and unsupported exact-TSP inferences while leaving tour strategy to the agent."
+    },
+    {
+      "stage": "discovery",
+      "status": "needs_revision",
+      "subject": {
+        "candidate_id": "bounded-metric-tsp-optimum",
+        "capability_ids": []
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/metric-tsp-proof-repair"
+        }
+      ],
+      "contract_ref": null,
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Keep optimum, approximation, and tour-witness outcomes separate.",
+        "Define interruption semantics that never turn incomplete search into optimality."
+      ],
+      "missing_evidence": [
+        "No second independent exact bounded metric-TSP workflow.",
+        "No accepted certificate and checker boundary.",
+        "No held-out comparative model run."
+      ],
+      "decision": "DEFER",
+      "next_action": "Reopen discovery only after MST is available and another exact-tour episode establishes recurrence.",
+      "move_episodes": [
+        "metric-tsp-proof-repair"
+      ],
+      "candidate_gate": {
+        "basis": "INSUFFICIENT",
+        "nonduplicative": true,
+        "bounded_typed_contract": false,
+        "honest_failure_semantics": false,
+        "maintained_backend": true,
+        "checker_or_obligation": false,
+        "public_reproduction": true,
+        "held_out_hypothesis": false
+      },
+      "portfolio_delta": "No portfolio delta is accepted at this stage.",
+      "public_reproduction": [
+        "metric-tsp-proof-repair"
+      ],
+      "evaluation_hypothesis": "A future bounded exact-tour result should improve correct optimality claims without converting interrupted searches into conclusions."
+    },
+    {
+      "stage": "discovery",
+      "status": "needs_revision",
+      "subject": {
+        "candidate_id": "dependent-random-mapping-expectation",
+        "capability_ids": []
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/random-function-expectation-audit"
+        }
+      ],
+      "contract_ref": null,
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Identify a reusable finite probability artifact that exposes dependence rather than encoding one random-function formula."
+      ],
+      "missing_evidence": [
+        "No second independent dependent finite-probability episode.",
+        "No stable atomic output or checker boundary.",
+        "No held-out comparative model run."
+      ],
+      "decision": "DEFER",
+      "next_action": "Mine additional dependent finite-distribution workflows before choosing a contract.",
+      "move_episodes": [
+        "random-function-expectation-audit"
+      ],
+      "candidate_gate": {
+        "basis": "INSUFFICIENT",
+        "nonduplicative": true,
+        "bounded_typed_contract": false,
+        "honest_failure_semantics": false,
+        "maintained_backend": false,
+        "checker_or_obligation": false,
+        "public_reproduction": true,
+        "held_out_hypothesis": false
+      },
+      "portfolio_delta": "No portfolio delta is accepted at this stage.",
+      "public_reproduction": [
+        "random-function-expectation-audit"
+      ],
+      "evaluation_hypothesis": "A future dependency-aware artifact should reduce independence-assumption errors on structurally different finite distributions."
+    },
+    {
+      "stage": "discovery",
+      "status": "needs_revision",
+      "subject": {
+        "candidate_id": "piecewise-linear-local-certificate",
+        "capability_ids": []
+      },
+      "evidence_refs": [
+        {
+          "ref": "benchmarks/regression-v1/tasks/nondifferentiable-maximum-construction"
+        }
+      ],
+      "contract_ref": null,
+      "runtime_snapshot": "#/runtime_snapshot",
+      "assurance": "DISCOVERY_EVIDENCE_ONLY",
+      "open_obligations": [
+        "Decide whether continuity, extremum, and one-sided-slope evidence form one coherent local certificate or separate atomic outcomes."
+      ],
+      "missing_evidence": [
+        "No second independent piecewise-linear workflow.",
+        "No accepted artifact normalization or checker boundary.",
+        "No held-out comparative model run."
+      ],
+      "decision": "DEFER",
+      "next_action": "Mine additional local piecewise-linear analysis episodes and nearby portfolio overlap.",
+      "move_episodes": [
+        "nondifferentiable-maximum-construction"
+      ],
+      "candidate_gate": {
+        "basis": "INSUFFICIENT",
+        "nonduplicative": true,
+        "bounded_typed_contract": false,
+        "honest_failure_semantics": false,
+        "maintained_backend": true,
+        "checker_or_obligation": false,
+        "public_reproduction": true,
+        "held_out_hypothesis": false
+      },
+      "portfolio_delta": "No portfolio delta is accepted at this stage.",
+      "public_reproduction": [
+        "nondifferentiable-maximum-construction"
+      ],
+      "evaluation_hypothesis": "A future local certificate should reduce continuity and derivative-sign mistakes across more than one branch family."
+    }
+  ]
+}

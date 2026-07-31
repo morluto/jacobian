@@ -22,7 +22,9 @@ solution is unique.
 These 24 public cases are workflow observations, not a causal benchmark. There
 is no control condition, randomized pairing, or performance claim in v1. A
 future A/B study can reuse these exact task digests while keeping its condition
-and model configuration outside the task bundles.
+and model configuration outside the task bundles. The versioned
+[`capability-evaluations/v1`](../capability-evaluations/v1/README.md) scaffold
+records the current gap ledger and the fail-closed C1/C2 comparison boundary.
 
 ## Validation
 

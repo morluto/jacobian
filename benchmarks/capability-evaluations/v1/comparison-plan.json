@@ -1,0 +1,130 @@
+{
+  "schema_version": "1",
+  "plan_id": "jacobian.capability-comparison.v1",
+  "status": "SCAFFOLD_ONLY",
+  "captured_at": "2026-07-31",
+  "evidence_classes": [
+    "HARNESS_VALIDATION",
+    "PUBLIC_WORKFLOW_OBSERVATION",
+    "HELD_OUT_COMPARATIVE_EVALUATION"
+  ],
+  "public_reproduction": {
+    "path": "benchmarks/regression-v1/tasks",
+    "task_count": 24,
+    "manifest_digest": "sha256:e6feea1ad0c9640670107c51ede1c7df1eb20517b01e79bc04cc04d83702d2d8",
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "causal_claims_allowed": false
+  },
+  "held_out_boundary": {
+    "status": "NOT_MATERIALIZED",
+    "task_manifest_digest": null,
+    "oracle_manifest_digest": null,
+    "minimum_independent_families": 2,
+    "agent_visible": [
+      "task instruction",
+      "offline input",
+      "submission and evidence schemas"
+    ],
+    "agent_forbidden": [
+      "Oracle solution",
+      "expected result",
+      "verifier source and authorized verification records"
+    ],
+    "storage_rule": "ORACLE_OUTSIDE_EVALUATED_WORKSPACE"
+  },
+  "conditions": [
+    {
+      "condition_id": "C0",
+      "role": "CONTEXT_ONLY",
+      "portfolio": "No Jacobian MCP; optional broad toolbox-value context, never the primary candidate comparison.",
+      "public_job_config": null,
+      "image_environment_variable": null,
+      "catalog_digest": null,
+      "status": "NOT_CONFIGURED"
+    },
+    {
+      "condition_id": "C1",
+      "role": "PRIMARY_CONTROL",
+      "portfolio": "Frozen current Jacobian catalog.",
+      "public_job_config": "benchmarks/capability-evaluations/v1/job-public-c1-current.json",
+      "image_environment_variable": "JACOBIAN_C1_IMAGE",
+      "catalog_digest": "sha256:c9fd0f0e062312f1b466c08207b5fd1d2994bd6aee12b6a8c2f6d7bd876706bc",
+      "status": "FROZEN"
+    },
+    {
+      "condition_id": "C2",
+      "role": "PRIMARY_TREATMENT",
+      "portfolio": "The C1 catalog plus exactly one accepted candidate delta.",
+      "public_job_config": "benchmarks/capability-evaluations/v1/job-public-c2-treatment.json",
+      "image_environment_variable": "JACOBIAN_C2_IMAGE",
+      "catalog_digest": null,
+      "status": "BLOCKED_PENDING_SINGLE_DELTA"
+    }
+  ],
+  "matched_invariants": [
+    "task digests",
+    "visible prompt",
+    "agent implementation",
+    "model identifier",
+    "reasoning effort",
+    "token budget",
+    "wall-time budget",
+    "container base",
+    "shell and file access",
+    "MCP policy profile",
+    "random seed",
+    "scorer and verifier identities"
+  ],
+  "randomization": {
+    "unit": "CASE_REPETITION",
+    "strategy": "BLOCK_RANDOMIZED_C1_C2_ORDER",
+    "seed": 104729,
+    "paired": true
+  },
+  "budget_ladder": [
+    {
+      "stage": "SMOKE",
+      "cases": null,
+      "conditions": 0,
+      "repetitions": null,
+      "model_execution": false,
+      "interpretation": "Oracle, schema, and verifier-attack validation only."
+    },
+    {
+      "stage": "PILOT",
+      "cases": 3,
+      "conditions": 2,
+      "repetitions": 3,
+      "model_execution": true,
+      "interpretation": "Workflow and variance diagnosis only; no statistically strong portfolio claim."
+    },
+    {
+      "stage": "DECISION",
+      "cases": 5,
+      "conditions": 2,
+      "repetitions": 5,
+      "model_execution": true,
+      "interpretation": "Minimum target after sample size is preregistered from pilot variance."
+    }
+  ],
+  "execution_gate": {
+    "explicit_authorization": false,
+    "hard_run_budget": null,
+    "credentials_present": false,
+    "held_out_frozen": false,
+    "treatment_frozen": false,
+    "model_execution_allowed": false
+  },
+  "claim_policy": {
+    "public_jobs_causal_claims_allowed": false,
+    "pilot_decision_claims_allowed": false,
+    "held_out_decision_requires": [
+      "mathematically correct completion",
+      "valid and scope-bound evidence",
+      "no false-certification regression",
+      "discoverable and successfully invoked candidate",
+      "frozen paired C1/C2 identities"
+    ],
+    "false_certification_rule": "STOP_AND_REPAIR_ON_ANY_REGRESSION"
+  }
+}

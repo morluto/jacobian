@@ -11,12 +11,14 @@ from jacobian.contracts.matrix_operations import (
     IntegerOutputMatrix,
     MatrixAdjugateResult,
     MatrixInverseResult,
+    MatrixProductResult,
     MatrixTraceResult,
     NullspaceResult,
     OutputRational,
     RationalLinearSolveRequest,
     RationalLinearSolveResult,
     RationalMatrix,
+    RationalMatrixProductRequest,
     RationalMatrixRequest,
     RationalOutputMatrix,
     RrefResult,
@@ -163,6 +165,23 @@ def compute_trace(request: SquareIntegerMatrixRequest) -> MatrixTraceResult:
         [[int(value) for value in row] for row in request.matrix.entries]
     )
     return MatrixTraceResult(trace=str(int(native_matrices.trace(source))))
+
+
+def compute_product(request: RationalMatrixProductRequest) -> MatrixProductResult:
+    left = _qq_matrix(request.left)
+    right = _qq_matrix(request.right)
+    product = left * right
+    return MatrixProductResult(
+        product=RationalOutputMatrix(
+            entries=tuple(
+                tuple(_rational(product[row, column]) for column in range(product.cols))
+                for row in range(product.rows)
+            )
+        ),
+        left_rows=left.rows,
+        inner_dimension=left.cols,
+        right_columns=right.cols,
+    )
 
 
 def compute_rational_linear_solve(

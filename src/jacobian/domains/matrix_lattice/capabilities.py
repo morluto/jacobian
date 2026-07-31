@@ -13,10 +13,12 @@ from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
     MatrixAdjugateResult,
     MatrixInverseResult,
+    MatrixProductResult,
     MatrixTraceResult,
     NullspaceResult,
     RationalLinearSolveRequest,
     RationalLinearSolveResult,
+    RationalMatrixProductRequest,
     RationalMatrixRequest,
     RrefResult,
     SmithNormalFormResult,
@@ -30,6 +32,7 @@ from jacobian.domains.matrix_lattice.operations import (
     compute_characteristic_polynomial,
     compute_inverse,
     compute_nullspace,
+    compute_product,
     compute_rational_linear_solve,
     compute_rref,
     compute_smith_normal_form,
@@ -184,6 +187,65 @@ MATRIX_CAPABILITIES = (
                 "trace_two_by_two",
                 "Compute the trace of a 2x2 integer matrix.",
                 {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            ),
+        ),
+    ),
+    matrix_operation(
+        "matrix.multiply.compute",
+        "Multiply two exact rational matrices",
+        (
+            "Compute the standard row-by-column product of two compatible bounded "
+            "matrices over QQ, with the operand shapes bound in the result. Equal "
+            "operands give the exact self-product or matrix square."
+        ),
+        RationalMatrixProductRequest,
+        MatrixProductResult,
+        compute_product,
+        "matrix.relation.product-of",
+        "matrix",
+        "matrix-multiplication",
+        "product",
+        "self-product",
+        "matrix-square",
+        "zero-matrix",
+        "matrix-identity",
+        "exact-rational",
+        invocation_examples=(
+            example(
+                "multiply_rectangular_matrices",
+                "Multiply a 2x3 matrix by a 3x2 matrix over QQ.",
+                {
+                    "left": {
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "2", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                        ]
+                    },
+                    "right": {
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                        ]
+                    },
+                },
             ),
         ),
     ),

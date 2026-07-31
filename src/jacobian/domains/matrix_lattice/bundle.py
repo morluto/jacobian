@@ -22,6 +22,7 @@ def build_matrix_bundle() -> DomainBundle:
                 "maximum_rows": 32,
                 "maximum_columns": 32,
                 "maximum_decimal_digits_per_scalar_component": 256,
+                "multiplication": "standard row-by-column product over QQ",
                 "rref": "unique reduced row echelon form over QQ",
                 "nullspace": "RREF fundamental basis ordered by ascending free column",
                 "characteristic_polynomial": "dense det(lambda I - A) coefficients",
@@ -35,6 +36,7 @@ def build_matrix_bundle() -> DomainBundle:
             "jacobian.sympy",
             features=(
                 "exact-rational-matrix",
+                "matrix-multiplication",
                 "rref",
                 "nullspace",
                 "characteristic-polynomial",

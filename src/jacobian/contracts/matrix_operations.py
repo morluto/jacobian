@@ -104,6 +104,22 @@ class RationalMatrixRequest(ContractModel):
     matrix: RationalMatrix
 
 
+class RationalMatrixProductRequest(ContractModel):
+    """Two compatible bounded matrices over the exact rational domain."""
+
+    left: RationalMatrix
+    right: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_compatible_shapes(self) -> Self:
+        if len(self.left.entries[0]) != len(self.right.entries):
+            raise ValueError(
+                "matrix multiplication requires the left column count to equal "
+                "the right row count"
+            )
+        return self
+
+
 class SquareRationalMatrixRequest(ContractModel):
     matrix: RationalMatrix
 
@@ -268,6 +284,24 @@ class MatrixTraceResult(ContractModel):
     def require_bounded_trace(cls, value: CanonicalInteger) -> CanonicalInteger:
         _check_integer_digits(value, maximum=MAX_OUTPUT_SCALAR_DIGITS)
         return value
+
+
+class MatrixProductResult(ContractModel):
+    product: RationalOutputMatrix
+    left_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    inner_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    convention: Literal["STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"] = (
+        "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"
+    )
+
+    @model_validator(mode="after")
+    def require_product_shape(self) -> Self:
+        if len(self.product.entries) != self.left_rows:
+            raise ValueError("product row count must equal left_rows")
+        if len(self.product.entries[0]) != self.right_columns:
+            raise ValueError("product column count must equal right_columns")
+        return self
 
 
 class RationalLinearSolveResult(ContractModel):

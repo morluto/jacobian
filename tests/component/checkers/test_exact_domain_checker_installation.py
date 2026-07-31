@@ -12,6 +12,7 @@ from jacobian.contracts.graph_optimization import (
 from jacobian.contracts.jacobian_syzygy import GradedJacobianSyzygyRequest
 from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
+    RationalMatrixProductRequest,
     RationalMatrixRequest,
     SquareRationalMatrixRequest,
 )
@@ -91,6 +92,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
         "polynomial.compute.square_free_decomposition",
     )
     matrix_ids = (
+        "matrix.multiply.compute",
         "matrix.normal_form.rref.compute",
         "matrix.nullspace.compute",
         "matrix.characteristic_polynomial.compute",
@@ -126,6 +128,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
         ),
         matrix=_installed(
             (
+                RationalMatrixProductRequest,
                 RationalMatrixRequest,
                 SquareRationalMatrixRequest,
                 IntegerMatrixRequest,
@@ -220,11 +223,13 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
         ),
         matrix=_installed(
             (
+                RationalMatrixProductRequest,
                 RationalMatrixRequest,
                 SquareRationalMatrixRequest,
                 IntegerMatrixRequest,
             ),
             (
+                "matrix.multiply.compute",
                 "matrix.normal_form.rref.compute",
                 "matrix.nullspace.compute",
                 "matrix.characteristic_polynomial.compute",
@@ -260,11 +265,13 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
     )
     matrix = _installed(
         (
+            RationalMatrixProductRequest,
             RationalMatrixRequest,
             SquareRationalMatrixRequest,
             IntegerMatrixRequest,
         ),
         (
+            "matrix.multiply.compute",
             "matrix.normal_form.rref.compute",
             "matrix.nullspace.compute",
             "matrix.characteristic_polynomial.compute",

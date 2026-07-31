@@ -26,6 +26,9 @@ _MAX_RESIDUE_TERMS = 64
 _MAX_RESIDUE_EXPONENT = 32
 _MAX_RESIDUE_ASSIGNMENTS = 4_096
 _MAX_RESIDUE_MODULUS = 1_000_000
+_MAX_MATRIX_DIMENSION = 32
+_MAX_MATRIX_INPUT_DIGITS = 256
+_MAX_MATRIX_OUTPUT_DIGITS = 4_096
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -202,6 +205,32 @@ def _integer_matrix(value: object) -> fmpz_mat:
     ):
         raise ValueError("integer matrix shape is malformed")
     return fmpz_mat([[_integer(item) for item in row] for row in entries])
+
+
+def _bounded_rational_matrix(value: object, *, maximum_digits: int) -> fmpq_mat:
+    if not isinstance(value, dict):
+        raise ValueError("rational matrix is malformed")
+    entries = value.get("entries")
+    if (
+        not isinstance(entries, list)
+        or not 1 <= len(entries) <= _MAX_MATRIX_DIMENSION
+        or not isinstance(entries[0], list)
+        or not 1 <= len(entries[0]) <= _MAX_MATRIX_DIMENSION
+    ):
+        raise ValueError("rational matrix exceeds the checker dimension bound")
+    for row in entries:
+        if not isinstance(row, list) or len(row) != len(entries[0]):
+            raise ValueError("rational matrix shape is malformed")
+        for item in row:
+            if not isinstance(item, dict) or set(item) != {"num", "den"}:
+                raise ValueError("rational matrix scalar is malformed")
+            for component in (item["num"], item["den"]):
+                if (
+                    not isinstance(component, str)
+                    or len(component.lstrip("-")) > maximum_digits
+                ):
+                    raise ValueError("rational matrix scalar exceeds the checker bound")
+    return _rational_matrix(value)
 
 
 def _run(
@@ -844,6 +873,52 @@ def check_matrix_nullspace(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _matrix_product(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(source) != {"left", "right"} or set(result) != {
+        "product",
+        "left_rows",
+        "inner_dimension",
+        "right_columns",
+        "convention",
+    }:
+        return False
+    if result["convention"] != "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ":
+        return False
+    left = _bounded_rational_matrix(
+        source["left"],
+        maximum_digits=_MAX_MATRIX_INPUT_DIGITS,
+    )
+    right = _bounded_rational_matrix(
+        source["right"],
+        maximum_digits=_MAX_MATRIX_INPUT_DIGITS,
+    )
+    if left.ncols() != right.nrows():
+        return False
+    expected = left * right
+    declared = _bounded_rational_matrix(
+        result["product"],
+        maximum_digits=_MAX_MATRIX_OUTPUT_DIGITS,
+    )
+    return (
+        type(result["left_rows"]) is int
+        and type(result["inner_dimension"]) is int
+        and type(result["right_columns"]) is int
+        and result["left_rows"] == left.nrows()
+        and result["inner_dimension"] == left.ncols()
+        and result["right_columns"] == right.ncols()
+        and declared == expected
+    )
+
+
+def check_matrix_product(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="matrix.multiply.compute",
+        witness_format="matrix.product.flint-replay",
+        replay=_matrix_product,
+    )
+
+
 def _characteristic_polynomial(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if set(result) != {
         "variable",
@@ -920,6 +995,7 @@ __all__ = [
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",
     "check_matrix_nullspace",
+    "check_matrix_product",
     "check_matrix_rref",
     "check_matrix_smith_normal_form",
     "check_polynomial_discriminant",

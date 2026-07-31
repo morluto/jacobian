@@ -367,20 +367,25 @@
       ],
       "current_capabilities": [
         {
-          "capability_id": "matrix.rank.compute",
+          "capability_id": "matrix.multiply.compute",
           "availability": "AVAILABLE",
-          "boundary": "Computes rank but cannot produce the exact matrix product."
+          "boundary": "Computes the complete exact row-by-column product of two compatible bounded matrices over QQ and binds the operand shapes."
+        },
+        {
+          "capability_id": "matrix.result.verify",
+          "availability": "AVAILABLE",
+          "boundary": "Independently replays the exact product with Python-FLINT when checker authority is installed."
         }
       ],
       "gap_classes": [
-        "MISSING_OPERATION"
+        "EXISTING_WORKS"
       ],
       "contamination": "PUBLIC_ANSWER_VISIBLE",
       "candidate_ids": [
         "matrix-exact-product"
       ],
-      "disposition": "ACCEPT_CANDIDATE",
-      "next_action": "Implement the fundamental exact product primitive as a separate atomic outcome; evaluate power only after product composition is observed."
+      "disposition": "USE_EXISTING",
+      "next_action": "Use and evaluate the exact product primitive; consider a separate power outcome only after repeated product-composition evidence."
     },
     {
       "task_id": "metric-tsp-proof-repair",
@@ -782,7 +787,8 @@
       "subject": {
         "candidate_id": "matrix-exact-product",
         "capability_ids": [
-          "matrix.multiply.compute"
+          "matrix.multiply.compute",
+          "matrix.result.verify"
         ]
       },
       "evidence_refs": [
@@ -791,15 +797,16 @@
         },
         {
           "ref": "MCP capability.describe capture on 2026-07-31: determinant, rank, inverse, adjugate, trace, and normal forms matched but no matrix product"
+        },
+        {
+          "ref": "MCP capability.describe audit on main@b7ace445: exact product and power queries returned only unrelated weak matrix matches"
         }
       ],
-      "contract_ref": "planned:matrix.multiply.compute",
+      "contract_ref": "capability:matrix.multiply.compute@1",
       "runtime_snapshot": "#/runtime_snapshot",
       "assurance": "DISCOVERY_EVIDENCE_ONLY",
       "open_obligations": [
-        "Bound dimensions and exact scalar representation before computation.",
-        "Return operands, shape binding, and the exact result artifact at COMPUTED assurance.",
-        "Add an independent bounded arithmetic replay before any VERIFIED path.",
+        "Measure whether the installed product and replay improve held-out matrix-identity work without increasing false certification.",
         "Evaluate whether a separate power outcome is justified after product composition traces exist."
       ],
       "missing_evidence": [
@@ -807,7 +814,7 @@
         "No held-out comparative model run has been authorized or executed."
       ],
       "decision": "IMPLEMENT",
-      "next_action": "Treat exact matrix multiplication as a documented fundamental-primitive exception and hand it to implement-math-capability.",
+      "next_action": "Freeze a held-out matrix-identity comparison for the product delta; keep matrix power deferred until composition traces justify it.",
       "move_episodes": [
         "matrix-square-zero-counterexample"
       ],

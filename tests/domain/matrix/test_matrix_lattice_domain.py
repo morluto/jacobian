@@ -22,8 +22,10 @@ from jacobian.contracts.matrix_operations import (
     IntegerMatrix,
     IntegerMatrixRequest,
     LatticeReductionRequest,
+    MatrixProductResult,
     MatrixTraceResult,
     NullspaceResult,
+    RationalMatrixProductRequest,
     SquareIntegerMatrixRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -85,6 +87,20 @@ def test_exact_matrix_domain_results_and_lineage(
             {
                 "trace": "5",
                 "convention": "SUM_OF_DIAGONAL_ENTRIES",
+            },
+        ),
+        (
+            "matrix.multiply.compute",
+            {
+                "left": _qq([[1, 2, 0], [0, 1, 1]]),
+                "right": _qq([[1, 0], [0, 1], [1, 1]]),
+            },
+            {
+                "product": _qq([[1, 2], [1, 2]]),
+                "left_rows": 2,
+                "inner_dimension": 3,
+                "right_columns": 2,
+                "convention": "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ",
             },
         ),
         (
@@ -207,6 +223,65 @@ def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
     }
 
 
+def test_matrix_multiplication_intent_is_discoverable(
+    matrix_domain_services: DomainTestServices,
+) -> None:
+    discovered = matrix_domain_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query=(
+                "multiply an exact matrix by itself and inspect whether its square "
+                "is zero"
+            ),
+            limit=5,
+        )
+    )
+
+    assert discovered.matches[0].capability_id == "matrix.multiply.compute"
+    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    descriptor = next(
+        descriptor
+        for descriptor in matrix_domain_services.core.capabilities.catalog().capabilities
+        if descriptor.capability_id == "matrix.multiply.compute"
+    )
+    assert descriptor.invocation_examples[0].name == "multiply_rectangular_matrices"
+
+    result = matrix_domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=descriptor.capability_id,
+            input=descriptor.invocation_examples[0].input,
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == {
+        "product": _qq([[1, 2], [1, 2]]),
+        "left_rows": 2,
+        "inner_dimension": 3,
+        "right_columns": 2,
+        "convention": "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ",
+    }
+
+
+def test_matrix_product_contracts_reject_incompatible_or_mismatched_shapes() -> None:
+    with raises(ValidationError, match="left column count"):
+        RationalMatrixProductRequest.model_validate(
+            {
+                "left": _qq([[1, 2]]),
+                "right": _qq([[1, 2]]),
+            }
+        )
+
+    with raises(ValidationError, match="product row count"):
+        MatrixProductResult.model_validate(
+            {
+                "product": _qq([[1, 2]]),
+                "left_rows": 2,
+                "inner_dimension": 1,
+                "right_columns": 2,
+            }
+        )
+
+
 def test_nullspace_result_enforces_rank_nullity() -> None:
     with raises(ValidationError, match="rank plus nullity"):
         NullspaceResult.model_validate(
@@ -237,6 +312,20 @@ def test_invalid_matrix_request_fails_before_operation_artifacts(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_EXACT_MATRIX_REQUEST"
     assert result.artifact_uris == ()
+
+    incompatible_product = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.multiply.compute",
+            input={
+                "left": _qq([[1, 2]]),
+                "right": _qq([[1, 2]]),
+            },
+        )
+    )
+
+    assert incompatible_product.execution.status is ExecutionStatus.ERROR
+    assert incompatible_product.diagnostics[0].code == "INVALID_EXACT_MATRIX_REQUEST"
+    assert incompatible_product.artifact_uris == ()
 
 
 def test_singular_matrix_inverse_is_not_applicable(

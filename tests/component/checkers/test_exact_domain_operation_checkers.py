@@ -18,6 +18,7 @@ from jacobian_checkers.exact_domain_operations import (
     check_integer_prime_factorization,
     check_matrix_characteristic_polynomial,
     check_matrix_nullspace,
+    check_matrix_product,
     check_matrix_rref,
     check_matrix_smith_normal_form,
     check_modular_polynomial_residue_image,
@@ -219,6 +220,24 @@ _CASES: tuple[
                 ],
                 "reconstructed": _poly(-1, 1, 1, -1),
                 "normalization": "MONIC_FACTORS",
+            },
+        ),
+    ),
+    (
+        check_matrix_product,
+        _request(
+            "matrix.multiply.compute",
+            "matrix.product.flint-replay",
+            {
+                "left": _qq([[1, 2, 0], [0, 1, 1]]),
+                "right": _qq([[1, 0], [0, 1], [1, 1]]),
+            },
+            {
+                "product": _qq([[1, 2], [1, 2]]),
+                "left_rows": 2,
+                "inner_dimension": 3,
+                "right_columns": 2,
+                "convention": "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ",
             },
         ),
     ),
@@ -684,6 +703,55 @@ def test_matrix_nullspace_checker_rejects_wrong_rank() -> None:
     )
 
     decision = check_matrix_nullspace(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def _matrix_product_checker_request() -> dict[str, Any]:
+    return copy.deepcopy(
+        next(
+            checker_request
+            for checker, checker_request in _CASES
+            if checker is check_matrix_product
+        )
+    )
+
+
+def test_matrix_product_checker_rejects_wrong_entry() -> None:
+    checker_request = _matrix_product_checker_request()
+    checker_request["candidate"]["payload"]["product"]["entries"][0][0] = _q(2)
+    checker_request["candidate"]["payload_digest"] = _digest(
+        checker_request["candidate"]["payload"]
+    )
+
+    decision = check_matrix_product(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_matrix_product_checker_rejects_wrong_shape_binding() -> None:
+    checker_request = _matrix_product_checker_request()
+    checker_request["candidate"]["payload"]["inner_dimension"] = 2
+    checker_request["candidate"]["payload_digest"] = _digest(
+        checker_request["candidate"]["payload"]
+    )
+
+    decision = check_matrix_product(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_matrix_product_checker_rejects_oversized_source() -> None:
+    checker_request = _matrix_product_checker_request()
+    checker_request["claim"]["payload"]["left"] = _qq([[1]] * 33)
+    checker_request["claim"]["payload_digest"] = _digest(
+        checker_request["claim"]["payload"]
+    )
+
+    decision = check_matrix_product(checker_request)
 
     assert decision["accepted"] is False
     assert decision["conclusion"] == "UNKNOWN"

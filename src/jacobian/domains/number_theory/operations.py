@@ -37,9 +37,15 @@ from jacobian.contracts.number_theory import (
     JacobiSymbolResult,
     LegendreSymbolRequest,
     LegendreSymbolResult,
+    ModularPolynomialResidueCount,
+    ModularPolynomialResidueImageRequest,
+    ModularPolynomialResidueImageResult,
+    ModularPolynomialResidueTableRow,
+    ModularPolynomialResidueWitness,
     ModularValueRequest,
     ModulusRequest,
     NonnegativeIntegerRequest,
+    NormalizedModularPolynomialTerm,
     PositiveIntegerRequest,
     PowerfulNumberRequest,
     PowerfulNumberResult,
@@ -384,6 +390,85 @@ def enumerate_quadratic_residues(request: ContractModel) -> ContractModel:
     return QuadraticResiduesResult(
         residues=tuple(str(int(r)) for r in quadratic_residues(modulus)),
     )
+
+
+def compute_modular_polynomial_residue_image(
+    request: ContractModel,
+) -> ContractModel:
+    """Enumerate one sparse polynomial over its declared finite residue domains."""
+    from itertools import product
+
+    polynomial = cast(ModularPolynomialResidueImageRequest, request)
+    normalized_terms = tuple(
+        NormalizedModularPolynomialTerm(
+            coefficient=int(term.coefficient) % polynomial.modulus,
+            exponents=term.exponents,
+        )
+        for term in polynomial.terms
+    )
+    table: list[ModularPolynomialResidueTableRow] = []
+    counts: dict[int, int] = {}
+    first_assignments: dict[int, tuple[int, ...]] = {}
+    for assignment in product(
+        *(variable.residues for variable in polynomial.variables)
+    ):
+        residue = _evaluate_modular_polynomial(
+            normalized_terms,
+            assignment,
+            polynomial.modulus,
+        )
+        table.append(
+            ModularPolynomialResidueTableRow(
+                assignment=assignment,
+                residue=residue,
+            )
+        )
+        counts[residue] = counts.get(residue, 0) + 1
+        first_assignments.setdefault(residue, assignment)
+    image = tuple(sorted(counts))
+    return ModularPolynomialResidueImageResult(
+        semantics_version="modular-polynomial-residue-image.v1",
+        modulus=polynomial.modulus,
+        variable_order=tuple(variable.name for variable in polynomial.variables),
+        domains=tuple(variable.residues for variable in polynomial.variables),
+        normalized_terms=normalized_terms,
+        enumeration_scope="COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+        total_assignments=len(table),
+        image=image,
+        residue_counts=tuple(
+            ModularPolynomialResidueCount(
+                residue=residue,
+                count=counts[residue],
+            )
+            for residue in image
+        ),
+        witnesses=tuple(
+            ModularPolynomialResidueWitness(
+                residue=residue,
+                assignment=first_assignments[residue],
+            )
+            for residue in image
+        ),
+        table=tuple(table),
+    )
+
+
+def _evaluate_modular_polynomial(
+    terms: tuple[NormalizedModularPolynomialTerm, ...],
+    assignment: tuple[int, ...],
+    modulus: int,
+) -> int:
+    value = 0
+    for term in terms:
+        monomial = term.coefficient
+        for coordinate, exponent in zip(
+            assignment,
+            term.exponents,
+            strict=True,
+        ):
+            monomial = monomial * pow(coordinate, exponent, modulus) % modulus
+        value = (value + monomial) % modulus
+    return value
 
 
 def solve_chinese_remainder(request: ContractModel) -> ContractModel:

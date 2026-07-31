@@ -6,6 +6,8 @@ from jacobian.contracts.number_theory import (
     IntegerValueResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
+    ModularPolynomialResidueImageRequest,
+    ModularPolynomialResidueImageResult,
     ModularValueRequest,
     ModulusRequest,
     QuadraticResiduesResult,
@@ -20,6 +22,7 @@ from jacobian.domains.number_theory.discrete_logarithm import (
 from jacobian.domains.number_theory.operations import (
     compute_jacobi_symbol,
     compute_modular_inverse,
+    compute_modular_polynomial_residue_image,
     compute_multiplicative_order,
     enumerate_quadratic_residues,
     solve_chinese_remainder,
@@ -93,6 +96,41 @@ MODULAR_CAPABILITIES = (
                 "quadratic_residues_mod_10",
                 "Enumerate quadratic residues modulo 10.",
                 {"modulus": 10},
+            ),
+        ),
+    ),
+    number_theory_operation(
+        "modular.polynomial_residue_image.compute",
+        "Compute modular polynomial residue image",
+        (
+            "Compute the complete image of a bounded sparse integer polynomial "
+            "over declared finite residue domains modulo m, including "
+            "multiplicities, witnesses, and the exhaustive assignment table."
+        ),
+        ModularPolynomialResidueImageRequest,
+        ModularPolynomialResidueImageResult,
+        compute_modular_polynomial_residue_image,
+        "number-theory",
+        "modular",
+        "polynomial",
+        "residue",
+        "enumeration",
+        "obstruction",
+        relation_id="modular.polynomial_residue_image.relation",
+        invocation_examples=(
+            example(
+                "cubic_residue_image_mod_7",
+                "Enumerate the complete image of four times x cubed modulo 7.",
+                {
+                    "modulus": 7,
+                    "variables": [
+                        {
+                            "name": "x",
+                            "residues": [0, 1, 2, 3, 4, 5, 6],
+                        }
+                    ],
+                    "terms": [{"coefficient": "4", "exponents": [3]}],
+                },
             ),
         ),
     ),

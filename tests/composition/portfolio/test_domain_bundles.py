@@ -44,6 +44,7 @@ from jacobian.contracts.number_theory import (
     FloorSquareRootRequest,
     JacobiSymbolRequest,
     LegendreSymbolRequest,
+    ModularPolynomialResidueImageRequest,
     ModularValueRequest,
     ModulusRequest,
     PositiveIntegerRequest,
@@ -146,6 +147,7 @@ EXPECTED_IDS: frozenset[str] = frozenset(
         "modular.compute.discrete_logarithm",
         "modular.compute.multiplicative_order",
         "modular.enumerate.quadratic_residues",
+        "modular.polynomial_residue_image.compute",
         "modular.solve.chinese_remainder",
         "number_theory.compute.jacobi_symbol",
         "number_theory.compute.factorial_valuation",
@@ -269,6 +271,16 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (PositiveIntegerRequest, {"n": 10}),
     (ModularValueRequest, {"value": "3", "modulus": 7}),
     (ModulusRequest, {"modulus": 7}),
+    (
+        ModularPolynomialResidueImageRequest,
+        {
+            "modulus": 7,
+            "variables": [
+                {"name": "x", "residues": [0, 1, 2, 3, 4, 5, 6]},
+            ],
+            "terms": [{"coefficient": "4", "exponents": [3]}],
+        },
+    ),
     (ChineseRemainderRequest, {"residues": [2, 3], "moduli": [3, 5]}),
     (JacobiSymbolRequest, {"a": "10", "n": 21}),
     (FloorSquareRootRequest, {"n": 12}),

@@ -1,12 +1,20 @@
 from collections.abc import Iterator
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityCompletenessStatus,
+    CapabilityDiscoveryRequest,
     CapabilityRequest,
+)
+from jacobian.contracts.number_theory import (
+    ModularPolynomialResidueImageRequest,
+    ModularPolynomialResidueImageResult,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.arithmetic import build_arithmetic_bundle
@@ -144,3 +152,232 @@ def test_geometric_sequence_handles_zero_terms_exactly(domain_services) -> None:
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == {"holds": expected}
+
+
+def _cubic_residue_payload() -> dict[str, object]:
+    return {
+        "modulus": 7,
+        "variables": [
+            {"name": "x", "residues": [0, 1, 2, 3, 4, 5, 6]},
+        ],
+        "terms": [{"coefficient": "4", "exponents": [3]}],
+    }
+
+
+def test_modular_polynomial_residue_image_is_complete_and_materialized(
+    domain_services,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.compute",
+            input=_cubic_residue_payload(),
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
+    assert result.obligations == ()
+    assert result.output["result"] == {
+        "semantics_version": "modular-polynomial-residue-image.v1",
+        "modulus": 7,
+        "variable_order": ["x"],
+        "domains": [[0, 1, 2, 3, 4, 5, 6]],
+        "normalized_terms": [{"coefficient": 4, "exponents": [3]}],
+        "enumeration_scope": "COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+        "total_assignments": 7,
+        "image": [0, 3, 4],
+        "residue_counts": [
+            {"residue": 0, "count": 1},
+            {"residue": 3, "count": 3},
+            {"residue": 4, "count": 3},
+        ],
+        "witnesses": [
+            {"residue": 0, "assignment": [0]},
+            {"residue": 3, "assignment": [3]},
+            {"residue": 4, "assignment": [1]},
+        ],
+        "table": [
+            {"assignment": [0], "residue": 0},
+            {"assignment": [1], "residue": 4},
+            {"assignment": [2], "residue": 4},
+            {"assignment": [3], "residue": 3},
+            {"assignment": [4], "residue": 4},
+            {"assignment": [5], "residue": 3},
+            {"assignment": [6], "residue": 3},
+        ],
+    }
+    input_uri, result_uri = result.artifact_uris
+    stored_result = domain_services.core.store.get(result_uri)
+    assert stored_result.payload == result.output["result"]
+    assert stored_result.manifest.parents == (input_uri,)
+    assert result.relationships[0].relation_id == (
+        "modular.polynomial_residue_image.relation"
+    )
+    assert result.relationships[0].source_artifact_uris == (input_uri,)
+    assert result.relationships[0].target_artifact_uris == (result_uri,)
+
+
+def test_modular_polynomial_residue_image_handles_multivariate_domains(
+    domain_services,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.compute",
+            input={
+                "modulus": 5,
+                "variables": [
+                    {"name": "x", "residues": [0, 1, 2]},
+                    {"name": "y", "residues": [0, 2]},
+                ],
+                "terms": [
+                    {"coefficient": "-1", "exponents": [0, 1]},
+                    {"coefficient": "1", "exponents": [2, 0]},
+                ],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    output = result.output["result"]
+    assert output["normalized_terms"] == [
+        {"coefficient": 4, "exponents": [0, 1]},
+        {"coefficient": 1, "exponents": [2, 0]},
+    ]
+    assert output["total_assignments"] == 6
+    assert output["table"] == [
+        {"assignment": [0, 0], "residue": 0},
+        {"assignment": [0, 2], "residue": 3},
+        {"assignment": [1, 0], "residue": 1},
+        {"assignment": [1, 2], "residue": 4},
+        {"assignment": [2, 0], "residue": 4},
+        {"assignment": [2, 2], "residue": 2},
+    ]
+    assert output["image"] == [0, 1, 2, 3, 4]
+
+
+def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
+    domain_services,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.compute",
+            input=_cubic_residue_payload(),
+        )
+    )
+    corrupted = deepcopy(result.output["result"])
+    corrupted["table"].pop()
+
+    with pytest.raises(ValidationError, match="complete table length"):
+        ModularPolynomialResidueImageResult.model_validate(corrupted)
+
+
+def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
+    domain_services,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.compute",
+            input={
+                "modulus": 7**7,
+                "variables": [
+                    {"name": "a", "residues": [18]},
+                    {"name": "b", "residues": [1]},
+                ],
+                "terms": [
+                    {"coefficient": "7", "exponents": [1, 6]},
+                    {"coefficient": "21", "exponents": [2, 5]},
+                    {"coefficient": "35", "exponents": [3, 4]},
+                    {"coefficient": "35", "exponents": [4, 3]},
+                    {"coefficient": "21", "exponents": [5, 2]},
+                    {"coefficient": "7", "exponents": [6, 1]},
+                ],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    output = result.output["result"]
+    assert output["modulus"] == 823543
+    assert output["total_assignments"] == 1
+    assert output["image"] == [0]
+    assert output["witnesses"] == [{"residue": 0, "assignment": [18, 1]}]
+    assert output["table"] == [{"assignment": [18, 1], "residue": 0}]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "modulus": 7,
+            "variables": [{"name": "x", "residues": [0, 1]}],
+            "terms": [{"coefficient": "1", "exponents": [1, 0]}],
+        },
+        {
+            "modulus": 7,
+            "variables": [{"name": "x", "residues": [0, 1]}],
+            "terms": [{"coefficient": "7", "exponents": [1]}],
+        },
+        {
+            "modulus": 17,
+            "variables": [
+                {"name": "x", "residues": list(range(17))},
+                {"name": "y", "residues": list(range(17))},
+                {"name": "z", "residues": list(range(17))},
+            ],
+            "terms": [{"coefficient": "1", "exponents": [1, 1, 1]}],
+        },
+    ],
+)
+def test_modular_polynomial_residue_image_rejects_invalid_scope_before_writes(
+    domain_services,
+    payload: dict[str, object],
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.compute",
+            input=payload,
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_NUMBER_THEORY_REQUEST"
+    assert result.artifact_uris == ()
+    assert result.episode_uri is None
+
+
+def test_modular_polynomial_residue_image_assignment_bound_is_exact() -> None:
+    accepted = ModularPolynomialResidueImageRequest.model_validate(
+        {
+            "modulus": 16,
+            "variables": [
+                {"name": "x", "residues": list(range(16))},
+                {"name": "y", "residues": list(range(16))},
+                {"name": "z", "residues": list(range(16))},
+            ],
+            "terms": [{"coefficient": "1", "exponents": [1, 1, 1]}],
+        }
+    )
+
+    assert len(accepted.variables) == 3
+    assert accepted.modulus == 16
+
+
+def test_modular_polynomial_residue_image_is_discoverable_by_intent(
+    domain_services,
+) -> None:
+    discovered = domain_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query=(
+                "complete sparse polynomial residue image modulo an integer "
+                "with witnesses and an exhaustive table"
+            ),
+            domain="modular",
+            limit=5,
+        )
+    )
+
+    assert discovered.matches[0].capability_id == (
+        "modular.polynomial_residue_image.compute"
+    )
+    assert discovered.matches[0].has_invocation_examples is True

@@ -11,6 +11,9 @@ integer nth root).
 
 from __future__ import annotations
 
+import math
+from collections import Counter
+from itertools import product
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
@@ -30,6 +33,12 @@ _MAX_MODULUS = 10_000
 _MAX_CRT_SIZE = 64
 _MAX_DIVISORS = 4_096
 _MAX_FACTOR_ENTRIES = 256
+_MAX_RESIDUE_VARIABLES = 6
+_MAX_RESIDUE_DOMAIN_SIZE = 32
+_MAX_RESIDUE_TERMS = 64
+_MAX_RESIDUE_EXPONENT = 32
+_MAX_RESIDUE_ASSIGNMENTS = 4_096
+_MAX_POLYNOMIAL_RESIDUE_MODULUS = 1_000_000
 
 BoundedInteger = Annotated[
     str,
@@ -38,6 +47,26 @@ BoundedInteger = Annotated[
         max_length=_MAX_INTEGER_LENGTH,
         strict=True,
     ),
+]
+ResidueVariableName = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^[a-z][a-z0-9_]{0,31}$",
+        max_length=32,
+        strict=True,
+    ),
+]
+ResidueDomain = Annotated[
+    tuple[StrictInt, ...],
+    Field(min_length=1, max_length=_MAX_RESIDUE_DOMAIN_SIZE),
+]
+ResidueAssignment = Annotated[
+    tuple[StrictInt, ...],
+    Field(min_length=1, max_length=_MAX_RESIDUE_VARIABLES),
+]
+CanonicalResidue = Annotated[
+    StrictInt,
+    Field(ge=0, lt=_MAX_POLYNOMIAL_RESIDUE_MODULUS),
 ]
 
 
@@ -182,6 +211,87 @@ class ModulusRequest(ContractModel):
     """A single bounded modulus (2 <= modulus <= 10 000)."""
 
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
+
+
+class ModularPolynomialVariable(ContractModel):
+    """One named variable and its canonical finite residue domain."""
+
+    name: ResidueVariableName
+    residues: ResidueDomain
+
+    @model_validator(mode="after")
+    def require_canonical_domain(self) -> Self:
+        if any(residue < 0 for residue in self.residues):
+            raise ValueError("variable residues must be nonnegative")
+        if self.residues != tuple(sorted(set(self.residues))):
+            raise ValueError("variable residues must be strictly increasing")
+        return self
+
+
+class ModularPolynomialTerm(ContractModel):
+    """One nonzero sparse integer-polynomial term in canonical exponent order."""
+
+    coefficient: BoundedInteger
+    exponents: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+
+    @model_validator(mode="after")
+    def require_nonnegative_exponents(self) -> Self:
+        if any(
+            exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
+            for exponent in self.exponents
+        ):
+            raise ValueError(
+                f"term exponents must be between 0 and {_MAX_RESIDUE_EXPONENT}"
+            )
+        return self
+
+
+class ModularPolynomialResidueImageRequest(ContractModel):
+    """A bounded sparse polynomial over declared finite residue domains."""
+
+    modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
+    variables: tuple[ModularPolynomialVariable, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+    terms: tuple[ModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_bounded_polynomial(self) -> Self:
+        variable_names = [variable.name for variable in self.variables]
+        if len(variable_names) != len(set(variable_names)):
+            raise ValueError("polynomial variable names must be unique")
+        if any(
+            residue >= self.modulus
+            for variable in self.variables
+            for residue in variable.residues
+        ):
+            raise ValueError("every variable residue must be less than the modulus")
+        assignment_count = math.prod(
+            len(variable.residues) for variable in self.variables
+        )
+        if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
+            raise ValueError(
+                "declared residue domains exceed the 4,096-assignment bound"
+            )
+        if any(len(term.exponents) != len(self.variables) for term in self.terms):
+            raise ValueError("every term exponent vector must match the variable count")
+        exponent_vectors = [term.exponents for term in self.terms]
+        if exponent_vectors != sorted(set(exponent_vectors)):
+            raise ValueError(
+                "term exponent vectors must be unique and lexicographically increasing"
+            )
+        if any(int(term.coefficient) % self.modulus == 0 for term in self.terms):
+            raise ValueError(
+                "sparse polynomial terms must have nonzero coefficient modulo m"
+            )
+        return self
 
 
 class ChineseRemainderRequest(ContractModel):
@@ -353,6 +463,183 @@ class QuadraticResiduesResult(ContractModel):
     """All quadratic residues modulo one modulus."""
 
     residues: tuple[BoundedInteger, ...]
+
+
+class NormalizedModularPolynomialTerm(ContractModel):
+    """One sparse term with its coefficient reduced to the canonical residue."""
+
+    coefficient: StrictInt = Field(ge=1, lt=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
+    exponents: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+
+
+class ModularPolynomialResidueCount(ContractModel):
+    """Multiplicity of one reachable residue in the declared assignment table."""
+
+    residue: CanonicalResidue
+    count: StrictInt = Field(ge=1, le=_MAX_RESIDUE_ASSIGNMENTS)
+
+
+class ModularPolynomialResidueWitness(ContractModel):
+    """The first lexicographic assignment reaching one residue."""
+
+    residue: CanonicalResidue
+    assignment: ResidueAssignment
+
+
+class ModularPolynomialResidueTableRow(ContractModel):
+    """One exact assignment-to-residue evaluation."""
+
+    assignment: ResidueAssignment
+    residue: CanonicalResidue
+
+
+class ModularPolynomialResidueImageResult(ContractModel):
+    """Complete image and exhaustive table for one bounded modular polynomial."""
+
+    semantics_version: Literal["modular-polynomial-residue-image.v1"]
+    modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
+    variable_order: tuple[ResidueVariableName, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+    domains: tuple[ResidueDomain, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+    normalized_terms: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS,
+    )
+    enumeration_scope: Literal["COMPLETE_DECLARED_CARTESIAN_PRODUCT"]
+    total_assignments: StrictInt = Field(ge=1, le=_MAX_RESIDUE_ASSIGNMENTS)
+    image: tuple[CanonicalResidue, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_ASSIGNMENTS,
+    )
+    residue_counts: tuple[ModularPolynomialResidueCount, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_ASSIGNMENTS,
+    )
+    witnesses: tuple[ModularPolynomialResidueWitness, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_ASSIGNMENTS,
+    )
+    table: tuple[ModularPolynomialResidueTableRow, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_ASSIGNMENTS,
+    )
+
+    @model_validator(mode="after")
+    def bind_complete_residue_image(self) -> Self:
+        assignments = _validate_residue_image_shape(self)
+        residues = _validate_residue_image_table(self, assignments)
+        _validate_residue_image_summaries(self, assignments, residues)
+        return self
+
+
+def _evaluate_normalized_modular_polynomial(
+    terms: tuple[NormalizedModularPolynomialTerm, ...],
+    assignment: tuple[int, ...],
+    modulus: int,
+) -> int:
+    value = 0
+    for term in terms:
+        monomial = term.coefficient
+        for coordinate, exponent in zip(
+            assignment,
+            term.exponents,
+            strict=True,
+        ):
+            monomial = monomial * pow(coordinate, exponent, modulus) % modulus
+        value = (value + monomial) % modulus
+    return value
+
+
+def _validate_residue_image_shape(
+    result: ModularPolynomialResidueImageResult,
+) -> tuple[tuple[int, ...], ...]:
+    if len(set(result.variable_order)) != len(result.variable_order):
+        raise ValueError("result variable names must be unique")
+    if len(result.domains) != len(result.variable_order):
+        raise ValueError("result domains must match the variable count")
+    if any(
+        domain != tuple(sorted(set(domain)))
+        or any(residue < 0 or residue >= result.modulus for residue in domain)
+        for domain in result.domains
+    ):
+        raise ValueError("result domains must contain canonical increasing residues")
+    if any(
+        len(term.exponents) != len(result.variable_order)
+        or term.coefficient >= result.modulus
+        or any(
+            exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
+            for exponent in term.exponents
+        )
+        for term in result.normalized_terms
+    ):
+        raise ValueError("normalized terms do not match the result scope")
+    exponent_vectors = [term.exponents for term in result.normalized_terms]
+    if exponent_vectors != sorted(set(exponent_vectors)):
+        raise ValueError("normalized term exponents must be canonical")
+    assignments = tuple(product(*result.domains))
+    if result.total_assignments != len(assignments):
+        raise ValueError("total assignments do not match the declared domains")
+    if len(result.table) != len(assignments):
+        raise ValueError("complete table length does not match the declared domains")
+    return assignments
+
+
+def _validate_residue_image_table(
+    result: ModularPolynomialResidueImageResult,
+    assignments: tuple[tuple[int, ...], ...],
+) -> tuple[int, ...]:
+    if tuple(row.assignment for row in result.table) != assignments:
+        raise ValueError(
+            "complete table must enumerate the declared Cartesian product in order"
+        )
+    expected_residues = tuple(
+        _evaluate_normalized_modular_polynomial(
+            result.normalized_terms,
+            assignment,
+            result.modulus,
+        )
+        for assignment in assignments
+    )
+    if tuple(row.residue for row in result.table) != expected_residues:
+        raise ValueError("complete table contains an incorrect polynomial evaluation")
+    return expected_residues
+
+
+def _validate_residue_image_summaries(
+    result: ModularPolynomialResidueImageResult,
+    assignments: tuple[tuple[int, ...], ...],
+    residues: tuple[int, ...],
+) -> None:
+    image = tuple(sorted(set(residues)))
+    if result.image != image:
+        raise ValueError("residue image does not match the complete table")
+    counts = Counter(residues)
+    expected_counts = tuple(
+        ModularPolynomialResidueCount(residue=residue, count=counts[residue])
+        for residue in image
+    )
+    if result.residue_counts != expected_counts:
+        raise ValueError("residue counts do not match the complete table")
+    first_assignments: dict[int, tuple[int, ...]] = {}
+    for assignment, residue in zip(assignments, residues, strict=True):
+        first_assignments.setdefault(residue, assignment)
+    expected_witnesses = tuple(
+        ModularPolynomialResidueWitness(
+            residue=residue,
+            assignment=first_assignments[residue],
+        )
+        for residue in image
+    )
+    if result.witnesses != expected_witnesses:
+        raise ValueError("residue witnesses must be the first table assignments")
 
 
 class ChineseRemainderResult(ContractModel):

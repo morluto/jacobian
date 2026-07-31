@@ -120,6 +120,29 @@ function packageNeedsRefresh(installedVersion) {
 }
 
 /**
+ * Build the uv arguments that install the pinned Python distribution.
+ *
+ * uv resolves pre-release dependencies only when they are explicitly allowed.
+ * While Jacobian is pre-stable its pinned distribution depends on pre-release
+ * packages, so the flag is required. pip accepts the same pins without it.
+ *
+ * @param {string} python
+ * @param {string} [spec]
+ * @returns {string[]}
+ */
+function uvInstallArgs(python, spec = PACKAGE_SPEC) {
+  return [
+    "pip",
+    "install",
+    "--upgrade",
+    "--prerelease=allow",
+    "--python",
+    python,
+    spec,
+  ];
+}
+
+/**
  * Ensure the shared virtual environment exists and the Jacobian package is
  * installed.  Returns the path to the venv Python executable.
  *
@@ -158,7 +181,7 @@ function ensureEnvironment(runtime) {
   const installedVersion = check.status === 0 ? check.stdout.trim() : null;
   if (packageNeedsRefresh(installedVersion)) {
     if (runtime.kind === "uv") {
-      const result = run(runtime.path, ["pip", "install", "--upgrade", "--python", python, PACKAGE_SPEC]);
+      const result = run(runtime.path, uvInstallArgs(python));
       if (result.error || result.status !== 0) {
         process.exitCode = 1;
         throw new Error(
@@ -263,6 +286,7 @@ module.exports = {
   VENV_NAME,
   packageNeedsRefresh,
   pythonVersionFromNpmVersion,
+  uvInstallArgs,
   venvRoot,
   venvPython,
   detectRuntime,

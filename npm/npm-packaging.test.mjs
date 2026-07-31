@@ -56,6 +56,7 @@ import {
   PYTHON_PACKAGE_VERSION,
   packageNeedsRefresh,
   pythonVersionFromNpmVersion,
+  uvInstallArgs,
 } from "./bin/launcher.cjs";
 import {
   EXPECTED_TOOLS,
@@ -143,6 +144,21 @@ test("launcher pins and refreshes stale default Python packages", () => {
   assert.equal(packageNeedsRefresh("0.4.0"), true);
   assert.equal(packageNeedsRefresh(null), true);
   assert.equal(packageNeedsRefresh(PYTHON_PACKAGE_VERSION), false);
+});
+
+test("launcher allows pre-release resolution when installing through uv", () => {
+  const args = uvInstallArgs("/tmp/venv/bin/python");
+
+  assert.ok(args.includes("--prerelease=allow"));
+  assert.deepEqual(args, [
+    "pip",
+    "install",
+    "--upgrade",
+    "--prerelease=allow",
+    "--python",
+    "/tmp/venv/bin/python",
+    PACKAGE_SPEC,
+  ]);
 });
 
 test("npm and Python packages publish the same release version", async () => {

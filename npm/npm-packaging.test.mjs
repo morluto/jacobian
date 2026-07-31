@@ -149,12 +149,12 @@ test("launcher pins and refreshes stale default Python packages", () => {
 test("launcher allows pre-release resolution when installing through uv", () => {
   const args = uvInstallArgs("/tmp/venv/bin/python");
 
-  assert.ok(args.includes("--prerelease=allow"));
+  assert.ok(args.includes("--prerelease=if-necessary"));
   assert.deepEqual(args, [
     "pip",
     "install",
     "--upgrade",
-    "--prerelease=allow",
+    "--prerelease=if-necessary",
     "--python",
     "/tmp/venv/bin/python",
     PACKAGE_SPEC,

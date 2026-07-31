@@ -122,9 +122,10 @@ function packageNeedsRefresh(installedVersion) {
 /**
  * Build the uv arguments that install the pinned Python distribution.
  *
- * uv resolves pre-release dependencies only when they are explicitly allowed.
- * While Jacobian is pre-stable its pinned distribution depends on pre-release
- * packages, so the flag is required. pip accepts the same pins without it.
+ * uv considers pre-release dependencies only when the resolver is allowed to
+ * do so. While Jacobian is pre-stable its pinned distribution depends on a
+ * pre-release package, so allow them only when necessary; ranged dependencies
+ * still prefer stable releases. pip accepts the same pins without this flag.
  *
  * @param {string} python
  * @param {string} [spec]
@@ -135,7 +136,7 @@ function uvInstallArgs(python, spec = PACKAGE_SPEC) {
     "pip",
     "install",
     "--upgrade",
-    "--prerelease=allow",
+    "--prerelease=if-necessary",
     "--python",
     python,
     spec,

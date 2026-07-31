@@ -19,6 +19,13 @@ from jacobian_checkers.bound_artifacts import bound_request as _bound_request
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _PYTHON_FLINT_VERSION = "0.9.0"
 _FLINT_VERSION = "3.6.0"
+_RESIDUE_VARIABLE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+_MAX_RESIDUE_VARIABLES = 6
+_MAX_RESIDUE_DOMAIN_SIZE = 32
+_MAX_RESIDUE_TERMS = 64
+_MAX_RESIDUE_EXPONENT = 32
+_MAX_RESIDUE_ASSIGNMENTS = 4_096
+_MAX_RESIDUE_MODULUS = 1_000_000
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -39,6 +46,28 @@ def _accept(detail: str) -> dict[str, Any]:
         "arithmetic": "EXACT_RATIONAL",
         "method": "DIRECT_WITNESS",
         "coverage": "NOT_APPLICABLE",
+        "detail": detail,
+    }
+
+
+def _reject_exact_integer(detail: str) -> dict[str, Any]:
+    return {
+        "accepted": False,
+        "conclusion": "UNKNOWN",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "DIRECT_WITNESS",
+        "coverage": "NOT_APPLICABLE",
+        "detail": detail,
+    }
+
+
+def _accept_exhaustive_integer(detail: str) -> dict[str, Any]:
+    return {
+        "accepted": True,
+        "conclusion": "TRUE",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "EXHAUSTIVE_FINITE",
+        "coverage": "EXHAUSTIVE",
         "detail": detail,
     }
 
@@ -303,6 +332,278 @@ def check_integer_powerful_number(request: dict[str, Any]) -> dict[str, Any]:
         witness_format="integer.powerful.flint-replay",
         replay=_powerful_number,
     )
+
+
+def _strict_integer(value: object, *, minimum: int, maximum: int) -> int:
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise ValueError("bounded integer is malformed")
+    return value
+
+
+def _modular_residue_source(
+    source: dict[str, Any],
+) -> tuple[
+    int,
+    list[str],
+    list[list[int]],
+    list[tuple[int, list[int]]],
+]:
+    if set(source) != {"modulus", "variables", "terms"}:
+        raise ValueError("modular-polynomial source is malformed")
+    modulus = _strict_integer(
+        source["modulus"],
+        minimum=2,
+        maximum=_MAX_RESIDUE_MODULUS,
+    )
+    names, domains = _modular_residue_variables(source["variables"], modulus)
+    terms = _modular_residue_terms(source["terms"], len(names), modulus)
+    return modulus, names, domains, terms
+
+
+def _modular_residue_variables(
+    value: object,
+    modulus: int,
+) -> tuple[list[str], list[list[int]]]:
+    if not isinstance(value, list) or not 1 <= len(value) <= _MAX_RESIDUE_VARIABLES:
+        raise ValueError("modular-polynomial variables are malformed")
+    names: list[str] = []
+    domains: list[list[int]] = []
+    assignment_count = 1
+    for variable in value:
+        if not isinstance(variable, dict) or set(variable) != {"name", "residues"}:
+            raise ValueError("modular-polynomial variable is malformed")
+        name = variable["name"]
+        residues = variable["residues"]
+        if (
+            not isinstance(name, str)
+            or _RESIDUE_VARIABLE.fullmatch(name) is None
+            or not isinstance(residues, list)
+            or not 1 <= len(residues) <= _MAX_RESIDUE_DOMAIN_SIZE
+            or any(
+                type(residue) is not int or not 0 <= residue < modulus
+                for residue in residues
+            )
+            or residues != sorted(set(residues))
+        ):
+            raise ValueError("modular-polynomial variable domain is noncanonical")
+        names.append(name)
+        domains.append(residues)
+        assignment_count *= len(residues)
+    if len(names) != len(set(names)):
+        raise ValueError("modular-polynomial variable names are not unique")
+    if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
+        raise ValueError("modular-polynomial assignment scope is too large")
+    return names, domains
+
+
+def _modular_residue_terms(
+    value: object,
+    variable_count: int,
+    modulus: int,
+) -> list[tuple[int, list[int]]]:
+    if not isinstance(value, list) or len(value) > _MAX_RESIDUE_TERMS:
+        raise ValueError("modular-polynomial terms are malformed")
+    terms: list[tuple[int, list[int]]] = []
+    for term in value:
+        if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
+            raise ValueError("modular-polynomial term is malformed")
+        coefficient_text = term["coefficient"]
+        exponents = term["exponents"]
+        if (
+            not isinstance(coefficient_text, str)
+            or len(coefficient_text) > 256
+            or not isinstance(exponents, list)
+            or len(exponents) != variable_count
+            or any(
+                type(exponent) is not int or not 0 <= exponent <= _MAX_RESIDUE_EXPONENT
+                for exponent in exponents
+            )
+        ):
+            raise ValueError("modular-polynomial sparse term is malformed")
+        coefficient = _integer(coefficient_text) % modulus
+        if coefficient == 0:
+            raise ValueError("modular-polynomial sparse term is zero modulo m")
+        terms.append((coefficient, exponents))
+    exponent_vectors = [tuple(exponents) for _, exponents in terms]
+    if exponent_vectors != sorted(set(exponent_vectors)):
+        raise ValueError("modular-polynomial terms are not in canonical order")
+    return terms
+
+
+def _cartesian_assignments(domains: list[list[int]]) -> list[list[int]]:
+    assignments: list[list[int]] = [[]]
+    for domain in domains:
+        assignments = [
+            [*prefix, residue] for prefix in assignments for residue in domain
+        ]
+    return assignments
+
+
+def _evaluate_modular_polynomial_with_flint(
+    terms: list[tuple[int, list[int]]],
+    assignment: list[int],
+    modulus: int,
+) -> int:
+    modulus_value = flint.fmpz(modulus)
+    value = flint.fmpz(0)
+    for coefficient, exponents in terms:
+        monomial = flint.fmpz(coefficient)
+        for coordinate, exponent in zip(assignment, exponents, strict=True):
+            monomial *= pow(flint.fmpz(coordinate), exponent, modulus_value)
+            monomial %= modulus_value
+        value += monomial
+        value %= modulus_value
+    return int(value)
+
+
+def _strict_result_integer(value: object) -> int:
+    if type(value) is not int:
+        raise ValueError("modular-polynomial result integer is malformed")
+    return value
+
+
+def _modular_residue_result_shape(result: dict[str, Any]) -> None:
+    if set(result) != {
+        "semantics_version",
+        "modulus",
+        "variable_order",
+        "domains",
+        "normalized_terms",
+        "enumeration_scope",
+        "total_assignments",
+        "image",
+        "residue_counts",
+        "witnesses",
+        "table",
+    }:
+        raise ValueError("modular-polynomial result is malformed")
+    _strict_result_integer(result["modulus"])
+    _strict_result_integer(result["total_assignments"])
+    if not isinstance(result["variable_order"], list) or not all(
+        isinstance(name, str) for name in result["variable_order"]
+    ):
+        raise ValueError("modular-polynomial result variable order is malformed")
+    if not isinstance(result["domains"], list) or any(
+        not isinstance(domain, list)
+        or any(type(residue) is not int for residue in domain)
+        for domain in result["domains"]
+    ):
+        raise ValueError("modular-polynomial result domains are malformed")
+    if not isinstance(result["normalized_terms"], list) or any(
+        not isinstance(term, dict)
+        or set(term) != {"coefficient", "exponents"}
+        or type(term["coefficient"]) is not int
+        or not isinstance(term["exponents"], list)
+        or any(type(exponent) is not int for exponent in term["exponents"])
+        for term in result["normalized_terms"]
+    ):
+        raise ValueError("normalized modular-polynomial terms are malformed")
+    if not isinstance(result["image"], list) or any(
+        type(residue) is not int for residue in result["image"]
+    ):
+        raise ValueError("modular-polynomial image is malformed")
+    if not isinstance(result["residue_counts"], list) or any(
+        not isinstance(item, dict)
+        or set(item) != {"residue", "count"}
+        or type(item["residue"]) is not int
+        or type(item["count"]) is not int
+        for item in result["residue_counts"]
+    ):
+        raise ValueError("modular-polynomial residue counts are malformed")
+    if not isinstance(result["witnesses"], list) or any(
+        not isinstance(item, dict)
+        or set(item) != {"residue", "assignment"}
+        or type(item["residue"]) is not int
+        or not isinstance(item["assignment"], list)
+        or any(type(value) is not int for value in item["assignment"])
+        for item in result["witnesses"]
+    ):
+        raise ValueError("modular-polynomial witnesses are malformed")
+    if not isinstance(result["table"], list) or any(
+        not isinstance(row, dict)
+        or set(row) != {"assignment", "residue"}
+        or type(row["residue"]) is not int
+        or not isinstance(row["assignment"], list)
+        or any(type(value) is not int for value in row["assignment"])
+        for row in result["table"]
+    ):
+        raise ValueError("modular-polynomial assignment table is malformed")
+
+
+def _modular_polynomial_residue_image(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    modulus, names, domains, terms = _modular_residue_source(source)
+    _modular_residue_result_shape(result)
+    normalized_terms = [
+        {"coefficient": coefficient, "exponents": exponents}
+        for coefficient, exponents in terms
+    ]
+    assignments = _cartesian_assignments(domains)
+    residues = [
+        _evaluate_modular_polynomial_with_flint(terms, assignment, modulus)
+        for assignment in assignments
+    ]
+    image = sorted(set(residues))
+    counts = [
+        {"residue": residue, "count": residues.count(residue)} for residue in image
+    ]
+    first_assignments: dict[int, list[int]] = {}
+    for assignment, residue in zip(assignments, residues, strict=True):
+        first_assignments.setdefault(residue, assignment)
+    witnesses = [
+        {"residue": residue, "assignment": first_assignments[residue]}
+        for residue in image
+    ]
+    table = [
+        {"assignment": assignment, "residue": residue}
+        for assignment, residue in zip(assignments, residues, strict=True)
+    ]
+    return bool(
+        result["semantics_version"] == "modular-polynomial-residue-image.v1"
+        and result["modulus"] == modulus
+        and result["variable_order"] == names
+        and result["domains"] == domains
+        and result["normalized_terms"] == normalized_terms
+        and result["enumeration_scope"] == "COMPLETE_DECLARED_CARTESIAN_PRODUCT"
+        and result["total_assignments"] == len(assignments)
+        and result["image"] == image
+        and result["residue_counts"] == counts
+        and result["witnesses"] == witnesses
+        and result["table"] == table
+    )
+
+
+def check_modular_polynomial_residue_image(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    operation_id = "modular.polynomial_residue_image.compute"
+    try:
+        if (
+            flint.__version__ != _PYTHON_FLINT_VERSION
+            or flint.__FLINT_VERSION__ != _FLINT_VERSION
+        ):
+            return _reject_exact_integer(
+                "authorized Python-FLINT runtime is unavailable"
+            )
+        source, result = _bound_request(
+            request,
+            operation_id=operation_id,
+            witness_format="modular.polynomial-residue-image.flint-replay",
+        )
+        if not _modular_polynomial_residue_image(source, result):
+            return _reject_exact_integer(
+                "declared result does not match independent Python-FLINT "
+                "exhaustive modular-polynomial replay"
+            )
+        return _accept_exhaustive_integer(
+            f"independent Python-FLINT exhaustive replay accepted {operation_id}"
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return _reject_exact_integer(
+            "malformed, unsupported, or mismatched checker request"
+        )
 
 
 def _gcd(source: dict[str, Any], result: dict[str, Any]) -> bool:

@@ -17,6 +17,7 @@ from jacobian.contracts.matrix_operations import (
 )
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
 from jacobian.contracts.polynomial_operations import (
@@ -105,6 +106,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
     number_theory_ids = (
         "integer.compute.prime_factorization",
         "integer.decide.powerful",
+        "modular.polynomial_residue_image.compute",
     )
     projective_ids = ("geometry.projective_line_arrangement.flats.materialize",)
     registry = CheckerRegistry(ArtifactStore(tmp_path / "store"))
@@ -142,7 +144,11 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             character="8",
         ),
         number_theory=_installed(
-            (FactorizationRequest, PowerfulNumberRequest),
+            (
+                FactorizationRequest,
+                PowerfulNumberRequest,
+                ModularPolynomialResidueImageRequest,
+            ),
             number_theory_ids,
             character="6",
         ),

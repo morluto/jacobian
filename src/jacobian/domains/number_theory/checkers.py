@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
 
@@ -57,6 +58,34 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "integer",
             "number-theory",
             "powerful-number",
+        ),
+    ),
+    ExactReplayCheckerDeclaration(
+        "modular.polynomial_residue_image.compute",
+        ModularPolynomialResidueImageRequest,
+        "check_modular_polynomial_residue_image",
+        "modular.polynomial-residue-image.flint-replay",
+        entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        replay_method="Python-FLINT exhaustive modular-polynomial replay",
+        reason=(
+            "operator-authorized Python-FLINT checker independently reconstructs "
+            "the declared Cartesian product and replays every modular-polynomial "
+            "evaluation without importing the stdlib producer"
+        ),
+        verification_capability_id="modular.polynomial_residue_image.verify",
+        verification_title="Verify a modular polynomial residue image",
+        verification_description=(
+            "Independently verify one complete bounded modular-polynomial residue "
+            "image, including every assignment, multiplicity, and first witness."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "number-theory",
+            "modular",
+            "polynomial",
+            "residue",
+            "enumeration",
         ),
     ),
 )

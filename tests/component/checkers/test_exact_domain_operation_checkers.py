@@ -4,6 +4,7 @@ import copy
 import subprocess
 import sys
 from collections.abc import Callable
+from itertools import product
 from typing import Any
 
 import pytest
@@ -19,6 +20,7 @@ from jacobian_checkers.exact_domain_operations import (
     check_matrix_nullspace,
     check_matrix_rref,
     check_matrix_smith_normal_form,
+    check_modular_polynomial_residue_image,
     check_polynomial_discriminant,
     check_polynomial_gcd,
     check_polynomial_resultant,
@@ -317,6 +319,49 @@ _CASES: tuple[
                     {"prime": "3", "power": 2},
                 ],
                 "violating_primes": [],
+            },
+        ),
+    ),
+    (
+        check_modular_polynomial_residue_image,
+        _request(
+            "modular.polynomial_residue_image.compute",
+            "modular.polynomial-residue-image.flint-replay",
+            {
+                "modulus": 7,
+                "variables": [
+                    {"name": "x", "residues": [0, 1, 2, 3, 4, 5, 6]},
+                ],
+                "terms": [{"coefficient": "4", "exponents": [3]}],
+            },
+            {
+                "semantics_version": "modular-polynomial-residue-image.v1",
+                "modulus": 7,
+                "variable_order": ["x"],
+                "domains": [[0, 1, 2, 3, 4, 5, 6]],
+                "normalized_terms": [{"coefficient": 4, "exponents": [3]}],
+                "enumeration_scope": "COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+                "total_assignments": 7,
+                "image": [0, 3, 4],
+                "residue_counts": [
+                    {"residue": 0, "count": 1},
+                    {"residue": 3, "count": 3},
+                    {"residue": 4, "count": 3},
+                ],
+                "witnesses": [
+                    {"residue": 0, "assignment": [0]},
+                    {"residue": 3, "assignment": [3]},
+                    {"residue": 4, "assignment": [1]},
+                ],
+                "table": [
+                    {"assignment": [0], "residue": 0},
+                    {"assignment": [1], "residue": 4},
+                    {"assignment": [2], "residue": 4},
+                    {"assignment": [3], "residue": 3},
+                    {"assignment": [4], "residue": 4},
+                    {"assignment": [5], "residue": 3},
+                    {"assignment": [6], "residue": 3},
+                ],
             },
         ),
     ),
@@ -622,6 +667,150 @@ def test_exact_domain_checker_rejects_changed_flint_runtime(
     assert decision["accepted"] is False
     assert decision["conclusion"] == "UNKNOWN"
     assert "runtime is unavailable" in decision["detail"]
+
+
+def _modular_checker_request() -> dict[str, Any]:
+    return copy.deepcopy(
+        next(
+            checker_request
+            for checker, checker_request in _CASES
+            if checker is check_modular_polynomial_residue_image
+        )
+    )
+
+
+def test_modular_residue_checker_reports_exhaustive_integer_replay() -> None:
+    decision = check_modular_polynomial_residue_image(_modular_checker_request())
+
+    assert decision["accepted"] is True
+    assert decision["arithmetic"] == "EXACT_INTEGER"
+    assert decision["method"] == "EXHAUSTIVE_FINITE"
+    assert decision["coverage"] == "EXHAUSTIVE"
+
+
+def test_modular_residue_checker_accepts_exact_assignment_bound() -> None:
+    assignments = [list(values) for values in product(range(16), repeat=3)]
+    residues = [
+        assignment[0] * assignment[1] * assignment[2] % 16 for assignment in assignments
+    ]
+    image = sorted(set(residues))
+    first_assignments: dict[int, list[int]] = {}
+    for assignment, residue in zip(assignments, residues, strict=True):
+        first_assignments.setdefault(residue, assignment)
+    checker_request = _request(
+        "modular.polynomial_residue_image.compute",
+        "modular.polynomial-residue-image.flint-replay",
+        {
+            "modulus": 16,
+            "variables": [
+                {"name": "x", "residues": list(range(16))},
+                {"name": "y", "residues": list(range(16))},
+                {"name": "z", "residues": list(range(16))},
+            ],
+            "terms": [{"coefficient": "1", "exponents": [1, 1, 1]}],
+        },
+        {
+            "semantics_version": "modular-polynomial-residue-image.v1",
+            "modulus": 16,
+            "variable_order": ["x", "y", "z"],
+            "domains": [list(range(16)), list(range(16)), list(range(16))],
+            "normalized_terms": [{"coefficient": 1, "exponents": [1, 1, 1]}],
+            "enumeration_scope": "COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+            "total_assignments": 4_096,
+            "image": image,
+            "residue_counts": [
+                {"residue": residue, "count": residues.count(residue)}
+                for residue in image
+            ],
+            "witnesses": [
+                {
+                    "residue": residue,
+                    "assignment": first_assignments[residue],
+                }
+                for residue in image
+            ],
+            "table": [
+                {"assignment": assignment, "residue": residue}
+                for assignment, residue in zip(assignments, residues, strict=True)
+            ],
+        },
+    )
+
+    decision = check_modular_polynomial_residue_image(checker_request)
+
+    assert decision["accepted"] is True
+    assert decision["method"] == "EXHAUSTIVE_FINITE"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda result: result["table"].pop(),
+        lambda result: result["table"][1].update(residue=3),
+        lambda result: result["residue_counts"][1].update(count=2),
+        lambda result: result["witnesses"][2].update(assignment=[2]),
+        lambda result: result.update(variable_order=["y"]),
+        lambda result: result["normalized_terms"][0].update(coefficient=3),
+    ),
+    ids=(
+        "partial-table",
+        "wrong-evaluation",
+        "wrong-multiplicity",
+        "nonfirst-witness",
+        "wrong-variable-order",
+        "wrong-normalization",
+    ),
+)
+def test_modular_residue_checker_rejects_one_obligation_mutation(
+    mutate: Callable[[dict[str, Any]], object],
+) -> None:
+    checker_request = _modular_checker_request()
+    mutate(checker_request["candidate"]["payload"])
+    checker_request["candidate"]["payload_digest"] = _digest(
+        checker_request["candidate"]["payload"]
+    )
+
+    decision = check_modular_polynomial_residue_image(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_modular_residue_checker_rejects_wrong_bound_scope() -> None:
+    checker_request = _modular_checker_request()
+    checker_request["scope"] = {
+        "assignment_count": 7,
+        "enumeration": "COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+    }
+
+    decision = check_modular_polynomial_residue_image(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+def test_exact_domain_checker_import_boundary_excludes_producer_modules() -> None:
+    script = """
+import builtins
+real_import = builtins.__import__
+blocked = {"jacobian", "sympy"}
+def guarded(name, *args, **kwargs):
+    if name.split(".", 1)[0] in blocked:
+        raise RuntimeError(f"forbidden checker import: {name}")
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded
+import jacobian_checkers.exact_domain_operations
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_graph_checker_reports_its_actual_exhaustive_replay_method() -> None:

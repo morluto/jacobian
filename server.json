@@ -7,7 +7,7 @@
     "url": "https://github.com/morluto/jacobian",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "npm",

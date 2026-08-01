@@ -1,5 +1,75 @@
 # Changelog
 
+## [0.7.0](https://github.com/morluto/jacobian/compare/jacobian-v0.6.0...jacobian-v0.7.0) (2026-08-01)
+
+
+### Features
+
+* **benchmarks:** expand agent workflow suite to 26 tasks ([#298](https://github.com/morluto/jacobian/issues/298)) ([3dc38cf](https://github.com/morluto/jacobian/commit/3dc38cffcbffc9335a05f126fae7b0d12444e993))
+* bootstrap agents from source checkouts ([62e0837](https://github.com/morluto/jacobian/commit/62e08371f769203cf249a91e9c0ec3431264a219))
+* bootstrap agents from source checkouts ([4b4331d](https://github.com/morluto/jacobian/commit/4b4331df16cd78e7c136b6f75626d0f3afbfdc89))
+* **evals:** add Jacobian control treatment toggle ([f0dd82b](https://github.com/morluto/jacobian/commit/f0dd82be33da0de88a8ec553ceaa4447e641682b))
+* **lean:** add axiom closure inspection ([446a5d2](https://github.com/morluto/jacobian/commit/446a5d2ee1644decad1e7e8f2c4a6b6080479a0a))
+* **mcp:** evaluate ResourceLink handoffs ([2a3f6f7](https://github.com/morluto/jacobian/commit/2a3f6f7becfc045980653eef1661085fd295714a))
+* **npm:** add explicit Python package upgrade command ([2dabcc4](https://github.com/morluto/jacobian/commit/2dabcc4e970355165f6378bd1f329cac2af2f985))
+* **storage:** add explicit state revision upgrade ([f851035](https://github.com/morluto/jacobian/commit/f8510358906ef559fd0bd51f0e8aee4cec542500))
+
+
+### Bug Fixes
+
+* **benchmarks:** accept equivalent Lefschetz witnesses ([11aba34](https://github.com/morluto/jacobian/commit/11aba349483054e92851294cc8285eaee5534d76))
+* **benchmarks:** align degree-sequence audit contracts ([78a10cc](https://github.com/morluto/jacobian/commit/78a10cc84d00be88225d298e95d7af28a16c2e89))
+* **benchmarks:** bind sharp-bound evidence to result ([faca89e](https://github.com/morluto/jacobian/commit/faca89e3f6c58e593f114c532b4dc88f457debcd))
+* **benchmarks:** clarify LCM evidence scope ([f590f70](https://github.com/morluto/jacobian/commit/f590f705ba9677090f00eb22a96d4a3ddfbf7f4a))
+* **benchmarks:** distinguish valuation lower bounds ([ff44346](https://github.com/morluto/jacobian/commit/ff44346ce3309830ca55bf20e99d100c6b6f3c18))
+* **benchmarks:** enforce generated-lemma witness bounds ([2472849](https://github.com/morluto/jacobian/commit/24728496bf243403feca0610d4319cb83ceee9dc))
+* **benchmarks:** enforce symbolic basis ordering ([da60dd7](https://github.com/morluto/jacobian/commit/da60dd79017f4103add693b99200888b0a5f1315))
+* **benchmarks:** exercise transitive Lean closure ([268bcd4](https://github.com/morluto/jacobian/commit/268bcd44f9f10c6333da05179d51d267129c7b33))
+* **benchmarks:** harden fourth-power scope audit ([eb19ba9](https://github.com/morluto/jacobian/commit/eb19ba9a0b71d29a9b0f6b69b418cbcc72c798cf))
+* **benchmarks:** harden Harbor planning and verification ([949540d](https://github.com/morluto/jacobian/commit/949540dc1a9c981752354b2e8a9ad0be5c0d0459))
+* **benchmarks:** harden local-density evidence contract ([893aa87](https://github.com/morluto/jacobian/commit/893aa875cb32df607b94838b5790c6a693ad78fe))
+* **benchmarks:** publish asymptotic frame normalization ([b48a649](https://github.com/morluto/jacobian/commit/b48a6495cea3a75ca8766b17b9793d6c0c997907))
+* **benchmarks:** reduce sharp-bound verifier complexity ([98a5aab](https://github.com/morluto/jacobian/commit/98a5aabca186739c97004e3dac123e1311e33fef))
+* **benchmarks:** reduce symbolic verifier complexity ([bb407f4](https://github.com/morluto/jacobian/commit/bb407f45926a8e1f2500da9b4961402aab32c174))
+* **benchmarks:** remove prescribed elimination strategy ([196316c](https://github.com/morluto/jacobian/commit/196316c4edc81339206c014b79ea503a9c227081))
+* bind bootstrap environment identity ([9af999b](https://github.com/morluto/jacobian/commit/9af999bb41dc3a4bb968324d54cb7e06f846983d))
+* bind bootstrap state and image identity ([20330df](https://github.com/morluto/jacobian/commit/20330dfd3551984ac4fb63bacef2cf6717e1c16b))
+* **build:** use available uv trixie image ([3057357](https://github.com/morluto/jacobian/commit/30573574efac455a55e78873b8af306b132d4768))
+* **ci:** close benchmark validation gaps ([6e4f31f](https://github.com/morluto/jacobian/commit/6e4f31fc8beca5bc0df720068fde280cbd9a3ab9))
+* **ci:** handle Oracle and npm runtime environments ([92a93c5](https://github.com/morluto/jacobian/commit/92a93c53fedb7944dbd411780544e73c97d5609e))
+* **ci:** run checks after pull request base edits ([b1b501a](https://github.com/morluto/jacobian/commit/b1b501af7ff8f16662e99c36813a4be2bfa99dcd))
+* **ci:** run checks after pull request base edits ([2e9577f](https://github.com/morluto/jacobian/commit/2e9577f00edcf0004a9969926725de76b7f4fbe5))
+* **ci:** separate Lean ownership from PR scheduling ([b686c25](https://github.com/morluto/jacobian/commit/b686c256f423b3247693419b085507c5efc37d31))
+* close bootstrap transaction edge cases ([dd34daa](https://github.com/morluto/jacobian/commit/dd34daa075fdcff8a0bcaa435f122fe26357e5f5))
+* close source launcher identity gaps ([b661065](https://github.com/morluto/jacobian/commit/b661065735b07133287c82c31c99787ed663128e))
+* **evals:** make Docker proxy configuration optional ([afe691d](https://github.com/morluto/jacobian/commit/afe691dfa4be52f04c7963d781bd067367ff54a8))
+* **evals:** make Docker proxy configuration optional ([b65e1cb](https://github.com/morluto/jacobian/commit/b65e1cbd8100f40db827e0804093a5fc14cc5da6))
+* **harbor:** allow model phase network dependencies ([21fdade](https://github.com/morluto/jacobian/commit/21fdadeba593b97c2d46899e997d7e85ea0a57c8))
+* **harbor:** allow single-task observation runs ([fc66115](https://github.com/morluto/jacobian/commit/fc661153a476d3e436e1f4bf3d2319ec8deea0d8))
+* **harbor:** constrain observation to prepared tasks ([4420d97](https://github.com/morluto/jacobian/commit/4420d9750a93fe863026a6263337670178b77777))
+* **harbor:** normalize result paths before evidence capture ([81f0a94](https://github.com/morluto/jacobian/commit/81f0a948b5a06220476f329c45b2d73956b13faa))
+* **harbor:** preinstall codex in graph task image ([1faa22a](https://github.com/morluto/jacobian/commit/1faa22a3baf6101eae12eb692b82d5322bbf670b))
+* harden source bootstrap preflight ([2821e71](https://github.com/morluto/jacobian/commit/2821e7107e7b896d7320630db05f91f0c8caa958))
+* honor directory-only state ignores ([21dce13](https://github.com/morluto/jacobian/commit/21dce13763434a3e497b05d3a70dda977517612f))
+* **npm:** launch npx wrapper without exec ([0751650](https://github.com/morluto/jacobian/commit/0751650b4cb8f8c8d7079211cbe97d1a9a2d5b61))
+* **observation:** allow local auth proxy image override ([dc9dd0b](https://github.com/morluto/jacobian/commit/dc9dd0b718843e7e756cbe976426148067f69371))
+* **observation:** use localhost for egress sidecars ([cae82bf](https://github.com/morluto/jacobian/commit/cae82bfb18d2e19d45f3f0162e6ed56f2bfa56df))
+* reject dirty source before Python discovery ([1b73493](https://github.com/morluto/jacobian/commit/1b73493b7578bf7f4f84bbe4e5bceff8e5b1d68c))
+* **review:** close trust-boundary findings ([d1fbde8](https://github.com/morluto/jacobian/commit/d1fbde83a43217f485b46fa4b24e7f3a213cf7ae))
+* **runtime:** preserve trust and persistence invariants ([42cb53e](https://github.com/morluto/jacobian/commit/42cb53e0a88fafb8f15f8f05df1062023ce54e12))
+* **tests:** follow canonical Harbor task paths ([0b75057](https://github.com/morluto/jacobian/commit/0b750577b6cee9d2e1be674dadae916b8a06024b))
+* version MCP registry metadata with releases ([11e3c4c](https://github.com/morluto/jacobian/commit/11e3c4cf2e3bf22b03a501e021fd37a03b938113))
+
+
+### Documentation
+
+* align 0.6 support status ([7564200](https://github.com/morluto/jacobian/commit/7564200e6a5d95f211016db3591ae900f692c045))
+* align benchmark skills with canonical layout ([5138006](https://github.com/morluto/jacobian/commit/5138006602be4a5d8146078629824a48358b4456))
+* **evals:** split reference and run guide ([38c5db5](https://github.com/morluto/jacobian/commit/38c5db514bcd6ce0ccb114b2a93257fdf5cdb4fb))
+* **lrat:** record Lean-only authority gate ([b1f5bc3](https://github.com/morluto/jacobian/commit/b1f5bc36411a30853f2f1e5345a2eb0090135cb2))
+* **skills:** tighten benchmark evaluation gates ([ba3dc7f](https://github.com/morluto/jacobian/commit/ba3dc7fc4f5edcd7b8dbad3e68734ba3dcd6d056))
+* **skills:** update Harbor dataset workflow ([cfb15f0](https://github.com/morluto/jacobian/commit/cfb15f08428dcbf6fc1ceafad463824ae4db95ad))
+
 ## [0.6.0](https://github.com/morluto/jacobian/compare/jacobian-v0.6.0-alpha.0...jacobian-v0.6.0) (2026-07-31)
 
 

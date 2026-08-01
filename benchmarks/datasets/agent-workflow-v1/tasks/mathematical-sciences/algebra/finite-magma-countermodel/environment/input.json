@@ -1,0 +1,40 @@
+{
+  "task_id": "jacobian/agent-workflow-v1-finite-magma-countermodel",
+  "carrier": "A nonempty finite set {0, ..., n-1}",
+  "operation": {
+    "symbol": "diamond",
+    "table_convention": "table[x][y] is x diamond y"
+  },
+  "premise": {
+    "quantification": "for all x,y",
+    "left": {"op": [{"var": "x"}, {"var": "y"}]},
+    "right": {
+      "op": [
+        {
+          "op": [
+            {"op": [{"var": "y"}, {"var": "x"}]},
+            {"var": "x"}
+          ]
+        },
+        {"var": "y"}
+      ]
+    }
+  },
+  "target": {
+    "quantification": "for all x,y",
+    "left": {
+      "op": [
+        {"op": [{"var": "x"}, {"var": "y"}]},
+        {"var": "y"}
+      ]
+    },
+    "right": {
+      "op": [
+        {"op": [{"var": "y"}, {"var": "x"}]},
+        {"var": "x"}
+      ]
+    }
+  },
+  "claim": "Every nonempty finite magma satisfying the premise also satisfies the target.",
+  "search_orders": [1, 2]
+}

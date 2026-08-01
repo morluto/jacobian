@@ -1,0 +1,11 @@
+Use carrier {0,1} and read rows as the left operand:
+
+0 1
+0 1
+
+Thus x diamond y = y. The premise reduces to y = y for every x,y. For
+x=0 and y=1, the target has left side 1 and right side 0, so it fails. The
+unique one-element operation satisfies the target, proving minimality among
+nonempty carriers.
+
+RESULT_JSON: {"minimality_checked_orders":[1],"order":2,"premise_holds_universally":true,"refuting_assignment":{"x":0,"y":1},"table":[[0,1],[0,1]],"target_holds_universally":false}

@@ -12,7 +12,7 @@ authors = [
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-autoformalization-semantic-audit"
-digest = "sha256:43745548ce276e0512c52fe5091b331b09bc25acec1e5e3dd37ff40bcf51ad99"
+digest = "sha256:ce83532bbdd9b6c781a51bfc85a1a74c5c828065b432f0100e977a52700156d2"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-calendar-good-days-audit"
@@ -20,15 +20,19 @@ digest = "sha256:9b5f8b6551fe13ddfa9c9e05b99de374ebb6bd1097c1a297c80253053d26fcc
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-distinct-sum-pairing-optimum"
-digest = "sha256:330ddb770b56e8a1e313a876f0fb24b3b9d7adaf70452f45fa5729db8a141918"
+digest = "sha256:05e4f1a4cfc6ef1c6aa97d0c3c01c462e27a22c04c50e0c9121c5d985f7b5308"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-divisibility-construction-witness"
-digest = "sha256:47033cba7eed0e8547eb81e01867b42daca0cd3e880b34343ea39a955b217648"
+digest = "sha256:997a76faef7340ca7c78227dd251d793924a5b23bb94c84697c53010ba170f4c"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-euler-line-symbolic-certificate"
-digest = "sha256:833c3accf03f72a2836b7bfb144c5ebffef20b0ba242de682b6bde9d987567a8"
+digest = "sha256:aafcb0a6b87229c4cabcfb7719a3b7eb96d3c3c088cce1f831b433b9d3756d9f"
+
+[[tasks]]
+name = "jacobian/agent-workflow-v1-finite-magma-countermodel"
+digest = "sha256:11e303e8401b819f76a51717e25fed8a0f678e12de77765205a07a03a8ff20f2"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-finite-partition"
@@ -44,7 +48,7 @@ digest = "sha256:94f03b9e3fd2e9d4252da06264712964e7a9140810f7c16c8552855449239d3
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-grounded-premise-proof"
-digest = "sha256:5d364abd11c1d04561311bdb434846644758edfbcaac34bbbd9433281a22ecea"
+digest = "sha256:38ac8b864dd0be1ff39f9c3a1fbb124e5c3a48acfd2d5377f671996b219fc609"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-hermite-normal-form"
@@ -52,31 +56,31 @@ digest = "sha256:46e9171b30f73a249c1189d0b3105557259d5ce4991992b5428ee2597a6ef0e
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-log-exponent-recovery"
-digest = "sha256:4be28b1e17ea670a55d3f2be1cde8ca93458367e1ebd24d83da932541eb5c96f"
+digest = "sha256:96aee022fb6e4bf3abf9a9216b6474c575ea433686b69f121c37a79c6d2dc827"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-log-inequality-meta-audit"
-digest = "sha256:9233675d1a4513ab5eeb6f36714943ac690a8cc233f56a6839793d10545798ba"
+digest = "sha256:86d0bc51e6ae9e67d1a74b1e14eddf8fe1642d57dd4a82b95011b3094ddc4aa4"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-matrix-square-zero-counterexample"
-digest = "sha256:a7dbe24b055e6324e094b4af081696995290991496b9b5c3ac3ce9db42246e7a"
+digest = "sha256:e058f25f6a3cbadac156ee03b43a33f9356a285358055b8fcb75cbe213fbce2f"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-metric-tsp-proof-repair"
-digest = "sha256:0f11825a7ecff4680cef355a895d3dcd3854d26cefa19ce286c1dcb740a04f6d"
+digest = "sha256:198c1156a325eb01599b3e9f146e6a47f8c1ce0af9718aa3d798afe890a7d184"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-modular-cubic-obstruction"
-digest = "sha256:35df96f3fca26f2da1c4ad57a1f9db87f0d7f7aa3704fbdd50fee93d2023a7ad"
+digest = "sha256:69f5fc78b745f44133b0ced9782f97f78f9f4306f72f123c365e0e1b7a0fe076"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-natural-subtraction-proof-repair"
-digest = "sha256:364f8769e407fdf462833f93730d5be7e4c0b26ebd32e8db9d041bbbd3d67c76"
+digest = "sha256:31dd23d70b61ae9e2afc48c7e9b7d0954ae62fda7ebc550b6a26daeeaec47281"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-nondifferentiable-maximum-construction"
-digest = "sha256:2ad0f13c862698b2aa22248dd5999924254db600ffe7ce0a8f56940308671f4d"
+digest = "sha256:38ac5dd84d79a174394c91020d05c2aad1b9e55e3a53464d24e3b54d6be1fe60"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-polynomial-map-collision"
@@ -88,7 +92,7 @@ digest = "sha256:0c07bd7c1baeec0d548a08e806274c6bdb9ac0c7778965e8430e44f619f3f00
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-polynomial-tail-counterexample"
-digest = "sha256:d14e68a6071b50c00e4fa5708760868e966d201843899502df20247f4affb03a"
+digest = "sha256:35267a292d95eedbacd71faacafb052db248fb9b89710bdd4d809d616a3d53f4"
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-random-function-expectation-audit"
@@ -104,4 +108,8 @@ digest = "sha256:18787277b8793c660245e20624762dc92cddbf54876b21119664f0a6e129cdf
 
 [[tasks]]
 name = "jacobian/agent-workflow-v1-subspace-direct-sum-counterexample"
-digest = "sha256:80956ff91c69b0ba25f28b55b1ae6e0317c57b8e7f9f4ae4eb289c302b651781"
+digest = "sha256:6a1d30e49d29b7b086194b09fc3df259c28e5d44fd70f71f2a8fe863967cc52c"
+
+[[tasks]]
+name = "jacobian/agent-workflow-v1-well-total-domination-counterexample"
+digest = "sha256:f7aa51bcaa1fd1b30b1c107c02187972e3a0c4c4f63ccf3820cad5309eadb76d"

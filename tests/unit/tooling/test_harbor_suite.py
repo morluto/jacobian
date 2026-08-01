@@ -658,6 +658,6 @@ def test_committed_examples_suite_allows_empty_tasks() -> None:
     assert suite.tasks == ()
 
 
-def test_committed_agent_workflow_suite_has_24_tasks() -> None:
+def test_committed_agent_workflow_suite_has_26_tasks() -> None:
     suite = get_suite("jacobian/agent-workflow-v1")
-    assert len(suite.tasks) == 24
+    assert len(suite.tasks) == 26

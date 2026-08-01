@@ -2,7 +2,7 @@
   "schema_version": "1",
   "plan_id": "jacobian.capability-comparison.v1",
   "status": "SCAFFOLD_ONLY",
-  "captured_at": "2026-07-31",
+  "captured_at": "2026-08-01",
   "evidence_classes": [
     "HARNESS_VALIDATION",
     "PUBLIC_WORKFLOW_OBSERVATION",
@@ -10,8 +10,8 @@
   ],
   "public_reproduction": {
     "path": "benchmarks/datasets/agent-workflow-v1/tasks",
-    "task_count": 24,
-    "manifest_digest": "sha256:6a7a84e4389593b74a0c8554368299fc73f6e96f7d5bb575cfc15013285042ad",
+    "task_count": 26,
+    "manifest_digest": "sha256:9ebc6068e2bd3008fba828b29b26fb2295456358511658e9c5b0c771f529a47e",
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "causal_claims_allowed": false
   },

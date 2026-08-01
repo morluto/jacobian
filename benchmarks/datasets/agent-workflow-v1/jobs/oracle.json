@@ -89,6 +89,12 @@
     },
     {
       "path": "benchmarks/datasets/agent-workflow-v1/tasks/mathematical-sciences/linear-algebra/subspace-direct-sum-counterexample"
+    },
+    {
+      "path": "benchmarks/datasets/agent-workflow-v1/tasks/mathematical-sciences/algebra/finite-magma-countermodel"
+    },
+    {
+      "path": "benchmarks/datasets/agent-workflow-v1/tasks/mathematical-sciences/graph-theory/well-total-domination-counterexample"
     }
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "task_id": "jacobian/agent-workflow-v1-well-total-domination-counterexample",
+  "claim": "Every connected simple graph with more than one vertex whose average degree is at most its number of pendant vertices is well totally dominated.",
+  "definitions": {
+    "pendant_vertex": "A vertex of degree one.",
+    "total_dominating_set": "A vertex set S such that every vertex has a neighbor in S.",
+    "minimal_total_dominating_set": "A total dominating set with no proper subset that is a total dominating set.",
+    "well_totally_dominated": "All minimal total dominating sets have the same cardinality."
+  },
+  "graph": {
+    "vertices": ["0", "1", "2", "3", "4"],
+    "edges": [["0", "1"], ["1", "2"], ["2", "3"], ["3", "4"]]
+  }
+}

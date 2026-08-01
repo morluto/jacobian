@@ -2,7 +2,7 @@ schema_version = "1"
 
 [dataset]
 id = "jacobian/agent-workflow-v1"
-version = "1.0.0"
+version = "1.1.0"
 title = "Jacobian agent workflow observations"
 purpose = "Fixed Jacobian-enabled mathematical workflows for Oracle validation and agent observation."
 claim_class = "workflow-observation"
@@ -152,5 +152,17 @@ required_provider = "core"
 [[tasks]]
 id = "jacobian/agent-workflow-v1-subspace-direct-sum-counterexample"
 path = "tasks/mathematical-sciences/linear-algebra/subspace-direct-sum-counterexample"
+maximum_assurance = "COMPUTED"
+required_provider = "core"
+
+[[tasks]]
+id = "jacobian/agent-workflow-v1-finite-magma-countermodel"
+path = "tasks/mathematical-sciences/algebra/finite-magma-countermodel"
+maximum_assurance = "COMPUTED"
+required_provider = "core"
+
+[[tasks]]
+id = "jacobian/agent-workflow-v1-well-total-domination-counterexample"
+path = "tasks/mathematical-sciences/graph-theory/well-total-domination-counterexample"
 maximum_assurance = "COMPUTED"
 required_provider = "core"

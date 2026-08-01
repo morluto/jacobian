@@ -35,7 +35,7 @@ def test_gap_ledger_covers_the_frozen_public_suite() -> None:
     )
 
     assert ledger_task_ids == task_dirs
-    assert len(ledger_task_ids) == len(set(ledger_task_ids)) == 24
+    assert len(ledger_task_ids) == len(set(ledger_task_ids)) == 26
     manifest_bytes = (WORKFLOW / "dataset.toml").read_bytes()
     manifest_digest = "sha256:" + hashlib.sha256(manifest_bytes).hexdigest()
     assert ledger["source_suite"]["manifest_sha256"] == manifest_digest

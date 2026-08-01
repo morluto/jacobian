@@ -1,6 +1,6 @@
 # Jacobian agent-workflow-v1
 
-This Harbor dataset contains 24 fixed Jacobian-enabled mathematical workflows
+This Harbor dataset contains 26 fixed Jacobian-enabled mathematical workflows
 for Oracle validation and agent observation. Tasks are organized as
 `tasks/mathematical-sciences/<field>/<task-name>/` and retain separate agent,
 Oracle, and verifier containers.
@@ -23,3 +23,7 @@ Five tasks have an operator-authorized verification record and may accept
 unsupported certification claim forces reward to zero. These are workflow
 observations, not a causal performance benchmark: the dataset has no control
 condition or randomized pairing.
+
+Version 1.1.0 adds the independently reviewed finite-magma and
+well-total-domination countermodel cases. Both remain public workflow evidence;
+neither is a held-out capability-benefit case.

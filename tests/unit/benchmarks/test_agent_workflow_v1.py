@@ -13,6 +13,7 @@ EXPECTED_TASKS = {
     "distinct-sum-pairing-optimum",
     "divisibility-construction-witness",
     "euler-line-symbolic-certificate",
+    "finite-magma-countermodel",
     "grounded-premise-proof",
     "graph-counterexample",
     "graph-artifact-composition",
@@ -32,6 +33,7 @@ EXPECTED_TASKS = {
     "polynomial-tail-counterexample",
     "random-function-expectation-audit",
     "subspace-direct-sum-counterexample",
+    "well-total-domination-counterexample",
 }
 REQUIRED_METADATA = {
     "evaluation_kind",
@@ -68,7 +70,8 @@ def test_agent_workflow_v1_has_nested_tasks_and_generated_manifest() -> None:
         assert metadata["fixture_digest"].startswith("sha256:")
         assert (task / "README.md").is_file()
         assert (task / "instruction.md").is_file()
-        assert (task / "environment" / "Dockerfile").is_file()
+        environment_dockerfile = task / "environment" / "Dockerfile"
+        assert environment_dockerfile.is_file()
         assert (task / "environment" / "input.json").is_file()
         assert (task / "environment" / "submission_schema.json").is_file()
         assert (task / "solution").is_dir()
@@ -79,6 +82,7 @@ def test_agent_workflow_v1_has_nested_tasks_and_generated_manifest() -> None:
         assert not (task / "input.json").exists()
         assert not (task / "metadata.json").exists()
         assert not (task / "environment" / "metadata.json").exists()
+        assert "metadata.json" not in environment_dockerfile.read_text()
         input_data = json.loads((task / "environment" / "input.json").read_text())
         assert input_data["task_id"] == config["task"]["name"]
         assert len(metadata["fixture_digest"]) == len("sha256:") + 64

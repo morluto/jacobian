@@ -26,12 +26,14 @@ RATIONAL_TASK = "rational-linear-solution"
 RESOURCE_DERIVED_TASKS = (
     "autoformalization-semantic-audit",
     "calendar-good-days-audit",
+    "finite-magma-countermodel",
     "log-exponent-recovery",
     "matrix-square-zero-counterexample",
     "metric-tsp-proof-repair",
     "polynomial-tail-counterexample",
     "random-function-expectation-audit",
     "subspace-direct-sum-counterexample",
+    "well-total-domination-counterexample",
 )
 VERIFIER_TASKS = tuple(
     sorted(
@@ -260,6 +262,10 @@ def test_resource_derived_oracles_and_assurance_boundary(
             lambda result: result.update(count=15),
         ),
         (
+            "finite-magma-countermodel",
+            lambda result: result["table"][1].__setitem__(1, 2),
+        ),
+        (
             "matrix-square-zero-counterexample",
             lambda result: result.update(matrix=[[1, 0], [0, 0]]),
         ),
@@ -274,6 +280,10 @@ def test_resource_derived_oracles_and_assurance_boundary(
         (
             "subspace-direct-sum-counterexample",
             lambda result: result.update(dependence_coefficients=[1, 1, 1, 1]),
+        ),
+        (
+            "well-total-domination-counterexample",
+            lambda result: result.update(degree_sum=7),
         ),
         (
             "log-exponent-recovery",
@@ -421,6 +431,48 @@ def test_metric_tsp_repair_accepts_reversed_optimal_tour(tmp_path: Path) -> None
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_finite_magma_accepts_alternate_smallest_countermodel(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_case(
+        tmp_path,
+        "finite-magma-countermodel",
+        "computed",
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["table"] = [[1, 0], [1, 0]]
+    _bind_result_evidence(app, submission)
+    _write_json(submission_path, submission)
+
+    accepted = _run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_total_domination_accepts_reordered_exact_witnesses(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_case(
+        tmp_path,
+        "well-total-domination-counterexample",
+        "computed",
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["pendant_vertices"] = ["4", "0"]
+    submission["result"]["minimal_total_dominating_sets"] = [
+        ["4", "3", "1", "0"],
+        ["3", "2", "1"],
+    ]
+    _bind_result_evidence(app, submission)
+    _write_json(submission_path, submission)
+
+    accepted = _run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
 def test_autoformalization_audit_accepts_alternative_exact_witnesses(
     tmp_path: Path,
 ) -> None:
@@ -474,8 +526,10 @@ def test_autoformalization_audit_rejects_incomplete_defect_set(
     [
         "autoformalization-semantic-audit",
         "divisibility-construction-witness",
+        "finite-magma-countermodel",
         "metric-tsp-proof-repair",
         "natural-subtraction-proof-repair",
+        "well-total-domination-counterexample",
     ],
 )
 def test_verifiers_reject_replaced_workspace_inputs(
@@ -498,9 +552,11 @@ def test_verifiers_reject_replaced_workspace_inputs(
     [
         "autoformalization-semantic-audit",
         "divisibility-construction-witness",
+        "finite-magma-countermodel",
         "metric-tsp-proof-repair",
         "modular-cubic-obstruction",
         "natural-subtraction-proof-repair",
+        "well-total-domination-counterexample",
     ],
 )
 def test_hardening_targets_accept_reference_solutions(

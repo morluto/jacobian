@@ -948,6 +948,17 @@ def _normalize_trial(
     return normalized, artifact_failures
 
 
+def _artifact_source_prefix(runtime: dict[str, Any] | None) -> str | None:
+    if runtime is None:
+        return None
+    pair_id = runtime.get("pair_id")
+    condition = runtime.get("condition")
+    condition_id = condition.get("id") if isinstance(condition, dict) else None
+    if isinstance(pair_id, str) and isinstance(condition_id, str):
+        return f"{pair_id}/{condition_id}"
+    return None
+
+
 def _observation_failures(
     *,
     counters: Counter[str],
@@ -1102,13 +1113,7 @@ def build_observation_evidence(
     trials: list[dict[str, Any]] = []
     artifact_failures: list[str] = []
     job_label = _display_path(job_path)
-    source_prefix: str | None = None
-    if runtime_snapshot is not None:
-        pair_id = runtime_snapshot.get("pair_id")
-        condition = runtime_snapshot.get("condition")
-        condition_id = condition.get("id") if isinstance(condition, dict) else None
-        if isinstance(pair_id, str) and isinstance(condition_id, str):
-            source_prefix = f"{pair_id}/{condition_id}"
+    source_prefix = _artifact_source_prefix(runtime_snapshot)
     for path, raw in raw_trials:
         task = _task_id(raw.get("task_name"))
         repetition = counters[task]

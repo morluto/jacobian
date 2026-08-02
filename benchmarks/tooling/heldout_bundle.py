@@ -138,9 +138,7 @@ def _safe_extract(archive: Path, output: Path) -> None:
         tar.extractall(output, members=members, filter="data")
 
 
-def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
-    dataset_root = _bundle_path(root, manifest["dataset"]["path"])
-    dataset_manifest = dataset_root / "dataset.toml"
+def _verify_dataset_manifest(manifest: dict[str, Any], dataset_manifest: Path) -> None:
     if _digest(dataset_manifest) != manifest["dataset"]["manifest_digest"]:
         raise HarborSuiteError("held-out dataset manifest digest mismatch")
     if dataset_manifest.is_symlink():
@@ -166,6 +164,12 @@ def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
     }
     if declared != expected:
         raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")
+
+
+def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
+    dataset_root = _bundle_path(root, manifest["dataset"]["path"])
+    dataset_manifest = dataset_root / "dataset.toml"
+    _verify_dataset_manifest(manifest, dataset_manifest)
     prompt = _bundle_path(root, manifest["experiment"]["prompt_path"])
     if _digest(prompt) != manifest["experiment"]["prompt_digest"]:
         raise HarborSuiteError("held-out prompt digest mismatch")

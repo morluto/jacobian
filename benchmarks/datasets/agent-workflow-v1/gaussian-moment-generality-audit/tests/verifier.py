@@ -170,11 +170,6 @@ def construction_valid(result: object, frozen: dict[str, Any]) -> bool:
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         return False
 
-    expected_v = [
-        Fraction(-1),
-        Fraction(-3, 2) / parameter,
-        Fraction(-1, 2) / (parameter * parameter),
-    ]
     h_at_zeta = evaluate_polynomial(h, zeta)
     v_at_zeta = evaluate_polynomial(v, zeta)
     branch_exact = zeta == T * h_at_zeta
@@ -187,7 +182,6 @@ def construction_valid(result: object, frozen: dict[str, Any]) -> bool:
 
     return bool(
         h == [parameter, Fraction(1)]
-        and v == expected_v
         and branch_exact
         and correction == target_correction
         and ONE + T.scale(Fraction(-1)) == ONE_MINUS_T

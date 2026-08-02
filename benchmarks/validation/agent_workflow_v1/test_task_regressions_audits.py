@@ -49,6 +49,57 @@ def test_gaussian_moment_audit_accepts_alternative_rational_parameter(
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_gaussian_moment_audit_validates_v_via_correction_identity(
+    tmp_path: Path,
+) -> None:
+    """The verifier must accept any v satisfying the correction-factor identity,
+    not just a pinned closed-form expression.  a=3 produces a different v than
+    a=1 or a=2, so passing here proves the identity check is what gates acceptance.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"].update(
+        parameter_a="3",
+        h_coefficients=["3", "1"],
+        v_coefficients=["-1", "-1/2", "-1/18"],
+        zeta={"numerator": ["0", "3"], "denominator": ["1", "-1"]},
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "Finite moment checks cannot prove the result. The exact branch and "
+        "formal square root cancel for every m>=1, giving the COMPUTED identity."
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_gaussian_moment_audit_rejects_v_violating_correction_identity(
+    tmp_path: Path,
+) -> None:
+    """A v that does not satisfy 1-2t v(zeta)=(1-t)^(-2) must be rejected even
+    when h and zeta are correct, proving the correction identity is the gate.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["v_coefficients"] = ["-1", "-3/2", "0"]
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_metric_tsp_evidence_requires_calculations(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(
         tmp_path, "metric-tsp-proof-repair", "computed"

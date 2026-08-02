@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["difficulty-provisional", "regression", "exact-symbolic-identity", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-dataset-derived-symbolic-proof"
-fixture_digest = "sha256:ae3f4f673a3950152fe46cd6a20ee0b84159f53aad0833507ebea1e8df5995a7"
+fixture_digest = "sha256:38918ddfc961e48b63ff4fdf5ab74c380f70e732f81f13fe4a6bffd20f0d7f26"
 derivation = "Derived from lm-provers/FineProofs-SFT default train row 376 at revision 73661e62811cf2940a0d3f82788a4f4332204c2f."
 [agent]
 timeout_sec = 600.0

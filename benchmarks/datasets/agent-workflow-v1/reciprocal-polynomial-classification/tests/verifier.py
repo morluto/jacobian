@@ -83,7 +83,7 @@ def _result_is_valid(result, frozen):
     if not isinstance(result, dict) or set(result) != required:
         return False
     m = result["m"]
-    bounds = frozen.get("parameter_bounds", {})
+    bounds = frozen.get("family_index_bounds", {})
     if (
         type(m) is not int
         or not isinstance(bounds, dict)
@@ -115,6 +115,7 @@ def _result_is_valid(result, frozen):
 
     return bool(
         frozen.get("coefficient_domain") == "ZZ"
+        and frozen.get("degree_bounds") == {"minimum": 11, "maximum": 39}
         and polynomial == expected_polynomial
         and quotient == expected_quotient
         and reverse == expected_reverse

@@ -175,7 +175,7 @@ def _evidence_matches(evidence):
         and "orbit" in text
         and ("phi_1" in text or "phi1" in text)
         and "p(1)" in text
-        and ("x-1" in text or "x − 1" in text)
+        and "x-1" in text
         and ("coefficient symmetry" in text or "reciprocal" in text)
     )
 

@@ -430,8 +430,10 @@ def test_exact_independence_number_stops_at_the_order_boundary(
     invariant = result.output["results"][0]["result"]
     assert invariant["status"] == expected_status
     if order == 24:
+        assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
         assert invariant["value"] == 24
     else:
+        assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
         assert invariant["value"] is None
         assert "limited to graphs of order 24" in invariant["detail"]
 

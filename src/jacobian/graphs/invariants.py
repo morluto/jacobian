@@ -177,6 +177,9 @@ class GraphPropertyAdapter:
             **batch.model_dump(mode="python"),
             property_artifact_uri=property_artifact.artifact_uri,
         )
+        has_incomplete_results = any(
+            binding.result.status == "NOT_COMPUTED" for binding in bindings
+        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -196,11 +199,17 @@ class GraphPropertyAdapter:
                 artifact_uri=graph_uri,
             ),
             completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
+                status=(
+                    CapabilityCompletenessStatus.PARTIAL
+                    if has_incomplete_results
+                    else CapabilityCompletenessStatus.COMPLETE
+                ),
                 basis=(
-                    "every requested invariant received a terminal COMPUTED, "
-                    "NOT_COMPUTED, NOT_APPLICABLE, or UNSUPPORTED result under "
-                    "registry version 1"
+                    "at least one requested invariant was not computed because "
+                    "the declared exact scope exceeded its safety boundary"
+                    if has_incomplete_results
+                    else "every requested invariant received a terminal COMPUTED, "
+                    "NOT_APPLICABLE, or UNSUPPORTED result under registry version 1"
                 ),
                 assurance_level=CapabilityAssuranceLevel.COMPUTED,
             ),

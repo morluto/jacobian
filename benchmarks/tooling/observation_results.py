@@ -1,4 +1,23 @@
-"""Normalize and compare Harbor model-in-the-loop observation results."""
+"""Normalize and compare Harbor model-in-the-loop observation results.
+
+This is the strict normalized observation evidence *v2* implementation.  It
+replaces v1 atomically and tightens three classes of contract that v1 left
+implicit:
+
+* **Dataset/task selection** is normalized to exactly one of the two Harbor job
+  forms -- ``datasets[].path`` with optional ``task_names`` or explicit
+  ``tasks[].path``.  Mixed selections, outside-dataset paths, unknown task
+  names, empty selections, and the v1 implicit "fall back to all known tasks"
+  behavior are rejected.
+* **Artifact identity** binds ``job``/``trial``/``step``/canonical source
+  path/artifact-relative path/digest for every observed trace artifact.
+  Identical bytes at distinct canonical source paths remain distinct and
+  allowed; reusing the same canonical source path more than once is rejected.
+* **Path hygiene** rejects absolute, traversal, escaping-symlink, missing
+  manifest, and malformed multistep paths.  The evidence fails closed:
+  ``TIMEOUT``/``CANCELLED``/``ERROR`` and incomplete enumeration never produce
+  ``VALID`` evidence and never authorize a causal claim.
+"""
 
 from __future__ import annotations
 
@@ -108,17 +127,255 @@ def _object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _expected_tasks(job: dict[str, Any], known: set[str]) -> set[str]:
+# ---------------------------------------------------------------------------
+# Strict dataset/task selection normalization (v2)
+# ---------------------------------------------------------------------------
+
+
+def _selection_known(
+    dataset: str, heldout_manifest: dict[str, Any] | None
+) -> tuple[dict[str, str], dict[str, Path], Path | None, str, str]:
+    """Return (name->digest, name->task_dir, dataset_path, evidence_class, dataset_id)."""
+
+    if heldout_manifest is not None:
+        known = {
+            str(item["id"]): str(item["digest"]) for item in heldout_manifest["tasks"]
+        }
+        dataset_path = None
+        evidence_class = "held-out-comparative-evaluation"
+        dataset_id = str(heldout_manifest.get("dataset", {}).get("id", dataset))
+        return known, {}, dataset_path, evidence_class, dataset_id
+
+    suite = get_suite(dataset)
+    known = {
+        ref.path.name: "sha256:" + task_digest(ref.path).removeprefix("sha256:")
+        for ref in suite.tasks
+    }
+    task_dirs = {ref.path.name: ref.path for ref in suite.tasks}
+    evidence_class = (
+        "workflow-observation"
+        if suite.claim_class == "workflow-observation"
+        else suite.claim_class
+    )
+    return known, task_dirs, suite.path, evidence_class, suite.id
+
+
+def _reject_path(value: str, *, label: str) -> list[str]:
+    """Reject absolute, traversal, and escaping-symlink paths lexically."""
+
+    failures: list[str] = []
+    candidate = Path(value)
+    if candidate.is_absolute():
+        failures.append(f"{label} must be relative: {value!r}")
+        return failures
+    parts = candidate.parts
+    if any(part == ".." for part in parts):
+        failures.append(f"{label} must not traverse parent directories: {value!r}")
+        return failures
+    if any(part in {"", "."} for part in parts) and len(parts) > 1:
+        failures.append(f"{label} is malformed: {value!r}")
+    # Walk the lexical chain from ROOT to detect symlinks without resolving.
+    current = ROOT
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            failures.append(f"{label} crosses an escaping symlink: {value!r}")
+            return failures
+    return failures
+
+
+def _validate_explicit_task_path(
+    value: str,
+    *,
+    dataset_path: Path | None,
+    task_dirs: dict[str, Path],
+) -> tuple[str | None, list[str]]:
+    failures = _reject_path(value, label="explicit task path")
+    if failures:
+        return None, failures
+    resolved = (ROOT / value).resolve()
+    try:
+        resolved.relative_to(ROOT)
+    except ValueError:
+        failures.append(f"explicit task path escapes repository: {value!r}")
+        return None, failures
+    if dataset_path is not None:
+        try:
+            resolved.relative_to(dataset_path.resolve())
+        except ValueError:
+            failures.append(f"explicit task path is outside the dataset: {value!r}")
+            return None, failures
+    short = resolved.name
+    expected = task_dirs.get(short)
+    if expected is None or expected.resolve() != resolved:
+        failures.append(f"explicit task path is not a known task: {value!r}")
+        return None, failures
+    manifest = resolved / "task.toml"
+    if not manifest.is_file() or manifest.is_symlink():
+        failures.append(f"explicit task is missing its manifest: {value!r}")
+        return None, failures
+    return short, failures
+
+
+def _normalize_selection(
+    job: dict[str, Any],
+    *,
+    known: dict[str, str],
+    task_dirs: dict[str, Path],
+    dataset_path: Path | None,
+) -> tuple[list[str], str, dict[str, Any], list[str]]:
+    """Normalize exactly one selection form; reject mixed/unknown/empty/fallback."""
+
+    failures: list[str] = []
+    has_datasets = job.get("datasets") is not None
+    has_tasks = job.get("tasks") is not None
+    if has_datasets and has_tasks:
+        failures.append(
+            "job must select tasks via datasets or explicit tasks, not both"
+        )
+        return [], "mixed", _eval_args("mixed", [], None, None, 0), failures
+    if has_datasets:
+        return _normalize_dataset_selection(job["datasets"], known=known)
+    if has_tasks:
+        return _normalize_explicit_selection(
+            job["tasks"], task_dirs=task_dirs, dataset_path=dataset_path
+        )
+    failures.append(
+        "job must select tasks via datasets or explicit tasks; "
+        "implicit fallback to all known tasks is forbidden"
+    )
+    return (
+        [],
+        "implicit-fallback",
+        _eval_args("implicit-fallback", [], None, None, 0),
+        failures,
+    )
+
+
+def _normalize_dataset_selection(
+    datasets: Any, *, known: dict[str, str]
+) -> tuple[list[str], str, dict[str, Any], list[str]]:
+    failures: list[str] = []
+    if not isinstance(datasets, list) or not datasets:
+        failures.append("job datasets must be a non-empty array")
+        return (
+            [],
+            "dataset-task-names",
+            _eval_args("dataset-task-names", [], None, None, 0),
+            failures,
+        )
     selected: set[str] = set()
-    for item in job.get("datasets", []):
-        if not isinstance(item, dict):
+    norm_datasets: list[dict[str, Any]] = []
+    for entry in datasets:
+        normalized, names, entry_failures = _normalize_dataset_entry(entry, known)
+        failures.extend(entry_failures)
+        if normalized is not None:
+            norm_datasets.append(normalized)
+            selected.update(names)
+    selected_sorted = sorted(selected)
+    if not selected_sorted and not failures:
+        failures.append("dataset selection resolved to no tasks")
+    eval_args = _eval_args(
+        "dataset-task-names", selected_sorted, norm_datasets, None, 0
+    )
+    return selected_sorted, "dataset-task-names", eval_args, failures
+
+
+def _normalize_dataset_entry(
+    entry: Any, known: dict[str, str]
+) -> tuple[dict[str, Any] | None, list[str], list[str]]:
+    if not isinstance(entry, dict):
+        return None, [], ["job dataset entry must be an object"]
+    path = entry.get("path")
+    if not isinstance(path, str) or not path:
+        return None, [], ["job dataset entry must have a non-empty path"]
+    task_names = entry.get("task_names")
+    if task_names is None:
+        return {"path": path, "task_names": None}, list(known), []
+    if not isinstance(task_names, list) or not task_names:
+        return None, [], ["task_names must be a non-empty array when present"]
+    names: list[str] = []
+    failures: list[str] = []
+    for name in task_names:
+        if not isinstance(name, str) or not name:
+            failures.append("task_names must be non-empty strings")
+        elif name not in known:
+            failures.append(f"unknown task name in dataset selection: {name}")
+        else:
+            names.append(name)
+    return {"path": path, "task_names": names}, names, failures
+
+
+def _normalize_explicit_selection(
+    tasks: Any, *, task_dirs: dict[str, Path], dataset_path: Path | None
+) -> tuple[list[str], str, dict[str, Any], list[str]]:
+    failures: list[str] = []
+    if not isinstance(tasks, list) or not tasks:
+        failures.append("job tasks must be a non-empty array")
+        return (
+            [],
+            "explicit-tasks",
+            _eval_args("explicit-tasks", [], None, None, 0),
+            failures,
+        )
+    selected: set[str] = set()
+    norm_tasks: list[dict[str, Any]] = []
+    for entry in tasks:
+        if not isinstance(entry, dict):
+            failures.append("job task entry must be an object")
             continue
-        names = item.get("task_names")
-        selected.update(known if names is None else names)
-    return selected or known
+        path = entry.get("path")
+        if not isinstance(path, str) or not path:
+            failures.append("job task entry must have a non-empty path")
+            continue
+        short, path_failures = _validate_explicit_task_path(
+            path, dataset_path=dataset_path, task_dirs=task_dirs
+        )
+        failures.extend(path_failures)
+        if short is not None:
+            if short in selected:
+                failures.append(f"explicit task path reused: {path!r}")
+            selected.add(short)
+        norm_tasks.append({"path": path})
+    selected_sorted = sorted(selected)
+    if not selected_sorted and not failures:
+        failures.append("explicit task selection resolved to no tasks")
+    eval_args = _eval_args("explicit-tasks", selected_sorted, None, norm_tasks, 0)
+    return selected_sorted, "explicit-tasks", eval_args, failures
+
+
+def _eval_args(
+    mode: str,
+    selection: list[str],
+    datasets: list[dict[str, Any]] | None,
+    tasks: list[dict[str, Any]] | None,
+    n_attempts: int,
+) -> dict[str, Any]:
+    record = {
+        "selection_mode": mode,
+        "datasets": datasets,
+        "tasks": tasks,
+        "selection": selection,
+        "n_attempts": n_attempts,
+    }
+    record["selection_digest"] = _json_digest(
+        {
+            "selection_mode": mode,
+            "datasets": datasets,
+            "tasks": tasks,
+            "selection": selection,
+        }
+    )
+    return record
 
 
 def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
+    """Normalize only the frozen Jacobian treatment additions.
+
+    Any other condition-specific Compose or MCP change remains in the
+    comparison signature and therefore invalidates the pair.
+    """
+
     normalized: dict[str, Any] = json.loads(json.dumps(job))
     normalized.pop("jobs_dir", None)
     environment = normalized.get("environment")
@@ -126,13 +383,26 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
         compose = environment.get("extra_docker_compose")
         if isinstance(compose, list):
             environment["extra_docker_compose"] = [
-                value
-                for value in compose
-                if Path(str(value)).name == "agent-eval-proxy.compose.yaml"
+                value for value in compose if Path(str(value)).name != "c2.compose.json"
             ]
     for agent in normalized.get("agents", []):
         if isinstance(agent, dict):
-            agent.pop("mcp_servers", None)
+            servers = agent.get("mcp_servers")
+            if isinstance(servers, list):
+                remaining = [
+                    server
+                    for server in servers
+                    if server
+                    != {
+                        "name": "jacobian",
+                        "transport": "streamable-http",
+                        "url": "http://jacobian:8000/mcp",
+                    }
+                ]
+                if remaining:
+                    agent["mcp_servers"] = remaining
+                else:
+                    agent.pop("mcp_servers", None)
     return normalized
 
 
@@ -185,55 +455,481 @@ def _read_trace(path: Path, calls: Counter[str]) -> int:
     return 0
 
 
-def _trace_summary(trial_path: Path | None) -> dict[str, Any]:
-    if trial_path is None:
-        return {"artifacts": [], "tool_calls": {}, "tool_errors": 0}
-    root = trial_path.parent
-    candidates = sorted(
-        path
-        for path in root.rglob("*")
-        if path.is_file()
-        and any(
-            marker in path.name.lower()
-            for marker in ("trajectory", "atif", "telemetry")
+_MANIFEST_FILENAME = "manifest.json"
+_ARTIFACTS_DIR = "artifacts"
+_STEPS_DIR = "steps"
+_MANIFEST_STATUSES_OK = {"ok"}
+_MANIFEST_STATUSES_NON_CONCLUSION = {"failed", "empty", "skipped"}
+_MANIFEST_STATUSES = _MANIFEST_STATUSES_OK | _MANIFEST_STATUSES_NON_CONCLUSION
+
+
+def _artifact_path_failures(path: Path, trial_root: Path) -> list[str]:
+    """Reject absolute, traversal, escaping-symlink, and malformed multistep paths."""
+
+    failures: list[str] = []
+    try:
+        rel = path.relative_to(trial_root)
+    except ValueError:
+        return [f"artifact path escapes trial root: {path}"]
+    parts = rel.parts
+    if not parts:
+        return []
+    if any(part == ".." for part in parts):
+        failures.append(f"artifact path traversal forbidden: {rel.as_posix()}")
+        return failures
+    if any(part == "" for part in parts):
+        failures.append(f"artifact path is malformed: {rel.as_posix()}")
+        return failures
+    current = trial_root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            failures.append(
+                f"artifact path crosses an escaping symlink: {rel.as_posix()}"
+            )
+            return failures
+    try:
+        path.resolve().relative_to(trial_root.resolve())
+    except ValueError:
+        failures.append(f"artifact path escapes trial root: {rel.as_posix()}")
+    return failures
+
+
+def _canonical_source_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
+def _validate_manifest_entry(entry: Any, *, location: str) -> list[str]:
+    """Validate one Harbor 0.20 ``ArtifactManifestEntry`` shape."""
+
+    failures: list[str] = []
+    if not isinstance(entry, dict):
+        return [f"{location}: manifest entry must be an object"]
+    for field in ("source", "destination", "type", "status"):
+        if field not in entry:
+            failures.append(f"{location}: manifest entry missing field {field!r}")
+    if failures:
+        return failures
+    source = entry.get("source")
+    destination = entry.get("destination")
+    entry_type = entry.get("type")
+    status = entry.get("status")
+    service = entry.get("service")
+    if not isinstance(source, str) or not source:
+        failures.append(f"{location}: manifest entry source must be a non-empty string")
+    if not isinstance(destination, str) or not destination:
+        failures.append(
+            f"{location}: manifest entry destination must be a non-empty string"
         )
+    if entry_type not in {"file", "directory"}:
+        failures.append(f"{location}: manifest entry type must be file or directory")
+    if status not in _MANIFEST_STATUSES:
+        failures.append(
+            f"{location}: manifest entry status must be one of "
+            f"{sorted(_MANIFEST_STATUSES)}"
+        )
+    if service is not None and (not isinstance(service, str) or not service):
+        failures.append(
+            f"{location}: manifest entry service must be null or a non-empty string"
+        )
+    return failures
+
+
+def _manifest_destination(entry: dict[str, Any]) -> str | None:
+    destination = entry.get("destination")
+    if not isinstance(destination, str) or not destination:
+        return None
+    if destination.startswith("artifacts/"):
+        return destination.removeprefix("artifacts/")
+    if destination == "artifacts":
+        return ""
+    return destination
+
+
+def _bind_manifest_file(
+    host_path: Path,
+    *,
+    artifacts_dir: Path,
+    trial_root: Path,
+    rel: str,
+    entry: dict[str, Any],
+    job_label: str,
+    trial_name: str,
+    step_index: int,
+    step_name: str | None,
+    source_prefix: str | None,
+) -> dict[str, Any]:
+    source = entry.get("source")
+    service = entry.get("service")
+    return _bind_artifact_file(
+        host_path=host_path,
+        artifacts_dir=artifacts_dir,
+        trial_root=trial_root,
+        rel=rel,
+        manifest_source=str(source) if isinstance(source, str) else "",
+        service=service if isinstance(service, str) else None,
+        job_label=job_label,
+        trial_name=trial_name,
+        step_index=step_index,
+        step_name=step_name,
+        source_prefix=source_prefix,
     )
-    calls: Counter[str] = Counter()
-    artifacts = [
-        {"path": path.relative_to(root).as_posix(), "digest": _sha256(path)}
-        for path in candidates
-    ]
-    errors = sum(_read_trace(path, calls) for path in candidates)
+
+
+def _manifest_file_artifacts(
+    host_path: Path, **context: Any
+) -> tuple[list[dict[str, Any]], list[str]]:
+    trial_name = str(context["trial_name"])
+    index = int(context["index"])
+    rel = str(context["rel"])
+    if not host_path.is_file():
+        return [], [
+            f"trial {trial_name}: manifest entry {index} file is missing on disk: {rel}"
+        ]
+    if host_path.is_symlink():
+        return [], [
+            f"trial {trial_name}: manifest entry {index} file is a forbidden symlink: {rel}"
+        ]
+    bind_context = {key: value for key, value in context.items() if key != "index"}
+    return [_bind_manifest_file(host_path, **bind_context)], []
+
+
+def _manifest_directory_artifacts(
+    host_path: Path, **context: Any
+) -> tuple[list[dict[str, Any]], list[str]]:
+    trial_name = str(context["trial_name"])
+    index = int(context["index"])
+    rel = str(context["rel"])
+    if not host_path.is_dir():
+        return [], [
+            f"trial {trial_name}: manifest entry {index} directory is missing on disk: {rel}"
+        ]
+    if host_path.is_symlink():
+        return [], [
+            f"trial {trial_name}: manifest entry {index} directory is a forbidden symlink: {rel}"
+        ]
+    regular_files = sorted(
+        child
+        for child in host_path.rglob("*")
+        if child.is_file() and not child.is_symlink()
+    )
+    if not regular_files:
+        return [], [
+            f"trial {trial_name}: manifest entry {index} ok directory is unexpectedly empty: {rel}"
+        ]
+    artifacts: list[dict[str, Any]] = []
+    failures: list[str] = []
+    artifacts_dir = context["artifacts_dir"]
+    bind_context = {key: value for key, value in context.items() if key != "index"}
+    for child in regular_files:
+        child_failures = _artifact_path_failures(child, artifacts_dir)
+        failures.extend(child_failures)
+        if not child_failures:
+            bind_context["rel"] = child.relative_to(artifacts_dir).as_posix()
+            artifacts.append(_bind_manifest_file(child, **bind_context))
+    return artifacts, failures
+
+
+def _manifest_entry_artifacts(
+    entry: Any,
+    *,
+    index: int,
+    artifacts_dir: Path,
+    trial_root: Path,
+    trial_name: str,
+    job_label: str,
+    step_index: int,
+    step_name: str | None,
+    source_prefix: str | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    location = f"trial {trial_name} manifest[{index}]"
+    failures = _validate_manifest_entry(entry, location=location)
+    if not isinstance(entry, dict):
+        return [], failures
+    status = entry.get("status")
+    if status in _MANIFEST_STATUSES_NON_CONCLUSION:
+        failures.append(
+            f"trial {trial_name}: artifact manifest entry {index} has "
+            f"non-conclusion status {status!r} (source={entry.get('source')!r})"
+        )
+        return [], failures
+    if status != "ok":
+        return [], failures
+    rel = _manifest_destination(entry)
+    if rel is None:
+        return [], failures
+    if not rel:
+        failures.append(
+            f"trial {trial_name}: manifest entry {index} destination resolves "
+            f"to the artifacts root: {entry.get('destination')!r}"
+        )
+        return [], failures
+    host_path = artifacts_dir / rel
+    path_failures = _artifact_path_failures(host_path, artifacts_dir)
+    failures.extend(path_failures)
+    if path_failures:
+        return [], failures
+    context = {
+        "index": index,
+        "artifacts_dir": artifacts_dir,
+        "trial_root": trial_root,
+        "rel": rel,
+        "entry": entry,
+        "job_label": job_label,
+        "trial_name": trial_name,
+        "step_index": step_index,
+        "step_name": step_name,
+        "source_prefix": source_prefix,
+    }
+    if entry.get("type") == "file":
+        artifacts, entry_failures = _manifest_file_artifacts(host_path, **context)
+    elif entry.get("type") == "directory":
+        artifacts, entry_failures = _manifest_directory_artifacts(host_path, **context)
+    else:
+        artifacts, entry_failures = (
+            [],
+            [
+                f"trial {trial_name}: manifest entry {index} has unknown type {entry.get('type')!r}"
+            ],
+        )
+    failures.extend(entry_failures)
+    return artifacts, failures
+
+
+def _manifest_artifacts_for_dir(
+    artifacts_dir: Path,
+    *,
+    trial_root: Path,
+    trial_name: str,
+    job_label: str,
+    step_index: int,
+    step_name: str | None,
+    source_prefix: str | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Read one ``artifacts/manifest.json`` and bind every ``ok`` entry.
+
+    Harbor 0.20 writes ``manifest.json`` as a JSON array of entries
+    ``{source, destination, type, status, service}``.  ``destination`` is the
+    artifact-relative path (``artifacts/<relative>``); ``source`` is the
+    canonical container source path.  Only ``ok`` entries have a collected
+    file on disk; ``failed``/``empty``/``skipped`` are non-conclusion records
+    that are surfaced as failures because evidence is incomplete.
+    """
+
+    failures: list[str] = []
+    if not artifacts_dir.is_dir():
+        failures.append(
+            f"trial {trial_name}: artifacts directory is missing: "
+            f"{artifacts_dir.relative_to(trial_root) if trial_root in artifacts_dir.parents or artifacts_dir == trial_root else artifacts_dir}"
+        )
+        return [], failures
+    manifest_path = artifacts_dir / _MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        failures.append(f"trial {trial_name}: artifact manifest is missing")
+        return [], failures
+    if manifest_path.is_symlink():
+        failures.append(f"trial {trial_name}: artifact manifest is a forbidden symlink")
+        return [], failures
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        failures.append(f"trial {trial_name}: artifact manifest is unreadable: {exc}")
+        return [], failures
+    if not isinstance(raw, list):
+        failures.append(f"trial {trial_name}: artifact manifest must be a JSON array")
+        return [], failures
+    if not raw:
+        failures.append(f"trial {trial_name}: artifact manifest is empty")
+        return [], failures
+    artifacts: list[dict[str, Any]] = []
+    for index, entry in enumerate(raw):
+        entry_artifacts, entry_failures = _manifest_entry_artifacts(
+            entry,
+            index=index,
+            artifacts_dir=artifacts_dir,
+            trial_root=trial_root,
+            trial_name=trial_name,
+            job_label=job_label,
+            step_index=step_index,
+            step_name=step_name,
+            source_prefix=source_prefix,
+        )
+        artifacts.extend(entry_artifacts)
+        failures.extend(entry_failures)
+    return artifacts, failures
+
+
+def _bind_artifact_file(
+    *,
+    host_path: Path,
+    artifacts_dir: Path,
+    trial_root: Path,
+    rel: str,
+    manifest_source: str,
+    service: str | None,
+    job_label: str,
+    trial_name: str,
+    step_index: int,
+    step_name: str | None,
+    source_prefix: str | None,
+) -> dict[str, Any]:
+    """Bind one regular on-disk file to a manifest-driven artifact identity."""
+
+    try:
+        source_path = host_path.relative_to(trial_root.parent).as_posix()
+    except ValueError:
+        source_path = rel
+    if source_prefix:
+        source_path = f"{source_prefix.rstrip('/')}/{source_path}"
     return {
-        "artifacts": artifacts,
-        "tool_calls": dict(sorted(calls.items())),
-        "tool_errors": errors,
+        "job": job_label,
+        "trial": trial_name,
+        "step": step_index,
+        "step_name": step_name,
+        "source_path": source_path,
+        "manifest_source": manifest_source,
+        "service": service,
+        "artifact_path": rel,
+        "digest": _sha256(host_path),
     }
 
 
+def _trial_artifacts(
+    trial_path: Path | None,
+    trial_name: str,
+    job_label: str,
+    *,
+    source_prefix: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int], int, list[str]]:
+    """Collect manifest-driven artifacts for one trial.
+
+    Single-step trials expose ``<trial>/artifacts/manifest.json``; multi-step
+    trials expose ``<trial>/steps/<step>/artifacts/manifest.json`` per step.
+    Both are read; every ``ok`` entry binds ``job``/``trial``/``step``/
+    ``step_name``/``source``/``service``/``artifact_path``/``digest``.
+    Missing manifests, missing files, malformed entries, and non-conclusion
+    statuses are failures (evidence fails closed).
+    """
+
+    if trial_path is None:
+        return [], {}, 0, []
+    root = trial_path.parent
+    artifacts: list[dict[str, Any]] = []
+    failures: list[str] = []
+    steps_dir = root / _STEPS_DIR
+    if steps_dir.is_dir():
+        step_dirs = sorted(
+            path
+            for path in steps_dir.iterdir()
+            if path.is_dir() and not path.is_symlink()
+        )
+        if not step_dirs:
+            failures.append(f"trial {trial_name}: steps directory is empty")
+        for step_index, step_dir in enumerate(step_dirs):
+            step_artifacts, step_failures = _manifest_artifacts_for_dir(
+                step_dir / _ARTIFACTS_DIR,
+                trial_root=root,
+                trial_name=trial_name,
+                job_label=job_label,
+                step_index=step_index,
+                step_name=step_dir.name,
+                source_prefix=source_prefix,
+            )
+            artifacts.extend(step_artifacts)
+            failures.extend(step_failures)
+    else:
+        step_artifacts, step_failures = _manifest_artifacts_for_dir(
+            root / _ARTIFACTS_DIR,
+            trial_root=root,
+            trial_name=trial_name,
+            job_label=job_label,
+            step_index=0,
+            step_name=None,
+            source_prefix=source_prefix,
+        )
+        artifacts.extend(step_artifacts)
+        failures.extend(step_failures)
+    # Tool-call accounting reads trace-shaped files via their canonical host
+    # source_path (which includes the artifacts/ or steps/<step>/artifacts/
+    # prefix); it never introduces artifacts on its own.
+    calls: Counter[str] = Counter()
+    trace_paths = [
+        root.parent / artifact["source_path"]
+        for artifact in artifacts
+        if any(
+            marker in Path(artifact["artifact_path"]).name.lower()
+            for marker in ("trajectory", "atif", "telemetry")
+        )
+    ]
+    errors = sum(_read_trace(path, calls) for path in trace_paths)
+    return artifacts, dict(sorted(calls.items())), errors, failures
+
+
+def _trial_status(trial: dict[str, Any], exception: Any) -> str:
+    raw = trial.get("status")
+    if isinstance(raw, str) and raw in {"TIMEOUT", "CANCELLED"}:
+        return raw
+    if exception is not None:
+        return "ERROR"
+    return "COMPLETED"
+
+
 def _normalize_trial(
-    path: Path | None, trial: dict[str, Any], repetition: int
-) -> dict[str, Any]:
+    path: Path | None,
+    trial: dict[str, Any],
+    repetition: int,
+    *,
+    job_label: str,
+    runtime: dict[str, Any] | None,
+    source_prefix: str | None = None,
+) -> tuple[dict[str, Any], list[str]]:
     agent_result = _object(trial.get("agent_result"))
     agent_info = _object(trial.get("agent_info"))
     model_info = _object(agent_info.get("model_info"))
     verifier = _object(trial.get("verifier_result"))
     rewards = _object(verifier.get("rewards"))
     exception = trial.get("exception_info")
-    return {
+    verifier_state = verifier.get("status")
+    if not isinstance(verifier_state, str):
+        verifier_state = verifier.get("state")
+    if not isinstance(verifier_state, str):
+        verifier_state = None
+    artifacts, tool_calls, tool_errors, artifact_failures = _trial_artifacts(
+        path,
+        str(trial.get("trial_name", "")),
+        job_label,
+        source_prefix=source_prefix,
+    )
+    budgets: dict[str, Any] | None = None
+    if runtime is not None:
+        budgets = {
+            "max_tokens": runtime.get("max_tokens"),
+            "max_cost_usd": runtime.get("max_cost_usd"),
+        }
+    normalized = {
         "task": _task_id(trial.get("task_name")),
         "task_digest": "sha256:"
         + str(trial.get("task_checksum", "")).removeprefix("sha256:"),
         "repetition": repetition,
         "trial_name": str(trial.get("trial_name", "")),
-        "status": "COMPLETED" if exception is None else "ERROR",
+        "pair_id": None,
+        "status": _trial_status(trial, exception),
         "exception_type": exception.get("exception_type")
         if isinstance(exception, dict)
         else None,
         "model": model_info.get("name"),
         "model_provider": model_info.get("provider"),
+        "agent": {
+            "name": agent_info.get("name"),
+            "version": agent_info.get("version"),
+        },
         "rewards": rewards,
         "false_certification": rewards.get("false_certification"),
+        "verifier_state": verifier_state,
         "tokens": {
             "input": agent_result.get("n_input_tokens"),
             "cache": agent_result.get("n_cache_tokens"),
@@ -241,34 +937,26 @@ def _normalize_trial(
         },
         "cost_usd": agent_result.get("cost_usd"),
         "agent_seconds": _timing_seconds(trial.get("agent_execution")),
-        "trace": _trace_summary(path),
+        "budgets": budgets,
+        "artifacts": artifacts,
+        "tool_calls": tool_calls,
+        "tool_errors": tool_errors,
         "raw_result_digest": _sha256(path) if path is not None else _json_digest(trial),
     }
+    if runtime is not None and isinstance(runtime.get("pair_id"), str):
+        normalized["pair_id"] = runtime["pair_id"]
+    return normalized, artifact_failures
 
 
-def _observation_identity(
-    dataset: str, heldout_manifest: dict[str, Any] | None
-) -> tuple[dict[str, str], str, str]:
-    if heldout_manifest is not None:
-        return (
-            {
-                str(item["id"]): str(item["digest"])
-                for item in heldout_manifest.get("tasks", [])
-            },
-            "held-out-comparative-evaluation",
-            str(heldout_manifest.get("dataset", {}).get("id", dataset)),
-        )
-    suite = get_suite(dataset)
-    known = {
-        ref.path.name: "sha256:" + task_digest(ref.path).removeprefix("sha256:")
-        for ref in suite.tasks
-    }
-    evidence_class = (
-        "workflow-observation"
-        if suite.claim_class == "workflow-observation"
-        else suite.claim_class
-    )
-    return known, evidence_class, suite.id
+def _artifact_source_prefix(runtime: dict[str, Any] | None) -> str | None:
+    if runtime is None:
+        return None
+    pair_id = runtime.get("pair_id")
+    condition = runtime.get("condition")
+    condition_id = condition.get("id") if isinstance(condition, dict) else None
+    if isinstance(pair_id, str) and isinstance(condition_id, str):
+        return f"{pair_id}/{condition_id}"
+    return None
 
 
 def _observation_failures(
@@ -285,10 +973,12 @@ def _observation_failures(
         failures.append(
             f"task coverage mismatch: expected={sorted(expected_tasks)}, observed={sorted(counters)}"
         )
+    if attempts <= 0:
+        failures.append("job n_attempts must be a positive integer")
     failures.extend(
         f"{task}: expected {attempts} repetitions, observed {counters[task]}"
         for task in sorted(expected_tasks)
-        if counters[task] != attempts
+        if attempts > 0 and counters[task] != attempts
     )
     failures.extend(
         f"{trial['task']} repetition {trial['repetition']}: task digest mismatch"
@@ -311,6 +1001,65 @@ def _observation_failures(
     return failures
 
 
+def _artifact_source_reuse(trials: list[dict[str, Any]]) -> list[str]:
+    """Reject the same canonical host source path reused across artifacts.
+
+    ``source_path`` is the canonical host artifact file path, stable relative
+    to the trial directory.  It differs across independent trials even when
+    the Harbor manifest ``manifest_source`` (a container path) repeats.
+    Identical bytes at distinct host source paths remain allowed; reusing the
+    same host source path more than once is rejected.
+    """
+
+    seen: dict[str, str] = {}
+    failures: list[str] = []
+    for trial in trials:
+        for artifact in trial["artifacts"]:
+            source_path = artifact["source_path"]
+            previous = seen.get(source_path)
+            if previous is not None:
+                failures.append(
+                    f"artifact source path reused: {source_path} "
+                    f"(trial {previous} and trial {trial['trial_name']})"
+                )
+            else:
+                seen[source_path] = trial["trial_name"]
+    return failures
+
+
+def _resolve_binding(
+    key: str,
+    *,
+    job: dict[str, Any],
+    runtime: dict[str, Any],
+    heldout_value: Any = None,
+) -> tuple[Any, list[str]]:
+    """Read an explicit binding from job/runtime/held-out and require agreement.
+
+    Returns ``(value, failures)``.  ``value`` is the agreed binding or ``None``
+    when missing.  Failures are recorded for missing bindings, mismatches, and
+    invalid shapes.  The value is never invented from surrounding state.
+    """
+
+    job_value = job.get(key)
+    runtime_value = runtime.get(key)
+    candidates: list[tuple[str, Any]] = []
+    if job_value is not None:
+        candidates.append(("job", job_value))
+    if runtime_value is not None:
+        candidates.append(("runtime", runtime_value))
+    if heldout_value is not None:
+        candidates.append(("held-out manifest", heldout_value))
+    if not candidates:
+        return None, [f"{key} binding is missing from job, runtime, and manifest"]
+    values = [value for _label, value in candidates]
+    first = values[0]
+    if any(value != first for value in values[1:]):
+        labels = ", ".join(f"{label}={value!r}" for label, value in candidates)
+        return first, [f"{key} bindings disagree: {labels}"]
+    return first, []
+
+
 def build_observation_evidence(
     *,
     dataset: str,
@@ -328,6 +1077,31 @@ def build_observation_evidence(
     payload = _read_json(result_path)
     if not isinstance(payload, dict):
         raise HarborSuiteError("Harbor result must be an object")
+
+    known_digests, task_dirs, dataset_path, evidence_class, dataset_id = (
+        _selection_known(dataset, heldout_manifest)
+    )
+    expected_tasks, _mode, eval_args, selection_failures = _normalize_selection(
+        job, known=known_digests, task_dirs=task_dirs, dataset_path=dataset_path
+    )
+    raw_attempts = job.get("n_attempts")
+    attempts: int = (
+        raw_attempts
+        if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool)
+        else 0
+    )
+    eval_args = dict(eval_args)
+    eval_args["n_attempts"] = attempts
+    eval_args["selection_digest"] = _json_digest(
+        {
+            "selection_mode": eval_args["selection_mode"],
+            "datasets": eval_args["datasets"],
+            "tasks": eval_args["tasks"],
+            "selection": eval_args["selection"],
+            "n_attempts": attempts,
+        }
+    )
+
     raw_trials = _trial_results(result_path, payload)
     raw_trials.sort(
         key=lambda pair: (
@@ -337,6 +1111,9 @@ def build_observation_evidence(
     )
     counters: Counter[str] = Counter()
     trials: list[dict[str, Any]] = []
+    artifact_failures: list[str] = []
+    job_label = _display_path(job_path)
+    source_prefix = _artifact_source_prefix(runtime_snapshot)
     for path, raw in raw_trials:
         task = _task_id(raw.get("task_name"))
         repetition = counters[task]
@@ -345,34 +1122,35 @@ def build_observation_evidence(
         ):
             repetition = int(runtime_snapshot["repetition"])
         counters[task] += 1
-        normalized = _normalize_trial(path, raw, repetition)
-        if runtime_snapshot is not None and isinstance(
-            runtime_snapshot.get("pair_id"), str
-        ):
-            normalized["pair_id"] = runtime_snapshot["pair_id"]
+        normalized, trial_artifact_failures = _normalize_trial(
+            path,
+            raw,
+            repetition,
+            job_label=job_label,
+            runtime=runtime_snapshot,
+            source_prefix=source_prefix,
+        )
+        artifact_failures.extend(trial_artifact_failures)
         trials.append(normalized)
 
-    known_digests, evidence_class, dataset_id = _observation_identity(
-        dataset, heldout_manifest
-    )
-    expected_tasks = _expected_tasks(job, set(known_digests))
-    raw_attempts = job.get("n_attempts")
-    attempts: int = (
-        raw_attempts
-        if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool)
-        else 0
-    )
     expected_digests = {
         task: known_digests[task] for task in expected_tasks if task in known_digests
     }
-    failures = _observation_failures(
-        counters=counters,
-        expected_tasks=expected_tasks,
-        attempts=attempts,
-        expected_digests=expected_digests,
-        trials=trials,
-        payload=payload,
+    failures: list[str] = []
+    failures.extend(selection_failures)
+    failures.extend(
+        _observation_failures(
+            counters=counters,
+            expected_tasks=set(expected_tasks),
+            attempts=attempts,
+            expected_digests=expected_digests,
+            trials=trials,
+            payload=payload,
+        )
     )
+    failures.extend(artifact_failures)
+    failures.extend(_artifact_source_reuse(trials))
+
     models = sorted(
         {str(trial["model"]) for trial in trials if trial["model"] is not None}
     )
@@ -400,16 +1178,53 @@ def build_observation_evidence(
         )
         if key in runtime
     }
+    heldout_harbor_version = (
+        heldout_manifest.get("experiment", {}).get("harbor_version")
+        if heldout_manifest is not None
+        else None
+    )
+    heldout_snapshot_id = (
+        heldout_manifest.get("dataset", {}).get("snapshot_id")
+        if heldout_manifest is not None
+        else None
+    )
+    snapshot_id, snapshot_failures = _resolve_binding(
+        "snapshot_id",
+        job=job,
+        runtime=runtime,
+        heldout_value=heldout_snapshot_id,
+    )
+    harbor_version, harbor_failures = _resolve_binding(
+        "harbor_version",
+        job=job,
+        runtime=runtime,
+        heldout_value=heldout_harbor_version,
+    )
+    failures.extend(snapshot_failures)
+    failures.extend(harbor_failures)
+    if not isinstance(snapshot_id, str) or not snapshot_id.startswith("sha256:"):
+        failures.append(
+            "snapshot_id must be a sha256 digest bound by the job or runtime"
+        )
+        snapshot_id = None
+    if not isinstance(harbor_version, str) or not harbor_version:
+        failures.append(
+            "harbor_version must be a non-empty string bound by the job, runtime, or manifest"
+        )
+        harbor_version = None
     evidence = {
-        "schema_version": "1",
+        "schema_version": "2",
         "evidence_class": evidence_class,
         "causal_claim_authorized": False,
         "status": "VALID" if not failures else "INCOMPLETE",
         "source_sha": _git_sha(),
         "dataset": dataset_id,
         "condition": condition,
+        "snapshot_id": snapshot_id,
+        "harbor_version": harbor_version,
+        "eval_args": eval_args,
         "job": {
-            "path": _display_path(job_path),
+            "path": job_label,
             "digest": _sha256(job_path),
             "comparison_signature": _json_digest(_comparison_job(job)),
             "n_attempts": attempts,
@@ -497,6 +1312,11 @@ def _comparison_failures(
         for name, value in (("control", control), ("treatment", treatment))
         if value.get("status") != "VALID"
     ]
+    if (control.get("condition"), treatment.get("condition")) not in {
+        ("control", "treatment"),
+        ("C1", "C2"),
+    }:
+        failures.append("conditions must be a distinct control/treatment or C1/C2 pair")
     failures.extend(
         f"{name} evidence has an invalid public-claim boundary"
         for name, value in (("control", control), ("treatment", treatment))
@@ -699,6 +1519,7 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
         key: plan.get(key)
         for key in (
             "bundle_manifest_digest",
+            "snapshot_id",
             "harbor_version",
             "agent",
             "model",
@@ -711,6 +1532,7 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
             "pair_count",
             "plan_digest",
         )
+        if key in plan
     }
 
 
@@ -749,14 +1571,58 @@ def collect_heldout_evidence(
     if models != [experiment["model"]]:
         failures.append("observed model does not match the frozen experiment")
     task_digests = {str(item["id"]): str(item["digest"]) for item in manifest["tasks"]}
+    failures.extend(_artifact_source_reuse(trials))
+    heldout_harbor_version = experiment.get("harbor_version")
+    bundle_id = manifest.get("bundle_id")
+    bundle_version = manifest.get("bundle_version")
+    manifest_snapshot_id = manifest.get("dataset", {}).get("snapshot_id")
+    snapshot_id, snapshot_failures = _resolve_binding(
+        "snapshot_id",
+        job=plan,
+        runtime=runtime_invariants,
+        heldout_value=manifest_snapshot_id,
+    )
+    harbor_version, harbor_failures = _resolve_binding(
+        "harbor_version",
+        job=plan,
+        runtime=runtime_invariants,
+        heldout_value=heldout_harbor_version,
+    )
+    failures.extend(snapshot_failures)
+    failures.extend(harbor_failures)
+    if not isinstance(snapshot_id, str) or not snapshot_id.startswith("sha256:"):
+        failures.append(
+            "snapshot_id must be a sha256 digest bound by the plan, runtime, or manifest dataset"
+        )
+        snapshot_id = None
+    if not isinstance(harbor_version, str) or not harbor_version:
+        failures.append(
+            "harbor_version must be a non-empty string bound by the plan, runtime, or manifest experiment"
+        )
+        harbor_version = None
+    if bundle_id is not None and isinstance(bundle_id, str):
+        # Surface the bundle identity in the runtime snapshot for traceability.
+        runtime_invariants.setdefault("bundle_id", bundle_id)
+    if bundle_version is not None and isinstance(bundle_version, str):
+        runtime_invariants.setdefault("bundle_version", bundle_version)
+    eval_args = _eval_args(
+        "dataset-task-names",
+        sorted(stage_tasks),
+        [{"path": manifest["dataset"]["path"], "task_names": sorted(stage_tasks)}],
+        None,
+        len(selected),
+    )
     evidence = {
-        "schema_version": "1",
+        "schema_version": "2",
         "evidence_class": "held-out-comparative-evaluation",
         "causal_claim_authorized": False,
         "status": "VALID" if not failures else "INCOMPLETE",
         "source_sha": _git_sha(),
         "dataset": manifest["dataset"]["id"],
         "condition": condition,
+        "snapshot_id": snapshot_id,
+        "harbor_version": harbor_version,
+        "eval_args": eval_args,
         "job": {
             "path": "run-plan.json",
             "digest": _sha256(run_plan_path),

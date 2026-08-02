@@ -21,11 +21,15 @@
     "dataset": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "path", "manifest_digest", "minimum_independent_families"],
+      "required": ["id", "path", "manifest_digest", "snapshot_id", "minimum_independent_families"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
         "path": {"const": "dataset"},
         "manifest_digest": {"$ref": "#/$defs/digest"},
+        "snapshot_id": {
+          "$ref": "#/$defs/digest",
+          "description": "Immutable benchmark snapshot ID this held-out dataset binds to. Observation evidence v2 reads this and requires agreement with the job/runtime snapshot_id."
+        },
         "minimum_independent_families": {"type": "integer", "minimum": 2}
       }
     },

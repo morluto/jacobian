@@ -19,6 +19,8 @@ from jacobian.contracts.polynomials import (
     PolynomialMapInverseClaim,
     PolynomialMapInverseSynthesisArtifact,
     PolynomialNoTwoSidedInverseClaim,
+    RationalFunctionArtifact,
+    RationalFunctionIdentityClaim,
     RationalPolynomial,
     RationalPolynomialMap,
     SparseRationalPolynomial,
@@ -40,6 +42,7 @@ from jacobian.polynomials.inverse import (
     PolynomialMapInverseSynthesizeAdapter,
     PolynomialMapInverseVerifyAdapter,
 )
+from jacobian.polynomials.rational_identity import RationalFunctionIdentityAdapter
 from jacobian.polynomials.resources import PolynomialInstallation, PolynomialResources
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
@@ -62,6 +65,7 @@ def install_polynomial_capabilities(
         PolynomialKellerConditionVerifyAdapter,
         PolynomialCollisionAdapter,
         PolynomialIdentityAdapter,
+        RationalFunctionIdentityAdapter,
         PolynomialCollisionSearchAdapter,
         PolynomialCollisionVerifyAdapter,
         PolynomialMapInverseCollisionVerifyAdapter,
@@ -106,6 +110,25 @@ def install_polynomial_capabilities(
             "maximum_exponent": 127,
             "monomial_order": "descending lexicographic",
             "zero_terms": "omitted",
+        },
+    )
+    rational_function_identity_semantics_uri = store.register_descriptor(
+        kind="semantics",
+        name="jacobian.sparse-rational-function-field",
+        version="1",
+        definition={
+            "description": (
+                "bounded fractions of canonical sparse polynomials over QQ in "
+                "an explicit ordered tuple of variables"
+            ),
+            "coefficient_field": "QQ",
+            "maximum_dimension": 4,
+            "maximum_terms_per_polynomial": 1024,
+            "maximum_exponent": 127,
+            "maximum_cross_product_term_pairs": 4096,
+            "denominators": "nonzero polynomials",
+            "equality": "exact polynomial cross multiplication",
+            "pointwise_definedness": "outside scope",
         },
     )
     inverse_semantics_uri = store.register_descriptor(
@@ -194,6 +217,21 @@ def install_polynomial_capabilities(
         name="jacobian.polynomial-identity-claim",
         version="1",
         schema=model_schema(PolynomialIdentityClaim),
+    )
+    rational_function_left_schema_uri = schemas.register(
+        name="jacobian.sparse-rational-function-left",
+        version="1",
+        schema=model_schema(RationalFunctionArtifact),
+    )
+    rational_function_right_schema_uri = schemas.register(
+        name="jacobian.sparse-rational-function-right",
+        version="1",
+        schema=model_schema(RationalFunctionArtifact),
+    )
+    rational_function_identity_claim_schema_uri = schemas.register(
+        name="jacobian.rational-function-identity-claim",
+        version="1",
+        schema=model_schema(RationalFunctionIdentityClaim),
     )
     keller_claim_schema_uri = schemas.register(
         name="jacobian.polynomial-map-keller-condition-claim",
@@ -315,6 +353,27 @@ def install_polynomial_capabilities(
         )
         .checker_id
     )
+    rational_function_identity_checker_id = (
+        CheckerInstaller(checkers)
+        .install(
+            CheckerOperation(
+                name="exact sparse rational-function identity checker",
+                entrypoint=(
+                    "jacobian_checkers.rational_functions:"
+                    "check_rational_function_identity"
+                ),
+                evidence_kind=EvidenceKind.CERTIFICATE,
+                format_id="polynomial.rational_function.identity_replay",
+                format_version="1",
+                claim_schema_uris=(rational_function_identity_claim_schema_uri,),
+                semantics_uris=(rational_function_identity_semantics_uri,),
+                candidate_schema_uris=(rational_function_right_schema_uri,),
+                reason="bundled independent sparse cross-multiplication checker",
+            ),
+            authorize=authorize_checker,
+        )
+        .checker_id
+    )
     inverse_checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -361,6 +420,9 @@ def install_polynomial_capabilities(
         polynomial_semantics_uri=polynomial_semantics_uri,
         factorization_semantics_uri=factorization_semantics_uri,
         identity_semantics_uri=identity_semantics_uri,
+        rational_function_identity_semantics_uri=(
+            rational_function_identity_semantics_uri
+        ),
         inverse_semantics_uri=inverse_semantics_uri,
         map_schema_uri=map_schema_uri,
         evaluation_schema_uri=evaluation_schema_uri,
@@ -370,6 +432,11 @@ def install_polynomial_capabilities(
         right_polynomial_schema_uri=right_polynomial_schema_uri,
         left_polynomial_schema_uri=left_polynomial_schema_uri,
         identity_claim_schema_uri=identity_claim_schema_uri,
+        rational_function_left_schema_uri=rational_function_left_schema_uri,
+        rational_function_right_schema_uri=rational_function_right_schema_uri,
+        rational_function_identity_claim_schema_uri=(
+            rational_function_identity_claim_schema_uri
+        ),
         keller_claim_schema_uri=keller_claim_schema_uri,
         inverse_collision_claim_schema_uri=inverse_collision_claim_schema_uri,
         inverse_claim_schema_uri=inverse_claim_schema_uri,
@@ -383,6 +450,7 @@ def install_polynomial_capabilities(
         jacobian_checker_id=jacobian_checker_id,
         keller_checker_id=keller_checker_id,
         identity_checker_id=identity_checker_id,
+        rational_function_identity_checker_id=rational_function_identity_checker_id,
         inverse_checker_id=inverse_checker_id,
         inverse_collision_checker_id=inverse_collision_checker_id,
     )
@@ -403,6 +471,11 @@ def install_polynomial_capabilities(
             ),
             PolynomialCollisionAdapter(resources),
             PolynomialIdentityAdapter(resources),
+            *(
+                (RationalFunctionIdentityAdapter(resources),)
+                if rational_function_identity_checker_id is not None
+                else ()
+            ),
             PolynomialCollisionSearchAdapter(resources),
             *(
                 (PolynomialCollisionVerifyAdapter(resources),)

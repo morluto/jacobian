@@ -216,29 +216,31 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence_is_valid(evidence: object) -> bool:
+def _evidence_is_valid(evidence: object, result: object) -> bool:
     if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
         return False
-    assert isinstance(evidence, list)
+    if not isinstance(evidence, list) or not evidence:
+        return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
         if target.stat().st_size > MAX_EVIDENCE_BYTES:
             return False
-        lower = target.read_text().lower()
-    except (OSError, UnicodeError):
+        text = target.read_text()
+        markers = [
+            line.removeprefix("RESULT_JSON:").strip()
+            for line in text.splitlines()
+            if line.startswith("RESULT_JSON:")
+        ]
+        prose = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.startswith("RESULT_JSON:")
+        ]
+        return bool(len(markers) == 1 and json.loads(markers[0]) == result and prose)
+    except (OSError, UnicodeError, ValueError):
         return False
-    return all(
-        phrase in lower
-        for phrase in (
-            "difference",
-            "taylor",
-            "valuation",
-            "divisibility",
-            "universal induction",
-        )
-    )
 
 
 def main() -> None:
@@ -253,7 +255,9 @@ def main() -> None:
     )
     result = data.get("result")
     math_correct = bool(contract and _result_is_valid(result, _load_frozen_input()))
-    evidence_valid = bool(math_correct and _evidence_is_valid(data.get("evidence")))
+    evidence_valid = bool(
+        math_correct and _evidence_is_valid(data.get("evidence"), result)
+    )
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
     assurance_correct = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]

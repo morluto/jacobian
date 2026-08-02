@@ -3,20 +3,19 @@
 [Documentation home](../index.md)
 
 Jacobian packages executable evaluation cases into the six Harbor datasets
-listed in [`benchmarks/README.md`](../../benchmarks/README.md). The comparison
-plan and discovery handoffs for capability research live separately in
-[`research/evaluations/capability-workflow-v1/`](../../research/evaluations/capability-workflow-v1/).
+listed in [`benchmarks/README.md`](../../benchmarks/README.md). Immutable
+snapshot locks under `benchmarks/snapshots/` define frozen evaluation and
+publication sets.
 Dataset identity is a claim boundary: workflow observations, public
 reproductions, answer-visible research diagnostics, runtime measurements,
 provider feasibility, and examples must not share an interpretation merely
 because they use one task format.
 
 The ownership boundary is deliberate. `benchmarks/datasets/` contains
-executable Harbor cases, `benchmarks/tooling/` contains reusable Harbor
-infrastructure, and `research/evaluations/` contains non-runnable plans,
-discovery handoffs, and reports. Research records may point at a canonical
-dataset, but they do not duplicate its tasks, become Harbor job input, or enter
-an agent container.
+executable Harbor cases and task-owned analysis records, while
+`benchmarks/tooling/` contains reusable Harbor infrastructure. Analysis records
+may capture discovery context, but they do not duplicate tasks, become Harbor
+job input, or enter an agent container.
 
 ## Task and verifier validation
 
@@ -46,7 +45,9 @@ Use the fixed `agent-workflow-v1` tasks for Jacobian workflow observations:
 make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1
 ```
 
-Normalize each condition with `make agent-eval-validate`, then compare the two
+Normalize each condition with `make agent-eval-validate`, passing a
+`RUNTIME_SNAPSHOT` that binds the immutable benchmark snapshot ID and pinned
+Harbor version, then compare the two
 evidence files with `make agent-eval-compare`. The comparator rejects unmatched
 task repetitions or drift in task digests, prompts, models, budgets, and job
 configuration. It reports correctness and assurance separately and marks
@@ -72,7 +73,9 @@ prompt settings, raw trace location, validation actually run, unresolved proof
 obligations, and next action. Publishing a local dataset to a Harbor registry
 requires separate authorization.
 
-Any executable task, verifier, schema, or membership change must update the
-owning `suite.toml` dataset version and regenerate `dataset.toml`. Historical
-evidence whose recorded inventory differs from the current source remains
-historical and must be labelled stale rather than rewritten.
+Ordinary executable task additions are leaf-only: the direct task bundle and
+its matching `members/<task>.toml` record. They change the prospective suite
+digest without rewriting stable suite policy or existing snapshot locks.
+Intentional evaluation and publication events create a content-addressed lock
+under `benchmarks/snapshots/`; publication manifests are generated under
+ignored `dist/harbor/` from that lock.

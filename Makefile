@@ -17,7 +17,7 @@ TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-check benchmark-inventory harbor-oracle harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare performance-eval provider-eval clean docs-linkcheck deploy-check
+.PHONY: help uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-check benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare performance-eval provider-eval clean docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Jacobian developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -193,11 +193,28 @@ harbor-check: ## Run Harbor topology, digest, provenance, and host-side validati
 	$(UV_RUN) python tools/sync_harbor_verifier_support.py --check
 	$(HARBOR_PYTHON) tools/check_harbor_dataset.py --check
 	$(UV_RUN) python tools/check_benchmark_contracts.py
-	$(UV_RUN) python tools/check_benchmark_adapters.py
+	$(HARBOR_PYTHON) tools/check_benchmark_adapters.py
 	$(UV_RUN) pytest -n 0 benchmarks/validation
 
 benchmark-inventory: ## Render the content-bound benchmark inventory (OUTPUT=path optional).
 	$(HARBOR_PYTHON) -m benchmarks.tooling.benchmark_inventory $(if $(OUTPUT),--output "$(OUTPUT)",)
+
+benchmark-snapshot: ## Create an immutable snapshot lock (DATASET=..., OUTPUT=..., SOURCE_TREE=... optional).
+	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/manage_benchmark_snapshots.py create \
+		--dataset "$(DATASET)" $(if $(OUTPUT),--output "$(OUTPUT)",) \
+		$(if $(SOURCE_TREE),--source-tree "$(SOURCE_TREE)",)
+
+benchmark-snapshot-validate: ## Validate a committed snapshot lock (LOCK=..., REPRODUCE=1 optional).
+	@test -n "$(LOCK)" || { echo "LOCK is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/manage_benchmark_snapshots.py validate --lock "$(LOCK)" \
+		$(if $(filter 1,$(REPRODUCE)),--reproduce,) \
+		$(if $(SOURCE_TREE),--source-tree "$(SOURCE_TREE)",)
+
+benchmark-publish: ## Generate an ignored Harbor dataset.toml from a snapshot (LOCK=..., DEST=... optional).
+	@test -n "$(LOCK)" || { echo "LOCK is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/manage_benchmark_snapshots.py publish --lock "$(LOCK)" \
+		$(if $(DEST),--dest "$(DEST)",)
 
 harbor-oracle: harbor-check harbor-oracle-run ## Check contracts, then run a dataset Oracle.
 
@@ -221,7 +238,7 @@ harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with task
 
 harbor-adapter-check: ## Check deterministic regeneration for ADAPTER=<id>.
 	@test -n "$(ADAPTER)" || { echo "ADAPTER is required" >&2; exit 2; }
-	$(UV_RUN) python tools/check_benchmark_adapters.py --adapter "$(ADAPTER)"
+	$(HARBOR_PYTHON) tools/check_benchmark_adapters.py --adapter "$(ADAPTER)"
 	@test -x "benchmarks/adapters/$(ADAPTER)/check.sh" || { echo "adapter check.sh is missing: $(ADAPTER)" >&2; exit 2; }
 	"benchmarks/adapters/$(ADAPTER)/check.sh"
 

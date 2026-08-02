@@ -8,6 +8,7 @@ import json
 import random
 import subprocess
 import tarfile
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -137,11 +138,38 @@ def _safe_extract(archive: Path, output: Path) -> None:
         tar.extractall(output, members=members, filter="data")
 
 
+def _verify_dataset_manifest(manifest: dict[str, Any], dataset_manifest: Path) -> None:
+    if _digest(dataset_manifest) != manifest["dataset"]["manifest_digest"]:
+        raise HarborSuiteError("held-out dataset manifest digest mismatch")
+    if dataset_manifest.is_symlink():
+        raise HarborSuiteError("held-out dataset manifest is a forbidden symlink")
+    try:
+        dataset_value = tomllib.loads(dataset_manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HarborSuiteError(f"held-out dataset manifest is invalid: {exc}") from exc
+    entries = dataset_value.get("tasks") if isinstance(dataset_value, dict) else None
+    if not isinstance(entries, list):
+        raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")
+    declared: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")
+        name = entry.get("name")
+        digest = entry.get("digest")
+        if not isinstance(name, str) or not isinstance(digest, str) or name in declared:
+            raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")
+        declared[name] = digest
+    expected = {
+        f"jacobian/{task['id']}": str(task["digest"]) for task in manifest["tasks"]
+    }
+    if declared != expected:
+        raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")
+
+
 def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
     dataset_root = _bundle_path(root, manifest["dataset"]["path"])
     dataset_manifest = dataset_root / "dataset.toml"
-    if _digest(dataset_manifest) != manifest["dataset"]["manifest_digest"]:
-        raise HarborSuiteError("held-out dataset manifest digest mismatch")
+    _verify_dataset_manifest(manifest, dataset_manifest)
     prompt = _bundle_path(root, manifest["experiment"]["prompt_path"])
     if _digest(prompt) != manifest["experiment"]["prompt_digest"]:
         raise HarborSuiteError("held-out prompt digest mismatch")
@@ -306,6 +334,7 @@ def render_plan(
                         "dataset_manifest_digest": manifest["dataset"][
                             "manifest_digest"
                         ],
+                        "snapshot_id": manifest["dataset"]["snapshot_id"],
                         "condition": condition,
                         "harbor_version": experiment["harbor_version"],
                         "agent": experiment["agent"],
@@ -345,6 +374,7 @@ def render_plan(
         "schema_version": "2",
         "stage": stage,
         "bundle_manifest_digest": _digest(manifest_path),
+        "snapshot_id": manifest["dataset"]["snapshot_id"],
         "harbor_version": experiment["harbor_version"],
         "agent": experiment["agent"],
         "model": experiment["model"],

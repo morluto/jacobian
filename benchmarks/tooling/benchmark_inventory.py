@@ -27,7 +27,6 @@ def _git(args: list[str]) -> str:
 
 
 def _suite_inventory(suite: Suite) -> dict[str, Any]:
-    suite_raw = tomllib.loads(suite.suite_manifest.read_text(encoding="utf-8"))
     distributions: dict[str, Counter[str]] = {
         key: Counter()
         for key in (
@@ -65,7 +64,6 @@ def _suite_inventory(suite: Suite) -> dict[str, Any]:
     return {
         "id": suite.id,
         "name": suite.dataset_name,
-        "version": suite_raw["dataset"]["version"],
         "evaluation_kind": suite.evaluation_kind,
         "claim_class": suite.claim_class,
         "task_count": len(tasks),

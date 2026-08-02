@@ -56,6 +56,8 @@ def _semantic_failures(
             )
     outputs = lock.get("outputs", [])
     if isinstance(outputs, list):
+        from benchmarks.tooling.harbor_suite import task_digest
+
         pairs: set[tuple[str, str]] = set()
         for output in outputs:
             if not isinstance(output, dict):
@@ -66,6 +68,27 @@ def _semantic_failures(
                     f"{_display(lock_path)}: duplicate output {pair[0]}/{pair[1]}"
                 )
             pairs.add(pair)
+            task_path = (
+                ROOT
+                / "benchmarks"
+                / "datasets"
+                / pair[0]
+                / pair[1]
+            )
+            if not task_path.is_dir() or not (task_path / "task.toml").is_file():
+                failures.append(
+                    f"{_display(lock_path)}: adapter output task is missing: "
+                    f"{pair[0]}/{pair[1]}"
+                )
+                continue
+            actual_digest = "sha256:" + task_digest(task_path).removeprefix(
+                "sha256:"
+            )
+            if output.get("task_digest") != actual_digest:
+                failures.append(
+                    f"{_display(lock_path)}: task digest mismatch for "
+                    f"{pair[0]}/{pair[1]}"
+                )
     return failures
 
 

@@ -16,7 +16,11 @@ from jacobian.contracts.polynomials import (
     PolynomialEvaluationRequest,
     PolynomialJacobianRequest,
     PolynomialMapEvaluation,
+    RationalFunctionArtifact,
+    RationalFunctionIdentityRequest,
     RationalPolynomialMap,
+    SparseRationalFunction,
+    SparseRationalPolynomial,
 )
 
 
@@ -206,4 +210,84 @@ def test_system_search_rejects_exact_grid_over_limit() -> None:
                 "max_abs_numerator": 8,
                 "max_denominator": 8,
             }
+        )
+
+
+def _dense_sparse_polynomial(term_count: int) -> SparseRationalPolynomial:
+    """Build a univariate polynomial with term_count terms in descending order."""
+    return SparseRationalPolynomial(
+        terms=tuple(
+            {
+                "coefficient": _rational(1),
+                "exponents": [term_count - 1 - index],
+            }
+            for index in range(term_count)
+        )
+    )
+
+
+def test_rational_function_artifact_accepts_dense_self_product_fraction() -> None:
+    """Thread PRRT_kwDOThEfjc6VuwhR: a single fraction with 65 numerator terms
+    and 65 denominator terms has a 4,225-pair self-product, but the artifact
+    must not apply the two-function cross-product bound to itself.
+    """
+    dense = _dense_sparse_polynomial(65)
+    artifact = RationalFunctionArtifact(
+        variables=("x",),
+        numerator=dense,
+        denominator=dense,
+    )
+    assert artifact.numerator is dense
+    assert artifact.denominator is dense
+
+
+def test_rational_function_identity_request_still_enforces_cross_product_bound() -> (
+    None
+):
+    """The identity-request cross-product bound must still reject a pair of
+    fractions whose cross product exceeds 4096 term pairs.
+    """
+    dense = _dense_sparse_polynomial(65)
+    with pytest.raises(ValidationError, match="cross product exceeds 4096"):
+        RationalFunctionIdentityRequest(
+            variables=("x",),
+            left=SparseRationalFunction(numerator=dense, denominator=dense),
+            right=SparseRationalFunction(numerator=dense, denominator=dense),
+        )
+
+
+def test_rational_function_artifact_rejects_duplicate_variables() -> None:
+    with pytest.raises(ValidationError, match="variables must be unique"):
+        RationalFunctionArtifact(
+            variables=("x", "x"),
+            numerator=SparseRationalPolynomial(
+                terms=({"coefficient": _rational(1), "exponents": [1, 0]},)
+            ),
+            denominator=SparseRationalPolynomial(
+                terms=({"coefficient": _rational(1), "exponents": [0, 0]},)
+            ),
+        )
+
+
+def test_rational_function_artifact_rejects_zero_denominator() -> None:
+    with pytest.raises(ValidationError, match="denominator must be nonzero"):
+        RationalFunctionArtifact(
+            variables=("x",),
+            numerator=SparseRationalPolynomial(
+                terms=({"coefficient": _rational(1), "exponents": [0]},)
+            ),
+            denominator=SparseRationalPolynomial(terms=()),
+        )
+
+
+def test_rational_function_artifact_rejects_exponent_dimension_mismatch() -> None:
+    with pytest.raises(ValidationError, match="variable order"):
+        RationalFunctionArtifact(
+            variables=("x", "y"),
+            numerator=SparseRationalPolynomial(
+                terms=({"coefficient": _rational(1), "exponents": [1, 0]},)
+            ),
+            denominator=SparseRationalPolynomial(
+                terms=({"coefficient": _rational(1), "exponents": [0]},)
+            ),
         )

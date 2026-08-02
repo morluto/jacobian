@@ -6,7 +6,10 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["jobs_dir", "n_attempts", "timeout_multiplier", "orchestrator", "environment", "agents"],
-  "anyOf": [{"required": ["tasks"]}, {"required": ["datasets"]}],
+  "oneOf": [
+    {"required": ["tasks"], "not": {"required": ["datasets"]}},
+    {"required": ["datasets"], "not": {"required": ["tasks"]}}
+  ],
   "properties": {
     "jobs_dir": {"type": "string", "minLength": 1},
     "n_attempts": {"type": "integer", "minimum": 1},
@@ -72,6 +75,7 @@
     },
     "datasets": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -87,12 +91,23 @@
     },
     "tasks": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["path"],
         "properties": {"path": {"type": "string", "minLength": 1}}
       }
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Immutable benchmark snapshot ID this job binds to. Observation evidence v2 reads this (or the runtime snapshot's equivalent) and requires agreement."
+    },
+    "harbor_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinned Harbor runner version this job was authored against. Observation evidence v2 reads this (or the runtime snapshot's equivalent) and requires agreement."
     }
   }
 }

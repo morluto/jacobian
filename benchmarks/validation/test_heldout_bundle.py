@@ -48,6 +48,7 @@ def _manifest() -> dict:
             "id": "capability-held-out-v1",
             "path": "dataset",
             "manifest_digest": "sha256:" + "e" * 64,
+            "snapshot_id": "sha256:" + "f" * 64,
             "minimum_independent_families": 2,
         },
         "tasks": tasks,
@@ -98,11 +99,9 @@ def _bundle(tmp_path: Path, value: dict) -> Path:
     root = tmp_path / "bundle"
     dataset = root / "dataset"
     dataset.mkdir(parents=True)
-    (dataset / "dataset.toml").write_text("version = '1'\n", encoding="utf-8")
     prompt = root / "prompts" / "heldout.md"
     prompt.parent.mkdir()
     prompt.write_text("{instruction}\n", encoding="utf-8")
-    value["dataset"]["manifest_digest"] = _digest(dataset / "dataset.toml")
     value["experiment"]["prompt_digest"] = _digest(prompt)
     for task in value["tasks"]:
         task_root = dataset / task["id"]
@@ -114,6 +113,22 @@ def _bundle(tmp_path: Path, value: dict) -> Path:
         (solution / "submission.json").write_text("{}\n", encoding="utf-8")
         task["verifier_tree_digest"] = _tree_digest(tests)
         task["oracle_tree_digest"] = _tree_digest(solution)
+    dataset_entries = [
+        "[dataset]",
+        'name = "jacobian/capability-held-out-v1"',
+        "",
+    ]
+    for task in value["tasks"]:
+        dataset_entries.extend(
+            [
+                "[[tasks]]",
+                f'name = "jacobian/{task["id"]}"',
+                f'digest = "{task["digest"]}"',
+                "",
+            ]
+        )
+    (dataset / "dataset.toml").write_text("\n".join(dataset_entries), encoding="utf-8")
+    value["dataset"]["manifest_digest"] = _digest(dataset / "dataset.toml")
     return root
 
 
@@ -164,6 +179,25 @@ def test_bundle_binds_complete_verifier_and_oracle_trees(
     )
 
     with pytest.raises(HarborSuiteError, match="tree digest mismatch"):
+        verify_bundle(value, root)
+
+
+def test_bundle_rejects_dataset_manifest_task_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = _manifest()
+    root = _bundle(tmp_path, value)
+    monkeypatch.setattr(heldout_bundle, "task_digest", lambda _path: "a" * 64)
+    manifest = root / value["dataset"]["path"] / "dataset.toml"
+    manifest.write_text(
+        '[dataset]\nname = "jacobian/capability-held-out-v1"\n\n'
+        '[[tasks]]\nname = "jacobian/held-out-0"\n'
+        f'digest = "{value["tasks"][0]["digest"]}"\n',
+        encoding="utf-8",
+    )
+    value["dataset"]["manifest_digest"] = _digest(manifest)
+
+    with pytest.raises(HarborSuiteError, match="manifest task set/digest mismatch"):
         verify_bundle(value, root)
 
 

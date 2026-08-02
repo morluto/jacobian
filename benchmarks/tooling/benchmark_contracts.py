@@ -10,6 +10,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from benchmarks.tooling.benchmark_snapshots import validate_lock
 from benchmarks.tooling.harbor_suite import (
     BENCHMARKS,
     ROOT,
@@ -19,6 +20,7 @@ from benchmarks.tooling.harbor_suite import (
 )
 
 SCHEMAS = BENCHMARKS / "schemas"
+SNAPSHOTS = BENCHMARKS / "snapshots"
 
 
 def _read_json(path: Path) -> Any:
@@ -66,12 +68,11 @@ def _validate(instance: Any, schema_name: str, path: Path) -> list[str]:
     return failures
 
 
-def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
-    raw = _read_json(path)
-    failures = _validate(raw, "harbor-job.schema.json", path)
-    if not isinstance(raw, dict):
-        return failures
-    for dataset in raw.get("datasets", []):
+def _dataset_selection_failures(
+    datasets: Any, *, path: Path, suite: Suite | None
+) -> list[str]:
+    failures: list[str] = []
+    for dataset in datasets:
         if not isinstance(dataset, dict):
             continue
         dataset_path = dataset.get("path")
@@ -99,6 +100,52 @@ def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
             failures.append(
                 f"{path.relative_to(ROOT)}: unknown task_names: {', '.join(unknown)}"
             )
+    return failures
+
+
+def _task_selection_failures(
+    tasks: Any, *, path: Path, suite: Suite | None
+) -> list[str]:
+    failures: list[str] = []
+    for task in tasks:
+        if not isinstance(task, dict) or not isinstance(task.get("path"), str):
+            continue
+        declared = str(task["path"])
+        resolved = (ROOT / declared).resolve()
+        try:
+            resolved.relative_to(BENCHMARKS / "datasets")
+        except ValueError:
+            failures.append(
+                f"{path.relative_to(ROOT)}: task path escapes benchmarks/datasets"
+            )
+            continue
+        if not resolved.is_dir() or not (resolved / "task.toml").is_file():
+            failures.append(
+                f"{path.relative_to(ROOT)}: task path is not a Harbor task: {declared}"
+            )
+            continue
+        if suite is not None and resolved.parent != suite.path:
+            failures.append(
+                f"{path.relative_to(ROOT)}: task path selects a different dataset"
+            )
+    return failures
+
+
+def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
+    raw = _read_json(path)
+    failures = _validate(raw, "harbor-job.schema.json", path)
+    if not isinstance(raw, dict):
+        return failures
+    if ("datasets" in raw) == ("tasks" in raw):
+        failures.append(
+            f"{path.relative_to(ROOT)}: select exactly one of datasets or tasks"
+        )
+    failures.extend(
+        _dataset_selection_failures(raw.get("datasets", []), path=path, suite=suite)
+    )
+    failures.extend(
+        _task_selection_failures(raw.get("tasks", []), path=path, suite=suite)
+    )
     return failures
 
 
@@ -181,17 +228,8 @@ def _observation_pair_failures() -> list[str]:
     return []
 
 
-def validate_all() -> list[str]:
-    """Return every benchmark contract failure without stopping at the first."""
-
-    for schema_path in sorted(SCHEMAS.glob("*.schema.json")):
-        _validator(schema_path.name)
-    failures = _validate(
-        _read_toml(BENCHMARKS / "registry.toml"),
-        "registry.schema.json",
-        BENCHMARKS / "registry.toml",
-    )
-    suites = load_registry()
+def _suite_contract_failures(suites: tuple[Suite, ...]) -> list[str]:
+    failures: list[str] = []
     global_ids: dict[str, str] = {}
     for suite in suites:
         failures.extend(
@@ -221,12 +259,48 @@ def validate_all() -> list[str]:
         failures.extend(_validate_job(suite.job_oracle, suite))
         if suite.job_observation is not None:
             failures.extend(_validate_job(suite.job_observation, suite))
+    return failures
+
+
+def _snapshot_contract_failures() -> list[str]:
+    failures: list[str] = []
+    for lock_path in sorted(SNAPSHOTS.rglob("*.lock.json")):
+        try:
+            lock = validate_lock(lock_path)
+        except HarborSuiteError as exc:
+            failures.append(f"{lock_path.relative_to(ROOT)}: {exc}")
+            continue
+        expected_name = str(lock["snapshot_id"]).removeprefix("sha256:")
+        if lock_path.name.removesuffix(".lock.json") != expected_name:
+            failures.append(
+                f"{lock_path.relative_to(ROOT)}: filename must match snapshot_id"
+            )
+        if lock_path.parent.name != lock["suite"]["id"]:
+            failures.append(
+                f"{lock_path.relative_to(ROOT)}: parent directory must match suite id"
+            )
+    return failures
+
+
+def validate_all() -> list[str]:
+    """Return every benchmark contract failure without stopping at the first."""
+
+    for schema_path in sorted(SCHEMAS.glob("*.schema.json")):
+        _validator(schema_path.name)
+    failures = _validate(
+        _read_toml(BENCHMARKS / "registry.toml"),
+        "registry.schema.json",
+        BENCHMARKS / "registry.toml",
+    )
+    suites = load_registry()
+    failures.extend(_suite_contract_failures(suites))
     failures.extend(
         _validate_job(
             BENCHMARKS / "config" / "agent-workflow-v1-control.json", suites[0]
         )
     )
     failures.extend(_observation_pair_failures())
+    failures.extend(_snapshot_contract_failures())
     return failures
 
 

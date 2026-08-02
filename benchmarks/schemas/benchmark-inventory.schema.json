@@ -17,11 +17,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name", "version", "evaluation_kind", "claim_class", "task_count", "jobs", "distributions", "tasks"],
+        "required": ["id", "name", "evaluation_kind", "claim_class", "task_count", "jobs", "distributions", "tasks"],
         "properties": {
           "id": {"type": "string", "minLength": 1},
           "name": {"type": "string", "pattern": "^jacobian/"},
-          "version": {"type": "string", "minLength": 1},
           "evaluation_kind": {"type": "string", "minLength": 1},
           "claim_class": {"type": "string", "minLength": 1},
           "task_count": {"type": "integer", "minimum": 0},

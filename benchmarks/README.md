@@ -7,8 +7,9 @@ examples from making incompatible claims look comparable.
 
 `benchmarks/datasets/<dataset>/` is the Harbor dataset root and contains the
 dataset's executable task bundles directly. `members/` retains Jacobian's
-assurance and provider metadata; `suite.toml` contains dataset metadata and
-`dataset.toml` is generated from Harbor task digests.
+authoritative identity, provenance, assurance, provider, environment-profile,
+verifier-contract, and evaluation-ownership metadata. `suite.toml` contains
+stable dataset policy and defaults only.
 Reusable Harbor infrastructure belongs under `benchmarks/tooling/`, adapters
 under `benchmarks/adapters/`, and non-runnable evaluation plans and research
 handoffs under `research/evaluations/`.
@@ -23,10 +24,13 @@ handoffs under `research/evaluations/`.
 | `jacobian/examples-v1` | Tutorial and smoke workflows | Oracle |
 
 `registry.toml` is the discovery index. Each dataset's member fragments own
-membership and assurance ceilings. `dataset.toml` is generated from those
-fragments and Harbor-computed task digests; hand-editing digests is a
-validation error. Harbor jobs point at the dataset root and use Harbor's
-native task-name filtering.
+membership. Intentional evaluation and publication events create immutable,
+content-addressed locks under `benchmarks/snapshots/`; those locks bind the
+suite header, ordered Harbor task digests, Harbor version, resolved images and
+verifier runtime, source tree, split, and evaluation configuration. Harbor
+publication `dataset.toml` files are generated under ignored `dist/harbor/`
+from a lock and are never committed in dataset roots. Harbor jobs point at the
+dataset root and use Harbor's native task-name filtering.
 
 The repository `.uv-version` pins active development, CI, release, and product
 image builds. Harbor task images remain bound to the uv version and digest in
@@ -44,13 +48,15 @@ benchmark layout are retained.
 
 ```sh
 make harbor-plan BASE=origin/main
-make harbor-sync
 make harbor-check
 make benchmark-inventory OUTPUT=/tmp/benchmark-inventory.json
+make benchmark-snapshot DATASET=agent-workflow-v1
+make benchmark-snapshot-validate LOCK=benchmarks/snapshots/agent-workflow-v1/<digest>.lock.json
+make benchmark-publish LOCK=benchmarks/snapshots/agent-workflow-v1/<digest>.lock.json
 make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 make harbor-oracle-all
 make agent-eval DATASET=agent-workflow-v1 TASKS=graph-counterexample EVAL_EXECUTE=1
-make agent-eval-validate RESULTS=... JOB=... CONDITION=control OUTPUT=control-evidence.json
+make agent-eval-validate RESULTS=... JOB=... RUNTIME_SNAPSHOT=... CONDITION=control OUTPUT=control-evidence.json
 make agent-eval-compare CONTROL=control-evidence.json TREATMENT=treatment-evidence.json OUTPUT=report
 make performance-eval
 make provider-eval PROVIDER=cgal

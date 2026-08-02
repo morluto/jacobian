@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import string
 import subprocess
 import tomllib
 from collections.abc import Callable, Mapping
@@ -285,9 +286,28 @@ def _resolve_source(*, git_fn: GitFn, source_tree: str | None) -> dict[str, Any]
     git calls for controlled generation (e.g. CI after a clean checkout).
     """
     if source_tree is not None:
-        if not isinstance(source_tree, str) or len(source_tree) != 40:
+        if (
+            not isinstance(source_tree, str)
+            or len(source_tree) != 40
+            or any(char not in string.hexdigits for char in source_tree)
+        ):
             raise HarborSuiteError(
                 f"source_tree must be a 40-character git tree SHA, got {source_tree!r}"
+            )
+        try:
+            object_type = git_fn(["cat-file", "-t", source_tree]).strip()
+            reachable = git_fn(["rev-list", "--all", "--objects"])
+        except HarborSuiteError as exc:
+            raise HarborSuiteError(
+                f"source_tree must identify a reachable git tree: {source_tree}"
+            ) from exc
+        if object_type != "tree" or not any(
+            line.split(maxsplit=1)[0] == source_tree
+            for line in reachable.splitlines()
+            if line.strip()
+        ):
+            raise HarborSuiteError(
+                f"source_tree must identify a reachable git tree: {source_tree}"
             )
         return {"tree_sha": source_tree, "dirty": False}
     tree_sha = git_fn(["rev-parse", "HEAD^{tree}"])

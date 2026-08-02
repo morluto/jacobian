@@ -37,6 +37,12 @@ MODES = ("none", "changed", "integration", "full")
 MAX_PULL_REQUEST_ORACLE_TASKS = 8
 TARGET_TASKS_PER_SHARD = 12
 MAX_DATASET_SHARDS = 4
+_ORACLE_SCOPE_RANK = {
+    "none": 0,
+    "changed-tasks": 1,
+    "affected-datasets": 2,
+    "all": 3,
+}
 BENCHMARK_CONTROL_PATHS = frozenset(
     {
         ".github/scripts/plan-benchmarks",
@@ -263,7 +269,8 @@ def _escalate(
 ) -> None:
     classification.reasons.append(reason)
     if integration:
-        classification.scope = scope
+        if _ORACLE_SCOPE_RANK[scope] > _ORACLE_SCOPE_RANK[classification.scope]:
+            classification.scope = scope
         classification.run_oracle = True
 
 

@@ -276,6 +276,22 @@ def test_membership_change_runs_affected_dataset_in_merge_queue() -> None:
     _assert_plan_valid(result)
 
 
+def test_merge_group_keeps_widest_oracle_scope_for_mixed_changes() -> None:
+    result = planner.plan(
+        [
+            "benchmarks/config/jacobian.mcp.json",
+            "benchmarks/datasets/agent-workflow-v1/members/new-task.toml",
+        ],
+        event="merge_group",
+    )
+
+    assert result["run-benchmark-oracle"] == "true"
+    assert result["benchmark-oracle-scope"] == "all"
+    assert result["benchmark-plan-mode"] == "integration"
+    assert len(_matrix(result)) > 1
+    _assert_plan_valid(result)
+
+
 def test_existing_task_member_change_selects_changed_task_oracle_on_pull_request() -> (
     None
 ):

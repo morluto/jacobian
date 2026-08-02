@@ -370,6 +370,12 @@ def _eval_args(
 
 
 def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
+    """Normalize only the frozen Jacobian treatment additions.
+
+    Any other condition-specific Compose or MCP change remains in the
+    comparison signature and therefore invalidates the pair.
+    """
+
     normalized: dict[str, Any] = json.loads(json.dumps(job))
     normalized.pop("jobs_dir", None)
     environment = normalized.get("environment")
@@ -379,11 +385,26 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
             environment["extra_docker_compose"] = [
                 value
                 for value in compose
-                if Path(str(value)).name == "agent-eval-proxy.compose.yaml"
+                if Path(str(value)).name != "c2.compose.json"
             ]
     for agent in normalized.get("agents", []):
         if isinstance(agent, dict):
-            agent.pop("mcp_servers", None)
+            servers = agent.get("mcp_servers")
+            if isinstance(servers, list):
+                remaining = [
+                    server
+                    for server in servers
+                    if server
+                    != {
+                        "name": "jacobian",
+                        "transport": "streamable-http",
+                        "url": "http://jacobian:8000/mcp",
+                    }
+                ]
+                if remaining:
+                    agent["mcp_servers"] = remaining
+                else:
+                    agent.pop("mcp_servers", None)
     return normalized
 
 
@@ -542,6 +563,7 @@ def _bind_manifest_file(
     trial_name: str,
     step_index: int,
     step_name: str | None,
+    source_prefix: str | None,
 ) -> dict[str, Any]:
     source = entry.get("source")
     service = entry.get("service")
@@ -556,6 +578,7 @@ def _bind_manifest_file(
         trial_name=trial_name,
         step_index=step_index,
         step_name=step_name,
+        source_prefix=source_prefix,
     )
 
 
@@ -623,6 +646,7 @@ def _manifest_entry_artifacts(
     job_label: str,
     step_index: int,
     step_name: str | None,
+    source_prefix: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     location = f"trial {trial_name} manifest[{index}]"
     failures = _validate_manifest_entry(entry, location=location)
@@ -661,6 +685,7 @@ def _manifest_entry_artifacts(
         "trial_name": trial_name,
         "step_index": step_index,
         "step_name": step_name,
+        "source_prefix": source_prefix,
     }
     if entry.get("type") == "file":
         artifacts, entry_failures = _manifest_file_artifacts(host_path, **context)
@@ -685,6 +710,7 @@ def _manifest_artifacts_for_dir(
     job_label: str,
     step_index: int,
     step_name: str | None,
+    source_prefix: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Read one ``artifacts/manifest.json`` and bind every ``ok`` entry.
 
@@ -732,6 +758,7 @@ def _manifest_artifacts_for_dir(
             job_label=job_label,
             step_index=step_index,
             step_name=step_name,
+            source_prefix=source_prefix,
         )
         artifacts.extend(entry_artifacts)
         failures.extend(entry_failures)
@@ -750,6 +777,7 @@ def _bind_artifact_file(
     trial_name: str,
     step_index: int,
     step_name: str | None,
+    source_prefix: str | None,
 ) -> dict[str, Any]:
     """Bind one regular on-disk file to a manifest-driven artifact identity."""
 
@@ -757,6 +785,8 @@ def _bind_artifact_file(
         source_path = host_path.relative_to(trial_root.parent).as_posix()
     except ValueError:
         source_path = rel
+    if source_prefix:
+        source_path = f"{source_prefix.rstrip('/')}/{source_path}"
     return {
         "job": job_label,
         "trial": trial_name,
@@ -771,7 +801,11 @@ def _bind_artifact_file(
 
 
 def _trial_artifacts(
-    trial_path: Path | None, trial_name: str, job_label: str
+    trial_path: Path | None,
+    trial_name: str,
+    job_label: str,
+    *,
+    source_prefix: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int], int, list[str]]:
     """Collect manifest-driven artifacts for one trial.
 
@@ -805,6 +839,7 @@ def _trial_artifacts(
                 job_label=job_label,
                 step_index=step_index,
                 step_name=step_dir.name,
+                source_prefix=source_prefix,
             )
             artifacts.extend(step_artifacts)
             failures.extend(step_failures)
@@ -816,6 +851,7 @@ def _trial_artifacts(
             job_label=job_label,
             step_index=0,
             step_name=None,
+            source_prefix=source_prefix,
         )
         artifacts.extend(step_artifacts)
         failures.extend(step_failures)
@@ -851,6 +887,7 @@ def _normalize_trial(
     *,
     job_label: str,
     runtime: dict[str, Any] | None,
+    source_prefix: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     agent_result = _object(trial.get("agent_result"))
     agent_info = _object(trial.get("agent_info"))
@@ -864,7 +901,10 @@ def _normalize_trial(
     if not isinstance(verifier_state, str):
         verifier_state = None
     artifacts, tool_calls, tool_errors, artifact_failures = _trial_artifacts(
-        path, str(trial.get("trial_name", "")), job_label
+        path,
+        str(trial.get("trial_name", "")),
+        job_label,
+        source_prefix=source_prefix,
     )
     budgets: dict[str, Any] | None = None
     if runtime is not None:
@@ -1064,6 +1104,13 @@ def build_observation_evidence(
     trials: list[dict[str, Any]] = []
     artifact_failures: list[str] = []
     job_label = _display_path(job_path)
+    source_prefix: str | None = None
+    if runtime_snapshot is not None:
+        pair_id = runtime_snapshot.get("pair_id")
+        condition = runtime_snapshot.get("condition")
+        condition_id = condition.get("id") if isinstance(condition, dict) else None
+        if isinstance(pair_id, str) and isinstance(condition_id, str):
+            source_prefix = f"{pair_id}/{condition_id}"
     for path, raw in raw_trials:
         task = _task_id(raw.get("task_name"))
         repetition = counters[task]
@@ -1078,6 +1125,7 @@ def build_observation_evidence(
             repetition,
             job_label=job_label,
             runtime=runtime_snapshot,
+            source_prefix=source_prefix,
         )
         artifact_failures.extend(trial_artifact_failures)
         trials.append(normalized)
@@ -1261,6 +1309,13 @@ def _comparison_failures(
         for name, value in (("control", control), ("treatment", treatment))
         if value.get("status") != "VALID"
     ]
+    if (control.get("condition"), treatment.get("condition")) not in {
+        ("control", "treatment"),
+        ("C1", "C2"),
+    }:
+        failures.append(
+            "conditions must be a distinct control/treatment or C1/C2 pair"
+        )
     failures.extend(
         f"{name} evidence has an invalid public-claim boundary"
         for name, value in (("control", control), ("treatment", treatment))

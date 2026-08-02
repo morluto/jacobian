@@ -46,6 +46,10 @@ def _clean_git(args: list[str]) -> str:
         return _TREE_SHA
     if args == ["status", "--porcelain"]:
         return ""
+    if args == ["cat-file", "-t", _TREE_SHA]:
+        return "tree"
+    if args == ["rev-list", "--all", "--objects"]:
+        return f"{_TREE_SHA}\n"
     raise AssertionError(f"unexpected git call: {args}")
 
 
@@ -247,17 +251,40 @@ def test_build_lock_fails_closed_on_dirty_tree(paths: dict[str, Path]) -> None:
 
 
 def test_build_lock_accepts_explicit_source_tree(paths: dict[str, Path]) -> None:
-    explicit = "abcdef0123456789abcdef0123456789abcdef01"
+    explicit = _TREE_SHA
     lock = build_lock(
         "jacobian/snap-test",
         digest_fn=_stub_digest,
-        git_fn=_dirty_git,  # would fail if git were called
+        git_fn=_clean_git,
         profiles_path=paths["profiles"],
         registry_path=paths["registry"],
         source_tree=explicit,
     )
     assert lock["source"]["tree_sha"] == explicit
     assert lock["source"]["dirty"] is False
+
+
+def test_build_lock_rejects_unreachable_explicit_source_tree(
+    paths: dict[str, Path],
+) -> None:
+    explicit = "abcdef0123456789abcdef0123456789abcdef01"
+
+    def unreachable_git(args: list[str]) -> str:
+        if args == ["cat-file", "-t", explicit]:
+            return "tree"
+        if args == ["rev-list", "--all", "--objects"]:
+            return ""
+        raise AssertionError(f"unexpected git call: {args}")
+
+    with pytest.raises(HarborSuiteError, match="reachable git tree"):
+        build_lock(
+            "jacobian/snap-test",
+            digest_fn=_stub_digest,
+            git_fn=unreachable_git,
+            profiles_path=paths["profiles"],
+            registry_path=paths["registry"],
+            source_tree=explicit,
+        )
 
 
 def test_build_lock_orders_tasks_by_id_with_harbor_native_digests(

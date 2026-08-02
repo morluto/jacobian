@@ -11,6 +11,7 @@ from pathlib import Path
 from benchmarks.tooling.harbor_suite import task_digest
 from benchmarks.tooling.heldout_bundle import (
     _digest,
+    _json_digest,
     _tree_digest,
     render_plan,
 )
@@ -138,6 +139,13 @@ def create_bundle(root: Path) -> tuple[Path, Path]:
             ]
         )
     _write(dataset / "dataset.toml", "\n".join(dataset_toml))
+    dataset_manifest_digest = _digest(dataset / "dataset.toml")
+    snapshot_id = _json_digest(
+        {
+            "dataset_manifest_digest": dataset_manifest_digest,
+            "task_digests": [task["digest"] for task in tasks],
+        }
+    )
     prompt = root / "bundle" / "prompts" / "heldout.md"
     _write(prompt, "{instruction}\n")
     manifest = {
@@ -151,7 +159,8 @@ def create_bundle(root: Path) -> tuple[Path, Path]:
         "dataset": {
             "id": "heldout-smoke-v1",
             "path": "dataset",
-            "manifest_digest": _digest(dataset / "dataset.toml"),
+            "manifest_digest": dataset_manifest_digest,
+            "snapshot_id": snapshot_id,
             "minimum_independent_families": 2,
         },
         "tasks": tasks,

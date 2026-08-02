@@ -67,10 +67,16 @@ def _affirmative_solved_or_verified_claim(text):
     "does not solve" or "not machine verified" are accepted.
     """
     for clause in re.split(r"[.!?;]+", text.casefold()):
-        if re.search(r"\b(?:machine|formally)\s+(?:verified|checked|certified)\b", clause):
+        if re.search(
+            r"\b(?:machine|formally)\s+(?:verified|checked|certified)\b", clause
+        ):
             words = _words(clause)
             match = next(
-                (i for i, word in enumerate(words) if word in {"verified", "checked", "certified"}),
+                (
+                    i
+                    for i, word in enumerate(words)
+                    if word in {"verified", "checked", "certified"}
+                ),
                 None,
             )
             if match is not None and not any(

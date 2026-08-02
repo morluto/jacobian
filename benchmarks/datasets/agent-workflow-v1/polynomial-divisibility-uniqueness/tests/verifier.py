@@ -286,7 +286,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
+                "scope_accuracy": float(scope_correct and limitations_correct),
                 "assurance_calibration": float(assurance_correct),
                 "input_integrity": float(frozen_input_ok),
                 "reward": float(passed),

@@ -124,7 +124,7 @@ digest = "sha256:057a1079c58d718bd55a5056449f908d80a4dae47ae6fc3f9e9213615b06afb
 
 [[tasks]]
 name = "jacobian/polynomial-divisibility-uniqueness"
-digest = "sha256:902e752df6492c9597474db8566b027a3c7e9ebc2ee846ede4a67cd01cf4445c"
+digest = "sha256:d981d3ffbb6052816ebbf796dcc8a5c9bdf2a4b08b4bc60eae4d2eb06802c8f6"
 
 [[tasks]]
 name = "jacobian/polynomial-map-collision"

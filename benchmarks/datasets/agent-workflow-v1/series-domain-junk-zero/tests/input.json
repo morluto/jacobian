@@ -1,0 +1,1 @@
+{"task_id":"jacobian/series-domain-junk-zero","source":{"repository":"google-deepmind/formal-conjectures","issue":3931,"commit":"60d13721bee9c49a21ee6510e2cf924637e47725","license":"Apache-2.0"},"api_semantics":"sum_if_summable_else_zero","denominator_bounds":[3,7],"block_levels":[2,10],"assurance_ceiling":"COMPUTED"}

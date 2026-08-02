@@ -1,0 +1,25 @@
+{
+  "task_id": "jacobian/squarefree-class-independence-audit",
+  "conclusion": "FOUR_ELEMENT_INDEPENDENT_SUBSET_FORCED",
+  "result": {
+    "ordered_pair_count": 2023,
+    "classification": {
+      "class_key": "SQUAREFREE_KERNEL",
+      "product_square_iff": "KERNELS_EQUAL",
+      "pair_count_formula": "SUM_OF_SQUARED_CLASS_SIZES",
+      "independent_selection": "ONE_ELEMENT_PER_DISTINCT_CLASS"
+    },
+    "modular_obstruction": {
+      "modulus": 8,
+      "target_residue": 7,
+      "quadratic_residues": [0, 1, 4],
+      "maximum_squares_ruled_out": 3
+    },
+    "consequence": "AT_LEAST_FOUR_SQUAREFREE_CLASSES"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "ALL_FINITE_SETS_OF_POSITIVE_INTEGERS_WITH_2023_SQUARE_PRODUCT_ORDERED_PAIRS",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:85a23966430faf9f45c9076550f4eb7f74e49e1d99787951cc629d67b0c9321a"}],
+  "limitations": ["The verifier replays the modular obstruction and structured reduction but does not machine-check a formal proof of the squarefree-kernel lemma."]
+}

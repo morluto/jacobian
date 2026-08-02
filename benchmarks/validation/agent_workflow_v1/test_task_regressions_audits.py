@@ -174,7 +174,392 @@ def test_autoformalization_rejects_positive_lean_compile_claim(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.9)
+
+
+def test_series_domain_audit_accepts_alternative_denominator(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "series-domain-junk-zero", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    result = submission["result"]
+    result["reciprocal_denominator"] = 5
+    result["real_part"] = "1/5"
+    result["general_block_power_exponent"] = {
+        "level_coefficient": 4,
+        "constant": -1,
+    }
+    for block in result["blocks"]:
+        block["block_sum_power_lower_bound"] = 2 ** (4 * block["level"] - 1)
+    (app / "evidence" / "answer.txt").write_text(
+        "For q=5 the general dyadic block lower bound is 2^(4k-1), "
+        "which proves divergence. "
+        "The block sums do not tend to zero. The returned zero is a fallback "
+        "artifact, not an analytic-continuation zero.\n"
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_series_domain_audit_rejects_corrupted_general_bound(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "series-domain-junk-zero", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["general_block_power_exponent"]["constant"] = 0
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_series_domain_audit_accepts_double_star_bound_notation(
+    tmp_path: Path,
+) -> None:
+    """Equivalent bound notation such as 2**(4*k-1) is accepted."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "series-domain-junk-zero", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    result = submission["result"]
+    result["reciprocal_denominator"] = 5
+    result["real_part"] = "1/5"
+    result["general_block_power_exponent"] = {
+        "level_coefficient": 4,
+        "constant": -1,
+    }
+    for block in result["blocks"]:
+        block["block_sum_power_lower_bound"] = 2 ** (4 * block["level"] - 1)
+    (app / "evidence" / "answer.txt").write_text(
+        "For q=5 the general dyadic block lower bound is 2**(4*k-1), "
+        "which proves divergence. "
+        "The block sums do not tend to zero. The returned zero is a fallback "
+        "artifact, not an analytic-continuation zero.\n"
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_series_domain_audit_rejects_affirmative_analytic_claim_in_evidence(
+    tmp_path: Path,
+) -> None:
+    """Evidence that affirmatively claims analytic continuation is rejected."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "series-domain-junk-zero", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    (app / "evidence" / "answer.txt").write_text(
+        "For q=3 the general dyadic block lower bound is 2^(2k-1), "
+        "which proves divergence. "
+        "The block sums do not tend to zero. The returned zero is a fallback "
+        "artifact. This verifies the analytic continuation and proves a "
+        "genuine zeta zero.\n"
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_research_status_audit_accepts_equivalent_case_order(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["cases"].reverse()
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_research_status_audit_rejects_wrong_scope_without_base_reward(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["scope"] = "wrong scope"
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["scope_accuracy"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.2)
+
+
+def test_research_status_audit_rejects_escaped_evidence_without_base_reward(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"] = [
+        {
+            "path": "../answer.txt",
+            "sha256": submission["evidence"][0]["sha256"],
+        }
+    ]
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.2)
+
+
+def test_research_status_audit_rejects_wrong_assurance_without_base_reward(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["assurance_calibration"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.2)
+
+
+def test_research_status_audit_rejects_tampered_frozen_input(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    (app / "input.json").write_text('{"cases":[]}')
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_research_status_audit_rejects_extra_selected_citations(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    for case in submission["result"]["cases"]:
+        if case["case_id"] == "binomial-equation-resolution":
+            case["selected_evidence_ids"].append("SW1999")
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_research_status_audit_rejects_undeclared_result_field(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["current_status"] = "ALL_FOUR_PROBLEMS_RESOLVED"
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_research_status_audit_rejects_non_string_case_id(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["cases"][0]["case_id"] = ["workshop-equation-status"]
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_research_status_audit_rejects_evidence_without_result_marker(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The frozen packets separate direct resolution evidence, "
+        "partial-progress evidence, historical openness, and a bare "
+        "problem listing. A negative web search or an old open-problem "
+        "citation cannot establish present status.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.2)
+
+
+def test_research_status_audit_rejects_escaped_semantics_in_result_marker(
+    tmp_path: Path,
+) -> None:
+    """The RESULT_JSON: marker carries the classifications, case IDs, and
+    selected evidence IDs, which already encode the resolution, partial
+    progress, historical openness, and problem-listing terms. A submission
+    whose prose supports none of the classifications must not pass the
+    semantic_claims checks or earn evidence validity, even though its result
+    marker is canonical and its prose is long enough.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text("This is not a problem statement.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.2)
+
+
+def test_research_status_audit_rejects_oversized_evidence(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text("x" * 2_097_152)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_research_status_audit_oversized_evidence_does_not_block_reward_record(
+    tmp_path: Path,
+) -> None:
+    """The evidence byte bound fires before the digest-bound resolution hashes
+    the file, so an oversized malformed artifact yields a complete reward.json
+    (math still correct, evidence rejected) instead of a verifier timeout.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text("x" * 2_097_152)
+    # A deliberately wrong digest proves the size gate, not the hash, rejects.
+    submission["evidence"][0]["sha256"] = "sha256:" + "0" * 64
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.2)
+
+
+def test_research_status_audit_rejects_deeply_nested_submission(
+    tmp_path: Path,
+) -> None:
+    """A deeply nested JSON payload overflows the CPython recursion limit; the
+    verifier treats it as a malformed submission and writes reward.json with
+    zero reward instead of crashing without a record.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    (app / "submission.json").write_text("[" * 12000 + "1" + "]" * 12000)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_research_status_audit_rejects_checked_assurance_above_ceiling(
+    tmp_path: Path,
+) -> None:
+    """CHECKED is above the task's COMPUTED assurance ceiling, so it is an
+    unsupported certification for this task and forces reward to zero rather
+    than granting the partial reward a below-ceiling mismatch would earn.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["claimed_assurance"] = "CHECKED"
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+
+
+def test_research_status_audit_rejects_invalid_utf8_evidence(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_bytes(
+        b"\xff\xfe resolution partial-progress historical problem listing"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_research_status_audit_requires_exponent_range_inference(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "research-status-evidence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    for case in submission["result"]["cases"]:
+        if case["case_id"] == "lebesgue-nagell-progress":
+            case["unsupported_inferences"] = []
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
 def test_inverse_distance_audit_accepts_alternative_rational_direction(
@@ -313,6 +698,40 @@ def test_lagrangian_projection_audit_rejects_evidence_without_result_marker(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
+
+
+def test_continuant_reversal_rejects_missing_symbolic_monomial(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "continuant-reversal-certificate", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["forward_monomials"].pop()
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_continuant_reversal_rejects_corrupted_reflection(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "continuant-reversal-certificate", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["reflection_pairs"][10]["reflected"] = [1]
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
 @pytest.mark.parametrize(
@@ -495,6 +914,62 @@ def test_lean_transitive_evidence_rejects_empty_prose(tmp_path: Path) -> None:
     assert rejected["evidence_validity"] == 0.0
 
 
+def test_trigonometric_power_sum_rejects_corrupted_recurrence_term(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "trigonometric-power-sum-valuation", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["terms"][12]["value"] += 7
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_trigonometric_power_sum_rejects_corrupted_induction_case(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "trigonometric-power-sum-valuation", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["induction_cases"][1]["coefficient_adjusted_offsets"] = [
+        1,
+        1,
+        0,
+    ]
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_trigonometric_power_sum_rejects_negated_scope(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "trigonometric-power-sum-valuation", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["scope"] = (
+        "This certificate does not cover the cubic recurrence or 7-adic induction."
+    )
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["scope_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_putnam_2adic_evidence_rejects_empty_prose(tmp_path: Path) -> None:
     """Putnam 2-adic audit evidence must have non-empty prose."""
     task, app, logs = support._prepare_case(
@@ -527,3 +1002,91 @@ def test_putnam_2adic_evidence_requires_result_binding(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
+
+
+def test_infinite_shift_spectrum_accepts_reversed_operator_orientation(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "infinite-shift-spectrum-counterexample", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    result = submission["result"]
+    result["orientation"] = "S_LEFT_T_RIGHT"
+    result["zero_eigenvalue_product"] = "TS"
+    result["identity_product"] = "ST"
+    for action in result["actions"]:
+        index = action["basis_index"]
+        action.update(
+            {
+                "s_output": None if index == 0 else index - 1,
+                "t_output": index + 1,
+                "st_output": index,
+                "ts_output": None if index == 0 else index,
+            }
+        )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+
+
+def test_infinite_shift_spectrum_rejects_corrupted_composition(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "infinite-shift-spectrum-counterexample", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["actions"][5]["st_output"] = 4
+    support._bind_result_evidence(app, submission)
+
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_indexed_pairwise_vacuity_accepts_canonical_case(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "indexed-pairwise-vacuity", "computed"
+    )
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_indexed_pairwise_vacuity_rejects_boolean_witness_element(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "indexed-pairwise-vacuity", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["subgroup"] = [False, 4, 8]
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_indexed_pairwise_vacuity_accepts_unordered_elements(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "indexed-pairwise-vacuity", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    result = submission["result"]
+    result["subgroup"] = [8, 0, 4]
+    result["cosets"][0] = [8, 4, 0]
+    result["part_artifact"]["elements"] = [8, 0, 4]
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0

@@ -1,0 +1,7 @@
+{
+  "task_id": "jacobian/inseparable-minimal-polynomial-audit",
+  "source": {"dataset": "Jiahao004/DeepTheorem", "repository": "https://huggingface.co/datasets/Jiahao004/DeepTheorem", "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8", "split": "train", "row": 2, "source_id": 843, "row_sha256": "sha256:245c3a2b642e01eebe4891fe9940e1518fcb5f39e4955cc44d1eca1db609cb22", "license": "MIT"},
+  "setting": {"base": "K(u)", "u": "t^p", "characteristic": "prime p", "transcendence": "t is transcendental over K"},
+  "source_gap": "Repeated roots of an annihilating polynomial do not alone identify the minimal polynomial.",
+  "assurance_ceiling": "COMPUTED"
+}

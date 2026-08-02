@@ -1,0 +1,23 @@
+{
+  "task_id": "jacobian/gaussian-moment-generality-audit",
+  "source": {
+    "url": "https://arxiv.org/abs/2607.18186v1",
+    "version": "v1",
+    "submitted": "2026-07-20",
+    "license": "arXiv non-exclusive distribution license 1.0",
+    "source_archive_sha256": "sha256:3978017f44d6edad32168706098c4aa68f9ffc7f7cbaf8ae1f1a38aebe97fe9f",
+    "captured": "2026-08-01"
+  },
+  "frozen_problem": {
+    "gaussians": "X1, X2, and T are independent standard real Gaussian variables.",
+    "complex_coordinates": "Z=(X1+i X2)/sqrt(2) and W=(X1-i X2)/sqrt(2).",
+    "template": "Choose nonzero rational a, set h(z)=a+z, P=W h(Z)+v(Z) T^2, and Q=Z/a, where deg(v)<=2.",
+    "available_identity": "For zeta=t h(zeta), E(A(Z) exp(tP)) = A(zeta) * (1-2t v(zeta))^(-1/2) / (1-t h'(zeta)), using the formal square-root branch with constant term 1.",
+    "target": "Construct v and zeta so E(P^m)=0 and E(QP^m)=m! for every integer m>=1.",
+    "parameter_bounds": {"max_abs_numerator": 10, "max_denominator": 10}
+  },
+  "audit_prompt": {
+    "invalid_argument": "Direct computation found the target moments for m=1,...,12, therefore the identities hold for every m>=1.",
+    "required_repair": "Replace finite extrapolation by exact rational-function identities that imply the full formal generating functions."
+  }
+}

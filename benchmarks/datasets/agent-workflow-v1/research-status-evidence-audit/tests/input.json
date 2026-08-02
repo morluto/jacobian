@@ -1,0 +1,50 @@
+{
+  "task_id": "jacobian/research-status-evidence-audit",
+  "dataset": "amphora/ResearchMath-14k",
+  "revision": "f22d0f28b55e6e777acf82e722d97ae982dff02e",
+  "source_packet_sha256": "sha256:6a4f30bc54142ae03756a412b1c54a2854e81e1d22f8311dc7aa0ec7796e26e0",
+  "split": "test",
+  "rows": [0, 1, 2, 5],
+  "cutoff": "2026-05-31",
+  "cases": [
+    {
+      "case_id": "workshop-equation-status",
+      "reported_status": "unknown",
+      "problem": "Determine all integer solutions of x^2-x=y^5-y.",
+      "report_claim": "A targeted search did not locate a complete resolution, therefore current status is unknown.",
+      "citations": [
+        {"id": "W2007", "year": 2007, "url": "https://pub.math.leidenuniv.nl/~evertsejh/07-workshop-problems.pdf", "text": "Problem 1: Find all integer solutions to x^2-x=y^5-y."}
+      ]
+    },
+    {
+      "case_id": "vanishing-conjecture-status",
+      "reported_status": "open",
+      "problem": "Vanishing Conjecture for Hessian-nilpotent polynomials.",
+      "report_claim": "The conjecture remains open at the 2026 cutoff.",
+      "citations": [
+        {"id": "Z2004", "year": 2004, "url": "https://arxiv.org/abs/math/0409534", "text": "Introduces the Vanishing Conjecture and relates it to the Jacobian Conjecture."},
+        {"id": "Z2008", "year": 2008, "url": "https://www.impan.pl/en/publishing-house/journals-and-series/annales-polonici-mathematici/all/93/2/85371/some-properties-of-and-open-problems-on-hessian-nilpotent-polynomials", "text": "Lists the Vanishing Conjecture among open problems on Hessian-nilpotent polynomials."}
+      ]
+    },
+    {
+      "case_id": "binomial-equation-resolution",
+      "reported_status": "solved",
+      "problem": "Determine all integer solutions of binom(x,2)=binom(y,5).",
+      "report_claim": "A later paper completely resolves this equation.",
+      "citations": [
+        {"id": "SW1999", "year": 1999, "url": "https://www.ams.org/journals/mcom/1999-68-227/S0025-5718-99-01047-9/", "text": "Determines complete solution sets for several binomial equations, not including the (2,5) case."},
+        {"id": "BMSS2019", "year": 2019, "url": "https://arxiv.org/abs/1901.03841", "text": "Determines all integer solutions of the binomial Thue equation binom(y,2)=binom(x,5)."}
+      ]
+    },
+    {
+      "case_id": "lebesgue-nagell-progress",
+      "reported_status": "partially_solved",
+      "problem": "Determine all integer solutions of x^2-2=y^p for prime p>=3.",
+      "report_claim": "Small and sufficiently large prime ranges are resolved, but no cited work gives a complete all-primes classification.",
+      "citations": [
+        {"id": "B2004", "year": 2004, "url": "https://arxiv.org/abs/math/0405220", "text": "Establishes explicit solved exponent ranges and strong restrictions on any remaining solutions."},
+        {"id": "KP2025", "year": 2025, "url": "https://arxiv.org/abs/2507.12397", "text": "Gives further results for the equation but does not claim a complete resolution for every prime exponent."}
+      ]
+    }
+  ]
+}

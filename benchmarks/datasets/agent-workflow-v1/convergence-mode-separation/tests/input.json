@@ -1,0 +1,2 @@
+{"task_id":"jacobian/convergence-mode-separation","source":{"repository":"google-deepmind/formal-conjectures","issue":3473,"file":"FormalConjectures/ErdosProblems/522.lean","blob_sha":"442b79dd1c1151740d9ce17551c1c9c9d77f5987","license":"Apache-2.0"},"construction":{"space":"[0,1)","measure":"lebesgue","level_start":1,"level_end":8,"interval":"[j/2^k,(j+1)/2^k)","sequence_index":"2^k+j"},"minimum_probe_count":3,"assurance_ceiling":"COMPUTED"}
+

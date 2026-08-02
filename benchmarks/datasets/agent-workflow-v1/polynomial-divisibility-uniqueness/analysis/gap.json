@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "polynomial-divisibility-uniqueness",
+  "analysis": {
+    "mathematical_moves": [
+      "Construct a symbolic polynomial remainder over Q[a] using the relation x^2 = x - a.",
+      "Compute the common polynomial gcd of the remainder coefficients and derive the unique integral root.",
+      "Verify the exact quotient by multiplication at the derived parameter."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.compute.gcd",
+        "availability": "AVAILABLE",
+        "boundary": "Computes a polynomial gcd and Bezout witness for supplied polynomials; symbolic remainder construction and the divisibility-family interpretation remain agent-owned."
+      }
+    ],
+    "gap_classes": [
+      "MISSING_OPERATION",
+      "WEAK_COMPOSITION"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "symbolic-polynomial-remainder-gcd-certificate"
+    ],
+    "disposition": "ACCEPT_CANDIDATE",
+    "next_action": "Use this as a regression case for composing symbolic remainder construction, polynomial gcd, and exact quotient verification without hard-coding the public parameter."
+  }
+}

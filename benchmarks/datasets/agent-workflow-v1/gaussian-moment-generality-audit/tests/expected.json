@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/gaussian-moment-generality-audit",
+  "conclusion": "ALL_EXPONENTS_IDENTITY_CERTIFIED",
+  "required_scope": "FROZEN_THREE_REAL_GAUSSIAN_TEMPLATE",
+  "maximum_assurance": "COMPUTED"
+}

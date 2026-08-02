@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "infinite-shift-spectrum-counterexample",
+  "analysis": {
+    "mathematical_moves": [
+      "Construct an infinite-dimensional shift counterexample and distinguish the two composition spectra while exposing the finite-dimensionality assumption."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep operator orientation, zero-eigenvalue roles, and the missing finite-dimensional assumption explicit in the certificate."
+  }
+}

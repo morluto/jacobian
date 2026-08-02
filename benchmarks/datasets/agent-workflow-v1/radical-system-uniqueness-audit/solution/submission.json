@@ -1,0 +1,27 @@
+{
+  "task_id": "jacobian/radical-system-uniqueness-audit",
+  "conclusion": "UNIQUE_REAL_SOLUTION",
+  "result": {
+    "substitution": "u=b^(1/6)",
+    "elimination_coefficients": [0, 0, -2, -1, 1],
+    "linear_factors": [
+      {"constant": 0, "x_coefficient": 1},
+      {"constant": 0, "x_coefficient": 1},
+      {"constant": -2, "x_coefficient": 1},
+      {"constant": 1, "x_coefficient": 1}
+    ],
+    "root_classification": [
+      {"u": -1, "status": "REJECTED", "reason": "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE"},
+      {"u": 0, "status": "REJECTED", "reason": "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE"},
+      {"u": 2, "status": "ACCEPTED", "reason": "SATISFIES_ALL_ROOT_DOMAINS"}
+    ],
+    "solutions": [
+      {"a": 2025, "b": 64, "c": 25, "u": 2, "equation_values": ["81=81", "9=9", "3=3"]}
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "Complete real solution set under principal-root semantics.",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:aea010d343fadaadae9808fcf229cd86260ee55b2168cb8a761140caada2449c"}],
+  "limitations": ["No external proof assistant independently certifies the symbolic derivation."]
+}

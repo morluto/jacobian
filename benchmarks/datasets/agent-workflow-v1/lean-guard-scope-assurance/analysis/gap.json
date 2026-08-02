@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "lean-guard-scope-assurance",
+  "analysis": {
+    "mathematical_moves": [
+      "Audit guard scope, custom-type division semantics, and proof-term exclusions from a frozen formalization case set."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep semantic case derivation separate from Lean compilation and reject extra or inverted case assertions."
+  }
+}

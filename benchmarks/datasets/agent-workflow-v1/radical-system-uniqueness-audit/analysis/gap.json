@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "radical-system-uniqueness-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Eliminate a radical system to a univariate polynomial, classify roots against principal-domain constraints, and reconstruct exact surviving solutions."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep root-domain rejection and exact substitution as separate certificate obligations."
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "task_id": "jacobian/inseparable-minimal-polynomial-audit",
+  "conclusion": "MINIMAL_POLYNOMIAL_GAP_REPAIRED",
+  "result": {
+    "diagnosis": "ANNIHILATING_POLYNOMIAL_NOT_YET_MINIMAL",
+    "candidate_polynomial": "X^p-u",
+    "valuation_obstruction": {"v_u_u": 1, "pth_power_multiple": "p*integer", "residue_contradiction": [1, 0]},
+    "irreducibility": "X^p-u_IRREDUCIBLE_OVER_K(u)",
+    "minimal_polynomial": {"polynomial": "X^p-u", "degree": "p"},
+    "inseparability": {"formal_derivative": "0", "root_multiplicity": "p", "conclusion": "t_INSEPARABLE_OVER_K(u)"},
+    "sanity_prime": 5
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "the symbolic extension K(t) over K(t^p) in arbitrary prime characteristic",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:f902ea716a2d7953601bc72d1556435bcf7fdfd9af85f8ce3a5204fae4f85133"}],
+  "limitations": ["The checker validates the valuation and minimal-polynomial certificate contract, but does not replay a proof assistant or implement arbitrary rational-function fields."]
+}

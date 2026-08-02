@@ -1,0 +1,1 @@
+{"task_id":"jacobian/inseparable-minimal-polynomial-audit","conclusion":"MINIMAL_POLYNOMIAL_GAP_REPAIRED","maximum_assurance":"COMPUTED","required_scope":"the symbolic extension K(t) over K(t^p) in arbitrary prime characteristic"}

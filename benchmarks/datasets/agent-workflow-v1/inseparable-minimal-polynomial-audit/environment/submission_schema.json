@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/inseparable-minimal-polynomial-audit"},
+    "conclusion": {"enum": ["MINIMAL_POLYNOMIAL_GAP_REPAIRED", "INSUFFICIENT_EVIDENCE"]},
+    "result": {"type": "object", "additionalProperties": false, "required": ["diagnosis", "candidate_polynomial", "irreducibility", "minimal_polynomial", "inseparability", "sanity_prime"], "anyOf": [{"required": ["valuation_obstruction"]}, {"required": ["irreducibility_certificate"]}], "properties": {
+      "diagnosis": {"const": "ANNIHILATING_POLYNOMIAL_NOT_YET_MINIMAL"},
+      "candidate_polynomial": {"const": "X^p-u"},
+      "valuation_obstruction": {"type": "object", "additionalProperties": false, "required": ["v_u_u", "pth_power_multiple", "residue_contradiction"], "properties": {"v_u_u": {"const": 1}, "pth_power_multiple": {"const": "p*integer"}, "residue_contradiction": {"type": "array", "prefixItems": [{"const": 1}, {"const": 0}], "items": false}}},
+      "irreducibility_certificate": {"type": "object", "additionalProperties": false, "required": ["method", "prime_element", "constant_term_valuation", "leading_coefficient_valuation"], "properties": {"method": {"const": "eisenstein"}, "prime_element": {"const": "u"}, "constant_term_valuation": {"const": 1}, "leading_coefficient_valuation": {"const": 0}}},
+      "irreducibility": {"const": "X^p-u_IRREDUCIBLE_OVER_K(u)"},
+      "minimal_polynomial": {"type": "object", "additionalProperties": false, "required": ["polynomial", "degree"], "properties": {"polynomial": {"const": "X^p-u"}, "degree": {"const": "p"}}},
+      "inseparability": {"type": "object", "additionalProperties": false, "required": ["formal_derivative", "root_multiplicity", "conclusion"], "properties": {"formal_derivative": {"const": "0"}, "root_multiplicity": {"const": "p"}, "conclusion": {"const": "t_INSEPARABLE_OVER_K(u)"}}},
+      "sanity_prime": {"type": "integer", "minimum": 2, "maximum": 97}
+    }},
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "scope": {"type": "string"}, "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  }
+}

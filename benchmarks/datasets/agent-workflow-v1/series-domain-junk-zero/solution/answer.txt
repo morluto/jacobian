@@ -1,0 +1,2 @@
+Choose s=1/3. On the block 2^k≤n<2^(k+1), there are 2^k terms and each is larger than 2^(-(k+1)/3), so the cube of the block-sum lower bound is 2^(2k-1). The block sums do not tend to zero, hence the positive series diverges. The API returns zero only through its nonsummable fallback, while Re(s)=1/3 is not 1/2. This is not an analytic zero certificate.
+

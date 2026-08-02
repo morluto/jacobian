@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/radical-system-uniqueness-audit",
+  "conclusion": "UNIQUE_REAL_SOLUTION",
+  "maximum_assurance": "COMPUTED",
+  "scope": "Complete real solution set under principal-root semantics."
+}

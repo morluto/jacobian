@@ -1,0 +1,29 @@
+{
+  "task_id": "jacobian/covering-path-lift-bijection",
+  "conclusion": "FIBERS_BIJECTED_BY_PATH_LIFTING",
+  "result": {
+    "base_path": ["x0", "x1", "x2"],
+    "reverse_path": ["x2", "x1", "x0"],
+    "forward_lifts": [
+      {"start": "x0_0", "trace": ["x0_0", "x1_1", "x2_1"], "endpoint": "x2_1"},
+      {"start": "x0_1", "trace": ["x0_1", "x1_2", "x2_2"], "endpoint": "x2_2"},
+      {"start": "x0_2", "trace": ["x0_2", "x1_0", "x2_0"], "endpoint": "x2_0"}
+    ],
+    "reverse_lifts": [
+      {"start": "x2_1", "trace": ["x2_1", "x1_1", "x0_0"], "endpoint": "x0_0"},
+      {"start": "x2_2", "trace": ["x2_2", "x1_2", "x0_1"], "endpoint": "x0_1"},
+      {"start": "x2_0", "trace": ["x2_0", "x1_0", "x0_2"], "endpoint": "x0_2"}
+    ],
+    "bijection": [
+      {"source": "x0_0", "target": "x2_1"},
+      {"source": "x0_1", "target": "x2_2"},
+      {"source": "x0_2", "target": "x2_0"}
+    ],
+    "local_covering_checked": true
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "Exact finite graph-cover fiber bijection induced by the submitted path.",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:cc45a522fd284baf8c9da26937e06c3251c16af47d77ed5ecc43389ab1610284"}],
+  "limitations": ["The general topological covering-space theorem is not externally certified."]
+}

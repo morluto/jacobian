@@ -12,6 +12,6 @@ Your certificate must establish, by exact rational-function identities rather th
 4. `E(exp(tP))=1` and `E(Q exp(tP))=t/(1-t)`;
 5. therefore `E(P^m)=0` and `E(QP^m)=m!` for every `m>=1`.
 
-Also classify the twelve-moment argument as insufficient. Do not claim that finite checking proves an all-exponents statement. Do not claim machine verification, settle the two-dimensional case, or assess unrelated reductions in the source paper.
+Also classify the twelve-moment argument as insufficient. Do not claim that finite checking proves an all-exponents statement. Do not claim machine verification, settle the two-dimensional case, or assess unrelated reductions in the source paper. State limitations covering both: (1) the certificate is not proof-assistant or machine verification, and (2) it does not settle the two-dimensional case or unrelated claims in the source paper.
 
-Write `/app/submission.json` matching the supplied schema and bind one concise explanation at `/app/evidence/answer.txt`.
+Write `/app/submission.json` matching the supplied schema and bind one concise explanation at `/app/evidence/answer.txt`. Include one `RESULT_JSON:` line containing the exact submitted `result` object as compact JSON, so the explanation is bound to the certificate.

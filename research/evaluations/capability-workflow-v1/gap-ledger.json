@@ -5,7 +5,7 @@
   "source_suite": {
     "path": "benchmarks/datasets/agent-workflow-v1/dataset.toml",
     "task_count": 39,
-    "manifest_sha256": "sha256:ae5dbf7aeb4d1adb9255f7d1f4f957de5ac08e1389b5bf5bf122d49023b3788c",
+    "manifest_sha256": "sha256:7658c35ebf86c2425792575cbdff8b1db6a8b24bf2b7f696e97d668b9e654b1e",
     "contamination": "PUBLIC_ANSWER_VISIBLE"
   },
   "runtime_snapshot": {
@@ -292,6 +292,11 @@
         "Replay exact rational-function branch, cancellation, and coefficient-extraction identities."
       ],
       "current_capabilities": [
+        {
+          "capability_id": "probability.gaussian_polynomial.moment.compute",
+          "availability": "AVAILABLE",
+          "boundary": "Computes one fixed-order exact Gaussian polynomial moment with a coefficient-contraction ledger, but explicitly does not establish an identity for every order, so it cannot justify the all-exponents conclusion from twelve finite moments."
+        },
         {
           "capability_id": "polynomial.identity.verify",
           "availability": "AVAILABLE",

@@ -39,7 +39,8 @@ def test_gaussian_moment_audit_accepts_alternative_rational_parameter(
     evidence_path = app / "evidence" / "answer.txt"
     evidence_path.write_text(
         "Finite moment checks cannot prove the result. The exact branch and "
-        "formal square root cancel for every m>=1, giving the COMPUTED identity."
+        "formal square root cancel for every m>=1, giving the COMPUTED identity.\n"
+        "RESULT_JSON: {}\n"
     )
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
@@ -70,7 +71,8 @@ def test_gaussian_moment_audit_validates_v_via_correction_identity(
     evidence_path = app / "evidence" / "answer.txt"
     evidence_path.write_text(
         "Finite moment checks cannot prove the result. The exact branch and "
-        "formal square root cancel for every m>=1, giving the COMPUTED identity."
+        "formal square root cancel for every m>=1, giving the COMPUTED identity.\n"
+        "RESULT_JSON: {}\n"
     )
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
@@ -95,6 +97,103 @@ def test_gaussian_moment_audit_rejects_v_violating_correction_identity(
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_gaussian_moment_audit_accepts_paraphrased_evidence(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "Twelve finite checks are insufficient to prove the universal claim. "
+        "The sqrt branch cancellation yields the all-exponents identity at "
+        "COMPUTED assurance.\n"
+        "RESULT_JSON: {}\n"
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_gaussian_moment_audit_accepts_paraphrased_limitations(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["limitations"] = [
+        "This is not machine verification of the result.",
+        "The 2D Gaussian Moments Conjecture is not settled here.",
+    ]
+    support._write_json(submission_path, submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_gaussian_moment_audit_rejects_evidence_without_result_marker(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "Finite moment checks cannot justify the universal exponent claim. "
+        "The formal square root cancels for every m>=1 at COMPUTED assurance.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_gaussian_moment_audit_rejects_oversized_evidence(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text("x" * 2_097_152)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_gaussian_moment_audit_rejects_oversized_coefficient_arrays(
+    tmp_path: Path,
+) -> None:
+    """A zeta represented by numerator/denominator multiplied by a long dense
+    common polynomial preserves the rational function but would make the
+    verifier's polynomial multiplication quadratic in an attacker-controlled
+    length; the bounded coefficient gate rejects it without that work.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "gaussian-moment-generality-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    # t/(1-t) multiplied by (1+z)^17 worth of dense common factor on both sides.
+    submission["result"]["zeta"] = {
+        "numerator": ["0"] + ["1"] * 17,
+        "denominator": ["1"] + ["0"] * 16 + ["-1"],
+    }
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0

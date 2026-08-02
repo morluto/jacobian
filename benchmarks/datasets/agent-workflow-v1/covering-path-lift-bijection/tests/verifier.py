@@ -1,4 +1,5 @@
 import json
+import re
 from collections import deque
 from itertools import pairwise
 from pathlib import Path
@@ -294,9 +295,10 @@ def main() -> None:
             term in submission["scope"].casefold()
             for term in ("finite", "graph", "cover", "fiber", "path")
         )
-        and not any(
-            marker in submission["scope"].casefold()
-            for marker in ("not ", "without", "cannot", "does not")
+        and not re.search(
+            r"\b(?:not|without|cannot|does not)\b[^.]{0,80}"
+            r"\b(?:finite|graph|cover|fiber|path)\b",
+            submission["scope"].casefold(),
         )
     )
     assurance = bool(

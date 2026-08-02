@@ -56,7 +56,7 @@ digest = "sha256:fec54cdc4c494da4d0dd3c0b9d158dd094bc9ae9e145ef9431d415b39517f38
 
 [[tasks]]
 name = "jacobian/gaussian-moment-generality-audit"
-digest = "sha256:43d2173e010378d6b1d25cd8cab7b8062b8e655094b5822849dee287029691b5"
+digest = "sha256:be583c87db834721b71e26a22317c65dc7814595e9d193c972b9fcf8ed9c0ea2"
 
 [[tasks]]
 name = "jacobian/generated-lemma-vacuity-audit"

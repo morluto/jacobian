@@ -295,7 +295,11 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
         )
     ) and not any(
         term in combined
-        for term in ("this is machine verification", "machine-verified", "formally verified")
+        for term in (
+            "this is machine verification",
+            "machine-verified",
+            "formally verified",
+        )
     )
     has_scope_caveat = any(
         term in combined
@@ -312,7 +316,10 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
         and has_scope_caveat
         and not any(
             term in combined
-            for term in ("settles the two-dimensional conjecture", "proves the two-dimensional conjecture")
+            for term in (
+                "settles the two-dimensional conjecture",
+                "proves the two-dimensional conjecture",
+            )
         )
     )
 

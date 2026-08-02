@@ -120,26 +120,45 @@ def test_comparison_derives_heldout_class_from_both_inputs() -> None:
 
 
 def test_comparison_preserves_unrelated_compose_differences() -> None:
-    control = _evidence("control", [1.0])
-    treatment = deepcopy(_evidence("treatment", [1.0]))
-    control["job"]["comparison_signature"] = "sha256:" + "a" * 64
-    treatment["job"]["comparison_signature"] = "sha256:" + "a" * 64
-    control["job"]["environment"] = {
-        "extra_docker_compose": [
-            "/abs/path/agent-eval-proxy.compose.yaml",
-            "/abs/path/c1.compose.json",
-        ]
-    }
-    treatment["job"]["environment"] = {
-        "extra_docker_compose": [
-            "/abs/path/agent-eval-proxy.compose.yaml",
-            "/abs/path/c2.compose.json",
-        ]
-    }
-    report = compare_evidence(control, treatment)
+    from benchmarks.tooling.observation_results import _comparison_job
 
+    control_job = {
+        "jobs_dir": "results",
+        "environment": {
+            "extra_docker_compose": [
+                "/abs/path/agent-eval-proxy.compose.yaml",
+            ]
+        },
+        "agents": [{"name": "codex"}],
+    }
+    treatment_job = {
+        "jobs_dir": "results",
+        "environment": {
+            "extra_docker_compose": [
+                "/abs/path/agent-eval-proxy.compose.yaml",
+                "/abs/path/c2.compose.json",
+            ]
+        },
+        "agents": [{"name": "codex", "mcp_servers": [{"name": "jacobian"}]}],
+    }
+    # Stripping only the c2 treatment overlay and mcp_servers makes the frozen
+    # control and treatment jobs compare equal.
+    assert _comparison_job(deepcopy(control_job)) == _comparison_job(
+        deepcopy(treatment_job)
+    )
+
+    # An unrelated sidecar survives normalization, so the signatures differ and
+    # the comparison rejects the configuration drift instead of hiding it.
+    with_sidecar = deepcopy(control_job)
+    with_sidecar["environment"]["extra_docker_compose"].append(
+        "/abs/path/extra.compose.json"
+    )
+    assert _comparison_job(with_sidecar) != _comparison_job(control_job)
+
+    report = compare_evidence(
+        _evidence("control", [1.0]), _evidence("treatment", [1.0])
+    )
     assert report["status"] == "VALID"
-    assert "job configuration differs" not in " ".join(report["validation_failures"])
 
 
 def test_comparison_rejects_missing_required_outcome_dimensions() -> None:
@@ -257,3 +276,95 @@ def test_observation_normalization_binds_repetitions_and_model(
     assert failures == []
     assert evidence["status"] == "VALID"
     assert evidence["fixed_invariants"]["model"] == "model"
+
+
+def test_observation_binds_agent_and_provider_identity_and_detects_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(observation_results, "task_digest", lambda _path: "a" * 64)
+    monkeypatch.setattr(observation_results, "_git_sha", lambda: "b" * 40)
+    job = {
+        "jobs_dir": str(tmp_path / "jobs"),
+        "n_attempts": 1,
+        "timeout_multiplier": 1,
+        "orchestrator": {"type": "local", "n_concurrent_trials": 1},
+        "environment": {"type": "docker"},
+        "agents": [{"name": "codex"}],
+        "datasets": [
+            {
+                "path": "benchmarks/datasets/agent-workflow-v1",
+                "task_names": ["graph-counterexample"],
+            }
+        ],
+    }
+    job_path = tmp_path / "job.json"
+    job_path.write_text(json.dumps(job), encoding="utf-8")
+    result = {
+        "id": "job",
+        "started_at": "2026-01-01T00:00:00Z",
+        "finished_at": "2026-01-01T00:01:00Z",
+        "n_total_trials": 1,
+        "stats": {
+            "n_completed_trials": 1,
+            "n_errored_trials": 0,
+            "n_running_trials": 0,
+            "n_pending_trials": 0,
+            "n_cancelled_trials": 0,
+        },
+        "trial_results": [
+            {
+                "task_name": "jacobian/graph-counterexample",
+                "task_checksum": "sha256:" + "a" * 64,
+                "trial_name": "attempt-0",
+                "agent_info": {
+                    "name": "codex",
+                    "version": "1.2.3",
+                    "model_info": {"name": "model", "provider": "openai"},
+                },
+                "agent_result": {
+                    "n_input_tokens": 10,
+                    "n_output_tokens": 5,
+                    "cost_usd": 0.01,
+                },
+                "verifier_result": {
+                    "rewards": {"correctness": 1.0, "false_certification": 0.0}
+                },
+                "exception_info": None,
+            }
+        ],
+    }
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    runtime = {"model": "model", "agent": {"name": "codex", "version": "1.2.3"}}
+
+    evidence, failures = build_observation_evidence(
+        dataset="agent-workflow-v1",
+        condition="control",
+        job_path=job_path,
+        jobs_dir=tmp_path,
+        result_path=result_path,
+        runtime_snapshot=runtime,
+    )
+
+    assert failures == []
+    assert evidence["fixed_invariants"]["agent_name"] == "codex"
+    assert evidence["fixed_invariants"]["agent_version"] == "1.2.3"
+    assert evidence["fixed_invariants"]["model_provider"] == "openai"
+
+    # A runtime identity drift (observed agent version differs from the frozen
+    # snapshot) must fail closed instead of producing a VALID comparison.
+    drifted = json.loads(result_path.read_text())
+    drifted["trial_results"][0]["agent_info"]["version"] = "9.9.9"
+    result_path.write_text(json.dumps(drifted), encoding="utf-8")
+
+    drifted_evidence, drifted_failures = build_observation_evidence(
+        dataset="agent-workflow-v1",
+        condition="control",
+        job_path=job_path,
+        jobs_dir=tmp_path,
+        result_path=result_path,
+        runtime_snapshot=runtime,
+    )
+
+    assert drifted_evidence["status"] == "INCOMPLETE"
+    assert any("agent version" in failure for failure in drifted_failures)

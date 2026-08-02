@@ -66,12 +66,17 @@ jobs:
               planner_args=(--event "$EVENT_NAME" --force-full)
               ;;
             pull_request|merge_group|push)
-              if [ "$FORCE_FULL" = "true" ]; then
-                planner_args=(--event "$EVENT_NAME" --force-full)
-              elif [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
-                planner_args=(--event "$EVENT_NAME" --force-full)
-              else
-                planner_args=(--event "$EVENT_NAME" --base "$BASE_SHA")
+              planner_args=(--event "$EVENT_NAME")
+              if [ "$FORCE_FULL" = "true" ] \
+                || [ -z "$BASE_SHA" ] \
+                || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+                planner_args+=(--force-full)
+              fi
+              # Preserve the PR's changed paths and base SHA even when a forced
+              # full plan is requested, so dataset version-bump invariants still
+              # apply to changed tasks instead of being bypassed by the label.
+              if [ -n "$BASE_SHA" ] && [[ ! "$BASE_SHA" =~ ^0+$ ]]; then
+                planner_args+=(--base "$BASE_SHA")
                 mapfile -d '' changed_paths < <(
                   git diff --name-only -z "$BASE_SHA" "$HEAD_SHA"
                 )

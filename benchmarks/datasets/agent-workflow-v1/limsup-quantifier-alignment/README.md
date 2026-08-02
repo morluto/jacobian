@@ -4,5 +4,6 @@ This Assurance benchmark freezes the semantic defect reported in google-deepmind
 
 The informal optimization claim says that some admissible object has limsup at most a bound. The proposed formalization instead says every admissible object has limsup at least that bound. A submission must construct two exact rational model families separating the formulas in both directions. The verifier evaluates both formulas itself and accepts alternative separating families.
 
-Difficulty is **Hard (provisional)**: the task requires quantifier, polarity, and optimization-direction analysis plus two independent countermodels. Baseline calibration has not yet been run. The task is an Assurance audit, not evidence that an agent can solve Erdős problem 33.
+Difficulty is **Medium-Hard / Hard (provisional)**: the task requires quantifier, polarity, and optimization-direction analysis plus two independent countermodels, but the separating families themselves are elementary once the formulas are exposed. Baseline calibration has not yet been run.
 
+The verifier checks only the displayed formula schema over bounded finite families of exact rational values. It does not model admissible sequences, derive a limsup, validate the surrounding optimization problem, or establish general autoformalization competence. This is an Assurance audit of one local semantic mismatch, not evidence that an agent can solve Erdős problem 33.

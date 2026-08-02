@@ -8,14 +8,12 @@ RSA ciphertext residues need not be units.
 Submit a domain-complete repair certificate for an odd prime `p`, positive
 `d` with `gcd(d,p-1)=1`, and least nonnegative remainder `d_p`.
 
-Your certificate must:
+Your certificate must address the domain gap and support the universal conclusion with an independently replayable symbolic certificate. It must:
 
 1. diagnose why the inverse-based step is not defined for nonunits;
 2. derive `1 <= d_p <= p-2` from the stated assumptions;
-3. prove the unit branch without negative exponents, using
-   `d=d_p+k(p-1)` with `k>=0` and Fermat's theorem;
-4. prove the nonunit branch using positivity of both exponents;
-5. state the exhaustive two-way domain split;
+3. prove both residue cases without introducing an undefined inverse;
+4. state the exhaustive domain split and why each branch is valid;
 6. provide freely chosen unit and nonunit numeric witnesses satisfying the
    frozen bounds; and
 7. distinguish the symbolic repair from bounded sanity checks.

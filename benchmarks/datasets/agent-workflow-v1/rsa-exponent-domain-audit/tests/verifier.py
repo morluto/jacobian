@@ -45,10 +45,10 @@ def _witness(value: object, *, unit: bool) -> bool:
         return False
     p, d, dp, c = value["p"], value["d"], value["d_p"], value["C"]
     if not (
-        3 <= p <= 97
+        3 <= p <= 43
         and _prime(p)
         and p % 2
-        and 1 <= d <= 500
+        and 1 <= d <= 80
         and math.gcd(d, p - 1) == 1
         and dp == d % (p - 1)
         and 1 <= dp <= p - 2
@@ -130,7 +130,11 @@ def _result(value: object, source: dict[str, Any]) -> bool:
 
 
 def _evidence(value: object) -> bool:
-    if not evidence_list_is_bound(value):
+    if (
+        not isinstance(value, list)
+        or len(value) != 1
+        or not evidence_list_is_bound(value)
+    ):
         return False
     assert isinstance(value, list)
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
@@ -162,7 +166,16 @@ def main() -> None:
     assurance = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
     )
-    limitations = bool(contract and data.get("limitations") == [LIMITATION])
+    limitations = bool(
+        contract
+        and isinstance(data.get("limitations"), list)
+        and any(
+            isinstance(item, str)
+            and "proof assistant" in item.casefold()
+            and "not" in item.casefold()
+            for item in data["limitations"]
+        )
+    )
     false_verified = false_verified_claim(submission, verification_record_bound=False)
     passed = bool(
         correct

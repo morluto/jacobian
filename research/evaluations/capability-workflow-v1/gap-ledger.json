@@ -4,8 +4,8 @@
   "captured_at": "2026-08-01",
   "source_suite": {
     "path": "benchmarks/datasets/agent-workflow-v1/dataset.toml",
-    "task_count": 38,
-    "manifest_sha256": "sha256:d3bc205f36fdd1c3a05ee0740e3dc13dc029cb70bc54f7d2392f73fedec27d07",
+    "task_count": 39,
+    "manifest_sha256": "sha256:f6f1e67a2eadd493f35d71d85ac6eea763e7af94337ea2c491d76a772616c1fd",
     "contamination": "PUBLIC_ANSWER_VISIBLE"
   },
   "runtime_snapshot": {
@@ -127,6 +127,23 @@
       "candidate_ids": [],
       "disposition": "NO_NEW_CAPABILITY",
       "next_action": "Keep recurrence construction, denominator auditing, and branch reconstruction as agent-owned composition rather than adding a problem-specific solver."
+    },
+    {
+      "task_id": "cyclotomic-reciprocity-certificate",
+      "mathematical_moves": [
+        "Recover a complete cyclotomic factorization from expanded coefficients.",
+        "Reconstruct every cyclotomic factor and the full product exactly.",
+        "Connect inversion-closed root orbits and nonvanishing at one to reciprocal symmetry."
+      ],
+      "current_capabilities": [
+        {"capability_id": "polynomial.factor.compute", "availability": "AVAILABLE", "boundary": "Can factor one polynomial but does not construct the root-orbit and reciprocal-scalar argument."},
+        {"capability_id": "polynomial.identity.verify", "availability": "AVAILABLE", "boundary": "Can replay the expanded product and reciprocal identity independently."}
+      ],
+      "gap_classes": ["EXISTING_WORKS", "MODEL_REASONING"],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "USE_EXISTING",
+      "next_action": "Retain as a factorization-to-reciprocity composition regression; do not add a cyclotomic-specific wrapper."
     },
     {
       "task_id": "dead-end-local-density-audit",

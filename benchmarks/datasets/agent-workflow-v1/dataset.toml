@@ -23,6 +23,10 @@ name = "jacobian/complex-power-sum-elimination"
 digest = "sha256:7973a71a04ee7ae9af0f4e95c31398fe75e6570b9296451301fc1d8406017410"
 
 [[tasks]]
+name = "jacobian/cyclotomic-reciprocity-certificate"
+digest = "sha256:37799806060a526f15633316d96e4addc6baa9699b0ba2dae632a5d5663ed7be"
+
+[[tasks]]
 name = "jacobian/dead-end-local-density-audit"
 digest = "sha256:131bb73beb7ee4e44d086a85228d9bdf5d4adadab4951ff1ebc8567c8b020c7a"
 

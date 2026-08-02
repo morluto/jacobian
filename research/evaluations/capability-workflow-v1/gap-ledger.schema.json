@@ -39,7 +39,7 @@
           "const": "benchmarks/datasets/agent-workflow-v1/dataset.toml"
         },
         "task_count": {
-          "const": 38
+          "const": 39
         },
         "manifest_sha256": {
           "$ref": "#/$defs/digest"
@@ -171,8 +171,8 @@
     },
     "tasks": {
       "type": "array",
-      "minItems": 38,
-      "maxItems": 38,
+      "minItems": 39,
+      "maxItems": 39,
       "items": {
         "$ref": "#/$defs/task"
       }

@@ -269,7 +269,7 @@
           "const": "benchmarks/datasets/agent-workflow-v1"
         },
         "task_count": {
-          "const": 38
+          "const": 39
         },
         "manifest_digest": {
           "$ref": "#/$defs/digest"

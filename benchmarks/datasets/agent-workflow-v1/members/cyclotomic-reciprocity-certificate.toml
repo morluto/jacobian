@@ -1,0 +1,3 @@
+task_id = "cyclotomic-reciprocity-certificate"
+assurance_ceiling = "COMPUTED"
+required_provider = "core"

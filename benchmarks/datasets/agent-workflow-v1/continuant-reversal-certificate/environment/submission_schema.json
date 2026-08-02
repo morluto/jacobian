@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "properties": {
+    "task_id": {
+      "const": "jacobian/continuant-reversal-certificate"
+    },
+    "conclusion": {
+      "enum": [
+        "REVERSAL_SYMMETRY_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_length",
+        "forward_monomials",
+        "reverse_monomials",
+        "reflection_pairs",
+        "recurrence_contract",
+        "proof_obligations",
+        "conclusion"
+      ],
+      "properties": {
+        "board_length": {
+          "const": 10
+        },
+        "forward_monomials": {
+          "$ref": "#/$defs/supports"
+        },
+        "reverse_monomials": {
+          "$ref": "#/$defs/supports"
+        },
+        "reflection_pairs": {
+          "type": "array",
+          "minItems": 89,
+          "maxItems": 89,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "forward",
+              "reflected"
+            ],
+            "properties": {
+              "forward": {
+                "$ref": "#/$defs/support"
+              },
+              "reflected": {
+                "$ref": "#/$defs/support"
+              }
+            }
+          }
+        },
+        "recurrence_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "initial_values",
+            "forward_coefficient",
+            "reverse_coefficient",
+            "reflection_rule"
+          ],
+          "properties": {
+            "initial_values": {
+              "const": [
+                1,
+                1
+              ]
+            },
+            "forward_coefficient": {
+              "const": "a_k"
+            },
+            "reverse_coefficient": {
+              "const": "a_(n-k)"
+            },
+            "reflection_rule": {
+              "const": "i_maps_to_n_minus_i"
+            }
+          }
+        },
+        "proof_obligations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "base_cases",
+            "partition",
+            "recurrence",
+            "reflection"
+          ],
+          "properties": {
+            "base_cases": {
+              "const": [
+                {
+                  "length": 0,
+                  "value": "1"
+                },
+                {
+                  "length": 1,
+                  "value": "1"
+                }
+              ]
+            },
+            "partition": {
+              "const": "each_tiling_ends_in_a_square_or_domino"
+            },
+            "recurrence": {
+              "const": "F_(k+1)=F_k+a_k*F_(k-1)"
+            },
+            "reflection": {
+              "const": "i_maps_to_n_minus_i_and_is_an_involution"
+            }
+          }
+        },
+        "conclusion": {
+          "const": "FINAL_POLYNOMIALS_EQUAL"
+        }
+      }
+    },
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "scope": {
+      "type": "string"
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "support": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9
+      }
+    },
+    "supports": {
+      "type": "array",
+      "minItems": 89,
+      "maxItems": 89,
+      "items": {
+        "$ref": "#/$defs/support"
+      }
+    }
+  }
+}

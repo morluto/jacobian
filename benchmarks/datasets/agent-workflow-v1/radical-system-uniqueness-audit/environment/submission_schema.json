@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/radical-system-uniqueness-audit"},
+    "conclusion": {"enum": ["UNIQUE_REAL_SOLUTION", "MULTIPLE_REAL_SOLUTIONS", "INSUFFICIENT_EVIDENCE"]},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["substitution", "elimination_coefficients", "linear_factors", "root_classification", "solutions"],
+      "properties": {
+        "substitution": {"const": "u=b^(1/6)"},
+        "elimination_coefficients": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "integer"}},
+        "linear_factors": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["constant", "x_coefficient"],
+            "properties": {"constant": {"type": "integer"}, "x_coefficient": {"type": "integer"}}
+          }
+        },
+        "root_classification": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["u", "status", "reason"],
+            "properties": {
+              "u": {"type": "integer"},
+              "status": {"enum": ["ACCEPTED", "REJECTED"]},
+              "reason": {"enum": ["PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE", "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE", "SATISFIES_ALL_ROOT_DOMAINS"]}
+            }
+          }
+        },
+        "solutions": {
+          "type": "array", "minItems": 1, "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["a", "b", "c", "u", "equation_values"],
+            "properties": {
+              "a": {"type": "integer"}, "b": {"type": "integer"}, "c": {"type": "integer"}, "u": {"type": "integer"},
+              "equation_values": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "scope": {"type": "string"},
+    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  }
+}

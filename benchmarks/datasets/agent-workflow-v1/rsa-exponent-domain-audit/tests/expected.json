@@ -1,0 +1,1 @@
+{"task_id":"jacobian/rsa-exponent-domain-audit","conclusion":"DOMAIN_COMPLETE_REPAIR","maximum_assurance":"COMPUTED","required_scope":"all integer ciphertext residues under the frozen odd-prime RSA exponent assumptions"}

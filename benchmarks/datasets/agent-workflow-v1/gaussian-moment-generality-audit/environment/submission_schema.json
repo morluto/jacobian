@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "completeness", "result", "evidence", "scope", "claimed_assurance", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/gaussian-moment-generality-audit"},
+    "conclusion": {"const": "ALL_EXPONENTS_IDENTITY_CERTIFIED"},
+    "completeness": {"const": "COMPLETE"},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parameter_a", "h_coefficients", "v_coefficients", "zeta", "audit", "formal_identities", "moment_conclusion"],
+      "properties": {
+        "parameter_a": {"type": "string"},
+        "h_coefficients": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}},
+        "v_coefficients": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}},
+        "zeta": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["numerator", "denominator"],
+          "properties": {
+            "numerator": {"type": "array", "minItems": 2, "maxItems": 16, "items": {"type": "string"}},
+            "denominator": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string"}}
+          }
+        },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["finite_checks_suffice", "repair_kind"],
+          "properties": {
+            "finite_checks_suffice": {"const": false},
+            "repair_kind": {"const": "FORMAL_RATIONAL_IDENTITY"}
+          }
+        },
+        "formal_identities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["branch_equation", "correction_factor", "square_root_branch", "combined_prefactor", "ordinary_mgf", "mixed_mgf"],
+          "properties": {
+            "branch_equation": {"const": "EXACT"},
+            "correction_factor": {"const": "ONE_MINUS_T_TO_NEGATIVE_TWO"},
+            "square_root_branch": {"const": "CONSTANT_TERM_ONE"},
+            "combined_prefactor": {"const": "ONE"},
+            "ordinary_mgf": {"const": "ONE"},
+            "mixed_mgf": {"const": "T_OVER_ONE_MINUS_T"}
+          }
+        },
+        "moment_conclusion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ordinary", "mixed", "quantifier"],
+          "properties": {
+            "ordinary": {"const": "ZERO"},
+            "mixed": {"const": "M_FACTORIAL"},
+            "quantifier": {"const": "EVERY_INTEGER_M_AT_LEAST_ONE"}
+          }
+        }
+      }
+    },
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "scope": {"const": "FROZEN_THREE_REAL_GAUSSIAN_TEMPLATE"},
+    "claimed_assurance": {"const": "COMPUTED"},
+    "limitations": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "string", "maxLength": 512}}
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/covering-path-lift-bijection",
+  "conclusion": "FIBERS_BIJECTED_BY_PATH_LIFTING",
+  "maximum_assurance": "COMPUTED",
+  "scope": "Exact finite graph-cover fiber bijection induced by the submitted path."
+}

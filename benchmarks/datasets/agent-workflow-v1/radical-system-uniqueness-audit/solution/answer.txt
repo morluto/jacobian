@@ -1,0 +1,7 @@
+Put u=b^(1/6), so u>=0. The second and third equations give
+(u^2-1)^2=u^3+1, hence u^4-u^3-2u^2=u^2(u-2)(u+1)=0.
+The principal sixth root excludes u=-1, and the nonnegative fourth-root
+right-hand side u^2-1 excludes u=0. Thus u=2. Then b=64, a/c=81,
+c=25, and a=2025. Direct substitution checks all three equations, so the
+unique real solution is (2025,64,25), contradicting the frozen multiplicity
+claim.

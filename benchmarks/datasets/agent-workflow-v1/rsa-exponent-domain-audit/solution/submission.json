@@ -1,0 +1,19 @@
+{
+  "task_id": "jacobian/rsa-exponent-domain-audit",
+  "conclusion": "DOMAIN_COMPLETE_REPAIR",
+  "result": {
+    "diagnosis": {"unsafe_step": "NEGATIVE_POWER_REQUIRES_UNIT", "missing_domain": "C_CONGRUENT_ZERO_MOD_P"},
+    "remainder_bounds": {"lower": 1, "upper": "p-2", "reason": "COPRIMALITY_EXCLUDES_ZERO_REMAINDER"},
+    "unit_branch": {"condition": "gcd(C,p)=1", "quotient_relation": "d=d_p+k*(p-1)", "quotient_bound": "k>=0", "identity": "C^d=C^d_p*(C^(p-1))^k"},
+    "nonunit_branch": {"condition": "p|C", "d_positive": true, "d_p_positive": true, "residues": [0, 0]},
+    "domain_split": ["gcd(C,p)=1", "p|C"],
+    "unit_witness": {"p": 11, "d": 7, "d_p": 7, "C": 2, "left_residue": 7, "right_residue": 7},
+    "nonunit_witness": {"p": 11, "d": 7, "d_p": 7, "C": 22, "left_residue": 0, "right_residue": 0},
+    "finite_testing_role": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "all integer ciphertext residues under the frozen odd-prime RSA exponent assumptions",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:6bfb235d59dc3ca92feb7e7671a7cdc1d8cf0de48070928424a4c2f0a9583023"}],
+  "limitations": ["The checker validates the symbolic two-branch contract and bounded residue sanity suite, but does not replay a proof assistant proof of the universal theorem."]
+}

@@ -168,3 +168,111 @@ def test_dead_end_local_density_audit_rejects_duplicate_case_id(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_subset_incidence_rejects_boolean_diagonal_weights(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6VuwyR: reject boolean diagonal weights.
+
+    Replacing every 1 in diagonal_weights with JSON true must not pass,
+    because True == 1 in Python but booleans violate the enum: [-1, 1]
+    contract.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "subset-incidence-determinant", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["diagonal_weights"] = [
+        True if w == 1 else w for w in submission["result"]["diagonal_weights"]
+    ]
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_subset_incidence_rejects_boolean_mask_order(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in mask_order."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "subset-incidence-determinant", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["mask_order"][0] = True
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_subset_incidence_rejects_boolean_trace_fields(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in trace numeric fields."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "subset-incidence-determinant", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["trace"][0]["n"] = True
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_subset_incidence_rejects_boolean_sample_n(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in sample_n."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "subset-incidence-determinant", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["sample_n"] = True
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_subset_incidence_rejects_duplicate_evidence_descriptors(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu43q: enforce the maxItems: 1 evidence limit.
+
+    Repeating the same evidence descriptor must not pass even though each
+    copy individually binds the expected evidence file.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "subset-incidence-determinant", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"].append(dict(submission["evidence"][0]))
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_subset_incidence_accepts_canonical_solution(
+    tmp_path: Path,
+) -> None:
+    """The canonical solution must still earn full reward after the fixes."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "subset-incidence-determinant", "computed"
+    )
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)

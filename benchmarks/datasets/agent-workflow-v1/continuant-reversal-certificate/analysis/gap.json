@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "continuant-reversal-certificate",
+  "analysis": {
+    "mathematical_moves": [
+      "Interpret a variable-coefficient recurrence as a complete path-tiling monomial family.",
+      "Construct and replay the reflection involution matching forward and reversed recurrence polynomials."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Can replay a supplied scalar identity, but its request is bounded to four variables and cannot directly replay this task's nine-coefficient symbolic identity; it also does not construct the tiling support family or involution."
+      }
+    ],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Retain as a symbolic involution regression; do not add a continuant-specific solver from one workflow."
+  }
+}

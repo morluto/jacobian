@@ -1,0 +1,13 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object","additionalProperties":false,
+  "required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],
+  "properties":{
+    "task_id":{"const":"jacobian/research-status-evidence-audit"},
+    "conclusion":{"const":"MIXED_STATUS_EVIDENCE_QUALITY"},
+    "result":{"type":"object","additionalProperties":false,"required":["cases"],"properties":{"cases":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"object","additionalProperties":false,"required":["case_id","classification","selected_evidence_ids","unsupported_inferences"],"properties":{"case_id":{"type":"string"},"classification":{"enum":["RESOLVED_BY_CITED_WORK","PARTIAL_PROGRESS_NO_FULL_RESOLUTION","HISTORICALLY_OPEN_CURRENT_STATUS_NOT_ESTABLISHED","PROBLEM_LISTED_STATUS_UNSUPPORTED"]},"selected_evidence_ids":{"type":"array","items":{"type":"string"},"uniqueItems":true},"unsupported_inferences":{"type":"array","items":{"enum":["NEGATIVE_SEARCH_PROVES_CURRENT_STATUS","HISTORICAL_OPENNESS_PROVES_2026_OPENNESS","RESOLVED_RANGES_CHARACTERIZED_AS_SMALL_AND_SUFFICIENTLY_LARGE"]},"uniqueItems":true}}}}}},
+    "claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"const":"COMPLETE"},
+    "evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},
+    "limitations":{"type":"array","items":{"type":"string"}}
+  }
+}

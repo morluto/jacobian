@@ -1,0 +1,22 @@
+{
+  "task_id": "jacobian/rsa-exponent-domain-audit",
+  "source": {
+    "dataset": "Jiahao004/DeepTheorem",
+    "repository": "https://huggingface.co/datasets/Jiahao004/DeepTheorem",
+    "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8",
+    "split": "train",
+    "row": 7,
+    "source_id": 780,
+    "row_sha256": "sha256:5665932a13c4e9074d5ca3300200cdbd5662a93606e838de2f2bb3008efbec50",
+    "license": "MIT"
+  },
+  "claim": "For every integer C, C^d is congruent to C^d_p modulo p under the RSA exponent assumptions.",
+  "assumptions": {
+    "p": "odd prime",
+    "d": "positive integer",
+    "coprimality": "gcd(d,p-1)=1",
+    "d_p": "least nonnegative residue of d modulo p-1"
+  },
+  "sanity_bounds": {"maximum_prime": 43, "maximum_exponent": 80},
+  "assurance_ceiling": "COMPUTED"
+}

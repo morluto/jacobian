@@ -46,7 +46,7 @@ def load_submission(
 
     try:
         value = json.loads(path.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return None
     return value if isinstance(value, dict) else None
 

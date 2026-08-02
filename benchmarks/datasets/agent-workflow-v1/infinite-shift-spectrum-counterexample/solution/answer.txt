@@ -1,0 +1,1 @@
+Take S=R and T=L on finitely supported rational sequences. Then TS=LR is the identity, while ST=RL fixes every e_i for i>0 and kills e_0. Thus zero is an eigenvalue of ST with eigenvector e_0 but is not an eigenvalue of the identity TS. The eigenvalue sets differ, exposing the missing finite-dimensional assumption. This is an algebraic countermodel, not a Lean compilation result.

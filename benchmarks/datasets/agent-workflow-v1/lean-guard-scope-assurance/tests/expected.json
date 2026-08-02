@@ -1,0 +1,1 @@
+{"task_id":"jacobian/lean-guard-scope-assurance","conclusion":"AUDIT_COMPLETE","maximum_assurance":"COMPUTED","required_scope":"five frozen Lean semantic-guard cases at the pinned ATP Checkers revision"}

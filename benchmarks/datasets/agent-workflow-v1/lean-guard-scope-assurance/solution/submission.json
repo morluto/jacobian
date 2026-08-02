@@ -1,0 +1,53 @@
+{
+  "task_id": "jacobian/lean-guard-scope-assurance",
+  "conclusion": "AUDIT_COMPLETE",
+  "result": {
+    "cases": [
+      {
+        "id": "guard_after_binder",
+        "findings": [
+          "INTEGER_DIVISION_TRUNCATION"
+        ],
+        "reason": "FULL_SCOPE_GUARD_BUT_NAT_DIVISION_MAY_TRUNCATE"
+      },
+      {
+        "id": "allzero_div_one",
+        "findings": [
+          "DIVISION_BY_ZERO"
+        ],
+        "reason": "LITERAL_ONE_IS_DEFINITIONALLY_ZERO_IN_CUSTOM_TYPE"
+      },
+      {
+        "id": "allzero_bad_lt_guard",
+        "findings": [
+          "DIVISION_BY_ZERO"
+        ],
+        "reason": "ARBITRARY_LT_DOES_NOT_ESTABLISH_NONZERO"
+      },
+      {
+        "id": "proof_term_noise",
+        "findings": [],
+        "reason": "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS"
+      },
+      {
+        "id": "zero_over_variable",
+        "findings": [
+          "DIVISION_BY_ZERO"
+        ],
+        "reason": "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
+      }
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "five frozen Lean semantic-guard cases at the pinned ATP Checkers revision",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:e3e0d3a9eb9494ac6f159275b09fefa2e61be90077aff0a0d25d017ef3b88347"
+    }
+  ],
+  "limitations": [
+    "The verifier derives semantic classifications from frozen facts but does not run Lean or certify the upstream linter implementation."
+  ]
+}

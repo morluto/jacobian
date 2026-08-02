@@ -6,6 +6,8 @@ import re
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _VARIABLE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 _MAX_DIMENSION = 4
@@ -39,8 +41,16 @@ def _parse_rational(value: object) -> Fraction:
         or _INTEGER.fullmatch(denominator) is None
     ):
         raise ValueError("rational integers are not canonical")
-    parsed = Fraction(int(numerator), int(denominator))
-    if str(parsed.numerator) != numerator or str(parsed.denominator) != denominator:
+    # Use the limit-independent canonical integer parser so coefficients up to
+    # the contract's 32,768-digit bound can be verified; Python's default
+    # 4,300-digit int() conversion limit would otherwise raise ValueError.
+    parsed = Fraction(
+        parse_canonical_integer(numerator), parse_canonical_integer(denominator)
+    )
+    if (
+        format_canonical_integer(parsed.numerator) != numerator
+        or format_canonical_integer(parsed.denominator) != denominator
+    ):
         raise ValueError("rational is not reduced and canonical")
     return parsed
 

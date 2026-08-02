@@ -397,6 +397,77 @@ def test_checker_rejects_cross_product_overflow() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Thread PRRT_kwDOThEfjc6VuwhT: coefficients beyond Python's 4,300-digit
+# int() conversion limit must still be verifiable up to the contract's
+# 32,768-digit bound.
+# ---------------------------------------------------------------------------
+
+
+def test_checker_accepts_identity_with_large_canonical_coefficients() -> None:
+    """A coefficient with more than 4,300 digits must not trigger
+    ValueError from int(); the limit-independent canonical parser must
+    handle it and the identity must be verified as TRUE.
+    """
+    large_digit_count = 5_000
+    large_numerator = "1" + "0" * (large_digit_count - 1)
+    request = _request(equal=True)
+    # Make both sides identical: same numerator and denominator with the
+    # large coefficient so the cross-multiplication identity holds.
+    identical_function = _function(
+        ["x"],
+        numerator=_polynomial([(1, 1, 2), (-1, 1, 0)]),
+        denominator=_polynomial([(1, 1, 1), (-1, 1, 0)]),
+    )
+    identical_function["numerator"]["terms"][0]["coefficient"] = {
+        "num": large_numerator,
+        "den": "1",
+    }
+    request["scope"]["payload"] = copy.deepcopy(identical_function)
+    request["candidate"]["payload"] = copy.deepcopy(identical_function)
+    _refresh_payload_digest(request["scope"])
+    _refresh_payload_digest(request["candidate"])
+
+    decision = check_rational_function_identity(request)
+
+    assert decision["accepted"] is True
+    assert decision["conclusion"] == "TRUE"
+
+
+def test_checker_detects_difference_with_large_canonical_coefficients() -> None:
+    """Large coefficients that differ must be detected as FALSE, not
+    rejected as UNKNOWN due to int() conversion failure.
+    """
+    large_digit_count = 5_000
+    left_numerator = "1" + "0" * (large_digit_count - 1)
+    right_numerator = "2" + "0" * (large_digit_count - 1)
+    request = _request(equal=True)
+    base_function = _function(
+        ["x"],
+        numerator=_polynomial([(1, 1, 2), (-1, 1, 0)]),
+        denominator=_polynomial([(1, 1, 1), (-1, 1, 0)]),
+    )
+    left_function = copy.deepcopy(base_function)
+    right_function = copy.deepcopy(base_function)
+    left_function["numerator"]["terms"][0]["coefficient"] = {
+        "num": left_numerator,
+        "den": "1",
+    }
+    right_function["numerator"]["terms"][0]["coefficient"] = {
+        "num": right_numerator,
+        "den": "1",
+    }
+    request["scope"]["payload"] = left_function
+    request["candidate"]["payload"] = right_function
+    _refresh_payload_digest(request["scope"])
+    _refresh_payload_digest(request["candidate"])
+
+    decision = check_rational_function_identity(request)
+
+    assert decision["accepted"] is True
+    assert decision["conclusion"] == "FALSE"
+
+
+# ---------------------------------------------------------------------------
 # Fail-closed: supporting-artifact and structural mutations
 # ---------------------------------------------------------------------------
 

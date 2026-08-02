@@ -289,21 +289,24 @@ class RationalFunctionArtifact(ContractModel):
 
     @model_validator(mode="after")
     def require_matching_fraction_field(self) -> Self:
-        # Reuse the identity-request validator for cross-field checks (variable
-        # uniqueness, exponent dimension matching, and cross-product bound).
-        # The self-comparison is intentional: we only need the side effect of
-        # the nested validator, not a real equality test.
-        RationalFunctionIdentityRequest(
-            variables=self.variables,
-            left=SparseRationalFunction(
-                numerator=self.numerator,
-                denominator=self.denominator,
-            ),
-            right=SparseRationalFunction(
-                numerator=self.numerator,
-                denominator=self.denominator,
-            ),
-        )
+        # Validate the artifact directly rather than reusing the
+        # two-function cross-product validator: the identity-request bound
+        # applies the pair limit to a single fraction's self-product
+        # (numerator.terms * denominator.terms), which incorrectly rejects a
+        # valid 65x65 fraction.  The artifact only needs variable uniqueness,
+        # exponent dimension matching, and a nonzero denominator.
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("rational-function variables must be unique")
+        dimension = len(self.variables)
+        for polynomial in (self.numerator, self.denominator):
+            if any(
+                len(term.exponents) != dimension for term in polynomial.terms
+            ):
+                raise ValueError(
+                    "every monomial must match the declared variable order"
+                )
+        if not self.denominator.terms:
+            raise ValueError("rational-function denominator must be nonzero")
         return self
 
 

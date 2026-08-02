@@ -243,6 +243,8 @@ def limitation_is_bounded(value: object) -> bool:
         "restricted",
         "supplied",
         "given",
+        "not a general",
+        "does not generalize",
     )
     subject = ("polynomial", "family", "divisibility", "certificate", "input")
     return (

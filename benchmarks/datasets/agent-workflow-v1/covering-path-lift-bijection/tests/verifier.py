@@ -269,7 +269,14 @@ def main() -> None:
         and _result_is_valid(submission.get("result"), source)
     )
     evidence = bool(math_contract and _evidence_is_valid(submission.get("evidence")))
-    scope = bool(math_contract and submission.get("scope") == expected["scope"])
+    scope = bool(
+        math_contract
+        and isinstance(submission.get("scope"), str)
+        and all(
+            term in submission["scope"].casefold()
+            for term in ("finite", "graph", "cover", "fiber", "path")
+        )
+    )
     assurance = bool(
         math_contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
@@ -278,7 +285,7 @@ def main() -> None:
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "VERIFIED"
     )
-    correct = bool(contract and math_correct)
+    correct = bool(contract and math_correct and evidence and scope and assurance)
     reward = (
         0.0
         if not correct or false_certification

@@ -24,7 +24,7 @@ digest = "sha256:7973a71a04ee7ae9af0f4e95c31398fe75e6570b9296451301fc1d840601741
 
 [[tasks]]
 name = "jacobian/covering-path-lift-bijection"
-digest = "sha256:7072eeaf565d28dbbecf31c41d831aecf8b1b9016826aea1659d10ff516b612a"
+digest = "sha256:806f12df50e4adadf084e56ee9666cd56443119ec5282f4609b7d5804ec7ba04"
 
 [[tasks]]
 name = "jacobian/dead-end-local-density-audit"

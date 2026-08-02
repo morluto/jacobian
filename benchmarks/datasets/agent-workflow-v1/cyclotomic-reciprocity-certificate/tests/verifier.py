@@ -100,10 +100,7 @@ def _result_is_valid(result, frozen):
         "reciprocal_scalar",
         "root_orbit_conclusion",
     }
-    if (
-        not isinstance(result, dict)
-        or set(result) != required
-    ):
+    if not isinstance(result, dict) or set(result) != required:
         return False
     leading = _integer(result["leading_coefficient"])
     p_at_one = _integer(result["p_at_one"])
@@ -175,7 +172,7 @@ def _evidence_matches(evidence):
         and "orbit" in text
         and ("phi_1" in text or "phi1" in text)
         and "p(1)" in text
-        and "x-1" in text
+        and re.search(r"x\s*[-\u2212]\s*1", text)
         and ("coefficient symmetry" in text or "reciprocal" in text)
     )
 
@@ -202,17 +199,27 @@ def main():
         and "cyclotomic" in scope_text
         and "general" in scope_text
         and "orbit" in scope_text
-        and not re.search(r"\b(?:not|without|excluding|only)\b[^.]{0,50}\bgeneral\b", scope_text)
+        and not re.search(
+            r"\b(?:not|without|excluding|only)\b[^.]{0,50}\bgeneral\b", scope_text
+        )
     )
     assurance_correct = bool(
         contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
-    limitations = submission.get("limitations", []) if isinstance(submission, dict) else []
+    limitations = (
+        submission.get("limitations", []) if isinstance(submission, dict) else []
+    )
     limitation_correct = False
     if contract and isinstance(limitations, list):
-        combined = " ".join(item.casefold() for item in limitations if isinstance(item, str))
-        negative_pattern = r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,60}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b"
+        combined = " ".join(
+            item.casefold() for item in limitations if isinstance(item, str)
+        )
+        negative_pattern = (
+            r"\b(?:not|no|without|does not|doesn't|lacks?|"
+            r"no\s+[^.]{0,20})\b[^.]{0,60}"
+            r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b"
+        )
         limitation_correct = bool(
             re.search(r"\bunrestricted\b", combined)
             and re.search(negative_pattern, combined)

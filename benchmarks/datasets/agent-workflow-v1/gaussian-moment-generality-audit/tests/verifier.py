@@ -239,6 +239,24 @@ def evidence_valid(value: object, result: object) -> bool:
     # redundant hashing of a large file once per array element.
     if not isinstance(value, list) or len(value) != 1:
         return False
+    descriptor = value[0]
+    if (
+        not isinstance(descriptor, dict)
+        or set(descriptor) != {"path", "sha256"}
+        or descriptor.get("path") != "evidence/answer.txt"
+        or not isinstance(descriptor.get("sha256"), str)
+    ):
+        return False
+    evidence_path = WORKSPACE / "evidence" / "answer.txt"
+    try:
+        if (
+            evidence_path.is_symlink()
+            or not evidence_path.is_file()
+            or evidence_path.stat().st_size > MAX_EVIDENCE_BYTES
+        ):
+            return False
+    except OSError:
+        return False
     if not evidence_list_is_bound(value, expected_path="evidence/answer.txt"):
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
@@ -271,13 +289,20 @@ def evidence_valid(value: object, result: object) -> bool:
             r"(?:square root|sqrt)[^.]{0,80}\b(?:does not|doesn't|not)\b[^.]{0,30}\bcancel",
             r"(?:all exponents|every m)[^.]{0,80}\b(?:false|not true|does not hold)\b",
         )
-        machine_claim = re.search(
-            r"\b(?:machine|formal(?:ly)?)\s+(?:verification|verified|proof)\b",
-            lowered,
+        clauses = [
+            clause.strip()
+            for clause in re.split(r"[.;:\n]+", lowered)
+            if clause.strip()
+        ]
+        machine_claim = re.compile(
+            r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b[^.]{0,60}\b(?:verification|verified|proof|checked)\b"
         )
-        machine_negation = re.search(
-            r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,30}\b(?:machine|formal(?:ly)?|proof)\b",
-            lowered,
+        machine_negation = re.compile(
+            r"\b(?:not|no|without|does not|doesn't|unverified|unreplayed|unassessed)\b[^.]{0,60}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b"
+        )
+        affirmative_machine_claim = any(
+            machine_claim.search(clause) and not machine_negation.search(clause)
+            for clause in clauses
         )
         return bool(
             len(markers) == 1
@@ -311,7 +336,7 @@ def evidence_valid(value: object, result: object) -> bool:
             and any(term in lowered for term in ("formal identity", "rational identity"))
             and not any(term in lowered for term in contradictions)
             and not any(re.search(pattern, lowered) for pattern in contradictory_patterns)
-            and not (machine_claim and not machine_negation)
+            and not affirmative_machine_claim
         )
     except (OSError, UnicodeError, ValueError):
         return False
@@ -325,22 +350,31 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
         or any(not isinstance(item, str) or len(item) > MAX_LIMITATION_BYTES for item in limitations)
     ):
         return False
-    combined = " ".join(str(item) for item in limitations).lower()
-    has_verification_caveat = bool(
-        re.search(
-            r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,100}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b",
-            combined,
-        )
+    clauses = [
+        clause.strip()
+        for item in limitations
+        for clause in re.split(r"[.;:\n]+", item.lower())
+        if clause.strip()
+    ]
+    verification_caveat = re.compile(
+        r"\b(?:not|no|without|does not|doesn't|unverified|unreplayed|unassessed)\b[^.]{0,60}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b"
     )
-    has_scope_caveat = bool(
-        re.search(
-            r"\b(?:not|no|neither|without|does not|doesn't)\b[^.]{0,100}\b(?:two-dimensional|2d|dimension two|conjecture|unrelated)\b",
-            combined,
-        )
+    affirmative_verification = re.compile(
+        r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b[^.]{0,60}\b(?:verification|verified|proof|checked)\b"
+    )
+    scope_caveat = re.compile(
+        r"\b(?:not|no|neither|without|does not|doesn't)\b[^.]{0,100}\b(?:two-dimensional|2d|dimension two|conjecture|unrelated)\b"
+    )
+    has_verification_caveat = any(verification_caveat.search(clause) for clause in clauses)
+    has_scope_caveat = any(scope_caveat.search(clause) for clause in clauses)
+    has_affirmative_verification = any(
+        affirmative_verification.search(clause) and not verification_caveat.search(clause)
+        for clause in clauses
     )
     return (
         has_verification_caveat
         and has_scope_caveat
+        and not has_affirmative_verification
     )
 
 
@@ -354,9 +388,7 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    math_correct = bool(
-        contract and construction_valid(data.get("result"), load_frozen())
-    )
+    math_correct = bool(construction_valid(data.get("result"), load_frozen()))
     evidence_correct = bool(
         math_correct and evidence_valid(data.get("evidence"), data.get("result"))
     )

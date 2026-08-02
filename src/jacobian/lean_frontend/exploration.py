@@ -110,6 +110,7 @@ class PersistentLeanRepl:
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None
         self._responses: queue.Queue[dict[str, Any] | BaseException] = queue.Queue()
+        self._reader_thread: threading.Thread | None = None
         self._base_env: int | None = None
         self._started_at = 0.0
         self._requests = 0
@@ -212,12 +213,13 @@ class PersistentLeanRepl:
         self._started_at = time.monotonic()
         self._requests = 0
         self._base_env = None
-        threading.Thread(
+        self._reader_thread = threading.Thread(
             target=self._read_responses,
             args=(self._process, responses),
             name="jacobian-lean-repl-reader",
             daemon=True,
-        ).start()
+        )
+        self._reader_thread.start()
         if self._base_command is not None:
             response = self._exchange({"cmd": self._base_command})
             base_env = response.get("env")
@@ -302,26 +304,31 @@ class PersistentLeanRepl:
         process = self._process
         self._process = None
         self._base_env = None
-        if process is None:
-            return
-        if process.stdin is not None:
-            with suppress(OSError):
-                process.stdin.close()
-        if process.poll() is None:
-            if os.name == "posix":
-                os.killpg(process.pid, signal.SIGTERM)
-            else:
-                process.terminate()
-            try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
+        if process is not None:
+            if process.stdin is not None:
+                with suppress(OSError):
+                    process.stdin.close()
+            if process.poll() is None:
                 if os.name == "posix":
-                    os.killpg(process.pid, signal.SIGKILL)
+                    os.killpg(process.pid, signal.SIGTERM)
                 else:
-                    process.kill()
-                process.wait()
-        if process.stdout is not None:
-            process.stdout.close()
+                    process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    if os.name == "posix":
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                    process.wait()
+            if process.stdout is not None:
+                process.stdout.close()
+        reader = self._reader_thread
+        if reader is not None and reader is not threading.current_thread():
+            reader.join(timeout=2)
+            if reader.is_alive():
+                raise RuntimeError("Lean REPL reader did not quiesce")
+        self._reader_thread = None
 
 
 def _single_proof_state(response: Mapping[str, Any]) -> int:
@@ -369,6 +376,8 @@ class LeanExplorationReplRuntime:
         self._policy = policy or LeanReplPolicy()
         self._sessions: dict[LeanEnvironment, PersistentLeanRepl] = {}
         self._lock = threading.Lock()
+        self._closing = False
+        self._closed = False
         self._finalizer = weakref.finalize(self, _close_repls, self._sessions)
 
     def execute(
@@ -382,6 +391,8 @@ class LeanExplorationReplRuntime:
         """Serialize exploration and reuse only an environment's base snapshot."""
 
         with self._lock:
+            if self._closing or self._closed:
+                raise RuntimeError("Lean exploration runtime is closing")
             session = self._sessions.get(environment)
             if session is None:
                 session = self._create_session(environment)
@@ -402,25 +413,47 @@ class LeanExplorationReplRuntime:
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """Replay and apply in a new process that is always discarded."""
 
-        session = self._create_session(environment)
-        try:
-            if pickle_path is None:
+        with self._lock:
+            if self._closing or self._closed:
+                raise RuntimeError("Lean exploration runtime is closing")
+            session = self._create_session(environment)
+            try:
+                if pickle_path is None:
+                    return session.execute_validated(
+                        command=command,
+                        tactic=tactic,
+                    )
                 return session.execute_validated(
                     command=command,
                     tactic=tactic,
+                    pickle_path=pickle_path,
                 )
-            return session.execute_validated(
-                command=command,
-                tactic=tactic,
-                pickle_path=pickle_path,
-            )
-        finally:
-            session.close()
+            finally:
+                session.close()
 
     def close(self) -> None:
         """Stop every exploration process without affecting independent checkers."""
 
-        self._finalizer()
+        with self._lock:
+            if self._closed:
+                return
+            self._closing = True
+            sessions = tuple(self._sessions.items())
+        failures: list[Exception] = []
+        for environment, session in sessions:
+            try:
+                session.close()
+            except Exception as exc:
+                failures.append(exc)
+            else:
+                with self._lock:
+                    self._sessions.pop(environment, None)
+        if failures:
+            raise ExceptionGroup("Lean exploration sessions failed to close", failures)
+        with self._lock:
+            self._finalizer.detach()
+            self._closed = True
+            self._closing = False
 
     def _create_session(self, environment: LeanEnvironment) -> PersistentLeanRepl:
         elan = shutil.which("elan")
@@ -474,6 +507,7 @@ class LeanExplorationInstallation:
     state_schema_uri: str
     transition_schema_uri: str
     retrieval_schema_uri: str
+    repl: LeanExplorationReplRuntime
 
 
 @dataclass(frozen=True, slots=True)
@@ -559,6 +593,7 @@ def install_lean_exploration_capabilities(
             state_schema_uri=state_schema_uri,
             transition_schema_uri=transition_schema_uri,
             retrieval_schema_uri=retrieval_schema_uri,
+            repl=repl,
         ),
     )
 

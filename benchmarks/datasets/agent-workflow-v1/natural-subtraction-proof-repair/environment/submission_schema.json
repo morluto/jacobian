@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "natural-subtraction-proof-repair"},
+    "task_id": {"const": "jacobian/natural-subtraction-proof-repair"},
     "conclusion": {"enum": ["REPAIR_CERTIFIED", "NO_REPAIR", "UNSUPPORTED"]},
     "result": {
       "type": "object",

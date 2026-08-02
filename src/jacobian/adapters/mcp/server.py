@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -55,7 +55,6 @@ from jacobian.adapters.mcp.tools import (
     workspace_write,
 )
 from jacobian.capabilities import CapabilityPolicy
-from jacobian.contracts.workspaces import WorkspaceWriteRequest
 from jacobian.references import reference_catalog
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
@@ -202,28 +201,28 @@ class JacobianCoreExtension(Extension):
         )
 
     async def _capability_catalog(self) -> str:
-        active_runtime = _resource_runtime(self._runtime, self._tenant_router)
-        return json.dumps(
-            active_runtime.core.capabilities.catalog().model_dump(mode="json"),
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+        with _resource_runtime(self._runtime, self._tenant_router) as active_runtime:
+            return json.dumps(
+                active_runtime.core.capabilities.catalog().model_dump(mode="json"),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
 
     async def _reference_catalog(self) -> str:
-        active_runtime = _resource_runtime(self._runtime, self._tenant_router)
-        return json.dumps(
-            reference_catalog(
-                active_runtime.portfolio.references,
-                graph=active_runtime.portfolio.graph,
-                polytope=active_runtime.services.polytope,
-                polytope_checkers=active_runtime.portfolio.polytope_checkers,
-                polynomial=active_runtime.portfolio.polynomial,
-                universal_algebra=active_runtime.portfolio.universal_algebra,
-                lean=active_runtime.portfolio.lean_checkers,
-            ),
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+        with _resource_runtime(self._runtime, self._tenant_router) as active_runtime:
+            return json.dumps(
+                reference_catalog(
+                    active_runtime.portfolio.references,
+                    graph=active_runtime.portfolio.graph,
+                    polytope=active_runtime.services.polytope,
+                    polytope_checkers=active_runtime.portfolio.polytope_checkers,
+                    polynomial=active_runtime.portfolio.polynomial,
+                    universal_algebra=active_runtime.portfolio.universal_algebra,
+                    lean=active_runtime.portfolio.lean_checkers,
+                ),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
 
     async def intercept_tool_call(
         self,
@@ -235,29 +234,39 @@ class JacobianCoreExtension(Extension):
         arguments = params.arguments or {}
         argument_digest = _argument_digest(arguments)
         try:
-            # MCP 2.0.0 validates declared parameter values through the generated
-            # Pydantic model, but that model intentionally ignores unknown keys.
-            # Keep this narrow adapter check so the public tool boundary remains
-            # closed; domain-selected capability payloads are validated later by
-            # Jacobian's descriptor contract.
-            binding = next(
-                binding
-                for binding in self.tools()
-                if binding.kwargs["name"] == params.name
-            )
-            accepted_arguments = {
-                name
-                for name in inspect.signature(binding.fn).parameters
-                if name != "ctx"
-            }
-            unknown_arguments = sorted(set(arguments) - accepted_arguments)
-            if unknown_arguments:
-                raise ValueError(
-                    "unknown tool arguments: " + ", ".join(unknown_arguments)
+            with ExitStack() as request_resources:
+                if self._tenant_router is not None:
+                    from mcp.server.auth.middleware.auth_context import (
+                        get_access_token,
+                    )
+
+                    access_token = get_access_token()
+                    subject = access_token.subject if access_token is not None else None
+                    active_runtime = request_resources.enter_context(
+                        self._tenant_router.lease_for(subject)
+                    )
+                    _start_lean_warmup(active_runtime)
+                # MCP 2.0.0 validates declared parameter values through the generated
+                # Pydantic model, but that model intentionally ignores unknown keys.
+                # Keep this narrow adapter check so the public tool boundary remains
+                # closed; domain-selected capability payloads are validated later by
+                # Jacobian's descriptor contract.
+                binding = next(
+                    binding
+                    for binding in self.tools()
+                    if binding.kwargs["name"] == params.name
                 )
-            if params.name == "workspace.write":
-                WorkspaceWriteRequest.model_validate(arguments)
-            result = await call_next(ctx)
+                accepted_arguments = {
+                    name
+                    for name in inspect.signature(binding.fn).parameters
+                    if name != "ctx"
+                }
+                unknown_arguments = sorted(set(arguments) - accepted_arguments)
+                if unknown_arguments:
+                    raise ValueError(
+                        "unknown tool arguments: " + ", ".join(unknown_arguments)
+                    )
+                result = await call_next(ctx)
         except MCPError:
             _log_tool_call(params.name, started, argument_digest, status="error")
             raise
@@ -371,6 +380,7 @@ def create_server(
     capability_exclusions: frozenset[str] = frozenset(),
     capability_policy: CapabilityPolicy | None = None,
     max_tenant_runtimes: int | None = None,
+    tenant_idle_timeout_seconds: float | None = None,
     _projection_strategy: CapabilityProjectionStrategy = (
         "COMPACT_URI_TEXT_RESOURCE_LINK"
     ),
@@ -392,6 +402,7 @@ def create_server(
 
     from jacobian.adapters.mcp.remote import (
         DEFAULT_MAX_TENANT_RUNTIMES,
+        DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
         TenantRuntimeRouter,
     )
     from jacobian.runtime.model import JacobianRuntime
@@ -428,6 +439,11 @@ def create_server(
                 DEFAULT_MAX_TENANT_RUNTIMES
                 if max_tenant_runtimes is None
                 else max_tenant_runtimes
+            ),
+            idle_timeout_seconds=(
+                DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS
+                if tenant_idle_timeout_seconds is None
+                else tenant_idle_timeout_seconds
             ),
         )
         if tenant_isolation

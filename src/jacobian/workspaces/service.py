@@ -113,7 +113,7 @@ class WorkspaceService:
             WorkspaceRevisionOperation.OPEN,
             selected.model_dump(mode="json"),
         )
-        with self.store.connection() as connection:
+        with self.store.transaction(), self.store.connection() as connection:
             reused = self._reuse(
                 connection,
                 idempotency_key=selected.idempotency_key,
@@ -124,60 +124,48 @@ class WorkspaceService:
             if reused is not None:
                 return reused
 
-        workspace_id = _opaque_id("workspace")
-        branch_id = _opaque_id("branch")
-        revision_id = _opaque_id("revision")
-        problem_card_id = _opaque_id("card")
-        now = _now()
-        problem = WorkspaceFinding(
-            card_id=problem_card_id,
-            kind=WorkspaceFindingKind.PROBLEM,
-            title=selected.name,
-            body=selected.problem,
-            tags=selected.tags,
-            created_revision=revision_id,
-            created_at=now,
-        )
-        focus = WorkspaceFocus(
-            active_item_id=problem_card_id,
-            pinned_item_ids=(problem_card_id,),
-            updated_revision=revision_id,
-        )
-        revision = WorkspaceRevision(
-            revision_id=revision_id,
-            workspace_id=workspace_id,
-            branch_id=branch_id,
-            operation=WorkspaceRevisionOperation.OPEN,
-            request_digest=request_digest,
-            findings=(problem,),
-            focus=focus,
-            created_at=now,
-        )
-        stored = self.store.put(
-            schema_uri=self.revision_schema_uri,
-            semantics_uri=self.revision_semantics_uri,
-            payload=revision.model_dump(mode="json"),
-            summary=f"open epistemic workspace {selected.name}",
-        )
-        result = WorkspaceOpenResult(
-            workspace_id=workspace_id,
-            branch_id=branch_id,
-            revision_id=revision_id,
-            revision_artifact_uri=stored.artifact_uri,
-            problem_card_id=problem_card_id,
-        )
-
-        with self.store.connection() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            reused = self._reuse(
-                connection,
-                idempotency_key=selected.idempotency_key,
+            workspace_id = _opaque_id("workspace")
+            branch_id = _opaque_id("branch")
+            revision_id = _opaque_id("revision")
+            problem_card_id = _opaque_id("card")
+            now = _now()
+            problem = WorkspaceFinding(
+                card_id=problem_card_id,
+                kind=WorkspaceFindingKind.PROBLEM,
+                title=selected.name,
+                body=selected.problem,
+                tags=selected.tags,
+                created_revision=revision_id,
+                created_at=now,
+            )
+            focus = WorkspaceFocus(
+                active_item_id=problem_card_id,
+                pinned_item_ids=(problem_card_id,),
+                updated_revision=revision_id,
+            )
+            revision = WorkspaceRevision(
+                revision_id=revision_id,
+                workspace_id=workspace_id,
+                branch_id=branch_id,
                 operation=WorkspaceRevisionOperation.OPEN,
                 request_digest=request_digest,
-                result_type=WorkspaceOpenResult,
+                findings=(problem,),
+                focus=focus,
+                created_at=now,
             )
-            if reused is not None:
-                return reused
+            stored = self.store.put(
+                schema_uri=self.revision_schema_uri,
+                semantics_uri=self.revision_semantics_uri,
+                payload=revision.model_dump(mode="json"),
+                summary=f"open epistemic workspace {selected.name}",
+            )
+            result = WorkspaceOpenResult(
+                workspace_id=workspace_id,
+                branch_id=branch_id,
+                revision_id=revision_id,
+                revision_artifact_uri=stored.artifact_uri,
+                problem_card_id=problem_card_id,
+            )
             timestamp = now.isoformat()
             connection.execute(
                 """
@@ -195,11 +183,7 @@ class WorkspaceService:
                 """,
                 (branch_id, workspace_id, revision_id, timestamp),
             )
-            self._insert_revision(
-                connection,
-                revision,
-                stored.artifact_uri,
-            )
+            self._insert_revision(connection, revision, stored.artifact_uri)
             self._insert_finding(connection, workspace_id, branch_id, problem)
             self._upsert_focus(connection, workspace_id, branch_id, focus)
             self._bind_idempotency(
@@ -217,7 +201,7 @@ class WorkspaceService:
             WorkspaceRevisionOperation.WRITE,
             selected.model_dump(mode="json"),
         )
-        with self.store.connection() as connection:
+        with self.store.transaction(), self.store.connection() as connection:
             reused = self._reuse(
                 connection,
                 idempotency_key=selected.idempotency_key,
@@ -228,51 +212,32 @@ class WorkspaceService:
             if reused is not None:
                 return reused
             prepared = self._prepare_write(connection, selected, request_digest)
-
-        result = WorkspaceWriteResult(
-            workspace_id=selected.workspace_id,
-            branch_id=selected.branch_id,
-            revision_id=prepared.revision.revision_id,
-            revision_artifact_uri=prepared.revision_artifact_uri,
-            id_map=prepared.id_map,
-            scratch_written=len(prepared.revision.scratch),
-            findings_written=len(prepared.revision.findings),
-            attempts_written=len(prepared.revision.attempts),
-            marks_written=len(prepared.revision.marks),
-            focus_updated=prepared.revision.focus is not None,
-            unverified_finding_ids=tuple(
-                finding.card_id for finding in prepared.revision.findings
-            ),
-            unresolved_dependency_ids=tuple(
-                sorted(
-                    {
-                        dependency_id
-                        for finding in prepared.revision.findings
-                        for dependency_id in (
-                            *finding.dependency_ids,
-                            *finding.assumption_ids,
-                        )
-                    }
-                )
-            ),
-        )
-
-        with self.store.connection() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            reused = self._reuse(
-                connection,
-                idempotency_key=selected.idempotency_key,
-                operation=WorkspaceRevisionOperation.WRITE,
-                request_digest=request_digest,
-                result_type=WorkspaceWriteResult,
-            )
-            if reused is not None:
-                return reused
-            self._require_head(
-                connection,
-                selected.workspace_id,
-                selected.branch_id,
-                selected.base_revision,
+            result = WorkspaceWriteResult(
+                workspace_id=selected.workspace_id,
+                branch_id=selected.branch_id,
+                revision_id=prepared.revision.revision_id,
+                revision_artifact_uri=prepared.revision_artifact_uri,
+                id_map=prepared.id_map,
+                scratch_written=len(prepared.revision.scratch),
+                findings_written=len(prepared.revision.findings),
+                attempts_written=len(prepared.revision.attempts),
+                marks_written=len(prepared.revision.marks),
+                focus_updated=prepared.revision.focus is not None,
+                unverified_finding_ids=tuple(
+                    finding.card_id for finding in prepared.revision.findings
+                ),
+                unresolved_dependency_ids=tuple(
+                    sorted(
+                        {
+                            dependency_id
+                            for finding in prepared.revision.findings
+                            for dependency_id in (
+                                *finding.dependency_ids,
+                                *finding.assumption_ids,
+                            )
+                        }
+                    )
+                ),
             )
             self._insert_revision(
                 connection,

@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "modular-cubic-obstruction"},
+    "task_id": {"const": "jacobian/modular-cubic-obstruction"},
     "conclusion": {"const": "NO_INTEGER_SOLUTIONS"},
     "result": {
       "type": "object",

@@ -1,0 +1,291 @@
+"""Exact identity verification in a bounded rational-function field."""
+
+from __future__ import annotations
+
+import hashlib
+
+from jacobian.canonical import canonicalize_json
+from jacobian.contracts.capabilities import (
+    CapabilityAssurance,
+    CapabilityAssuranceLevel,
+    CapabilityCompleteness,
+    CapabilityCompletenessStatus,
+    CapabilityDescriptor,
+    CapabilityInvocationExample,
+    CapabilityMode,
+    CapabilityRelationship,
+    CapabilityRelationshipStatus,
+    CapabilityRequest,
+    CapabilityResult,
+    CapabilityScope,
+)
+from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.polynomials import (
+    RationalFunctionArtifact,
+    RationalFunctionIdentityClaim,
+    RationalFunctionIdentityOutput,
+    RationalFunctionIdentityReplayPayload,
+    RationalFunctionIdentityRequest,
+)
+from jacobian.contracts.results import Conclusion
+from jacobian.polynomials._support import _polynomial_error, _validate_request
+from jacobian.polynomials.resources import PolynomialResources
+from jacobian.provider_runtime import known_provider_runtime
+from jacobian.schema_registry import model_schema
+
+
+class RationalFunctionIdentityAdapter:
+    """Verify equality in one declared QQ rational-function field."""
+
+    def __init__(self, resources: PolynomialResources) -> None:
+        self.resources = resources
+        checker_id = resources.installation.rational_function_identity_checker_id
+        self._descriptor = CapabilityDescriptor(
+            capability_id="polynomial.rational_function.identity.verify",
+            version="1",
+            title="Verify an exact rational-function identity",
+            description=(
+                "Independently verify equality of two bounded sparse rational "
+                "functions in a declared QQ fraction field by exact cross "
+                "multiplication. This does not prove pointwise definedness."
+            ),
+            provider="jacobian.rational-function-checker",
+            provider_runtime=known_provider_runtime(
+                "jacobian.rational-function-checker",
+                features=("rational-function-identity", "exact-rational"),
+                checker_ids=((checker_id,) if checker_id is not None else ()),
+            ),
+            modes=(CapabilityMode.VERIFY,),
+            input_schema=model_schema(RationalFunctionIdentityRequest),
+            output_schema=model_schema(RationalFunctionIdentityOutput),
+            tags=(
+                "polynomial",
+                "rational-function",
+                "identity",
+                "verification",
+            ),
+            invocation_examples=(
+                CapabilityInvocationExample(
+                    name="cancel_common_factor",
+                    description="Verify that (x²-1)/(x-1) equals x+1 in QQ(x).",
+                    mode=CapabilityMode.VERIFY,
+                    input=RationalFunctionIdentityRequest.model_validate(
+                        {
+                            "variables": ["x"],
+                            "left": {
+                                "numerator": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-1", "den": "1"},
+                                            "exponents": [0],
+                                        },
+                                    ]
+                                },
+                                "denominator": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [1],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-1", "den": "1"},
+                                            "exponents": [0],
+                                        },
+                                    ]
+                                },
+                            },
+                            "right": {
+                                "numerator": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [1],
+                                        },
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [0],
+                                        },
+                                    ]
+                                },
+                                "denominator": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [0],
+                                        },
+                                    ]
+                                },
+                            },
+                        }
+                    ).model_dump(mode="json"),
+                ),
+            ),
+        )
+
+    @property
+    def descriptor(self) -> CapabilityDescriptor:
+        return self._descriptor
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        validated = _validate_request(
+            RationalFunctionIdentityRequest,
+            request.input,
+            code="INVALID_RATIONAL_FUNCTION_IDENTITY_REQUEST",
+            operation="rational-function identity verification",
+        )
+        checker_id = self.resources.installation.rational_function_identity_checker_id
+        if checker_id is None:
+            raise _polynomial_error(
+                "RATIONAL_FUNCTION_IDENTITY_CHECKER_UNAVAILABLE",
+                "rational_function_identity_verification",
+                "No authorized rational-function identity checker is installed.",
+            )
+        semantics_uri = (
+            self.resources.installation.rational_function_identity_semantics_uri
+        )
+        left_payload = RationalFunctionArtifact(
+            variables=validated.variables,
+            numerator=validated.left.numerator,
+            denominator=validated.left.denominator,
+        )
+        right_payload = RationalFunctionArtifact(
+            variables=validated.variables,
+            numerator=validated.right.numerator,
+            denominator=validated.right.denominator,
+        )
+        left = self.resources.artifacts.put(
+            schema_uri=self.resources.installation.rational_function_left_schema_uri,
+            semantics_uri=semantics_uri,
+            payload=left_payload.model_dump(mode="json"),
+            summary="left exact rational function",
+        )
+        right = self.resources.artifacts.put(
+            schema_uri=self.resources.installation.rational_function_right_schema_uri,
+            semantics_uri=semantics_uri,
+            payload=right_payload.model_dump(mode="json"),
+            summary="right exact rational function",
+        )
+        claim = self.resources.artifacts.put(
+            schema_uri=(
+                self.resources.installation.rational_function_identity_claim_schema_uri
+            ),
+            semantics_uri=semantics_uri,
+            payload=RationalFunctionIdentityClaim(
+                variables=validated.variables,
+                left_uri=left.artifact_uri,
+                right_uri=right.artifact_uri,
+            ).model_dump(mode="json"),
+            parents=(left.artifact_uri, right.artifact_uri),
+            summary="exact rational-function identity claim",
+        )
+        semantics = self.resources.store.get(semantics_uri)
+        replay_payload = RationalFunctionIdentityReplayPayload(
+            variables=validated.variables,
+            left_uri=left.artifact_uri,
+            right_uri=right.artifact_uri,
+        ).model_dump(mode="json")
+        certificate = CertificateEnvelope(
+            certificate_type="polynomial.rational_function.identity_replay",
+            format_version="1",
+            bindings=EvidenceBindings(
+                claim_digest=claim.object_digest,
+                semantics_digest=semantics.manifest.object_digest,
+                candidate_digest=right.object_digest,
+                scope_digest=left.object_digest,
+            ),
+            payload_digest=(
+                "sha256:"
+                + hashlib.sha256(canonicalize_json(replay_payload)).hexdigest()
+            ),
+            payload=replay_payload,
+        )
+        certificate_artifact = self.resources.artifacts.put(
+            schema_uri=self.resources.installation.certificate_schema_uri,
+            semantics_uri=semantics_uri,
+            payload=certificate.model_dump(mode="json"),
+            parents=(claim.artifact_uri, right.artifact_uri, left.artifact_uri),
+            summary="rational-function cross-multiplication replay certificate",
+        )
+        checked = self.resources.verification.verify_certificate(
+            certificate_uri=certificate_artifact.artifact_uri,
+            checker_id=checker_id,
+        )
+        verified = checked.verification_record_uri is not None
+        identical = {
+            Conclusion.TRUE: True,
+            Conclusion.FALSE: False,
+            Conclusion.UNKNOWN: None,
+        }[checked.conclusion]
+        output = RationalFunctionIdentityOutput(
+            identical=identical,
+            conclusion=checked.conclusion,
+            left_uri=left.artifact_uri,
+            right_uri=right.artifact_uri,
+            claim_uri=claim.artifact_uri,
+            certificate_uri=certificate_artifact.artifact_uri,
+            verification_record_uri=checked.verification_record_uri,
+            checker_id=checker_id,
+        )
+        return CapabilityResult(
+            capability_id=self.descriptor.capability_id,
+            capability_version=self.descriptor.version,
+            mode=request.mode,
+            execution=checked.execution,
+            output=output.model_dump(mode="json"),
+            scope=CapabilityScope(
+                description=(
+                    "equality in the declared QQ fraction field; pointwise "
+                    "denominator-definedness is outside scope"
+                ),
+                parameters={"variables": list(validated.variables)},
+                artifact_uri=left.artifact_uri,
+            ),
+            completeness=(
+                CapabilityCompleteness(
+                    status=CapabilityCompletenessStatus.COMPLETE,
+                    basis="both sparse cross products were replayed independently",
+                    assurance_level=CapabilityAssuranceLevel.VERIFIED,
+                    verification_record_uri=checked.verification_record_uri,
+                )
+                if verified
+                else CapabilityCompleteness(
+                    status=CapabilityCompletenessStatus.UNKNOWN,
+                    basis="the independent checker did not accept the replay",
+                )
+            ),
+            relationships=(
+                CapabilityRelationship(
+                    relation_id="polynomial.relation.rational-function-identity",
+                    source_artifact_uris=(left.artifact_uri,),
+                    target_artifact_uris=(right.artifact_uri,),
+                    status=CapabilityRelationshipStatus.VERIFIED,
+                    verification_record_uri=checked.verification_record_uri,
+                ),
+            )
+            if checked.conclusion is Conclusion.TRUE and verified
+            else (),
+            assurance=CapabilityAssurance(
+                level=(
+                    CapabilityAssuranceLevel.VERIFIED
+                    if verified
+                    else CapabilityAssuranceLevel.HEURISTIC
+                ),
+                basis=(
+                    "authorized independent sparse cross-multiplication replay"
+                    if verified
+                    else "the independent checker did not accept the replay"
+                ),
+                verification_record_uri=checked.verification_record_uri,
+            ),
+            artifact_uris=(
+                left.artifact_uri,
+                right.artifact_uri,
+                claim.artifact_uri,
+                certificate_artifact.artifact_uri,
+                *((checked.verification_record_uri,) if verified else ()),
+            ),
+        )

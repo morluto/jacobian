@@ -63,6 +63,12 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/jacobian", "src/jacobian_checkers"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.diagnostics",
+    "/.diagnostics/**",
+]
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
 testpaths = ["tests"]

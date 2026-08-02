@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -80,10 +82,11 @@ def _start_lean_warmup(runtime: JacobianRuntime) -> None:
         runtime.portfolio.lean.start_mathlib_warmup()
 
 
+@contextmanager
 def _resource_runtime(
     runtime: JacobianRuntime | None,
     tenant_router: TenantRuntimeRouter | None,
-) -> JacobianRuntime:
+) -> Iterator[JacobianRuntime]:
     """Route resources through the same auth context as tools.
 
     MCP 2.0.0 does not inject ``Context`` into static resources, but its HTTP
@@ -95,13 +98,16 @@ def _resource_runtime(
 
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
-        return tenant_router.runtime_for(subject)
+        with tenant_router.lease_for(subject) as active_runtime:
+            _start_lean_warmup(active_runtime)
+            yield active_runtime
+        return
     if runtime is None:
         raise AgentRecoveryError(
             "Jacobian is unavailable for this resource request. Retry once; if it "
             "fails again, inspect the local Jacobian log."
         )
-    return runtime
+    yield runtime
 
 
 def _configured_root(state_dir: str | Path | None) -> Path:

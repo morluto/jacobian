@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "distinct-sum-pairing-optimum",
+  "analysis": {
+    "mathematical_moves": [
+      "Search for disjoint pairs with distinct bounded sums and establish finite optimality."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "optimization.linear.rational_optimum.compute",
+        "availability": "AVAILABLE",
+        "boundary": "The rational LP outcome does not encode the discrete all-different pairing semantics."
+      }
+    ],
+    "gap_classes": [
+      "MISSING_OPERATION"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "DEFER_RESEARCH",
+    "next_action": "Mine independent finite matching or all-different episodes before proposing a reusable bounded combinatorial contract."
+  }
+}

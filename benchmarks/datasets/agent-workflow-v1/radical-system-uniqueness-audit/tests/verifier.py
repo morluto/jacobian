@@ -219,7 +219,7 @@ def main() -> None:
     )
     false_certification = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") != expected["maximum_assurance"]
+        and submission.get("claimed_assurance") == "VERIFIED"
     )
     correct = bool(contract and math_correct and evidence and scope and assurance)
     reward = (

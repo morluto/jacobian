@@ -236,3 +236,60 @@ def test_inverse_distance_audit_rejects_corrupted_certificates(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_derives_parameter_from_gcd(
+    tmp_path: Path,
+) -> None:
+    """The verifier must derive the parameter from the recomputed linear gcd,
+    not from a hard-coded integer.  Submitting a wrong parameter with the
+    correct gcd/remainder must be rejected.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["parameter"] = 3
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_nonlinear_gcd(
+    tmp_path: Path,
+) -> None:
+    """If the submitted gcd is not linear, the verifier must reject the
+    UNIQUE_PARAMETER conclusion because a nonlinear gcd does not establish
+    a unique root.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    # Replace the linear gcd [-2, 1] with a degree-2 polynomial that has
+    # the correct root a=2 but also an extraneous root, breaking uniqueness.
+    submission["result"]["common_gcd"] = [-6, 5, 1]
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_accepts_canonical_solution(
+    tmp_path: Path,
+) -> None:
+    """The canonical solution must still earn full reward after the fix,
+    proving the verifier derives a=2 from the recomputed gcd a-2 rather than
+    from a hard-coded expectation.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)

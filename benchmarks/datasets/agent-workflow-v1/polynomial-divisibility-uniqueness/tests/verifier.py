@@ -127,6 +127,23 @@ def main() -> None:
 
     computed_r0, computed_r1 = symbolic_remainder()
     computed_gcd = monic_gcd(computed_r0, computed_r1)
+    # Uniqueness and the parameter are consequences of the recomputed gcd,
+    # not hard-coded expectations.  A monic linear gcd c0 + c1*a (c1 != 0)
+    # has exactly one rational root a = -c0/c1; that root is the unique
+    # integer parameter, and its integrality is what licenses UNIQUE_PARAMETER.
+    gcd_is_linear = (
+        len(computed_gcd) == 2 and computed_gcd[1] != 0
+    )
+    derived_parameter = (
+        -computed_gcd[0] / computed_gcd[1] if gcd_is_linear else None
+    )
+    parameter_is_integer = (
+        derived_parameter is not None
+        and derived_parameter.denominator == 1
+    )
+    derived_parameter_int = (
+        int(derived_parameter.numerator) if parameter_is_integer else None
+    )
     symbolic_ok = (
         r0 is not None
         and r1 is not None
@@ -134,11 +151,12 @@ def main() -> None:
         and [Fraction(x) for x in r1] == computed_r1
         and gcd is not None
         and [Fraction(x) for x in gcd] == computed_gcd
-        and computed_gcd == [Fraction(-2), Fraction(1)]
+        and gcd_is_linear
+        and parameter_is_integer
     )
     quotient_ok = (
         type(parameter) is int
-        and parameter == 2
+        and parameter == derived_parameter_int
         and quotient is not None
         and multiply([parameter, -1, 1], quotient)
         == [90, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]

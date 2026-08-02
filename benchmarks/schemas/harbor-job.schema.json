@@ -4,15 +4,19 @@
   "title": "Harbor job configuration",
   "description": "Reference contract for Harbor job JSON files committed under each dataset. Jobs select Harbor task bundles directly or use Harbor dataset paths and task-name filters.",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "required": ["jobs_dir", "n_attempts", "timeout_multiplier", "orchestrator", "environment", "agents"],
-  "anyOf": [{"required": ["tasks"]}, {"required": ["datasets"]}],
+  "oneOf": [
+    {"required": ["tasks"], "not": {"required": ["datasets"]}},
+    {"required": ["datasets"], "not": {"required": ["tasks"]}}
+  ],
   "properties": {
     "jobs_dir": {"type": "string", "minLength": 1},
     "n_attempts": {"type": "integer", "minimum": 1},
     "timeout_multiplier": {"type": "number", "exclusiveMinimum": 0},
     "orchestrator": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type"],
       "properties": {
         "type": {"type": "string", "minLength": 1},
@@ -22,6 +26,7 @@
     },
     "environment": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type"],
       "properties": {
         "type": {"type": "string", "minLength": 1},
@@ -38,14 +43,25 @@
       "minItems": 1,
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["name"],
         "properties": {
           "name": {"type": "string", "minLength": 1},
           "model_name": {"type": "string", "minLength": 1},
+          "kwargs": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "version": {"type": "string", "minLength": 1},
+              "prompt_template_path": {"type": "string", "minLength": 1},
+              "reasoning_effort": {"type": "string", "minLength": 1}
+            }
+          },
           "mcp_servers": {
             "type": "array",
             "items": {
               "type": "object",
+              "additionalProperties": false,
               "required": ["name", "transport", "url"],
               "properties": {
                 "name": {"type": "string", "minLength": 1},
@@ -59,8 +75,10 @@
     },
     "datasets": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["path"],
         "properties": {
           "path": {"type": "string", "minLength": 1},
@@ -73,11 +91,23 @@
     },
     "tasks": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["path"],
         "properties": {"path": {"type": "string", "minLength": 1}}
       }
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Immutable benchmark snapshot ID this job binds to. Observation evidence v2 reads this (or the runtime snapshot's equivalent) and requires agreement."
+    },
+    "harbor_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinned Harbor runner version this job was authored against. Observation evidence v2 reads this (or the runtime snapshot's equivalent) and requires agreement."
     }
   }
 }

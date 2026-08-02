@@ -7,9 +7,11 @@ import hmac
 import json
 import re
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.auth.provider import AccessToken
 
@@ -19,6 +21,7 @@ from jacobian.runtime.model import JacobianRuntime
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 DEFAULT_MAX_TENANT_RUNTIMES = 32
+DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS = 900.0
 
 
 class AuthenticationError(PermissionError):
@@ -27,6 +30,49 @@ class AuthenticationError(PermissionError):
 
 class TenantRuntimeLimitError(RuntimeError):
     """The server cannot admit another in-memory tenant runtime."""
+
+
+class TenantRuntimeRouterClosedError(RuntimeError):
+    """The tenant runtime owner is shutting down or closed."""
+
+
+@dataclass(slots=True)
+class _TenantRuntimeEntry:
+    runtime: JacobianRuntime
+    active_leases: int
+    last_used: float
+
+
+class TenantRuntimeLease:
+    """One caller-owned hold preventing eviction or shutdown of a runtime."""
+
+    def __init__(
+        self,
+        router: TenantRuntimeRouter,
+        tenant_key: str,
+        runtime: JacobianRuntime,
+    ) -> None:
+        self._router = router
+        self._tenant_key = tenant_key
+        self.runtime = runtime
+        self._released = False
+
+    def __enter__(self) -> JacobianRuntime:
+        return self.runtime
+
+    def __exit__(self, *_exc: object) -> None:
+        self.release()
+
+    def release(self) -> None:
+        if self._released:
+            return
+        self._released = True
+        self._router._release(self._tenant_key)
+
+
+type _AcquisitionPlan = (
+    TenantRuntimeLease | tuple[str, _TenantRuntimeEntry] | Literal["CREATE", "WAIT"]
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,9 +134,14 @@ class TenantRuntimeRouter:
         capability_adapter_entrypoints: tuple[str, ...] = (),
         capability_policy: CapabilityPolicy | None = None,
         max_tenant_runtimes: int = DEFAULT_MAX_TENANT_RUNTIMES,
+        idle_timeout_seconds: float = DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+        runtime_factory: Callable[..., JacobianRuntime] = create_runtime,
     ) -> None:
         if max_tenant_runtimes < 1:
             raise ValueError("max_tenant_runtimes must be positive")
+        if idle_timeout_seconds <= 0:
+            raise ValueError("idle_timeout_seconds must be positive")
         if not _TENANT_PATTERN.fullmatch(anonymous_tenant_id):
             raise ValueError(
                 "anonymous_tenant_id must start with a letter or digit, contain only "
@@ -103,10 +154,70 @@ class TenantRuntimeRouter:
         self.capability_adapter_entrypoints = capability_adapter_entrypoints
         self.capability_policy = capability_policy
         self.max_tenant_runtimes = max_tenant_runtimes
-        self._runtimes: dict[str, JacobianRuntime] = {}
-        self._lock = threading.Lock()
+        self.idle_timeout_seconds = idle_timeout_seconds
+        self._clock = clock
+        self._runtime_factory = runtime_factory
+        self._runtimes: dict[str, _TenantRuntimeEntry] = {}
+        self._creating: set[str] = set()
+        self._evictions_in_flight = 0
+        self._condition = threading.Condition()
+        self._closing = False
+        self._closed = False
+        self._shutdown_in_flight = False
 
     def runtime_for(self, subject: str | None) -> JacobianRuntime:
+        """Return a compatible unleased runtime for non-request local callers."""
+
+        lease = self.lease_for(subject)
+        try:
+            return lease.runtime
+        finally:
+            lease.release()
+
+    def lease_for(self, subject: str | None) -> TenantRuntimeLease:
+        """Acquire one tenant runtime, creating or evicting outside the lock."""
+
+        tenant_key = self._tenant_key(subject)
+        while True:
+            with self._condition:
+                if self._closing or self._closed:
+                    raise TenantRuntimeRouterClosedError(
+                        "tenant runtime router is closing"
+                    )
+                plan = self._plan_acquisition(tenant_key)
+                if isinstance(plan, TenantRuntimeLease):
+                    return plan
+                if plan == "WAIT":
+                    self._condition.wait()
+                    continue
+                if plan == "CREATE":
+                    break
+            self._close_evicted(plan)
+
+        try:
+            runtime = self._runtime_factory(
+                self.root / "tenants" / tenant_key,
+                checker_authority=self.checker_authority,
+                capability_adapter_entrypoints=self.capability_adapter_entrypoints,
+                capability_policy=self.capability_policy,
+            )
+        except BaseException:
+            with self._condition:
+                self._creating.discard(tenant_key)
+                self._condition.notify_all()
+            raise
+        with self._condition:
+            self._creating.discard(tenant_key)
+            entry = _TenantRuntimeEntry(
+                runtime=runtime,
+                active_leases=1,
+                last_used=self._clock(),
+            )
+            self._runtimes[tenant_key] = entry
+            self._condition.notify_all()
+        return TenantRuntimeLease(self, tenant_key, runtime)
+
+    def _tenant_key(self, subject: str | None) -> str:
         tenant = subject
         if tenant is None:
             if not self.allow_anonymous:
@@ -120,41 +231,107 @@ class TenantRuntimeRouter:
                 "The authenticated subject cannot be used for tenant isolation. "
                 "Check the server token configuration, then authenticate again."
             )
-        tenant_key = hashlib.sha256(tenant.encode("utf-8")).hexdigest()
-        with self._lock:
-            runtime = self._runtimes.get(tenant_key)
-            if runtime is None:
-                if len(self._runtimes) >= self.max_tenant_runtimes:
-                    raise TenantRuntimeLimitError(
-                        "This server has reached its in-memory tenant limit."
-                    )
-                runtime = create_runtime(
-                    self.root / "tenants" / tenant_key,
-                    checker_authority=self.checker_authority,
-                    capability_adapter_entrypoints=(
-                        self.capability_adapter_entrypoints
-                    ),
-                    capability_policy=self.capability_policy,
-                )
-                self._runtimes[tenant_key] = runtime
-            return runtime
+        return hashlib.sha256(tenant.encode("utf-8")).hexdigest()
+
+    def _plan_acquisition(self, tenant_key: str) -> _AcquisitionPlan:
+        now = self._clock()
+        entry = self._runtimes.get(tenant_key)
+        if entry is not None and not (
+            entry.active_leases == 0
+            and now - entry.last_used >= self.idle_timeout_seconds
+        ):
+            entry.active_leases += 1
+            entry.last_used = now
+            return TenantRuntimeLease(self, tenant_key, entry.runtime)
+        if entry is not None:
+            eviction = (tenant_key, self._runtimes.pop(tenant_key))
+            self._evictions_in_flight += 1
+            return eviction
+        if tenant_key in self._creating:
+            return "WAIT"
+        if (
+            len(self._runtimes) + len(self._creating) + self._evictions_in_flight
+            < self.max_tenant_runtimes
+        ):
+            self._creating.add(tenant_key)
+            return "CREATE"
+        inactive = tuple(
+            (key, candidate)
+            for key, candidate in self._runtimes.items()
+            if candidate.active_leases == 0
+        )
+        if not inactive:
+            raise TenantRuntimeLimitError(
+                "This server has reached its in-memory tenant limit."
+            )
+        eviction = min(inactive, key=lambda item: (item[1].last_used, item[0]))
+        del self._runtimes[eviction[0]]
+        self._evictions_in_flight += 1
+        return eviction
+
+    def _close_evicted(self, eviction: tuple[str, _TenantRuntimeEntry]) -> None:
+        tenant_key, entry = eviction
+        try:
+            entry.runtime.close()
+        except BaseException:
+            with self._condition:
+                self._evictions_in_flight -= 1
+                self._runtimes[tenant_key] = entry
+                self._condition.notify_all()
+            raise
+        with self._condition:
+            self._evictions_in_flight -= 1
+            self._condition.notify_all()
+
+    def _release(self, tenant_key: str) -> None:
+        with self._condition:
+            entry = self._runtimes.get(tenant_key)
+            if entry is None or entry.active_leases < 1:
+                raise RuntimeError("tenant runtime lease ownership was lost")
+            entry.active_leases -= 1
+            entry.last_used = self._clock()
+            self._condition.notify_all()
 
     def close(self) -> None:
         """Close every tenant runtime owned by this router."""
 
-        with self._lock:
-            runtimes = tuple(self._runtimes.values())
-            self._runtimes.clear()
+        with self._condition:
+            if self._closed:
+                return
+            while self._shutdown_in_flight:
+                self._condition.wait()
+                if self._closed:
+                    return
+            self._closing = True
+            while (
+                self._creating
+                or self._evictions_in_flight
+                or any(entry.active_leases for entry in self._runtimes.values())
+            ):
+                self._condition.wait()
+            self._shutdown_in_flight = True
+            runtimes = tuple(self._runtimes.items())
         failures: list[Exception] = []
-        for runtime in runtimes:
+        for tenant_key, entry in runtimes:
             try:
-                runtime.close()
+                entry.runtime.close()
             except Exception as exc:
                 failures.append(exc)
+            else:
+                with self._condition:
+                    self._runtimes.pop(tenant_key, None)
         if failures:
+            with self._condition:
+                self._shutdown_in_flight = False
+                self._condition.notify_all()
             raise ExceptionGroup(
                 "one or more tenant runtimes failed to close", failures
             )
+        with self._condition:
+            self._shutdown_in_flight = False
+            self._closed = True
+            self._closing = False
+            self._condition.notify_all()
 
 
 def load_static_token_file(path: str | Path) -> tuple[StaticTokenGrant, ...]:

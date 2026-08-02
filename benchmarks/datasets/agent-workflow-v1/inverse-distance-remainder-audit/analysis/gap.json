@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "inverse-distance-remainder-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Separate a correct asymptotic conclusion from an invalid intermediate order estimate.",
+      "Derive the invariant second-order inverse-distance term.",
+      "Construct exact rational unit directions with opposite nonzero quadratic residual signs."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Can replay finite coefficient identities but does not establish analytic big-O remainder bounds."
+      }
+    ],
+    "gap_classes": [
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Use as an asymptotic proof-audit diagnostic; do not add a general series-remainder capability from one directional certificate family."
+  }
+}

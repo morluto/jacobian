@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,16 @@ from jacobian.workspaces import (
 )
 
 pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
+
+
+def _blob_paths(blob_root: Path) -> set[Path]:
+    return {
+        blob
+        for prefix in blob_root.iterdir()
+        if prefix.is_dir()
+        for blob in prefix.iterdir()
+        if blob.is_file()
+    }
 
 
 def test_workspace_open_is_idempotent_and_restart_replays_revision(
@@ -67,6 +78,54 @@ def test_workspace_open_is_idempotent_and_restart_replays_revision(
     assert resume.resume is not None
     assert resume.resume.problem.verification == "UNVERIFIED"
     assert "retrieval does not promote" in resume.warning
+
+
+def test_concurrent_idempotent_workspace_open_publishes_one_revision(
+    attached_complete_runtime,
+) -> None:
+    runtime = attached_complete_runtime
+    request = WorkspaceOpenRequest(
+        idempotency_key="workspace-open-concurrent-001",
+        name="concurrent replay fixture",
+        problem="Two retries must resolve to one accepted workspace.",
+    )
+    ready = threading.Barrier(3)
+    results = []
+    errors: list[BaseException] = []
+    with runtime.core.store.connection() as connection:
+        artifacts_before = connection.execute(
+            "SELECT COUNT(*) FROM artifacts"
+        ).fetchone()[0]
+    quota_before = runtime.core.store._blob_bytes_committed()
+    blobs_before = _blob_paths(runtime.core.store.blob_root)
+
+    def open_workspace() -> None:
+        ready.wait(timeout=2)
+        try:
+            results.append(runtime.core.workspaces.open(request))
+        except BaseException as exc:
+            errors.append(exc)
+
+    workers = [threading.Thread(target=open_workspace) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    ready.wait(timeout=2)
+    for worker in workers:
+        worker.join(timeout=5)
+
+    assert errors == []
+    assert len(results) == 2
+    assert results[0] == results[1]
+    with runtime.core.store.connection() as connection:
+        artifacts_after = connection.execute(
+            "SELECT COUNT(*) FROM artifacts"
+        ).fetchone()[0]
+    assert artifacts_after == artifacts_before + 1
+    quota_after = runtime.core.store._blob_bytes_committed()
+    blobs_after = _blob_paths(runtime.core.store.blob_root)
+    assert len(blobs_after - blobs_before) == 2
+    assert quota_after > quota_before
+    assert runtime.core.store._blob_bytes_committed() == quota_after
 
 
 def test_workspace_write_cannot_add_a_second_problem(attached_complete_runtime) -> None:
@@ -328,6 +387,69 @@ def test_workspace_rejects_stale_base_without_partial_index_writes(
                 revision_id=opened.revision_id,
             )
         )
+
+
+def test_concurrent_workspace_writes_publish_only_the_winning_revision(
+    attached_complete_runtime,
+) -> None:
+    runtime = attached_complete_runtime
+    opened = _open(runtime, key="workspace-open-concurrent-write-001")
+    ready = threading.Barrier(3)
+    results = []
+    errors: list[BaseException] = []
+    with runtime.core.store.connection() as connection:
+        artifacts_before = connection.execute(
+            "SELECT COUNT(*) FROM artifacts"
+        ).fetchone()[0]
+    quota_before = runtime.core.store._blob_bytes_committed()
+    blobs_before = _blob_paths(runtime.core.store.blob_root)
+
+    def write(client_ref: str) -> None:
+        request = WorkspaceWriteRequest(
+            idempotency_key=f"workspace-write-concurrent-{client_ref}",
+            workspace_id=opened.workspace_id,
+            branch_id=opened.branch_id,
+            base_revision=opened.revision_id,
+            findings=(
+                WorkspaceFindingDraft(
+                    client_ref=client_ref,
+                    kind=WorkspaceFindingKind.GOAL,
+                    title=f"Competing goal {client_ref}",
+                    body="Only one revision may advance this branch head.",
+                ),
+            ),
+        )
+        ready.wait(timeout=2)
+        try:
+            results.append(runtime.core.workspaces.write(request))
+        except BaseException as exc:
+            errors.append(exc)
+
+    workers = [threading.Thread(target=write, args=(ref,)) for ref in ("G1", "G2")]
+    for worker in workers:
+        worker.start()
+    ready.wait(timeout=2)
+    for worker in workers:
+        worker.join(timeout=5)
+
+    assert len(results) == 1
+    assert len(errors) == 1
+    assert isinstance(errors[0], WorkspaceConflictError)
+    with runtime.core.store.connection() as connection:
+        artifacts_after = connection.execute(
+            "SELECT COUNT(*) FROM artifacts"
+        ).fetchone()[0]
+        revisions = connection.execute(
+            "SELECT COUNT(*) FROM workspace_revisions WHERE workspace_id = ?",
+            (opened.workspace_id,),
+        ).fetchone()[0]
+    assert artifacts_after == artifacts_before + 1
+    assert revisions == 2
+    quota_after = runtime.core.store._blob_bytes_committed()
+    blobs_after = _blob_paths(runtime.core.store.blob_root)
+    assert len(blobs_after - blobs_before) == 2
+    assert quota_after > quota_before
+    assert runtime.core.store._blob_bytes_committed() == quota_after
 
 
 def test_workspace_rejects_idempotency_rebinding_and_invalid_references(

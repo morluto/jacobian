@@ -525,6 +525,13 @@ class LeanDeclarationService:
     def __init__(self, backend: LeanDeclarationBackend) -> None:
         self.backend = backend
 
+    def close(self) -> None:
+        """Release backend-owned declaration sessions when supported."""
+
+        close = getattr(self.backend, "close", None)
+        if callable(close):
+            close()
+
     def search(
         self,
         query: LeanDeclarationSearchRequest,

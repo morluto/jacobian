@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import textwrap
 from pathlib import Path
@@ -9,13 +10,11 @@ from pathlib import Path
 import pytest
 import tomli_w
 from benchmarks.tooling.harbor_suite import (
-    DIGEST_PREFIX,
     TASK_SCHEMA_VERSION,
+    EnvironmentProfile,
     HarborSuiteError,
     Suite,
-    check_dataset_manifest,
     check_verifier_support,
-    expected_dataset_manifest,
     get_suite,
     load_registry,
     validate_task_topology,
@@ -32,6 +31,16 @@ def patched_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     import benchmarks.tooling.harbor_suite as hs
 
     monkeypatch.setattr(hs, "ROOT", tmp_path)
+    profile = EnvironmentProfile(
+        name="test-profile",
+        agent_image="python:3.12-slim",
+        verifier_image="python:3.12-slim",
+        verifier_runtime_digest="sha256:" + "0" * 64,
+        allow_apt=False,
+    )
+    monkeypatch.setattr(
+        hs, "load_environment_profiles", lambda: {profile.name: profile}
+    )
     return tmp_path
 
 
@@ -80,7 +89,6 @@ def _write_suite_toml(
         "schema_version": "2",
         "dataset": {
             "id": ds_id,
-            "version": "1.0.0",
             "title": "Test",
             "purpose": "Test purpose.",
         },
@@ -92,13 +100,22 @@ def _write_suite_toml(
         for entry in tasks:
             task_id = str(entry["id"]).removeprefix("jacobian/")
             member = {
+                "schema_version": "1",
                 "task_id": task_id,
+                "task_name": f"jacobian/{task_id}",
+                "evaluation_kind": "workflow",
+                "domain": "test",
+                "field": "test",
+                "provenance_class": "hand-designed",
+                "provenance_ref": "unit-test fixture",
                 "assurance_ceiling": entry["assurance_ceiling"],
                 "required_provider": entry.get("required_provider", "core"),
+                "environment_profile": "test-profile",
+                "verifier_contract_version": "1",
+                "evaluation_owner": ds_id,
             }
-            (members / f"{task_id.replace('/', '-')}.toml").write_text(
-                tomli_w.dumps(member)
-            )
+            member_name = task_id.replace("/", "-")
+            (members / f"{member_name}.toml").write_text(tomli_w.dumps(member))
 
 
 def _make_minimal_task(root: Path, *, task_id: str = "jacobian/test-v1-a") -> Path:
@@ -133,9 +150,13 @@ def _make_minimal_task(root: Path, *, task_id: str = "jacobian/test-v1-a") -> Pa
             required_provider = "core"
             [agent]
             timeout_sec = 60.0
+            [environment]
+            network_mode = "no-network"
             [verifier]
             timeout_sec = 60.0
             environment_mode = "separate"
+            [verifier.environment]
+            network_mode = "no-network"
             """
         ).strip()
         + "\n"
@@ -328,10 +349,10 @@ def test_suite_rejects_symlinked_task_path(tmp_path: Path, patched_root: Path) -
         ds_path / "suite.toml",
         tasks=[{"id": "jacobian/test-v1-a", "assurance_ceiling": "COMPUTED"}],
     )
-    (ds_path / "members" / "test-v1-a.toml").unlink()
-    (ds_path / "members" / "alias.toml").symlink_to(
-        ds_path / "members" / "test-v1-a.toml"
-    )
+    member = ds_path / "members" / "test-v1-a.toml"
+    target = tmp_path / "member-target.toml"
+    member.replace(target)
+    member.symlink_to(target)
     reg = _write_registry(tmp_path, [_make_dataset_entry("jacobian/test-v1", ds_path)])
     with pytest.raises(HarborSuiteError, match="symlink"):
         load_registry(reg)
@@ -391,59 +412,18 @@ def test_registry_rejects_incomplete_canonical_task_directory(
         load_registry(reg)
 
 
-# ---------------------------------------------------------------------------
-# Dataset manifest generation
-# ---------------------------------------------------------------------------
-
-
-def test_expected_dataset_manifest_has_header_and_tasks(
-    tmp_path: Path, patched_root: Path, monkeypatch: pytest.MonkeyPatch
+def test_registry_rejects_unowned_direct_task_bundle(
+    tmp_path: Path, patched_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     _make_canonical_task(tmp_path)
     (ds_path / "jobs").mkdir()
     (ds_path / "jobs" / "oracle.json").write_text("{}")
-    _write_suite_toml(
-        ds_path / "suite.toml",
-        tasks=[
-            {
-                "id": "jacobian/test-v1-a",
-                "assurance_ceiling": "COMPUTED",
-                "required_provider": "core",
-            }
-        ],
-    )
-    reg = _write_registry(
-        tmp_path,
-        [_make_dataset_entry("jacobian/test-v1", ds_path)],
-    )
-    suite = load_registry(reg)[0]
-    monkeypatch.setattr(
-        "benchmarks.tooling.harbor_suite.task_digest", lambda p: "a" * 64
-    )
-    manifest = expected_dataset_manifest(suite)
-    assert "[dataset]" in manifest
-    assert 'name = "jacobian/test-v1"' in manifest
-    assert "[[tasks]]" in manifest
-    assert f"{DIGEST_PREFIX}{'a' * 64}" in manifest
-
-
-def test_check_dataset_manifest_reports_missing_manifest(
-    tmp_path: Path, patched_root: Path
-) -> None:
-    ds_path = tmp_path / "test-v1"
-    ds_path.mkdir()
-    (ds_path / "jobs").mkdir()
-    (ds_path / "jobs" / "oracle.json").write_text("{}")
     _write_suite_toml(ds_path / "suite.toml")
-    reg = _write_registry(
-        tmp_path,
-        [_make_dataset_entry("jacobian/test-v1", ds_path)],
-    )
-    suite = load_registry(reg)[0]
-    failures = check_dataset_manifest(suite)
-    assert len(failures) == 1
-    assert "missing" in failures[0].lower() or "stale" in failures[0].lower()
+    reg = _write_registry(tmp_path, [_make_dataset_entry("jacobian/test-v1", ds_path)])
+
+    with pytest.raises(HarborSuiteError, match=r"not assigned in members"):
+        load_registry(reg)
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +475,18 @@ def test_validate_task_topology_reports_missing_metadata_field(
     (task / "task.toml").write_text(task_toml)
     failures = validate_task_topology(suite, task)
     assert any("metadata" in f.lower() for f in failures)
+
+
+def test_validate_task_topology_reports_unknown_environment_profile(
+    tmp_path: Path, patched_root: Path
+) -> None:
+    suite, task = _make_suite_with_task(tmp_path)
+    unknown = dataclasses.replace(suite.tasks[0], environment_profile="not-a-profile")
+    suite = dataclasses.replace(suite, tasks=(unknown,))
+
+    failures = validate_task_topology(suite, task)
+
+    assert any("unknown environment profile" in failure for failure in failures)
 
 
 def test_validate_task_topology_reports_workflow_fixture_digest_drift(

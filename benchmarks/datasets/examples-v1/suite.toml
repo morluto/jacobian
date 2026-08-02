@@ -2,7 +2,6 @@ schema_version = "2"
 
 [dataset]
 id = "jacobian/examples-v1"
-version = "1.0.0"
 title = "Jacobian executable examples"
 purpose = "Tutorial and smoke workflows whose completion is documentation evidence, not a comparative score."
 claim_class = "example"

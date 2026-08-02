@@ -1,0 +1,164 @@
+name: Held-out Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_key:
+        description: Private S3 object key for the frozen manifest
+        required: true
+        type: string
+      stage:
+        description: Frozen evaluation stage
+        required: true
+        default: pilot
+        type: choice
+        options: [pilot, decision]
+      confirmation:
+        description: Enter RUN_HELD_OUT to authorize model execution
+        required: true
+        type: string
+
+concurrency:
+  group: heldout-benchmarks
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  evaluate:
+    name: Protected Held-out Evaluation
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'RUN_HELD_OUT'
+    environment: benchmark-eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Assume the read-only held-out bundle role
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ vars.HELDOUT_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.HELDOUT_AWS_REGION }}
+      - name: Install the locked Jacobian environment
+        run: uv sync --locked --dev
+      - id: bundle
+        name: Fetch and verify the private bundle
+        env:
+          BUNDLE_ROOT: ${{ runner.temp }}/jacobian-heldout-${{ github.run_id }}
+          MANIFEST_URI: s3://${{ vars.HELDOUT_BUCKET }}/${{ inputs.manifest_key }}
+        run: |
+          uvx --from harbor==0.20.0 --with tomli-w==1.2.0 --with jsonschema \
+            python -m benchmarks.tooling.heldout_bundle fetch \
+            --manifest-uri "$MANIFEST_URI" --output "$BUNDLE_ROOT"
+          echo "root=$BUNDLE_ROOT" >> "$GITHUB_OUTPUT"
+      - id: plan
+        name: Render randomized task-repetition pairs
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+          STAGE: ${{ inputs.stage }}
+        run: |
+          max_tokens=$(jq -r '.experiment.max_tokens' "$BUNDLE_ROOT/manifest.json")
+          max_cost=$(jq -r '.experiment.max_cost_usd' "$BUNDLE_ROOT/manifest.json")
+          uvx --from harbor==0.20.0 --with tomli-w==1.2.0 --with jsonschema \
+            python -m benchmarks.tooling.heldout_bundle render \
+            --manifest "$BUNDLE_ROOT/manifest.json" \
+            --bundle-root "$BUNDLE_ROOT/bundle" \
+            --output "$BUNDLE_ROOT/rendered" \
+            --stage "$STAGE" --max-tokens "$max_tokens" \
+            --max-cost-usd "$max_cost"
+          echo "run_plan=$BUNDLE_ROOT/rendered/run-plan.json" >> "$GITHUB_OUTPUT"
+      - name: Preflight the exact treatment image and advertised identity
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+        run: |
+          manifest="$BUNDLE_ROOT/manifest.json"
+          image=$(jq -r '.conditions[] | select(.id == "C2") | .image' "$manifest")
+          version=$(jq -r '.conditions[] | select(.id == "C2") | .server_version' "$manifest")
+          profile=$(jq -r '.conditions[] | select(.id == "C2") | .policy_profile' "$manifest")
+          expected_catalog=$(jq -r '.conditions[] | select(.id == "C2") | .catalog_digest' "$manifest")
+          expected_policy=$(jq -r '.conditions[] | select(.id == "C2") | .policy_digest' "$manifest")
+          docker pull "$image"
+          docker run --rm -d --name jacobian-heldout-preflight \
+            -p 127.0.0.1:8000:8000 "$image" \
+            --transport streamable-http --host 0.0.0.0 --port 8000 \
+            --allow-anonymous --stateless-http --state-dir /tmp/jacobian-state
+          cleanup() { docker rm -f jacobian-heldout-preflight >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for _ in $(seq 1 60); do
+            if uv run --locked python deploy/smoke_remote.py \
+              http://127.0.0.1:8000/mcp --expect-version "$version" \
+              --expect-policy-profile "$profile" --timeout-seconds 5 \
+              > "$BUNDLE_ROOT/preflight.json" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          test -s "$BUNDLE_ROOT/preflight.json"
+          test "$(jq -r '.catalog.catalog_digest' "$BUNDLE_ROOT/preflight.json")" = "$expected_catalog"
+          test "$(jq -r '.catalog.policy_digest' "$BUNDLE_ROOT/preflight.json")" = "$expected_policy"
+      - name: Execute and resume at complete pair boundaries
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+          RUN_PLAN: ${{ steps.plan.outputs.run_plan }}
+        run: |
+          uv run --locked python -m benchmarks.tooling.heldout_runner \
+            --run-plan "$RUN_PLAN" \
+            --ledger "$BUNDLE_ROOT/rendered/execution-ledger.json"
+      - name: Normalize and compare held-out evidence
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+          RUN_PLAN: ${{ steps.plan.outputs.run_plan }}
+        run: |
+          for condition in C1 C2; do
+            lower=$(printf '%s' "$condition" | tr '[:upper:]' '[:lower:]')
+            uv run --locked python -m benchmarks.tooling.observation_results collect-heldout \
+              --run-plan "$RUN_PLAN" \
+              --manifest "$BUNDLE_ROOT/manifest.json" \
+              --ledger "$BUNDLE_ROOT/rendered/execution-ledger.json" \
+              --condition "$condition" \
+              --output "$BUNDLE_ROOT/rendered/$lower-observation-evidence.json"
+          done
+          uv run --locked python -m benchmarks.tooling.observation_results compare \
+            --control "$BUNDLE_ROOT/rendered/c1-observation-evidence.json" \
+            --treatment "$BUNDLE_ROOT/rendered/c2-observation-evidence.json" \
+            --output "$BUNDLE_ROOT/rendered/comparison"
+      - name: Sanitize publishable evidence
+        if: always() && steps.bundle.outputs.root != ''
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+        run: |
+          source="$BUNDLE_ROOT/rendered"
+          target="$BUNDLE_ROOT/sanitized"
+          mkdir -p "$target"
+          for file in \
+            c1-observation-evidence.json \
+            c2-observation-evidence.json \
+            execution-ledger.json; do
+            if [ -f "$source/$file" ]; then cp "$source/$file" "$target/$file"; fi
+          done
+          if [ -d "$source/comparison" ]; then cp -R "$source/comparison" "$target/comparison"; fi
+          if [ -f "$source/run-plan.json" ]; then
+            jq '{schema_version, stage, plan_digest, bundle_manifest_digest, harbor_version, agent, model, prompt_digest, reasoning_effort, randomization_seed, budget, pair_count, runs: [.runs[] | {pair_id, pair_index, task, repetition, condition, jacobian_enabled}]}' \
+              "$source/run-plan.json" > "$target/run-plan.json"
+          fi
+      - name: Publish evaluation summary
+        if: always() && steps.bundle.outputs.root != ''
+        env:
+          REPORT: ${{ steps.bundle.outputs.root }}/sanitized/comparison/comparison-report.md
+        run: |
+          if [ -f "$REPORT" ]; then cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload non-Oracle sanitized evidence
+        if: always() && steps.bundle.outputs.root != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: heldout-evidence-${{ github.run_id }}
+          path: ${{ steps.bundle.outputs.root }}/sanitized
+          if-no-files-found: warn
+          retention-days: 90

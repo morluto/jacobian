@@ -191,3 +191,99 @@ def test_clean_execution_discards_every_repl_instance(
 
     assert len(sessions) == 2
     assert all(session.closed for session in sessions)
+
+
+def test_runtime_close_releases_retained_sessions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = LeanExplorationReplRuntime(tmp_path, {})
+
+    class FakeSession:
+        closed = False
+
+        def execute(
+            self,
+            *,
+            command: str,
+            tactic: str,
+            pickle_path: Path | None = None,
+        ) -> tuple[dict[str, object], dict[str, object]]:
+            assert command and tactic
+            assert pickle_path is None
+            return {}, {}
+
+        def close(self) -> None:
+            self.closed = True
+
+    session = FakeSession()
+    monkeypatch.setattr(runtime, "_create_session", lambda _environment: session)
+
+    runtime.execute(
+        command="example : True := by sorry",
+        tactic="trivial",
+        environment=LeanEnvironment.CORE,
+    )
+    runtime.close()
+    runtime.close()
+
+    assert session.closed
+
+
+def test_runtime_close_retries_failed_sessions_and_rejects_new_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = LeanExplorationReplRuntime(tmp_path, {})
+
+    class FakeSession:
+        def __init__(self, *, fail_close: bool) -> None:
+            self.fail_close = fail_close
+            self.close_calls = 0
+
+        def execute(
+            self,
+            *,
+            command: str,
+            tactic: str,
+            pickle_path: Path | None = None,
+        ) -> tuple[dict[str, object], dict[str, object]]:
+            return {}, {}
+
+        def close(self) -> None:
+            self.close_calls += 1
+            if self.fail_close:
+                raise RuntimeError("injected session close failure")
+
+    sessions = [FakeSession(fail_close=True), FakeSession(fail_close=False)]
+    monkeypatch.setattr(
+        runtime, "_create_session", lambda _environment: sessions.pop(0)
+    )
+    runtime.execute(command="first", tactic="skip", environment=LeanEnvironment.CORE)
+    runtime.execute(
+        command="second", tactic="skip", environment=LeanEnvironment.MATHLIB
+    )
+    failed, succeeded = tuple(
+        runtime._sessions[environment]
+        for environment in (LeanEnvironment.CORE, LeanEnvironment.MATHLIB)
+    )
+
+    with pytest.raises(ExceptionGroup, match="sessions failed to close"):
+        runtime.close()
+    assert failed.close_calls == 1
+    assert succeeded.close_calls == 1
+    with pytest.raises(RuntimeError, match="runtime is closing"):
+        runtime.execute(
+            command="third", tactic="skip", environment=LeanEnvironment.CORE
+        )
+
+    failed.fail_close = False
+    runtime.close()
+    assert failed.close_calls == 2
+    assert succeeded.close_calls == 1
+    with pytest.raises(RuntimeError, match="runtime is closing"):
+        runtime.execute_clean(
+            command="third",
+            tactic="skip",
+            environment=LeanEnvironment.CORE,
+        )

@@ -109,6 +109,9 @@ class ExperimentService:
         self.structures = structures
         self._threads: dict[str, threading.Thread] = {}
         self._thread_lock = threading.Lock()
+        self._starts_in_flight = 0
+        self._closing = False
+        self._closed = False
         self._recover_interrupted_experiments()
         self.semantics_uri = store.register_descriptor(
             kind="semantics",
@@ -140,6 +143,36 @@ class ExperimentService:
             version="1",
             schema=model_schema(EvaluationBatchResult),
         )
+
+    def close(self, *, timeout_seconds: float = 30) -> None:
+        """Quiesce enumeration starts and workers before storage teardown."""
+
+        if timeout_seconds < 0:
+            raise ValueError("timeout_seconds must be non-negative")
+        deadline = time.monotonic() + timeout_seconds
+        with self._thread_lock:
+            if self._closed:
+                return
+            self._closing = True
+        while True:
+            with self._thread_lock:
+                active = tuple(
+                    thread for thread in self._threads.values() if thread.is_alive()
+                )
+                if not active and self._starts_in_flight == 0:
+                    self._closed = True
+                    self._closing = False
+                    return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ExperimentError(
+                    "enumeration workers did not quiesce before runtime shutdown"
+                )
+            if not active:
+                time.sleep(min(remaining, 0.01))
+                continue
+            for thread in active:
+                thread.join(timeout=min(remaining, 0.05))
 
     def _put_internal_artifact(
         self,
@@ -277,6 +310,22 @@ class ExperimentService:
     ) -> ExperimentHandle:
         """Validate, persist, and launch one bounded enumeration job."""
 
+        with self._thread_lock:
+            if self._closing or self._closed:
+                raise ExperimentError("experiment service is closing")
+            self._starts_in_flight += 1
+        try:
+            return self._start_enumeration_reserved(request)
+        finally:
+            with self._thread_lock:
+                self._starts_in_flight -= 1
+
+    def _start_enumeration_reserved(
+        self,
+        request: SearchEnumerateRequest | dict[str, Any],
+    ) -> ExperimentHandle:
+        """Start after reserving the lifecycle through worker launch."""
+
         selected = SearchEnumerateRequest.model_validate(request)
         validation = self.claims.validate(
             claim_uri=selected.claim_uri,
@@ -319,19 +368,35 @@ class ExperimentService:
             updated_at=now,
         )
         self._write_new(snapshot)
-        thread = threading.Thread(
-            target=self._run_enumeration,
-            args=(experiment_uri,),
-            name=f"jacobian-enumeration-{experiment_uri.removeprefix('experiment://')}",
-            daemon=True,
-        )
-        with self._thread_lock:
-            self._threads[experiment_uri] = thread
-        thread.start()
+        self._launch_enumeration(experiment_uri, lifecycle_reserved=True)
         return ExperimentHandle(
             experiment_uri=experiment_uri,
             state=ExperimentState.PENDING,
         )
+
+    def _launch_enumeration(
+        self,
+        experiment_uri: str,
+        *,
+        lifecycle_reserved: bool = False,
+    ) -> None:
+        with self._thread_lock:
+            if self._closed or (self._closing and not lifecycle_reserved):
+                raise ExperimentError("experiment service is closing")
+            current = self._threads.get(experiment_uri)
+            if current is not None and current.is_alive():
+                return
+            thread = threading.Thread(
+                target=self._run_enumeration,
+                args=(experiment_uri,),
+                name=(
+                    "jacobian-enumeration-"
+                    f"{experiment_uri.removeprefix('experiment://')}"
+                ),
+                daemon=True,
+            )
+            self._threads[experiment_uri] = thread
+            thread.start()
 
     def inspect(self, experiment_uri: str) -> ExperimentSnapshot:
         """Read the latest durable experiment snapshot."""

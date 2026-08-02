@@ -222,7 +222,7 @@ def _result_is_valid(value: object, source: dict[str, Any]) -> bool:
     return len(pairs) == len(source_fiber) and pairs == set(forward.items())
 
 
-def _evidence_is_valid(value: object) -> bool:
+def _evidence_is_valid(value: object, result: object) -> bool:
     if (
         not isinstance(value, list)
         or len(value) != 1
@@ -236,8 +236,23 @@ def _evidence_is_valid(value: object) -> bool:
         text = target.read_text().lower()
     except (OSError, UnicodeError):
         return False
-    return all(
-        term in text for term in ("unique", "reversed path", "bijection", "inverse")
+    if not isinstance(result, dict) or not isinstance(result.get("bijection"), list):
+        return False
+    return bool(
+        all(
+            term in text
+            for term in ("unique", "reversed path", "bijection", "inverse")
+        )
+        and not any(
+            marker in text
+            for marker in ("not a bijection", "not unique", "no inverse")
+        )
+        and all(
+            str(pair.get(key, "")).casefold() in text
+            for pair in result["bijection"]
+            if isinstance(pair, dict)
+            for key in ("source", "target")
+        )
     )
 
 
@@ -268,13 +283,20 @@ def main() -> None:
         and submission.get("completeness") == "COMPLETE"
         and _result_is_valid(submission.get("result"), source)
     )
-    evidence = bool(math_contract and _evidence_is_valid(submission.get("evidence")))
+    evidence = bool(
+        math_contract
+        and _evidence_is_valid(submission.get("evidence"), submission.get("result"))
+    )
     scope = bool(
         math_contract
         and isinstance(submission.get("scope"), str)
         and all(
             term in submission["scope"].casefold()
             for term in ("finite", "graph", "cover", "fiber", "path")
+        )
+        and not any(
+            marker in submission["scope"].casefold()
+            for marker in ("not ", "without", "cannot", "does not")
         )
     )
     assurance = bool(

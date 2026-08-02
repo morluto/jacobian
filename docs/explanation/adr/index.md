@@ -18,6 +18,7 @@ stable public contract.
 | [0008](0008-harbor-native-benchmark-datasets.md) | Package every executable benchmark case in claim-specific Harbor datasets | Accepted, pre-stable |
 | [0009](0009-bounded-lrat-authority.md) | Keep LRAT replay experimental and addition-only until an independent backend passes the authority gate | Accepted, pre-stable |
 | [0010](0010-domain-owned-inspection-contracts.md) | Keep formal inspection and intermediate representations domain-owned and bounded | Accepted |
+| [0011](0011-leaf-only-benchmark-snapshots.md) | Make benchmark additions leaf-only and freeze evaluation sets as immutable snapshots | Accepted, pre-stable |
 
 Add an ADR when a decision changes a trust boundary, durable data model,
 cross-component contract, dependency strategy, or other choice that would be

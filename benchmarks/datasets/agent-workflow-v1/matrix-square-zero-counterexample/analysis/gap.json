@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "matrix-square-zero-counterexample",
+  "analysis": {
+    "mathematical_moves": [
+      "Multiply an exact integer matrix by itself and inspect zero/nonzero conditions."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "matrix.multiply.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Computes the complete exact row-by-column product of two compatible bounded matrices over QQ and binds the operand shapes."
+      },
+      {
+        "capability_id": "matrix.result.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Independently replays the exact product with Python-FLINT when checker authority is installed."
+      }
+    ],
+    "gap_classes": [
+      "EXISTING_WORKS"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "matrix-exact-product"
+    ],
+    "disposition": "USE_EXISTING",
+    "next_action": "Use and evaluate the exact product primitive; consider a separate power outcome only after repeated product-composition evidence."
+  }
+}

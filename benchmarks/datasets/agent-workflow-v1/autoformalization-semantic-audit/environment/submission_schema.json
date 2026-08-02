@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "autoformalization-semantic-audit"},
+    "task_id": {"const": "jacobian/autoformalization-semantic-audit"},
     "conclusion": {
       "enum": [
         "PROPOSED_FORMALIZATION_FAITHFUL",

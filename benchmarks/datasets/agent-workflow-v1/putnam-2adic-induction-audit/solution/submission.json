@@ -33,6 +33,6 @@
   "claimed_assurance": "COMPUTED",
   "scope": "the frozen recurrence and symbolic induction for every integer k>=1",
   "completeness": "COMPLETE",
-  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:e49888d43e7c98c1410eb1392d5b4e297bad1e02d8e352a8419cf87dd77867be"}],
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:e6620bf26f28673fa65e2c906d22ef7a9dcac4b11664fb7671196d7725cba620"}],
   "limitations": ["The checker validates the recurrence-difference identity and affine valuation arithmetic conditional on frozen doubling identities, but does not derive those identities or replay the Lean kernel proof."]
 }

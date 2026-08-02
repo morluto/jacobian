@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "log-exponent-recovery",
+  "analysis": {
+    "mathematical_moves": [
+      "Reduce exact logarithmic identities to integer exponents and rational reciprocal-log contributions."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "integer.compute.prime_factorization",
+        "availability": "AVAILABLE",
+        "boundary": "Supplies exact exponent data without prescribing the logarithmic derivation."
+      },
+      {
+        "capability_id": "rational.compute.sum",
+        "availability": "AVAILABLE",
+        "boundary": "Supports exact rational composition."
+      }
+    ],
+    "gap_classes": [
+      "EXISTING_WORKS",
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Measure whether agents compose factorization and rational arithmetic correctly; do not add a task-shaped logarithm solver."
+  }
+}

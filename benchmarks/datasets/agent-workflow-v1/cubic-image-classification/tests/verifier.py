@@ -151,6 +151,10 @@ def _result(value: object, source: dict[str, Any]) -> bool:
         covers.update(residues)
         target = _affine(family["value"])
         assert target is not None
+        if target[1] == 0:
+            if 0 <= target[0] <= 500:
+                covered_values.add(target[0])
+            continue
         for parameter in range(family["parameter_min"], 501):
             candidate = target[0] + target[1] * parameter
             if 0 <= candidate <= 500:

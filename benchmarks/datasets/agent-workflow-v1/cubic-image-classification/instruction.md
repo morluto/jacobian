@@ -14,5 +14,7 @@ Use the factorization fields `linear: "A+B+C"` and
 
 A list of residue classes or a few numerical witnesses is insufficient.  The
 verifier independently expands every family symbolically, checks
-nonnegativity, and proves residue-class coverage.  Bind
-`/app/evidence/answer.txt` and do not claim `VERIFIED`.
+nonnegativity, and proves residue-class coverage.  Put a concise derivation in
+`/app/evidence/answer.txt`, include a `RESULT_JSON:` line containing the
+submitted result as JSON, and bind that file with its SHA-256 digest.  Do not
+claim `VERIFIED`.

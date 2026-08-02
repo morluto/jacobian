@@ -174,9 +174,12 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
             if line.startswith("RESULT_JSON:")
         )
         body = "\n".join(line for line in lines if not line.startswith("RESULT_JSON:"))
+        lowered = body.lower()
         return (
             json.loads(marker) == result
-            and bool(body.strip())
+            and "gcd" in lowered
+            and "remainder" in lowered
+            and ("product" in lowered or "multiplication" in lowered)
         )
     except (OSError, StopIteration, UnicodeError, ValueError, RecursionError):
         return False

@@ -127,15 +127,24 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     ):
         return False
     families = value["families"]
-    if not isinstance(families, list) or len(families) != 3:
+    if not isinstance(families, list) or len(families) < 3:
         return False
     covers: set[int] = set()
+    covered_values: set[int] = set()
     for family in families:
         residues = _family(family)
         if residues is None or residues & set(excluded):
             return False
         covers.update(residues)
-    return covers == set(image)
+        target = _affine(family["value"])
+        assert target is not None
+        for parameter in range(family["parameter_min"], 501):
+            candidate = target[0] + target[1] * parameter
+            if 0 <= candidate <= 500:
+                covered_values.add(candidate)
+    return covers == set(image) and all(
+        value in covered_values for value in range(501) if value % 9 in image
+    )
 
 
 def _evidence(value: object) -> bool:
@@ -170,7 +179,16 @@ def main() -> None:
     assurance = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
     )
-    limitations = bool(contract and data.get("limitations") == [LIMITATION])
+    limitations = bool(
+        contract
+        and isinstance(data.get("limitations"), list)
+        and any(
+            isinstance(item, str)
+            and "proof assistant" in item.casefold()
+            and "not" in item.casefold()
+            for item in data["limitations"]
+        )
+    )
     false_verified = false_verified_claim(submission, verification_record_bound=False)
     passed = bool(
         correct

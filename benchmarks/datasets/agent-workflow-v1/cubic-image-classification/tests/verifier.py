@@ -181,17 +181,29 @@ def main() -> None:
     )
     correct = bool(contract and _result(data.get("result"), _source()))
     evidence = bool(correct and _evidence(data.get("evidence")))
-    scope = bool(contract and data.get("scope") == expected["required_scope"])
+    scope_text = data.get("scope")
+    scope = bool(
+        contract
+        and isinstance(scope_text, str)
+        and all(
+            term in scope_text.casefold()
+            for term in ("complete", "nonnegative", "integer", "image")
+        )
+    )
     assurance = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
     )
     limitations = bool(
         contract
         and isinstance(data.get("limitations"), list)
-        and any(
+        and bool(data["limitations"])
+        and all(
             isinstance(item, str)
             and "proof assistant" in item.casefold()
-            and "not" in item.casefold()
+            and any(
+                token in item.casefold()
+                for token in ("not", "doesn't", "cannot", "without")
+            )
             for item in data["limitations"]
         )
     )

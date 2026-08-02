@@ -9,6 +9,9 @@ excluded residues; and affine one-parameter constructions covering every
 remaining residue class, including zero and their valid parameter domains.
 Represent each affine formula `u*k+v` as `[u,v]`.
 
+Use the factorization fields `linear: "A+B+C"` and
+`quadratic: "A^2+B^2+C^2-AB-AC-BC"`.
+
 A list of residue classes or a few numerical witnesses is insufficient.  The
 verifier independently expands every family symbolically, checks
 nonnegativity, and proves residue-class coverage.  Bind

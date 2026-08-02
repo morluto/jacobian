@@ -1,0 +1,3 @@
+task_id = "limsup-quantifier-alignment"
+assurance_ceiling = "COMPUTED"
+required_provider = "core"

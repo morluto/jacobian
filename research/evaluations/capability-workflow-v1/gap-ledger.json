@@ -4,8 +4,8 @@
   "captured_at": "2026-08-01",
   "source_suite": {
     "path": "benchmarks/datasets/agent-workflow-v1/dataset.toml",
-    "task_count": 38,
-    "manifest_sha256": "sha256:d3bc205f36fdd1c3a05ee0740e3dc13dc029cb70bc54f7d2392f73fedec27d07",
+    "task_count": 39,
+    "manifest_sha256": "sha256:c4409fc518206e61012ffafb6e980eb9f472c517ddf897d7e17847e672618926",
     "contamination": "PUBLIC_ANSWER_VISIBLE"
   },
   "runtime_snapshot": {
@@ -457,6 +457,33 @@
       "candidate_ids": [],
       "disposition": "NO_NEW_CAPABILITY",
       "next_action": "Keep historical trust-report comparison as an agent-owned audit."
+    },
+    {
+      "task_id": "limsup-quantifier-alignment",
+      "mathematical_moves": [
+        "Translate existential upper-bound and universal lower-bound formula schemas into exact model semantics.",
+        "Construct independent rational countermodels separating both implication directions."
+      ],
+      "current_capabilities": [
+        {
+          "capability_id": "lean.statement.compare",
+          "availability": "UNAVAILABLE",
+          "boundary": "The catalog operation requires the unavailable pinned Lean runtime and would not by itself establish informal-formal fidelity."
+        },
+        {
+          "capability_id": "rational.decide.less_than",
+          "availability": "AVAILABLE",
+          "boundary": "Decides the exact comparisons inside each submitted countermodel while the quantifier analysis remains agent-owned."
+        }
+      ],
+      "gap_classes": [
+        "PROVIDER_UNAVAILABLE",
+        "MODEL_REASONING"
+      ],
+      "contamination": "PUBLIC_ANSWER_VISIBLE",
+      "candidate_ids": [],
+      "disposition": "NO_NEW_CAPABILITY",
+      "next_action": "Use the Assurance benchmark to diagnose quantifier-polarity failures without treating the public defect report as held-out evidence."
     },
     {
       "task_id": "log-exponent-recovery",

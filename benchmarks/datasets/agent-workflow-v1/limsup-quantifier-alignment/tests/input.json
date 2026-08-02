@@ -1,0 +1,2 @@
+{"task_id":"jacobian/limsup-quantifier-alignment","source":{"repository":"google-deepmind/formal-conjectures","commit":"37a34a76ea03c9ab157981bf4495a8c3a1add68a","issue":1347,"issue_url":"https://github.com/google-deepmind/formal-conjectures/issues/1347","license":"Apache-2.0"},"intended_formula":"exists A, limsup(A) <= Y","proposed_formula":"forall A, limsup(A) >= Y","bound":"1","model_constraints":{"minimum_family_size":2,"maximum_family_size":8,"minimum_value":"-8","maximum_value":"8"},"assurance_ceiling":"COMPUTED"}
+

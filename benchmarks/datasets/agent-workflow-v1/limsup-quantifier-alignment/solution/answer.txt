@@ -1,0 +1,2 @@
+The intended existential upper-bound statement and the proposed universal lower-bound statement are incomparable. Values 1/2 and 2 make the intended formula true but the proposed formula false; values 3/2 and 2 make the proposed formula true but the intended formula false. This audits formula alignment only and does not solve Erdős problem 33.
+

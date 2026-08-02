@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "metric-tsp-proof-repair"},
+    "task_id": {"const": "jacobian/metric-tsp-proof-repair"},
     "conclusion": {"const": "REPAIRED"},
     "result": {
       "type": "object",

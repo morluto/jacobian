@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "divisibility-construction-witness"},
+    "task_id": {"const": "jacobian/divisibility-construction-witness"},
     "conclusion": {"const": "WITNESS_FOUND"},
     "result": {
       "type": "object",

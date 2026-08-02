@@ -10,3 +10,25 @@ claims equivalence to the source.
 
 Manually authored or substantially transformed tasks remain authored Harbor
 tasks with provenance metadata; an “inspired by” citation is not an adapter.
+
+Follow Harbor's maintained adapter layout: a locked Python package and CLI
+generate ordinary task directories containing `task.toml`, `instruction.md`,
+`environment/`, `solution/`, and `tests/`. Reuse an existing Harbor mapper when
+the source already follows Terminal-Bench or another supported format; keep
+source-specific code to the conversion that cannot be expressed by that
+mapper. Do not introduce a Jacobian-only task format or generate a root
+`dataset.toml`.
+
+Each adapter directory must contain `source.lock.json`, `README.md`, a locked
+generator package, and an executable parity/regeneration check. The lock conforms to
+`benchmarks/schemas/source-adapter-lock.schema.json` and binds source revision,
+license, row selection, dependencies, output task digests, Oracle evidence,
+and parity evidence. `make harbor-check` validates every lock without network
+access; `make harbor-adapter-check ADAPTER=<id>` additionally runs that
+adapter's deterministic regeneration check.
+
+Parity claims follow Harbor's ABC-Bench example: freeze the source selection,
+agent and model versions, environment, repetitions, metric, and raw result
+digests; report Oracle coverage separately; and count verifier or infrastructure
+failures explicitly rather than smoothing them into benchmark misses. Generated
+tasks remain directly runnable with Harbor's `-p` path and task filters.

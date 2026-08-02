@@ -15,6 +15,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp_types import TextContent, TextResourceContents
 
 from jacobian import __version__
+from jacobian.canonical import canonicalize_json
 
 EXPECTED_TOOLS = {
     "capability.describe",
@@ -114,6 +115,17 @@ async def inspect(
             raise RuntimeError("deployed capability catalog is not text")
         catalog_text = catalog_content.text
         catalog = json.loads(catalog_text)
+        catalog_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                canonicalize_json(
+                    {
+                        "catalog_version": catalog["catalog_version"],
+                        "capabilities": catalog["capabilities"],
+                    }
+                )
+            ).hexdigest()
+        )
         capability_ids = {
             capability["capability_id"] for capability in catalog["capabilities"]
         }
@@ -157,6 +169,7 @@ async def inspect(
                 "catalog_version": catalog["catalog_version"],
                 "capabilities": len(capability_ids),
                 "policy_profile": policy_profile,
+                "catalog_digest": catalog_digest,
                 "policy_digest": catalog["policy_digest"],
                 "sha256": hashlib.sha256(catalog_text.encode("utf-8")).hexdigest(),
             },

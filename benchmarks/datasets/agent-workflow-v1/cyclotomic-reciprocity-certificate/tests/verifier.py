@@ -93,7 +93,7 @@ def _result_is_valid(result, frozen):
     factors = result["factors"]
     if not isinstance(factors, list) or not factors or len(factors) > 8:
         return False
-    parsed, previous, total = [], 1, 0
+    parsed, total = [], 0
     for factor in factors:
         if not isinstance(factor, dict) or set(factor) != {"order", "multiplicity"}:
             return False
@@ -101,17 +101,17 @@ def _result_is_valid(result, frozen):
         if (
             type(order) is not int
             or type(multiplicity) is not int
-            or not previous < order <= frozen.get("maximum_cyclotomic_order", 0)
+            or not 1 < order <= frozen.get("maximum_cyclotomic_order", 0)
             or not 1 <= multiplicity <= 8
         ):
             return False
         parsed.append((order, multiplicity))
-        previous, total = order, total + multiplicity
+        total += multiplicity
     if total > frozen.get("maximum_total_multiplicity", 0):
         return False
     cache = {1: [-1, 1]}
     product = [result["leading_coefficient"]]
-    for order, multiplicity in parsed:
+    for order, multiplicity in sorted(parsed):
         factor = _cyclotomic(order, cache)
         if factor is None or factor != list(reversed(factor)):
             return False
@@ -125,6 +125,8 @@ def _result_is_valid(result, frozen):
         and product == list(reversed(product))
         and result["p_at_one"] == sum(product)
         and result["p_at_one"] != 0
+        and type(result["p_at_one"]) is int
+        and type(result["reciprocal_scalar"]) is int
         and result["reciprocal_scalar"] == 1
         and result["root_orbit_conclusion"]
         == "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
@@ -132,14 +134,28 @@ def _result_is_valid(result, frozen):
 
 
 def _evidence_matches(evidence):
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+    if (
+        not isinstance(evidence, list)
+        or len(evidence) != 1
+        or not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt")
+    ):
         return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     try:
         text = target.read_text().casefold() if target else ""
     except (OSError, UnicodeError):
         return False
-    return all(word in text for word in ("cyclotomic", "inversion", "p(1)"))
+    return bool(
+        len(text) >= 180
+        and "cyclotomic" in text
+        and "inversion" in text
+        and "root" in text
+        and "orbit" in text
+        and ("phi_1" in text or "phi1" in text)
+        and "p(1)" in text
+        and ("x-1" in text or "x − 1" in text)
+        and ("coefficient symmetry" in text or "reciprocal" in text)
+    )
 
 
 def main():
@@ -156,7 +172,12 @@ def main():
         contract and math_correct and _evidence_matches(submission.get("evidence"))
     )
     scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
+        contract
+        and isinstance(submission.get("scope"), str)
+        and all(
+            term in submission["scope"].casefold()
+            for term in ("frozen", "degree", "cyclotomic", "orbit")
+        )
     )
     assurance_correct = bool(
         contract

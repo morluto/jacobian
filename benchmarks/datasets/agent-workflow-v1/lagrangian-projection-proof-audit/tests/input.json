@@ -1,0 +1,41 @@
+{
+  "task_id": "jacobian/lagrangian-projection-proof-audit",
+  "source": {
+    "dataset": "LukeBailey181Pub/ArxivMathGradingBench",
+    "revision": "86c2b07ec545c0bd37feac10d4fc03675a85a6f6",
+    "split": "train",
+    "row": 11,
+    "row_sha256": "sha256:094bc10d13dd610b5f2a17f69203641a0cc05fbca5982df06d9e07c8d189a559",
+    "arxiv_id": "2502.00898",
+    "paper_version_audited": "v1",
+    "corrected_version": "v2",
+    "license": "CC 4.0",
+    "v1_source_sha256": "sha256:ab35b410bcabf78e5e4b753f8610e3601a6c102e5ab5e0893de1cb74cab0765b",
+    "v2_source_sha256": "sha256:81590935c7b6ef08a8f788a1f7c3fa676b08d80ca0c93a01a7ff88a31e08e3b6"
+  },
+  "frozen_claim": {
+    "location": "Lemma 4.1 (v1 numbering)",
+    "invalid_step": "Treat D^T J D as zero for an arbitrary nearby full-rank differential D.",
+    "standard_symplectic_matrix": [["0","0","1","0"],["0","0","0","1"],["-1","0","0","0"],["0","-1","0","0"]],
+    "definitions": [
+      "G = D^T D",
+      "N = G^{-1}",
+      "L = D^T J D",
+      "W = D P + J D N Q"
+    ],
+    "naive_projections": [
+      "P_naive = N D^T W",
+      "Q_naive = -D^T J W"
+    ],
+    "corrected_identities": [
+      "N D^T W = P + N L N Q",
+      "-D^T J W = -L P + Q"
+    ]
+  },
+  "certificate_limits": {
+    "matrix_shape_D": [4,2],
+    "matrix_shape_coefficients": [2,2],
+    "maximum_absolute_numerator": 50,
+    "maximum_denominator": 20
+  }
+}

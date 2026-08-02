@@ -234,6 +234,80 @@ class PolynomialIdentityRequest(ContractModel):
         return self
 
 
+class SparseRationalFunction(ContractModel):
+    """One bounded fraction of sparse polynomials over a shared QQ ring."""
+
+    numerator: SparseRationalPolynomial
+    denominator: SparseRationalPolynomial
+
+    @model_validator(mode="after")
+    def require_nonzero_denominator(self) -> Self:
+        if not self.denominator.terms:
+            raise ValueError("rational-function denominator must be nonzero")
+        return self
+
+
+class RationalFunctionIdentityRequest(ContractModel):
+    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    left: SparseRationalFunction
+    right: SparseRationalFunction
+
+    @model_validator(mode="after")
+    def require_matching_bounded_fraction_field(self) -> Self:
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("rational-function variables must be unique")
+        dimension = len(self.variables)
+        polynomials = (
+            self.left.numerator,
+            self.left.denominator,
+            self.right.numerator,
+            self.right.denominator,
+        )
+        if any(
+            len(term.exponents) != dimension
+            for polynomial in polynomials
+            for term in polynomial.terms
+        ):
+            raise ValueError("every monomial must match the declared variable order")
+        if (
+            max(
+                len(self.left.numerator.terms) * len(self.right.denominator.terms),
+                len(self.right.numerator.terms) * len(self.left.denominator.terms),
+            )
+            > 4096
+        ):
+            raise ValueError("rational-function cross product exceeds 4096 term pairs")
+        return self
+
+
+class RationalFunctionArtifact(ContractModel):
+    rational_function_schema_version: Literal["1"] = "1"
+    domain: Literal["QQ_FRACTION_FIELD"] = "QQ_FRACTION_FIELD"
+    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    numerator: SparseRationalPolynomial
+    denominator: SparseRationalPolynomial
+
+    @model_validator(mode="after")
+    def require_matching_fraction_field(self) -> Self:
+        # Validate the artifact directly rather than reusing the
+        # two-function cross-product validator: the identity-request bound
+        # applies the pair limit to a single fraction's self-product
+        # (numerator.terms * denominator.terms), which incorrectly rejects a
+        # valid 65x65 fraction.  The artifact only needs variable uniqueness,
+        # exponent dimension matching, and a nonzero denominator.
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("rational-function variables must be unique")
+        dimension = len(self.variables)
+        for polynomial in (self.numerator, self.denominator):
+            if any(len(term.exponents) != dimension for term in polynomial.terms):
+                raise ValueError(
+                    "every monomial must match the declared variable order"
+                )
+        if not self.denominator.terms:
+            raise ValueError("rational-function denominator must be nonzero")
+        return self
+
+
 class PolynomialMapInverseVerifyRequest(ContractModel):
     forward_map: RationalPolynomialMap
     inverse_map: RationalPolynomialMap
@@ -596,6 +670,24 @@ class PolynomialIdentityReplayPayload(ContractModel):
     right_uri: ArtifactUri
 
 
+class RationalFunctionIdentityClaim(ContractModel):
+    claim_schema_version: Literal["1"] = "1"
+    predicate: Literal["RATIONAL_FUNCTION_IDENTITY"] = "RATIONAL_FUNCTION_IDENTITY"
+    domain: Literal["QQ_FRACTION_FIELD"] = "QQ_FRACTION_FIELD"
+    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    left_uri: ArtifactUri
+    right_uri: ArtifactUri
+
+
+class RationalFunctionIdentityReplayPayload(ContractModel):
+    method: Literal["CROSS_MULTIPLY_SPARSE_POLYNOMIALS"] = (
+        "CROSS_MULTIPLY_SPARSE_POLYNOMIALS"
+    )
+    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    left_uri: ArtifactUri
+    right_uri: ArtifactUri
+
+
 class PolynomialMapInverseClaim(ContractModel):
     claim_schema_version: Literal["1"] = "1"
     predicate: Literal["POLYNOMIAL_MAP_TWO_SIDED_INVERSE"] = (
@@ -790,6 +882,37 @@ class PolynomialIdentityOutput(ContractModel):
         if self.conclusion not in expected:
             raise ValueError(
                 "polynomial identity conclusion must be TRUE, FALSE, or UNKNOWN"
+            )
+        if self.identical is not expected[self.conclusion]:
+            raise ValueError("identical must preserve an unknown checker conclusion")
+        return self
+
+
+class RationalFunctionIdentityOutput(ContractModel):
+    identical: bool | None
+    conclusion: Conclusion
+    left_uri: ArtifactUri
+    right_uri: ArtifactUri
+    claim_uri: ArtifactUri
+    certificate_uri: ArtifactUri
+    verification_record_uri: ArtifactUri | None = None
+    checker_id: CheckerUri | None = None
+    exactness: PolynomialExactness = PolynomialExactness.EXACT
+    determinism: PolynomialDeterminism = PolynomialDeterminism.DETERMINISTIC
+    equality_semantics: Literal["QQ_FRACTION_FIELD_CROSS_MULTIPLICATION"] = (
+        "QQ_FRACTION_FIELD_CROSS_MULTIPLICATION"
+    )
+
+    @model_validator(mode="after")
+    def identity_matches_conclusion(self) -> Self:
+        expected = {
+            Conclusion.TRUE: True,
+            Conclusion.FALSE: False,
+            Conclusion.UNKNOWN: None,
+        }
+        if self.conclusion not in expected:
+            raise ValueError(
+                "rational-function identity conclusion must be TRUE, FALSE, or UNKNOWN"
             )
         if self.identical is not expected[self.conclusion]:
             raise ValueError("identical must preserve an unknown checker conclusion")

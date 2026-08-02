@@ -128,8 +128,7 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     if (
         not _strict_int_list(value["image_residues_mod_9"])
         or not _strict_int_list(value["excluded_residues_mod_9"])
-        or
-        value["image_residues_mod_9"] != image
+        or value["image_residues_mod_9"] != image
         or value["excluded_residues_mod_9"] != excluded
     ):
         return False

@@ -27,6 +27,6 @@ unsupported certification claim forces reward to zero. These are workflow
 observations, not a causal performance benchmark: the dataset has no control
 condition or randomized pairing.
 
-Version 1.1.0 adds the independently reviewed finite-magma and
+Version 1.2.0 adds the independently reviewed finite-magma and
 well-total-domination countermodel cases. Both remain public workflow evidence;
 neither is a held-out capability-benefit case.

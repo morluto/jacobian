@@ -289,7 +289,11 @@ class RationalFunctionArtifact(ContractModel):
 
     @model_validator(mode="after")
     def require_matching_fraction_field(self) -> Self:
-        request = RationalFunctionIdentityRequest(
+        # Reuse the identity-request validator for cross-field checks (variable
+        # uniqueness, exponent dimension matching, and cross-product bound).
+        # The self-comparison is intentional: we only need the side effect of
+        # the nested validator, not a real equality test.
+        RationalFunctionIdentityRequest(
             variables=self.variables,
             left=SparseRationalFunction(
                 numerator=self.numerator,
@@ -300,8 +304,6 @@ class RationalFunctionArtifact(ContractModel):
                 denominator=self.denominator,
             ),
         )
-        if request.variables != self.variables:
-            raise ValueError("rational-function artifact has an invalid variable order")
         return self
 
 

@@ -143,7 +143,7 @@ def read_evidence_json(
         return None
     try:
         value = json.loads(target.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return None
     return value if isinstance(value, dict) else None
 

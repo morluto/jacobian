@@ -142,7 +142,9 @@ def _certificate_is_valid(value: object) -> bool:
         return False
     coefficients = value["elimination_coefficients"]
     if (
-        value["substitution"] != "u=b^(1/6)"
+        not isinstance(coefficients, list)
+        or not all(type(coefficient) is int for coefficient in coefficients)
+        or value["substitution"] != "u=b^(1/6)"
         or coefficients != EXPECTED_ELIMINATION
         or not _factorization_is_complete(value["linear_factors"])
         or _integer_roots(coefficients) != set(EXPECTED_CLASSIFICATION)

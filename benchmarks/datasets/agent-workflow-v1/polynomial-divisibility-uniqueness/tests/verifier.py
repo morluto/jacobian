@@ -186,6 +186,8 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
             and "gcd" in lowered
             and "remainder" in lowered
             and ("product" in lowered or "multiplication" in lowered)
+            and f"a={result.get('parameter')}" in lowered.replace(" ", "")
+            and "a-2" in lowered.replace(" ", "")
         )
     except (OSError, StopIteration, UnicodeError, ValueError, RecursionError):
         return False

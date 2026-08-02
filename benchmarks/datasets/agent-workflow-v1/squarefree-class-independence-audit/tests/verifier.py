@@ -153,11 +153,19 @@ def limitation_is_unchecked(value: object) -> bool:
     if not isinstance(value, str):
         return False
     text = value.casefold()
-    verification = r"(?:machine|formally?|proof[- ]assistant)(?:[- ](?:checked|verified|verification|proof))?"
-    negative_pattern = rf"\b(?:not|no|without|does not|doesn't)\b[^.]{0,60}\b{verification}\b"
+    verification = (
+        r"(?:machine(?:[- ](?:check(?:ed)?|verified|verification|proof))?"
+        r"|formal(?:ly)?(?:[- ](?:checked|verified|verification|proof))?"
+        r"|proof[- ]assistant(?:[- ](?:checked|verified|verification|proof))?)"
+    )
+    negative_pattern = (
+        r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,60}\b"
+        + verification
+        + r"\b"
+    )
     negative = re.search(negative_pattern, text)
     remainder = re.sub(negative_pattern, "", text)
-    return bool(negative and not re.search(rf"\b{verification}\b", remainder))
+    return bool(negative and not re.search(r"\b" + verification + r"\b", remainder))
 
 
 def main() -> None:

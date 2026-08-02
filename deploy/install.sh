@@ -10,6 +10,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/service_state.sh"
 
 MODE="local"
 DOMAIN=""
@@ -34,6 +35,10 @@ TAILSCALE_STATUS=""
 RENDER_ROOT=""
 RELEASE_BUILD_DIR=""
 RELEASE_WAS_BUILT=0
+ROLLBACK_ROOT=""
+ROLLBACK_ARMED=0
+DEPLOYMENT_ACCEPTED=0
+PREVIOUS_RELEASE=""
 
 cleanup() {
     if [[ -n "${RELEASE_BUILD_DIR}" && -d "${RELEASE_BUILD_DIR}" ]]; then
@@ -44,6 +49,9 @@ cleanup() {
     fi
     if [[ -n "${TAILSCALE_STATUS}" && -f "${TAILSCALE_STATUS}" ]]; then
         rm -f "${TAILSCALE_STATUS}"
+    fi
+    if [[ -n "${ROLLBACK_ROOT}" && -d "${ROLLBACK_ROOT}" ]]; then
+        rm -rf -- "${ROLLBACK_ROOT}"
     fi
 }
 
@@ -80,19 +88,100 @@ Examples:
   sudo ./deploy/install.sh --mode tailscale
 
 The default is token authentication. On the first authenticated install, the
-script creates /etc/jacobian-mcp/tokens.json and prints the generated token once.
-Subsequent runs reuse that secret unless --auth-tokens-file is supplied.
+script creates /etc/jacobian-mcp/tokens.json with mode 0600. It prints only that
+path; retrieve it explicitly with privileged access or import it into a secret
+manager. Subsequent runs reuse it unless --auth-tokens-file is supplied.
 EOF
 }
 
 die() {
     printf 'error: %s\n' "$*" >&2
+    if ((ROLLBACK_ARMED)) && ((!DEPLOYMENT_ACCEPTED)); then
+        rollback_deployment 1 || true
+    fi
     exit 1
 }
 
 log() {
     printf '==> %s\n' "$*"
 }
+
+snapshot_file() {
+    local name="$1"
+    local path="$2"
+    if [[ -e "${path}" || -L "${path}" ]]; then
+        cp -a -- "${path}" "${ROLLBACK_ROOT}/${name}"
+        : >"${ROLLBACK_ROOT}/${name}.present"
+    else
+        : >"${ROLLBACK_ROOT}/${name}.absent"
+    fi
+}
+
+restore_file() {
+    local name="$1"
+    local path="$2"
+    if [[ -f "${ROLLBACK_ROOT}/${name}.present" ]]; then
+        install -d -m 0755 "$(dirname -- "${path}")"
+        rm -rf -- "${path}"
+        cp -a -- "${ROLLBACK_ROOT}/${name}" "${path}"
+    else
+        rm -rf -- "${path}"
+    fi
+}
+
+rollback_deployment() {
+    local original_status="$1"
+    local rollback_failed=0
+    trap - ERR
+    set +e
+    printf 'error: deployment failed; restoring the previous activation\n' >&2
+    restore_file token "${TOKEN_DESTINATION}" || rollback_failed=1
+    restore_file mcp-service "${SYSTEMD_ROOT}/jacobian-mcp.service" \
+        || rollback_failed=1
+    restore_file anonymous \
+        "${SYSTEMD_ROOT}/jacobian-mcp.service.d/anonymous.conf" \
+        || rollback_failed=1
+    restore_file caddy-config "${CADDY_CONFIG_ROOT}/Caddyfile" \
+        || rollback_failed=1
+    restore_file caddy-service "${SYSTEMD_ROOT}/jacobian-caddy.service" \
+        || rollback_failed=1
+    restore_file funnel-service "${SYSTEMD_ROOT}/jacobian-funnel.service" \
+        || rollback_failed=1
+    if [[ -n "${PREVIOUS_RELEASE}" ]]; then
+        ln -sfn "${PREVIOUS_RELEASE}" "${CURRENT_LINK}.rollback" \
+            && mv -Tf "${CURRENT_LINK}.rollback" "${CURRENT_LINK}" \
+            || rollback_failed=1
+    else
+        rm -f -- "${CURRENT_LINK}" || rollback_failed=1
+    fi
+    "${SYSTEMCTL_BIN}" daemon-reload || rollback_failed=1
+    restore_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+        jacobian-mcp.service || rollback_failed=1
+    restore_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+        jacobian-caddy.service || rollback_failed=1
+    restore_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+        jacobian-funnel.service || rollback_failed=1
+    ROLLBACK_ARMED=0
+    if ((rollback_failed)); then
+        printf 'error: rollback encountered additional failures; inspect systemd and the preserved release %s\n' \
+            "${RELEASE_DIR}" >&2
+    else
+        printf 'error: previous deployment activation restored; failed release preserved at %s\n' \
+            "${RELEASE_DIR}" >&2
+    fi
+    set -e
+    return "${original_status}"
+}
+
+on_error() {
+    local status="$?"
+    if ((ROLLBACK_ARMED)) && ((!DEPLOYMENT_ACCEPTED)); then
+        rollback_deployment "${status}" || true
+    fi
+    exit "${status}"
+}
+
+trap on_error ERR
 
 find_executable() {
     local name="$1"
@@ -389,13 +478,29 @@ fi
 if [[ -e "${CURRENT_LINK}" && ! -L "${CURRENT_LINK}" ]]; then
     die "${CURRENT_LINK} exists and is not a symlink"
 fi
+ROLLBACK_ROOT="$(mktemp -d)"
+PREVIOUS_RELEASE="$(readlink "${CURRENT_LINK}" 2>/dev/null || true)"
+snapshot_file token "${TOKEN_DESTINATION}"
+snapshot_file mcp-service "${SYSTEMD_ROOT}/jacobian-mcp.service"
+snapshot_file anonymous "${SYSTEMD_ROOT}/jacobian-mcp.service.d/anonymous.conf"
+snapshot_file caddy-config "${CADDY_CONFIG_ROOT}/Caddyfile"
+snapshot_file caddy-service "${SYSTEMD_ROOT}/jacobian-caddy.service"
+snapshot_file funnel-service "${SYSTEMD_ROOT}/jacobian-funnel.service"
+snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+    jacobian-mcp.service
+snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+    jacobian-caddy.service
+snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+    jacobian-funnel.service
+ROLLBACK_ARMED=1
+
 install -d -m 0755 "$(dirname -- "${CURRENT_LINK}")"
 ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"
 mv -Tf "${CURRENT_LINK}.new" "${CURRENT_LINK}"
 
 log "installing authentication configuration"
 install -d -m 0700 "${CONFIG_ROOT}"
-GENERATED_TOKEN=""
+GENERATED_TOKEN_FILE=0
 if ((ALLOW_ANONYMOUS)); then
     install -d -m 0755 \
         "${SYSTEMD_ROOT}/jacobian-mcp.service.d"
@@ -418,15 +523,32 @@ if not any("jacobian:use" in grant.scopes for grant in grants):
 PY
         install -m 0600 "${AUTH_TOKENS_FILE}" "${TOKEN_DESTINATION}"
     elif [[ ! -f "${TOKEN_DESTINATION}" ]]; then
-        GENERATED_TOKEN="$("${RELEASE_DIR}/.venv/bin/python" - <<'PY'
+        "${RELEASE_DIR}/.venv/bin/python" - \
+            "${TOKEN_DESTINATION}" "${TENANT_ID}" <<'PY'
+import json
+import os
 import secrets
+import sys
 
-print(secrets.token_urlsafe(48))
+destination, tenant_id = sys.argv[1:]
+descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+    json.dump(
+        {
+            "tokens": [
+                {
+                    "tenant_id": tenant_id,
+                    "token": secrets.token_urlsafe(48),
+                    "scopes": ["jacobian:use"],
+                }
+            ]
+        },
+        stream,
+        indent=2,
+    )
+    stream.write("\n")
 PY
-)"
-        umask 077
-        printf '{\n  "tokens": [\n    {\n      "tenant_id": "%s",\n      "token": "%s",\n      "scopes": ["jacobian:use"]\n    }\n  ]\n}\n' \
-            "${TENANT_ID}" "${GENERATED_TOKEN}" >"${TOKEN_DESTINATION}"
+        GENERATED_TOKEN_FILE=1
     fi
     "${RELEASE_DIR}/.venv/bin/python" - "${TOKEN_DESTINATION}" <<'PY'
 import sys
@@ -524,22 +646,13 @@ fi
 
 if ((!SKIP_SMOKE)); then
     log "running the read-only deployment smoke"
-    SMOKE_TOKEN=""
+    SMOKE_TOKEN_FILE=""
     if ((!ALLOW_ANONYMOUS)); then
-        SMOKE_TOKEN="$("${RELEASE_DIR}/.venv/bin/python" - \
-            "${TOKEN_DESTINATION}" <<'PY'
-import sys
-
-from jacobian.adapters.mcp.remote import load_static_token_file
-
-grants = load_static_token_file(sys.argv[1])
-print(next(grant.token for grant in grants if "jacobian:use" in grant.scopes))
-PY
-)"
+        SMOKE_TOKEN_FILE="${TOKEN_DESTINATION}"
     fi
     SMOKE_SUCCEEDED=0
     for attempt in {1..12}; do
-        if JACOBIAN_MCP_BEARER_TOKEN="${SMOKE_TOKEN}" \
+        if JACOBIAN_MCP_AUTH_TOKENS_FILE="${SMOKE_TOKEN_FILE}" \
             "${RELEASE_DIR}/.venv/bin/python" \
             "${RELEASE_DIR}/deploy/smoke_remote.py" \
             "${CONNECTOR_URL}" \
@@ -556,6 +669,9 @@ PY
         "deployment smoke failed; inspect jacobian-mcp and ingress journals"
 fi
 
+DEPLOYMENT_ACCEPTED=1
+ROLLBACK_ARMED=0
+
 cat <<EOF
 
 Jacobian MCP deployment is active.
@@ -564,10 +680,11 @@ Jacobian MCP deployment is active.
   connector: ${CONNECTOR_URL}
   auth file: $([[ "${ALLOW_ANONYMOUS}" == 1 ]] && printf 'anonymous mode' || printf '%s' "${TOKEN_DESTINATION}")
 EOF
-if [[ -n "${GENERATED_TOKEN}" ]]; then
+if ((GENERATED_TOKEN_FILE)); then
     cat <<EOF
 
-Generated bearer token (shown once; store it in your client secret manager):
-${GENERATED_TOKEN}
+A bearer token was generated in ${TOKEN_DESTINATION}.
+Retrieve it explicitly with privileged access or import that root-readable file
+into your secret manager; the installer never prints credential values.
 EOF
 fi

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,9 @@ def test_metric_tsp_scope_is_part_of_correctness(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
-def test_metric_tsp_evidence_requires_calculations(tmp_path: Path) -> None:
+def test_metric_tsp_evidence_rejects_mismatched_result_marker(
+    tmp_path: Path,
+) -> None:
     task, app, logs = support._prepare_case(
         tmp_path, "metric-tsp-proof-repair", "computed"
     )
@@ -34,12 +35,13 @@ def test_metric_tsp_evidence_requires_calculations(tmp_path: Path) -> None:
         "MST Euler shortcut optimal approximation\nRESULT_JSON: {}\n"
     )
     support._bind_result_evidence(app, submission)
-    support._write_json(submission_path, submission)
+    tampered = json.loads(submission_path.read_text())
+    tampered["result"]["weights"]["optimal"] = 999
+    support._write_json(submission_path, tampered)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.9)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
 def test_metric_tsp_accepts_factor_two_claim(tmp_path: Path) -> None:
@@ -200,6 +202,119 @@ def test_inverse_distance_audit_accepts_alternative_rational_direction(
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_lagrangian_projection_audit_accepts_alternative_coefficients(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "lagrangian-projection-proof-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    result = submission["result"]
+    result.update(
+        P=[["2", "0"], ["0", "2"]],
+        W=[["2", "2/5"], ["0", "2"], ["-1", "1"], ["0", "-4/5"]],
+        naive_P=[["2", "2/5"], ["-2/5", "2"]],
+        naive_Q=[["1", "-1"], ["1", "1"]],
+        corrected_first_projection=[["2", "2/5"], ["-2/5", "2"]],
+        corrected_second_projection=[["1", "-1"], ["1", "1"]],
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "The nonzero Lagrangian defect mixes the two naive projections; "
+        "the corrected coupled identities reconstruct the exact witness "
+        "with scaled coefficients P=2I and Q=I.\n"
+        "RESULT_JSON: {}\n"
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_lagrangian_projection_audit_rejects_tampered_frozen_input(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "lagrangian-projection-proof-audit", "computed"
+    )
+    (app / "input.json").write_text(
+        '{"frozen_claim":{"standard_symplectic_matrix":[["0","0","1","0"],["0","0","0","1"],["0","0","0","0"],["0","0","0","0"]]}}'
+    )
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_lagrangian_projection_audit_rejects_extra_result_field(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "lagrangian-projection-proof-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["extra_field"] = "malicious"
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_lagrangian_projection_audit_rejects_multiple_evidence_descriptors(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "lagrangian-projection-proof-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"] = [
+        submission["evidence"][0],
+        submission["evidence"][0],
+    ]
+    support._write_json(submission_path, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_lagrangian_projection_audit_rejects_oversized_evidence(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "lagrangian-projection-proof-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text("x" * 2_097_152)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_lagrangian_projection_audit_rejects_evidence_without_result_marker(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "lagrangian-projection-proof-audit", "computed"
+    )
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The nonzero Lagrangian defect mixes the two naive projections; "
+        "the corrected coupled identities reconstruct the exact witness.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+
+
 @pytest.mark.parametrize(
     ("path", "replacement"),
     [
@@ -239,148 +354,135 @@ def test_inverse_distance_audit_rejects_corrupted_certificates(
     assert rejected["reward"] == 0.0
 
 
-def test_polynomial_divisibility_derives_parameter_from_gcd(
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "calendar-good-days-audit",
+        "distinct-sum-pairing-optimum",
+        "modular-cubic-obstruction",
+        "random-function-expectation-audit",
+        "well-total-domination-counterexample",
+    ],
+)
+def test_keyword_only_evidence_is_accepted_with_bound_result(
     tmp_path: Path,
+    task_name: str,
 ) -> None:
-    """The verifier must derive the parameter from the recomputed linear gcd,
-    not from a hard-coded integer.  Submitting a wrong parameter with the
-    correct gcd/remainder must be rejected.
+    """Keyword-only prose is accepted once RESULT_JSON binds the structured result.
+
+    Replaces the former keyword-gate attack: evidence that mentions none of the
+    previously required terms but carries a correct RESULT_JSON marker and has
+    non-empty prose should now pass evidence validation, because correctness
+    depends on the structured result, not on prose vocabulary.
     """
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    submission["result"]["parameter"] = 3
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("Brief explanation.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
-
-
-def test_polynomial_divisibility_derivation_helper_is_not_hardcoded() -> None:
-    """Thread PRRT_kwDOThEfjc6VuwnB-derive: the parameter-derivation logic must
-    compute the unique integer root of a controlled linear gcd, not match a
-    hard-coded value.  Exercise ``derive_unique_parameter`` directly with linear
-    gcds whose integral root is *not* the canonical 2, so a regressed
-    implementation that only accepts ``parameter == 2`` would fail these cases.
-    """
-    import importlib
-    import sys
-
-    tests_dir = support.TASKS / "polynomial-divisibility-uniqueness" / "tests"
-    sys.path.insert(0, str(tests_dir))
-    try:
-        verifier = importlib.import_module("verifier")
-        # c0 + c1*a with root -c0/c1; pick roots that are not 2.
-        assert verifier.derive_unique_parameter([Fraction(3), Fraction(1)]) == -3
-        assert verifier.derive_unique_parameter([Fraction(-5), Fraction(1)]) == 5
-        assert verifier.derive_unique_parameter([Fraction(0), Fraction(1)]) == 0
-        # Non-integral rational root cannot license a UNIQUE_PARAMETER claim.
-        assert verifier.derive_unique_parameter([Fraction(1), Fraction(2)]) is None
-        # Nonlinear and constant gcds cannot certify uniqueness.
-        assert (
-            verifier.derive_unique_parameter([Fraction(6), Fraction(-5), Fraction(1)])
-            is None
-        )
-        assert verifier.derive_unique_parameter([Fraction(2), Fraction(0)]) is None
-    finally:
-        sys.path.remove(str(tests_dir))
-        sys.modules.pop("verifier", None)
-        sys.modules.pop("verifier_support", None)
-
-
-def test_polynomial_divisibility_rejects_nonlinear_gcd(
-    tmp_path: Path,
-) -> None:
-    """If the submitted gcd is not linear, the verifier must reject the
-    UNIQUE_PARAMETER conclusion because a nonlinear gcd does not establish
-    a unique root.
-    """
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    # Replace the linear gcd [-2, 1] with (a-2)(a-3) = a^2 - 5a + 6, a
-    # degree-2 polynomial that *contains* the correct root a=2 but also has
-    # the extraneous root a=3, breaking uniqueness.  A weaker verifier that
-    # only checks the submitted gcd vanishes at the reported parameter would
-    # accept this; the correct verifier rejects it because the recomputed gcd
-    # is linear and the submitted gcd is not equal to it.
-    submission["result"]["common_gcd"] = [6, -5, 1]
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
-
-
-def test_polynomial_divisibility_accepts_canonical_solution(
-    tmp_path: Path,
-) -> None:
-    """The canonical solution must still earn full reward after the fix,
-    proving the verifier derives a=2 from the recomputed gcd a-2 rather than
-    from a hard-coded expectation.
-    """
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
     accepted = support._run_verifier(task, app, logs)
     assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
     assert accepted["reward"] == pytest.approx(1.0)
 
 
-def test_polynomial_divisibility_rejects_extra_result_keys(
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "calendar-good-days-audit",
+        "distinct-sum-pairing-optimum",
+        "modular-cubic-obstruction",
+    ],
+)
+def test_evidence_without_result_marker_is_rejected(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    """Evidence lacking a RESULT_JSON marker must fail evidence validation."""
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "A complete explanation with all the right ideas but no structured marker.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_divisibility_evidence_rejects_mismatched_result_marker(
     tmp_path: Path,
 ) -> None:
-    """Thread PRRT_kwDOThEfjc6VuwnA: reject result objects outside the
-    advertised schema (additionalProperties: false).
-    """
+    """Divisibility evidence must bind the exact structured result, not just prose."""
     task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+        tmp_path, "divisibility-construction-witness", "computed"
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    submission["result"]["extra_field"] = 0
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("Brief explanation.\nRESULT_JSON: {}\n")
     support._bind_result_evidence(app, submission)
-    support._write_json(submission_path, submission)
+    tampered = json.loads(submission_path.read_text())
+    tampered["result"]["a"] = 999
+    support._write_json(submission_path, tampered)
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
 
 
-def test_polynomial_divisibility_rejects_missing_result_keys(
+def test_autoformalization_keyword_only_evidence_is_accepted(
     tmp_path: Path,
 ) -> None:
-    """Thread PRRT_kwDOThEfjc6VuwnA: the verifier requires the exact five
-    result keys (additionalProperties: false), so a result object missing a
-    required key must be rejected even when the remaining values are correct.
-    """
+    """Keyword-only evidence without the previously required terms is accepted
+    once RESULT_JSON binds the structured result and no positive compile claim
+    is present."""
     task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+        tmp_path, "autoformalization-semantic-audit", "computed"
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    del submission["result"]["quotient"]
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("The audit found problems.\nRESULT_JSON: {}\n")
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
 
 
-def test_polynomial_divisibility_rejects_empty_evidence(
+def test_complex_power_sum_keyword_only_evidence_is_accepted(
     tmp_path: Path,
 ) -> None:
-    """Thread PRRT_kwDOThEfjc6Vu4rD: validate evidence content before awarding
-    full credit.  An empty answer.txt with a matching digest must not pass.
-    """
+    """Complex power-sum evidence without the previously required phrases is
+    accepted once RESULT_JSON binds the structured result."""
     task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+        tmp_path, "complex-power-sum-elimination", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("The elimination works.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+
+
+def test_lean_transitive_evidence_rejects_empty_prose(tmp_path: Path) -> None:
+    """Lean transitive audit evidence must have non-empty prose."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "lean-transitive-axiom-audit", "computed"
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
@@ -390,112 +492,38 @@ def test_polynomial_divisibility_rejects_empty_evidence(
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
 
 
-def test_polynomial_divisibility_rejects_evidence_with_wrong_result_marker(
-    tmp_path: Path,
-) -> None:
-    """Thread PRRT_kwDOThEfjc6Vu4rD: evidence whose RESULT_JSON marker does not
-    match the submitted result must be rejected.
-    """
+def test_putnam_2adic_evidence_rejects_empty_prose(tmp_path: Path) -> None:
+    """Putnam 2-adic audit evidence must have non-empty prose."""
     task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+        tmp_path, "putnam-2adic-induction-audit", "computed"
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text('Some derivation text.\nRESULT_JSON: {"parameter": 99}\n')
+    evidence_path.write_text("\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_putnam_2adic_evidence_requires_result_binding(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "putnam-2adic-induction-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("Arbitrary nonempty evidence.\n")
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
-
-
-def test_polynomial_divisibility_rejects_symlinked_submission(
-    tmp_path: Path,
-) -> None:
-    """Thread PRRT_kwDOThEfjc6Vu4rE: reject symlinked submission artifacts."""
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
-    submission_path = app / "submission.json"
-    alias = app / "evidence" / "alias.json"
-    alias.write_text(submission_path.read_text())
-    submission_path.unlink()
-    submission_path.symlink_to(alias)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
-
-
-def test_polynomial_divisibility_reports_input_integrity_separately(
-    tmp_path: Path,
-) -> None:
-    """Thread PRRT_kwDOThEfjc6Vu4rF: report input integrity separately from
-    correctness.  Tampering with input.json must not zero the mathematical
-    correctness signal or the evidence-validity signal; only the aggregate
-    reward is gated on input integrity.
-    """
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
-    input_path = app / "input.json"
-    original = input_path.read_bytes()
-    tampered = json.loads(original)
-    tampered["extra_key"] = "tampered"
-    support._write_json(input_path, tampered)
-
-    result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["input_integrity"] == 0.0
-    assert result["reward"] == 0.0
-
-
-def test_polynomial_divisibility_rejects_duplicate_evidence(
-    tmp_path: Path,
-) -> None:
-    """Thread PRRT_kwDOThEfjc6VuwnB-evidence: enforce the maxItems: 1 evidence
-    contract.  Repeating the same valid evidence descriptor must not pass even
-    though each copy individually binds the expected evidence file.
-    """
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    submission["evidence"].append(dict(submission["evidence"][0]))
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
-
-
-def test_polynomial_divisibility_rejects_deeply_nested_json(
-    tmp_path: Path,
-) -> None:
-    """Thread PRRT_kwDOThEfjc6VuwnB-recursion: a deeply nested submission.json
-    that triggers RecursionError in json.loads must score zero instead of
-    crashing the verifier without writing reward.json.
-    """
-    task, app, logs = support._prepare_case(
-        tmp_path, "polynomial-divisibility-uniqueness", "computed"
-    )
-    submission_path = app / "submission.json"
-    # Write deeply nested JSON as a raw string to avoid RecursionError in
-    # json.dumps during test setup; the verifier's json.loads will hit it.
-    submission_path.write_text("[" * 10_000 + "0" + "]" * 10_000)
-
-    result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0

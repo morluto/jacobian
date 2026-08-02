@@ -20,6 +20,7 @@ import pytest
 
 from jacobian.contracts.discovery import ExperimentHandle
 from jacobian.contracts.search import ExperimentState
+from jacobian.experiments import ExperimentError, ExperimentService
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import RuntimeClosedError
 from jacobian.search import SearchError, SearchService
@@ -133,6 +134,79 @@ def test_close_quiesces_search_workers_before_closing_store(
         )
 
 
+def test_close_quiesces_enumeration_workers_before_closing_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(tmp_path)
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+    worker_errors: list[BaseException] = []
+
+    def blocked_run(service: ExperimentService, _experiment_uri: str) -> None:
+        worker_started.set()
+        release_worker.wait(timeout=2)
+        try:
+            service.store.register_descriptor(
+                kind="schema",
+                name="enumeration-worker-during-close",
+                version="1",
+                definition={"type": "object"},
+            )
+        except BaseException as exc:
+            worker_errors.append(exc)
+
+    monkeypatch.setattr(ExperimentService, "_run_enumeration", blocked_run)
+    runtime.services.experiments._launch_enumeration(
+        "experiment://runtime-enumeration-close"
+    )
+    assert worker_started.wait(timeout=1)
+
+    releaser = threading.Thread(target=lambda: (time.sleep(0.05), release_worker.set()))
+    releaser.start()
+    runtime.close()
+    releaser.join(timeout=1)
+
+    assert worker_errors == []
+    with pytest.raises(StoreClosedError):
+        runtime.core.store.register_descriptor(
+            kind="schema",
+            name="after-enumeration-worker-close",
+            version="1",
+            definition={"type": "object"},
+        )
+
+
+def test_enumeration_close_timeout_keeps_store_open_for_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(tmp_path)
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+
+    def blocked_run(_service: ExperimentService, _experiment_uri: str) -> None:
+        worker_started.set()
+        release_worker.wait(timeout=2)
+
+    monkeypatch.setattr(ExperimentService, "_run_enumeration", blocked_run)
+    runtime.services.experiments._launch_enumeration(
+        "experiment://runtime-enumeration-timeout"
+    )
+    assert worker_started.wait(timeout=1)
+
+    with pytest.raises(ExperimentError, match="did not quiesce"):
+        runtime.services.experiments.close(timeout_seconds=0)
+    runtime.core.store.register_descriptor(
+        kind="schema",
+        name="store-open-after-enumeration-timeout",
+        version="1",
+        definition={"type": "object"},
+    )
+    release_worker.set()
+    runtime.close()
+
+
 def test_close_waits_for_a_reserved_search_start_through_worker_launch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -174,6 +248,60 @@ def test_close_waits_for_a_reserved_search_start_through_worker_launch(
         release_start.set()
 
     releaser = threading.Thread(target=release_after_close_begins)
+    releaser.start()
+    runtime.close()
+    starter.join(timeout=1)
+    releaser.join(timeout=1)
+
+    assert start_errors == []
+    assert start_results == [
+        ExperimentHandle(
+            experiment_uri=experiment_uri,
+            state=ExperimentState.PENDING,
+        )
+    ]
+
+
+def test_close_waits_for_a_reserved_enumeration_start_through_worker_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(tmp_path)
+    start_reserved = threading.Event()
+    release_start = threading.Event()
+    start_results: list[ExperimentHandle] = []
+    start_errors: list[BaseException] = []
+    experiment_uri = "experiment://" + "b" * 32
+
+    def blocked_start(
+        service: ExperimentService,
+        _request: object,
+    ) -> ExperimentHandle:
+        start_reserved.set()
+        release_start.wait(timeout=2)
+        service._launch_enumeration(experiment_uri, lifecycle_reserved=True)
+        return ExperimentHandle(
+            experiment_uri=experiment_uri,
+            state=ExperimentState.PENDING,
+        )
+
+    monkeypatch.setattr(
+        ExperimentService,
+        "_start_enumeration_reserved",
+        blocked_start,
+    )
+    monkeypatch.setattr(ExperimentService, "_run_enumeration", lambda *_args: None)
+
+    def start_enumeration() -> None:
+        try:
+            start_results.append(runtime.services.experiments.start_enumeration({}))
+        except BaseException as exc:
+            start_errors.append(exc)
+
+    starter = threading.Thread(target=start_enumeration)
+    starter.start()
+    assert start_reserved.wait(timeout=1)
+    releaser = threading.Thread(target=lambda: (time.sleep(0.05), release_start.set()))
     releaser.start()
     runtime.close()
     starter.join(timeout=1)

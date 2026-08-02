@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/comparison-report.schema.json",
+  "title": "Jacobian paired public workflow comparison",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_class", "causal_claim_authorized", "status", "dataset", "source_sha", "conditions", "pair_count", "metrics", "validation_failures"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "evidence_class": {"enum": ["public-workflow-comparison", "held-out-comparison"]},
+    "causal_claim_authorized": {"const": false},
+    "status": {"enum": ["VALID", "INVALID"]},
+    "dataset": {"type": ["string", "null"]},
+    "source_sha": {"type": ["string", "null"]},
+    "conditions": {"type": "object"},
+    "pair_count": {"type": "integer", "minimum": 0},
+    "metrics": {"type": "object"},
+    "validation_failures": {"type": "array", "items": {"type": "string"}}
+  }
+}

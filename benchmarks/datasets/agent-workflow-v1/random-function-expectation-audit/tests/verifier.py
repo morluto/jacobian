@@ -27,8 +27,9 @@ def evidence_matches_result(evidence, result):
             for line in text.splitlines()
             if line.startswith("RESULT_JSON:")
         )
-        return json.loads(marker) == result and all(
-            term in text for term in ("probability", "expectation", "65000")
+        return json.loads(marker) == result and any(
+            line.strip() and not line.startswith("RESULT_JSON:")
+            for line in text.splitlines()
         )
     except (OSError, StopIteration, UnicodeError, ValueError):
         return False

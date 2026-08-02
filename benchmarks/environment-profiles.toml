@@ -1,0 +1,19 @@
+schema_version = "1"
+
+[profiles.core-python]
+agent_image = "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
+verifier_image = "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+verifier_runtime_digest = "sha256:9d0be5300d435988ea50f1e27f805250784992cad86ff1b7f448fa145a320f78"
+allow_apt = false
+
+[profiles.core-python-minimal-verifier]
+agent_image = "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
+verifier_image = "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
+verifier_runtime_digest = "sha256:9d0be5300d435988ea50f1e27f805250784992cad86ff1b7f448fa145a320f78"
+allow_apt = false
+
+[profiles.uv-provider]
+agent_image = "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+verifier_image = "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
+verifier_runtime_digest = "sha256:9d0be5300d435988ea50f1e27f805250784992cad86ff1b7f448fa145a320f78"
+allow_apt = true

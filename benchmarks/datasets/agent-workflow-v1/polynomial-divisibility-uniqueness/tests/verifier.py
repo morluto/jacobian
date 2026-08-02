@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -124,6 +125,16 @@ def integers(value: Any) -> list[int] | None:
     return [int(x) for x in value]
 
 
+def integer_value(value: Any) -> int | None:
+    """Normalize a JSON number accepted by the schema's ``integer`` type."""
+
+    if type(value) is int:
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return None
+
+
 def load_regular_submission() -> dict[str, Any] | None:
     """Parse the submission, rejecting symlinked submission artifacts.
 
@@ -136,7 +147,7 @@ def load_regular_submission() -> dict[str, Any] | None:
     """
     path = WORKSPACE / "submission.json"
     try:
-        if path.is_symlink():
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 1_048_576:
             return None
         root = WORKSPACE.resolve()
         target = path.resolve(strict=True)
@@ -155,7 +166,8 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
 
     Rejects empty or arbitrary evidence text: the file must contain a
     ``RESULT_JSON:`` marker matching the submitted result object and a
-    non-empty human-readable derivation body.  The evidence list must contain
+    non-empty human-readable derivation body with concrete certificate values.
+    The evidence list must contain
     exactly one descriptor (submission_schema.json sets maxItems: 1).
     """
     if not isinstance(evidence, list) or len(evidence) != 1:
@@ -180,19 +192,48 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
         )
         body = "\n".join(line for line in lines if not line.startswith("RESULT_JSON:"))
         lowered = body.lower()
+        compact = "".join(lowered.split())
+        parameter = integer_value(result.get("parameter")) if isinstance(result, dict) else None
+        expected_fragments = (
+            f"r0={result.get('remainder_constant')}",
+            f"r1={result.get('remainder_x')}",
+            f"gcd={result.get('common_gcd')}",
+            f"quotient={result.get('quotient')}",
+        )
         return (
             json.loads(marker) == result
             and len(body) >= 80
             and "gcd" in lowered
             and "remainder" in lowered
             and ("product" in lowered or "multiplication" in lowered)
-            and f"a={result.get('parameter')}" in lowered.replace(" ", "")
-            and "a-2" in lowered.replace(" ", "")
+            and parameter is not None
+            and f"a={parameter}" in compact
+            and "a-2" in compact
+            and all(fragment.replace(" ", "") in compact for fragment in expected_fragments)
         )
     except (OSError, StopIteration, UnicodeError, ValueError, RecursionError):
         return False
 
 
+def limitation_is_bounded(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    lowered = value.casefold()
+    bounded_language = (
+        "only",
+        "specific",
+        "frozen",
+        "limited",
+        "restricted",
+        "not general",
+        "does not generalize",
+        "no general",
+    )
+    return (
+        "polynomial" in lowered
+        and "family" in lowered
+        and any(phrase in lowered for phrase in bounded_language)
+    )
 def main() -> None:
     submission = load_regular_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -227,6 +268,7 @@ def main() -> None:
     gcd = integers(result_typed.get("common_gcd"))
     quotient = integers(result_typed.get("quotient"))
     parameter = result_typed.get("parameter")
+    parameter_value = integer_value(parameter)
 
     computed_r0, computed_r1 = symbolic_remainder()
     computed_gcd = monic_gcd(computed_r0, computed_r1)
@@ -248,10 +290,10 @@ def main() -> None:
         and parameter_is_integer
     )
     quotient_ok = (
-        type(parameter) is int
-        and parameter == derived_parameter_int
+        parameter_value is not None
+        and parameter_value == derived_parameter_int
         and quotient is not None
-        and trim(multiply([parameter, -1, 1], trim(quotient)))
+        and trim(multiply([parameter_value, -1, 1], trim(quotient)))
         == [90, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
     )
     # Thread 4: keep mathematical correctness independent of input integrity.
@@ -270,13 +312,7 @@ def main() -> None:
     limitations_correct = bool(
         contract
         and isinstance(data.get("limitations"), list)
-        and any(
-            isinstance(item, str)
-            and "polynomial" in item.casefold()
-            and "family" in item.casefold()
-            and "not" in item.casefold()
-            for item in data["limitations"]
-        )
+        and any(limitation_is_bounded(item) for item in data["limitations"])
     )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False

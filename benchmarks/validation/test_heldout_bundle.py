@@ -127,9 +127,7 @@ def _bundle(tmp_path: Path, value: dict) -> Path:
                 "",
             ]
         )
-    (dataset / "dataset.toml").write_text(
-        "\n".join(dataset_entries), encoding="utf-8"
-    )
+    (dataset / "dataset.toml").write_text("\n".join(dataset_entries), encoding="utf-8")
     value["dataset"]["manifest_digest"] = _digest(dataset / "dataset.toml")
     return root
 
@@ -192,8 +190,8 @@ def test_bundle_rejects_dataset_manifest_task_drift(
     monkeypatch.setattr(heldout_bundle, "task_digest", lambda _path: "a" * 64)
     manifest = root / value["dataset"]["path"] / "dataset.toml"
     manifest.write_text(
-        "[dataset]\nname = \"jacobian/capability-held-out-v1\"\n\n"
-        "[[tasks]]\nname = \"jacobian/held-out-0\"\n"
+        '[dataset]\nname = "jacobian/capability-held-out-v1"\n\n'
+        '[[tasks]]\nname = "jacobian/held-out-0"\n'
         f'digest = "{value["tasks"][0]["digest"]}"\n',
         encoding="utf-8",
     )

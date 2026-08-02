@@ -166,22 +166,19 @@ def test_comparison_derives_heldout_class_from_both_inputs() -> None:
 
 
 def test_comparison_rejects_same_condition_inputs() -> None:
-    report = compare_evidence(
-        _evidence("control", [1.0]), _evidence("control", [1.0])
-    )
+    report = compare_evidence(_evidence("control", [1.0]), _evidence("control", [1.0]))
 
     assert report["status"] == "INVALID"
-    assert "conditions must be a distinct control/treatment or C1/C2 pair" in report[
-        "validation_failures"
-    ]
+    assert (
+        "conditions must be a distinct control/treatment or C1/C2 pair"
+        in report["validation_failures"]
+    )
 
 
 def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> None:
     control = {
         "environment": {
-            "extra_docker_compose": [
-                "benchmarks/config/agent-eval-proxy.compose.yaml"
-            ]
+            "extra_docker_compose": ["benchmarks/config/agent-eval-proxy.compose.yaml"]
         },
         "agents": [{"name": "codex"}],
     }
@@ -811,12 +808,15 @@ def test_heldout_artifact_source_paths_include_pair_and_condition(
 
     assert artifacts_0[0]["source_path"].startswith("copy-token-0-r001/C1/")
     assert artifacts_1[0]["source_path"].startswith("copy-token-0-r002/C1/")
-    assert _artifact_source_reuse(
-        [
-            {"trial_name": "attempt-0", "artifacts": artifacts_0},
-            {"trial_name": "attempt-1", "artifacts": artifacts_1},
-        ]
-    ) == []
+    assert (
+        _artifact_source_reuse(
+            [
+                {"trial_name": "attempt-0", "artifacts": artifacts_0},
+                {"trial_name": "attempt-1", "artifacts": artifacts_1},
+            ]
+        )
+        == []
+    )
 
 
 # ---------------------------------------------------------------------------

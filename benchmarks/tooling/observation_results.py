@@ -383,9 +383,7 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
         compose = environment.get("extra_docker_compose")
         if isinstance(compose, list):
             environment["extra_docker_compose"] = [
-                value
-                for value in compose
-                if Path(str(value)).name != "c2.compose.json"
+                value for value in compose if Path(str(value)).name != "c2.compose.json"
             ]
     for agent in normalized.get("agents", []):
         if isinstance(agent, dict):
@@ -1313,9 +1311,7 @@ def _comparison_failures(
         ("control", "treatment"),
         ("C1", "C2"),
     }:
-        failures.append(
-            "conditions must be a distinct control/treatment or C1/C2 pair"
-        )
+        failures.append("conditions must be a distinct control/treatment or C1/C2 pair")
     failures.extend(
         f"{name} evidence has an invalid public-claim boundary"
         for name, value in (("control", control), ("treatment", treatment))

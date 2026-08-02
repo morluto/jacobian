@@ -148,9 +148,7 @@ def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
     try:
         dataset_value = tomllib.loads(dataset_manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise HarborSuiteError(
-            f"held-out dataset manifest is invalid: {exc}"
-        ) from exc
+        raise HarborSuiteError(f"held-out dataset manifest is invalid: {exc}") from exc
     entries = dataset_value.get("tasks") if isinstance(dataset_value, dict) else None
     if not isinstance(entries, list):
         raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")

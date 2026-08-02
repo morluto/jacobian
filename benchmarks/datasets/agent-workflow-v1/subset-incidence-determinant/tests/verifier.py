@@ -15,6 +15,16 @@ TESTS = Path("/tests")
 LIMITATION = "The verifier checks a complete finite incidence factorization and the general counting formula but does not replay the universal theorem in Lean."
 
 
+def _is_int(value: object) -> bool:
+    """Accept only genuine integers, rejecting JSON booleans.
+
+    Python treats ``True == 1`` and ``False == 0``, so plain equality or
+    isinstance checks would let booleans pass the agent-visible
+    ``enum: [-1, 1]`` and numeric contracts.
+    """
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _source() -> dict[str, Any]:
     try:
         raw = (TESTS / "input.json").read_bytes()
@@ -58,11 +68,18 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     if (
         provenance.get("revision") != "dfb0a47a1c1ec3a10f2a9acfdf41a2043920f33c"
         or n != 5
+        or not _is_int(value["sample_n"])
         or value["sample_n"] != n
     ):
         return False
     order = value["mask_order"]
     weights = value["diagonal_weights"]
+    # Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in mask_order.
+    if not isinstance(order, list) or not all(_is_int(m) for m in order):
+        return False
+    # Thread PRRT_kwDOThEfjc6VuwyR: reject booleans in diagonal_weights.
+    if not isinstance(weights, list) or not all(_is_int(w) for w in weights):
+        return False
     expected_order = sorted(range(1, 2**n), key=lambda mask: (mask.bit_count(), mask))
     expected_weights = [1 if mask.bit_count() % 2 else -1 for mask in expected_order]
     if (
@@ -82,6 +99,20 @@ def _result(value: object, source: dict[str, Any]) -> bool:
         }
         for k in range(1, source["trace_max_n"] + 1)
     ]
+    # Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in trace numeric fields.
+    for entry in trace:
+        if not isinstance(entry, dict) or set(entry) != {
+            "n",
+            "even_nonempty_count",
+            "determinant",
+        }:
+            return False
+        if not (
+            _is_int(entry["n"])
+            and _is_int(entry["even_nonempty_count"])
+            and _is_int(entry["determinant"])
+        ):
+            return False
     return bool(
         trace == expected_trace
         and value["general_even_count"] == "2^(n-1)-1"
@@ -90,9 +121,12 @@ def _result(value: object, source: dict[str, Any]) -> bool:
 
 
 def _evidence(value: object) -> bool:
+    # Thread PRRT_kwDOThEfjc6Vu43q: enforce the agent-visible maxItems: 1
+    # contract on the evidence list before resolving any descriptor.
+    if not isinstance(value, list) or len(value) != 1:
+        return False
     if not evidence_list_is_bound(value):
         return False
-    assert isinstance(value, list)
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:
         return False

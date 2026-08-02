@@ -1,0 +1,14 @@
+{
+  "task_id": "jacobian/squarefree-class-independence-audit",
+  "source": {
+    "dataset": "lm-provers/FineProofs-SFT",
+    "revision": "73661e62811cf2940a0d3f82788a4f4332204c2f",
+    "config": "default",
+    "split": "train",
+    "row": 4,
+    "canonical_row_sha256": "sha256:d221d45dfd530c3892d960f7685fd5caabcdec5079b4122731bebeab79aad52d",
+    "license": "Apache-2.0"
+  },
+  "problem": "A finite set S of positive integers has exactly 2023 ordered pairs (x,y) for which xy is a square. Prove that S contains four distinct elements whose pairwise products are all nonsquares.",
+  "certificate_bounds": {"minimum_modulus": 2, "maximum_modulus": 64}
+}

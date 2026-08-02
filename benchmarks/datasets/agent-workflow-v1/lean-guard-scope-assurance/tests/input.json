@@ -1,0 +1,19 @@
+{
+  "task_id": "jacobian/lean-guard-scope-assurance",
+  "source": {
+    "repository": "https://github.com/Shashi456/atp-checkers",
+    "revision": "3e7e99d027fece04d9cd96288cdd040c366458e5",
+    "path": "test/PrefixScopeTests.lean",
+    "file_sha256": "sha256:678168bc51f11d4c436a09343afad408f62b36fd8ff11a5446cbb5cfb5033214",
+    "license": "MIT"
+  },
+  "cases": [
+    {"id": "guard_after_binder", "operation": "nat_div", "numerator": "a", "divisor": "b", "result_type": "Nat", "guard": "b_ne_zero", "guard_position": "after_expression_binder", "expression_location": "data_binder_type"},
+    {"id": "allzero_div_one", "operation": "custom_div", "numerator": "zero", "divisor": "one", "result_type": "AllZero", "ofnat_zero_equals_one": true, "expression_location": "definition_value"},
+    {"id": "allzero_bad_lt_guard", "operation": "custom_div", "numerator": "x", "divisor": "one", "result_type": "AllZero", "ofnat_zero_equals_one": true, "lt_is_universal": true, "guard": "zero_lt_one", "expression_location": "definition_value"},
+    {"id": "proof_term_noise", "operation": "nat_div_and_sub", "divisor": "zero", "subtrahend_exceeds_minuend": true, "expression_location": "proof_term", "declaration_kind": "theorem"},
+    {"id": "zero_over_variable", "operation": "nat_div", "numerator": "zero", "divisor": "x", "result_type": "Nat", "guard": null, "expression_location": "definition_value"}
+  ],
+  "allowed_findings": ["DIVISION_BY_ZERO", "INTEGER_DIVISION_TRUNCATION", "NAT_SUBTRACTION_TRUNCATION"],
+  "assurance_ceiling": "COMPUTED"
+}

@@ -1,0 +1,104 @@
+{
+  "task_id": "jacobian/exponential-moment-rationality",
+  "conclusion": "BRANCH_COMPLETE_FORMULAS_CERTIFIED",
+  "result": {
+    "variables": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "generic_formula": {
+      "numerator": [
+        {
+          "exponents": [
+            0,
+            0,
+            3,
+            0
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "coefficient": "-2"
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            0,
+            2
+          ],
+          "coefficient": "1"
+        }
+      ],
+      "denominator": [
+        {
+          "exponents": [
+            0,
+            2,
+            0,
+            0
+          ],
+          "coefficient": "-1"
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            1,
+            0
+          ],
+          "coefficient": "1"
+        }
+      ]
+    },
+    "singular_formula": {
+      "numerator": [
+        {
+          "exponents": [
+            0,
+            4,
+            0,
+            0
+          ],
+          "coefficient": "1"
+        }
+      ],
+      "denominator": [
+        {
+          "exponents": [
+            3,
+            0,
+            0,
+            0
+          ],
+          "coefficient": "1"
+        }
+      ]
+    },
+    "branch_partition": [
+      "GENERIC_DENOMINATOR_NONZERO",
+      "RANK_ONE_X_EQUALS_Y"
+    ],
+    "rationality_conclusion": "E_RATIONAL_IN_BOTH_BRANCHES"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "TWO_ATOM_REAL_EXPONENTIAL_MOMENTS_GENERIC_AND_RANK_ONE_BRANCHES",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:269714dafb65630e10283204bad5a98bd50a5a0ddefead827a5b803915341aff"
+    }
+  ],
+  "limitations": [
+    "No proof assistant independently certifies the real-exponential branch argument."
+  ]
+}

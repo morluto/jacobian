@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "indexed-pairwise-vacuity",
+  "analysis": {
+    "mathematical_moves": [
+      "Distinguish value-level pairwise predicates from indexed pairwise predicates and exhibit the vacuity through an exact finite cover artifact."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep indexed references and range-level semantics explicit, with bounded integer parsing for witness artifacts."
+  }
+}

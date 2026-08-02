@@ -1,0 +1,38 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/continuant-reversal-certificate"
+version = "1.0.0"
+description = "Certify reversal symmetry of a variable-coefficient recurrence through path tilings."
+keywords = ["recurrence", "continuant", "tilings", "involution"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+field = "combinatorics"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-symbolic-proof"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "symbolic-recurrence", "involution", "offline"]
+case_version = "agent-workflow-v1"
+contamination_class = "public-dataset-derived-symbolic-proof"
+fixture_digest = "sha256:bdf323a795b7d890bb836e68c181cc2cbd8c66efcc68aac2ca7e5b376efe97d4"
+derivation = "Derived from lm-provers/FineProofs-SFT default train row 302 at revision 73661e62811cf2940a0d3f82788a4f4332204c2f."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

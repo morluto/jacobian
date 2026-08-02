@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/covering-path-lift-bijection"},
+    "conclusion": {"enum": ["FIBERS_BIJECTED_BY_PATH_LIFTING", "INVALID_COVER", "INSUFFICIENT_EVIDENCE"]},
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["base_path", "reverse_path", "forward_lifts", "reverse_lifts", "bijection", "local_covering_checked"],
+      "properties": {
+        "base_path": {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "string"}, "uniqueItems": true},
+        "reverse_path": {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "string"}, "uniqueItems": true},
+        "forward_lifts": {"$ref": "#/$defs/lifts"},
+        "reverse_lifts": {"$ref": "#/$defs/lifts"},
+        "bijection": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "items": {"type": "object", "additionalProperties": false, "required": ["source", "target"], "properties": {"source": {"type": "string"}, "target": {"type": "string"}}}
+        },
+        "local_covering_checked": {"const": true}
+      }
+    },
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "scope": {"type": "string"},
+    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "lifts": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["start", "trace", "endpoint"],
+        "properties": {"start": {"type": "string"}, "trace": {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "string"}}, "endpoint": {"type": "string"}}
+      }
+    }
+  }
+}

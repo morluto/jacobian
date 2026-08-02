@@ -107,6 +107,10 @@ def test_resource_derived_oracles_and_assurance_boundary(
             lambda result: result["table"][1].__setitem__(1, 2),
         ),
         (
+            "gaussian-moment-generality-audit",
+            lambda result: result["v_coefficients"].__setitem__(2, "-1/3"),
+        ),
+        (
             "matrix-square-zero-counterexample",
             lambda result: result.update(matrix=[[1, 0], [0, 0]]),
         ),
@@ -117,6 +121,10 @@ def test_resource_derived_oracles_and_assurance_boundary(
         (
             "polynomial-tail-counterexample",
             lambda result: result.update(x2="1"),
+        ),
+        (
+            "polynomial-divisibility-uniqueness",
+            lambda result: result["remainder_x"].__setitem__(0, 3),
         ),
         (
             "subspace-direct-sum-counterexample",

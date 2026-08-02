@@ -1,0 +1,2 @@
+{"task_id":"jacobian/indexed-pairwise-vacuity","source":{"repository":"google-deepmind/formal-conjectures","issue":4045,"commit":"71d34fc2958f1010ee43ccd4d54a9631574d7ef9","license":"Apache-2.0"},"bounds":{"minimum_modulus":8,"maximum_modulus":24,"minimum_cosets":4,"minimum_coset_size":2},"group_model":"additive_ZMod_n","assurance_ceiling":"COMPUTED"}
+

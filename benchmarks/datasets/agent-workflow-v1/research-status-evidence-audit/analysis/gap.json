@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "research-status-evidence-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Separate direct resolution, partial progress, historical openness, and bare problem-listing evidence.",
+      "Select only citations sufficient for each classification and enumerate unsupported inferences.",
+      "Calibrate current-status claims against a frozen evidence cutoff without treating search absence as proof."
+    ],
+    "current_capabilities": [],
+    "gap_classes": [
+      "MISSING_OPERATION",
+      "WEAK_DISCOVERY"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "citation-status-evidence-audit"
+    ],
+    "disposition": "ACCEPT_CANDIDATE",
+    "next_action": "Use this as a regression case for citation sufficiency and evidence-bound research-status classification before stabilizing a provenance-audit capability."
+  }
+}

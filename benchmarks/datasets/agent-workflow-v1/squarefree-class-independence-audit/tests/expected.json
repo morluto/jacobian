@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/squarefree-class-independence-audit",
+  "conclusion": "FOUR_ELEMENT_INDEPENDENT_SUBSET_FORCED",
+  "maximum_assurance": "COMPUTED",
+  "required_scope": "ALL_FINITE_SETS_OF_POSITIVE_INTEGERS_WITH_2023_SQUARE_PRODUCT_ORDERED_PAIRS"
+}

@@ -275,8 +275,8 @@ def _execute_run(
 
 def _budget_exceeded(ledger: dict[str, Any]) -> bool:
     return bool(
-        ledger["usage"]["tokens"] > ledger["budget"]["max_tokens"]
-        or ledger["usage"]["cost_usd"] > ledger["budget"]["max_cost_usd"]
+        ledger["usage"]["tokens"] >= ledger["budget"]["max_tokens"]
+        or ledger["usage"]["cost_usd"] >= ledger["budget"]["max_cost_usd"]
     )
 
 

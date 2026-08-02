@@ -114,7 +114,19 @@ def _expected_tasks(job: dict[str, Any], known: set[str]) -> set[str]:
         if not isinstance(item, dict):
             continue
         names = item.get("task_names")
-        selected.update(known if names is None else names)
+        if names is None:
+            selected.update(known)
+            continue
+        if not isinstance(names, list) or not all(
+            isinstance(name, str) for name in names
+        ):
+            raise HarborSuiteError("job task_names must be a list of strings")
+        selected.update(names)
+    unknown = sorted(selected - known)
+    if unknown:
+        raise HarborSuiteError(
+            "job selects tasks outside the declared dataset: " + ", ".join(unknown)
+        )
     return selected or known
 
 
@@ -132,6 +144,14 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
         if isinstance(agent, dict):
             agent.pop("mcp_servers", None)
     return normalized
+
+
+def _normalize_eval_args(eval_args: str | None) -> list[str]:
+    if not eval_args:
+        return []
+    import shlex
+
+    return shlex.split(eval_args)
 
 
 def _timing_seconds(value: Any) -> float | None:
@@ -323,6 +343,7 @@ def build_observation_evidence(
     result_path: Path | None = None,
     runtime_snapshot: dict[str, Any] | None = None,
     heldout_manifest: dict[str, Any] | None = None,
+    eval_args: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     job = _read_json(job_path)
     if not isinstance(job, dict):
@@ -449,7 +470,12 @@ def build_observation_evidence(
         "job": {
             "path": _display_path(job_path),
             "digest": _sha256(job_path),
-            "comparison_signature": _json_digest(_comparison_job(job)),
+            "comparison_signature": _json_digest(
+                {
+                    "job": _comparison_job(job),
+                    "eval_args": _normalize_eval_args(eval_args),
+                }
+            ),
             "n_attempts": attempts,
         },
         "runtime_snapshot": runtime,
@@ -550,6 +576,18 @@ def _comparison_failures(
     )
     if control.get("fixed_invariants") != treatment.get("fixed_invariants"):
         failures.append("fixed invariants differ")
+    control_trial_digests = {
+        item.get("raw_result_digest")
+        for item in control.get("trials", [])
+        if isinstance(item, dict) and item.get("raw_result_digest")
+    }
+    treatment_trial_digests = {
+        item.get("raw_result_digest")
+        for item in treatment.get("trials", [])
+        if isinstance(item, dict) and item.get("raw_result_digest")
+    }
+    if control_trial_digests & treatment_trial_digests:
+        failures.append("control and treatment reuse a normalized trial artifact")
     if control.get("job", {}).get("comparison_signature") != treatment.get(
         "job", {}
     ).get("comparison_signature"):
@@ -903,6 +941,7 @@ def main() -> int:
     validate_parser.add_argument("--result", type=Path)
     validate_parser.add_argument("--runtime-snapshot", type=Path)
     validate_parser.add_argument("--heldout-manifest", type=Path)
+    validate_parser.add_argument("--eval-args")
     validate_parser.add_argument("--output", type=Path, required=True)
     collect_parser = subparsers.add_parser("collect-heldout")
     collect_parser.add_argument("--run-plan", type=Path, required=True)
@@ -926,6 +965,7 @@ def main() -> int:
             result_path=args.result,
             runtime_snapshot=runtime,
             heldout_manifest=heldout,
+            eval_args=args.eval_args,
         )
         _validate_contract(evidence, "observation-evidence.schema.json")
         args.output.parent.mkdir(parents=True, exist_ok=True)

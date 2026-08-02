@@ -258,9 +258,7 @@ def plan(
         raise ValueError(f"unsupported benchmark event: {event}")
     if force_full or event in {"schedule", "workflow_dispatch"}:
         reason = "forced full portfolio" if force_full else f"{event} full portfolio"
-        return _forced_full_plan(
-            paths=paths, base=base, timings=timings, reason=reason
-        )
+        return _forced_full_plan(paths=paths, base=base, timings=timings, reason=reason)
 
     benchmark_paths = [
         path
@@ -441,16 +439,28 @@ def main() -> int:
     try:
         timings: dict[str, float] | None = None
         if args.timings_file is not None:
-            raw_timings = json.loads(args.timings_file.read_text(encoding="utf-8"))
-            if not isinstance(raw_timings, dict) or not all(
-                isinstance(key, str)
-                and isinstance(value, (int, float))
-                and not isinstance(value, bool)
-                and value > 0
-                for key, value in raw_timings.items()
-            ):
-                parser.error("timings file must map task keys to positive seconds")
-            timings = {key: float(value) for key, value in raw_timings.items()}
+            try:
+                raw_timings = json.loads(args.timings_file.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                print(
+                    f"warning: ignoring invalid benchmark timings file: {exc}",
+                    file=sys.stderr,
+                )
+            else:
+                valid = isinstance(raw_timings, dict) and all(
+                    isinstance(key, str)
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and value > 0
+                    for key, value in raw_timings.items()
+                )
+                if not valid:
+                    print(
+                        "warning: ignoring incompatible benchmark timings file",
+                        file=sys.stderr,
+                    )
+                else:
+                    timings = {key: float(value) for key, value in raw_timings.items()}
         for key, value in plan(
             paths,
             event=args.event,

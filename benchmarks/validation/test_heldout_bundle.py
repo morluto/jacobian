@@ -313,6 +313,7 @@ def test_complete_plan_collects_exact_pairs_and_derives_heldout_report(
                     "task_name": f"jacobian/{run['task']}",
                     "task_checksum": "sha256:" + "a" * 64,
                     "trial_name": "attempt-0",
+                    "condition": run["condition"],
                     "agent_info": {
                         "name": "codex",
                         "version": "1.2.3",

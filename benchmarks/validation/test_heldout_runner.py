@@ -99,6 +99,17 @@ def test_runner_marks_pair_boundary_budget_overage_incomplete(tmp_path: Path) ->
     assert "pair boundary" in ledger["validation_failures"][0]
 
 
+def test_runner_stops_at_an_exact_pair_budget_boundary(tmp_path: Path) -> None:
+    plan = _plan(tmp_path, max_tokens=30)
+    calls, runner = _runner()
+
+    ledger = execute_plan(plan, tmp_path / "ledger.json", command_runner=runner)
+
+    assert len(calls) == 2
+    assert ledger["status"] == "INCOMPLETE"
+    assert "pair boundary" in ledger["validation_failures"][0]
+
+
 def test_runner_fails_closed_when_accounting_is_missing(tmp_path: Path) -> None:
     plan = _plan(tmp_path)
     _calls, runner = _runner(missing_cost=True)

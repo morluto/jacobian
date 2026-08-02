@@ -27,8 +27,9 @@ def _evidence(condition: str, correctness: list[float]) -> dict:
                     "scope_accuracy": 1.0,
                     "assurance_calibration": 1.0,
                     "reward": reward,
+                    "false_certification": False,
                 },
-                "false_certification": False,
+                "false_certification": 0.0,
                 "tokens": {"input": 10, "output": 5},
                 "cost_usd": 0.01,
                 "agent_seconds": 2.0,
@@ -55,7 +56,10 @@ def _evidence(condition: str, correctness: list[float]) -> dict:
             "sampling_seed": None,
             "sampling_deterministic": False,
         },
-        "result": {"path": "result.json", "digest": "sha256:" + "d" * 64},
+        "result": {
+            "path": "result.json",
+            "digest": "sha256:" + ("d" if condition in {"control", "C1"} else "e") * 64,
+        },
         "trials": trials,
         "validation_failures": [],
     }
@@ -105,6 +109,19 @@ def test_comparison_rejects_duplicate_pair_keys() -> None:
 
     assert report["status"] == "INVALID"
     assert "duplicate" in " ".join(report["validation_failures"])
+
+
+def test_comparison_rejects_reused_result_artifact() -> None:
+    control = _evidence("control", [1.0])
+    treatment = _evidence("treatment", [1.0])
+    shared_digest = "sha256:" + "f" * 64
+    control["trials"][0]["raw_result_digest"] = shared_digest
+    treatment["trials"][0]["raw_result_digest"] = shared_digest
+
+    report = compare_evidence(control, treatment)
+
+    assert report["status"] == "INVALID"
+    assert any("normalized trial artifact" in item for item in report["validation_failures"])
 
 
 def test_comparison_derives_heldout_class_from_both_inputs() -> None:

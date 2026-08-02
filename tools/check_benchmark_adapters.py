@@ -66,6 +66,37 @@ def _semantic_failures(
                     f"{_display(lock_path)}: duplicate output {pair[0]}/{pair[1]}"
                 )
             pairs.add(pair)
+            dataset = output.get("dataset")
+            task_id = output.get("task_id")
+            if not isinstance(dataset, str) or not isinstance(task_id, str):
+                continue
+            task_dir = ROOT / "benchmarks" / "datasets" / dataset / task_id
+            if not task_dir.is_dir():
+                failures.append(
+                    f"{_display(lock_path)}: generated task is missing: "
+                    f"benchmarks/datasets/{dataset}/{task_id}"
+                )
+                continue
+            try:
+                from benchmarks.tooling.harbor_suite import (
+                    HarborSuiteError,
+                    task_digest,
+                )
+
+                actual_digest = task_digest(task_dir)
+            except (HarborSuiteError, OSError, RuntimeError, ValueError) as exc:
+                failures.append(
+                    f"{_display(lock_path)}: unable to digest generated task "
+                    f"{dataset}/{task_id}: {exc}"
+                )
+            else:
+                declared_digest = str(output.get("task_digest", ""))
+                if actual_digest != declared_digest:
+                    failures.append(
+                        f"{_display(lock_path)}: task digest mismatch for "
+                        f"{dataset}/{task_id}: declared={declared_digest}, "
+                        f"actual={actual_digest}"
+                    )
     return failures
 
 

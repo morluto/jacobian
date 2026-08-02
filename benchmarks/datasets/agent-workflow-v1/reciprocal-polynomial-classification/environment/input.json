@@ -1,0 +1,1 @@
+{"task_id":"jacobian/reciprocal-polynomial-classification","functional_equation":"1/P(z)+1/P(1/z)=z+1/z","coefficient_domain":"ZZ","parameter_bounds":{"minimum":6,"maximum":20},"classification_family":"P_m(z)=sum_(j=0)^(m-1) (-1)^j z^(2j+1)","target":"exact family-member and cleared Laurent-identity certificate"}

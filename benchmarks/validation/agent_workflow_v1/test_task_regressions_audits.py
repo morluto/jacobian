@@ -1090,3 +1090,78 @@ def test_indexed_pairwise_vacuity_accepts_unordered_elements(tmp_path: Path) -> 
 
     accepted = support._run_verifier(task, app, logs)
     assert accepted["correctness"] == 1.0
+
+
+def test_reciprocal_polynomial_classification_accepts_oracle(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "reciprocal-polynomial-classification", "computed"
+    )
+    target = app / "evidence" / "classification-certificate.json"
+    target.write_bytes((task / "solution" / target.name).read_bytes())
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_reciprocal_polynomial_classification_accepts_alternative_member(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "reciprocal-polynomial-classification", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    m = 7
+    quotient = [
+        {"exponent": 2 * index, "coefficient": (-1) ** index} for index in range(m)
+    ]
+    result = submission["result"]
+    result.update(
+        {
+            "m": m,
+            "polynomial_terms": [
+                {"exponent": item["exponent"] + 1, "coefficient": item["coefficient"]}
+                for item in quotient
+            ],
+            "quotient_terms": quotient,
+            "reverse_terms": quotient,
+            "reverse_quotient_constant": 1,
+            "degree": 13,
+            "quotient_degree": 12,
+        }
+    )
+    target = app / "evidence" / "classification-certificate.json"
+    certificate = json.loads(
+        (task / "solution" / "classification-certificate.json").read_text()
+    )
+    certificate["result"] = result
+    support._write_json(target, certificate)
+    submission["evidence"][0]["sha256"] = support._digest(target)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_reciprocal_polynomial_classification_rejects_corrupted_coefficient(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "reciprocal-polynomial-classification", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["polynomial_terms"][3]["coefficient"] = 1
+    target = app / "evidence" / "classification-certificate.json"
+    certificate = json.loads(
+        (task / "solution" / "classification-certificate.json").read_text()
+    )
+    certificate["result"] = submission["result"]
+    support._write_json(target, certificate)
+    submission["evidence"][0]["sha256"] = support._digest(target)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0

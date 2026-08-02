@@ -1,5 +1,6 @@
 import json
 import math
+from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
@@ -10,11 +11,7 @@ from verifier_support import (
 )
 
 W, E = Path("/app"), Path("/tests")
-TERMINAL = {
-    ("0<a<2", "a_next<3/2"),
-    ("0<a<1", "a_next<0"),
-    ("1<a<3/2", "0<a_next<5/6<1"),
-}
+NEG_INF, POS_INF = "NEGATIVE_INFINITY", "POSITIVE_INFINITY"
 
 
 def _frozen():
@@ -29,7 +26,7 @@ def _frozen():
 
 def _result_valid(result, frozen):
     required = {
-        "potential_recurrence",
+        "potential_identity_coefficients",
         "initial_potential",
         "threshold",
         "decrement_lower_bound",
@@ -47,30 +44,59 @@ def _result_valid(result, frozen):
         or any(type(rat[k]) is not int for k in rat)
     ):
         return False
+
+    def rational(value):
+        if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+            return None
+        numerator, denominator = value["numerator"], value["denominator"]
+        if (
+            type(numerator) is not int
+            or type(denominator) is not int
+            or denominator < 1
+        ):
+            return None
+        if math.gcd(numerator, denominator) != 1:
+            return None
+        return Fraction(numerator, denominator)
+
     bounds = result["terminal_bounds"]
-    parsed = (
-        {(x.get("premise"), x.get("conclusion")) for x in bounds}
-        if isinstance(bounds, list)
-        and all(
-            isinstance(x, dict) and set(x) == {"premise", "conclusion"} for x in bounds
-        )
-        else set()
-    )
+    parsed = set()
+    if isinstance(bounds, list) and len(bounds) == 3:
+        for item in bounds:
+            if not isinstance(item, dict) or set(item) != {
+                "input_lower",
+                "input_upper",
+                "output_lower",
+                "output_upper",
+            }:
+                return False
+            values = []
+            for key in ("input_lower", "input_upper", "output_lower", "output_upper"):
+                raw = item[key]
+                values.append(raw if raw in (NEG_INF, POS_INF) else rational(raw))
+            if any(value is None for value in values):
+                return False
+            parsed.add(tuple(values))
+    expected_bounds = {
+        (Fraction(0), Fraction(2), NEG_INF, Fraction(3, 2)),
+        (Fraction(0), Fraction(1), NEG_INF, Fraction(0)),
+        (Fraction(1), Fraction(3, 2), Fraction(0), Fraction(5, 6)),
+    }
     transitions = result["phase_transitions"]
     exact_phase = (
         3136 * 4 - transitions * 7 < 4 * 4 and 3136 * 4 - (transitions - 1) * 7 >= 4 * 4
     )
     return bool(
         frozen.get("initial_value") == 56
-        and result["potential_recurrence"] == "d[n+1]=d[n]-2+1/d[n]"
+        and result["potential_identity_coefficients"] == [1, -2, 1]
         and result["initial_potential"] == 56**2
-        and result["threshold"] == 4
+        and rational(result["threshold"]) == 4
         and rat == {"numerator": 7, "denominator": 4}
         and math.gcd(rat["numerator"], rat["denominator"]) == 1
         and type(transitions) is int
         and exact_phase
         and result["threshold_index_upper"] == 1 + transitions
-        and parsed == TERMINAL
+        and parsed == expected_bounds
         and len(bounds) == 3
         and result["negative_index_upper"] == result["threshold_index_upper"] + 3
         and result["negative_index_upper"] < frozen["target"]["index_upper_exclusive"]

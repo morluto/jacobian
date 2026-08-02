@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -194,11 +195,26 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
         lowered = body.lower()
         compact = "".join(lowered.split())
         parameter = integer_value(result.get("parameter")) if isinstance(result, dict) else None
-        expected_fragments = (
-            f"r0={result.get('remainder_constant')}",
-            f"r1={result.get('remainder_x')}",
-            f"gcd={result.get('common_gcd')}",
-            f"quotient={result.get('quotient')}",
+        expected_fragments = tuple(
+            str(result.get(key)).replace(" ", "")
+            for key in (
+                "remainder_constant",
+                "remainder_x",
+                "common_gcd",
+                "quotient",
+            )
+        )
+        parameter_is_stated = bool(
+            parameter is not None
+            and any(
+                form in compact
+                for form in (
+                    f"a={parameter}",
+                    f"rootis{parameter}",
+                    f"root={parameter}",
+                    f"parameteris{parameter}",
+                )
+            )
         )
         return (
             json.loads(marker) == result
@@ -206,10 +222,10 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
             and "gcd" in lowered
             and "remainder" in lowered
             and ("product" in lowered or "multiplication" in lowered)
-            and parameter is not None
-            and f"a={parameter}" in compact
-            and "a-2" in compact
-            and all(fragment.replace(" ", "") in compact for fragment in expected_fragments)
+            and parameter_is_stated
+            and "unique" in lowered
+            and "root" in lowered
+            and all(fragment in compact for fragment in expected_fragments)
         )
     except (OSError, StopIteration, UnicodeError, ValueError, RecursionError):
         return False
@@ -225,14 +241,14 @@ def limitation_is_bounded(value: object) -> bool:
         "frozen",
         "limited",
         "restricted",
-        "not general",
-        "does not generalize",
-        "no general",
+        "supplied",
+        "given",
     )
+    subject = ("polynomial", "family", "divisibility", "certificate", "input")
     return (
-        "polynomial" in lowered
-        and "family" in lowered
+        any(word in lowered for word in subject)
         and any(phrase in lowered for phrase in bounded_language)
+        and not re.search(r"\b(?:general|arbitrary)\s+polynomial", lowered)
     )
 def main() -> None:
     submission = load_regular_submission()

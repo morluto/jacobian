@@ -2,7 +2,6 @@ schema_version = "2"
 
 [dataset]
 id = "jacobian/provider-feasibility-v1"
-version = "1.0.0"
 title = "Jacobian provider feasibility"
 purpose = "Pinned optional-backend feasibility checks with provider-specific expected outcomes."
 claim_class = "provider-feasibility"

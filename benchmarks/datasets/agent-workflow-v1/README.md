@@ -4,8 +4,10 @@ This Harbor dataset contains fixed mathematical workflows for Oracle validation
 and agent observation. Each task bundle is a direct child of
 this directory and retains separate agent, Oracle, and verifier containers.
 
-`suite.toml` owns membership and contract metadata. `dataset.toml` is generated
-from Harbor-computed task digests. The Oracle contract gate is:
+`suite.toml` owns stable dataset policy. Each `members/<task>.toml` record owns
+membership, provenance, environment, and verifier-contract metadata. Immutable
+snapshot locks own frozen corpus identity; no mutable publication manifest is
+committed here. The Oracle contract gate is:
 
 ```sh
 make harbor-oracle DATASET=agent-workflow-v1
@@ -38,7 +40,7 @@ make agent-eval DATASET=agent-workflow-v1 \
   TASKS=graph-counterexample EVAL_EXECUTE=1
 ```
 
-The task bundles and generated task digests must be identical between these
+The task bundles and Harbor task digests must be identical between these
 jobs. Both jobs use the same optional proxy overlay; only the treatment adds
 the Jacobian sidecar and MCP config. This paired setup is for
 workflow comparison; the public dataset is not held-out evidence.
@@ -49,7 +51,3 @@ unsupported certification claim forces reward to zero. These are workflow
 observations, not a causal performance benchmark. The committed control and
 treatment jobs document a paired workflow setup, but the public suite is not
 held out and cannot support a causal performance claim.
-
-Version 1.1.0 adds the independently reviewed finite-magma and
-well-total-domination countermodel cases. Both remain public workflow evidence;
-neither is a held-out capability-benefit case.

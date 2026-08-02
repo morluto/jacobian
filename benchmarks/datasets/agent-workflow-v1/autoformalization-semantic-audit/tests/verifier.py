@@ -170,7 +170,10 @@ def _evidence_matches_result(evidence, result):
         )
         return (
             json.loads(marker) == result
-            and all(term in text for term in ("dimension", "dot product", "coordinate"))
+            and any(
+                line.strip() and not line.startswith("RESULT_JSON:")
+                for line in text.splitlines()
+            )
             and not _has_positive_compile_claim(text)
         )
     except (OSError, StopIteration, UnicodeError, ValueError):

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "modular-cubic-obstruction",
+  "analysis": {
+    "mathematical_moves": [
+      "Enumerate a complete polynomial residue image and certify that a target residue is absent."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "modular.enumerate.quadratic_residues",
+        "availability": "AVAILABLE",
+        "boundary": "Only squares modulo m are supported; cubic and multivariate sparse polynomial images are absent."
+      }
+    ],
+    "gap_classes": [
+      "MISSING_OPERATION",
+      "WEAK_DISCOVERY"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "modular-polynomial-residue-image"
+    ],
+    "disposition": "ACCEPT_CANDIDATE",
+    "next_action": "Use as the primary public reproduction for a complete residue image and independent obstruction replay."
+  }
+}

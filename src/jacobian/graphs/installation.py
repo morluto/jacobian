@@ -19,10 +19,8 @@ from jacobian.contracts.graph_invariants import (
     GraphNeighborhoodIndependenceArtifact,
     GraphNeighborhoodIndependenceClaim,
 )
-from jacobian.graphs.artifacts import (
-    GRAPH_PAYLOAD_SCHEMA,
-    GraphArtifactResources,
-)
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
+from jacobian.graphs.artifacts import GraphArtifactResources
 from jacobian.graphs.atlas_search import (
     GraphAtlasSearchAdapter,
     GraphAtlasSearchResources,
@@ -97,10 +95,10 @@ def install_graph_capabilities(
             ),
         },
     )
-    graph_schema_uri = schemas.register(
+    graph_schema_uri = schemas.register_model(
         name="jacobian.simple-undirected-graph",
         version="1",
-        schema=GRAPH_PAYLOAD_SCHEMA,
+        model=SimpleUndirectedGraph,
     )
     scope_schema_uri = schemas.register(
         name="jacobian.graph-atlas-scope",

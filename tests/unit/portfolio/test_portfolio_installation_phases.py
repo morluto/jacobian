@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -121,3 +121,27 @@ def test_reference_phase_derives_authority_from_its_context() -> None:
     assert result.references == {}
     assert result.lean_checkers == {}
     assert context.registered == []
+
+
+def test_portfolio_close_releases_every_owned_lean_resource_once() -> None:
+    closed: list[str] = []
+
+    class Resource:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def close(self) -> None:
+            closed.append(self.name)
+
+    result = PortfolioInstallation()
+    result.lean_declarations = cast(Any, Resource("declarations"))
+    result.lean_exploration = cast(
+        Any,
+        SimpleNamespace(repl=Resource("exploration")),
+    )
+    result.lean = cast(Any, Resource("verification"))
+
+    result.close()
+    result.close()
+
+    assert closed == ["declarations", "exploration", "verification"]

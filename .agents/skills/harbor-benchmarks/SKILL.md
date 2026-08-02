@@ -39,12 +39,12 @@ Read `AGENTS.md`, `CONTRIBUTING.md`, and
 `docs/reference/capability-workflow-evaluations.md`. Each Harbor dataset owns
 its task bundles directly under
 `benchmarks/datasets/<dataset>/<task-id>/`; a bundle is a direct child of its
-dataset, not a symlink or nested task directory. Keep domain, field, provenance,
-and evaluation classification in typed `task.toml` metadata rather than
-directory hierarchy. A dataset selects its bundles through one
-`benchmarks/datasets/<dataset>/members/<task-id>.toml` fragment per member, and
-the generated `dataset.toml` is the Harbor digest boundary. Do not maintain a
-second shared task root or copy a bundle outside its owning dataset.
+dataset, not a symlink or nested task directory. Keep domain-owned execution
+metadata in typed `task.toml`. A dataset selects its bundles through one
+authoritative `benchmarks/datasets/<dataset>/members/<task-id>.toml` record per
+member. Immutable snapshot locks are evaluation and publication boundaries;
+never commit a mutable `dataset.toml` in a dataset root or maintain a second
+shared task root.
 
 Before adding a task, run the benchmark planner and check for a global ID
 collision. Manually authored or substantially transformed cases remain authored
@@ -59,6 +59,15 @@ metadata, concise provenance, an agent-visible
 separate clean-room verifier. Instructions must
 be agent-agnostic: describe the mathematical outcome and evidence, never
 capability IDs, tool sequences, preferred decompositions, or Jacobian details.
+
+For a new task, copy the member shape from `benchmarks/templates/member.toml`,
+create exactly one `members/<task-id>.toml` record alongside the direct task
+bundle, and resolve its `environment_profile` through
+`benchmarks/environment-profiles.toml`. Standard profiles use digest-pinned
+images and prohibit `apt-get`; provider-specific installation belongs only in
+an explicitly allowed profile. Harbor verifier Dockerfiles are built from the
+task's `tests/` directory, so do not use parent-directory `COPY` paths, host
+paths, floating image tags, or symlinks to share hidden material.
 
 Verifiers must reject malformed submissions, symlink or workspace escapes,
 wrong evidence paths or digests, incomplete scope, mismatched claims, and false
@@ -79,7 +88,6 @@ Use the pinned Harbor runner from the repository:
 ```sh
 uvx --from harbor==0.20.0 harbor --version
 make harbor-plan BASE=origin/main
-make harbor-sync
 make harbor-check
 make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 ```
@@ -87,8 +95,9 @@ make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 After any input, instruction, metadata, verifier, dependency, image, or task
 contract change:
 
-1. Recompute each canonical task content digest with Harbor's task model and
-   regenerate every affected `dataset.toml`; do not invent a custom digest.
+1. Recompute each prospective task and suite digest with Harbor's task model.
+   Do not rewrite an existing snapshot or historical evaluation. Create a new
+   snapshot only for an intentional evaluation or publication event.
 2. Parse/check every canonical task selected by member fragments and reject
    missing, duplicate, ambiguous, or escaping references.
 3. Run every task through the dataset's Oracle job and require full applicable
@@ -100,9 +109,41 @@ contract change:
    secrets, host paths, raw caches, and floating dependencies.
 
 Do not treat `harbor sync` as a local digest calculator when the task is not
-published. The committed dataset manifest and canonical task content must
-agree. `harbor-check` is outside the product `tests/` topology; keep Harbor
-validation from entering product Python coverage.
+published. Membership is authoritative in the member record and task content
+is hashed by Harbor's `Task.checksum`; there is no mutable dataset-root
+manifest to regenerate. `harbor-check` is outside the product `tests/`
+topology; keep Harbor validation from entering product Python coverage.
+
+Only create a snapshot for an intentional evaluation or publication boundary:
+
+```sh
+make benchmark-snapshot DATASET=agent-workflow-v1
+make benchmark-snapshot-validate \
+  LOCK=benchmarks/snapshots/<dataset>/<digest>.lock.json
+make benchmark-publish \
+  LOCK=benchmarks/snapshots/<dataset>/<digest>.lock.json
+```
+
+Commit the lock under `benchmarks/snapshots/<dataset>/`; publication output
+under ignored `dist/harbor/` is generated and must not be edited or committed.
+Historical plans, ledgers, observations, and reports reference the lock ID and
+must never be rewritten when a later task is added.
+
+Observation evidence is version 2. Jobs must select exactly one of
+`datasets[].path` (with optional task filters) or explicit `tasks[].path`;
+mixed, empty, unknown, escaping, and implicit full-suite selections fail
+closed. Bind evidence to the snapshot ID, task digest, Harbor version,
+normalized arguments, runtime state, model, repetition, budgets, result, and
+verifier status. Use Harbor's artifact manifest as the source of truth for
+artifact identity and reject traversal, escaping symlinks, missing entries, and
+non-conclusion execution states.
+
+Current separate-verifier tasks retain synchronized `tests/verifier_support.py`
+copies because Harbor requires the separate verifier image to contain its test
+runtime in the task `tests/` build context. Do not delete those files or the
+sync checker until a digest-pinned shared verifier image is published and the
+task Dockerfiles have migrated to that image. A local-only image or invented
+digest is not a valid substitute.
 
 The independent benchmark planner emits `run-benchmark-check`,
 `run-benchmark-oracle`, `benchmark-oracle-scope`, an exact dataset/task/digest

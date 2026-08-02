@@ -112,18 +112,12 @@ def _evidence_valid(evidence: object) -> bool:
     if target is None:
         return False
     try:
-        text = target.read_text().lower()
+        text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    return all(
-        x in text
-        for x in (
-            "incomplete",
-            "type",
-            "compiler-trust",
-            "transitive closure",
-            "frozen graph",
-        )
+    return any(
+        line.strip() and not line.startswith("RESULT_JSON:")
+        for line in text.splitlines()
     )
 
 

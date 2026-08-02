@@ -135,8 +135,8 @@ def test_resource_derived_oracles_and_assurance_boundary(
             lambda result: result.update(expected_value="2025"),
         ),
         (
-            "squarefree-class-independence-audit",
-            lambda result: result["modular_obstruction"].update(target_residue=6),
+            "lagrangian-projection-proof-audit",
+            lambda result: result["lagrangian_defect"][0].__setitem__(1, "0"),
         ),
     ],
 )

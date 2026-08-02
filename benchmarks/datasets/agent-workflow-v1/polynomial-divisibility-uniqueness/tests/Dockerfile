@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.checksum="9077a806e1359c4bb17c9ae2c2da2da47ec397bfecb571c73dc902acf6b4e003"
+LABEL jacobian.checksum="866bf4a2fdd3d5068ee56f6e9762894e855ee117f31537aced0cbe73268ebea2"
 LABEL jacobian.task="jacobian/polynomial-divisibility-uniqueness"
 COPY expected.json input.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

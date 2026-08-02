@@ -440,7 +440,8 @@ def test_polynomial_divisibility_reports_input_integrity_separately(
 ) -> None:
     """Thread PRRT_kwDOThEfjc6Vu4rF: report input integrity separately from
     correctness.  Tampering with input.json must not zero the mathematical
-    correctness signal.
+    correctness signal or the evidence-validity signal; only the aggregate
+    reward is gated on input integrity.
     """
     task, app, logs = support._prepare_case(
         tmp_path, "polynomial-divisibility-uniqueness", "computed"
@@ -453,5 +454,48 @@ def test_polynomial_divisibility_reports_input_integrity_separately(
 
     result = support._run_verifier(task, app, logs)
     assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
     assert result["input_integrity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_duplicate_evidence(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6VuwnB-evidence: enforce the maxItems: 1 evidence
+    contract.  Repeating the same valid evidence descriptor must not pass even
+    though each copy individually binds the expected evidence file.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"].append(dict(submission["evidence"][0]))
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_deeply_nested_json(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6VuwnB-recursion: a deeply nested submission.json
+    that triggers RecursionError in json.loads must score zero instead of
+    crashing the verifier without writing reward.json.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    # Write deeply nested JSON as a raw string to avoid RecursionError in
+    # json.dumps during test setup; the verifier's json.loads will hit it.
+    submission_path.write_text("[" * 10_000 + "0" + "]" * 10_000)
+
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0

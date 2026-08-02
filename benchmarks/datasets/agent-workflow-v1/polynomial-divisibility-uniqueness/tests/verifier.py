@@ -125,6 +125,9 @@ def load_regular_submission() -> dict[str, Any] | None:
     The shared ``load_submission`` helper follows symlinks; this local wrapper
     requires the declared submission path to be a regular file rooted under
     the workspace so an agent cannot alias it to another workspace file.
+    Deeply nested JSON can raise ``RecursionError`` from ``json.loads``; catch
+    it here so a malformed submission scores zero instead of crashing the
+    verifier without writing ``reward.json``.
     """
     path = WORKSPACE / "submission.json"
     try:
@@ -136,7 +139,10 @@ def load_regular_submission() -> dict[str, Any] | None:
             return None
     except OSError:
         return None
-    return load_submission(path)
+    try:
+        return load_submission(path)
+    except RecursionError:
+        return None
 
 
 def evidence_matches_result(evidence: object, result: object) -> bool:
@@ -144,13 +150,19 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
 
     Rejects empty or arbitrary evidence text: the file must contain a
     ``RESULT_JSON:`` marker matching the submitted result object and a
-    non-empty human-readable derivation body.
+    non-empty human-readable derivation body.  The evidence list must contain
+    exactly one descriptor (submission_schema.json sets maxItems: 1).
     """
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+    if not isinstance(evidence, list) or len(evidence) != 1:
         return False
-    target = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt"  # type: ignore[index]
-    )
+    try:
+        if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+            return False
+        target = resolve_evidence(
+            evidence[0], expected_path="evidence/answer.txt"
+        )
+    except RecursionError:
+        return False
     if target is None:
         return False
     try:
@@ -166,7 +178,7 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
             json.loads(marker) == result
             and bool(body.strip())
         )
-    except (OSError, StopIteration, UnicodeError, ValueError):
+    except (OSError, StopIteration, UnicodeError, ValueError, RecursionError):
         return False
 
 
@@ -228,9 +240,11 @@ def main() -> None:
     # Thread 4: keep mathematical correctness independent of input integrity.
     math_correct = bool(contract and result_schema_ok and symbolic_ok and quotient_ok)
     # Thread 2: validate evidence content, not just path and digest.
+    # Input integrity is reported separately and gates only the aggregate
+    # reward; coupling it here would make evidence failures indistinguishable
+    # from input-tampering failures.
     evidence_valid = bool(
         math_correct
-        and frozen_input_ok
         and evidence_matches_result(data.get("evidence"), result_typed)
     )
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])

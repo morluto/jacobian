@@ -50,6 +50,11 @@ observations, not a causal performance benchmark. The committed control and
 treatment jobs document a paired workflow setup, but the public suite is not
 held out and cannot support a causal performance claim.
 
-Version 1.2.0 adds the independently reviewed finite-magma and
+Version 1.1.0 adds the independently reviewed finite-magma and
 well-total-domination countermodel cases. Both remain public workflow evidence;
 neither is a held-out capability-benefit case.
+
+Version 1.2.0 adds the polynomial-divisibility-uniqueness case, which certifies
+a unique integer parameter via a symbolic remainder and monic-gcd derivation.
+It remains public workflow evidence; it is not a held-out capability-benefit
+case.

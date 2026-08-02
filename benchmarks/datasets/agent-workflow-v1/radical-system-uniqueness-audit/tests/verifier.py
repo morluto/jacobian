@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -115,7 +116,19 @@ def _solution_is_exact(value: object) -> bool:
         f"{u**3 + 1}={u**3 + 1}",
         f"{u**2 - 1}={u**2 - 1}",
     ]
-    return equations_hold and value["equation_values"] == expected_values
+    submitted_values = value["equation_values"]
+    if not isinstance(submitted_values, list) or len(submitted_values) != 3:
+        return False
+
+    def normalize(item: str) -> str:
+        return re.sub(r"\s+", "", item)
+
+    return (
+        all(isinstance(item, str) and "=" in item for item in submitted_values)
+        and equations_hold
+        and [normalize(item) for item in submitted_values]
+        == [normalize(item) for item in expected_values]
+    )
 
 
 def _certificate_is_valid(value: object) -> bool:
@@ -146,7 +159,11 @@ def _certificate_is_valid(value: object) -> bool:
 
 
 def _evidence_is_valid(value: object) -> bool:
-    if not evidence_list_is_bound(value):
+    if (
+        not isinstance(value, list)
+        or len(value) != 1
+        or not evidence_list_is_bound(value)
+    ):
         return False
     target = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if target is None:
@@ -196,7 +213,7 @@ def main() -> None:
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "VERIFIED"
     )
-    correct = bool(contract and math_correct)
+    correct = bool(contract and math_correct and evidence and scope and assurance)
     reward = (
         0.0
         if not correct or false_certification

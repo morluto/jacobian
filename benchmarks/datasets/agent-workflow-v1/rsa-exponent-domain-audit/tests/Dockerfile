@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.checksum="fe64dfe0577ab71ca8209f9d627eed46e0e617aed300dd1e49bb216272bd8dac"
+LABEL jacobian.checksum="ee4c0fdcd663e9ca3fd4291e9daae9372252d6c5f256a7ccc820aa31a0871837"
 LABEL jacobian.task="jacobian/rsa-exponent-domain-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

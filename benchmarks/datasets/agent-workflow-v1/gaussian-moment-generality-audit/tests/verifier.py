@@ -234,9 +234,12 @@ def construction_valid(result: object, frozen: dict[str, Any]) -> bool:
 
 
 def evidence_valid(value: object, result: object) -> bool:
-    if not evidence_list_is_bound(value, expected_path="evidence/answer.txt"):
-        return False
+    # Validate cardinality before resolving or hashing any evidence file so
+    # a malformed submission repeating a valid descriptor cannot force
+    # redundant hashing of a large file once per array element.
     if not isinstance(value, list) or len(value) != 1:
+        return False
+    if not evidence_list_is_bound(value, expected_path="evidence/answer.txt"):
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:
@@ -325,7 +328,7 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
     combined = " ".join(str(item) for item in limitations).lower()
     has_verification_caveat = bool(
         re.search(
-            r"\b(?:not|no|without|does not|doesn't|assumes?)\b[^.]{0,100}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b",
+            r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,100}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b",
             combined,
         )
     )

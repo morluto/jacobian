@@ -83,13 +83,17 @@ def _affirmative_solved_or_verified_claim(text):
     if re.search(r"\b(machine|formally?)\s+(verified|certified)\b", text.casefold()):
         return True
     for clause in re.split(r"[.!?;]+", text.casefold()):
-        if not any(subject in clause for subject in ("open problem", "theorem", "lean")):
+        if not any(
+            subject in clause for subject in ("open problem", "theorem", "lean")
+        ):
             continue
         words = _words(clause)
         for index, word in enumerate(words):
             if word not in _AFFIRMATIVE_LEMMAS:
                 continue
-            if not any(token in words[max(0, index - 2) : index] for token in _NEGATION_TOKENS):
+            if not any(
+                token in words[max(0, index - 2) : index] for token in _NEGATION_TOKENS
+            ):
                 return True
     return False
 
@@ -249,11 +253,15 @@ def main():
             if isinstance(item, str)
         )
     )
+    claimed_assurance = data.get("claimed_assurance")
+    assurance_is_unsupported = isinstance(claimed_assurance, str) and (
+        claimed_assurance not in {"UNVERIFIED", "COMPUTED"}
+    )
     false_certification = bool(
         false_verified_claim(submission, verification_record_bound=False)
         or limitations_affirmative
         or _evidence_affirmative_claim(data.get("evidence"))
-        or data.get("claimed_assurance") not in {"UNVERIFIED", "COMPUTED"}
+        or assurance_is_unsupported
     )
     correct = bool(
         contract and math_correct and limitations_correct and not false_certification

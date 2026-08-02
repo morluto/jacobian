@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "log-exponent-recovery"},
+    "task_id": {"const": "jacobian/log-exponent-recovery"},
     "conclusion": {"const": "SOLVED"},
     "result": {"type": "object", "additionalProperties": false, "required": ["value", "reciprocal_log_contributions"], "properties": {"value": {"type": "integer"}, "reciprocal_log_contributions": {"type": "object", "additionalProperties": false, "required": ["x", "y", "z", "xyz"], "properties": {"x": {"type": "string"}, "y": {"type": "string"}, "z": {"type": "string"}, "xyz": {"type": "string"}}}}},
     "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},

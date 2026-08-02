@@ -51,7 +51,7 @@ class StateDatabase:
         self.path = path
         self.synchronous = synchronous
         self._state = _ConnectionState()
-        self._connection_lock = threading.Lock()
+        self._connection_lock = threading.RLock()
         self._open_connections: set[sqlite3.Connection] = set()
         self._lifecycle_lock = PersistenceLock(
             path.with_name(path.name + ".lifecycle.lock")
@@ -81,8 +81,21 @@ class StateDatabase:
     def connect(self) -> sqlite3.Connection:
         """Open and configure one tracked SQLite handle."""
 
-        if self._closed:
-            raise StateDatabaseError("state database is closed")
+        with self._connection_lock:
+            if self._closed:
+                raise StateDatabaseError("state database is closed")
+            connection = self._open_configured_connection()
+            try:
+                self._open_connections.add(connection)
+            except BaseException:
+                connection.close()
+                self._open_connections.discard(connection)
+                raise
+            return connection
+
+    def _open_configured_connection(self) -> sqlite3.Connection:
+        """Open a configured handle without registering it as caller-owned."""
+
         connection = sqlite3.connect(
             self.path,
             timeout=30,
@@ -92,12 +105,8 @@ class StateDatabase:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute(f"PRAGMA synchronous = {self.synchronous}")
-            with self._connection_lock:
-                self._open_connections.add(connection)
         except BaseException:
             connection.close()
-            with self._connection_lock:
-                self._open_connections.discard(connection)
             raise
         return connection
 
@@ -226,15 +235,19 @@ class StateDatabase:
     def connection(self) -> Iterator[sqlite3.Connection]:
         """Yield this thread's transaction or reusable owned connection."""
 
-        transaction = self._state.transaction
-        if transaction is not None:
-            yield transaction
+        with self._connection_lock:
+            if self._closed:
+                raise StateDatabaseError("state database is closed")
+            connection = self._state.transaction
+            in_transaction = connection is not None
+            if connection is None:
+                connection = self._state.connection
+            if connection is None:
+                connection = self.connect()
+                self._state.connection = connection
+        if in_transaction:
+            yield connection
             return
-
-        connection = self._state.connection
-        if connection is None:
-            connection = self.connect()
-            self._state.connection = connection
         with connection:
             yield connection
 
@@ -252,30 +265,47 @@ class StateDatabase:
     def close(self, *, checkpoint: bool) -> None:
         """Checkpoint when requested, close every handle, and end ownership."""
 
-        if self._closed:
-            return
-        checkpoint_error: BaseException | None = None
-        if checkpoint:
-            with self._lifecycle_lock.hold():
-                connection = self.connect()
-                try:
-                    result = connection.execute(
-                        "PRAGMA wal_checkpoint(TRUNCATE)"
-                    ).fetchone()
-                    if result is None or result[0] != 0:
-                        checkpoint_error = StateDatabaseError(
-                            f"could not checkpoint state database: {result!r}"
-                        )
-                except BaseException as exc:
-                    checkpoint_error = exc
-                finally:
-                    self.close_connection(connection)
-        self._close_all_connections()
+        with self._connection_lock:
+            if self._closed:
+                return
+            self._closed = True
+            checkpoint_error = self._checkpoint_for_close() if checkpoint else None
+            close_error: BaseException | None = None
+            try:
+                self._close_all_connections()
+            except BaseException as exc:
+                close_error = exc
+            self._state.connection = None
         if checkpoint_error is not None:
             raise StateDatabaseError(
                 "could not checkpoint state database"
             ) from checkpoint_error
-        self._closed = True
+        if close_error is not None:
+            raise close_error
+
+    def _checkpoint_for_close(self) -> BaseException | None:
+        with self._lifecycle_lock.hold():
+            connection: sqlite3.Connection | None = None
+            failure: BaseException | None = None
+            try:
+                connection = self._open_configured_connection()
+                result = connection.execute(
+                    "PRAGMA wal_checkpoint(TRUNCATE)"
+                ).fetchone()
+                if result is None or result[0] != 0:
+                    failure = StateDatabaseError(
+                        f"could not checkpoint state database: {result!r}"
+                    )
+            except BaseException as exc:
+                failure = exc
+            finally:
+                if connection is not None:
+                    try:
+                        connection.close()
+                    except BaseException as exc:
+                        if failure is None:
+                            failure = exc
+            return failure
 
     def _close_all_connections(self) -> None:
         failures: list[BaseException] = []
@@ -287,7 +317,6 @@ class StateDatabase:
                     failures.append(exc)
                 finally:
                     self._open_connections.discard(connection)
-        self._state.connection = None
         if failures:
             raise StateDatabaseError(
                 "could not close every state database handle"

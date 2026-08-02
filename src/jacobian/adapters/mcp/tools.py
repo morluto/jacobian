@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Annotated, Any, Literal
 
@@ -18,7 +17,11 @@ from jacobian.adapters.mcp.projections import (
     _capability_discovery_response,
     _capability_inspection_extensions,
 )
-from jacobian.adapters.mcp.tooling import AgentRecoveryError, _invoke_capability_attempt
+from jacobian.adapters.mcp.tooling import (
+    AgentRecoveryError,
+    _invoke_capability_attempt,
+    _run_blocking,
+)
 from jacobian.contracts.capabilities import (
     CapabilityInputKind,
     CapabilityMode,
@@ -276,7 +279,7 @@ async def workspace_open(
     ctx: Context[AppState, Any] | None = None,
 ) -> WorkspaceOpenResult:
     active_runtime = _runtime(ctx)
-    return await asyncio.to_thread(
+    return await _run_blocking(
         active_runtime.core.workspaces.open,
         WorkspaceOpenRequest(
             idempotency_key=idempotency_key,
@@ -390,7 +393,7 @@ async def workspace_write(
     ctx: Context[AppState, Any] | None = None,
 ) -> WorkspaceWriteResult:
     active_runtime = _runtime(ctx)
-    return await asyncio.to_thread(
+    return await _run_blocking(
         active_runtime.core.workspaces.write,
         WorkspaceWriteRequest(
             idempotency_key=idempotency_key,
@@ -424,7 +427,7 @@ async def workspace_query(
     ctx: Context[AppState, Any] | None = None,
 ) -> WorkspaceQueryResult:
     active_runtime = _runtime(ctx)
-    return await asyncio.to_thread(
+    return await _run_blocking(
         active_runtime.core.workspaces.query,
         WorkspaceQueryRequest(
             workspace_id=workspace_id,

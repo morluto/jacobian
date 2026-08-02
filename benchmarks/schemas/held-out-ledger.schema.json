@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/held-out-ledger.schema.json",
+  "title": "Resumable held-out evaluation execution ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_digest", "status", "budget", "usage", "runs", "completed_pairs", "validation_failures"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "status": {"enum": ["RUNNING", "COMPLETE", "INCOMPLETE"]},
+    "budget": {"type": "object"},
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "cost_usd"],
+      "properties": {
+        "tokens": {"type": "integer", "minimum": 0},
+        "cost_usd": {"type": "number", "minimum": 0}
+      }
+    },
+    "runs": {"type": "object", "additionalProperties": {"type": "object"}},
+    "completed_pairs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "validation_failures": {"type": "array", "items": {"type": "string"}}
+  }
+}

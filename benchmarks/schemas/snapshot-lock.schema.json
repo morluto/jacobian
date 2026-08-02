@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/snapshot-lock.schema.json",
+  "title": "Immutable content-addressed Harbor benchmark snapshot lock",
+  "description": "A reproducible, content-addressed pin of one registered Jacobian Harbor dataset: ordered Harbor-native task digests, the suite header digest, the pinned Harbor version, the resolved per-task agent/verifier image and verifier-runtime digests, the source git tree, and the evaluation split/config. The lock_digest is the canonical-JSON digest of the lock body with lock_digest and snapshot_id removed; snapshot_id equals lock_digest and is the content version. The source must be clean (dirty=false); a dirty tree is not reproducible.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "lock_digest",
+    "suite",
+    "harbor_version",
+    "source",
+    "environment",
+    "tasks",
+    "evaluation"
+  ],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "snapshot_id": {"$ref": "#/$defs/digest"},
+    "lock_digest": {"$ref": "#/$defs/digest"},
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "title",
+        "purpose",
+        "claim_class",
+        "answer_visibility",
+        "default_execution_profile",
+        "evaluation_kind",
+        "publication_status",
+        "scored",
+        "required_provider",
+        "runtime_profile",
+        "suite_header_digest"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "name": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "purpose": {"type": "string", "minLength": 1},
+        "claim_class": {"type": "string", "minLength": 1},
+        "answer_visibility": {"type": "string", "minLength": 1},
+        "default_execution_profile": {"type": "string", "minLength": 1},
+        "evaluation_kind": {"type": "string", "minLength": 1},
+        "publication_status": {"type": "string", "minLength": 1},
+        "scored": {"type": "boolean"},
+        "required_provider": {"type": "string", "minLength": 1},
+        "runtime_profile": {"type": "string", "minLength": 1},
+        "suite_header_digest": {"$ref": "#/$defs/digest"},
+        "keywords": {"type": "array", "items": {"type": "string"}},
+        "authors": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "harbor_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tree_sha",
+        "dirty",
+        "registry_digest",
+        "environment_profiles_digest"
+      ],
+      "properties": {
+        "tree_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "dirty": {"const": false},
+        "registry_digest": {"$ref": "#/$defs/digest"},
+        "environment_profiles_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profiles", "summary_digest"],
+      "description": "Deterministic summary of the per-task resolved environments. Suite.runtime_profile is an evaluation runtime label, not an environment-profiles.toml key; image fields are resolved per task from member environment_profile records.",
+      "properties": {
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "summary_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "digest",
+          "assurance_ceiling",
+          "required_provider",
+          "environment_profile",
+          "environment",
+          "member_digest"
+        ],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "name": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"},
+          "digest": {"$ref": "#/$defs/digest"},
+          "assurance_ceiling": {"type": "string", "minLength": 1},
+          "required_provider": {"type": "string", "minLength": 1},
+          "environment_profile": {"type": "string", "minLength": 1},
+          "environment": {"$ref": "#/$defs/resolved_environment"},
+          "member_digest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_ids",
+        "oracle_job_digest",
+        "oracle_jobs_dir"
+      ],
+      "properties": {
+        "task_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}
+        },
+        "oracle_job_digest": {"$ref": "#/$defs/digest"},
+        "observation_job_digest": {"$ref": "#/$defs/digest"},
+        "compose_file_digest": {"$ref": "#/$defs/digest"},
+        "oracle_jobs_dir": {"type": "string", "minLength": 1},
+        "observation_jobs_dir": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "resolved_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "agent_image",
+        "verifier_image",
+        "verifier_runtime_digest",
+        "allow_apt"
+      ],
+      "properties": {
+        "profile": {"type": "string", "minLength": 1},
+        "agent_image": {"type": "string", "pattern": "^[^@]+@sha256:[0-9a-f]{64}$"},
+        "verifier_image": {"type": "string", "pattern": "^[^@]+@sha256:[0-9a-f]{64}$"},
+        "verifier_runtime_digest": {"$ref": "#/$defs/digest"},
+        "allow_apt": {"type": "boolean"}
+      }
+    }
+  }
+}

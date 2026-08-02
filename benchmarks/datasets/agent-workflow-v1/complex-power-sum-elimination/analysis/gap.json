@@ -1,0 +1,25 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "complex-power-sum-elimination",
+  "analysis": {
+    "mathematical_moves": [
+      "Derive exact Newton power-sum recurrences and eliminate the symmetric product.",
+      "Audit every quotient denominator and reconstruct both quadratic-field target branches."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Can replay declared polynomial identities, but does not synthesize the recurrence elimination or prove both quadratic-field branches are complete and achievable."
+      }
+    ],
+    "gap_classes": [
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep recurrence construction, denominator auditing, and branch reconstruction as agent-owned composition rather than adding a problem-specific solver."
+  }
+}

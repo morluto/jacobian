@@ -51,8 +51,7 @@ operation belongs to job composition.
 
 Two unrelated task additions have disjoint intended tracked paths and can merge
 in either order. A new task changes the prospective suite digest without
-rewriting an existing snapshot, comparison plan, gap analysis, schema, or
-README count.
+rewriting an existing snapshot lock or task-owned analysis record.
 
 Shared verifier-image migration requires an operator-published immutable image
 before copied runtime support can be removed without breaking Oracle

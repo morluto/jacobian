@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.checksum="56e5b8f1a9d076cdae34adc20dedebfa64fb3f9825c0ac2eecc1e05d66c2aba2"
+LABEL jacobian.checksum="302cc91d10ae8f50de15c35adeeba05c0cbf4f548bc13a7a50f730d9b16ba795"
 LABEL jacobian.task="jacobian/subset-incidence-determinant"
 COPY expected.json input.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

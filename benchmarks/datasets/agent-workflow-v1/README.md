@@ -50,6 +50,6 @@ observations, not a causal performance benchmark. The committed control and
 treatment jobs document a paired workflow setup, but the public suite is not
 held out and cannot support a causal performance claim.
 
-Version 1.2.0 adds the independently reviewed finite-magma and
-well-total-domination countermodel cases. Both remain public workflow evidence;
-neither is a held-out capability-benefit case.
+Version 1.2.0 adds the independently reviewed subset-incidence determinant
+case. It remains public workflow evidence and is not a held-out
+capability-benefit case.

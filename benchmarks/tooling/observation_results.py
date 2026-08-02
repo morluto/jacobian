@@ -164,7 +164,10 @@ def _walk_trace(value: Any, calls: Counter[str]) -> int:
         value.get("name"), str
     ):
         calls[str(value["name"])] += 1
-    own_error = int(value.get("error") not in {None, False, ""})
+    error_value = value.get("error")
+    own_error = int(
+        error_value is not None and error_value is not False and error_value != ""
+    )
     return own_error + sum(_walk_trace(child, calls) for child in value.values())
 
 
@@ -472,7 +475,7 @@ def build_observation_evidence(
 
 def _number(value: Any) -> float | None:
     if isinstance(value, bool):
-        return float(value)
+        return None
     if isinstance(value, (int, float)) and math.isfinite(float(value)):
         return float(value)
     return None

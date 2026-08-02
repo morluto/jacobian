@@ -399,7 +399,7 @@ def render_plan(
         "pair_count": len(pairs),
         "runs": runs,
     }
-    plan["plan_digest"] = _json_digest(plan)
+    plan["plan_digest"] = _json_digest({key: value for key, value in plan.items() if key != "plan_digest"})
     run_plan = output / "run-plan.json"
     run_plan.write_text(
         json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8"

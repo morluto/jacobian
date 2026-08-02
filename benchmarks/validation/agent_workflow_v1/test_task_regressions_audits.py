@@ -293,3 +293,110 @@ def test_polynomial_divisibility_accepts_canonical_solution(
     accepted = support._run_verifier(task, app, logs)
     assert accepted["correctness"] == 1.0
     assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_polynomial_divisibility_rejects_extra_result_keys(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6VuwnA: reject result objects outside the
+    advertised schema (additionalProperties: false).
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["extra_field"] = 0
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_empty_evidence(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu4rD: validate evidence content before awarding
+    full credit.  An empty answer.txt with a matching digest must not pass.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_evidence_with_wrong_result_marker(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu4rD: evidence whose RESULT_JSON marker does not
+    match the submitted result must be rejected.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "Some derivation text.\n"
+        'RESULT_JSON: {"parameter": 99}\n'
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_symlinked_submission(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu4rE: reject symlinked submission artifacts."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    alias = app / "evidence" / "alias.json"
+    alias.write_text(submission_path.read_text())
+    submission_path.unlink()
+    submission_path.symlink_to(alias)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_reports_input_integrity_separately(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6Vu4rF: report input integrity separately from
+    correctness.  Tampering with input.json must not zero the mathematical
+    correctness signal.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    input_path = app / "input.json"
+    original = input_path.read_bytes()
+    tampered = json.loads(original)
+    tampered["extra_key"] = "tampered"
+    support._write_json(input_path, tampered)
+
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["input_integrity"] == 0.0
+    assert result["reward"] == 0.0

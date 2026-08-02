@@ -9,12 +9,16 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 LIMITATION = "This exact certificate covers only the frozen dividend and divisor family; it is not a general polynomial-factorization result."
+RESULT_KEYS = frozenset(
+    {"parameter", "remainder_constant", "remainder_x", "common_gcd", "quotient"}
+)
 
 
 def trim(p: list[Fraction]) -> list[Fraction]:
@@ -98,8 +102,59 @@ def integers(value: Any) -> list[int] | None:
     return value
 
 
+def load_regular_submission() -> dict[str, Any] | None:
+    """Parse the submission, rejecting symlinked submission artifacts.
+
+    The shared ``load_submission`` helper follows symlinks; this local wrapper
+    requires the declared submission path to be a regular file rooted under
+    the workspace so an agent cannot alias it to another workspace file.
+    """
+    path = WORKSPACE / "submission.json"
+    try:
+        if path.is_symlink():
+            return None
+        root = WORKSPACE.resolve()
+        target = path.resolve(strict=True)
+        if not target.is_relative_to(root):
+            return None
+    except OSError:
+        return None
+    return load_submission(path)
+
+
+def evidence_matches_result(evidence: object, result: object) -> bool:
+    """Bind the evidence file to the submitted result and require a derivation.
+
+    Rejects empty or arbitrary evidence text: the file must contain a
+    ``RESULT_JSON:`` marker matching the submitted result object and a
+    non-empty human-readable derivation body.
+    """
+    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+        return False
+    target = resolve_evidence(
+        evidence[0], expected_path="evidence/answer.txt"  # type: ignore[index]
+    )
+    if target is None:
+        return False
+    try:
+        text = target.read_text()
+        lines = text.splitlines()
+        marker = next(
+            line.removeprefix("RESULT_JSON:").strip()
+            for line in lines
+            if line.startswith("RESULT_JSON:")
+        )
+        body = "\n".join(line for line in lines if not line.startswith("RESULT_JSON:"))
+        return (
+            json.loads(marker) == result
+            and bool(body.strip())
+        )
+    except (OSError, StopIteration, UnicodeError, ValueError):
+        return False
+
+
 def main() -> None:
-    submission = load_submission()
+    submission = load_regular_submission()
     data = submission if isinstance(submission, dict) else {}
     expected = json.loads((TESTS / "expected.json").read_text())
     contract = strict_submission_contract(
@@ -117,13 +172,15 @@ def main() -> None:
     except OSError:
         frozen_input_ok = False
     result = data.get("result", {})
-    r0 = (
-        integers(result.get("remainder_constant")) if isinstance(result, dict) else None
-    )
-    r1 = integers(result.get("remainder_x")) if isinstance(result, dict) else None
-    gcd = integers(result.get("common_gcd")) if isinstance(result, dict) else None
-    quotient = integers(result.get("quotient")) if isinstance(result, dict) else None
-    parameter = result.get("parameter") if isinstance(result, dict) else None
+    result_typed = result if isinstance(result, dict) else {}
+    # Thread 1: reject result objects outside the advertised schema
+    # (submission_schema.json sets additionalProperties: false on result).
+    result_schema_ok = isinstance(result, dict) and set(result) == RESULT_KEYS
+    r0 = integers(result_typed.get("remainder_constant"))
+    r1 = integers(result_typed.get("remainder_x"))
+    gcd = integers(result_typed.get("common_gcd"))
+    quotient = integers(result_typed.get("quotient"))
+    parameter = result_typed.get("parameter")
 
     computed_r0, computed_r1 = symbolic_remainder()
     computed_gcd = monic_gcd(computed_r0, computed_r1)
@@ -161,12 +218,13 @@ def main() -> None:
         and multiply([parameter, -1, 1], quotient)
         == [90, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
     )
-    math_correct = bool(contract and frozen_input_ok and symbolic_ok and quotient_ok)
+    # Thread 4: keep mathematical correctness independent of input integrity.
+    math_correct = bool(contract and result_schema_ok and symbolic_ok and quotient_ok)
+    # Thread 2: validate evidence content, not just path and digest.
     evidence_valid = bool(
         math_correct
-        and evidence_list_is_bound(
-            data.get("evidence"), expected_path="evidence/answer.txt"
-        )
+        and frozen_input_ok
+        and evidence_matches_result(data.get("evidence"), result_typed)
     )
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
     assurance_correct = bool(
@@ -176,8 +234,11 @@ def main() -> None:
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
+    # Thread 4: gate the aggregate reward on input integrity without
+    # corrupting the independently computed mathematical-correctness signal.
     passed = bool(
         math_correct
+        and frozen_input_ok
         and evidence_valid
         and scope_correct
         and assurance_correct
@@ -193,6 +254,7 @@ def main() -> None:
                 "evidence_validity": float(evidence_valid),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
+                "input_integrity": float(frozen_input_ok),
                 "reward": float(passed),
                 "false_certification": false_certification,
             }

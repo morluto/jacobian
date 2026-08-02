@@ -241,7 +241,9 @@ def test_rational_function_artifact_accepts_dense_self_product_fraction() -> Non
     assert artifact.denominator is dense
 
 
-def test_rational_function_identity_request_still_enforces_cross_product_bound() -> None:
+def test_rational_function_identity_request_still_enforces_cross_product_bound() -> (
+    None
+):
     """The identity-request cross-product bound must still reject a pair of
     fractions whose cross product exceeds 4096 term pairs.
     """

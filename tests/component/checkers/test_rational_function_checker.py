@@ -68,9 +68,7 @@ def _request(*, equal: bool = True) -> dict[str, Any]:
         numerator=_polynomial([(1, 1, 2), (-1, 1, 0)]),
         denominator=_polynomial([(1, 1, 1), (-1, 1, 0)]),
     )
-    right_numerator = _polynomial(
-        [(1, 1, 1), (1 if equal else 2, 1, 0)]
-    )
+    right_numerator = _polynomial([(1, 1, 1), (1 if equal else 2, 1, 0)])
     right_payload = _function(
         variables,
         numerator=right_numerator,

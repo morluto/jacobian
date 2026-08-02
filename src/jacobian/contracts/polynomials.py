@@ -299,9 +299,7 @@ class RationalFunctionArtifact(ContractModel):
             raise ValueError("rational-function variables must be unique")
         dimension = len(self.variables)
         for polynomial in (self.numerator, self.denominator):
-            if any(
-                len(term.exponents) != dimension for term in polynomial.terms
-            ):
+            if any(len(term.exponents) != dimension for term in polynomial.terms):
                 raise ValueError(
                     "every monomial must match the declared variable order"
                 )

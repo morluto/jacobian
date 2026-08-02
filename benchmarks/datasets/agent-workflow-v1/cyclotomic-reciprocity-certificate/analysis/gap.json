@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "cyclotomic-reciprocity-certificate",
+  "analysis": {
+    "mathematical_moves": [
+      "Recover a complete cyclotomic factorization and use root-orbit inversion to establish reciprocal coefficient symmetry."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Checks exact polynomial identities and expansions; it does not independently certify the unrestricted reciprocal theorem."
+      },
+      {
+        "capability_id": "polynomial.factor.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Returns coefficient- and multiplicity-bearing factor lists with reconstructed products; cyclotomic labeling and the general inversion-orbit argument remain agent-owned."
+      }
+    ],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Use exact factor reconstruction and keep the Phi_1/P(1) and root-orbit arguments explicit in evidence."
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "task_id": "jacobian/cyclotomic-reciprocity-certificate",
+  "conclusion": "CYCLOTOMIC_RECIPROCITY_CERTIFIED",
+  "result": {
+    "leading_coefficient": 3,
+    "factors": [
+      {
+        "order": 2,
+        "multiplicity": 2
+      },
+      {
+        "order": 3,
+        "multiplicity": 1
+      },
+      {
+        "order": 5,
+        "multiplicity": 1
+      },
+      {
+        "order": 8,
+        "multiplicity": 1
+      },
+      {
+        "order": 12,
+        "multiplicity": 1
+      }
+    ],
+    "expanded_coefficients": [
+      3,
+      12,
+      21,
+      21,
+      18,
+      24,
+      33,
+      33,
+      30,
+      33,
+      33,
+      24,
+      18,
+      21,
+      21,
+      12,
+      3
+    ],
+    "reciprocal_coefficients": [
+      3,
+      12,
+      21,
+      21,
+      18,
+      24,
+      33,
+      33,
+      30,
+      33,
+      33,
+      24,
+      18,
+      21,
+      21,
+      12,
+      3
+    ],
+    "p_at_one": 360,
+    "reciprocal_scalar": 1,
+    "root_orbit_conclusion": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "FROZEN_DEGREE_16_POLYNOMIAL_AND_GENERAL_CYCLOTOMIC_ORBIT_ARGUMENT",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:769c0beaeb600ee0bb9446cc3f04d65f82dc6da820761f28f5cbcec4f92c238a"
+    }
+  ],
+  "limitations": [
+    "The unrestricted real-polynomial theorem is not proof-assistant verified."
+  ]
+}

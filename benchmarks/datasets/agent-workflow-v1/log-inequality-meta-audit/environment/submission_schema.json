@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "log-inequality-meta-audit"},
+    "task_id": {"const": "jacobian/log-inequality-meta-audit"},
     "conclusion": {"const": "CLAIM_FALSE_EVALUATION_RUBRIC_CONSISTENT"},
     "result": {
       "type": "object",

@@ -14,8 +14,10 @@ separate claims:
 - `examples-v1` owns non-comparative tutorial and smoke workflows.
 
 `registry.toml` is the discovery index. A dataset's `suite.toml` owns its
-header, while sorted `members/*.toml` fragments select canonical task IDs.
-Its `dataset.toml` is generated from the suite and Harbor task checksums.
+stable policy, while sorted `members/*.toml` records authoritatively bind
+canonical task IDs to provenance, assurance, environment, and verifier
+contracts. Content-addressed snapshot locks freeze intentional evaluation sets;
+publication manifests are generated from locks outside dataset roots.
 
 ## Task contract
 

@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 # Exact finite optimization and proof-repair verifier.
 LABEL jacobian.task="jacobian/metric-tsp-proof-repair" \
-      jacobian.checksum="23691d567e4147dec2b97156b02f49db6fd78408c270a08260d46d7c73844634"
+      jacobian.checksum="945bf6c773510ca20d2ddd805e4254c744b82a4f76cc5369153f4cce25300025"
 COPY expected.json input.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

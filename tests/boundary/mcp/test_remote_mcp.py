@@ -557,6 +557,7 @@ def test_authenticated_streamable_http_isolates_tenant_memory(
             )
             assert report["server"]["version"] == version("jacobian")
             assert report["catalog"]["policy_profile"] == "DEFAULT"
+            assert report["catalog"]["catalog_digest"].startswith("sha256:")
         finally:
             http_server.should_exit = True
             server_thread.join(timeout=10)

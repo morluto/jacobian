@@ -113,10 +113,15 @@ def integers(value: Any) -> list[int] | None:
     if (
         not isinstance(value, list)
         or not value
-        or any(type(x) is not int for x in value)
+        or any(
+            isinstance(x, bool)
+            or not isinstance(x, (int, float))
+            or (isinstance(x, float) and not x.is_integer())
+            for x in value
+        )
     ):
         return None
-    return value
+    return [int(x) for x in value]
 
 
 def load_regular_submission() -> dict[str, Any] | None:
@@ -175,6 +180,7 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
         lowered = body.lower()
         return (
             json.loads(marker) == result
+            and len(body) >= 80
             and "gcd" in lowered
             and "remainder" in lowered
             and ("product" in lowered or "multiplication" in lowered)
@@ -194,10 +200,16 @@ def main() -> None:
         verification_record="forbidden",
     )
     try:
-        frozen_input_ok = (
-            not (WORKSPACE / "input.json").is_symlink()
-            and (WORKSPACE / "input.json").read_bytes()
-            == (TESTS / "input.json").read_bytes()
+        workspace_input = WORKSPACE / "input.json"
+        frozen_input = TESTS / "input.json"
+        frozen_input_ok = bool(
+            all(
+                path.is_file()
+                and not path.is_symlink()
+                and path.stat().st_size <= 1_048_576
+                for path in (workspace_input, frozen_input)
+            )
+            and workspace_input.read_bytes() == frozen_input.read_bytes()
         )
     except OSError:
         frozen_input_ok = False

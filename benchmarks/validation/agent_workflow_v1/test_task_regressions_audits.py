@@ -280,7 +280,10 @@ def test_polynomial_divisibility_derivation_helper_is_not_hardcoded() -> None:
         # Non-integral rational root cannot license a UNIQUE_PARAMETER claim.
         assert verifier.derive_unique_parameter([Fraction(1), Fraction(2)]) is None
         # Nonlinear and constant gcds cannot certify uniqueness.
-        assert verifier.derive_unique_parameter([Fraction(6), Fraction(-5), Fraction(1)]) is None
+        assert (
+            verifier.derive_unique_parameter([Fraction(6), Fraction(-5), Fraction(1)])
+            is None
+        )
         assert verifier.derive_unique_parameter([Fraction(2), Fraction(0)]) is None
     finally:
         sys.path.remove(str(tests_dir))
@@ -404,10 +407,7 @@ def test_polynomial_divisibility_rejects_evidence_with_wrong_result_marker(
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text(
-        "Some derivation text.\n"
-        'RESULT_JSON: {"parameter": 99}\n'
-    )
+    evidence_path.write_text('Some derivation text.\nRESULT_JSON: {"parameter": 99}\n')
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(submission_path, submission)
 

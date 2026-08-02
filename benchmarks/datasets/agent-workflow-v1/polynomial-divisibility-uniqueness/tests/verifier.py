@@ -158,9 +158,7 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
     try:
         if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
             return False
-        target = resolve_evidence(
-            evidence[0], expected_path="evidence/answer.txt"
-        )
+        target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     except RecursionError:
         return False
     if target is None:
@@ -247,8 +245,7 @@ def main() -> None:
     # reward; coupling it here would make evidence failures indistinguishable
     # from input-tampering failures.
     evidence_valid = bool(
-        math_correct
-        and evidence_matches_result(data.get("evidence"), result_typed)
+        math_correct and evidence_matches_result(data.get("evidence"), result_typed)
     )
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
     assurance_correct = bool(

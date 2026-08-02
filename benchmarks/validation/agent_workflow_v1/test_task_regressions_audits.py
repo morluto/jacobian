@@ -216,6 +216,13 @@ def test_lagrangian_projection_audit_accepts_alternative_coefficients(
         corrected_first_projection=[["2", "2/5"], ["-2/5", "2"]],
         corrected_second_projection=[["1", "-1"], ["1", "1"]],
     )
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "The nonzero Lagrangian defect mixes the two naive projections; "
+        "the corrected coupled identities reconstruct the exact witness "
+        "with scaled coefficients P=2I and Q=I."
+    )
+    support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 
     accepted = support._run_verifier(task, app, logs)

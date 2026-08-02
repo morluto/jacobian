@@ -56,7 +56,13 @@ def _fraction(text):
 
 
 def _words(text):
-    return re.findall(r"[a-z]+", text.casefold())
+    normalized = (
+        text.casefold()
+        .replace("isn't", "is not")
+        .replace("doesn't", "does not")
+        .replace("can't", "can not")
+    )
+    return re.findall(r"[a-z]+", normalized)
 
 
 def _affirmative_solved_or_verified_claim(text):
@@ -92,7 +98,7 @@ def _affirmative_solved_or_verified_claim(text):
             if word not in _AFFIRMATIVE_LEMMAS:
                 continue
             if not any(
-                token in words[max(0, index - 2) : index] for token in _NEGATION_TOKENS
+                token in words[max(0, index - 10) : index] for token in _NEGATION_TOKENS
             ):
                 return True
     return False
@@ -193,7 +199,7 @@ def _evidence_valid(evidence, result):
         return False
     try:
         bound_result = json.loads(markers[0])
-    except ValueError:
+    except (ValueError, RecursionError):
         return False
     if not isinstance(result, dict) or bound_result != result:
         return False

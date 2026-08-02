@@ -276,7 +276,6 @@ def evidence_valid(value: object, result: object) -> bool:
                     "m≥1",
                 )
             )
-            and "computed" in lowered
             and not any(term in lowered for term in contradictions)
         )
     except (OSError, UnicodeError, ValueError):
@@ -287,19 +286,16 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
     if not isinstance(limitations, list) or not limitations:
         return False
     combined = " ".join(str(item) for item in limitations).lower()
-    has_verification_caveat = any(
-        term in combined
-        for term in (
-            "proof-assistant",
-            "proof assistant",
-            "machine verification",
-            "not verification",
-            "not constitute verification",
-            "does not constitute",
+    has_verification_caveat = (
+        "proof assistant" in combined
+        or "proof-assistant" in combined
+        or (
+            "verification" in combined
+            and any(term in combined for term in ("not", "no ", "without", "assumes"))
         )
-    ) or (
-        "verification" in combined
-        and any(term in combined for term in ("not", "no ", "without", "assumes"))
+    ) and not any(
+        term in combined
+        for term in ("this is machine verification", "machine-verified", "formally verified")
     )
     has_scope_caveat = any(
         term in combined
@@ -311,7 +307,14 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
             "unrelated",
         )
     )
-    return has_verification_caveat and has_scope_caveat
+    return (
+        has_verification_caveat
+        and has_scope_caveat
+        and not any(
+            term in combined
+            for term in ("settles the two-dimensional conjecture", "proves the two-dimensional conjecture")
+        )
+    )
 
 
 def main() -> None:

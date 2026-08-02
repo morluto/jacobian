@@ -39,7 +39,7 @@ class GraphInvariantBatchRequest(ContractModel):
 
 class GraphInvariantResult(ContractModel):
     invariant: GraphInvariantName
-    status: Literal["COMPUTED", "NOT_APPLICABLE", "UNSUPPORTED"]
+    status: Literal["COMPUTED", "NOT_COMPUTED", "NOT_APPLICABLE", "UNSUPPORTED"]
     value: Any = None
     exactness: Literal["EXACT", "NOT_APPLICABLE"]
     backend: str | None = Field(default=None, min_length=1, max_length=128)

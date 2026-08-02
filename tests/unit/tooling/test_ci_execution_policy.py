@@ -93,7 +93,7 @@ def test_oracle_workers_do_not_repeat_benchmark_contract_suite() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]
 
-    assert "needs: [plan, contract]" in oracle
+    assert "needs: [plan, record-schema, prospective-digest]" in oracle
     assert "make harbor-oracle-run" in oracle
     assert "make harbor-oracle DATASET" not in oracle
 

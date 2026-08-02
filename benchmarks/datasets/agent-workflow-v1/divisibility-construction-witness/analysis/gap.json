@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "divisibility-construction-witness",
+  "analysis": {
+    "mathematical_moves": [
+      "Evaluate polynomial divisibility conditions over a bounded integer search scope.",
+      "Return a witness with exact quotient and remainder arithmetic."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "modular.enumerate.quadratic_residues",
+        "availability": "AVAILABLE",
+        "boundary": "Enumerates squares modulo one modulus only; it cannot expose a general sparse polynomial residue image."
+      }
+    ],
+    "gap_classes": [
+      "MISSING_OPERATION",
+      "WEAK_DISCOVERY"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "modular-polynomial-residue-image"
+    ],
+    "disposition": "ACCEPT_CANDIDATE",
+    "next_action": "Use this as the second structurally distinct public episode for a complete polynomial residue-image producer."
+  }
+}

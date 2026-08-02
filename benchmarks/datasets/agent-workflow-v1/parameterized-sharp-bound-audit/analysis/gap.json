@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "parameterized-sharp-bound-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Separate an attained symmetric minimum from a strict-positivity boundary infimum.",
+      "Derive the exact parameter transition and replay two affine polynomial certificate decompositions.",
+      "Audit equality, threshold, and limiting-family semantics independently of the dataset answer."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Can replay scalar polynomial identities but does not establish nonnegativity regimes, sharpness, or boundary attainment."
+      }
+    ],
+    "gap_classes": [
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Use as a proof-audit diagnostic; do not add an inequality-specific sharp-bound solver without repeated independent workflows."
+  }
+}

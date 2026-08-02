@@ -3,7 +3,7 @@
 UV_RUN := uv run --locked
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
-HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 python
+HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
 PYTEST_ARGS ?=
 TESTS ?=
 EVAL_ARGS ?=
@@ -17,7 +17,7 @@ TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-check harbor-oracle harbor-oracle-run harbor-oracle-all harbor-adapter-check agent-eval performance-eval provider-eval clean docs-linkcheck deploy-check
+.PHONY: help uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-check benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare performance-eval provider-eval clean docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Jacobian developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -178,8 +178,12 @@ precommit: ## Fix and run every routine local handoff check.
 check-static: lint-full typecheck test-architecture todo-check build ## Run CI-owned static checks plus a local package build.
 
 harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
-	@changed_paths=$$(if [ -n "$(BASE)" ]; then git diff --name-only "$(BASE)" HEAD; else git diff --name-only HEAD; fi); \
-	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks $$changed_paths
+	@changed_paths=$$({ \
+		if [ -n "$(BASE)" ]; then git diff --name-only "$(BASE)" HEAD; fi; \
+		git diff --name-only HEAD; \
+		git ls-files --others --exclude-standard; \
+	} | sort -u); \
+	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks $(if $(BASE),--base "$(BASE)",) -- $$changed_paths
 
 harbor-sync: ## Update vendored verifier support and deterministic task digests.
 	$(UV_RUN) python tools/sync_harbor_verifier_support.py --write
@@ -188,7 +192,29 @@ harbor-sync: ## Update vendored verifier support and deterministic task digests.
 harbor-check: ## Run Harbor topology, digest, provenance, and host-side validation checks.
 	$(UV_RUN) python tools/sync_harbor_verifier_support.py --check
 	$(HARBOR_PYTHON) tools/check_harbor_dataset.py --check
+	$(UV_RUN) python tools/check_benchmark_contracts.py
+	$(HARBOR_PYTHON) tools/check_benchmark_adapters.py
 	$(UV_RUN) pytest -n 0 benchmarks/validation
+
+benchmark-inventory: ## Render the content-bound benchmark inventory (OUTPUT=path optional).
+	$(HARBOR_PYTHON) -m benchmarks.tooling.benchmark_inventory $(if $(OUTPUT),--output "$(OUTPUT)",)
+
+benchmark-snapshot: ## Create an immutable snapshot lock (DATASET=..., OUTPUT=..., SOURCE_TREE=... optional).
+	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/manage_benchmark_snapshots.py create \
+		--dataset "$(DATASET)" $(if $(OUTPUT),--output "$(OUTPUT)",) \
+		$(if $(SOURCE_TREE),--source-tree "$(SOURCE_TREE)",)
+
+benchmark-snapshot-validate: ## Validate a committed snapshot lock (LOCK=..., REPRODUCE=1 optional).
+	@test -n "$(LOCK)" || { echo "LOCK is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/manage_benchmark_snapshots.py validate --lock "$(LOCK)" \
+		$(if $(filter 1,$(REPRODUCE)),--reproduce,) \
+		$(if $(SOURCE_TREE),--source-tree "$(SOURCE_TREE)",)
+
+benchmark-publish: ## Generate an ignored Harbor dataset.toml from a snapshot (LOCK=..., DEST=... optional).
+	@test -n "$(LOCK)" || { echo "LOCK is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/manage_benchmark_snapshots.py publish --lock "$(LOCK)" \
+		$(if $(DEST),--dest "$(DEST)",)
 
 harbor-oracle: harbor-check harbor-oracle-run ## Check contracts, then run a dataset Oracle.
 
@@ -212,10 +238,37 @@ harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with task
 
 harbor-adapter-check: ## Check deterministic regeneration for ADAPTER=<id>.
 	@test -n "$(ADAPTER)" || { echo "ADAPTER is required" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/check_benchmark_adapters.py --adapter "$(ADAPTER)"
 	@test -x "benchmarks/adapters/$(ADAPTER)/check.sh" || { echo "adapter check.sh is missing: $(ADAPTER)" >&2; exit 2; }
 	"benchmarks/adapters/$(ADAPTER)/check.sh"
 
-agent-eval: ## Run a Harbor Jacobian observation job (DATASET=agent-workflow-v1 EVAL_EXECUTE=1).
+heldout-validate: ## Validate a private held-out manifest (MANIFEST=path).
+	@test -n "$(MANIFEST)" || { echo "MANIFEST is required" >&2; exit 2; }
+	$(UV_RUN) python -m benchmarks.tooling.heldout_bundle validate --manifest "$(MANIFEST)"
+
+heldout-render: ## Verify a private bundle and render matched jobs (MANIFEST=..., BUNDLE_ROOT=..., OUTPUT=..., STAGE=...).
+	@test -n "$(MANIFEST)" -a -n "$(BUNDLE_ROOT)" -a -n "$(OUTPUT)" -a -n "$(STAGE)" -a -n "$(MAX_TOKENS)" -a -n "$(MAX_COST_USD)" || { echo "MANIFEST, BUNDLE_ROOT, OUTPUT, STAGE, MAX_TOKENS, and MAX_COST_USD are required" >&2; exit 2; }
+	$(HARBOR_PYTHON) -m benchmarks.tooling.heldout_bundle render \
+		--manifest "$(MANIFEST)" --bundle-root "$(BUNDLE_ROOT)" --output "$(OUTPUT)" \
+		--stage "$(STAGE)" --max-tokens "$(MAX_TOKENS)" --max-cost-usd "$(MAX_COST_USD)"
+
+heldout-smoke: ## Render a synthetic private bundle and run Harbor nop/Oracle without model cost.
+	$(HARBOR_PYTHON) -m benchmarks.tooling.heldout_smoke --run-harbor
+
+JACOBIAN_ENABLED ?= 1
+ifneq ($(filter 0 1,$(JACOBIAN_ENABLED)),$(JACOBIAN_ENABLED))
+$(error JACOBIAN_ENABLED must be exactly 0 or 1 (got '$(JACOBIAN_ENABLED)'))
+endif
+
+ifeq ($(JACOBIAN_ENABLED),0)
+EVAL_CONFIG ?= benchmarks/config/agent-workflow-v1-control.json
+override MCP_CONFIG :=
+else
+EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation.json
+MCP_CONFIG ?= benchmarks/config/jacobian.mcp.json
+endif
+
+agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, DATASET=agent-workflow-v1, EVAL_EXECUTE=1).
 	@if [ "$(EVAL_EXECUTE)" != "1" ]; then \
 		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1"; \
 		exit 0; \
@@ -225,10 +278,26 @@ agent-eval: ## Run a Harbor Jacobian observation job (DATASET=agent-workflow-v1 
 		exit 2; \
 	fi; \
 	$(HARBOR_RUNNER) run \
-		-c "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation.json" \
+		-c "$(EVAL_CONFIG)" \
+		-a codex \
 		-m "$${JACOBIAN_MODEL}" \
+		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
 		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS)
+
+agent-eval-validate: ## Normalize one observation (RESULTS=..., JOB=..., CONDITION=..., OUTPUT=...).
+	@test -n "$(RESULTS)" -a -n "$(JOB)" -a -n "$(CONDITION)" -a -n "$(OUTPUT)" || { echo "RESULTS, JOB, CONDITION, and OUTPUT are required" >&2; exit 2; }
+	$(UV_RUN) python -m benchmarks.tooling.observation_results validate \
+		--dataset "$(or $(DATASET),agent-workflow-v1)" --condition "$(CONDITION)" \
+		--job "$(JOB)" --jobs-dir "$(RESULTS)" --output "$(OUTPUT)" \
+		$(if $(RESULT),--result "$(RESULT)",) \
+		$(if $(RUNTIME_SNAPSHOT),--runtime-snapshot "$(RUNTIME_SNAPSHOT)",) \
+		$(if $(HELDOUT_MANIFEST),--heldout-manifest "$(HELDOUT_MANIFEST)",)
+
+agent-eval-compare: ## Compare normalized observations (CONTROL=..., TREATMENT=..., OUTPUT=...).
+	@test -n "$(CONTROL)" -a -n "$(TREATMENT)" -a -n "$(OUTPUT)" || { echo "CONTROL, TREATMENT, and OUTPUT are required" >&2; exit 2; }
+	$(UV_RUN) python -m benchmarks.tooling.observation_results compare \
+		--control "$(CONTROL)" --treatment "$(TREATMENT)" --output "$(OUTPUT)"
 
 performance-eval: ## Run the report-only performance dataset through its Oracle job.
 	$(MAKE) harbor-oracle DATASET=performance-v1

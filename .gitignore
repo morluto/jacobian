@@ -26,6 +26,7 @@ coverage.json
 coverage.xml
 .hypothesis/
 .jacobian/
+.diagnostics/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
@@ -36,7 +37,7 @@ build/
 dist/
 htmlcov/
 benchmarks/results/
-jobs/
+/jobs/
 lean/.lake/
 
 # Test infrastructure state

@@ -12,6 +12,31 @@ outcomes and evidence, not a preferred sequence of calls.
 Use the [shared handoff format](../../../docs/reference/capability-development-handoffs.md)
 for inputs, returns, and portfolio decisions.
 
+## Classify the evidence before running
+
+Give each case and result one primary evidence role:
+
+- **task/verifier validation:** checks the benchmark harness, task contract,
+  independent Oracle, or deliberate failure cases; it is harness evidence,
+  not model capability evidence;
+- **regression/public reproduction:** known or public case; useful for contract
+  and breakage detection, never held-out causal evidence;
+- **assurance/conformance:** tests calibration, scope, schemas, artifacts,
+  discovery, or parameterization, and may not measure mathematical capability
+  value;
+- **Jacobian workflow observation:** records agent discovery, tool use,
+  artifacts, and assurance behavior on a configured Harbor workflow; it is
+  workflow evidence, not comparative performance evidence;
+- **held-out causal comparison:** an unseen or transformed case with a frozen
+  control/treatment intervention and an independently judgeable outcome.
+
+Do not promote a public regression, a single observation, or a reward change
+caused only by assurance calibration into a claim that Jacobian improved
+mathematical problem solving. A causal comparison is not ready until a control
+pilot is below the success ceiling, treatment has a plausible capability-to-
+outcome hypothesis, and the plan specifies multiple repetitions and uncertainty
+reporting.
+
 ## Confirm evaluation readiness
 
 Start from a concrete intervention:
@@ -155,6 +180,12 @@ Make these primary:
 - scope and completeness accuracy;
 - evidence and verification-record bindings; and
 - acceptance of mathematically valid alternative strategies.
+
+Keep mathematical correctness, evidence validity, scope/completeness, false
+certification, and assurance calibration as separate reported metrics. An
+aggregate reward may summarize a workflow contract, but it must not be the
+primary evidence for a capability-benefit claim when it combines these
+dimensions.
 
 Among semantically correct runs, measure:
 

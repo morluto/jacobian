@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "subspace-direct-sum-counterexample"},
+    "task_id": {"const": "jacobian/subspace-direct-sum-counterexample"},
     "conclusion": {"const": "FALSE"},
     "result": {"type": "object", "additionalProperties": false, "required": ["generators", "dependence_coefficients"], "properties": {"generators": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer"}}}, "dependence_coefficients": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer"}}}},
     "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},

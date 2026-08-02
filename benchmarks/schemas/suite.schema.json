@@ -10,10 +10,9 @@
     "dataset": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "version", "title", "purpose", "claim_class", "answer_visibility", "default_execution_profile"],
+      "required": ["id", "title", "purpose", "claim_class", "answer_visibility", "default_execution_profile"],
       "properties": {
         "id": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"},
-        "version": {"type": "string", "minLength": 1},
         "title": {"type": "string", "minLength": 1},
         "purpose": {"type": "string", "minLength": 1},
         "claim_class": {"type": "string", "minLength": 1},

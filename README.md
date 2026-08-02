@@ -41,7 +41,14 @@ claim, candidate, scope, semantics, certificate format, and checker identity.
 
 ## Quickstart
 
-The npm launcher installs Jacobian and configures supported MCP clients:
+The npm launcher installs Jacobian and configures supported MCP clients. For a
+one-off setup without a global install, run:
+
+```sh
+npx jacobian setup
+```
+
+For repeated use, install the launcher persistently and use its commands:
 
 ```sh
 npm install -g jacobian

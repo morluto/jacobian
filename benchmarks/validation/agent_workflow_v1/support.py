@@ -31,6 +31,7 @@ RESOURCE_DERIVED_TASKS = (
     "gaussian-moment-generality-audit",
     "generated-lemma-vacuity-audit",
     "inverse-distance-remainder-audit",
+    "lagrangian-projection-proof-audit",
     "lcm-highly-abundant-scope-audit",
     "lean-transitive-axiom-audit",
     "log-exponent-recovery",

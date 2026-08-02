@@ -1,0 +1,31 @@
+{
+  "jobs_dir": "benchmarks/results/agent-workflow-v1-control",
+  "n_attempts": 3,
+  "timeout_multiplier": 1,
+  "orchestrator": {
+    "type": "local",
+    "n_concurrent_trials": 1,
+    "quiet": false
+  },
+  "environment": {
+    "type": "docker",
+    "force_build": true,
+    "delete": true,
+    "extra_docker_compose": [
+      "benchmarks/config/agent-eval-proxy.compose.yaml"
+    ]
+  },
+  "agents": [
+    {
+      "name": "codex"
+    }
+  ],
+  "datasets": [
+    {
+      "path": "benchmarks/datasets/agent-workflow-v1",
+      "task_names": [
+        "graph-counterexample"
+      ]
+    }
+  ]
+}

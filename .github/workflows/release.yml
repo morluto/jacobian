@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -13,6 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -20,18 +23,20 @@ jobs:
     name: Build release artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
     steps:
       - name: Resolve release tag
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           test -n "$RELEASE_TAG"
           echo "sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ steps.release.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -51,6 +56,14 @@ jobs:
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+      - name: Require successful CI for release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          test "$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$RELEASE_SHA&status=success&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_sha == env.RELEASE_SHA and .conclusion == "success")] | length')" -gt 0
       - name: Build Python distributions
         run: uv build --out-dir dist/python
       - name: Test and pack npm distribution
@@ -86,7 +99,7 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    needs: publish-pypi
+    needs: [build, publish-pypi]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm
@@ -96,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ needs.build.outputs.release_sha }}
           persist-credentials: false
       - id: node
         name: Load npm Node version
@@ -175,3 +188,51 @@ jobs:
             npm publish artifacts/npm/*.tgz --access public --tag "$dist_tag"
           fi
           npm dist-tag add "jacobian@$version" "$dist_tag"
+
+  publish-mcp:
+    name: Publish to MCP Registry
+    needs: [build, publish-npm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.release_sha }}
+          persist-credentials: false
+      - name: Verify immutable release commit
+        env:
+          RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+        run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+      - name: Install MCP Registry publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.0
+        run: |
+          case "$(uname -m)" in
+            x86_64)
+              architecture=amd64
+              checksum=1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf
+              ;;
+            aarch64|arm64)
+              architecture=arm64
+              checksum=c978982c60e1b4903a976de090f04dc4fac4a320daa50704fcad2dbc93433d62
+              ;;
+            *)
+              echo "unsupported MCP Publisher architecture: $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+          archive="mcp-publisher_linux_${architecture}.tar.gz"
+          curl -fsSLo "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${archive}"
+          echo "$checksum  $archive" | sha256sum --check --strict
+          tar xzf "$archive" mcp-publisher
+          chmod +x mcp-publisher
+      - name: Validate server metadata
+        run: ./mcp-publisher validate
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish server metadata
+        run: ./mcp-publisher publish

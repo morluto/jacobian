@@ -5,7 +5,8 @@
       "release-type": "python",
       "package-name": "jacobian",
       "extra-files": [
-        "npm/package.json"
+        "npm/package.json",
+        "server.json"
       ]
     }
   }

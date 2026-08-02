@@ -15,6 +15,7 @@ class PolynomialInstallation:
     polynomial_semantics_uri: str
     factorization_semantics_uri: str
     identity_semantics_uri: str
+    rational_function_identity_semantics_uri: str
     inverse_semantics_uri: str
     map_schema_uri: str
     evaluation_schema_uri: str
@@ -24,6 +25,9 @@ class PolynomialInstallation:
     right_polynomial_schema_uri: str
     left_polynomial_schema_uri: str
     identity_claim_schema_uri: str
+    rational_function_left_schema_uri: str
+    rational_function_right_schema_uri: str
+    rational_function_identity_claim_schema_uri: str
     keller_claim_schema_uri: str
     inverse_collision_claim_schema_uri: str
     inverse_claim_schema_uri: str
@@ -37,6 +41,7 @@ class PolynomialInstallation:
     jacobian_checker_id: str | None
     keller_checker_id: str | None
     identity_checker_id: str | None
+    rational_function_identity_checker_id: str | None
     inverse_checker_id: str | None
     inverse_collision_checker_id: str | None
 

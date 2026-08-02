@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jacobian"
-version = "0.6.0"
+version = "0.7.0"
 description = "A capability-first MCP workbench for executable mathematics"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -62,6 +62,12 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jacobian", "src/jacobian_checkers"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.diagnostics",
+    "/.diagnostics/**",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"

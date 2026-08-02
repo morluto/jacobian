@@ -17,13 +17,21 @@ Classify the work before editing a task:
 
 - **Task/verifier validation:** parse the bundles, run the Oracle, and attack
   deliberate failure cases. This is harness evidence.
+- **Regression or public reproduction:** replay a known or public case to
+  detect breakage. This is not held-out evidence and must not support a causal
+  capability claim.
+- **Assurance or contract conformance:** test assurance calibration, scope,
+  schemas, artifacts, discovery, or parameterization. These cases may measure
+  workflow quality without measuring mathematical capability value.
 - **Jacobian workflow observation:** use the committed Harbor observation job,
   its direct local MCP service, and Harbor ATIF plus Jacobian telemetry. This is
   workflow evidence, not comparative performance.
 - **Future causal comparison:** put control/treatment conditions in Harbor job
   configuration, outside task bundles, with identical task digests, prompts,
-  models, budgets, environments, and seeds. Do not add an A/B condition merely
-  to validate v1.
+  models, budgets, environments, and seeds. Require held-out or transformed
+  cases, a non-ceiling control pilot, multiple repetitions, and separately
+  reported correctness and assurance metrics. Do not treat an A/B run on the
+  public suite as a causal result.
 
 ## Author or change a task
 
@@ -31,12 +39,12 @@ Read `AGENTS.md`, `CONTRIBUTING.md`, and
 `docs/reference/capability-workflow-evaluations.md`. Each Harbor dataset owns
 its task bundles directly under
 `benchmarks/datasets/<dataset>/<task-id>/`; a bundle is a direct child of its
-dataset, not a symlink or nested task directory. Keep domain, field, provenance,
-and evaluation classification in typed `task.toml` metadata rather than
-directory hierarchy. A dataset selects its bundles through one
-`benchmarks/datasets/<dataset>/members/<task-id>.toml` fragment per member, and
-the generated `dataset.toml` is the Harbor digest boundary. Do not maintain a
-second shared task root or copy a bundle outside its owning dataset.
+dataset, not a symlink or nested task directory. Keep domain-owned execution
+metadata in typed `task.toml`. A dataset selects its bundles through one
+authoritative `benchmarks/datasets/<dataset>/members/<task-id>.toml` record per
+member. Immutable snapshot locks are evaluation and publication boundaries;
+never commit a mutable `dataset.toml` in a dataset root or maintain a second
+shared task root.
 
 Before adding a task, run the benchmark planner and check for a global ID
 collision. Manually authored or substantially transformed cases remain authored
@@ -51,6 +59,15 @@ metadata, concise provenance, an agent-visible
 separate clean-room verifier. Instructions must
 be agent-agnostic: describe the mathematical outcome and evidence, never
 capability IDs, tool sequences, preferred decompositions, or Jacobian details.
+
+For a new task, copy the member shape from `benchmarks/templates/member.toml`,
+create exactly one `members/<task-id>.toml` record alongside the direct task
+bundle, and resolve its `environment_profile` through
+`benchmarks/environment-profiles.toml`. Standard profiles use digest-pinned
+images and prohibit `apt-get`; provider-specific installation belongs only in
+an explicitly allowed profile. Harbor verifier Dockerfiles are built from the
+task's `tests/` directory, so do not use parent-directory `COPY` paths, host
+paths, floating image tags, or symlinks to share hidden material.
 
 Verifiers must reject malformed submissions, symlink or workspace escapes,
 wrong evidence paths or digests, incomplete scope, mismatched claims, and false
@@ -71,7 +88,6 @@ Use the pinned Harbor runner from the repository:
 ```sh
 uvx --from harbor==0.20.0 harbor --version
 make harbor-plan BASE=origin/main
-make harbor-sync
 make harbor-check
 make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 ```
@@ -79,8 +95,9 @@ make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 After any input, instruction, metadata, verifier, dependency, image, or task
 contract change:
 
-1. Recompute each canonical task content digest with Harbor's task model and
-   regenerate every affected `dataset.toml`; do not invent a custom digest.
+1. Recompute each prospective task and suite digest with Harbor's task model.
+   Do not rewrite an existing snapshot or historical evaluation. Create a new
+   snapshot only for an intentional evaluation or publication event.
 2. Parse/check every canonical task selected by member fragments and reject
    missing, duplicate, ambiguous, or escaping references.
 3. Run every task through the dataset's Oracle job and require full applicable
@@ -92,9 +109,41 @@ contract change:
    secrets, host paths, raw caches, and floating dependencies.
 
 Do not treat `harbor sync` as a local digest calculator when the task is not
-published. The committed dataset manifest and canonical task content must
-agree. `harbor-check` is outside the product `tests/` topology; keep Harbor
-validation from entering product Python coverage.
+published. Membership is authoritative in the member record and task content
+is hashed by Harbor's `Task.checksum`; there is no mutable dataset-root
+manifest to regenerate. `harbor-check` is outside the product `tests/`
+topology; keep Harbor validation from entering product Python coverage.
+
+Only create a snapshot for an intentional evaluation or publication boundary:
+
+```sh
+make benchmark-snapshot DATASET=agent-workflow-v1
+make benchmark-snapshot-validate \
+  LOCK=benchmarks/snapshots/<dataset>/<digest>.lock.json
+make benchmark-publish \
+  LOCK=benchmarks/snapshots/<dataset>/<digest>.lock.json
+```
+
+Commit the lock under `benchmarks/snapshots/<dataset>/`; publication output
+under ignored `dist/harbor/` is generated and must not be edited or committed.
+Historical plans, ledgers, observations, and reports reference the lock ID and
+must never be rewritten when a later task is added.
+
+Observation evidence is version 2. Jobs must select exactly one of
+`datasets[].path` (with optional task filters) or explicit `tasks[].path`;
+mixed, empty, unknown, escaping, and implicit full-suite selections fail
+closed. Bind evidence to the snapshot ID, task digest, Harbor version,
+normalized arguments, runtime state, model, repetition, budgets, result, and
+verifier status. Use Harbor's artifact manifest as the source of truth for
+artifact identity and reject traversal, escaping symlinks, missing entries, and
+non-conclusion execution states.
+
+Current separate-verifier tasks retain synchronized `tests/verifier_support.py`
+copies because Harbor requires the separate verifier image to contain its test
+runtime in the task `tests/` build context. Do not delete those files or the
+sync checker until a digest-pinned shared verifier image is published and the
+task Dockerfiles have migrated to that image. A local-only image or invented
+digest is not a valid substitute.
 
 The independent benchmark planner emits `run-benchmark-check`,
 `run-benchmark-oracle`, `benchmark-oracle-scope`, an exact dataset/task/digest
@@ -116,13 +165,19 @@ verifier logs, source SHA, task digest, and Harbor version.
 Review the committed observation job and run the local Harbor composition. The
 Jacobian service is intentionally anonymous for this local evaluation path;
 Harbor connects directly to `http://jacobian:8000/mcp`. Set `JACOBIAN_IMAGE`
-only when overriding the default local image:
+only when overriding the default local image. Use the toggle explicitly:
 
 ```sh
 export JACOBIAN_MODEL='your-model'
 export JACOBIAN_IMAGE='jacobian:local'
-make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1
+make agent-eval DATASET=agent-workflow-v1 \
+  JACOBIAN_ENABLED=1 EVAL_EXECUTE=1
 ```
+
+For a control run, use `JACOBIAN_ENABLED=0`; it selects the matching Harbor
+job without the sidecar or MCP configuration. Keep the task filter, model,
+prompt, budget, and environment fixed when comparing the two modes. The
+external MCP configuration belongs to the treatment job, not task TOMLs.
 
 Inspect Harbor ATIF together with Jacobian telemetry for capability discovery
 and descriptions, invocation and parameter errors, artifact and verification

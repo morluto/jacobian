@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian.artifacts import ArtifactValidationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
@@ -10,6 +11,103 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+
+
+def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    installation = runtime.portfolio.graph
+    vertices = [f"v{index:03d}" for index in range(256)]
+
+    accepted = runtime.core.artifacts.put(
+        schema_uri=installation.graph_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload={
+            "graph_schema_version": "1",
+            "vertices": vertices,
+            "edges": [],
+        },
+    )
+
+    assert runtime.core.store.get(accepted.artifact_uri).payload["vertices"] == vertices
+    with pytest.raises(ArtifactValidationError, match="does not match its schema"):
+        runtime.core.artifacts.put(
+            schema_uri=installation.graph_schema_uri,
+            semantics_uri=installation.semantics_uri,
+            payload={
+                "graph_schema_version": "1",
+                "vertices": [*vertices, "v256"],
+                "edges": [],
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "graph_schema_version": "1",
+            "vertices": ["a", "b"],
+            "edges": [["b", "a"]],
+        },
+        {
+            "graph_schema_version": "1",
+            "vertices": ["a", "b"],
+            "edges": [["a", "a"]],
+        },
+        {
+            "graph_schema_version": "1",
+            "vertices": ["a", "b"],
+            "edges": [["a", "c"]],
+        },
+        {
+            "graph_schema_version": "1",
+            "vertices": ["a", "b"],
+            "edges": [["a", "b"], ["a", "b"]],
+        },
+    ],
+)
+def test_generic_graph_artifacts_reject_noncanonical_simple_graphs(
+    authorized_complete_runtime,
+    payload: dict[str, object],
+) -> None:
+    runtime = authorized_complete_runtime
+    installation = runtime.portfolio.graph
+
+    with pytest.raises(ArtifactValidationError, match="does not match its schema"):
+        runtime.core.artifacts.put(
+            schema_uri=installation.graph_schema_uri,
+            semantics_uri=installation.semantics_uri,
+            payload=payload,
+        )
+
+
+def test_graph_consumers_reject_forged_malformed_payloads(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    installation = runtime.portfolio.graph
+    forged = runtime.core.store.put(
+        schema_uri=installation.graph_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload={
+            "graph_schema_version": "1",
+            "vertices": ["a", "b"],
+            "edges": [["a", "a"]],
+        },
+        summary="forged malformed graph",
+    )
+
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.compute.properties",
+            input={"graph_uri": forged.artifact_uri, "properties": ["order"]},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INCOMPATIBLE_GRAPH_ARTIFACT"
 
 
 def test_explicit_graph_construction_canonicalizes_and_feeds_graph_capabilities(
@@ -296,6 +394,48 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
         )
         assert invariant_artifact.manifest.parents == (graph_uri,)
         assert invariant_artifact.payload["result"] == binding["result"]
+
+
+@pytest.mark.parametrize(
+    ("order", "expected_status"),
+    [(24, "COMPUTED"), (25, "NOT_COMPUTED")],
+)
+def test_exact_independence_number_stops_at_the_order_boundary(
+    authorized_complete_runtime,
+    order: int,
+    expected_status: str,
+) -> None:
+    runtime = authorized_complete_runtime
+    installation = runtime.portfolio.graph
+    graph = runtime.core.artifacts.put(
+        schema_uri=installation.graph_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload={
+            "graph_schema_version": "1",
+            "vertices": [f"v{index:02d}" for index in range(order)],
+            "edges": [],
+        },
+    )
+
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.compute.properties",
+            input={
+                "graph_uri": graph.artifact_uri,
+                "properties": ["independence_number"],
+            },
+        )
+    )
+
+    invariant = result.output["results"][0]["result"]
+    assert invariant["status"] == expected_status
+    if order == 24:
+        assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
+        assert invariant["value"] == 24
+    else:
+        assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
+        assert invariant["value"] is None
+        assert "limited to graphs of order 24" in invariant["detail"]
 
 
 def test_graph_counterexample_invariant_batch_reproduces_path_five(

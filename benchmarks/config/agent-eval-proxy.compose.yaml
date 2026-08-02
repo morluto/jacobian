@@ -1,0 +1,13 @@
+services:
+  main:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      HTTP_PROXY: ${JACOBIAN_EVAL_HTTP_PROXY:-}
+      HTTPS_PROXY: ${JACOBIAN_EVAL_HTTPS_PROXY:-}
+      ALL_PROXY: ${JACOBIAN_EVAL_ALL_PROXY:-}
+      NO_PROXY: ${JACOBIAN_EVAL_NO_PROXY:-localhost,127.0.0.1,jacobian}
+      http_proxy: ${JACOBIAN_EVAL_HTTP_PROXY:-}
+      https_proxy: ${JACOBIAN_EVAL_HTTPS_PROXY:-}
+      all_proxy: ${JACOBIAN_EVAL_ALL_PROXY:-}
+      no_proxy: ${JACOBIAN_EVAL_NO_PROXY:-localhost,127.0.0.1,jacobian}

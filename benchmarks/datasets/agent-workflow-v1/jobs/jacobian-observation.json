@@ -1,6 +1,6 @@
 {
   "jobs_dir": "benchmarks/results/agent-workflow-v1",
-  "n_attempts": 1,
+  "n_attempts": 3,
   "timeout_multiplier": 1,
   "orchestrator": {
     "type": "local",
@@ -12,19 +12,13 @@
     "force_build": true,
     "delete": true,
     "extra_docker_compose": [
+      "benchmarks/config/agent-eval-proxy.compose.yaml",
       "benchmarks/datasets/agent-workflow-v1/jacobian-observation.compose.yaml"
     ]
   },
   "agents": [
     {
-      "name": "codex",
-      "mcp_servers": [
-        {
-          "name": "jacobian",
-          "transport": "streamable-http",
-          "url": "http://jacobian:8000/mcp"
-        }
-      ]
+      "name": "codex"
     }
   ],
   "datasets": [

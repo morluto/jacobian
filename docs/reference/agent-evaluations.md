@@ -28,53 +28,38 @@ and validates the generated task digests. Wrong
 answers, malformed or escaped evidence, incomplete scope, and false
 certification receive zero reward.
 
-## Jacobian observation
+## Evaluation roles
 
-Harbor runs the same canonical tasks with the local Jacobian MCP service as an
-ordinary Compose sidecar:
+There are two supported Jacobian observation modes. Standalone observation asks
+whether an agent can discover and use Jacobian. Paired control/treatment asks
+whether Jacobian changes outcomes.
 
-```sh
-export JACOBIAN_IMAGE='jacobian:local'
-export JACOBIAN_MODEL='your-model'
-make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1
-```
+For a paired run, control and treatment must use identical task bundles and
+task digests. The only intended difference is Jacobian availability. Do not add
+Jacobian to task TOMLs: that changes the task contract and invalidates the
+matched boundary.
 
-The Compose file defaults to `jacobian:local`; set `JACOBIAN_IMAGE` when using
-another local or registry image. Harbor selects tasks from the dataset
-represented by the generated
-`benchmarks/datasets/agent-workflow-v1/dataset.toml` manifest. Pass
-`TASKS=graph-counterexample` selects the same small default explicitly; the
-committed observation job defaults to that task.
+Use the [run agent evaluations how-to](../how-to/run-agent-evaluations.md) for
+commands, Docker and proxy setup, external MCP configuration, and
+troubleshooting.
 
-The observation service is anonymous and intended for local evaluation. It
-does not add an image identity, token, proxy, or eligibility preflight in front
-of Harbor.
+## Metrics and interpretation
 
-### Optional Docker proxy
+Report mathematical correctness, evidence validity, scope/completeness, false
+certification, and assurance calibration separately. Aggregate reward may
+summarize a workflow contract, but is not primary evidence of Jacobian's
+mathematical capability value when it combines those dimensions.
 
-The observation Compose overlay leaves the task container's network direct by
-default. If the host requires a proxy for package installation or Codex model
-access, configure it explicitly for the container:
-
-```sh
-export JACOBIAN_EVAL_HTTP_PROXY='http://host.docker.internal:7890'
-export JACOBIAN_EVAL_HTTPS_PROXY='http://host.docker.internal:7890'
-export JACOBIAN_EVAL_NO_PROXY='localhost,127.0.0.1,jacobian'
-make agent-eval DATASET=agent-workflow-v1 TASKS=graph-counterexample EVAL_EXECUTE=1
-```
-
-The overlay maps `host.docker.internal` to the Docker host and passes both
-upper- and lower-case proxy variables to Harbor's `main` container, including
-the agent installation phase. Proxying remains disabled when these variables
-are unset. On Linux, the host proxy must accept connections from Docker's
-bridge interface; a proxy bound only to the host's loopback address is not
-reachable from a container.
+Start comparative work with three representative cases and three repetitions
+per condition. Stronger claims require held-out or transformed cases, a
+non-ceiling control pilot, more repetitions, and uncertainty reporting. Public
+suite results remain workflow observations, not held-out causal evidence.
 
 Inspect Harbor ATIF together with Jacobian telemetry for discovery,
 descriptions, invocation and parameter errors, artifact and verification-record
 flow, repeated calls, shell activity, tokens, time, and completion. This is
-workflow evidence, not a causal comparison: version 1 has no control condition,
-randomized pairing, or held-out performance claim.
+workflow evidence, not a causal comparison: the public suite has no held-out
+performance claim.
 
 The separate
 [`research-diagnostics-v1`](../../benchmarks/datasets/research-diagnostics-v1/README.md)

@@ -4,13 +4,25 @@
 This planner is deliberately independent from the product CI classifier.  A
 benchmark-only change never turns on a product Python lane, and a product-only
 change never turns on Harbor execution.
+
+The emitted plan is a versioned, tamper-evident contract.  It binds the chosen
+lanes to the triggering event and the base/head (or merge-group) SHA, records a
+digest of the planner itself, and records a digest of the benchmark topology so
+downstream jobs can confirm they are validating the exact tree the planner saw.
+The plan selects three independent validation lanes -- record/schema conformance,
+prospective digest/record freshness, and merge-group inventory validation -- in
+addition to the Docker Oracle lane.  Unknown benchmark paths fail closed to the
+full portfolio.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import hashlib
 import importlib
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,24 +31,40 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+PLAN_VERSION = "1"
 EVENTS = ("pull_request", "merge_group", "push", "schedule", "workflow_dispatch")
+MODES = ("none", "changed", "integration", "full")
 MAX_PULL_REQUEST_ORACLE_TASKS = 8
+TARGET_TASKS_PER_SHARD = 12
+MAX_DATASET_SHARDS = 4
+_ORACLE_SCOPE_RANK = {
+    "none": 0,
+    "changed-tasks": 1,
+    "affected-datasets": 2,
+    "all": 3,
+}
 BENCHMARK_CONTROL_PATHS = frozenset(
     {
         ".github/scripts/plan-benchmarks",
         ".github/scripts/validate-benchmark-plan",
         ".github/workflows/benchmarks.yml",
+        ".github/workflows/heldout-benchmarks.yml",
         "Makefile",
+        "tools/check_benchmark_adapters.py",
+        "tools/check_benchmark_contracts.py",
         "tools/check_harbor_dataset.py",
         "tools/sync_harbor_verifier_support.py",
     }
 )
 BENCHMARK_EXECUTION_CONTROL_PATHS = frozenset(
     {
+        "tools/check_benchmark_adapters.py",
+        "tools/check_benchmark_contracts.py",
         "tools/check_harbor_dataset.py",
         "tools/sync_harbor_verifier_support.py",
     }
 )
+BENCHMARK_CONFIG_PREFIX = "benchmarks/config/"
 
 
 def _json(value: object) -> str:
@@ -52,6 +80,50 @@ def _digest(path: Path) -> str:
     return digest if digest.startswith("sha256:") else f"sha256:{digest}"
 
 
+def _planner_digest() -> str:
+    return "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _topology_digest(suites: list[Any] | tuple[Any, ...]) -> str:
+    """Content-bound digest over the canonical benchmark topology.
+
+    Binds the registry, environment profiles, each suite manifest, each
+    member fragment, and the ordered Harbor task digests so that member
+    metadata, suite policy, registry, and environment-profile changes all
+    alter the digest.  File SHA256s are used for the canonical files; Harbor
+    task digests are used for task content.
+    """
+
+    payload: list[str] = []
+    registry = ROOT / "benchmarks" / "registry.toml"
+    if registry.is_file():
+        payload.append(f"registry.toml\t{_file_sha256(registry)}")
+    profiles = ROOT / "benchmarks" / "environment-profiles.toml"
+    if profiles.is_file():
+        payload.append(f"environment-profiles.toml\t{_file_sha256(profiles)}")
+    for suite in sorted(suites, key=lambda item: item.id):
+        payload.append(f"suite\t{suite.id}")
+        suite_manifest = getattr(suite, "suite_manifest", None)
+        if suite_manifest is not None:
+            suite_manifest = Path(suite_manifest)
+            if suite_manifest.is_file():
+                payload.append(f"{suite.id}/suite.toml\t{_file_sha256(suite_manifest)}")
+        suite_path = getattr(suite, "path", None)
+        members_dir = Path(suite_path) / "members" if suite_path is not None else None
+        if members_dir is not None and members_dir.is_dir():
+            for member in sorted(members_dir.glob("*.toml")):
+                payload.append(
+                    f"{suite.id}/members/{member.name}\t{_file_sha256(member)}"
+                )
+        for ref in sorted(suite.tasks, key=lambda item: item.path.name):
+            payload.append(f"{suite.id}/task\t{ref.path.name}\t{_digest(ref.path)}")
+    return "sha256:" + hashlib.sha256("\n".join(payload).encode()).hexdigest()
+
+
 def _membership() -> tuple[dict[str, list[tuple[str, Path]]], dict[str, Any]]:
     by_task: dict[str, list[tuple[str, Path]]] = {}
     suites: dict[str, Any] = {}
@@ -62,20 +134,361 @@ def _membership() -> tuple[dict[str, list[tuple[str, Path]]], dict[str, Any]]:
     return by_task, suites
 
 
-def _full_plan(reason: str) -> dict[str, str]:
-    suites = _harbor_suite().load_registry()
-    matrix = [
-        {"dataset": suite.id, "task": ref.path.name, "digest": _digest(ref.path)}
-        for suite in suites
-        for ref in suite.tasks
-    ]
+def _exact_entry(dataset: str, task: str, path: Path) -> dict[str, Any]:
     return {
-        "run-benchmark-check": "true",
-        "run-benchmark-oracle": "true",
-        "benchmark-oracle-scope": "all",
-        "benchmark-oracle-matrix": _json(matrix),
-        "benchmark-plan-reasons": _json([reason]),
+        "dataset": dataset,
+        "shard": task,
+        "tasks": [task],
+        "task_digests": [{"task": task, "digest": _digest(path)}],
     }
+
+
+def _shard_entries(
+    suites: list[Any] | tuple[Any, ...],
+    *,
+    timings: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    timings = timings or {}
+    matrix: list[dict[str, Any]] = []
+    for suite in suites:
+        tasks = list(suite.tasks)
+        if not tasks:
+            continue
+        shard_count = min(
+            MAX_DATASET_SHARDS,
+            max(1, math.ceil(len(tasks) / TARGET_TASKS_PER_SHARD)),
+        )
+        bins: list[tuple[float, list[Any]]] = [(0.0, []) for _ in range(shard_count)]
+        weighted = sorted(
+            tasks,
+            key=lambda ref: (
+                -timings.get(f"{suite.id}/{ref.path.name}", 1.0),
+                ref.path.name,
+            ),
+        )
+        for ref in weighted:
+            index = min(range(shard_count), key=lambda item: (bins[item][0], item))
+            weight, assigned = bins[index]
+            assigned.append(ref)
+            bins[index] = (
+                weight + timings.get(f"{suite.id}/{ref.path.name}", 1.0),
+                assigned,
+            )
+        for index, (_weight, assigned) in enumerate(bins, start=1):
+            ordered = sorted(assigned, key=lambda ref: ref.path.name)
+            matrix.append(
+                {
+                    "dataset": suite.id,
+                    "shard": f"{index:02d}-of-{shard_count:02d}",
+                    "tasks": [ref.path.name for ref in ordered],
+                    "task_digests": [
+                        {"task": ref.path.name, "digest": _digest(ref.path)}
+                        for ref in ordered
+                    ],
+                }
+            )
+    return matrix
+
+
+def _emit(
+    *,
+    event: str,
+    base: str | None,
+    head: str | None,
+    planner_digest: str,
+    topology_digest: str,
+    mode: str,
+    run_check: bool,
+    record_schema: bool,
+    prospective_digest: bool,
+    inventory: bool,
+    run_oracle: bool,
+    scope: str,
+    matrix: list[dict[str, Any]],
+    reasons: list[str],
+) -> dict[str, str]:
+    return {
+        "benchmark-plan-version": PLAN_VERSION,
+        "benchmark-plan-event": event,
+        "benchmark-plan-base-sha": base or "",
+        "benchmark-plan-head-sha": head or "",
+        "benchmark-planner-digest": planner_digest,
+        "benchmark-topology-digest": topology_digest,
+        "benchmark-plan-mode": mode,
+        "run-benchmark-check": str(run_check).lower(),
+        "run-benchmark-record-schema": str(record_schema).lower(),
+        "run-benchmark-prospective-digest": str(prospective_digest).lower(),
+        "run-benchmark-inventory": str(inventory).lower(),
+        "run-benchmark-oracle": str(run_oracle).lower(),
+        "benchmark-oracle-scope": scope,
+        "benchmark-oracle-matrix": _json(matrix),
+        "benchmark-plan-reasons": _json(list(dict.fromkeys(reasons))),
+    }
+
+
+def _oracle_matrix(
+    *,
+    scope: str,
+    oracle_tasks: set[str],
+    affected_datasets: set[str],
+    by_task: dict[str, list[tuple[str, Path]]],
+    suites_by_id: dict[str, Any],
+    timings: dict[str, float] | None,
+) -> list[dict[str, Any]]:
+    if scope == "all":
+        return _shard_entries(_harbor_suite().load_registry(), timings=timings)
+    if scope == "affected-datasets":
+        return _shard_entries(
+            [suite for suite in suites_by_id.values() if suite.id in affected_datasets],
+            timings=timings,
+        )
+    return [
+        _exact_entry(dataset, task_id, path)
+        for task_id in sorted(oracle_tasks)
+        for dataset, path in by_task[task_id]
+    ]
+
+
+@dataclasses.dataclass
+class _Classification:
+    oracle_tasks: set[str]
+    affected_datasets: set[str]
+    reasons: list[str]
+    run_oracle: bool
+    scope: str
+    unknown: bool
+    digest_relevant: bool
+
+
+def _escalate(
+    classification: _Classification,
+    *,
+    integration: bool,
+    scope: str,
+    reason: str,
+) -> None:
+    classification.reasons.append(reason)
+    if integration:
+        if _ORACLE_SCOPE_RANK[scope] > _ORACLE_SCOPE_RANK[classification.scope]:
+            classification.scope = scope
+        classification.run_oracle = True
+
+
+def _classify_benchmark_paths(
+    benchmark_paths: list[str],
+    suites_by_id: dict[str, Any],
+    *,
+    integration: bool,
+) -> _Classification:
+    """Classify each changed benchmark path into lane and Oracle decisions."""
+
+    classification = _Classification(
+        oracle_tasks=set(),
+        affected_datasets=set(),
+        reasons=[],
+        run_oracle=False,
+        scope="none",
+        unknown=False,
+        digest_relevant=False,
+    )
+    for path in benchmark_paths:
+        if _classify_control_path(path, classification, integration=integration):
+            continue
+        parts = Path(path).parts
+        if len(parts) >= 3 and parts[:2] == ("benchmarks", "datasets"):
+            _classify_dataset_path(
+                path, parts, suites_by_id, classification, integration=integration
+            )
+        else:
+            _classify_shared_path(path, classification, integration=integration)
+    return classification
+
+
+def _classify_control_path(
+    path: str,
+    classification: _Classification,
+    *,
+    integration: bool,
+) -> bool:
+    """Handle control-plane and execution-configuration paths.
+
+    Returns True when the path is a control-plane or config path.
+    """
+
+    if path.startswith(BENCHMARK_CONFIG_PREFIX):
+        classification.digest_relevant = True
+        _escalate(
+            classification,
+            integration=integration,
+            scope="all",
+            reason="benchmark execution configuration change"
+            if integration
+            else "benchmark execution configuration Oracle deferred to merge queue",
+        )
+        return True
+    if path in BENCHMARK_CONTROL_PATHS:
+        if path in BENCHMARK_EXECUTION_CONTROL_PATHS:
+            classification.digest_relevant = True
+            _escalate(
+                classification,
+                integration=integration,
+                scope="all",
+                reason="benchmark execution control-plane change"
+                if integration
+                else "control-plane Oracle deferred to merge queue",
+            )
+        else:
+            classification.reasons.append(
+                "benchmark planning or workflow contract change"
+            )
+        return True
+    return False
+
+
+def _classify_dataset_path(
+    path: str,
+    parts: tuple[str, ...],
+    suites_by_id: dict[str, Any],
+    classification: _Classification,
+    *,
+    integration: bool,
+) -> None:
+    dataset_id = parts[2]
+    if dataset_id not in suites_by_id:
+        classification.unknown = True
+        classification.digest_relevant = True
+        classification.reasons.append(f"unknown dataset path: {path}")
+        return
+    relative = parts[3:]
+    task_id = relative[0] if len(relative) >= 2 else None
+    suite = suites_by_id[dataset_id]
+    suite_task_ids = {ref.path.name for ref in suite.tasks}
+    if task_id in suite_task_ids:
+        classification.affected_datasets.add(dataset_id)
+        task_relative = relative[1:]
+        if task_relative != ("README.md",):
+            # A new task directory plus its member fragment resolves directly
+            # from the current tree: no prior inventory or dataset version bump
+            # is required to select its Oracle.
+            classification.oracle_tasks.add(task_id)
+            classification.run_oracle = True
+            classification.digest_relevant = True
+            classification.reasons.append(f"executable task change: {task_id}")
+        else:
+            classification.reasons.append(f"task documentation change: {task_id}")
+        return
+    if relative[:1] == ("members",) and len(relative) == 2:
+        member_name = relative[1]
+        member_task_id = member_name[:-5] if member_name.endswith(".toml") else None
+        if member_task_id is not None and member_task_id in suite_task_ids:
+            # A member fragment for an existing task can change its assurance
+            # ceiling or required provider, which affects Oracle execution.
+            classification.affected_datasets.add(dataset_id)
+            classification.oracle_tasks.add(member_task_id)
+            classification.run_oracle = True
+            classification.digest_relevant = True
+            classification.reasons.append(
+                f"executable task member change: {member_task_id}"
+            )
+        else:
+            # New or unknown member fragment: defer to merge queue.
+            classification.affected_datasets.add(dataset_id)
+            classification.digest_relevant = True
+            _escalate(
+                classification,
+                integration=integration,
+                scope="affected-datasets",
+                reason=f"dataset membership change: {dataset_id}"
+                if integration
+                else f"dataset membership change deferred to merge queue: {dataset_id}",
+            )
+        return
+    if relative[:1] in {("README.md",), ("dataset.toml",)}:
+        if relative[:1] == ("dataset.toml",):
+            classification.digest_relevant = True
+        classification.reasons.append(
+            f"dataset documentation or generated manifest: {dataset_id}"
+        )
+        return
+    classification.affected_datasets.add(dataset_id)
+    classification.digest_relevant = True
+    _escalate(
+        classification,
+        integration=integration,
+        scope="affected-datasets",
+        reason=f"dataset integration change: {dataset_id}"
+        if integration
+        else f"dataset Oracle deferred to merge queue: {dataset_id}",
+    )
+
+
+def _classify_shared_path(
+    path: str,
+    classification: _Classification,
+    *,
+    integration: bool,
+) -> None:
+    if path.startswith("benchmarks/validation/") or path in {
+        "benchmarks/README.md",
+        "benchmarks/__init__.py",
+    }:
+        classification.reasons.append("benchmark validation or documentation change")
+        return
+    if path.startswith("benchmarks/templates/"):
+        classification.reasons.append("benchmark authoring template change")
+        return
+    if path == "benchmarks/adapters/README.md":
+        classification.reasons.append("adapter documentation change")
+        return
+    if path == "benchmarks/environment-profiles.toml":
+        classification.digest_relevant = True
+        _escalate(
+            classification,
+            integration=integration,
+            scope="all",
+            reason="environment profile integration change"
+            if integration
+            else "environment profile Oracle deferred to merge queue",
+        )
+        return
+    if path.startswith("benchmarks/snapshots/"):
+        classification.reasons.append("immutable benchmark snapshot change")
+        return
+    if path.startswith("benchmarks/adapters/"):
+        classification.digest_relevant = True
+        _escalate(
+            classification,
+            integration=integration,
+            scope="all",
+            reason="adapter integration change"
+            if integration
+            else "adapter Oracle deferred to merge queue",
+        )
+        return
+    if path == "benchmarks/registry.toml" or path.startswith("benchmarks/tooling/"):
+        classification.digest_relevant = True
+        _escalate(
+            classification,
+            integration=integration,
+            scope="all",
+            reason="shared benchmark integration change"
+            if integration
+            else "shared-support Oracle deferred to merge queue",
+        )
+        return
+    if path.startswith("benchmarks/schemas/"):
+        _escalate(
+            classification,
+            integration=integration,
+            scope="all",
+            reason="benchmark schema integration change"
+            if integration
+            else "benchmark schema Oracle deferred to merge queue",
+        )
+        return
+    classification.unknown = True
+    classification.digest_relevant = True
+    classification.reasons.append(f"unclassified benchmark path: {path}")
 
 
 def plan(
@@ -83,12 +496,36 @@ def plan(
     *,
     event: str = "pull_request",
     force_full: bool = False,
+    timings: dict[str, float] | None = None,
+    base: str | None = None,
+    head: str | None = None,
 ) -> dict[str, str]:
     if event not in EVENTS:
         raise ValueError(f"unsupported benchmark event: {event}")
+
+    planner_digest = _planner_digest()
+
+    # Scheduled, manual, and forced runs own an explicit full-portfolio sweep.
     if force_full or event in {"schedule", "workflow_dispatch"}:
         reason = "forced full portfolio" if force_full else f"{event} full portfolio"
-        return _full_plan(reason)
+        suites = _harbor_suite().load_registry()
+        matrix = _shard_entries(suites, timings=timings)
+        return _emit(
+            event=event,
+            base=base,
+            head=head,
+            planner_digest=planner_digest,
+            topology_digest=_topology_digest(suites),
+            mode="full",
+            run_check=True,
+            record_schema=True,
+            prospective_digest=True,
+            inventory=True,
+            run_oracle=True,
+            scope="all",
+            matrix=matrix,
+            reasons=[reason],
+        )
 
     benchmark_paths = [
         path
@@ -98,120 +535,63 @@ def plan(
         or path in BENCHMARK_CONTROL_PATHS
     ]
     if not benchmark_paths:
-        return {
-            "run-benchmark-check": "false",
-            "run-benchmark-oracle": "false",
-            "benchmark-oracle-scope": "none",
-            "benchmark-oracle-matrix": "[]",
-            "benchmark-plan-reasons": "[]",
-        }
-
-    # Merge groups own integration Oracle evidence.  A main push repeats the
-    # deterministic contract check for the landed tree without rerunning the
-    # same Docker portfolio after merge-queue validation.
-    if event == "push":
-        return {
-            "run-benchmark-check": "true",
-            "run-benchmark-oracle": "false",
-            "benchmark-oracle-scope": "none",
-            "benchmark-oracle-matrix": "[]",
-            "benchmark-plan-reasons": _json(
-                ["main push repeats contracts; merge queue owns Oracle evidence"]
-            ),
-        }
+        return _emit(
+            event=event,
+            base=base,
+            head=head,
+            planner_digest=planner_digest,
+            topology_digest="",
+            mode="none",
+            run_check=False,
+            record_schema=False,
+            prospective_digest=False,
+            inventory=False,
+            run_oracle=False,
+            scope="none",
+            matrix=[],
+            reasons=[],
+        )
 
     by_task, suites_by_id = _membership()
-    oracle_tasks: set[str] = set()
-    affected_datasets: set[str] = set()
-    reasons: list[str] = []
-    run_oracle = False
-    scope = "none"
-    unknown = False
+    topology_digest = _topology_digest(list(suites_by_id.values()))
+
+    # A main push repeats the deterministic contract lanes for the landed tree
+    # without rerunning the same Docker Oracle portfolio after merge-queue
+    # validation.  Inventory validation is the merge queue's responsibility.
+    if event == "push":
+        return _emit(
+            event=event,
+            base=base,
+            head=head,
+            planner_digest=planner_digest,
+            topology_digest=topology_digest,
+            mode="changed",
+            run_check=True,
+            record_schema=True,
+            prospective_digest=True,
+            inventory=False,
+            run_oracle=False,
+            scope="none",
+            matrix=[],
+            reasons=["main push repeats contracts; merge queue owns Oracle evidence"],
+        )
+
     integration = event == "merge_group"
-
-    for path in benchmark_paths:
-        if path in BENCHMARK_CONTROL_PATHS:
-            if path in BENCHMARK_EXECUTION_CONTROL_PATHS and integration:
-                scope = "all"
-                run_oracle = True
-                reasons.append("benchmark execution control-plane change")
-            elif path in BENCHMARK_EXECUTION_CONTROL_PATHS:
-                reasons.append("control-plane Oracle deferred to merge queue")
-            else:
-                reasons.append("benchmark planning or workflow contract change")
-            continue
-
-        parts = Path(path).parts
-        if len(parts) >= 3 and parts[:2] == ("benchmarks", "datasets"):
-            dataset_id = parts[2]
-            if dataset_id not in suites_by_id:
-                unknown = True
-                reasons.append(f"unknown dataset path: {path}")
-                continue
-            relative = parts[3:]
-            task_id = relative[0] if len(relative) >= 2 else None
-            suite = suites_by_id[dataset_id]
-            suite_task_ids = {ref.path.name for ref in suite.tasks}
-            if task_id in suite_task_ids:
-                affected_datasets.add(dataset_id)
-                task_relative = relative[1:]
-                if task_relative != ("README.md",):
-                    oracle_tasks.add(task_id)
-                    run_oracle = True
-                    reasons.append(f"executable task change: {task_id}")
-                else:
-                    reasons.append(f"task documentation change: {task_id}")
-                continue
-            if relative[:1] in {("README.md",), ("dataset.toml",)}:
-                reasons.append(
-                    f"dataset documentation or generated manifest: {dataset_id}"
-                )
-                continue
-            affected_datasets.add(dataset_id)
-            if integration:
-                scope = "affected-datasets"
-                run_oracle = True
-                reasons.append(f"dataset integration change: {dataset_id}")
-            else:
-                reasons.append(f"dataset Oracle deferred to merge queue: {dataset_id}")
-            continue
-
-        if path.startswith("benchmarks/validation/") or path in {
-            "benchmarks/README.md",
-            "benchmarks/__init__.py",
-        }:
-            reasons.append("benchmark validation or documentation change")
-            continue
-        if path.startswith("benchmarks/templates/"):
-            reasons.append("benchmark authoring template change")
-            continue
-        if path == "benchmarks/adapters/README.md":
-            reasons.append("adapter documentation change")
-            continue
-        if path.startswith("benchmarks/adapters/"):
-            if integration:
-                scope = "all"
-                run_oracle = True
-                reasons.append("adapter integration change")
-            else:
-                reasons.append("adapter Oracle deferred to merge queue")
-            continue
-        if path.startswith(("benchmarks/tooling/", "benchmarks/schemas/")) or path == (
-            "benchmarks/registry.toml"
-        ):
-            if integration:
-                scope = "all"
-                run_oracle = True
-                reasons.append("shared benchmark integration change")
-            else:
-                reasons.append("shared-support Oracle deferred to merge queue")
-            continue
-        unknown = True
-        reasons.append(f"unclassified benchmark path: {path}")
+    classification = _classify_benchmark_paths(
+        benchmark_paths, suites_by_id, integration=integration
+    )
+    oracle_tasks = classification.oracle_tasks
+    affected_datasets = classification.affected_datasets
+    reasons = classification.reasons
+    run_oracle = classification.run_oracle
+    scope = classification.scope
+    unknown = classification.unknown
+    digest_relevant = classification.digest_relevant
 
     if unknown:
         scope = "all"
         run_oracle = True
+        digest_relevant = True
         reasons.append("fail-closed benchmark path classification")
 
     if (
@@ -226,52 +606,74 @@ def plan(
             f"(limit {MAX_PULL_REQUEST_ORACLE_TASKS})"
         )
 
-    if scope == "all":
-        suites = _harbor_suite().load_registry()
-        matrix = [
-            {"dataset": suite.id, "task": ref.path.name, "digest": _digest(ref.path)}
-            for suite in suites
-            for ref in suite.tasks
-        ]
-    elif scope == "affected-datasets":
-        matrix = [
-            {"dataset": suite.id, "task": ref.path.name, "digest": _digest(ref.path)}
-            for suite in suites_by_id.values()
-            if suite.id in affected_datasets
-            for ref in suite.tasks
-        ]
-    else:
-        matrix = [
-            {"dataset": dataset, "task": task_id, "digest": _digest(path)}
-            for task_id in sorted(oracle_tasks)
-            for dataset, path in by_task[task_id]
-        ]
+    matrix = _oracle_matrix(
+        scope=scope,
+        oracle_tasks=oracle_tasks,
+        affected_datasets=affected_datasets,
+        by_task=by_task,
+        suites_by_id=suites_by_id,
+        timings=timings,
+    )
 
     if run_oracle and scope == "none":
         scope = "changed-tasks"
-    return {
-        "run-benchmark-check": "true",
-        "run-benchmark-oracle": str(run_oracle).lower(),
-        "benchmark-oracle-scope": scope,
-        "benchmark-oracle-matrix": _json(matrix if run_oracle else []),
-        "benchmark-plan-reasons": _json(list(dict.fromkeys(reasons))),
-    }
+
+    if unknown:
+        mode = "full"
+    elif integration:
+        mode = "integration"
+    else:
+        mode = "changed"
+
+    return _emit(
+        event=event,
+        base=base,
+        head=head,
+        planner_digest=planner_digest,
+        topology_digest=topology_digest,
+        mode=mode,
+        run_check=True,
+        record_schema=True,
+        prospective_digest=digest_relevant,
+        inventory=mode in {"integration", "full"},
+        run_oracle=run_oracle,
+        scope=scope,
+        matrix=matrix if run_oracle else [],
+        reasons=reasons,
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", choices=EVENTS, default="pull_request")
     parser.add_argument("--force-full", action="store_true")
+    parser.add_argument("--timings-file", type=Path)
+    parser.add_argument("--base")
+    parser.add_argument("--head")
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
     paths = args.paths[1:] if args.paths[:1] == ["--"] else args.paths
-    try:
-        for key, value in plan(
-            paths, event=args.event, force_full=args.force_full
-        ).items():
-            print(f"{key}={value}")
-    except _harbor_suite().HarborSuiteError as exc:
-        parser.error(str(exc))
+    timings: dict[str, float] | None = None
+    if args.timings_file is not None:
+        raw_timings = json.loads(args.timings_file.read_text(encoding="utf-8"))
+        if not isinstance(raw_timings, dict) or not all(
+            isinstance(key, str)
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value > 0
+            for key, value in raw_timings.items()
+        ):
+            parser.error("timings file must map task keys to positive seconds")
+        timings = {key: float(value) for key, value in raw_timings.items()}
+    for key, value in plan(
+        paths,
+        event=args.event,
+        force_full=args.force_full,
+        timings=timings,
+        base=args.base,
+        head=args.head,
+    ).items():
+        print(f"{key}={value}")
     return 0
 
 

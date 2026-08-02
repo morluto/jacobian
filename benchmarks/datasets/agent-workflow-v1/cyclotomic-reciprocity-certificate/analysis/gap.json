@@ -11,6 +11,11 @@
         "capability_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",
         "boundary": "Checks exact polynomial identities and expansions; it does not independently certify the unrestricted reciprocal theorem."
+      },
+      {
+        "capability_id": "polynomial.factor.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Returns coefficient- and multiplicity-bearing factor lists with reconstructed products; cyclotomic labeling and the general inversion-orbit argument remain agent-owned."
       }
     ],
     "gap_classes": ["MODEL_REASONING"],

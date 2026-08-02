@@ -1,4 +1,6 @@
 import json
+import math
+import re
 from pathlib import Path
 
 from verifier_support import (
@@ -32,6 +34,21 @@ def _trim(poly):
     while len(result) > 1 and result[-1] == 0:
         result.pop()
     return result
+
+
+def _integer(value):
+    if type(value) is int:
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _integer_list(value):
+    if not isinstance(value, list) or not value:
+        return None
+    normalized = [_integer(item) for item in value]
+    return normalized if all(item is not None for item in normalized) else None
 
 
 def _mul(left, right):
@@ -86,9 +103,12 @@ def _result_is_valid(result, frozen):
     if (
         not isinstance(result, dict)
         or set(result) != required
-        or type(result["leading_coefficient"]) is not int
-        or result["leading_coefficient"] == 0
     ):
+        return False
+    leading = _integer(result["leading_coefficient"])
+    p_at_one = _integer(result["p_at_one"])
+    reciprocal_scalar = _integer(result["reciprocal_scalar"])
+    if leading is None or leading == 0:
         return False
     factors = result["factors"]
     if not isinstance(factors, list) or not factors or len(factors) > 8:
@@ -98,9 +118,11 @@ def _result_is_valid(result, frozen):
         if not isinstance(factor, dict) or set(factor) != {"order", "multiplicity"}:
             return False
         order, multiplicity = factor["order"], factor["multiplicity"]
+        order = _integer(order)
+        multiplicity = _integer(multiplicity)
         if (
-            type(order) is not int
-            or type(multiplicity) is not int
+            order is None
+            or multiplicity is None
             or not 1 < order <= frozen.get("maximum_cyclotomic_order", 0)
             or not 1 <= multiplicity <= 8
         ):
@@ -110,24 +132,24 @@ def _result_is_valid(result, frozen):
     if total > frozen.get("maximum_total_multiplicity", 0):
         return False
     cache = {1: [-1, 1]}
-    product = [result["leading_coefficient"]]
+    product = [leading]
     for order, multiplicity in sorted(parsed):
         factor = _cyclotomic(order, cache)
         if factor is None or factor != list(reversed(factor)):
             return False
         for _ in range(multiplicity):
             product = _mul(product, factor)
+    expanded = _integer_list(result["expanded_coefficients"])
+    reciprocal = _integer_list(result["reciprocal_coefficients"])
     coefficients = frozen.get("coefficients")
     return bool(
         product == coefficients
-        and result["expanded_coefficients"] == product
-        and result["reciprocal_coefficients"] == list(reversed(product))
+        and expanded == product
+        and reciprocal == list(reversed(product))
         and product == list(reversed(product))
-        and result["p_at_one"] == sum(product)
-        and result["p_at_one"] != 0
-        and type(result["p_at_one"]) is int
-        and type(result["reciprocal_scalar"]) is int
-        and result["reciprocal_scalar"] == 1
+        and p_at_one == sum(product)
+        and p_at_one != 0
+        and reciprocal_scalar == 1
         and result["root_orbit_conclusion"]
         == "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
     )
@@ -171,25 +193,34 @@ def main():
     evidence_valid = bool(
         contract and math_correct and _evidence_matches(submission.get("evidence"))
     )
+    scope = submission.get("scope") if isinstance(submission, dict) else None
+    scope_text = scope.casefold() if isinstance(scope, str) else ""
     scope_correct = bool(
         contract
-        and isinstance(submission.get("scope"), str)
-        and all(
-            term in submission["scope"].casefold()
-            for term in ("frozen", "degree", "cyclotomic", "orbit")
-        )
+        and ("degree 16" in scope_text or "degree_16" in scope_text)
+        and "frozen" in scope_text
+        and "cyclotomic" in scope_text
+        and "general" in scope_text
+        and "orbit" in scope_text
+        and not re.search(r"\b(?:not|without|excluding|only)\b[^.]{0,50}\bgeneral\b", scope_text)
     )
     assurance_correct = bool(
         contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
-    limitation_correct = bool(
-        contract
-        and any(
-            "unrestricted" in item.casefold() and "not" in item.casefold()
-            for item in submission.get("limitations", [])
+    limitations = submission.get("limitations", []) if isinstance(submission, dict) else []
+    limitation_correct = False
+    if contract and isinstance(limitations, list):
+        combined = " ".join(item.casefold() for item in limitations if isinstance(item, str))
+        negative_pattern = r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,60}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b"
+        limitation_correct = bool(
+            re.search(r"\bunrestricted\b", combined)
+            and re.search(negative_pattern, combined)
+            and not re.search(
+                r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b[^.]{0,60}\b(?:verified|checked|proof)\b",
+                re.sub(negative_pattern, "", combined),
+            )
         )
-    )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )

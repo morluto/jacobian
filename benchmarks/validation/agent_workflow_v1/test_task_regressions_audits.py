@@ -509,3 +509,21 @@ def test_putnam_2adic_evidence_rejects_empty_prose(tmp_path: Path) -> None:
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["evidence_validity"] == 0.0
+
+
+def test_putnam_2adic_evidence_requires_result_binding(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "putnam-2adic-induction-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("Arbitrary nonempty evidence.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0

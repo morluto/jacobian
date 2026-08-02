@@ -48,7 +48,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "euler-line-symbolic-certificate"},
+    "task_id": {"const": "jacobian/euler-line-symbolic-certificate"},
     "conclusion": {"const": "TRUE"},
     "result": {
       "type": "object",

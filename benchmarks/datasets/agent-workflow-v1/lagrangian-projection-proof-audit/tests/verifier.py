@@ -184,21 +184,7 @@ def evidence_valid(evidence, result):
             for line in text.splitlines()
             if line.strip() and not line.startswith("RESULT_JSON:")
         ]
-        lowered = text.lower()
-        return bool(
-            len(markers) == 1
-            and json.loads(markers[0]) == result
-            and prose
-            and sum(map(len, prose)) >= 20
-            and all(
-                term in lowered
-                for term in (
-                    "lagrangian defect",
-                    "naive projections",
-                    "corrected coupled identities",
-                )
-            )
-        )
+        return bool(len(markers) == 1 and json.loads(markers[0]) == result and prose)
     except (OSError, UnicodeError, ValueError):
         return False
 

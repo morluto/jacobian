@@ -17,5 +17,9 @@
       "name": "oracle"
     }
   ],
-  "tasks": []
+  "datasets": [
+    {
+      "path": "benchmarks/datasets/examples-v1"
+    }
+  ]
 }

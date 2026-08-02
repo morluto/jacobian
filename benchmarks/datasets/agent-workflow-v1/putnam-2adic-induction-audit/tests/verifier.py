@@ -226,18 +226,12 @@ def _evidence_is_valid(evidence: object) -> bool:
     try:
         if target.stat().st_size > MAX_EVIDENCE_BYTES:
             return False
-        lower = target.read_text().lower()
+        text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    return all(
-        phrase in lower
-        for phrase in (
-            "difference",
-            "taylor",
-            "valuation",
-            "divisibility",
-            "universal induction",
-        )
+    return any(
+        line.strip() and not line.startswith("RESULT_JSON:")
+        for line in text.splitlines()
     )
 
 

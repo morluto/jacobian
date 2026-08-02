@@ -21,10 +21,11 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "1"
+      "const": "2"
     },
     "plan_id": {
-      "const": "jacobian.capability-comparison.v1"
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+$"
     },
     "status": {
       "const": "SCAFFOLD_ONLY"
@@ -258,27 +259,45 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "path",
-        "task_count",
-        "manifest_digest",
+        "snapshot",
         "contamination",
         "causal_claims_allowed"
       ],
       "properties": {
-        "path": {
-          "const": "benchmarks/datasets/agent-workflow-v1"
-        },
-        "task_count": {
-          "const": 39
-        },
-        "manifest_digest": {
-          "$ref": "#/$defs/digest"
+        "snapshot": {
+          "$ref": "#/$defs/snapshotRef"
         },
         "contamination": {
           "const": "PUBLIC_ANSWER_VISIBLE"
         },
         "causal_claims_allowed": {
           "const": false
+        }
+      }
+    },
+    "snapshotRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "snapshot_id",
+        "lock_path",
+        "status"
+      ],
+      "properties": {
+        "suite_id": {
+          "type": "string",
+          "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"
+        },
+        "snapshot_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "lock_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "const": "LOCKED"
         }
       }
     },

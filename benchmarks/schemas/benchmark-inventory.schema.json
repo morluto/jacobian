@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/benchmark-inventory.schema.json",
+  "title": "Content-bound Jacobian benchmark inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_sha", "source_dirty", "registry_digest", "dataset_count", "task_count", "datasets"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_dirty": {"type": "boolean"},
+    "registry_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "dataset_count": {"type": "integer", "minimum": 1},
+    "task_count": {"type": "integer", "minimum": 0},
+    "datasets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "evaluation_kind", "claim_class", "task_count", "jobs", "distributions", "tasks"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "pattern": "^jacobian/"},
+          "evaluation_kind": {"type": "string", "minLength": 1},
+          "claim_class": {"type": "string", "minLength": 1},
+          "task_count": {"type": "integer", "minimum": 0},
+          "jobs": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+          "distributions": {"type": "object"},
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name", "digest", "verifier", "verifier_digest", "submission_schema_digest"],
+              "properties": {
+                "id": {"type": "string", "minLength": 1},
+                "name": {"type": "string", "pattern": "^jacobian/"},
+                "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                "verifier": {"type": "string", "minLength": 1},
+                "verifier_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                "submission_schema_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

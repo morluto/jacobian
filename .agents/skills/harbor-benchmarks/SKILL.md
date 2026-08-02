@@ -39,12 +39,12 @@ Read `AGENTS.md`, `CONTRIBUTING.md`, and
 `docs/reference/capability-workflow-evaluations.md`. Each Harbor dataset owns
 its task bundles directly under
 `benchmarks/datasets/<dataset>/<task-id>/`; a bundle is a direct child of its
-dataset, not a symlink or nested task directory. Keep domain, field, provenance,
-and evaluation classification in typed `task.toml` metadata rather than
-directory hierarchy. A dataset selects its bundles through one
-`benchmarks/datasets/<dataset>/members/<task-id>.toml` fragment per member, and
-the generated `dataset.toml` is the Harbor digest boundary. Do not maintain a
-second shared task root or copy a bundle outside its owning dataset.
+dataset, not a symlink or nested task directory. Keep domain-owned execution
+metadata in typed `task.toml`. A dataset selects its bundles through one
+authoritative `benchmarks/datasets/<dataset>/members/<task-id>.toml` record per
+member. Immutable snapshot locks are evaluation and publication boundaries;
+never commit a mutable `dataset.toml` in a dataset root or maintain a second
+shared task root.
 
 Before adding a task, run the benchmark planner and check for a global ID
 collision. Manually authored or substantially transformed cases remain authored
@@ -79,7 +79,6 @@ Use the pinned Harbor runner from the repository:
 ```sh
 uvx --from harbor==0.20.0 harbor --version
 make harbor-plan BASE=origin/main
-make harbor-sync
 make harbor-check
 make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 ```
@@ -87,8 +86,9 @@ make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 After any input, instruction, metadata, verifier, dependency, image, or task
 contract change:
 
-1. Recompute each canonical task content digest with Harbor's task model and
-   regenerate every affected `dataset.toml`; do not invent a custom digest.
+1. Recompute each prospective task and suite digest with Harbor's task model.
+   Do not rewrite an existing snapshot or historical evaluation. Create a new
+   snapshot only for an intentional evaluation or publication event.
 2. Parse/check every canonical task selected by member fragments and reject
    missing, duplicate, ambiguous, or escaping references.
 3. Run every task through the dataset's Oracle job and require full applicable

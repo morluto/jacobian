@@ -1,55 +1,114 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://jacobian.invalid/schemas/capability-gap-ledger-v1.json",
-  "title": "Jacobian public workflow capability gap ledger",
+  "$id": "https://jacobian.invalid/schemas/capability-gap-ledger-v2.json",
+  "title": "Jacobian public workflow capability gap ledger (snapshot-scoped)",
+  "description": "A historical, generated gap ledger that references one immutable benchmark snapshot lock and a frozen, ordered set of leaf-owned per-task analysis records. The ledger is decoupled from current suite membership, mutable publication manifests, and hard-coded current task counts: its analysis_records are inline frozen data (order, task_id, leaf ref, and content digest). New tasks added to the live suite after capture must not retarget this ledger.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "ledger_id",
     "captured_at",
-    "source_suite",
+    "snapshot",
     "runtime_snapshot",
     "gap_taxonomy",
-    "tasks",
+    "analysis_records",
     "handoffs"
   ],
   "properties": {
     "schema_version": {
-      "const": "1"
+      "const": "2"
     },
     "ledger_id": {
-      "const": "jacobian.agent-workflow-v1.capability-gap-ledger"
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+$"
     },
     "captured_at": {
       "type": "string",
       "format": "date"
     },
-    "source_suite": {
+    "snapshot": {
+      "$ref": "#/$defs/snapshotRef"
+    },
+    "runtime_snapshot": {
+      "$ref": "#/$defs/runtimeSnapshot"
+    },
+    "gap_taxonomy": {
+      "type": "array",
+      "minItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/gap"
+      }
+    },
+    "analysis_records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/analysisRecord"
+      }
+    },
+    "handoffs": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "$ref": "#/$defs/handoff"
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]+$"
+    },
+    "gap": {
+      "enum": [
+        "EXISTING_WORKS",
+        "WEAK_DISCOVERY",
+        "BAD_PARAMETERIZATION",
+        "MISSING_OPERATION",
+        "MISSING_ARTIFACT_HANDOFF",
+        "MISSING_CHECKER",
+        "PROVIDER_UNAVAILABLE",
+        "ENVIRONMENT_BUDGET_AUTH",
+        "MODEL_REASONING"
+      ]
+    },
+    "snapshotRef": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "path",
-        "task_count",
-        "manifest_sha256",
-        "contamination"
+        "suite_id",
+        "snapshot_id",
+        "lock_path",
+        "status"
       ],
       "properties": {
-        "path": {
-          "const": "benchmarks/datasets/agent-workflow-v1/dataset.toml"
+        "suite_id": {
+          "type": "string",
+          "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"
         },
-        "task_count": {
-          "const": 39
-        },
-        "manifest_sha256": {
+        "snapshot_id": {
           "$ref": "#/$defs/digest"
         },
-        "contamination": {
-          "const": "PUBLIC_ANSWER_VISIBLE"
+        "lock_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "const": "LOCKED"
         }
       }
     },
-    "runtime_snapshot": {
+    "runtimeSnapshot": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -77,7 +136,8 @@
           "minLength": 1
         },
         "harbor_version": {
-          "const": "0.20.0"
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
         },
         "catalog_digest": {
           "$ref": "#/$defs/digest"
@@ -139,77 +199,29 @@
           "const": "NOT_RUN"
         },
         "oracle_evidence": {
+          "description": "Historical Oracle coverage captured at capture time. This is a subset of the snapshot task set, not the full frozen analysis_records membership, and must not be treated as the snapshot identity.",
           "type": "object",
           "additionalProperties": false,
           "required": [
             "task_count",
             "result_sha256",
-            "host_local_path"
+            "result_path"
           ],
           "properties": {
             "task_count": {
-              "const": 26
+              "type": "integer",
+              "minimum": 0
             },
             "result_sha256": {
               "$ref": "#/$defs/digest"
             },
-            "host_local_path": {
+            "result_path": {
               "type": "string",
               "minLength": 1
             }
           }
         }
       }
-    },
-    "gap_taxonomy": {
-      "type": "array",
-      "minItems": 9,
-      "uniqueItems": true,
-      "items": {
-        "$ref": "#/$defs/gap"
-      }
-    },
-    "tasks": {
-      "type": "array",
-      "minItems": 39,
-      "maxItems": 39,
-      "items": {
-        "$ref": "#/$defs/task"
-      }
-    },
-    "handoffs": {
-      "type": "array",
-      "minItems": 7,
-      "items": {
-        "$ref": "#/$defs/handoff"
-      }
-    }
-  },
-  "$defs": {
-    "sha": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{40}$"
-    },
-    "digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "id": {
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9_.-]+$"
-    },
-    "gap": {
-      "enum": [
-        "EXISTING_WORKS",
-        "WEAK_DISCOVERY",
-        "BAD_PARAMETERIZATION",
-        "MISSING_OPERATION",
-        "MISSING_ARTIFACT_HANDOFF",
-        "MISSING_CHECKER",
-        "PROVIDER_UNAVAILABLE",
-        "ENVIRONMENT_BUDGET_AUTH",
-        "MODEL_REASONING"
-      ]
     },
     "capability": {
       "type": "object",
@@ -235,11 +247,10 @@
         }
       }
     },
-    "task": {
+    "analysis": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "task_id",
         "mathematical_moves",
         "current_capabilities",
         "gap_classes",
@@ -249,9 +260,6 @@
         "next_action"
       ],
       "properties": {
-        "task_id": {
-          "$ref": "#/$defs/id"
-        },
         "mathematical_moves": {
           "type": "array",
           "minItems": 1,
@@ -296,6 +304,58 @@
         "next_action": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "analysisLeaf": {
+      "description": "The leaf-owned, snapshot-independent per-task analysis record committed at benchmarks/datasets/agent-workflow-v1/<task-id>/analysis/gap.json. The leaf carries no snapshot binding: embedding snapshot_id would create a digest cycle because the leaf is inside the Harbor task checksum. Only the generated aggregate gap-ledger.json and comparison-plan.json bind the immutable snapshot. The ledger's analysis_records[i].analysis_digest is the canonical-JSON digest of this object's analysis field.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "ledger_id",
+        "task_id",
+        "analysis"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1"
+        },
+        "ledger_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "task_id": {
+          "$ref": "#/$defs/id"
+        },
+        "analysis": {
+          "$ref": "#/$defs/analysis"
+        }
+      }
+    },
+    "analysisRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order",
+        "task_id",
+        "analysis_ref",
+        "analysis_digest"
+      ],
+      "properties": {
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "task_id": {
+          "$ref": "#/$defs/id"
+        },
+        "analysis_ref": {
+          "type": "string",
+          "pattern": "^benchmarks/datasets/agent-workflow-v1/[a-z][a-z0-9_-]+/analysis/gap\\.json$"
+        },
+        "analysis_digest": {
+          "$ref": "#/$defs/digest"
         }
       }
     },

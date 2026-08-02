@@ -35,7 +35,8 @@
             "DISPROVED",
             "COUNTEREXAMPLE_EXISTS",
             "EXACT_IDENTITY",
-            "NO_GLOBAL_CONCLUSION"
+            "NO_GLOBAL_CONCLUSION",
+            "NO_GLOBAL_CONCLUSION_EXPECTED"
           ]
         },
         "answer_visible_summary": {

@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.checksum="d63077a958241f43d1481cce1dc03fdb8af7fafe50ae837214733a461415bf05"
+LABEL jacobian.checksum="803f2bcf9ab682361f23b58d4cf8eaae743428350cf51f50c55eeaea5e59a30a"
 LABEL jacobian.task="jacobian/lagrangian-projection-proof-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

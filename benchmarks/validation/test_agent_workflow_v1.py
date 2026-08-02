@@ -24,17 +24,20 @@ def task_dirs() -> list[Path]:
     return sorted(ref.path for ref in get_suite("agent-workflow-v1").tasks)
 
 
-def test_agent_workflow_v1_has_flat_tasks_and_generated_manifest() -> None:
-    manifest = tomllib.loads((DATASET / "dataset.toml").read_text())
-    assert manifest["dataset"]["name"] == "jacobian/agent-workflow-v1"
+def test_agent_workflow_v1_has_flat_tasks_and_authoritative_members() -> None:
     task_paths = task_dirs()
     assert task_paths
-    manifest_names = {entry["name"] for entry in manifest["tasks"]}
-    assert manifest_names == {f"jacobian/{path.name}" for path in task_paths}
+    member_ids = {path.stem for path in (DATASET / "members").glob("*.toml")}
+    assert member_ids == {path.name for path in task_paths}
+    assert not (DATASET / "dataset.toml").exists()
 
     for task in task_paths:
         config = tomllib.loads((task / "task.toml").read_text())
         metadata = config["metadata"]
+        member = tomllib.loads((DATASET / "members" / f"{task.name}.toml").read_text())
+        assert member["task_name"] == config["task"]["name"]
+        assert member["evaluation_owner"] == "jacobian/agent-workflow-v1"
+        assert member["verifier_contract_version"] == "1"
         assert set(metadata) >= REQUIRED_METADATA
         assert metadata["domain"] == "mathematical-sciences"
         assert metadata["required_provider"] == "core"

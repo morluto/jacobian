@@ -22,7 +22,9 @@ def test_metric_tsp_scope_is_part_of_correctness(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
-def test_metric_tsp_evidence_requires_calculations(tmp_path: Path) -> None:
+def test_metric_tsp_evidence_rejects_mismatched_result_marker(
+    tmp_path: Path,
+) -> None:
     task, app, logs = support._prepare_case(
         tmp_path, "metric-tsp-proof-repair", "computed"
     )
@@ -33,12 +35,13 @@ def test_metric_tsp_evidence_requires_calculations(tmp_path: Path) -> None:
         "MST Euler shortcut optimal approximation\nRESULT_JSON: {}\n"
     )
     support._bind_result_evidence(app, submission)
-    support._write_json(submission_path, submission)
+    tampered = json.loads(submission_path.read_text())
+    tampered["result"]["weights"]["optimal"] = 999
+    support._write_json(submission_path, tampered)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.9)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
 def test_metric_tsp_accepts_factor_two_claim(tmp_path: Path) -> None:
@@ -349,3 +352,160 @@ def test_inverse_distance_audit_rejects_corrupted_certificates(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "calendar-good-days-audit",
+        "distinct-sum-pairing-optimum",
+        "modular-cubic-obstruction",
+        "random-function-expectation-audit",
+        "well-total-domination-counterexample",
+    ],
+)
+def test_keyword_only_evidence_is_accepted_with_bound_result(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    """Keyword-only prose is accepted once RESULT_JSON binds the structured result.
+
+    Replaces the former keyword-gate attack: evidence that mentions none of the
+    previously required terms but carries a correct RESULT_JSON marker and has
+    non-empty prose should now pass evidence validation, because correctness
+    depends on the structured result, not on prose vocabulary.
+    """
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("Brief explanation.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "calendar-good-days-audit",
+        "distinct-sum-pairing-optimum",
+        "modular-cubic-obstruction",
+    ],
+)
+def test_evidence_without_result_marker_is_rejected(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    """Evidence lacking a RESULT_JSON marker must fail evidence validation."""
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "A complete explanation with all the right ideas but no structured marker.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_divisibility_evidence_rejects_mismatched_result_marker(
+    tmp_path: Path,
+) -> None:
+    """Divisibility evidence must bind the exact structured result, not just prose."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "divisibility-construction-witness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("Brief explanation.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
+    tampered = json.loads(submission_path.read_text())
+    tampered["result"]["a"] = 999
+    support._write_json(submission_path, tampered)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_autoformalization_keyword_only_evidence_is_accepted(
+    tmp_path: Path,
+) -> None:
+    """Keyword-only evidence without the previously required terms is accepted
+    once RESULT_JSON binds the structured result and no positive compile claim
+    is present."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "autoformalization-semantic-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("The audit found problems.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+
+
+def test_complex_power_sum_keyword_only_evidence_is_accepted(
+    tmp_path: Path,
+) -> None:
+    """Complex power-sum evidence without the previously required phrases is
+    accepted once RESULT_JSON binds the structured result."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "complex-power-sum-elimination", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("The elimination works.\nRESULT_JSON: {}\n")
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+
+
+def test_lean_transitive_evidence_rejects_empty_prose(tmp_path: Path) -> None:
+    """Lean transitive audit evidence must have non-empty prose."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "lean-transitive-axiom-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_putnam_2adic_evidence_rejects_empty_prose(tmp_path: Path) -> None:
+    """Putnam 2-adic audit evidence must have non-empty prose."""
+    task, app, logs = support._prepare_case(
+        tmp_path, "putnam-2adic-induction-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0

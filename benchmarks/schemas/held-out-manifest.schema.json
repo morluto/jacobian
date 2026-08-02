@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/held-out-manifest.schema.json",
+  "title": "Private held-out Jacobian evaluation bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bundle_id", "bundle_version", "archive", "dataset", "tasks", "conditions", "experiment"],
+  "properties": {
+    "schema_version": {"const": "2"},
+    "bundle_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "bundle_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "sha256"],
+      "properties": {
+        "uri": {"type": "string", "pattern": "^s3://[^/]+/.+\\.tar\\.gz$"},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "manifest_digest", "snapshot_id", "minimum_independent_families"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "path": {"const": "dataset"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "snapshot_id": {
+          "$ref": "#/$defs/digest",
+          "description": "Immutable benchmark snapshot ID this held-out dataset binds to. Observation evidence v2 reads this and requires agreement with the job/runtime snapshot_id."
+        },
+        "minimum_independent_families": {"type": "integer", "minimum": 2}
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "family", "digest", "verifier_root", "verifier_tree_digest", "oracle_root", "oracle_tree_digest"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "family": {"type": "string", "minLength": 1},
+          "digest": {"$ref": "#/$defs/digest"},
+          "verifier_root": {"type": "string", "pattern": "^dataset/[a-z0-9-]+/tests$"},
+          "verifier_tree_digest": {"$ref": "#/$defs/digest"},
+          "oracle_root": {"type": "string", "pattern": "^dataset/[a-z0-9-]+/solution$"},
+          "oracle_tree_digest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"oneOf": [{"$ref": "#/$defs/control"}, {"$ref": "#/$defs/treatment"}]}
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["harbor_version", "agent", "model", "prompt_path", "prompt_digest", "reasoning_effort", "randomization_seed", "max_tokens", "max_cost_usd", "stages"],
+      "properties": {
+        "harbor_version": {"const": "0.20.0"},
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {"const": "codex"},
+            "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+          }
+        },
+        "model": {"type": "string", "minLength": 1},
+        "prompt_path": {"type": "string", "pattern": "^prompts/[A-Za-z0-9._/-]+\\.md$"},
+        "prompt_digest": {"$ref": "#/$defs/digest"},
+        "reasoning_effort": {"type": "string", "minLength": 1},
+        "randomization_seed": {"type": "integer"},
+        "max_tokens": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "exclusiveMinimum": 0},
+        "stages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pilot", "decision"],
+          "properties": {
+            "pilot": {"$ref": "#/$defs/stage"},
+            "decision": {"$ref": "#/$defs/stage"}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "jacobian_enabled"],
+      "properties": {
+        "id": {"const": "C1"},
+        "role": {"const": "PRIMARY_CONTROL"},
+        "jacobian_enabled": {"const": false}
+      }
+    },
+    "treatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "jacobian_enabled", "image", "server_version", "policy_profile", "catalog_digest", "policy_digest"],
+      "properties": {
+        "id": {"const": "C2"},
+        "role": {"const": "PRIMARY_TREATMENT"},
+        "jacobian_enabled": {"const": true},
+        "image": {"type": "string", "pattern": "^[^@]+@sha256:[0-9a-f]{64}$"},
+        "server_version": {"type": "string", "minLength": 1},
+        "policy_profile": {"type": "string", "minLength": 1},
+        "catalog_digest": {"$ref": "#/$defs/digest"},
+        "policy_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_ids", "repetitions"],
+      "properties": {
+        "task_ids": {"type": "array", "minItems": 3, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}},
+        "repetitions": {"type": "integer", "minimum": 3}
+      }
+    }
+  }
+}

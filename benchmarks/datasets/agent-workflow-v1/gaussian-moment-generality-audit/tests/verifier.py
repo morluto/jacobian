@@ -241,6 +241,13 @@ def evidence_valid(value: object, result: object) -> bool:
             if line.strip() and not line.startswith("RESULT_JSON:")
         ]
         lowered = text.lower()
+        contradictions = (
+            "finite checks are sufficient",
+            "finite checks suffice",
+            "the claim that finite checks are insufficient is false",
+            "settles the two-dimensional conjecture",
+            "proves the two-dimensional conjecture",
+        )
         return bool(
             len(markers) == 1
             and json.loads(markers[0]) == result
@@ -270,6 +277,7 @@ def evidence_valid(value: object, result: object) -> bool:
                 )
             )
             and "computed" in lowered
+            and not any(term in lowered for term in contradictions)
         )
     except (OSError, UnicodeError, ValueError):
         return False

@@ -88,7 +88,7 @@ digest = "sha256:9522b73e4f9e42b545b26fe86cd1e55ffce5e1935f5e92194aecb7a32b3acaa
 
 [[tasks]]
 name = "jacobian/limsup-quantifier-alignment"
-digest = "sha256:20b0099b9cae4052dd882738adb78647076b6ff68767774c8686ab3520abba2a"
+digest = "sha256:81efe3f245f71f32ff430e11fc0b1a29c8e771ecd2a62a7b30ed10250067bb62"
 
 [[tasks]]
 name = "jacobian/log-exponent-recovery"

@@ -16,8 +16,10 @@ E = Path("/tests")
 
 # Lemma forms that, when used affirmatively about the open problem, claim it is
 # solved or machine/formally verified. Base present-tense verbs ("solve",
-# "verify") are intentionally excluded so legitimate prose such as "the verifier
-# recomputes" or "does not solve" is not flagged.
+# "verify", "check") are intentionally excluded so legitimate prose such as "the
+# verifier recomputes" or "does not solve" is not flagged. Past-tense "checked"
+# is included so affirmative claims such as "Lean checked this result" are
+# caught as false certification above the COMPUTED assurance ceiling.
 _AFFIRMATIVE_LEMMAS = (
     "solved",
     "solves",
@@ -27,6 +29,7 @@ _AFFIRMATIVE_LEMMAS = (
     "proves",
     "certified",
     "settled",
+    "checked",
 )
 _NEGATION_TOKENS = (
     "not",

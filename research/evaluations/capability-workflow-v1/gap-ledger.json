@@ -5,7 +5,7 @@
   "source_suite": {
     "path": "benchmarks/datasets/agent-workflow-v1/dataset.toml",
     "task_count": 39,
-    "manifest_sha256": "sha256:0ad73a23d68f50cfc39e6d4ac3b4dc9ff47883c280df70565ed9c1c37522318e",
+    "manifest_sha256": "sha256:36c1a9d89d53d49c4b09418e9d52d4afb62c2c36cfd34a96e2c1f89b84b97155",
     "contamination": "PUBLIC_ANSWER_VISIBLE"
   },
   "runtime_snapshot": {
@@ -432,9 +432,9 @@
       ],
       "current_capabilities": [
         {
-          "capability_id": "matrix.identity.verify",
+          "capability_id": "matrix.result.verify",
           "availability": "AVAILABLE",
-          "boundary": "Can replay exact finite matrix identities but does not diagnose which geometric premise authorizes a simplification."
+          "boundary": "Can replay one supported stored matrix result against its exact input lineage but does not diagnose which geometric premise authorizes a simplification."
         }
       ],
       "gap_classes": [

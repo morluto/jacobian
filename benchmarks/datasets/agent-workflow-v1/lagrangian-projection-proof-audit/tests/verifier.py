@@ -11,6 +11,39 @@ from verifier_support import (
 
 W = Path("/app")
 E = Path("/tests")
+MAX_EVIDENCE_BYTES = 1_048_576
+
+RESULT_KEYS = frozenset(
+    {
+        "error_location",
+        "D",
+        "P",
+        "Q",
+        "W",
+        "gram",
+        "inverse_gram",
+        "lagrangian_defect",
+        "naive_P",
+        "naive_Q",
+        "corrected_first_projection",
+        "corrected_second_projection",
+    }
+)
+
+
+def load_frozen():
+    try:
+        workspace = W / "input.json"
+        frozen = E / "input.json"
+        if workspace.is_symlink() or frozen.is_symlink():
+            return {}
+        frozen_bytes = frozen.read_bytes()
+        if workspace.read_bytes() != frozen_bytes:
+            return {}
+        value = json.loads(frozen_bytes)
+    except (OSError, UnicodeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def canonical(value):
@@ -73,11 +106,12 @@ def nonzero(a):
 
 
 def certificate_valid(result, frozen):
+    if not isinstance(result, dict) or set(result) != RESULT_KEYS:
+        return False
+    if not frozen or "frozen_claim" not in frozen:
+        return False
     try:
-        if (
-            not isinstance(result, dict)
-            or result.get("error_location") != "ARBITRARY_D_ASSUMED_LAGRANGIAN"
-        ):
+        if result.get("error_location") != "ARBITRARY_D_ASSUMED_LAGRANGIAN":
             return False
         d = matrix(result.get("D"), 4, 2)
         p = matrix(result.get("P"), 2, 2)
@@ -126,29 +160,52 @@ def certificate_valid(result, frozen):
     )
 
 
-def evidence_valid(evidence):
-    if not evidence_list_is_bound(evidence):
+def evidence_valid(evidence, result):
+    if (
+        not isinstance(evidence, list)
+        or len(evidence) != 1
+        or not evidence_list_is_bound(evidence)
+    ):
         return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
-        text = target.read_text().lower()
-    except OSError:
-        return False
-    return all(
-        term in text
-        for term in (
-            "lagrangian defect",
-            "naive projections",
-            "corrected coupled identities",
+        if target.stat().st_size > MAX_EVIDENCE_BYTES:
+            return False
+        text = target.read_text()
+        markers = [
+            line.removeprefix("RESULT_JSON:").strip()
+            for line in text.splitlines()
+            if line.startswith("RESULT_JSON:")
+        ]
+        prose = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.startswith("RESULT_JSON:")
+        ]
+        lowered = text.lower()
+        return bool(
+            len(markers) == 1
+            and json.loads(markers[0]) == result
+            and prose
+            and sum(map(len, prose)) >= 20
+            and all(
+                term in lowered
+                for term in (
+                    "lagrangian defect",
+                    "naive projections",
+                    "corrected coupled identities",
+                )
+            )
         )
-    )
+    except (OSError, UnicodeError, ValueError):
+        return False
 
 
 def main():
     submission = load_submission()
-    frozen = json.loads((W / "input.json").read_text())
+    frozen = load_frozen()
     expected = json.loads((E / "expected.json").read_text())
     source = frozen.get("source") if isinstance(frozen, dict) else {}
     source_bound = bool(
@@ -176,7 +233,9 @@ def main():
         mathematical_contract and source_bound and certificate_valid(result, frozen)
     )
     evidence = bool(
-        mathematical_contract and evidence_valid(submission.get("evidence"))
+        mathematical_contract
+        and isinstance(result, dict)
+        and evidence_valid(submission.get("evidence"), result)
     )
     scope = bool(
         mathematical_contract and submission.get("scope") == expected["required_scope"]

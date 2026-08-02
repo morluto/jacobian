@@ -80,7 +80,7 @@ digest = "sha256:da39b223acfdc15423a11baf90c99851877c2bc97670870ee3b4d5742aa4b54
 
 [[tasks]]
 name = "jacobian/lagrangian-projection-proof-audit"
-digest = "sha256:b98181ae66fb0a00452bc1559037f511ca3f2afa5acf0f5e66ea35e0ff0617df"
+digest = "sha256:b5f163db9009d3071e10e41085a8175046e322290dbf0ec238877d5c19b31e28"
 
 [[tasks]]
 name = "jacobian/lcm-highly-abundant-scope-audit"

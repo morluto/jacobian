@@ -44,13 +44,8 @@
     },
     {
       "path": "benchmarks/tooling/harbor_suite.py",
-      "symbol": "load_registry",
-      "complexity": 12
-    },
-    {
-      "path": "benchmarks/tooling/harbor_suite.py",
       "symbol": "validate_task_topology",
-      "complexity": 28
+      "complexity": 19
     },
     {
       "path": "src/jacobian/adapters/mcp/remote.py",

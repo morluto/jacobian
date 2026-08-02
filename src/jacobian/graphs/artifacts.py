@@ -6,10 +6,14 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from jacobian.artifacts import ArtifactService
 from jacobian.capabilities import CapabilityInvocationError
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.graphs.atlas import networkx_loader
+from jacobian.schema_registry import model_schema
 from jacobian.store import ArtifactStore, StoreError
 
 if TYPE_CHECKING:
@@ -18,29 +22,7 @@ if TYPE_CHECKING:
 
 ARTIFACT_URI_PATTERN = r"^artifact://sha256/[0-9a-f]{64}$"
 
-GRAPH_PAYLOAD_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "graph_schema_version": {"const": "1"},
-        "vertices": {
-            "type": "array",
-            "items": {"type": "string"},
-            "uniqueItems": True,
-        },
-        "edges": {
-            "type": "array",
-            "items": {
-                "type": "array",
-                "items": {"type": "string"},
-                "minItems": 2,
-                "maxItems": 2,
-            },
-            "uniqueItems": True,
-        },
-    },
-    "required": ["graph_schema_version", "vertices", "edges"],
-    "additionalProperties": False,
-}
+GRAPH_PAYLOAD_SCHEMA: dict[str, Any] = model_schema(SimpleUndirectedGraph)
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,16 +94,9 @@ def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Gra
                 ),
             )
         )
-    payload = artifact.payload
-    vertices = payload.get("vertices")
-    edges = payload.get("edges")
-    if (
-        payload.get("graph_schema_version") != "1"
-        or not isinstance(vertices, list)
-        or not all(isinstance(vertex, str) for vertex in vertices)
-        or len(set(vertices)) != len(vertices)
-        or not isinstance(edges, list)
-    ):
+    try:
+        payload = SimpleUndirectedGraph.model_validate(artifact.payload)
+    except ValidationError as exc:
         raise CapabilityInvocationError(
             CapabilityDiagnostic(
                 code="INCOMPATIBLE_GRAPH_ARTIFACT",
@@ -131,43 +106,10 @@ def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Gra
                 schema_uri=resources.graph_schema_uri,
                 hint="Recreate the graph through its owning capability.",
             )
-        )
-    vertex_set = set(vertices)
-    normalized_edges: list[tuple[str, str]] = []
-    for edge in edges:
-        if (
-            not isinstance(edge, list)
-            or len(edge) != 2
-            or not all(isinstance(endpoint, str) for endpoint in edge)
-            or edge[0] not in vertex_set
-            or edge[1] not in vertex_set
-            or edge[0] >= edge[1]
-        ):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="INCOMPATIBLE_GRAPH_ARTIFACT",
-                    stage="graph_validation",
-                    message="The graph artifact violates simple-graph semantics.",
-                    path="graph_uri",
-                    schema_uri=resources.graph_schema_uri,
-                    hint="Recreate the graph through its owning capability.",
-                )
-            )
-        normalized_edges.append((edge[0], edge[1]))
-    if len(set(normalized_edges)) != len(normalized_edges):
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
-                code="INCOMPATIBLE_GRAPH_ARTIFACT",
-                stage="graph_validation",
-                message="The graph artifact contains duplicate edges.",
-                path="graph_uri",
-                schema_uri=resources.graph_schema_uri,
-                hint="Recreate the graph through its owning capability.",
-            )
-        )
+        ) from exc
     graph: nx_type.Graph[str] = nx().Graph()
-    graph.add_nodes_from(vertices)
-    graph.add_edges_from(normalized_edges)
+    graph.add_nodes_from(payload.vertices)
+    graph.add_edges_from(payload.edges)
     return graph
 
 

@@ -2,13 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jacobian.invalid/benchmarks/schemas/suite-entry.schema.json",
   "title": "Harbor dataset member fragment",
-  "description": "Reference contract for one dataset members/<task-id>.toml fragment. The task_id selects the direct Harbor task bundle with the same name under that dataset root; assurance_ceiling caps the claimed_assurance the verifier will accept, and required_provider names the optional backend the task depends on.",
+  "description": "Authoritative membership and provenance record for one direct Harbor task bundle.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "assurance_ceiling", "required_provider"],
+  "required": ["schema_version", "task_id", "task_name", "evaluation_kind", "domain", "field", "provenance_class", "provenance_ref", "assurance_ceiling", "required_provider", "environment_profile", "verifier_contract_version", "evaluation_owner"],
   "properties": {
+    "schema_version": {"const": "1"},
     "task_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "task_name": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"},
+    "evaluation_kind": {"type": "string", "minLength": 1},
+    "domain": {"type": "string", "minLength": 1},
+    "field": {"type": "string", "minLength": 1},
+    "provenance_class": {"type": "string", "minLength": 1},
+    "provenance_ref": {"type": "string", "minLength": 1},
     "assurance_ceiling": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
-    "required_provider": {"type": "string", "minLength": 1}
+    "required_provider": {"type": "string", "minLength": 1},
+    "environment_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "verifier_contract_version": {"type": "string", "pattern": "^[0-9]+$"},
+    "evaluation_owner": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"}
   }
 }

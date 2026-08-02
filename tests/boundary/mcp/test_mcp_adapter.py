@@ -524,6 +524,57 @@ def test_mcp_workspace_schema_and_fail_closed_round_trip(
     asyncio.run(scenario())
 
 
+def test_mcp_workspace_write_treats_explicit_null_collections_as_empty(
+    tmp_path: Path,
+) -> None:
+    server = create_server(tmp_path)
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(server, raise_exceptions=True) as client:
+            opened_result = await client.call_tool(
+                "workspace.open",
+                {
+                    "idempotency_key": "mcp-workspace-open-null-001",
+                    "name": "Nullable collections",
+                    "problem": "Explicit null and omission have the same meaning.",
+                },
+            )
+            opened = json.loads(opened_result.content[0].text)
+            written_result = await client.call_tool(
+                "workspace.write",
+                {
+                    "idempotency_key": "mcp-workspace-write-null-001",
+                    "workspace_id": opened["workspace_id"],
+                    "branch_id": opened["branch_id"],
+                    "base_revision": opened["revision_id"],
+                    "scratch": None,
+                    "findings": [
+                        {
+                            "client_ref": "G1",
+                            "kind": "GOAL",
+                            "title": "One real mutation",
+                            "body": "The other nullable collections are empty.",
+                        }
+                    ],
+                    "attempts": None,
+                    "marks": None,
+                    "focus": None,
+                },
+            )
+
+            assert written_result.is_error is False
+            written = json.loads(written_result.content[0].text)
+            assert written["scratch_written"] == 0
+            assert written["findings_written"] == 1
+            assert written["attempts_written"] == 0
+            assert written["marks_written"] == 0
+            assert written["focus_updated"] is False
+
+    asyncio.run(scenario())
+
+
 def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
     async def scenario() -> None:
         from mcp import Client

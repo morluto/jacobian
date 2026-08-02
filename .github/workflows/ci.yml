@@ -368,6 +368,7 @@ jobs:
             ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
       - name: Upload domain shard timings
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
         with:
           name: domain-duration-shard-${{ matrix.shard }}
           path: .ci/test-durations.json
@@ -430,6 +431,7 @@ jobs:
             ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
       - name: Upload composition shard timings
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
         with:
           name: composition-duration-shard-${{ matrix.shard }}
           path: .ci/composition-test-durations.json
@@ -528,7 +530,47 @@ jobs:
         with:
           pattern: '*-duration-shard-*'
           path: .ci/shards
+
+      - name: Check domain shard timings
+        id: check-domain-timings
+        env:
+          SHARD_COUNT: ${{ needs.plan.outputs.domain-shard-count }}
+        run: |
+          missing=0
+          for shard in $(seq 1 "$SHARD_COUNT"); do
+            path=".ci/shards/domain-duration-shard-${shard}/test-durations.json"
+            if [ ! -f "$path" ]; then
+              echo "::warning::Domain timing artifact for shard ${shard} is unavailable; keeping the previous timing hint"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check composition shard timings
+        id: check-composition-timings
+        env:
+          SHARD_COUNT: ${{ needs.plan.outputs.composition-shard-count }}
+        run: |
+          missing=0
+          for shard in $(seq 1 "$SHARD_COUNT"); do
+            path=".ci/shards/composition-duration-shard-${shard}/composition-test-durations.json"
+            if [ ! -f "$path" ]; then
+              echo "::warning::Composition timing artifact for shard ${shard} is unavailable; keeping the previous timing hint"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Merge domain shard timings
+        if: steps.check-domain-timings.outputs.complete == 'true'
         env:
           SHARD_COUNT: ${{ needs.plan.outputs.domain-shard-count }}
         run: |
@@ -544,6 +586,7 @@ jobs:
             --python-version "3.12" \
             --pytest-split-version "${{ needs.plan.outputs.pytest-split-version }}"
       - name: Merge composition shard timings
+        if: steps.check-composition-timings.outputs.complete == 'true'
         env:
           SHARD_COUNT: ${{ needs.plan.outputs.composition-shard-count }}
         run: |
@@ -560,6 +603,7 @@ jobs:
             --pytest-split-version "${{ needs.plan.outputs.pytest-split-version }}"
       - name: Publish domain timing hint
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.check-domain-timings.outputs.complete == 'true'
         with:
           name: domain-test-durations
           path: .ci/domain-test-durations.json
@@ -567,6 +611,7 @@ jobs:
           retention-days: 90
       - name: Publish composition timing hint
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.check-composition-timings.outputs.complete == 'true'
         with:
           name: composition-test-durations
           path: .ci/composition-test-durations.json

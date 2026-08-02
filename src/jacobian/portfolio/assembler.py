@@ -35,25 +35,32 @@ def install_portfolio(
 
     result = PortfolioInstallation()
     resolver = ProviderAvailabilityResolver()
-    with (
-        core.checkers.policy_transaction(),
-        core.store.transaction(),
-        cached_package_digests(),
-    ):
-        runtimes = resolver.resolve()
-        FoundationInstaller(context).install(
-            core,
-            result,
-            runtimes,
-        )
-        CoreApplicationInstaller(context).install(
-            application,
-            result,
-        )
-        ResourceCapabilityInstaller(context).install(result)
-        ReferenceLeanInstaller(context, resolver).install(
-            application,
-            result,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
-        )
+    try:
+        with (
+            core.checkers.policy_transaction(),
+            core.store.transaction(),
+            cached_package_digests(),
+        ):
+            runtimes = resolver.resolve()
+            FoundationInstaller(context).install(
+                core,
+                result,
+                runtimes,
+            )
+            CoreApplicationInstaller(context).install(
+                application,
+                result,
+            )
+            ResourceCapabilityInstaller(context).install(result)
+            ReferenceLeanInstaller(context, resolver).install(
+                application,
+                result,
+                capability_adapter_entrypoints=capability_adapter_entrypoints,
+            )
+    except BaseException as exc:
+        try:
+            result.close()
+        except BaseException as cleanup_exc:
+            exc.add_note(f"partial portfolio cleanup also failed: {cleanup_exc}")
+        raise
     return result

@@ -2,7 +2,6 @@ schema_version = "2"
 
 [dataset]
 id = "jacobian/public-reproductions-v1"
-version = "1.0.0"
 title = "Jacobian public mathematical reproductions"
 purpose = "Replay known public mathematical cases with deterministic, independently checked outcomes."
 claim_class = "public-case-correctness"

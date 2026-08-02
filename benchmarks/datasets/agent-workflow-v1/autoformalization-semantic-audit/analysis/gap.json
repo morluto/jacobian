@@ -1,0 +1,38 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "autoformalization-semantic-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Compare formal statement semantics with an informal dimension and dot-product claim.",
+      "Produce exact rational vector counterexamples to two semantic substitutions."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "lean.statement.compare",
+        "availability": "UNAVAILABLE",
+        "boundary": "The operation exists, but the pinned Lean runtime is absent from the current environment."
+      },
+      {
+        "capability_id": "matrix.nullspace.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Returns the complete canonical basis of exact rational dependencies among ordered matrix columns; the original audit missed this installed outcome because its descriptor exposed only nullspace terminology."
+      },
+      {
+        "capability_id": "matrix.result.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Independently replays the complete nullspace basis with Python-FLINT, but the generic verifier is discovered after the producer rather than by relation intent."
+      }
+    ],
+    "gap_classes": [
+      "PROVIDER_UNAVAILABLE",
+      "WEAK_DISCOVERY"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "rational-relation-basis"
+    ],
+    "disposition": "USE_EXISTING",
+    "next_action": "Restore the pinned Lean profile separately; expose rational-relation terminology and an ordered-column example on matrix.nullspace.compute instead of adding a duplicate producer."
+  }
+}

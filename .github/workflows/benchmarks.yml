@@ -25,7 +25,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     outputs:
+      benchmark-plan-version: ${{ steps.plan.outputs.benchmark-plan-version }}
+      benchmark-plan-event: ${{ steps.plan.outputs.benchmark-plan-event }}
+      benchmark-plan-base-sha: ${{ steps.plan.outputs.benchmark-plan-base-sha }}
+      benchmark-plan-head-sha: ${{ steps.plan.outputs.benchmark-plan-head-sha }}
+      benchmark-planner-digest: ${{ steps.plan.outputs.benchmark-planner-digest }}
+      benchmark-topology-digest: ${{ steps.plan.outputs.benchmark-topology-digest }}
+      benchmark-plan-mode: ${{ steps.plan.outputs.benchmark-plan-mode }}
       run-benchmark-check: ${{ steps.plan.outputs.run-benchmark-check }}
+      run-benchmark-record-schema: ${{ steps.plan.outputs.run-benchmark-record-schema }}
+      run-benchmark-prospective-digest: ${{ steps.plan.outputs.run-benchmark-prospective-digest }}
+      run-benchmark-inventory: ${{ steps.plan.outputs.run-benchmark-inventory }}
       run-benchmark-oracle: ${{ steps.plan.outputs.run-benchmark-oracle }}
       benchmark-oracle-scope: ${{ steps.plan.outputs.benchmark-oracle-scope }}
       benchmark-oracle-matrix: ${{ steps.plan.outputs.benchmark-oracle-matrix }}
@@ -39,6 +49,12 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Restore benchmark timing history
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .benchmark-timings.json
+          key: benchmark-timings-unmatched
+          restore-keys: benchmark-timings-
       - id: plan
         name: Classify benchmark changes
         env:
@@ -53,18 +69,18 @@ jobs:
                 github.sha }}
           FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:benchmark-full') }}
         run: |
-          planner_args=(--event "$EVENT_NAME" --)
+          set -eu
+          planner_args=(--event "$EVENT_NAME" --head "$HEAD_SHA")
           changed_paths=()
           case "$EVENT_NAME" in
             schedule|workflow_dispatch)
-              planner_args=(--event "$EVENT_NAME" --force-full --)
+              planner_args=(--event "$EVENT_NAME" --force-full --head "$HEAD_SHA")
               ;;
             pull_request|merge_group|push)
-              if [ "$FORCE_FULL" = "true" ]; then
-                planner_args=(--event "$EVENT_NAME" --force-full --)
-              elif [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
-                planner_args=(--event "$EVENT_NAME" --force-full --)
+              if [ "$FORCE_FULL" = "true" ] || [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+                planner_args=(--event "$EVENT_NAME" --force-full --head "$HEAD_SHA")
               else
+                planner_args=(--event "$EVENT_NAME" --base "$BASE_SHA" --head "$HEAD_SHA")
                 mapfile -d '' changed_paths < <(
                   git diff --name-only -z "$BASE_SHA" "$HEAD_SHA"
                 )
@@ -72,10 +88,13 @@ jobs:
               ;;
             *) exit 2 ;;
           esac
+          if [ -f .benchmark-timings.json ]; then
+            planner_args+=(--timings-file .benchmark-timings.json)
+          fi
           plan_output=$(
             uvx --from harbor==0.20.0 --with tomli-w==1.2.0 \
               python .github/scripts/plan-benchmarks \
-              "${planner_args[@]}" "${changed_paths[@]}"
+              "${planner_args[@]}" -- "${changed_paths[@]}"
           )
           printf '%s\n' "$plan_output" | python .github/scripts/validate-benchmark-plan
           printf '%s\n' "$plan_output" >> "$GITHUB_OUTPUT"
@@ -87,10 +106,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  contract:
-    name: Benchmark Contract Checks
+  record-schema:
+    name: Benchmark Record & Schema Checks
     needs: plan
-    if: needs.plan.outputs.run-benchmark-check == 'true'
+    if: needs.plan.outputs.run-benchmark-record-schema == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -101,12 +120,62 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-      - run: make harbor-check
+      - name: Validate benchmark contracts, schemas, and generated records
+        run: |
+          uv run --locked python tools/check_benchmark_contracts.py
+          uv run --locked python tools/check_benchmark_adapters.py
+
+  prospective-digest:
+    name: Benchmark Prospective Digest Checks
+    needs: plan
+    if: needs.plan.outputs.run-benchmark-prospective-digest == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Validate vendored verifier support and committed task digests
+        run: |
+          uvx --from harbor==0.20.0 --with tomli-w==1.2.0 --with jsonschema \
+            python tools/sync_harbor_verifier_support.py --check
+          uvx --from harbor==0.20.0 --with tomli-w==1.2.0 --with jsonschema \
+            python tools/check_harbor_dataset.py --check
+
+  inventory:
+    name: Benchmark Inventory Validation
+    needs: plan
+    if: needs.plan.outputs.run-benchmark-inventory == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Build and validate the content-bound benchmark inventory
+        run: |
+          uvx --from harbor==0.20.0 --with tomli-w==1.2.0 --with jsonschema \
+            python -m benchmarks.tooling.benchmark_inventory
+          uv run --locked pytest -n 0 benchmarks/validation
 
   oracle:
-    name: Benchmark Oracle (${{ matrix.dataset }}/${{ matrix.task }})
-    needs: [plan, contract]
-    if: needs.plan.outputs.run-benchmark-oracle == 'true'
+    name: Benchmark Oracle (${{ matrix.dataset }}/${{ matrix.shard }})
+    needs: [plan, record-schema, prospective-digest]
+    if: >-
+      ${{ always() &&
+      needs.plan.result == 'success' &&
+      needs.plan.outputs.run-benchmark-oracle == 'true' &&
+      needs.record-schema.result == 'success' &&
+      (needs.plan.outputs.run-benchmark-prospective-digest == 'false' ||
+      needs.prospective-digest.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -125,13 +194,13 @@ jobs:
       - name: Run exact task Oracle
         env:
           DATASET: ${{ matrix.dataset }}
-          TASKS: ${{ matrix.task }}
+          TASKS: ${{ join(matrix.tasks, ' ') }}
         run: make harbor-oracle-run DATASET="$DATASET" TASKS="$TASKS"
       - name: Upload Oracle evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-oracle-${{ matrix.dataset }}-${{ matrix.task }}
+          name: benchmark-oracle-${{ matrix.dataset }}-${{ matrix.shard }}
           path: |
             benchmarks/results/${{ matrix.dataset }}-oracle
             benchmarks/results/${{ matrix.dataset }}-oracle/**/oracle-evidence.json
@@ -141,26 +210,102 @@ jobs:
   validation:
     name: Benchmark Validation
     if: ${{ !cancelled() }}
-    needs: [plan, contract, oracle]
+    needs: [plan, record-schema, prospective-digest, inventory, oracle]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require planned benchmark validation
         env:
           PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_CHECK: ${{ needs.plan.outputs.run-benchmark-check }}
-          RUN_ORACLE: ${{ needs.plan.outputs.run-benchmark-oracle }}
-          CHECK_RESULT: ${{ needs.contract.result }}
+          PLAN_CHECK: ${{ needs.plan.outputs.run-benchmark-check }}
+          RECORD_SCHEMA_FLAG: ${{ needs.plan.outputs.run-benchmark-record-schema }}
+          PROSPECTIVE_DIGEST_FLAG: ${{ needs.plan.outputs.run-benchmark-prospective-digest }}
+          INVENTORY_FLAG: ${{ needs.plan.outputs.run-benchmark-inventory }}
+          ORACLE_FLAG: ${{ needs.plan.outputs.run-benchmark-oracle }}
+          RECORD_SCHEMA_RESULT: ${{ needs.record-schema.result }}
+          PROSPECTIVE_DIGEST_RESULT: ${{ needs.prospective-digest.result }}
+          INVENTORY_RESULT: ${{ needs.inventory.result }}
           ORACLE_RESULT: ${{ needs.oracle.result }}
         run: |
+          set -eu
+          # The planner itself must always succeed; a missing plan is a hard
+          # failure rather than an unselected lane.
           test "$PLAN_RESULT" = success
-          case "$RUN_CHECK" in
-            true) test "$CHECK_RESULT" = success ;;
-            false) test "$CHECK_RESULT" = skipped ;;
-            *) exit 1 ;;
+          # A selected lane (flag=true) must report success.  Any other result
+          # (failure, cancelled, timeout, or an unexpected skip) is a failure:
+          # an unselected lane is the only acceptable non-success outcome, and
+          # it is handled by the flag=false branch below.  This keeps unselected
+          # lanes distinct from failures, cancellations, timeouts, and skips
+          # that occur despite a lane being selected.
+          check_lane() {
+            local flag="$1" result="$2" name="$3"
+            case "$flag" in
+              true)
+                if [ "$result" != "success" ]; then
+                  echo "benchmark lane $name was selected but did not succeed (result=$result)" >&2
+                  return 1
+                fi
+                ;;
+              false)
+                if [ "$result" != "skipped" ]; then
+                  echo "benchmark lane $name was unselected but result=$result (expected skipped)" >&2
+                  return 1
+                fi
+                ;;
+              *)
+                echo "invalid $name plan flag: $flag" >&2
+                return 1
+                ;;
+            esac
+          }
+          check_lane "$RECORD_SCHEMA_FLAG" "$RECORD_SCHEMA_RESULT" "record-schema"
+          check_lane "$PROSPECTIVE_DIGEST_FLAG" "$PROSPECTIVE_DIGEST_RESULT" "prospective-digest"
+          check_lane "$INVENTORY_FLAG" "$INVENTORY_RESULT" "inventory"
+          check_lane "$ORACLE_FLAG" "$ORACLE_RESULT" "oracle"
+          case "$PLAN_CHECK" in
+            true) ;;
+            false)
+              test "$RECORD_SCHEMA_RESULT" = skipped
+              test "$PROSPECTIVE_DIGEST_RESULT" = skipped
+              test "$INVENTORY_RESULT" = skipped
+              test "$ORACLE_RESULT" = skipped
+              ;;
+            *) echo "invalid run-benchmark-check flag: $PLAN_CHECK" >&2; exit 1 ;;
           esac
-          case "$RUN_ORACLE" in
-            true) test "$ORACLE_RESULT" = success ;;
-            false) test "$ORACLE_RESULT" = skipped ;;
-            *) exit 1 ;;
-          esac
+
+  timings:
+    name: Publish Benchmark Timings
+    needs: [plan, oracle]
+    if: needs.plan.outputs.run-benchmark-oracle == 'true' && needs.oracle.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Download Oracle artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: benchmark-oracle-*
+          path: oracle-artifacts
+      - name: Collect per-task timings
+        run: |
+          uv run --locked python -m benchmarks.tooling.benchmark_timings \
+            --root oracle-artifacts --output .benchmark-timings.json
+      - name: Upload timing evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-timings-${{ github.sha }}
+          path: .benchmark-timings.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Save timing history for future main-branch plans
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .benchmark-timings.json
+          key: benchmark-timings-${{ github.run_id }}

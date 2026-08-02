@@ -1,4 +1,6 @@
 import json
+import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -93,10 +95,25 @@ def _family(value: object) -> set[int] | None:
     expression = _add(expression, _scale(_mul(_mul(polys[0], polys[1]), polys[2]), -3))
     if expression != target or target[1] < 0 or target[0] + target[1] * minimum < 0:
         return None
+    if target[1] == 0:
+        period = 1
+    else:
+        period = 9 // math.gcd(target[1], 9)
+        if target[1] != 9 // period:
+            return None
     residues = {(target[1] * (minimum + step) + target[0]) % 9 for step in range(9)}
     declared = value["covered_residues"]
     if not _strict_int_list(declared) or declared != sorted(residues):
         return None
+    if target[1] > 0:
+        for residue in residues:
+            first = next(
+                target[0] + target[1] * parameter
+                for parameter in range(minimum, minimum + period)
+                if (target[0] + target[1] * parameter) % 9 == residue
+            )
+            if first != residue:
+                return None
     return residues
 
 
@@ -154,9 +171,10 @@ def _result(value: object, source: dict[str, Any]) -> bool:
 
 
 def _evidence(value: object) -> bool:
+    if not isinstance(value, list) or len(value) != 1:
+        return False
     if not evidence_list_is_bound(value):
         return False
-    assert isinstance(value, list)
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
@@ -200,9 +218,10 @@ def main() -> None:
         and all(
             isinstance(item, str)
             and "proof assistant" in item.casefold()
-            and any(
-                token in item.casefold()
-                for token in ("not", "doesn't", "cannot", "without")
+            and re.search(
+                r"\b(?:not|doesn['']?t|cannot|without)\b.{0,80}(?:lean|proof assistant|replay|verify)",
+                item,
+                re.I,
             )
             for item in data["limitations"]
         )

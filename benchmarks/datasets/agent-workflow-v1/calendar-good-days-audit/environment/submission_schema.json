@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "calendar-good-days-audit"},
+    "task_id": {"const": "jacobian/calendar-good-days-audit"},
     "conclusion": {"enum": ["TRUE", "FALSE"]},
     "result": {
       "type": "object",

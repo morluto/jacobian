@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Annotated, Any
@@ -14,6 +13,7 @@ from jacobian.adapters.mcp.guidance import (
     discovery_prompt,
     evidence_check_prompt,
 )
+from jacobian.adapters.mcp.tooling import _run_blocking
 from jacobian.runtime.model import JacobianRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,20 +35,20 @@ def _register_resources_and_prompts(
     async def artifact_resource(
         digest: str,
     ) -> str:
-        active_runtime = _resource_runtime(runtime, tenant_router)
-        artifact = await asyncio.to_thread(
-            active_runtime.core.store.get,
-            f"artifact://sha256/{digest}",
-        )
-        return json.dumps(
-            {
-                "artifact_uri": artifact.artifact_uri,
-                "manifest": artifact.manifest.model_dump(mode="json"),
-                "payload": artifact.payload,
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+        with _resource_runtime(runtime, tenant_router) as active_runtime:
+            artifact = await _run_blocking(
+                active_runtime.core.store.get,
+                f"artifact://sha256/{digest}",
+            )
+            return json.dumps(
+                {
+                    "artifact_uri": artifact.artifact_uri,
+                    "manifest": artifact.manifest.model_dump(mode="json"),
+                    "payload": artifact.payload,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
 
     @server.resource(  # type: ignore[untyped-decorator]
         "experiment://{experiment_id}",
@@ -59,16 +59,16 @@ def _register_resources_and_prompts(
     async def experiment_resource(
         experiment_id: str,
     ) -> str:
-        active_runtime = _resource_runtime(runtime, tenant_router)
-        snapshot = await asyncio.to_thread(
-            active_runtime.services.experiment_router.inspect,
-            f"experiment://{experiment_id}",
-        )
-        return json.dumps(
-            snapshot.model_dump(mode="json"),
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+        with _resource_runtime(runtime, tenant_router) as active_runtime:
+            snapshot = await _run_blocking(
+                active_runtime.services.experiment_router.inspect,
+                f"experiment://{experiment_id}",
+            )
+            return json.dumps(
+                snapshot.model_dump(mode="json"),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
 
     @server.resource(  # type: ignore[untyped-decorator]
         "experiment://{experiment_id}/accounting",
@@ -79,28 +79,28 @@ def _register_resources_and_prompts(
     async def experiment_accounting_resource(
         experiment_id: str,
     ) -> str:
-        active_runtime = _resource_runtime(runtime, tenant_router)
-        snapshot = await asyncio.to_thread(
-            active_runtime.services.experiment_router.inspect,
-            f"experiment://{experiment_id}",
-        )
-        coverage = getattr(snapshot, "coverage", None)
-        return json.dumps(
-            {
-                "experiment_uri": snapshot.experiment_uri,
-                "state": snapshot.state.value,
-                "stop_reason": (
-                    snapshot.stop_reason.value
-                    if snapshot.stop_reason is not None
-                    else None
-                ),
-                "coverage": coverage.value if coverage is not None else None,
-                "verification": snapshot.verification.value,
-                "accounting": snapshot.accounting.model_dump(mode="json"),
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+        with _resource_runtime(runtime, tenant_router) as active_runtime:
+            snapshot = await _run_blocking(
+                active_runtime.services.experiment_router.inspect,
+                f"experiment://{experiment_id}",
+            )
+            coverage = getattr(snapshot, "coverage", None)
+            return json.dumps(
+                {
+                    "experiment_uri": snapshot.experiment_uri,
+                    "state": snapshot.state.value,
+                    "stop_reason": (
+                        snapshot.stop_reason.value
+                        if snapshot.stop_reason is not None
+                        else None
+                    ),
+                    "coverage": coverage.value if coverage is not None else None,
+                    "verification": snapshot.verification.value,
+                    "accounting": snapshot.accounting.model_dump(mode="json"),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
 
     @server.resource(  # type: ignore[untyped-decorator]
         "experiment://{experiment_id}/scope",
@@ -111,16 +111,16 @@ def _register_resources_and_prompts(
     async def experiment_scope_resource(
         experiment_id: str,
     ) -> str:
-        active_runtime = _resource_runtime(runtime, tenant_router)
-        snapshot = await asyncio.to_thread(
-            active_runtime.services.experiment_router.inspect,
-            f"experiment://{experiment_id}",
-        )
-        return await asyncio.to_thread(
-            _experiment_scope_content,
-            active_runtime,
-            snapshot,
-        )
+        with _resource_runtime(runtime, tenant_router) as active_runtime:
+            snapshot = await _run_blocking(
+                active_runtime.services.experiment_router.inspect,
+                f"experiment://{experiment_id}",
+            )
+            return await _run_blocking(
+                _experiment_scope_content,
+                active_runtime,
+                snapshot,
+            )
 
     @server.resource(  # type: ignore[untyped-decorator]
         "experiment://{experiment_id}/archive",
@@ -131,34 +131,34 @@ def _register_resources_and_prompts(
     async def experiment_archive_resource(
         experiment_id: str,
     ) -> str:
-        active_runtime = _resource_runtime(runtime, tenant_router)
-        snapshot = await asyncio.to_thread(
-            active_runtime.services.experiment_router.inspect,
-            f"experiment://{experiment_id}",
-        )
-        if snapshot.archive_uri is None:
+        with _resource_runtime(runtime, tenant_router) as active_runtime:
+            snapshot = await _run_blocking(
+                active_runtime.services.experiment_router.inspect,
+                f"experiment://{experiment_id}",
+            )
+            if snapshot.archive_uri is None:
+                return json.dumps(
+                    {
+                        "experiment_uri": snapshot.experiment_uri,
+                        "archive_uri": None,
+                        "page_uris": list(snapshot.archive_page_uris),
+                    },
+                    sort_keys=True,
+                )
+            archive = await _run_blocking(
+                active_runtime.core.store.get,
+                snapshot.archive_uri,
+            )
             return json.dumps(
                 {
                     "experiment_uri": snapshot.experiment_uri,
-                    "archive_uri": None,
-                    "page_uris": list(snapshot.archive_page_uris),
+                    "archive_uri": archive.artifact_uri,
+                    "manifest": archive.manifest.model_dump(mode="json"),
+                    "payload": archive.payload,
                 },
+                ensure_ascii=False,
                 sort_keys=True,
             )
-        archive = await asyncio.to_thread(
-            active_runtime.core.store.get,
-            snapshot.archive_uri,
-        )
-        return json.dumps(
-            {
-                "experiment_uri": snapshot.experiment_uri,
-                "archive_uri": archive.artifact_uri,
-                "manifest": archive.manifest.model_dump(mode="json"),
-                "payload": archive.payload,
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
 
     @server.prompt(  # type: ignore[untyped-decorator]
         name="jacobian-discover",

@@ -53,6 +53,8 @@ class LeanService:
             weakref.WeakValueDictionary()
         )
         self._warmup_started = False
+        self._warmup_thread: threading.Thread | None = None
+        self._closing = False
         self._mathlib_warmup_status = "NOT_STARTED"
         self._mathlib_warmup_detail: str | None = None
 
@@ -176,18 +178,36 @@ class LeanService:
     def start_mathlib_warmup(self) -> bool:
         """Warm the pinned Mathlib runtime once without delaying server startup."""
 
-        with self._cache_lock:
-            if self._warmup_started:
-                return False
-            self._warmup_started = True
-            self._mathlib_warmup_status = "RUNNING"
         thread = threading.Thread(
             target=self._warm_mathlib,
             name="jacobian-lean-mathlib-warmup",
             daemon=True,
         )
-        thread.start()
+        with self._cache_lock:
+            if self._warmup_started or self._closing:
+                return False
+            self._warmup_started = True
+            self._mathlib_warmup_status = "RUNNING"
+            self._warmup_thread = thread
+            thread.start()
         return True
+
+    def close(self, *, timeout_seconds: float = 120) -> None:
+        """Wait for the optional warm-up before releasing its shared store."""
+
+        if timeout_seconds < 0:
+            raise ValueError("timeout_seconds must be non-negative")
+        with self._cache_lock:
+            self._closing = True
+            thread = self._warmup_thread
+        if thread is not None:
+            thread.join(timeout=timeout_seconds)
+            if thread.is_alive():
+                raise RuntimeError("Lean Mathlib warm-up did not quiesce")
+        with self._cache_lock:
+            self._warmup_thread = None
+            self._cache.clear()
+            self._certificate_locks.clear()
 
     def _warm_mathlib(self) -> None:
         try:

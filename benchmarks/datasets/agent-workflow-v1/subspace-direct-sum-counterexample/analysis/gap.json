@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "ledger_id": "jacobian.agent-workflow-v1.capability-gap-ledger",
+  "task_id": "subspace-direct-sum-counterexample",
+  "analysis": {
+    "mathematical_moves": [
+      "Compute rank and a nonzero rational dependence among named subspace generators.",
+      "Separate generator-family semantics from one Ax=b solution."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "matrix.nullspace.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Returns nullity and the complete canonical basis of exact rational dependencies among ordered generator columns; rank is determined by rank-nullity."
+      },
+      {
+        "capability_id": "matrix.result.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Independently replays the exact stored nullspace basis and binds a verification record to the input and result."
+      }
+    ],
+    "gap_classes": [
+      "WEAK_DISCOVERY",
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "rational-relation-basis"
+    ],
+    "disposition": "USE_EXISTING",
+    "next_action": "Expose relation terminology on matrix.nullspace.compute and derive direct-sum claims from ordered generator columns through agent-owned composition."
+  }
+}

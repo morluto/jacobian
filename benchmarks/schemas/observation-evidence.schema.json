@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/observation-evidence.schema.json",
+  "title": "Jacobian Harbor workflow observation evidence",
+  "description": "Strict normalized observation evidence v2. Binds the immutable benchmark snapshot ID and Harbor version (read from explicit job/runtime/held-out manifest bindings, never invented), normalized evaluation arguments, runtime/model/agent/repetition/budgets/results/rewards/verifier states/failures, and manifest-driven per-artifact identity. Fails closed: VALID only when execution is complete and every binding matches.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_class",
+    "causal_claim_authorized",
+    "status",
+    "source_sha",
+    "dataset",
+    "condition",
+    "snapshot_id",
+    "harbor_version",
+    "eval_args",
+    "job",
+    "runtime_snapshot",
+    "fixed_invariants",
+    "result",
+    "trials",
+    "validation_failures"
+  ],
+  "properties": {
+    "schema_version": {"const": "2"},
+    "evidence_class": {"type": "string", "minLength": 1},
+    "causal_claim_authorized": {"const": false},
+    "status": {"enum": ["VALID", "INCOMPLETE"]},
+    "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "dataset": {"type": "string", "minLength": 1},
+    "condition": {"type": "string", "minLength": 1},
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "harbor_version": {"type": "string", "minLength": 1},
+    "eval_args": {"$ref": "#/$defs/eval_args"},
+    "job": {"$ref": "#/$defs/job"},
+    "runtime_snapshot": {"$ref": "#/$defs/runtime_snapshot"},
+    "fixed_invariants": {"$ref": "#/$defs/fixed_invariants"},
+    "result": {"$ref": "#/$defs/result"},
+    "trials": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/trial"}
+    },
+    "validation_failures": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "eval_args": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection_mode", "selection", "n_attempts", "selection_digest"],
+      "properties": {
+        "selection_mode": {
+          "enum": ["dataset-task-names", "explicit-tasks"]
+        },
+        "datasets": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "task_names": {
+                "type": ["array", "null"],
+                "items": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        },
+        "tasks": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {"path": {"type": "string", "minLength": 1}}
+          }
+        },
+        "selection": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "n_attempts": {"type": "integer", "minimum": 0},
+        "selection_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest", "comparison_signature", "n_attempts"],
+      "properties": {
+        "path": {"type": "string"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "comparison_signature": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "n_attempts": {"type": "integer", "minimum": 0}
+      }
+    },
+    "runtime_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {"type": "string", "minLength": 1},
+        "bundle_version": {"type": "string", "minLength": 1},
+        "bundle_manifest_digest": {"$ref": "#/$defs/digest"},
+        "dataset_manifest_digest": {"$ref": "#/$defs/digest"},
+        "snapshot_id": {"$ref": "#/$defs/digest"},
+        "condition": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"$ref": "#/$defs/runtime_condition"}
+          ]
+        },
+        "harbor_version": {"type": "string", "minLength": 1},
+        "agent": {"$ref": "#/$defs/agent_identity"},
+        "model": {"type": "string", "minLength": 1},
+        "prompt_path": {"type": "string", "minLength": 1},
+        "prompt_digest": {"$ref": "#/$defs/digest"},
+        "reasoning_effort": {"type": "string", "minLength": 1},
+        "randomization_seed": {"type": "integer"},
+        "stage": {"type": "string", "minLength": 1},
+        "pair_id": {"type": "string", "minLength": 1},
+        "pair_index": {"type": "integer", "minimum": 0},
+        "task": {"type": "string", "minLength": 1},
+        "repetition": {"type": "integer", "minimum": 0},
+        "max_tokens": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "exclusiveMinimum": 0},
+        "catalog_digest": {"$ref": "#/$defs/digest"},
+        "policy_digest": {"$ref": "#/$defs/digest"},
+        "runtime_state": {"type": "string", "minLength": 1},
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_tokens", "max_cost_usd", "enforcement", "missing_accounting", "overage"],
+          "properties": {
+            "max_tokens": {"type": "integer", "minimum": 1},
+            "max_cost_usd": {"type": "number", "exclusiveMinimum": 0},
+            "enforcement": {"const": "PAIR_BOUNDARY_POST_RUN"},
+            "missing_accounting": {"const": "INCOMPLETE"},
+            "overage": {"const": "INCOMPLETE"}
+          }
+        },
+        "pair_count": {"type": "integer", "minimum": 1},
+        "plan_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "fixed_invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "tasks", "sampling_seed", "sampling_deterministic", "runtime"],
+      "properties": {
+        "model": {"type": ["string", "null"]},
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task", "digest"],
+            "properties": {
+              "task": {"type": "string", "minLength": 1},
+              "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+            }
+          }
+        },
+        "sampling_seed": {"type": ["integer", "null"]},
+        "sampling_deterministic": {"type": "boolean"},
+        "runtime": {"$ref": "#/$defs/runtime_invariants"}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {"type": "string"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task",
+        "task_digest",
+        "repetition",
+        "trial_name",
+        "status",
+        "model",
+        "agent",
+        "rewards",
+        "false_certification",
+        "verifier_state",
+        "tokens",
+        "cost_usd",
+        "agent_seconds",
+        "budgets",
+        "artifacts",
+        "tool_calls",
+        "tool_errors",
+        "raw_result_digest"
+      ],
+      "properties": {
+        "task": {"type": "string", "minLength": 1},
+        "task_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "repetition": {"type": "integer", "minimum": 0},
+        "trial_name": {"type": "string"},
+        "pair_id": {"type": ["string", "null"]},
+        "status": {
+          "enum": ["COMPLETED", "ERROR", "TIMEOUT", "CANCELLED"]
+        },
+        "exception_type": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "model_provider": {"type": ["string", "null"]},
+        "agent": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {"type": ["string", "null"]},
+            "version": {"type": ["string", "null"]}
+          }
+        },
+        "rewards": {
+          "type": "object",
+          "additionalProperties": {"type": ["number", "boolean", "null"]}
+        },
+        "false_certification": {"type": ["boolean", "number", "null"]},
+        "verifier_state": {"type": ["string", "null"]},
+        "tokens": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input", "cache", "output"],
+          "properties": {
+            "input": {"type": ["integer", "null"]},
+            "cache": {"type": ["integer", "null"]},
+            "output": {"type": ["integer", "null"]}
+          }
+        },
+        "cost_usd": {"type": ["number", "null"]},
+        "agent_seconds": {"type": ["number", "null"]},
+        "budgets": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "max_tokens": {"type": ["integer", "null"]},
+            "max_cost_usd": {"type": ["number", "null"]}
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifact"}
+        },
+        "tool_calls": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        },
+        "tool_errors": {"type": "integer", "minimum": 0},
+        "raw_result_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job",
+        "trial",
+        "step",
+        "step_name",
+        "source_path",
+        "manifest_source",
+        "service",
+        "artifact_path",
+        "digest"
+      ],
+      "properties": {
+        "job": {"type": "string"},
+        "trial": {"type": "string"},
+        "step": {"type": "integer", "minimum": 0},
+        "step_name": {"type": ["string", "null"]},
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+        "description": "Canonical host artifact file path, stable relative to the job directory and including the trial directory. Differs across independent trials; never leaks absolute host prefixes."
+        },
+        "manifest_source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Harbor 0.20 manifest entry source: the absolute container path the artifact was collected from. Repeats legitimately across independent trial containers."
+        },
+        "service": {"type": ["string", "null"]},
+        "artifact_path": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "agent_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "runtime_condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "jacobian_enabled"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "role": {"type": "string", "minLength": 1},
+        "jacobian_enabled": {"type": "boolean"},
+        "image": {"type": "string", "minLength": 1},
+        "server_version": {"type": "string", "minLength": 1},
+        "policy_profile": {"type": "string", "minLength": 1},
+        "catalog_digest": {"$ref": "#/$defs/digest"},
+        "policy_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "runtime_invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {"type": "string", "minLength": 1},
+        "bundle_version": {"type": "string", "minLength": 1},
+        "bundle_manifest_digest": {"$ref": "#/$defs/digest"},
+        "dataset_manifest_digest": {"$ref": "#/$defs/digest"},
+        "snapshot_id": {"$ref": "#/$defs/digest"},
+        "harbor_version": {"type": "string", "minLength": 1},
+        "agent": {"$ref": "#/$defs/agent_identity"},
+        "model": {"type": "string", "minLength": 1},
+        "prompt_path": {"type": "string", "minLength": 1},
+        "prompt_digest": {"$ref": "#/$defs/digest"},
+        "reasoning_effort": {"type": "string", "minLength": 1},
+        "randomization_seed": {"type": "integer"},
+        "stage": {"type": "string", "minLength": 1},
+        "budget": {"type": ["string", "object", "null"]},
+        "pair_count": {"type": "integer", "minimum": 0},
+        "plan_digest": {"$ref": "#/$defs/digest"},
+        "max_tokens": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "exclusiveMinimum": 0}
+      }
+    }
+  }
+}

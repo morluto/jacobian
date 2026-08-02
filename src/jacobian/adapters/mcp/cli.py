@@ -118,6 +118,15 @@ def _parser() -> argparse.ArgumentParser:
         default=32,
         help="maximum in-memory tenant runtimes for remote transports",
     )
+    parser.add_argument(
+        "--tenant-idle-timeout-seconds",
+        type=float,
+        default=900.0,
+        help=(
+            "inactive tenant runtime TTL in seconds; expiry is checked on the "
+            "next acquisition"
+        ),
+    )
     return parser
 
 
@@ -126,6 +135,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.max_tenant_runtimes < 1:
         parser.error("--max-tenant-runtimes must be positive")
+    if args.tenant_idle_timeout_seconds <= 0:
+        parser.error("--tenant-idle-timeout-seconds must be positive")
+    if args.allow_anonymous and args.auth_tokens_file is not None:
+        parser.error("--allow-anonymous and --auth-tokens-file are mutually exclusive")
     if args.anonymous_tenant_id != "anonymous" and not args.allow_anonymous:
         parser.error("--anonymous-tenant-id requires --allow-anonymous")
     args.path = args.path if args.path.startswith("/") else f"/{args.path}"
@@ -195,6 +208,7 @@ def main() -> None:
         capability_adapter_entrypoints=tuple(args.capability_adapter),
         capability_policy=capability_policy,
         max_tenant_runtimes=args.max_tenant_runtimes,
+        tenant_idle_timeout_seconds=args.tenant_idle_timeout_seconds,
     )
     if args.transport == "streamable-http":
         server.run(

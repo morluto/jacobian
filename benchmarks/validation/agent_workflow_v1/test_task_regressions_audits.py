@@ -1090,3 +1090,72 @@ def test_indexed_pairwise_vacuity_accepts_unordered_elements(tmp_path: Path) -> 
 
     accepted = support._run_verifier(task, app, logs)
     assert accepted["correctness"] == 1.0
+
+
+def _prepare_periodic_orbit_case(tmp_path: Path):
+    task, app, logs = support._prepare_case(
+        tmp_path, "periodic-orbit-polynomial-obstruction", "computed"
+    )
+    source = task / "solution" / "periodic-orbit-certificate.json"
+    target = app / "evidence" / "periodic-orbit-certificate.json"
+    target.write_bytes(source.read_bytes())
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"][0]["sha256"] = support._digest(target)
+    support._write_json(submission_path, submission)
+    return task, app, logs
+
+
+def _bind_periodic_orbit_evidence(app: Path, submission: dict) -> None:
+    evidence_path = app / "evidence" / "periodic-orbit-certificate.json"
+    evidence = json.loads(evidence_path.read_text())
+    evidence["result"] = submission["result"]
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+
+
+def test_periodic_orbit_obstruction_accepts_reordered_prime_reductions(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["modular_reductions"].reverse()
+    _bind_periodic_orbit_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_periodic_orbit_obstruction_rejects_one_sided_reduction(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["modular_reductions"] = submission["result"][
+        "modular_reductions"
+    ][:1]
+    _bind_periodic_orbit_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_periodic_orbit_obstruction_rejects_corrupted_mobius_coefficient(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["exact_period_coefficients"] = [1, -1, 1, -1]
+    _bind_periodic_orbit_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0

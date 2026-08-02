@@ -70,6 +70,23 @@ def monic_gcd(p: list[Fraction], q: list[Fraction]) -> list[Fraction]:
     return scale(left, Fraction(1, 1) / left[-1])
 
 
+def derive_unique_parameter(gcd: list[Fraction]) -> int | None:
+    """Derive the unique integer parameter from a monic linear gcd c0 + c1*a.
+
+    A monic linear gcd with c1 != 0 has exactly one rational root a = -c0/c1.
+    Return that root as an int when it is integral, otherwise None.  Nonlinear
+    or constant gcds also return None: they cannot certify a *unique* integer
+    parameter.  Extracted from ``main`` so the derivation logic can be exercised
+    with controlled gcds whose root is not the canonical value 2.
+    """
+    if len(gcd) != 2 or gcd[1] == 0:
+        return None
+    root = -gcd[0] / gcd[1]
+    if root.denominator != 1:
+        return None
+    return int(root.numerator)
+
+
 def symbolic_remainder() -> tuple[list[Fraction], list[Fraction]]:
     # A residue is c0(a) + c1(a)x. Multiplication by x uses x^2=x-a.
     c0, c1 = [Fraction(1)], [Fraction(0)]
@@ -188,19 +205,9 @@ def main() -> None:
     # not hard-coded expectations.  A monic linear gcd c0 + c1*a (c1 != 0)
     # has exactly one rational root a = -c0/c1; that root is the unique
     # integer parameter, and its integrality is what licenses UNIQUE_PARAMETER.
-    gcd_is_linear = (
-        len(computed_gcd) == 2 and computed_gcd[1] != 0
-    )
-    derived_parameter = (
-        -computed_gcd[0] / computed_gcd[1] if gcd_is_linear else None
-    )
-    parameter_is_integer = (
-        derived_parameter is not None
-        and derived_parameter.denominator == 1
-    )
-    derived_parameter_int = (
-        int(derived_parameter.numerator) if parameter_is_integer else None
-    )
+    gcd_is_linear = len(computed_gcd) == 2 and computed_gcd[1] != 0
+    derived_parameter_int = derive_unique_parameter(computed_gcd)
+    parameter_is_integer = derived_parameter_int is not None
     symbolic_ok = (
         r0 is not None
         and r1 is not None

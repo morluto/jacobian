@@ -690,13 +690,18 @@
           "capability_id": "polynomial.identity.verify",
           "availability": "AVAILABLE",
           "boundary": "Can replay the final product identity but does not establish parameter-family completeness."
+        },
+        {
+          "capability_id": "polynomial.compute.gcd",
+          "availability": "AVAILABLE",
+          "boundary": "Computes the monic GCD and Bezout identity of two bounded univariate polynomials over QQ, supplying the linear gcd whose unique integer root certifies the parameter. Symbolic remainder construction and root extraction remain agent-owned reasoning."
         }
       ],
       "gap_classes": ["EXISTING_WORKS", "MODEL_REASONING"],
       "contamination": "PUBLIC_ANSWER_VISIBLE",
       "candidate_ids": [],
       "disposition": "NO_NEW_CAPABILITY",
-      "next_action": "Retain symbolic parameter reduction as agent-owned reasoning; one task does not justify a dedicated divisibility-family wrapper."
+      "next_action": "Retain symbolic parameter reduction as agent-owned reasoning; polynomial.compute.gcd already supplies the gcd move, and one task does not justify a dedicated divisibility-family wrapper."
     },
     {
       "task_id": "polynomial-map-collision",

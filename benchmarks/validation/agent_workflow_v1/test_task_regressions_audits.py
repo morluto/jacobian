@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -258,6 +259,35 @@ def test_polynomial_divisibility_derives_parameter_from_gcd(
     assert rejected["reward"] == 0.0
 
 
+def test_polynomial_divisibility_derivation_helper_is_not_hardcoded() -> None:
+    """Thread PRRT_kwDOThEfjc6VuwnB-derive: the parameter-derivation logic must
+    compute the unique integer root of a controlled linear gcd, not match a
+    hard-coded value.  Exercise ``derive_unique_parameter`` directly with linear
+    gcds whose integral root is *not* the canonical 2, so a regressed
+    implementation that only accepts ``parameter == 2`` would fail these cases.
+    """
+    import importlib
+    import sys
+
+    tests_dir = support.TASKS / "polynomial-divisibility-uniqueness" / "tests"
+    sys.path.insert(0, str(tests_dir))
+    try:
+        verifier = importlib.import_module("verifier")
+        # c0 + c1*a with root -c0/c1; pick roots that are not 2.
+        assert verifier.derive_unique_parameter([Fraction(3), Fraction(1)]) == -3
+        assert verifier.derive_unique_parameter([Fraction(-5), Fraction(1)]) == 5
+        assert verifier.derive_unique_parameter([Fraction(0), Fraction(1)]) == 0
+        # Non-integral rational root cannot license a UNIQUE_PARAMETER claim.
+        assert verifier.derive_unique_parameter([Fraction(1), Fraction(2)]) is None
+        # Nonlinear and constant gcds cannot certify uniqueness.
+        assert verifier.derive_unique_parameter([Fraction(6), Fraction(-5), Fraction(1)]) is None
+        assert verifier.derive_unique_parameter([Fraction(2), Fraction(0)]) is None
+    finally:
+        sys.path.remove(str(tests_dir))
+        sys.modules.pop("verifier", None)
+        sys.modules.pop("verifier_support", None)
+
+
 def test_polynomial_divisibility_rejects_nonlinear_gcd(
     tmp_path: Path,
 ) -> None:
@@ -270,9 +300,13 @@ def test_polynomial_divisibility_rejects_nonlinear_gcd(
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    # Replace the linear gcd [-2, 1] with a degree-2 polynomial that has
-    # the correct root a=2 but also an extraneous root, breaking uniqueness.
-    submission["result"]["common_gcd"] = [-6, 5, 1]
+    # Replace the linear gcd [-2, 1] with (a-2)(a-3) = a^2 - 5a + 6, a
+    # degree-2 polynomial that *contains* the correct root a=2 but also has
+    # the extraneous root a=3, breaking uniqueness.  A weaker verifier that
+    # only checks the submitted gcd vanishes at the reported parameter would
+    # accept this; the correct verifier rejects it because the recomputed gcd
+    # is linear and the submitted gcd is not equal to it.
+    submission["result"]["common_gcd"] = [6, -5, 1]
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
@@ -307,6 +341,27 @@ def test_polynomial_divisibility_rejects_extra_result_keys(
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     submission["result"]["extra_field"] = 0
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_divisibility_rejects_missing_result_keys(
+    tmp_path: Path,
+) -> None:
+    """Thread PRRT_kwDOThEfjc6VuwnA: the verifier requires the exact five
+    result keys (additionalProperties: false), so a result object missing a
+    required key must be rejected even when the remaining values are correct.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-divisibility-uniqueness", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    del submission["result"]["quotient"]
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 

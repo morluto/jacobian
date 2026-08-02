@@ -99,14 +99,19 @@ def evidence_valid(evidence: object) -> bool:
         text = path.read_text().lower()
     except (OSError, UnicodeError):
         return False
-    return all(
-        phrase in text
-        for phrase in (
-            "squarefree kernel",
-            "sum of the squared class sizes",
-            "at least four",
-            "computed",
+    return bool(
+        len(text) >= 160
+        and all(
+            phrase in text
+            for phrase in (
+                "squarefree kernel",
+                "sum of the squared class sizes",
+                "at least four",
+                "computed",
+            )
         )
+        and "modular" in text
+        and "2023" in text
     )
 
 

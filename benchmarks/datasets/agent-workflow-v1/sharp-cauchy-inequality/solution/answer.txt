@@ -1,0 +1,1 @@
+The exact symbolic certificate and equality witness are machine-readable.

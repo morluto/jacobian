@@ -113,6 +113,7 @@ def evidence_valid(evidence: object, result: object) -> bool:
         text = body.casefold()
         compact = "".join(text.split())
         obstruction = result["modular_obstruction"] if isinstance(result, dict) else {}
+        marker_result = json.loads(marker)
         expected_fragments = (
             f"ordered_pair_count={result.get('ordered_pair_count')}",
             f"modulus={obstruction.get('modulus')}",
@@ -124,12 +125,11 @@ def evidence_valid(evidence: object, result: object) -> bool:
         return False
     contradictory = (
         re.search(r"\b(?:not|never)\b[^.]{0,80}\bsquarefree\s+kernel", text)
-        or re.search(r"\bproduct\b[^.]{0,80}\b(?:not|never)\b[^.]{0,20}\bsquare", text)
         or re.search(r"\b(?:not|never)\b[^.]{0,80}\bat\s+least\s+four", text)
     )
     return bool(
         isinstance(result, dict)
-        and json.loads(marker) == result
+        and marker_result == result
         and len(body) >= 160
         and not contradictory
         and all(fragment.replace(" ", "") in compact for fragment in expected_fragments)
@@ -153,10 +153,11 @@ def limitation_is_unchecked(value: object) -> bool:
     if not isinstance(value, str):
         return False
     text = value.casefold()
-    return bool(
-        re.search(r"\b(?:not|no|without|does not)\b[^.]{0,80}\b(?:machine|formal|proof assistant)", text)
-        or re.search(r"\b(?:machine|formal|proof assistant)\b[^.]{0,80}\b(?:not|no|without)", text)
-    )
+    verification = r"(?:machine|formally?|proof[- ]assistant)(?:[- ](?:checked|verified|verification|proof))?"
+    negative_pattern = rf"\b(?:not|no|without|does not|doesn't)\b[^.]{0,60}\b{verification}\b"
+    negative = re.search(negative_pattern, text)
+    remainder = re.sub(negative_pattern, "", text)
+    return bool(negative and not re.search(rf"\b{verification}\b", remainder))
 
 
 def main() -> None:

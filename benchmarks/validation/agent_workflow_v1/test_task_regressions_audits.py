@@ -1090,3 +1090,73 @@ def test_indexed_pairwise_vacuity_accepts_unordered_elements(tmp_path: Path) -> 
 
     accepted = support._run_verifier(task, app, logs)
     assert accepted["correctness"] == 1.0
+
+
+def _prepare_root_localization_case(tmp_path: Path):
+    task, app, logs = support._prepare_case(
+        tmp_path, "polynomial-root-localization-certificate", "computed"
+    )
+    evidence = task / "solution" / "root-bound-certificate.json"
+    target = app / "evidence" / "root-bound-certificate.json"
+    target.write_bytes(evidence.read_bytes())
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"][0]["sha256"] = support._digest(target)
+    support._write_json(submission_path, submission)
+    return task, app, logs
+
+
+def _bind_root_localization_evidence(app: Path, submission: dict) -> None:
+    evidence_path = app / "evidence" / "root-bound-certificate.json"
+    evidence = json.loads(evidence_path.read_text())
+    evidence["result"] = submission["result"]
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+
+
+def test_polynomial_root_localization_accepts_permuted_weight_order(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_root_localization_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["nonnegative_weights"].reverse()
+    submission["result"]["root_identity_rhs"] = (
+        submission["result"]["root_identity_rhs"][1:]
+        + submission["result"]["root_identity_rhs"][:1]
+    )
+    _bind_root_localization_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_polynomial_root_localization_rejects_corrupted_symbolic_coefficient(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_root_localization_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["one_minus_z_times_q"][2] = [0, -1, 0, 1]
+    _bind_root_localization_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_root_localization_rejects_false_verified_claim(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare_root_localization_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["claimed_assurance"] = "VERIFIED"
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["false_certification"] is True
+    assert rejected["reward"] == 0.0

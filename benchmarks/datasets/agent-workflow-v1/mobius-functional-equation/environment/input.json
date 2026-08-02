@@ -1,0 +1,1 @@
+{"task_id":"jacobian/mobius-functional-equation","domain":"R minus {0,1}","transform":{"numerator":[-1,1],"denominator":[0,1]},"equation":"F(x)+F(T(x))=1+x","coefficient_domain":"ZZ","required_orbit_length":3}

@@ -64,6 +64,10 @@ def _affine(value: object) -> list[int] | None:
     return [intercept, slope]
 
 
+def _strict_int_list(value: object) -> bool:
+    return isinstance(value, list) and all(type(item) is int for item in value)
+
+
 def _family(value: object) -> set[int] | None:
     if not isinstance(value, dict) or set(value) != {
         "parameter_min",
@@ -91,7 +95,7 @@ def _family(value: object) -> set[int] | None:
         return None
     residues = {(target[1] * (minimum + step) + target[0]) % 9 for step in range(9)}
     declared = value["covered_residues"]
-    if not isinstance(declared, list) or declared != sorted(residues):
+    if not _strict_int_list(declared) or declared != sorted(residues):
         return None
     return residues
 
@@ -122,6 +126,9 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     )
     excluded = sorted(set(range(9)) - set(image))
     if (
+        not _strict_int_list(value["image_residues_mod_9"])
+        or not _strict_int_list(value["excluded_residues_mod_9"])
+        or
         value["image_residues_mod_9"] != image
         or value["excluded_residues_mod_9"] != excluded
     ):

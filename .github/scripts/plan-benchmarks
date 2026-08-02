@@ -154,10 +154,14 @@ def _require_dataset_version_bumps(
             continue
         dataset = parts[2]
         relative = parts[3:]
-        if relative == ("suite.toml",) or relative[:1] == ("members",) or (
-            len(relative) >= 2
-            and relative[1:] != ("README.md",)
-            and relative[0] not in {"jobs", "members"}
+        if (
+            relative == ("suite.toml",)
+            or relative[:1] == ("members",)
+            or (
+                len(relative) >= 2
+                and relative[1:] != ("README.md",)
+                and relative[0] not in {"jobs", "members"}
+            )
         ):
             requiring_bump.add(dataset)
     missing = sorted(
@@ -222,6 +226,26 @@ def _oracle_matrix(
     ]
 
 
+def _forced_full_plan(
+    *,
+    paths: list[str],
+    base: str | None,
+    timings: dict[str, float] | None,
+    reason: str,
+) -> dict[str, str]:
+    if paths:
+        benchmark_changed = [
+            path
+            for path in paths
+            if path == "benchmarks"
+            or path.startswith("benchmarks/")
+            or path in BENCHMARK_CONTROL_PATHS
+        ]
+        if benchmark_changed:
+            _require_dataset_version_bumps(benchmark_changed, base=base)
+    return _full_plan(reason, timings=timings)
+
+
 def plan(
     paths: list[str],
     *,
@@ -234,7 +258,9 @@ def plan(
         raise ValueError(f"unsupported benchmark event: {event}")
     if force_full or event in {"schedule", "workflow_dispatch"}:
         reason = "forced full portfolio" if force_full else f"{event} full portfolio"
-        return _full_plan(reason, timings=timings)
+        return _forced_full_plan(
+            paths=paths, base=base, timings=timings, reason=reason
+        )
 
     benchmark_paths = [
         path

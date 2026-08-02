@@ -126,9 +126,7 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
         compose = environment.get("extra_docker_compose")
         if isinstance(compose, list):
             environment["extra_docker_compose"] = [
-                value
-                for value in compose
-                if Path(str(value)).name == "agent-eval-proxy.compose.yaml"
+                value for value in compose if Path(str(value)).name != "c2.compose.json"
             ]
     for agent in normalized.get("agents", []):
         if isinstance(agent, dict):
@@ -232,6 +230,8 @@ def _normalize_trial(
         else None,
         "model": model_info.get("name"),
         "model_provider": model_info.get("provider"),
+        "agent_name": agent_info.get("name"),
+        "agent_version": agent_info.get("version"),
         "rewards": rewards,
         "false_certification": rewards.get("false_certification"),
         "tokens": {
@@ -381,6 +381,41 @@ def build_observation_evidence(
     runtime = runtime_snapshot or {}
     if runtime.get("model") is not None and models != [runtime["model"]]:
         failures.append("recorded model differs from the frozen runtime snapshot")
+    providers = sorted(
+        {
+            str(trial["model_provider"])
+            for trial in trials
+            if trial.get("model_provider") is not None
+        }
+    )
+    if len(providers) > 1:
+        failures.append(f"expected one model provider identity, observed={providers}")
+    agent_names = sorted(
+        {
+            str(trial["agent_name"])
+            for trial in trials
+            if trial.get("agent_name") is not None
+        }
+    )
+    if len(agent_names) != 1:
+        failures.append(f"expected one agent name identity, observed={agent_names}")
+    agent_versions = sorted(
+        {
+            str(trial["agent_version"])
+            for trial in trials
+            if trial.get("agent_version") is not None
+        }
+    )
+    if len(agent_versions) != 1:
+        failures.append(
+            f"expected one agent version identity, observed={agent_versions}"
+        )
+    frozen_agent = runtime.get("agent") if isinstance(runtime, dict) else None
+    if isinstance(frozen_agent, dict):
+        if agent_names and agent_names != [frozen_agent.get("name")]:
+            failures.append("observed agent name differs from the frozen runtime")
+        if agent_versions and agent_versions != [frozen_agent.get("version")]:
+            failures.append("observed agent version differs from the frozen runtime")
     snapshot_invariants = {
         key: runtime.get(key)
         for key in (
@@ -417,6 +452,9 @@ def build_observation_evidence(
         "runtime_snapshot": runtime,
         "fixed_invariants": {
             "model": models[0] if len(models) == 1 else None,
+            "model_provider": providers[0] if len(providers) == 1 else None,
+            "agent_name": agent_names[0] if len(agent_names) == 1 else None,
+            "agent_version": agent_versions[0] if len(agent_versions) == 1 else None,
             "tasks": [
                 {"task": task, "digest": expected_digests[task]}
                 for task in sorted(expected_digests)
@@ -610,9 +648,17 @@ def compare_evidence(
         metric: _metric_report(metric, pairs, control_trials, treatment_trials)
         for metric in metric_names
     }
-    for metric in ("correctness", "false_certification"):
+    for metric in (
+        "correctness",
+        "evidence_validity",
+        "scope_accuracy",
+        "assurance_calibration",
+        "false_certification",
+    ):
         if metrics[metric]["pair_count"] != len(pairs):
-            failures.append(f"core metric is missing from a complete pair: {metric}")
+            failures.append(
+                f"required outcome metric is missing from a complete pair: {metric}"
+            )
     return {
         "schema_version": "1",
         "evidence_class": _derived_comparison_class(control, treatment),
@@ -748,6 +794,40 @@ def collect_heldout_evidence(
     )
     if models != [experiment["model"]]:
         failures.append("observed model does not match the frozen experiment")
+    providers = sorted(
+        {
+            str(item["model_provider"])
+            for item in trials
+            if item.get("model_provider") is not None
+        }
+    )
+    if len(providers) > 1:
+        failures.append(f"expected one model provider identity, observed={providers}")
+    agent_names = sorted(
+        {
+            str(item["agent_name"])
+            for item in trials
+            if item.get("agent_name") is not None
+        }
+    )
+    frozen_agent = experiment.get("agent") if isinstance(experiment, dict) else None
+    frozen_agent_name = (
+        frozen_agent.get("name") if isinstance(frozen_agent, dict) else None
+    )
+    frozen_agent_version = (
+        frozen_agent.get("version") if isinstance(frozen_agent, dict) else None
+    )
+    if agent_names and agent_names != [frozen_agent_name]:
+        failures.append("observed agent name does not match the frozen experiment")
+    agent_versions = sorted(
+        {
+            str(item["agent_version"])
+            for item in trials
+            if item.get("agent_version") is not None
+        }
+    )
+    if agent_versions and agent_versions != [frozen_agent_version]:
+        failures.append("observed agent version does not match the frozen experiment")
     task_digests = {str(item["id"]): str(item["digest"]) for item in manifest["tasks"]}
     evidence = {
         "schema_version": "1",
@@ -768,6 +848,9 @@ def collect_heldout_evidence(
         "runtime_snapshot": runtime_invariants,
         "fixed_invariants": {
             "model": models[0] if len(models) == 1 else None,
+            "model_provider": providers[0] if len(providers) == 1 else None,
+            "agent_name": agent_names[0] if len(agent_names) == 1 else None,
+            "agent_version": agent_versions[0] if len(agent_versions) == 1 else None,
             "tasks": [
                 {"task": task, "digest": task_digests[task]}
                 for task in sorted(stage_tasks)

@@ -55,6 +55,7 @@ def _runner(*, missing_cost: bool = False):
             agent_result["cost_usd"] = 0.1
         result = {
             "stats": {
+                "n_completed_trials": 1,
                 "n_errored_trials": 0,
                 "n_running_trials": 0,
                 "n_pending_trials": 0,
@@ -115,3 +116,100 @@ def test_runner_rejects_ledger_from_another_plan(tmp_path: Path) -> None:
 
     with pytest.raises(HarborSuiteError, match="different run plan"):
         execute_plan(plan, ledger)
+
+
+def test_runner_fails_closed_when_completed_trial_count_is_missing(
+    tmp_path: Path,
+) -> None:
+    plan = _plan(tmp_path)
+    calls: list[list[str]] = []
+
+    def run(command: list[str]) -> int:
+        calls.append(command)
+        job = Path(command[-1])
+        result_root = job.parent / "results" / "job"
+        result_root.mkdir(parents=True)
+        result = {
+            "stats": {
+                "n_errored_trials": 0,
+                "n_running_trials": 0,
+                "n_pending_trials": 0,
+                "n_cancelled_trials": 0,
+            },
+            "trial_results": [
+                {
+                    "agent_result": {
+                        "n_input_tokens": 10,
+                        "n_output_tokens": 5,
+                        "cost_usd": 0.1,
+                    },
+                    "exception_info": None,
+                }
+            ],
+        }
+        (result_root / "result.json").write_text(json.dumps(result))
+        return 0
+
+    ledger = execute_plan(plan, tmp_path / "ledger.json", command_runner=run)
+
+    assert ledger["status"] == "INCOMPLETE"
+    assert "completed trial count" in ledger["validation_failures"][0]
+
+
+def test_runner_fails_closed_when_completed_trial_count_mismatches_payloads(
+    tmp_path: Path,
+) -> None:
+    plan = _plan(tmp_path)
+    calls: list[list[str]] = []
+
+    def run(command: list[str]) -> int:
+        calls.append(command)
+        job = Path(command[-1])
+        result_root = job.parent / "results" / "job"
+        result_root.mkdir(parents=True)
+        result = {
+            "stats": {
+                "n_completed_trials": 2,
+                "n_errored_trials": 0,
+                "n_running_trials": 0,
+                "n_pending_trials": 0,
+                "n_cancelled_trials": 0,
+            },
+            "trial_results": [
+                {
+                    "agent_result": {
+                        "n_input_tokens": 10,
+                        "n_output_tokens": 5,
+                        "cost_usd": 0.1,
+                    },
+                    "exception_info": None,
+                }
+            ],
+        }
+        (result_root / "result.json").write_text(json.dumps(result))
+        return 0
+
+    ledger = execute_plan(plan, tmp_path / "ledger.json", command_runner=run)
+
+    assert ledger["status"] == "INCOMPLETE"
+    assert "does not match" in ledger["validation_failures"][0]
+
+
+def test_runner_reconciles_complete_result_without_rerunning(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    ledger_path = tmp_path / "ledger.json"
+    calls, runner = _runner()
+
+    first = execute_plan(plan, ledger_path, command_runner=runner)
+    assert first["status"] == "COMPLETE"
+    assert len(calls) == 2
+
+    # Simulate interruption: remove the ledger but keep the result directories.
+    ledger_path.unlink()
+    calls.clear()
+
+    resumed = execute_plan(plan, ledger_path, command_runner=runner)
+
+    assert resumed["status"] == "COMPLETE"
+    assert len(calls) == 0
+    assert resumed["usage"] == {"tokens": 30, "cost_usd": 0.2}

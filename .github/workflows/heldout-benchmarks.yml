@@ -13,6 +13,10 @@ on:
         default: pilot
         type: choice
         options: [pilot, decision]
+      pilot_report_key:
+        description: Private S3 object key for a completed pilot comparison report (required for decision)
+        required: false
+        type: string
       confirmation:
         description: Enter RUN_HELD_OUT to authorize model execution
         required: true
@@ -58,22 +62,70 @@ jobs:
             python -m benchmarks.tooling.heldout_bundle fetch \
             --manifest-uri "$MANIFEST_URI" --output "$BUNDLE_ROOT"
           echo "root=$BUNDLE_ROOT" >> "$GITHUB_OUTPUT"
+      - id: restore
+        name: Restore prior ledger and result directories
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+          MANIFEST_KEY: ${{ inputs.manifest_key }}
+          STAGE: ${{ inputs.stage }}
+        run: |
+          experiment_id=$(printf '%s' "$MANIFEST_KEY" | sha256sum | cut -d' ' -f1)
+          restore_key="heldout-ledger-${experiment_id}-${STAGE}"
+          restore_root="$BUNDLE_ROOT/restored"
+          mkdir -p "$restore_root"
+          if aws s3 cp "s3://${{ vars.HELDOUT_BUCKET }}/ledgers/${restore_key}/execution-ledger.json" \
+            "$restore_root/execution-ledger.json" 2>/dev/null; then
+            echo "Restored prior ledger for $restore_key"
+          fi
+          if aws s3 cp --recursive "s3://${{ vars.HELDOUT_BUCKET }}/ledgers/${restore_key}/runs/" \
+            "$restore_root/runs/" 2>/dev/null; then
+            echo "Restored prior result directories for $restore_key"
+          fi
+          echo "restore_root=$restore_root" >> "$GITHUB_OUTPUT"
       - id: plan
         name: Render randomized task-repetition pairs
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
           STAGE: ${{ inputs.stage }}
+          PILOT_REPORT_KEY: ${{ inputs.pilot_report_key }}
         run: |
           max_tokens=$(jq -r '.experiment.max_tokens' "$BUNDLE_ROOT/manifest.json")
           max_cost=$(jq -r '.experiment.max_cost_usd' "$BUNDLE_ROOT/manifest.json")
+          pilot_arg=""
+          if [ "$STAGE" = "decision" ]; then
+            if [ -z "$PILOT_REPORT_KEY" ]; then
+              echo "decision stage requires pilot_report_key" >&2
+              exit 2
+            fi
+            pilot_report="$BUNDLE_ROOT/pilot-comparison-report.json"
+            aws s3 cp "s3://${{ vars.HELDOUT_BUCKET }}/$PILOT_REPORT_KEY" "$pilot_report"
+            pilot_arg="--pilot-report $pilot_report"
+          fi
           uvx --from harbor==0.20.0 --with tomli-w==1.2.0 --with jsonschema \
             python -m benchmarks.tooling.heldout_bundle render \
             --manifest "$BUNDLE_ROOT/manifest.json" \
             --bundle-root "$BUNDLE_ROOT/bundle" \
             --output "$BUNDLE_ROOT/rendered" \
             --stage "$STAGE" --max-tokens "$max_tokens" \
-            --max-cost-usd "$max_cost"
+            --max-cost-usd "$max_cost" $pilot_arg
           echo "run_plan=$BUNDLE_ROOT/rendered/run-plan.json" >> "$GITHUB_OUTPUT"
+      - name: Merge restored ledger and result directories into the rendered plan
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+          RESTORE_ROOT: ${{ steps.restore.outputs.restore_root }}
+        run: |
+          if [ -f "$RESTORE_ROOT/execution-ledger.json" ]; then
+            cp "$RESTORE_ROOT/execution-ledger.json" "$BUNDLE_ROOT/rendered/execution-ledger.json"
+          fi
+          if [ -d "$RESTORE_ROOT/runs" ]; then
+            for result_dir in "$RESTORE_ROOT"/runs/*/c*/results; do
+              if [ -d "$result_dir" ]; then
+                rel="${result_dir#$RESTORE_ROOT/}"
+                mkdir -p "$BUNDLE_ROOT/rendered/$(dirname "$rel")"
+                cp -R "$result_dir" "$BUNDLE_ROOT/rendered/$rel"
+              fi
+            done
+          fi
       - name: Preflight the exact treatment image and advertised identity
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
@@ -107,10 +159,29 @@ jobs:
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
           RUN_PLAN: ${{ steps.plan.outputs.run_plan }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           uv run --locked python -m benchmarks.tooling.heldout_runner \
             --run-plan "$RUN_PLAN" \
             --ledger "$BUNDLE_ROOT/rendered/execution-ledger.json"
+      - name: Persist ledger and raw trial traces to durable storage
+        if: always() && steps.bundle.outputs.root != ''
+        env:
+          BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
+          MANIFEST_KEY: ${{ inputs.manifest_key }}
+          STAGE: ${{ inputs.stage }}
+        run: |
+          experiment_id=$(printf '%s' "$MANIFEST_KEY" | sha256sum | cut -d' ' -f1)
+          durable_key="ledgers/heldout-ledger-${experiment_id}-${STAGE}"
+          if [ -f "$BUNDLE_ROOT/rendered/execution-ledger.json" ]; then
+            aws s3 cp "$BUNDLE_ROOT/rendered/execution-ledger.json" \
+              "s3://${{ vars.HELDOUT_BUCKET }}/${durable_key}/execution-ledger.json"
+          fi
+          if [ -d "$BUNDLE_ROOT/rendered/runs" ]; then
+            aws s3 sync "$BUNDLE_ROOT/rendered/runs" \
+              "s3://${{ vars.HELDOUT_BUCKET }}/${durable_key}/runs/" \
+              --exclude "job.json" --exclude "runtime.json"
+          fi
       - name: Normalize and compare held-out evidence
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
@@ -162,3 +233,11 @@ jobs:
           path: ${{ steps.bundle.outputs.root }}/sanitized
           if-no-files-found: warn
           retention-days: 90
+      - name: Upload raw trial traces
+        if: always() && steps.bundle.outputs.root != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: heldout-raw-traces-${{ github.run_id }}
+          path: ${{ steps.bundle.outputs.root }}/rendered/runs/**/results
+          if-no-files-found: warn
+          retention-days: 30

@@ -305,6 +305,18 @@ def test_force_full_includes_each_dataset_task_pair() -> None:
     }
 
 
+def test_force_full_still_requires_dataset_version_bumps() -> None:
+    with pytest.raises(Exception, match="dataset version bump"):
+        planner.plan(
+            [
+                "benchmarks/datasets/agent-workflow-v1/"
+                "parameterized-sharp-bound-audit/tests/verifier.py"
+            ],
+            event="workflow_dispatch",
+            force_full=True,
+        )
+
+
 def test_timing_weights_balance_slow_tasks_deterministically() -> None:
     suites = planner._harbor_suite().load_registry()
     suite = next(item for item in suites if len(item.tasks) > 12)

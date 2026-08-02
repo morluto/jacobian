@@ -119,6 +119,75 @@ def test_comparison_derives_heldout_class_from_both_inputs() -> None:
     assert report["status"] == "VALID"
 
 
+def test_comparison_preserves_unrelated_compose_differences() -> None:
+    control = _evidence("control", [1.0])
+    treatment = deepcopy(_evidence("treatment", [1.0]))
+    control["job"]["comparison_signature"] = "sha256:" + "a" * 64
+    treatment["job"]["comparison_signature"] = "sha256:" + "a" * 64
+    control["job"]["environment"] = {
+        "extra_docker_compose": [
+            "/abs/path/agent-eval-proxy.compose.yaml",
+            "/abs/path/c1.compose.json",
+        ]
+    }
+    treatment["job"]["environment"] = {
+        "extra_docker_compose": [
+            "/abs/path/agent-eval-proxy.compose.yaml",
+            "/abs/path/c2.compose.json",
+        ]
+    }
+    report = compare_evidence(control, treatment)
+
+    assert report["status"] == "VALID"
+    assert "job configuration differs" not in " ".join(report["validation_failures"])
+
+
+def test_comparison_rejects_missing_required_outcome_dimensions() -> None:
+    control = _evidence("control", [1.0])
+    treatment = _evidence("treatment", [1.0])
+    for trial in control["trials"] + treatment["trials"]:
+        del trial["rewards"]["evidence_validity"]
+        del trial["rewards"]["scope_accuracy"]
+        del trial["rewards"]["assurance_calibration"]
+
+    report = compare_evidence(control, treatment)
+
+    assert report["status"] == "INVALID"
+    failures = " ".join(report["validation_failures"])
+    assert "evidence_validity" in failures
+    assert "scope_accuracy" in failures
+    assert "assurance_calibration" in failures
+
+
+def test_comparison_binds_agent_and_provider_identity() -> None:
+    control = _evidence("control", [1.0])
+    treatment = deepcopy(_evidence("treatment", [1.0]))
+    control["fixed_invariants"]["agent_name"] = "codex"
+    control["fixed_invariants"]["agent_version"] = "1.2.3"
+    control["fixed_invariants"]["model_provider"] = "openai"
+    treatment["fixed_invariants"]["agent_name"] = "codex"
+    treatment["fixed_invariants"]["agent_version"] = "1.2.3"
+    treatment["fixed_invariants"]["model_provider"] = "openai"
+
+    report = compare_evidence(control, treatment)
+
+    assert report["status"] == "VALID"
+
+
+def test_comparison_rejects_drifted_agent_identity() -> None:
+    control = _evidence("control", [1.0])
+    treatment = deepcopy(_evidence("treatment", [1.0]))
+    control["fixed_invariants"]["agent_name"] = "codex"
+    control["fixed_invariants"]["agent_version"] = "1.2.3"
+    treatment["fixed_invariants"]["agent_name"] = "claude"
+    treatment["fixed_invariants"]["agent_version"] = "1.2.3"
+
+    report = compare_evidence(control, treatment)
+
+    assert report["status"] == "INVALID"
+    assert "fixed invariants differ" in report["validation_failures"]
+
+
 def test_observation_normalization_binds_repetitions_and_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

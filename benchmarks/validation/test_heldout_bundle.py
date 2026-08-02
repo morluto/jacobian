@@ -152,6 +152,82 @@ def test_manifest_rejects_non_digest_pinned_treatment_image(tmp_path: Path) -> N
         validate_manifest(_write(tmp_path, value))
 
 
+def test_manifest_rejects_pilot_with_more_than_three_repetitions(
+    tmp_path: Path,
+) -> None:
+    value = _manifest()
+    value["experiment"]["stages"]["pilot"]["repetitions"] = 4
+
+    with pytest.raises(HarborSuiteError, match="exactly three repetitions"):
+        validate_manifest(_write(tmp_path, value))
+
+
+def test_pilot_gate_rejects_ceiling_saturated_control(tmp_path: Path) -> None:
+    from benchmarks.tooling.heldout_bundle import validate_pilot_gate
+
+    manifest = _manifest()
+    pilot_report = {
+        "status": "VALID",
+        "evidence_class": "held-out-comparison",
+        "pair_count": 9,
+        "metrics": {
+            "correctness": {
+                "pair_count": 9,
+                "control_mean": 1.0,
+                "treatment_mean": 1.0,
+            }
+        },
+    }
+
+    with pytest.raises(HarborSuiteError, match="success ceiling"):
+        validate_pilot_gate(manifest, pilot_report)
+
+
+def test_pilot_gate_accepts_non_saturated_control(tmp_path: Path) -> None:
+    from benchmarks.tooling.heldout_bundle import validate_pilot_gate
+
+    manifest = _manifest()
+    pilot_report = {
+        "status": "VALID",
+        "evidence_class": "held-out-comparison",
+        "pair_count": 9,
+        "metrics": {
+            "correctness": {
+                "pair_count": 9,
+                "control_mean": 0.5,
+                "treatment_mean": 0.7,
+            }
+        },
+    }
+
+    validate_pilot_gate(manifest, pilot_report)
+
+
+def test_pilot_gate_rejects_invalid_report(tmp_path: Path) -> None:
+    from benchmarks.tooling.heldout_bundle import validate_pilot_gate
+
+    manifest = _manifest()
+    pilot_report = {"status": "INVALID", "pair_count": 9}
+
+    with pytest.raises(HarborSuiteError, match="not VALID"):
+        validate_pilot_gate(manifest, pilot_report)
+
+
+def test_pilot_gate_rejects_incomplete_pair_count(tmp_path: Path) -> None:
+    from benchmarks.tooling.heldout_bundle import validate_pilot_gate
+
+    manifest = _manifest()
+    pilot_report = {
+        "status": "VALID",
+        "evidence_class": "held-out-comparison",
+        "pair_count": 3,
+        "metrics": {"correctness": {"pair_count": 3, "control_mean": 0.5}},
+    }
+
+    with pytest.raises(HarborSuiteError, match="pair count"):
+        validate_pilot_gate(manifest, pilot_report)
+
+
 def test_bundle_binds_complete_verifier_and_oracle_trees(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -226,6 +302,7 @@ def test_complete_plan_collects_exact_pairs_and_derives_heldout_report(
         result_root.mkdir(parents=True)
         result = {
             "stats": {
+                "n_completed_trials": 1,
                 "n_errored_trials": 0,
                 "n_running_trials": 0,
                 "n_pending_trials": 0,
@@ -249,6 +326,9 @@ def test_complete_plan_collects_exact_pairs_and_derives_heldout_report(
                     "verifier_result": {
                         "rewards": {
                             "correctness": 1.0,
+                            "evidence_validity": 1.0,
+                            "scope_accuracy": 1.0,
+                            "assurance_calibration": 1.0,
                             "false_certification": 0.0,
                             "reward": 1.0,
                         }
@@ -324,3 +404,18 @@ def test_heldout_workflow_is_main_only_manifest_driven_and_sanitized() -> None:
     assert "catalog.catalog_digest" in workflow
     assert "steps.bundle.outputs.root != ''" in workflow
     assert "path: ${{ steps.bundle.outputs.root }}/sanitized" in workflow
+
+
+def test_heldout_workflow_restores_ledgers_and_persists_traces() -> None:
+    workflow = (ROOT / ".github/workflows/heldout-benchmarks.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Restore prior ledger and result directories" in workflow
+    assert "steps.restore.outputs.restore_root" in workflow
+    assert "Persist ledger and raw trial traces to durable storage" in workflow
+    assert "heldout-raw-traces-" in workflow
+    assert "OPENAI_API_KEY" in workflow
+    assert "pilot_report_key" in workflow
+    assert "--pilot-report" in workflow
+    assert "decision stage requires pilot_report_key" in workflow

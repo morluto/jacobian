@@ -3,7 +3,7 @@
 UV_RUN := uv run --locked
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
-HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
+HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema==4.26.0 python
 PYTEST_ARGS ?=
 TESTS ?=
 EVAL_ARGS ?=
@@ -292,7 +292,8 @@ agent-eval-validate: ## Normalize one observation (RESULTS=..., JOB=..., CONDITI
 		--job "$(JOB)" --jobs-dir "$(RESULTS)" --output "$(OUTPUT)" \
 		$(if $(RESULT),--result "$(RESULT)",) \
 		$(if $(RUNTIME_SNAPSHOT),--runtime-snapshot "$(RUNTIME_SNAPSHOT)",) \
-		$(if $(HELDOUT_MANIFEST),--heldout-manifest "$(HELDOUT_MANIFEST)",)
+		$(if $(HELDOUT_MANIFEST),--heldout-manifest "$(HELDOUT_MANIFEST)",) \
+		$(if $(EVAL_ARGS),--eval-args "$(EVAL_ARGS)",)
 
 agent-eval-compare: ## Compare normalized observations (CONTROL=..., TREATMENT=..., OUTPUT=...).
 	@test -n "$(CONTROL)" -a -n "$(TREATMENT)" -a -n "$(OUTPUT)" || { echo "CONTROL, TREATMENT, and OUTPUT are required" >&2; exit 2; }

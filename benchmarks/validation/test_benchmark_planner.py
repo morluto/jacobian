@@ -520,6 +520,53 @@ def test_schedule_event_runs_full_portfolio() -> None:
     _assert_plan_valid(result)
 
 
+def test_force_full_still_requires_dataset_version_bumps() -> None:
+    with pytest.raises(Exception, match="dataset version bump"):
+        planner.plan(
+            [
+                "benchmarks/datasets/agent-workflow-v1/"
+                "parameterized-sharp-bound-audit/tests/verifier.py"
+            ],
+            event="workflow_dispatch",
+            force_full=True,
+        )
+
+
+def test_force_full_pr_with_base_still_enforces_version_value_bumps() -> None:
+    """A ci:benchmark-full PR must not bypass the version-value check.
+
+    The workflow preserves changed paths and passes --base even when a forced
+    full plan is requested, so a task change whose suite.toml version value is
+    unchanged against the base must still fail closed.
+    """
+    suite = planner._harbor_suite().get_suite("public-reproductions-v1")
+    task = suite.tasks[0].path.name
+
+    with pytest.raises(Exception, match="version value did not change"):
+        planner.plan(
+            [
+                f"benchmarks/datasets/{suite.id}/{task}/tests/verifier.py",
+                f"benchmarks/datasets/{suite.id}/suite.toml",
+            ],
+            event="pull_request",
+            force_full=True,
+            base="main",
+        )
+
+
+def test_benchmark_workflow_preserves_changed_paths_for_forced_full_prs() -> None:
+    workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+
+    # The force-full branch must still compute changed_paths against BASE_SHA so
+    # the planner receives the PR's benchmark changes instead of an empty list.
+    pr_branch = workflow.split("pull_request|merge_group|push)", 1)[1].split(
+        "*) exit 2", 1
+    )[0]
+    assert "--force-full" in pr_branch
+    assert "--base" in pr_branch
+    assert "git diff --name-only -z" in pr_branch
+
+
 def test_timing_weights_balance_slow_tasks_deterministically() -> None:
     suites = planner._harbor_suite().load_registry()
     suite = next(item for item in suites if len(item.tasks) > 12)

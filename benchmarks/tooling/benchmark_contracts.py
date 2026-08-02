@@ -16,6 +16,7 @@ from benchmarks.tooling.harbor_suite import (
     ROOT,
     HarborSuiteError,
     Suite,
+    get_suite,
     load_registry,
 )
 
@@ -296,7 +297,8 @@ def validate_all() -> list[str]:
     failures.extend(_suite_contract_failures(suites))
     failures.extend(
         _validate_job(
-            BENCHMARKS / "config" / "agent-workflow-v1-control.json", suites[0]
+            BENCHMARKS / "config" / "agent-workflow-v1-control.json",
+            get_suite("agent-workflow-v1"),
         )
     )
     failures.extend(_observation_pair_failures())

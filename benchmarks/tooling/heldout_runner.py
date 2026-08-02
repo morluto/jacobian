@@ -87,9 +87,21 @@ def _usage(result_path: Path) -> tuple[int, float]:
         )
     ):
         raise HarborSuiteError("Harbor result is incomplete")
+    n_completed = stats.get("n_completed_trials") if isinstance(stats, dict) else None
+    if (
+        not isinstance(n_completed, int)
+        or isinstance(n_completed, bool)
+        or n_completed <= 0
+    ):
+        raise HarborSuiteError("Harbor result has no positive completed trial count")
     tokens = 0
     cost = 0.0
-    for trial in _trial_payloads(result_path, result):
+    trials = _trial_payloads(result_path, result)
+    if len(trials) != n_completed:
+        raise HarborSuiteError(
+            "Harbor completed trial count does not match per-trial payloads"
+        )
+    for trial in trials:
         if trial.get("exception_info") is not None:
             raise HarborSuiteError("Harbor trial contains an exception")
         agent_result = trial.get("agent_result")
@@ -210,6 +222,25 @@ def _execute_run(
     existing = ledger["runs"].get(run_id)
     if isinstance(existing, dict) and existing.get("status") == "COMPLETE":
         return True
+    jobs_dir = root / run["jobs_dir"]
+    try:
+        result_path = _result_file(jobs_dir)
+        tokens, cost = _usage(result_path)
+    except HarborSuiteError:
+        result_path = None
+        tokens = 0
+        cost = 0.0
+    if result_path is not None:
+        ledger["runs"][run_id] = {
+            "status": "COMPLETE",
+            "result_digest": _file_digest(result_path),
+            "tokens": tokens,
+            "cost_usd": cost,
+        }
+        ledger["usage"]["tokens"] += tokens
+        ledger["usage"]["cost_usd"] += cost
+        _write_ledger(ledger_path, ledger)
+        return True
     command = [
         "uvx",
         "--from",
@@ -224,7 +255,7 @@ def _execute_run(
             ledger_path, ledger, run_id, f"Harbor run failed: {run_id}", "ERROR"
         )
     try:
-        result_path = _result_file(root / run["jobs_dir"])
+        result_path = _result_file(jobs_dir)
         tokens, cost = _usage(result_path)
     except HarborSuiteError as exc:
         return _incomplete(
@@ -244,8 +275,8 @@ def _execute_run(
 
 def _budget_exceeded(ledger: dict[str, Any]) -> bool:
     return bool(
-        ledger["usage"]["tokens"] > ledger["budget"]["max_tokens"]
-        or ledger["usage"]["cost_usd"] > ledger["budget"]["max_cost_usd"]
+        ledger["usage"]["tokens"] >= ledger["budget"]["max_tokens"]
+        or ledger["usage"]["cost_usd"] >= ledger["budget"]["max_cost_usd"]
     )
 
 

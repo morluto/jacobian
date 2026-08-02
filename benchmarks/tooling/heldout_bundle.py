@@ -85,6 +85,8 @@ def _validate_experiment(manifest: dict[str, Any], task_ids: set[str]) -> None:
             raise HarborSuiteError(f"{stage} references unknown task ids: {unknown}")
     if len(stages["pilot"]["task_ids"]) != 3:
         raise HarborSuiteError("pilot must freeze exactly three tasks")
+    if stages["pilot"]["repetitions"] != 3:
+        raise HarborSuiteError("pilot must freeze exactly three repetitions")
     decision = stages["decision"]
     if len(decision["task_ids"]) < 5 or decision["repetitions"] < 5:
         raise HarborSuiteError(
@@ -118,6 +120,41 @@ def validate_manifest(path: Path) -> dict[str, Any]:
     }:
         raise HarborSuiteError("held-out conditions must be the frozen C1/C2 pair")
     return manifest
+
+
+def validate_pilot_gate(manifest: dict[str, Any], pilot_report: dict[str, Any]) -> None:
+    """Require a content-bound successful pilot before accepting the decision stage.
+
+    The pilot report must be VALID, pair-complete, and its control condition must
+    not saturate the success ceiling (all-correct), otherwise the decision stage
+    cannot measure treatment improvement.
+    """
+
+    if pilot_report.get("status") != "VALID":
+        raise HarborSuiteError("pilot report is not VALID")
+    if pilot_report.get("evidence_class") != "held-out-comparison":
+        raise HarborSuiteError("pilot report is not a held-out comparison")
+    expected_pairs = (
+        len(manifest["experiment"]["stages"]["pilot"]["task_ids"])
+        * manifest["experiment"]["stages"]["pilot"]["repetitions"]
+    )
+    if pilot_report.get("pair_count") != expected_pairs:
+        raise HarborSuiteError(
+            f"pilot report pair count {pilot_report.get('pair_count')} "
+            f"does not match the frozen pilot ({expected_pairs})"
+        )
+    metrics = pilot_report.get("metrics", {})
+    correctness = metrics.get("correctness", {})
+    if correctness.get("pair_count") != expected_pairs:
+        raise HarborSuiteError("pilot report is missing correctness from every pair")
+    control_mean = correctness.get("control_mean")
+    if not isinstance(control_mean, (int, float)) or isinstance(control_mean, bool):
+        raise HarborSuiteError("pilot report has no numeric control correctness mean")
+    if float(control_mean) >= 1.0:
+        raise HarborSuiteError(
+            "pilot control saturated the success ceiling; "
+            "decision stage cannot measure treatment improvement"
+        )
 
 
 def _safe_extract(archive: Path, output: Path) -> None:
@@ -392,7 +429,7 @@ def render_plan(
         "pair_count": len(pairs),
         "runs": runs,
     }
-    plan["plan_digest"] = _json_digest(plan)
+    plan["plan_digest"] = _json_digest({key: value for key, value in plan.items() if key != "plan_digest"})
     run_plan = output / "run-plan.json"
     run_plan.write_text(
         json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -419,6 +456,12 @@ def main() -> int:
     render_parser.add_argument("--stage", choices=("pilot", "decision"), required=True)
     render_parser.add_argument("--max-tokens", type=int, required=True)
     render_parser.add_argument("--max-cost-usd", type=float, required=True)
+    render_parser.add_argument(
+        "--pilot-report",
+        type=Path,
+        default=None,
+        help="Required for the decision stage: a VALID pilot comparison report",
+    )
     args = parser.parse_args()
     if args.command == "validate":
         validate_manifest(args.manifest)
@@ -426,6 +469,14 @@ def main() -> int:
     elif args.command == "fetch":
         print(fetch_bundle(args.manifest_uri, args.output))
     else:
+        manifest = validate_manifest(args.manifest)
+        if args.stage == "decision":
+            if args.pilot_report is None or not args.pilot_report.is_file():
+                raise HarborSuiteError(
+                    "decision stage requires a --pilot-report from a completed pilot"
+                )
+            pilot_report = _read_json(args.pilot_report)
+            validate_pilot_gate(manifest, pilot_report)
         print(
             render_plan(
                 args.manifest,
@@ -443,4 +494,10 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["fetch_bundle", "render_plan", "validate_manifest", "verify_bundle"]
+__all__ = [
+    "fetch_bundle",
+    "render_plan",
+    "validate_manifest",
+    "validate_pilot_gate",
+    "verify_bundle",
+]

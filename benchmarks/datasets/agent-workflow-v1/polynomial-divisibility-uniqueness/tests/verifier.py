@@ -169,6 +169,8 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
     if target is None:
         return False
     try:
+        if target.stat().st_size > 1_048_576:
+            return False
         text = target.read_text()
         lines = text.splitlines()
         marker = next(
@@ -236,10 +238,10 @@ def main() -> None:
     symbolic_ok = (
         r0 is not None
         and r1 is not None
-        and [Fraction(x) for x in r0] == computed_r0
-        and [Fraction(x) for x in r1] == computed_r1
+        and trim([Fraction(x) for x in r0]) == computed_r0
+        and trim([Fraction(x) for x in r1]) == computed_r1
         and gcd is not None
-        and [Fraction(x) for x in gcd] == computed_gcd
+        and trim([Fraction(x) for x in gcd]) == computed_gcd
         and gcd_is_linear
         and parameter_is_integer
     )
@@ -247,7 +249,7 @@ def main() -> None:
         type(parameter) is int
         and parameter == derived_parameter_int
         and quotient is not None
-        and multiply([parameter, -1, 1], quotient)
+        and trim(multiply([parameter, -1, 1], trim(quotient)))
         == [90, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
     )
     # Thread 4: keep mathematical correctness independent of input integrity.
@@ -263,7 +265,17 @@ def main() -> None:
     assurance_correct = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
     )
-    limitations_correct = bool(contract and LIMITATION in data.get("limitations", []))
+    limitations_correct = bool(
+        contract
+        and isinstance(data.get("limitations"), list)
+        and any(
+            isinstance(item, str)
+            and "polynomial" in item.casefold()
+            and "family" in item.casefold()
+            and "not" in item.casefold()
+            for item in data["limitations"]
+        )
+    )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )

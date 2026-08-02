@@ -1,4 +1,5 @@
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -14,10 +15,9 @@ from verifier_support import (
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_EVIDENCE_BYTES = 1_048_576
-LIMITATIONS = {
-    "The certificate assumes the frozen Gaussian/Lagrange formal identity and does not constitute proof-assistant verification.",
-    "The construction settles neither the two-dimensional Gaussian Moments Conjecture nor unrelated claims in the source paper.",
-}
+MAX_SUBMISSION_BYTES = 1_048_576
+MAX_LIMITATIONS = 8
+MAX_LIMITATION_BYTES = 512
 
 
 def trim(poly: list[Fraction]) -> list[Fraction]:
@@ -132,8 +132,10 @@ def load_frozen() -> dict[str, Any]:
         workspace_input = WORKSPACE / "input.json"
         test_input = TESTS / "input.json"
         if (
-            workspace_input.is_symlink()
-            or test_input.is_symlink()
+            any(
+                path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_SUBMISSION_BYTES
+                for path in (workspace_input, test_input)
+            )
             or workspace_input.read_bytes() != test_input.read_bytes()
         ):
             return {}
@@ -141,6 +143,19 @@ def load_frozen() -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def load_bounded_submission() -> dict[str, Any] | None:
+    path = WORKSPACE / "submission.json"
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_SUBMISSION_BYTES:
+            return None
+    except OSError:
+        return None
+    try:
+        return load_submission(path)
+    except RecursionError:
+        return None
 
 
 def construction_valid(result: object, frozen: dict[str, Any]) -> bool:
@@ -248,6 +263,19 @@ def evidence_valid(value: object, result: object) -> bool:
             "settles the two-dimensional conjecture",
             "proves the two-dimensional conjecture",
         )
+        contradictory_patterns = (
+            r"finite checks[^.]{0,80}\b(?:not|never)\b[^.]{0,30}\binsufficient\b",
+            r"(?:square root|sqrt)[^.]{0,80}\b(?:does not|doesn't|not)\b[^.]{0,30}\bcancel",
+            r"(?:all exponents|every m)[^.]{0,80}\b(?:false|not true|does not hold)\b",
+        )
+        machine_claim = re.search(
+            r"\b(?:machine|formal(?:ly)?)\s+(?:verification|verified|proof)\b",
+            lowered,
+        )
+        machine_negation = re.search(
+            r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,30}\b(?:machine|formal(?:ly)?|proof)\b",
+            lowered,
+        )
         return bool(
             len(markers) == 1
             and json.loads(markers[0]) == result
@@ -276,56 +304,45 @@ def evidence_valid(value: object, result: object) -> bool:
                     "m≥1",
                 )
             )
+            and any(term in lowered for term in ("cancel", "cancellation"))
+            and any(term in lowered for term in ("formal identity", "rational identity"))
             and not any(term in lowered for term in contradictions)
+            and not any(re.search(pattern, lowered) for pattern in contradictory_patterns)
+            and not (machine_claim and not machine_negation)
         )
     except (OSError, UnicodeError, ValueError):
         return False
 
 
 def limitations_are_semantically_covered(limitations: object) -> bool:
-    if not isinstance(limitations, list) or not limitations:
+    if (
+        not isinstance(limitations, list)
+        or not limitations
+        or len(limitations) > MAX_LIMITATIONS
+        or any(not isinstance(item, str) or len(item) > MAX_LIMITATION_BYTES for item in limitations)
+    ):
         return False
     combined = " ".join(str(item) for item in limitations).lower()
-    has_verification_caveat = (
-        "proof assistant" in combined
-        or "proof-assistant" in combined
-        or (
-            "verification" in combined
-            and any(term in combined for term in ("not", "no ", "without", "assumes"))
-        )
-    ) and not any(
-        term in combined
-        for term in (
-            "this is machine verification",
-            "machine-verified",
-            "formally verified",
+    has_verification_caveat = bool(
+        re.search(
+            r"\b(?:not|no|without|does not|doesn't|assumes?)\b[^.]{0,100}\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b",
+            combined,
         )
     )
-    has_scope_caveat = any(
-        term in combined
-        for term in (
-            "two-dimensional",
-            "2d",
-            "dimension two",
-            "conjecture",
-            "unrelated",
+    has_scope_caveat = bool(
+        re.search(
+            r"\b(?:not|no|neither|without|does not|doesn't)\b[^.]{0,100}\b(?:two-dimensional|2d|dimension two|conjecture|unrelated)\b",
+            combined,
         )
     )
     return (
         has_verification_caveat
         and has_scope_caveat
-        and not any(
-            term in combined
-            for term in (
-                "settles the two-dimensional conjecture",
-                "proves the two-dimensional conjecture",
-            )
-        )
     )
 
 
 def main() -> None:
-    submission = load_submission()
+    submission = load_bounded_submission()
     data = submission if isinstance(submission, dict) else {}
     expected = json.loads((TESTS / "expected.json").read_text())
     contract = strict_submission_contract(

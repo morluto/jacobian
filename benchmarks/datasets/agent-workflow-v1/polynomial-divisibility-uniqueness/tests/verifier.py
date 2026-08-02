@@ -250,7 +250,6 @@ def limitation_is_bounded(value: object) -> bool:
     return (
         any(word in lowered for word in subject)
         and any(phrase in lowered for phrase in bounded_language)
-        and not re.search(r"\b(?:general|arbitrary)\s+polynomial", lowered)
     )
 def main() -> None:
     submission = load_regular_submission()

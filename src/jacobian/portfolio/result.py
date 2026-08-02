@@ -284,6 +284,29 @@ class PortfolioInstallation:
     lean_checkers: dict[LeanEnvironment, LeanCheckerInstallation] = field(
         default_factory=dict
     )
+    _closed: bool = field(default=False, init=False, repr=False)
+
+    def close(self) -> None:
+        """Release portfolio-owned Lean sessions, processes, and warm-up work."""
+
+        if self._closed:
+            return
+        failures: list[Exception] = []
+        resources = (
+            self.lean_declarations,
+            self.lean_exploration.repl if self.lean_exploration is not None else None,
+            self.lean,
+        )
+        for resource in resources:
+            if resource is None:
+                continue
+            try:
+                resource.close()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            raise ExceptionGroup("portfolio resources failed to close", failures)
+        self._closed = True
 
     def installed_bundle(self, domain_id: str) -> InstalledDomainBundle | None:
         """Return one installed mathematical domain bundle, if available."""

@@ -7,8 +7,9 @@ examples from making incompatible claims look comparable.
 
 `benchmarks/datasets/<dataset>/` is the Harbor dataset root and contains the
 dataset's executable task bundles directly. `members/` retains Jacobian's
-assurance and provider metadata; `suite.toml` contains dataset metadata and
-`dataset.toml` is generated from Harbor task digests.
+authoritative identity, provenance, assurance, provider, environment-profile,
+verifier-contract, and evaluation-ownership metadata. `suite.toml` contains
+stable dataset policy and defaults only.
 Reusable Harbor infrastructure belongs under `benchmarks/tooling/`, adapters
 under `benchmarks/adapters/`, and non-runnable evaluation plans and research
 handoffs under `research/evaluations/`.
@@ -23,10 +24,13 @@ handoffs under `research/evaluations/`.
 | `jacobian/examples-v1` | Tutorial and smoke workflows | Oracle |
 
 `registry.toml` is the discovery index. Each dataset's member fragments own
-membership and assurance ceilings. `dataset.toml` is generated from those
-fragments and Harbor-computed task digests; hand-editing digests is a
-validation error. Harbor jobs point at the dataset root and use Harbor's
-native task-name filtering.
+membership. Intentional evaluation and publication events create immutable,
+content-addressed locks under `benchmarks/snapshots/`; those locks bind the
+suite header, ordered Harbor task digests, Harbor version, resolved images and
+verifier runtime, source tree, split, and evaluation configuration. Harbor
+publication `dataset.toml` files are generated under ignored `dist/harbor/`
+from a lock and are never committed in dataset roots. Harbor jobs point at the
+dataset root and use Harbor's native task-name filtering.
 
 The repository `.uv-version` pins active development, CI, release, and product
 image builds. Harbor task images remain bound to the uv version and digest in
@@ -44,11 +48,16 @@ benchmark layout are retained.
 
 ```sh
 make harbor-plan BASE=origin/main
-make harbor-sync
 make harbor-check
+make benchmark-inventory OUTPUT=/tmp/benchmark-inventory.json
+make benchmark-snapshot DATASET=agent-workflow-v1
+make benchmark-snapshot-validate LOCK=benchmarks/snapshots/agent-workflow-v1/<digest>.lock.json
+make benchmark-publish LOCK=benchmarks/snapshots/agent-workflow-v1/<digest>.lock.json
 make harbor-oracle DATASET=agent-workflow-v1 TASKS="task-id"
 make harbor-oracle-all
 make agent-eval DATASET=agent-workflow-v1 TASKS=graph-counterexample EVAL_EXECUTE=1
+make agent-eval-validate RESULTS=... JOB=... RUNTIME_SNAPSHOT=... CONDITION=control OUTPUT=control-evidence.json
+make agent-eval-compare CONTROL=control-evidence.json TREATMENT=treatment-evidence.json OUTPUT=report
 make performance-eval
 make provider-eval PROVIDER=cgal
 ```
@@ -60,6 +69,39 @@ coverage, while pushes to `main` repeat the deterministic contract gate without
 duplicating those Docker jobs. The weekly and manually dispatched benchmark
 workflow performs the full portfolio sweep; maintainers can request the same
 scope on a pull request with `ci:benchmark-full`.
+
+Changed tasks remain one Oracle job each. Affected-dataset and full-portfolio
+sweeps use deterministic, dataset-bounded shards with at most four concurrent
+jobs. Every shard carries the exact task IDs and Harbor digests it owns, and
+the result validator still requires each selected task exactly once. The
+planner accepts an optional positive-seconds timing file and otherwise falls
+back to equal weights. Successful full runs on `main` publish median per-task
+timings as an artifact and cache; later plans restore that uncommitted history
+automatically.
+
+Observation results are normalized into content-bound JSON before comparison.
+Correctness, evidence validity, scope, assurance calibration, false
+certification, tool traces, tokens, time, and cost remain separate. Reports
+from the public workflow suite are workflow evidence only, never causal
+capability evidence.
+
+Private held-out evaluation is dispatched through the protected
+`Held-out Benchmarks` workflow. Its S3 manifest freezes the treatment image,
+catalog and policy digests, task and Oracle identities, model, prompt, budget,
+randomization, and pilot/decision sample sizes. The workflow downloads it with
+OIDC, refuses unpinned or unsafe bundles, and uploads only non-Oracle evidence.
+The control condition explicitly disables Jacobian and is forbidden from
+declaring an image, sidecar, or MCP server; only the treatment binds the
+digest-pinned Jacobian image and advertised server, catalog, and policy
+identities. Each task/repetition becomes a randomized C1/C2 pair of one-attempt
+Harbor jobs. A resumable ledger binds the exact plan and checks token and cost
+accounting after each complete pair. Because Harbor cannot currently hard-stop
+Codex at those limits, missing accounting or a pair-boundary overage makes the
+run incomplete and prevents a valid comparison.
+
+Run `make heldout-smoke` to build a temporary non-mathematical private-bundle
+fixture and exercise its rendered contract through Harbor's zero-model-cost
+`nop` and `oracle` agents.
 
 Performance timing is reported separately from reward, and research datasets
 are explicitly non-comparative diagnostics. Uniform task structure does not

@@ -68,6 +68,8 @@ PROPERTY_NAMES = (
     "triangle_frequencies",
 )
 
+MAX_EXACT_INDEPENDENCE_ORDER = 24
+
 
 @dataclass(frozen=True, slots=True)
 class GraphInvariantResources:
@@ -175,6 +177,9 @@ class GraphPropertyAdapter:
             **batch.model_dump(mode="python"),
             property_artifact_uri=property_artifact.artifact_uri,
         )
+        has_incomplete_results = any(
+            binding.result.status == "NOT_COMPUTED" for binding in bindings
+        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -194,9 +199,16 @@ class GraphPropertyAdapter:
                 artifact_uri=graph_uri,
             ),
             completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
+                status=(
+                    CapabilityCompletenessStatus.PARTIAL
+                    if has_incomplete_results
+                    else CapabilityCompletenessStatus.COMPLETE
+                ),
                 basis=(
-                    "every requested invariant received a terminal COMPUTED, "
+                    "at least one requested invariant was not computed because "
+                    "the declared exact scope exceeded its safety boundary"
+                    if has_incomplete_results
+                    else "every requested invariant received a terminal COMPUTED, "
                     "NOT_APPLICABLE, or UNSUPPORTED result under registry version 1"
                 ),
                 assurance_level=CapabilityAssuranceLevel.COMPUTED,
@@ -338,6 +350,20 @@ def _compute_invariant_result(
             detail=(
                 "the invariant is not present in graph.compute.properties "
                 "registry version 1"
+            ),
+        )
+    if name == "independence_number" and graph.number_of_nodes() > (
+        MAX_EXACT_INDEPENDENCE_ORDER
+    ):
+        return GraphInvariantResult(
+            invariant=name,
+            status="NOT_COMPUTED",
+            exactness="NOT_APPLICABLE",
+            backend=_property_backend(name),
+            detail=(
+                "exact independence-number computation is limited to graphs of "
+                f"order {MAX_EXACT_INDEPENDENCE_ORDER}; received order "
+                f"{graph.number_of_nodes()}"
             ),
         )
     try:

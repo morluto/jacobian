@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -249,6 +250,48 @@ def test_invalid_in_memory_migration_order_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(StateDatabaseError, match="ordered, consecutive"):
         database.migrate((migration,))
     database.close(checkpoint=False)
+
+
+def test_close_cannot_race_connection_configuration_and_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = StateDatabase(tmp_path / "state.sqlite3", synchronous="FULL")
+    raw_connection_opened = threading.Event()
+    release_connect = threading.Event()
+    original_connect = sqlite3.connect
+
+    def blocked_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        connection = original_connect(*args, **kwargs)
+        raw_connection_opened.set()
+        assert release_connect.wait(timeout=2)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", blocked_connect)
+    connect_errors: list[BaseException] = []
+
+    def connect() -> None:
+        try:
+            database.connect()
+        except BaseException as exc:
+            connect_errors.append(exc)
+
+    connector = threading.Thread(target=connect)
+    connector.start()
+    assert raw_connection_opened.wait(timeout=1)
+
+    closer = threading.Thread(target=lambda: database.close(checkpoint=False))
+    closer.start()
+    release_connect.set()
+    connector.join(timeout=2)
+    closer.join(timeout=2)
+
+    assert not connector.is_alive()
+    assert not closer.is_alive()
+    assert database.open_connection_count == 0
+    with pytest.raises(StateDatabaseError, match="closed"):
+        database.connect()
+    assert connect_errors == []
 
 
 def test_two_processes_can_race_to_migrate_empty_state(tmp_path: Path) -> None:

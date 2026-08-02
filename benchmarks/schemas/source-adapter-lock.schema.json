@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/source-adapter-lock.schema.json",
+  "title": "Pinned external benchmark source adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "adapter_id", "source", "selection", "dependencies", "outputs"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "adapter_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "revision", "sha256", "license", "redistribution"],
+      "properties": {
+        "url": {"type": "string", "format": "uri"},
+        "revision": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "license": {"type": "string", "minLength": 1},
+        "redistribution": {"enum": ["allowed", "metadata-only", "forbidden"]}
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["included_rows", "excluded_rows", "rule"],
+      "properties": {
+        "included_rows": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "excluded_rows": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "rule": {"type": "string", "minLength": 1}
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^(==|sha256:|git\\+[^@]+@).+"}
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["task_id", "dataset", "source_row", "task_digest", "oracle_evidence_digest", "parity_evidence_digest"],
+        "properties": {
+          "task_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "dataset": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "source_row": {"type": "string", "minLength": 1},
+          "task_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "oracle_evidence_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "parity_evidence_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

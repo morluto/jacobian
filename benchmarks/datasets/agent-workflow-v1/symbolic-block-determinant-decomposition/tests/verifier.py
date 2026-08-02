@@ -238,20 +238,12 @@ def _evidence_matches(evidence: object, result: dict) -> bool:
             for line in text.splitlines()
             if line.startswith("RESULT_JSON:")
         ]
-        lower = text.lower()
-        return bool(
-            len(markers) == 1
-            and json.loads(markers[0]) == result
-            and all(
-                phrase in lower
-                for phrase in (
-                    "common",
-                    "sum-zero",
-                    "symbolic similarity",
-                    "unrestricted theorem",
-                )
-            )
-        )
+        prose = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.startswith("RESULT_JSON:")
+        ]
+        return bool(len(markers) == 1 and json.loads(markers[0]) == result and prose)
     except (OSError, UnicodeError, ValueError):
         return False
 

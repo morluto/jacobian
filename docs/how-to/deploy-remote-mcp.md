@@ -49,12 +49,13 @@ procedure. For `domain`, point the domain's DNS at the host and allow inbound
 TCP 80 and 443 before deployment so Caddy can obtain and renew its certificate.
 
 Authentication is the default. The first authenticated run creates
-`/etc/jacobian-mcp/tokens.json`, prints its generated token once, and uses that
-token for the smoke. A subsequent run reuses the secret. Supply a reviewed
-multi-tenant file with `--auth-tokens-file PATH` instead. Anonymous operation
-requires `--allow-anonymous`; a public anonymous endpoint additionally requires
-`--confirm-public-anonymous`, because every reachable caller shares its
-operator-chosen tenant and state.
+`/etc/jacobian-mcp/tokens.json` with mode `0600` and uses that file for the
+smoke without printing the credential. Retrieve it explicitly with privileged
+access or import it into a secret manager. A subsequent run reuses the secret.
+Supply a reviewed multi-tenant file with `--auth-tokens-file PATH` instead.
+Anonymous operation requires `--allow-anonymous`; a public anonymous endpoint
+additionally requires `--confirm-public-anonymous`, because every reachable
+caller shares its operator-chosen tenant and state.
 
 Inspect a complete plan without root or host mutation:
 
@@ -105,6 +106,7 @@ uv run jacobian-mcp \
   --path /mcp \
   --state-dir /var/lib/jacobian \
   --max-tenant-runtimes 32 \
+  --tenant-idle-timeout-seconds 900 \
   --auth-tokens-file /run/secrets/jacobian-tokens.json \
   --public-base-url https://math-tools.example.org
 ```
@@ -113,9 +115,12 @@ Put a TLS-terminating reverse proxy in front of `127.0.0.1:8000`. The public
 URL must route `/mcp` without stripping the path. Each authenticated subject is
 mapped to a separate hashed directory below
 `/var/lib/jacobian/tenants/`. The server retains at most 32 tenant runtimes by
-default. Existing tenants remain available at the limit; new tenants receive a
-bounded admission error. Set `--max-tenant-runtimes` to match the instance's
-memory budget.
+default. At the limit, it evicts the least-recently-used inactive runtime; it
+never evicts a runtime with an active request, and returns a bounded admission
+error when every slot is active. Inactive runtimes expire after 900 seconds by
+default. Expiry is checked on the next tenant acquisition rather than by a
+background reaper. Set `--max-tenant-runtimes` and
+`--tenant-idle-timeout-seconds` to match the instance's memory budget.
 
 For a disposable local transport test only:
 
@@ -123,6 +128,7 @@ For a disposable local transport test only:
 uv run jacobian-mcp \
   --transport streamable-http \
   --max-tenant-runtimes 32 \
+  --tenant-idle-timeout-seconds 900 \
   --allow-anonymous \
   --anonymous-tenant-id local-smoke-2026-07
 ```

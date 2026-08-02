@@ -134,6 +134,10 @@ def test_resource_derived_oracles_and_assurance_boundary(
             "random-function-expectation-audit",
             lambda result: result.update(expected_value="2025"),
         ),
+        (
+            "lagrangian-projection-proof-audit",
+            lambda result: result["lagrangian_defect"][0].__setitem__(1, "0"),
+        ),
     ],
 )
 def test_resource_derived_verifiers_reject_corrupted_witnesses(

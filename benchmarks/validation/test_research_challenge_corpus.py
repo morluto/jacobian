@@ -19,9 +19,9 @@ def _task_dirs() -> list[Path]:
 def test_research_diagnostics_are_one_public_answer_visible_task_each() -> None:
     tasks = _task_dirs()
     assert {path.name for path in tasks} == EXPECTED_RESEARCH_TASKS
-    manifest = tomllib.loads((DATASET / "dataset.toml").read_text())
-    assert manifest["dataset"]["name"] == "jacobian/research-diagnostics-v1"
-    assert len(manifest["tasks"]) == len(tasks)
+    members = sorted((DATASET / "members").glob("*.toml"))
+    assert {path.stem for path in members} == EXPECTED_RESEARCH_TASKS
+    assert not (DATASET / "dataset.toml").exists()
     for task in tasks:
         cfg = tomllib.loads((task / "task.toml").read_text())
         metadata = cfg["metadata"]

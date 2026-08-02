@@ -8,12 +8,12 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 from mcp_types import ToolAnnotations
 
 from jacobian.adapters.mcp.projections import (
-    _consume_cancelled_worker_result,
     _invoke_capability_with_cancellation,
 )
 from jacobian.canonical import canonicalize_json
@@ -24,6 +24,30 @@ from jacobian.contracts.capabilities import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _run_blocking[BlockingResultT](
+    function: Callable[..., BlockingResultT],
+    /,
+    *args: Any,
+    on_cancel: Callable[[], None] | None = None,
+) -> BlockingResultT:
+    """Run blocking MCP work without detaching it from request teardown."""
+
+    worker = asyncio.create_task(asyncio.to_thread(function, *args))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        if on_cancel is not None:
+            on_cancel()
+        try:
+            await asyncio.shield(worker)
+        except Exception:
+            _LOGGER.debug(
+                "blocking MCP worker failed while its cancelled request drained",
+                exc_info=True,
+            )
+        raise
 
 
 class AgentRecoveryError(RuntimeError):
@@ -159,8 +183,8 @@ async def _invoke_capability_attempt(
     )
     trace_digest, trace_source = _request_trace_digest(ctx)
     cancellation_event = threading.Event()
-    worker = asyncio.create_task(
-        asyncio.to_thread(
+    try:
+        result = await _run_blocking(
             _invoke_capability_with_cancellation,
             runtime,
             CapabilityRequest(
@@ -169,13 +193,9 @@ async def _invoke_capability_attempt(
                 input=payload,
             ),
             cancellation_event,
+            on_cancel=cancellation_event.set,
         )
-    )
-    try:
-        result = await asyncio.shield(worker)
     except asyncio.CancelledError:
-        cancellation_event.set()
-        worker.add_done_callback(_consume_cancelled_worker_result)
         _log_capability_attempt(
             capability_id=capability_id,
             mode=mode,

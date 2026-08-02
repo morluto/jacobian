@@ -5,9 +5,10 @@ Each case is a self-contained task directly under this dataset directory;
 public provenance does not
 make Oracle solutions or verifier code agent-visible.
 
-`suite.toml` is the source of truth for membership and task contract metadata.
-`dataset.toml` is generated from Harbor task digests and must not be edited by
-hand. The Oracle job runs every migrated case:
+`suite.toml` owns stable dataset policy; authoritative `members/*.toml` records
+own membership and task contract metadata. Immutable snapshot locks freeze
+Harbor task digests for intentional evaluations. The Oracle job runs every
+migrated case:
 
 ```sh
 make harbor-oracle DATASET=public-reproductions-v1

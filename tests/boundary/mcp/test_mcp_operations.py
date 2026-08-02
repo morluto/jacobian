@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 from importlib.metadata import version
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import pytest
 from jacobian.adapters.mcp.context import _public_tool_error
 from jacobian.adapters.mcp.projections import WORKSPACE_TOOL_NAMES
 from jacobian.adapters.mcp.server import create_server
-from jacobian.adapters.mcp.tooling import _request_trace_digest
+from jacobian.adapters.mcp.tooling import _request_trace_digest, _run_blocking
 
 MCP_TOOL_NAMES = {
     "capability.describe",
@@ -217,3 +218,37 @@ def test_mcp_entrypoint_reports_distribution_version() -> None:
 
     assert completed.returncode == 0
     assert completed.stdout.strip() == f"jacobian-mcp {version('jacobian')}"
+
+
+def test_cancelled_mcp_blocking_work_drains_before_request_task_finishes() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+    cancellation_signalled = threading.Event()
+
+    def blocking_operation() -> str:
+        started.set()
+        release.wait(timeout=2)
+        finished.set()
+        return "finished"
+
+    async def scenario() -> None:
+        task = asyncio.create_task(
+            _run_blocking(
+                blocking_operation,
+                on_cancel=cancellation_signalled.set,
+            )
+        )
+        while not started.is_set():
+            await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0.05)
+        assert cancellation_signalled.is_set()
+        assert not task.done()
+        assert not finished.is_set()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert finished.is_set()
+
+    asyncio.run(scenario())

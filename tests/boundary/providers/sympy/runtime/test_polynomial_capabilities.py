@@ -90,6 +90,108 @@ def _identity_input(
     }
 
 
+def _rational_function_identity_input(*, equal: bool = True) -> dict[str, Any]:
+    x = symbols("x")
+    return {
+        "variables": ["x"],
+        "left": {
+            "numerator": _poly_payload(Poly(x**2 - 1, x, domain="QQ")),
+            "denominator": _poly_payload(Poly(x - 1, x, domain="QQ")),
+        },
+        "right": {
+            "numerator": _poly_payload(Poly(x + (1 if equal else 2), x, domain="QQ")),
+            "denominator": _poly_payload(Poly(1, x, domain="QQ")),
+        },
+    }
+
+
+def test_rational_function_identity_cross_multiplies_exactly(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.rational_function.identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input=_rational_function_identity_input(),
+        )
+    )
+
+    assert result.output["identical"] is True
+    assert result.output["conclusion"] == Conclusion.TRUE.value
+    assert result.output["equality_semantics"] == (
+        "QQ_FRACTION_FIELD_CROSS_MULTIPLICATION"
+    )
+    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
+    assert len(result.relationships) == 1
+
+    semantics_uri = (
+        runtime.portfolio.polynomial.rational_function_identity_semantics_uri
+    )
+    semantics = runtime.core.store.get(semantics_uri)
+    assert semantics.payload["definition"]["pointwise_definedness"] == "outside scope"
+    for output_key in ("left_uri", "right_uri", "claim_uri", "certificate_uri"):
+        artifact = runtime.core.store.get(result.output[output_key])
+        assert artifact.manifest.semantics_uri == semantics_uri
+
+
+def test_rational_function_identity_reports_exact_difference(
+    authorized_complete_runtime,
+) -> None:
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.rational_function.identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input=_rational_function_identity_input(equal=False),
+        )
+    )
+
+    assert result.output["identical"] is False
+    assert result.output["conclusion"] == Conclusion.FALSE.value
+    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert result.relationships == ()
+
+
+def test_rational_function_identity_rejects_zero_denominator(
+    authorized_complete_runtime,
+) -> None:
+    request = _rational_function_identity_input()
+    request["left"]["denominator"] = {"terms": []}
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.rational_function.identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input=request,
+        )
+    )
+
+    assert result.execution.status.value == "ERROR"
+    assert result.diagnostics[0].code == "INVALID_RATIONAL_FUNCTION_IDENTITY_REQUEST"
+
+
+def test_rational_function_identity_preserves_checker_rejection_as_unknown(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    checker_id = runtime.portfolio.polynomial.rational_function_identity_checker_id
+    assert checker_id is not None
+    runtime.core.checkers.revoke(checker_id, reason="exercise fail-closed projection")
+    result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.rational_function.identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input=_rational_function_identity_input(),
+        )
+    )
+
+    assert result.output["identical"] is None
+    assert result.output["conclusion"] == Conclusion.UNKNOWN.value
+    assert result.output["verification_record_uri"] is None
+    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
+    assert result.completeness.status is CapabilityCompletenessStatus.UNKNOWN
+
+
 def test_polynomial_identity_descriptor_example_is_directly_invocable(
     authorized_complete_runtime,
 ) -> None:

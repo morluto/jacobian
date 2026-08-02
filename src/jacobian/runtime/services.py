@@ -86,7 +86,14 @@ class ApplicationServices:
     def close(self) -> None:
         """Quiesce application-owned workers before foundational teardown."""
 
-        self.search.close()
+        failures: list[Exception] = []
+        for close in (self.search.close, self.experiments.close):
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            raise ExceptionGroup("application services did not quiesce", failures)
 
 
 def build_application_services(core: CoreServices) -> ApplicationServices:

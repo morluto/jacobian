@@ -172,7 +172,12 @@ def _evidence_is_valid(value: object) -> bool:
         text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    return all(term in text for term in ("u>=0", "u=0", "u=-1", "(2025,64,25)"))
+    return (
+        len(text) >= 180
+        and all(term in text for term in ("u>=0", "u=0", "u=-1", "(2025,64,25)"))
+        and all(term in text.casefold() for term in ("principal", "excludes", "substitution"))
+        and "not a solution" not in text.casefold()
+    )
 
 
 def main() -> None:

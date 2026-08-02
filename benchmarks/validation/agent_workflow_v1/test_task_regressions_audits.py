@@ -236,3 +236,153 @@ def test_inverse_distance_audit_rejects_corrupted_certificates(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_limsup_quantifier_alignment_canonical_case_scores_full_reward(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted["false_certification"] is False
+
+
+def test_limsup_quantifier_alignment_accepts_alternative_separating_families(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    # Alternative valid families within the frozen bounds: intended-only needs
+    # at least one value <= 1 and not all >= 1; proposed-only needs all >= 1
+    # and not any <= 1.
+    submission["result"]["intended_only_model"] = {
+        "limsup_values": ["-1/2", "0", "3"],
+        "intended_truth": True,
+        "proposed_truth": False,
+        "distinguishing_index": 0,
+    }
+    submission["result"]["proposed_only_model"] = {
+        "limsup_values": ["2", "5"],
+        "intended_truth": False,
+        "proposed_truth": True,
+        "distinguishing_index": 0,
+    }
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_limsup_quantifier_alignment_rejects_affirmative_solved_limitation(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["limitations"] = ["The open problem is solved."]
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+    assert rejected["false_certification"] is True
+
+
+def test_limsup_quantifier_alignment_rejects_bare_open_problem_limitation(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["limitations"] = ["The open problem is mentioned."]
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+
+
+def test_limsup_quantifier_alignment_requires_evidence_to_agree_with_result(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    # Contradictory prose containing the required keywords but no RESULT_JSON
+    # marker binding it to the submitted result.
+    (app / "evidence" / "answer.txt").write_text(
+        "The existential and universal statements are not incomparable.\n",
+        encoding="utf-8",
+    )
+    submission["evidence"][0]["sha256"] = support._digest(
+        app / "evidence" / "answer.txt"
+    )
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.9)
+
+
+def test_limsup_quantifier_alignment_rejects_mismatched_result_marker(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    (app / "evidence" / "answer.txt").write_text(
+        "existential universal incomparable\n"
+        'RESULT_JSON: {"relationship":"EQUIVALENT"}\n',
+        encoding="utf-8",
+    )
+    submission["evidence"][0]["sha256"] = support._digest(
+        app / "evidence" / "answer.txt"
+    )
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.9)
+
+
+def test_limsup_quantifier_alignment_rejects_machine_verified_evidence_claim(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "limsup-quantifier-alignment", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "The existential and universal statements are incomparable; "
+        "this result is machine verified.\n",
+        encoding="utf-8",
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["false_certification"] is True
+    assert rejected["reward"] == 0.0

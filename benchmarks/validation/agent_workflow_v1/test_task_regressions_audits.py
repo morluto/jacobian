@@ -237,7 +237,9 @@ def test_lagrangian_projection_audit_rejects_tampered_frozen_input(
     task, app, logs = support._prepare_case(
         tmp_path, "lagrangian-projection-proof-audit", "computed"
     )
-    (app / "input.json").write_text('{"frozen_claim":{"standard_symplectic_matrix":[["0","0","1","0"],["0","0","0","1"],["0","0","0","0"],["0","0","0","0"]]}}')
+    (app / "input.json").write_text(
+        '{"frozen_claim":{"standard_symplectic_matrix":[["0","0","1","0"],["0","0","0","1"],["0","0","0","0"],["0","0","0","0"]]}}'
+    )
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0

@@ -39,23 +39,9 @@ _NEGATION_TOKENS = (
     "nor",
     "neither",
 )
-_SCOPE_LIMITING_MARKERS = (
-    "not",
-    "no claim",
-    "no ",
-    "does not",
-    "doesn't",
-    "doesnt",
-    "without",
-    "cannot",
-    "can't",
-    "never",
-    "nor",
-    "neither",
-    "unsolved",
-    "not solved",
-    "not verified",
-    "not machine",
+_SCOPE_LIMITING_RE = re.compile(
+    r"\b(?:not|no|without|cannot|never|nor|neither|unsolved)\b"
+    r"|\bdoesn(?:'t|t)\b"
 )
 
 
@@ -80,8 +66,6 @@ def _affirmative_solved_or_verified_claim(text):
     negation token in the preceding clause, so negated scope statements such as
     "does not solve" or "not machine verified" are accepted.
     """
-    if re.search(r"\b(machine|formally?)\s+(verified|certified)\b", text.casefold()):
-        return True
     for clause in re.split(r"[.!?;]+", text.casefold()):
         if not any(
             subject in clause for subject in ("open problem", "theorem", "lean")
@@ -106,7 +90,7 @@ def _limitation_is_scope_limiting(text):
         return False
     if _affirmative_solved_or_verified_claim(text):
         return False
-    return any(marker in folded for marker in _SCOPE_LIMITING_MARKERS)
+    return _SCOPE_LIMITING_RE.search(folded) is not None
 
 
 def _model(value, *, intended, proposed, bound, lower, upper):
@@ -239,6 +223,8 @@ def main():
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
     )
     limitations = data.get("limitations", [])
+    if not isinstance(limitations, list):
+        limitations = []
     limitations_affirmative = any(
         _affirmative_solved_or_verified_claim(item)
         for item in limitations

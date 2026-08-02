@@ -152,7 +152,7 @@ digest = "sha256:f8a8cd0791e229a8b64fbe3e3b805d2f6d113795d82c113b05f713b0e38c613
 
 [[tasks]]
 name = "jacobian/squarefree-class-independence-audit"
-digest = "sha256:df86ac9b65c0d7cbe5a59c65d88254b5495486a9b9bea3afe7261bb56c19e0bd"
+digest = "sha256:419a018cc2490cd62e89798d46a8e6db8ee924dd8fa57329e3670e7c580411ff"
 
 [[tasks]]
 name = "jacobian/subspace-direct-sum-counterexample"

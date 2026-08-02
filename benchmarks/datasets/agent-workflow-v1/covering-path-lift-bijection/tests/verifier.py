@@ -208,18 +208,26 @@ def _result_is_valid(value: object, source: dict[str, Any]) -> bool:
     ):
         return False
     bijection = value["bijection"]
-    if not isinstance(bijection, list):
+    if not isinstance(bijection, list) or len(bijection) != len(source_fiber):
         return False
-    pairs = {
-        (item.get("source"), item.get("target"))
+    if any(
+        not isinstance(item, dict)
+        or set(item) != {"source", "target"}
+        or not isinstance(item["source"], str)
+        or not isinstance(item["target"], str)
         for item in bijection
-        if isinstance(item, dict) and set(item) == {"source", "target"}
-    }
+    ):
+        return False
+    pairs = {(item["source"], item["target"]) for item in bijection}
     return len(pairs) == len(source_fiber) and pairs == set(forward.items())
 
 
 def _evidence_is_valid(value: object) -> bool:
-    if not evidence_list_is_bound(value):
+    if (
+        not isinstance(value, list)
+        or len(value) != 1
+        or not evidence_list_is_bound(value)
+    ):
         return False
     target = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if target is None:

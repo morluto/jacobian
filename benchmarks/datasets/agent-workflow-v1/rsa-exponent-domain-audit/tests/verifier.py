@@ -1,5 +1,6 @@
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -144,9 +145,34 @@ def _evidence(value: object) -> bool:
         text = path.read_text().lower()
     except (OSError, UnicodeError):
         return False
-    return all(
+    if not all(
         term in text
         for term in ("unit branch", "nonunit branch", "negative exponent", "computed")
+    ):
+        return False
+    contradictions = (
+        re.search(r"\bno\b[^.]{0,80}\bunit branch\b", text),
+        re.search(
+            r"\bnegative exponent\b[^.]{0,80}\b(?:always|everywhere|regardless)\b",
+            text,
+        ),
+        re.search(
+            r"\b(?:inverse|unit condition)\b[^.]{0,80}"
+            r"\b(?:never|required nowhere)\b",
+            text,
+        ),
+    )
+    if any(contradictions):
+        return False
+    return bool(
+        re.search(r"\b(?:gcd|coprime|unit group|unit condition)\b", text)
+        and re.search(
+            r"\b(?:p\s*\|\s*c|nonunit|zero modulo p|both positive powers)\b",
+            text,
+        )
+        and re.search(
+            r"\bd\s*=\s*d_p\s*\+\s*k\s*\(p-1\)|fermat\b", text
+        )
     )
 
 

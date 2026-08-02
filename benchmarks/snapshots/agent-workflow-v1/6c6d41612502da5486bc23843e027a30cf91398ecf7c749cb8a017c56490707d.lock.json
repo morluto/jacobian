@@ -55,14 +55,14 @@
     ]
   },
   "harbor_version": "0.20.0",
-  "lock_digest": "sha256:ec2887168c7ae2ae50bcbe7e808428b87b4a02bef5fdf838a9753341d8b5bc04",
+  "lock_digest": "sha256:6c6d41612502da5486bc23843e027a30cf91398ecf7c749cb8a017c56490707d",
   "schema_version": "1",
-  "snapshot_id": "sha256:ec2887168c7ae2ae50bcbe7e808428b87b4a02bef5fdf838a9753341d8b5bc04",
+  "snapshot_id": "sha256:6c6d41612502da5486bc23843e027a30cf91398ecf7c749cb8a017c56490707d",
   "source": {
     "dirty": false,
     "environment_profiles_digest": "sha256:ea576735471edd2598ff95b68fc237c71b7b5d677e63c3520e35b74c9e43eb76",
     "registry_digest": "sha256:c1175fb31a6d9b174994107497d7bc7c1df69272e48b6c6bdc2b46baf86fab86",
-    "tree_sha": "fe901abcd4312775918ab27fc204ab452ccee6d9"
+    "tree_sha": "bef55c1a927c96a9e315ca1f1abee460cfbf10bd"
   },
   "suite": {
     "answer_visibility": "hidden-at-runtime",
@@ -605,7 +605,7 @@
     },
     {
       "assurance_ceiling": "COMPUTED",
-      "digest": "sha256:96de2e7aa7225f6484d32fd7ae66f63520f27491be0726491fae29bdd9745e12",
+      "digest": "sha256:228fd24101d711495da5cc282ffa7167c30773e11238d11081d96fb332766dc9",
       "environment": {
         "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
         "allow_apt": false,

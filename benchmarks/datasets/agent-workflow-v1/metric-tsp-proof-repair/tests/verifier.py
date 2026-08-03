@@ -67,12 +67,14 @@ def _is_two_approximation_claim(value):
     )
     if match is None:
         return False
-    surrounding = normalized[max(0, match.start() - 80) : match.end() + 80]
+    # Scan the entire corrected claim for contradictions so a submission that
+    # states the 2-approximation and later retracts it ("... is false") far
+    # from the matched phrase cannot pass.
     return (
         re.search(
             r"\b(?:not|never|cannot|can\s+not|false|invalid|reject|unsupported|"
             r"unproven|does\s+not|doesn\'t|isn\'t)\b",
-            surrounding,
+            normalized,
         )
         is None
     )

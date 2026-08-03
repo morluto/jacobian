@@ -93,9 +93,12 @@ def certificate_valid(result: object, frozen: dict) -> bool:
 
 
 def evidence_valid(evidence: object, result: object) -> bool:
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
+    # Validate cardinality before resolving or hashing any evidence file so
+    # a malformed submission repeating a valid descriptor cannot force
+    # redundant hashing of a large file once per array element.
     if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
         return False
     path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:

@@ -1090,3 +1090,77 @@ def test_indexed_pairwise_vacuity_accepts_unordered_elements(tmp_path: Path) -> 
 
     accepted = support._run_verifier(task, app, logs)
     assert accepted["correctness"] == 1.0
+
+
+def test_squarefree_rejects_repeated_evidence_descriptors(tmp_path: Path) -> None:
+    """A malformed evidence list repeating a valid descriptor is rejected
+    before the verifier hashes the file once per array element.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "squarefree-class-independence-audit", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    descriptor = submission["evidence"][0]
+    submission["evidence"] = [dict(descriptor) for _ in range(2000)]
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_metric_tsp_rejects_contradicted_two_approximation_claim(
+    tmp_path: Path,
+) -> None:
+    """A corrected claim that states the 2-approximation and later retracts it
+    far from the matched phrase must not pass as a valid repair.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "metric-tsp-proof-repair", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["corrected_claim"] = (
+        "2-approximation " + "filler " * 30 + "is false"
+    )
+    support._bind_result_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_covering_path_requires_covering_theorem_limitation(
+    tmp_path: Path,
+) -> None:
+    """An otherwise valid certificate with no covering-theorem limitation
+    receives zero reward so the finite-cover scope stays visible.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "covering-path-lift-bijection", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["limitations"] = []
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+
+
+def test_covering_path_rejects_unrelated_limitation(tmp_path: Path) -> None:
+    """A limitation that does not reference the covering theorem does not
+    satisfy the scope obligation.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "covering-path-lift-bijection", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["limitations"] = ["The verifier does not use a proof assistant."]
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0

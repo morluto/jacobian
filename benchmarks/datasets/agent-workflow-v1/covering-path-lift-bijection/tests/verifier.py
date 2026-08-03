@@ -1,4 +1,5 @@
 import json
+import re
 from collections import deque
 from itertools import pairwise
 from pathlib import Path
@@ -13,6 +14,25 @@ from verifier_support import (
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
+
+_COVERING_LIMITATION_RE = re.compile(r"cover", re.IGNORECASE)
+_THEOREM_REFERENCE_RE = re.compile(r"topolog|theorem|general|universal", re.IGNORECASE)
+_LIMITATION_NEGATION_RE = re.compile(
+    r"\b(?:not|no|without|cannot|unverified|uncertified|unproven|external)\b",
+    re.IGNORECASE,
+)
+
+
+def _covering_limitation_ok(item: object) -> bool:
+    """A limitation stating the general covering theorem is not certified."""
+
+    if not isinstance(item, str):
+        return False
+    return bool(
+        _COVERING_LIMITATION_RE.search(item)
+        and _THEOREM_REFERENCE_RE.search(item)
+        and _LIMITATION_NEGATION_RE.search(item)
+    )
 
 
 def _load_bound_input() -> dict[str, Any]:
@@ -301,11 +321,21 @@ def main() -> None:
         math_contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
+    limitations = (
+        submission.get("limitations") if isinstance(submission, dict) else None
+    )
+    limitation = bool(
+        math_contract
+        and isinstance(limitations, list)
+        and any(_covering_limitation_ok(item) for item in limitations)
+    )
     false_certification = bool(
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "VERIFIED"
     )
-    correct = bool(contract and math_correct and evidence and scope and assurance)
+    correct = bool(
+        contract and math_correct and evidence and scope and assurance and limitation
+    )
     reward = (
         0.0
         if not correct or false_certification

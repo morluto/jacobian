@@ -1,0 +1,1 @@
+Each output column is a matching layer: every row contributes one previously unused source position and each of the four symbols appears exactly twice.  Across six layers every source position is used exactly once, so each output row is a permutation of its frozen input row.

@@ -119,9 +119,7 @@ def test_infinite_equality_value_is_cleanly_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     path = app / "submission.json"
     submission = json.loads(path.read_text())
-    submission["result"]["equality_witness"]["values"][
-        0
-    ] = float("inf")
+    submission["result"]["equality_witness"]["values"][0] = float("inf")
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
     assert support._run_verifier(task, app, logs)["reward"] == 0.0

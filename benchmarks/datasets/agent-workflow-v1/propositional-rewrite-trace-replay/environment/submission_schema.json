@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/propositional-rewrite-trace-replay"},
+    "conclusion": {"enum": ["TARGET_REACHED", "NO_VALID_TRACE"]},
+    "result": {"type": "object", "additionalProperties": false, "required": ["steps", "final_ast"], "properties": {"steps": {"type": "array", "minItems": 6, "maxItems": 16, "items": {"$ref": "#/$defs/step"}}, "final_ast": {"$ref": "#/$defs/node"}}},
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "scope": {"const": "FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES"},
+    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/rewrite-trace.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "limitations": {"const": ["PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"]}
+  },
+  "$defs": {
+    "step": {"type": "object", "additionalProperties": false, "required": ["rule", "path", "after_ast"], "properties": {"rule": {"enum": ["DE_MORGAN_OR", "NOT_IMPLICATION", "DOUBLE_NEGATION", "FLATTEN_ASSOCIATIVE", "CONTRADICTION"]}, "path": {"type": "array", "maxItems": 12, "items": {"type": "integer", "minimum": 0, "maximum": 15}}, "after_ast": {"$ref": "#/$defs/node"}}},
+    "node": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["op", "name"], "properties": {"op": {"const": "atom"}, "name": {"type": "string", "minLength": 1, "maxLength": 80}}},
+        {"type": "object", "additionalProperties": false, "required": ["op"], "properties": {"op": {"const": "false"}}},
+        {"type": "object", "additionalProperties": false, "required": ["op", "args"], "properties": {"op": {"const": "not"}, "args": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/node"}}}},
+        {"type": "object", "additionalProperties": false, "required": ["op", "args"], "properties": {"op": {"const": "imp"}, "args": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/node"}}}},
+        {"type": "object", "additionalProperties": false, "required": ["op", "args"], "properties": {"op": {"enum": ["and", "or"]}, "args": {"type": "array", "minItems": 2, "maxItems": 16, "items": {"$ref": "#/$defs/node"}}}}
+      ]
+    }
+  }
+}

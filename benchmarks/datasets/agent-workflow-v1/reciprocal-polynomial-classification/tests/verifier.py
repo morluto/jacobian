@@ -11,6 +11,19 @@ from verifier_support import (
 
 W, E = Path("/app"), Path("/tests")
 
+
+def _json_equal(left, right):
+    """Compare two JSON values without Python's bool/int coercion.
+
+    Python treats ``True == 1`` as equal, so a certificate that replaces an
+    integer ``1`` with boolean ``true`` would pass ``==`` despite not being an
+    exact copy.  Serializing both values to canonical JSON distinguishes them.
+    """
+    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, sort_keys=True, separators=(",", ":")
+    )
+
+
 _ASSURANCE_ORDER = {
     "UNVERIFIED": 0,
     "COMPUTED": 1,
@@ -185,8 +198,8 @@ def main():
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == submission.get("result")
-        and evidence["limitations"] == submission.get("limitations")
+        and _json_equal(evidence["result"], submission.get("result"))
+        and _json_equal(evidence["limitations"], submission.get("limitations"))
     )
     envelope_correct = bool(
         contract

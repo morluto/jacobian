@@ -1275,3 +1275,33 @@ def test_reciprocal_polynomial_classification_rejects_checked_above_ceiling(
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["reward"] == 0.0
+
+
+def test_reciprocal_polynomial_classification_rejects_boolean_in_evidence_copy(
+    tmp_path: Path,
+) -> None:
+    """When the evidence certificate replaces an integer coefficient with
+    boolean ``true``, Python equality treats them as equal but the evidence
+    does not exactly copy the result.  The verifier must reject this.
+    """
+    task, app, logs = support._prepare_case(
+        tmp_path, "reciprocal-polynomial-classification", "computed"
+    )
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    target = app / "evidence" / "classification-certificate.json"
+    certificate = json.loads(
+        (task / "solution" / "classification-certificate.json").read_text()
+    )
+    certificate["result"] = json.loads(
+        json.dumps(submission["result"], separators=(",", ":")).replace(
+            '"coefficient":1', '"coefficient":true'
+        )
+    )
+    support._write_json(target, certificate)
+    submission["evidence"][0]["sha256"] = support._digest(target)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

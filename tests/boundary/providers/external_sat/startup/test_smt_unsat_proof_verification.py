@@ -27,10 +27,6 @@ from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
 from jacobian.verification._helpers import _environment_digest
 
-pytestmark = [
-    pytest.mark.usefixtures("authorized_complete_runtime"),
-]
-
 _FIXTURES = (
     Path(__file__).resolve().parents[5]
     / "tests"

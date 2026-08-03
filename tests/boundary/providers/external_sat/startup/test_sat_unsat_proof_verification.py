@@ -27,11 +27,6 @@ from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
 from jacobian.verification._helpers import _environment_digest
 
-pytestmark = [
-    pytest.mark.usefixtures("authorized_complete_runtime"),
-]
-
-
 def _fake_drat_trim(tmp_path: Path, body: str) -> Path:
     executable = tmp_path / "drat-trim"
     executable.write_text(

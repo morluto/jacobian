@@ -31,8 +31,6 @@ from jacobian.runtime import create_runtime
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
-pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
-
 
 def _service(tmp_path: Path) -> CapabilityService:
     store = ArtifactRepository(tmp_path)

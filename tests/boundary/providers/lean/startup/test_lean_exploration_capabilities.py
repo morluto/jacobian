@@ -19,7 +19,6 @@ pytestmark = [
         not pinned_mathlib_runtime_available(),
         reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
     ),
-    pytest.mark.usefixtures("authorized_complete_runtime"),
 ]
 
 

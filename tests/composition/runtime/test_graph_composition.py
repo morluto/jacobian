@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
@@ -15,8 +13,6 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
-
-pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
 
 
 def _runtime_with_composition(tmp_path: Path) -> JacobianRuntime:

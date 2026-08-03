@@ -10,7 +10,6 @@ from jacobian.providers.external_solver_runtime import (
 )
 
 pytestmark = [
-    pytest.mark.usefixtures("attached_complete_runtime"),
     pytest.mark.skipif(
         not cadical_runtime_available(),
         reason="the pinned CaDiCaL runtime is unavailable",

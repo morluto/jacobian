@@ -19,10 +19,6 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-pytestmark = [
-    pytest.mark.usefixtures("attached_complete_runtime"),
-]
-
 
 @pytest.fixture(scope="module")
 def oracle_runtime(

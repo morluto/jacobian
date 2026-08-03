@@ -25,10 +25,6 @@ from jacobian.search import SearchError
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StorageLimits
 
-pytestmark = [
-    pytest.mark.usefixtures("attached_complete_runtime"),
-]
-
 
 def _install_search_plugin(
     runtime: JacobianRuntime,

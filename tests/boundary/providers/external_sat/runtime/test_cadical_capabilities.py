@@ -20,11 +20,6 @@ from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.sat_smt.cadical import install_cadical_capabilities
 
-pytestmark = [
-    pytest.mark.usefixtures("authorized_complete_runtime"),
-]
-
-
 def _fake_cadical(tmp_path: Path, body: str) -> Path:
     executable = tmp_path / "fake-cadical"
     executable.write_text(

@@ -230,7 +230,6 @@ def test_cli_unsupported_state_version_is_typed_and_preserves_state() -> None:
     assert "fresh state directory" in error["hint"]
 
 
-@pytest.mark.usefixtures("authorized_complete_runtime")
 def test_cli_enumeration_completes_before_the_local_process_exits(
     tmp_path: Path,
 ) -> None:

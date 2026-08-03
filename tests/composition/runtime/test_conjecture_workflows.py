@@ -26,10 +26,6 @@ from jacobian.contracts.results import ExecutionStatus, Verification
 from jacobian.contracts.search import SearchBudget
 from jacobian.runtime.model import JacobianRuntime
 
-pytestmark = [
-    pytest.mark.usefixtures("attached_complete_runtime"),
-]
-
 
 def _install_hypothesis_plugin(
     runtime: JacobianRuntime,

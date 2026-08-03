@@ -27,8 +27,6 @@ from jacobian.runtime.model import RuntimeClosedError
 from jacobian.search import SearchError, SearchService
 from jacobian.storage.errors import StorageClosedError
 
-pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
-
 
 def test_runtime_uses_one_schema_registry_instance(attached_complete_runtime) -> None:
     assert (

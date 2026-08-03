@@ -23,8 +23,6 @@ from jacobian.contracts.sat import (
 from jacobian.runtime import create_runtime
 from jacobian.sat_smt.sat import SatArtifactError
 
-pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
-
 
 def _producer() -> CapabilityProviderRuntime:
     return CapabilityProviderRuntime(

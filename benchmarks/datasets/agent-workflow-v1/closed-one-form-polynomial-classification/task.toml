@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["regression", "symbolic-integrability", "basis-certificate", "difficulty-provisional"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-synthetic-problem-transformed"
-fixture_digest = "sha256:803221c573516c2c908f840671e789a4fb2e1f56eca414972ecd6304f7c40e20"
+fixture_digest = "sha256:a24444c935d38afd302218e77a45bc27b6bcaf9a35f10a5f0a67070b5ee95a86"
 derivation = "Derived from Xerv-AI/GRAD train row 23 at revision 71595210590450202b7b69225bc07e9e01b13c5c."
 [agent]
 timeout_sec = 900.0

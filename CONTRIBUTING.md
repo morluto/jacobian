@@ -36,11 +36,22 @@ unit lane; it is a useful local handoff, but the pre-push hook intentionally
 runs only `make lint typecheck` so it stays below the interactive feedback
 budget. CI owns path-planned correctness lanes and optional environments.
 
-`make check-static` adds dependency/dead-code checks and a package build when a
-focused change needs them. `make test-all-ci` is the explicit exceptional local
+`make check-changed` combines the static edit-loop checks with exact changed
+test selection. `make check-static` adds dependency/dead-code checks and a
+package build when a focused change needs them. `make test-all-ci` is the explicit exceptional local
 reproduction of every semantic lane. Run `make help` for the complete command
-index. Lane ownership and local commands are documented in
+index of common commands; use `make help-all` for lifecycle and diagnostic
+plumbing. Lane ownership and local commands are documented in
 [testing strategy](docs/reference/testing-strategy.md).
+
+Use `make test-plan BASE=origin/main` for exact local test selectors and
+`make ci-plan BASE=origin/main` for the broader hosted-CI lane decision plus a
+provenance-bound plan receipt. The two reports intentionally answer different
+questions: the local plan may run exact importing tests, while the hosted plan
+owns required semantic lanes and fail-closed infrastructure coverage. Use
+`make harbor-plan BASE=origin/main`
+for benchmark contracts and Oracle scope; run it through Make because the
+planner requires the pinned Harbor runtime to compute task digests.
 Tests can be narrowed without learning another wrapper:
 
 ```sh
@@ -115,6 +126,8 @@ aid; `make check` and CI remain the handoff gates.
 | --- | --- | --- |
 | Docs only | `make docs-linkcheck` | Documentation |
 | Focused Python | affected target, then `make check` | Planned Python/static/package lanes |
+| Benchmark task input | `make harbor-check-task DATASET=... TASKS=...` | Exact task contract and Oracle when executable inputs change |
+| Benchmark task README | `make docs-linkcheck` | Contract checks; no Oracle |
 | Lean runtime | focused `make test-lean`, then `make check` | Lean plus affected lanes |
 | CI, dependencies, or unknown paths | `make check-static` plus affected tests | Fail-closed functional lanes |
 

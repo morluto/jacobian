@@ -13,7 +13,10 @@ The verifier independently checks the global occurrence premise, every
 position binding, exactly-once use of all input positions, all row
 permutations, and all column histograms.  Alternative valid decompositions are
 accepted.  Place the structured answer at `/app/submission.json` and a bound
-explanation at `/app/evidence/answer.txt`.
+explanation at `/app/evidence/answer.txt`.  The evidence must contain exactly
+one `RESULT_JSON:` line whose JSON equals the submitted `result` object, and
+must discuss column layers, row permutations, source positions, and the exact
+two-of-each-symbol balance.
 
 Do not claim proof-assistant verification; the result is an exact computation
-for this frozen instance.
+for this frozen instance.  Claim at most `COMPUTED` assurance.

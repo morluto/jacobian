@@ -153,6 +153,28 @@ def test_keyword_only_evidence_without_result_binding_is_rejected(
     assert result["reward"] == 0.0
 
 
+def test_boolean_in_result_json_evidence_is_rejected(tmp_path: Path) -> None:
+    """RESULT_JSON must match the submitted result without bool/int coercion."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    coerced = json.loads(json.dumps(submission["result"]))
+    assert coerced["balanced_matrix"][0][0] == 1
+    coerced["balanced_matrix"][0][0] = True
+    assert coerced == submission["result"]  # Python coerces True == 1
+    evidence.write_text(
+        "column row source position exactly\n"
+        "RESULT_JSON:"
+        + json.dumps(coerced, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
 def test_symlinked_submission_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     original = app / "submission-original.json"

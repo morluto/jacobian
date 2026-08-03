@@ -135,6 +135,19 @@ def _result(value: object) -> bool:
     return global_counts == Counter({1: 12, 2: 12, 3: 12, 4: 12})
 
 
+def _json_equal(left: object, right: object) -> bool:
+    """Compare JSON values without Python's bool/int coercion.
+
+    ``True == 1`` and ``False == 0`` in Python, so evidence that replaces
+    integer ``1``/``0`` with boolean ``true``/``false`` would pass ``==``
+    despite not matching the exact submitted result. Canonical JSON
+    serialization distinguishes those types.
+    """
+    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, sort_keys=True, separators=(",", ":")
+    )
+
+
 def _evidence(value: object, result: object) -> bool:
     if (
         not isinstance(value, list)
@@ -161,7 +174,7 @@ def _evidence(value: object, result: object) -> bool:
     except (ValueError, RecursionError):
         return False
     folded = text.casefold()
-    return bound == result and all(
+    return _json_equal(bound, result) and all(
         word in folded for word in ("column", "row", "source position", "exactly")
     )
 

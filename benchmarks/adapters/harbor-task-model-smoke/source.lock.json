@@ -9,7 +9,9 @@
     "redistribution": "metadata-only"
   },
   "selection": {
-    "included_rows": ["task-model-smoke/graph-counterexample"],
+    "included_rows": [
+      "task-model-smoke/graph-counterexample"
+    ],
     "excluded_rows": [],
     "rule": "one deterministic task-model reference row"
   },
@@ -23,7 +25,7 @@
       "task_id": "graph-counterexample",
       "dataset": "agent-workflow-v1",
       "source_row": "task-model-smoke/graph-counterexample",
-      "task_digest": "sha256:549a04a5648c0894415be4196447bbd82187764439a141640c0e88958a607bf3",
+      "task_digest": "sha256:a1dced8ae2116297864e87477f6d2bf6a6e2ac82fe1217cd4284c79c20875e33",
       "oracle_evidence_digest": "sha256:9784dbb208532027ee7068f2315e951cb0f5cb2a361711558373d75be884d378",
       "parity_evidence_digest": "sha256:0ca0a36c42995ff7472de486a72fe4d71b41eadd961920c74450152bf24149f5"
     }

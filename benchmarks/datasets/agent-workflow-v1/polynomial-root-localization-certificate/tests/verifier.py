@@ -50,6 +50,29 @@ def _vector(value):
     )
 
 
+def _int_list(value, length):
+    """Validate a list of exact integers with a fixed length, rejecting booleans."""
+    return (
+        value
+        if isinstance(value, list)
+        and len(value) == length
+        and all(type(x) is int for x in value)
+        else None
+    )
+
+
+def _json_equal(left, right):
+    """Compare two JSON values without Python's bool/int coercion.
+
+    Python treats ``True == 1`` as equal, so a certificate that replaces an
+    integer ``1`` with boolean ``true`` would pass ``==`` despite not being an
+    exact copy.  Serializing both values to canonical JSON distinguishes them.
+    """
+    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, sort_keys=True, separators=(",", ":")
+    )
+
+
 def _weights(value):
     if not isinstance(value, list) or len(value) != 4:
         return None
@@ -92,12 +115,16 @@ def _result_is_valid(result, frozen):
     ):
         return False
     total = [sum(WEIGHTS[p][i] for p in WEIGHTS) for i in range(4)]
+    weight_sum = _int_list(result["weight_sum"], 4)
+    controlled_powers = _int_list(result["controlled_powers"], 4)
     return bool(
         weights == WEIGHTS
         and rhs == WEIGHTS
-        and result["weight_sum"] == total == [1, 0, 0, 0]
+        and weight_sum is not None
+        and weight_sum == total == [1, 0, 0, 0]
         and product == PRODUCT
-        and result["controlled_powers"] == [1, 2, 3, 4]
+        and controlled_powers is not None
+        and controlled_powers == [1, 2, 3, 4]
         and result["reciprocal_reduction"]
         == "NONZERO_ROOT_LAMBDA_MAPS_TO_Q_ROOT_Z_EQUALS_1_OVER_LAMBDA"
         and result["modulus_conclusion"] == "ABS_LAMBDA_LE_1"
@@ -130,8 +157,8 @@ def main():
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == submission.get("result")
-        and evidence["limitations"] == submission.get("limitations")
+        and _json_equal(evidence["result"], submission.get("result"))
+        and _json_equal(evidence["limitations"], submission.get("limitations"))
     )
     assurance_correct = bool(
         contract

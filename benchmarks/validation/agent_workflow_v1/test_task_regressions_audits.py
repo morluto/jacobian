@@ -1160,3 +1160,61 @@ def test_polynomial_root_localization_rejects_false_verified_claim(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["false_certification"] is True
     assert rejected["reward"] == 0.0
+
+
+def test_polynomial_root_localization_rejects_boolean_in_weight_sum(
+    tmp_path: Path,
+) -> None:
+    """Boolean values must not spoof integer entries in weight_sum."""
+    task, app, logs = _prepare_root_localization_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["weight_sum"] = [True, 0, 0, 0]
+    _bind_root_localization_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_root_localization_rejects_boolean_in_controlled_powers(
+    tmp_path: Path,
+) -> None:
+    """Boolean values must not spoof integer entries in controlled_powers."""
+    task, app, logs = _prepare_root_localization_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["controlled_powers"] = [True, 2, 3, 4]
+    _bind_root_localization_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_polynomial_root_localization_rejects_boolean_in_evidence_copy(
+    tmp_path: Path,
+) -> None:
+    """When the evidence certificate replaces an integer with boolean ``true``,
+    Python equality treats them as equal but the evidence does not exactly copy
+    the result.  The verifier must reject this.
+    """
+    task, app, logs = _prepare_root_localization_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "root-bound-certificate.json"
+    evidence = json.loads(evidence_path.read_text())
+    evidence["result"] = json.loads(
+        json.dumps(submission["result"], separators=(",", ":")).replace(
+            '"weight_sum":[1,0,0,0]', '"weight_sum":[true,0,0,0]'
+        )
+    )
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

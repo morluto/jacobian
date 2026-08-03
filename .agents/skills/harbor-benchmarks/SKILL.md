@@ -121,9 +121,10 @@ Put new or changed task verifier attack tests in a **per-task leaf module**:
 
 `benchmarks/validation/agent_workflow_v1/test_<task_id_with_underscores>.py`
 
-Do **not** append to a shared `test_task_regressions_*.py` dump. Suite-wide
-contracts stay in `test_generic_verifier_contracts.py` (assurance / fail-closed
-attacks over `VERIFIER_TASKS`) and the small fixed samples in
+Do **not** append to a shared `test_task_regressions_*.py` dump (those files
+are gone; do not recreate them). Suite-wide contracts stay in
+`test_generic_verifier_contracts.py` (assurance / fail-closed attacks over
+`VERIFIER_TASKS`) and the small fixed samples in
 `test_result_json_evidence_policy.py`. Edit `RESOURCE_DERIVED_TASKS` or
 `VERIFICATION_RECORD_TASKS` in `support.py` only when the task shares that exact
 assurance or scoring contract. Keep task-local prepare/bind helpers in the leaf;

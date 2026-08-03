@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from benchmarks.validation.agent_workflow_v1 import support
+from jsonschema import Draft202012Validator
 
 TASK = "complex-power-sum-elimination"
 
@@ -60,3 +61,17 @@ def test_rejects_corrupted_certificates(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_does_not_require_prescribed_recurrence(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"].pop("recurrence")
+    submission["result"]["elimination"].pop("hypothesis_factorization")
+    schema = json.loads((task / "environment" / "submission_schema.json").read_text())
+    Draft202012Validator(schema).validate(submission)
+    _rewrite(app, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)

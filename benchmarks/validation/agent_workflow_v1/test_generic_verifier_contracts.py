@@ -89,6 +89,33 @@ def test_resource_derived_oracles_and_assurance_boundary(
     assert unsupported["false_certification"] is True
 
 
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "autoformalization-semantic-audit",
+        "complex-power-sum-elimination",
+        "divisibility-construction-witness",
+        "finite-magma-countermodel",
+        "metric-tsp-proof-repair",
+        "natural-subtraction-proof-repair",
+        "well-total-domination-counterexample",
+    ],
+)
+def test_verifiers_reject_replaced_workspace_inputs(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    input_path = app / "input.json"
+    input_data = json.loads(input_path.read_text())
+    input_data["task_id"] = "tampered"
+    support._write_json(input_path, input_data)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 @pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
 def test_verifiers_reject_unhashable_assurance(
     tmp_path: Path,

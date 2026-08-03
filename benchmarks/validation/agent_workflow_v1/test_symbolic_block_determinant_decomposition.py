@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from benchmarks.validation.agent_workflow_v1 import support
 
-TASK = "inverse-distance-remainder-audit"
+TASK = "symbolic-block-determinant-decomposition"
 
 
 def _case(tmp_path: Path):
@@ -18,18 +18,19 @@ def _rewrite(app: Path, submission: dict) -> None:
     support._write_json(app / "submission.json", submission)
 
 
-def test_accepts_alternative_rational_direction(tmp_path: Path) -> None:
+def test_accepts_alternative_sum_zero_basis(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["directional_witnesses"][0] = {
-        "direction": [
-            {"numerator": 4, "denominator": 5},
-            {"numerator": 3, "denominator": 5},
-        ],
-        "quadratic_coefficient": {"numerator": 23, "denominator": 50},
-        "sign": "POSITIVE",
-        "normalized_residual_limit": "quadratic_coefficient",
-    }
+    submission["result"]["basis_change"] = [
+        ["1", "1", "0"],
+        ["1", "-1", "1"],
+        ["1", "0", "-1"],
+    ]
+    submission["result"]["basis_change_inverse"] = [
+        ["1/3", "1/3", "1/3"],
+        ["2/3", "-1/3", "-1/3"],
+        ["1/3", "1/3", "-2/3"],
+    ]
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
@@ -38,33 +39,21 @@ def test_accepts_alternative_rational_direction(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("path", "replacement"),
+    ("field", "replacement"),
     [
-        (
-            ("second_order_term", "dot_square_coefficient"),
-            {"numerator": 1, "denominator": 1},
-        ),
-        (
-            ("directional_witnesses", 0, "quadratic_coefficient"),
-            {"numerator": 2, "denominator": 1},
-        ),
-        (
-            ("response_audit", "defects"),
-            ["CUBIC_REMAINDER_FALSE"],
-        ),
+        ("basis_change_inverse", [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]]),
+        ("channels", ["A-B", "A+2B", "A-B"]),
+        ("basis_change", [["1", "1", "1"], ["1", "-1", "0"], ["0", "0", "-1"]]),
     ],
 )
 def test_rejects_corrupted_certificates(
     tmp_path: Path,
-    path: tuple[object, ...],
+    field: str,
     replacement: object,
 ) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    target = submission["result"]
-    for key in path[:-1]:
-        target = target[key]
-    target[path[-1]] = replacement
+    submission["result"][field] = replacement
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
@@ -72,14 +61,17 @@ def test_rejects_corrupted_certificates(
     assert rejected["reward"] == 0.0
 
 
-def test_enforces_visible_rational_bounds(tmp_path: Path) -> None:
+def test_enforces_common_channel_first(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    coefficient = submission["result"]["directional_witnesses"][0][
-        "quadratic_coefficient"
-    ]
-    coefficient["numerator"] *= 1_000_001
-    coefficient["denominator"] *= 1_000_001
+    result = submission["result"]
+    for row in result["basis_change"]:
+        row[0], row[1] = row[1], row[0]
+    result["basis_change_inverse"][0], result["basis_change_inverse"][1] = (
+        result["basis_change_inverse"][1],
+        result["basis_change_inverse"][0],
+    )
+    result["channels"] = ["A-B", "A+2B", "A-B"]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0

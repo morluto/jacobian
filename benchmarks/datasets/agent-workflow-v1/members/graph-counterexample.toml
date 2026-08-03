@@ -11,8 +11,3 @@ required_provider = "core"
 environment_profile = "core-python"
 verifier_contract_version = "1"
 evaluation_owner = "jacobian/agent-workflow-v1"
-
-[tool_opportunity]
-value = "OPTIONAL"
-relevant_capability_ids = ["graph.search.atlas"]
-rationale = "Bounded atlas search can produce complete finite evidence, but this six-vertex witness is also short enough to construct and replay directly."

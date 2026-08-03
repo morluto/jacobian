@@ -1,1 +1,9 @@
-{"task_id":"jacobian/jcb-postdoc-014","conclusion":"DISPROVED","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-014","answer-visible diagnostic"],"expected_conclusion":"DISPROVED","expected_key_facts":{"mdr_f":"4","mdr_g":"5","same_flats":"true"}}
+{
+  "task_id": "jacobian/jcb-postdoc-014",
+  "conclusion": "DISPROVED",
+  "maximum_assurance": "COMPUTED",
+  "required_scope": "jacobian/jcb-postdoc-014 public answer-visible exact graded relation diagnostic",
+  "required_limitations": ["PUBLIC_ANSWER_VISIBLE", "BENCHMARK_VERIFIER_NOT_PRODUCT_AUTHORITY"],
+  "evidence_path": "evidence/syzygy-certificate.json",
+  "mdr": {"f": 4, "g": 5}
+}

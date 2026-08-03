@@ -48,13 +48,6 @@ make agent-eval DATASET=agent-workflow-v1 \
   TASKS=graph-counterexample EVAL_EXECUTE=1
 ```
 
-`agent-eval` first writes the fully resolved Harbor configuration and checks
-the selected control/treatment wiring. After execution it writes
-`routing-observation.json` beside the results. The report is diagnostic
-evidence only: it records configuration, discovery, invocation, and
-capability-use status without changing verifier rewards or authorizing a
-mathematical conclusion.
-
 The task bundles and Harbor task digests must be identical between these
 jobs. Both jobs use the same optional proxy overlay; only the treatment adds
 the Jacobian sidecar and MCP config. This paired setup is for

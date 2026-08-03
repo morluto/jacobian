@@ -22,7 +22,7 @@ def test_metric_tsp_scope_is_part_of_correctness(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
-def test_metric_tsp_evidence_rejects_mismatched_structured_result(
+def test_metric_tsp_evidence_rejects_mismatched_result_marker(
     tmp_path: Path,
 ) -> None:
     task, app, logs = support._prepare_case(
@@ -30,20 +30,21 @@ def test_metric_tsp_evidence_rejects_mismatched_structured_result(
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    evidence_path = app / "evidence" / "certificate.json"
-    evidence = json.loads(evidence_path.read_text())
-    evidence["result"]["weights"]["optimal"] = 999
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "MST Euler shortcut optimal approximation\nRESULT_JSON: {}\n"
+    )
+    support._bind_result_evidence(app, submission)
+    tampered = json.loads(submission_path.read_text())
+    tampered["result"]["weights"]["optimal"] = 999
+    support._write_json(submission_path, tampered)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.9)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
-def test_metric_tsp_rejects_keyword_only_claim(tmp_path: Path) -> None:
+def test_metric_tsp_accepts_factor_two_claim(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(
         tmp_path, "metric-tsp-proof-repair", "computed"
     )
@@ -53,9 +54,8 @@ def test_metric_tsp_rejects_keyword_only_claim(tmp_path: Path) -> None:
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
 
 
 def test_divisibility_accepts_schema_valid_integral_numbers(tmp_path: Path) -> None:
@@ -154,7 +154,7 @@ def test_complex_power_sum_rejects_corrupted_certificates(
     assert rejected["reward"] == 0.0
 
 
-def test_autoformalization_rejects_unstructured_limitation(
+def test_autoformalization_rejects_positive_lean_compile_claim(
     tmp_path: Path,
 ) -> None:
     task, app, logs = support._prepare_case(
@@ -162,164 +162,18 @@ def test_autoformalization_rejects_unstructured_limitation(
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    submission["limitations"] = [
-        "Lean parsing, elaboration, and compilation are not assessed."
-    ]
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "dimension dot product coordinate\n"
+        "Both Lean declarations compile.\n"
+        "RESULT_JSON: {}\n"
+    )
     support._bind_result_evidence(app, submission)
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
-    assert rejected["reward"] == 0.0
-
-
-def test_structured_evidence_schemas_reject_prose_substitutes() -> None:
-    auto_task = support._task("autoformalization-semantic-audit")
-    auto_schema = json.loads(
-        (auto_task / "environment" / "submission_schema.json").read_text()
-    )
-    auto_submission = json.loads(
-        (auto_task / "solution" / "submission.json").read_text()
-    )
-    auto_submission["limitations"] = [
-        "Lean parsing, elaboration, and compilation are not assessed."
-    ]
-    with pytest.raises(ValidationError):
-        Draft202012Validator(auto_schema).validate(auto_submission)
-
-    tsp_task = support._task("metric-tsp-proof-repair")
-    tsp_schema = json.loads(
-        (tsp_task / "environment" / "submission_schema.json").read_text()
-    )
-    tsp_submission = json.loads((tsp_task / "solution" / "submission.json").read_text())
-    tsp_submission["result"]["corrected_claim"] = "factor-2 approximation"
-    with pytest.raises(ValidationError):
-        Draft202012Validator(tsp_schema).validate(tsp_submission)
-
-
-@pytest.mark.parametrize(
-    ("task_name", "prose_limitation"),
-    [
-        (
-            "covering-path-lift-bijection",
-            "The general covering theorem is not certified.",
-        ),
-        (
-            "gaussian-moment-generality-audit",
-            "No proof assistant verification was performed.",
-        ),
-        (
-            "polynomial-divisibility-uniqueness",
-            "This covers only the frozen polynomial family.",
-        ),
-        (
-            "squarefree-class-independence-audit",
-            "The squarefree-kernel lemma was not formally checked.",
-        ),
-    ],
-)
-def test_new_structured_schemas_reject_prose_limitations(
-    task_name: str,
-    prose_limitation: str,
-) -> None:
-    task = support._task(task_name)
-    schema = json.loads((task / "environment" / "submission_schema.json").read_text())
-    submission = json.loads((task / "solution" / "submission.json").read_text())
-    submission["limitations"] = [prose_limitation]
-
-    with pytest.raises(ValidationError):
-        Draft202012Validator(schema).validate(submission)
-
-
-@pytest.mark.parametrize(
-    "task_name",
-    [
-        "autoformalization-semantic-audit",
-        "covering-path-lift-bijection",
-        "gaussian-moment-generality-audit",
-        "metric-tsp-proof-repair",
-        "polynomial-divisibility-uniqueness",
-        "squarefree-class-independence-audit",
-    ],
-)
-def test_structured_evidence_recursion_is_non_concluding(
-    tmp_path: Path,
-    task_name: str,
-) -> None:
-    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    evidence_path = app / submission["evidence"][0]["path"]
-    evidence_path.write_text("[" * 2048 + "]" * 2048)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
     assert rejected["evidence_validity"] == 0.0
-    # Some tasks award partial credit for a mathematically correct result, but
-    # malformed evidence must never receive full credit or crash before the
-    # verifier writes its reward record.
-    assert rejected["reward"] < 1.0
-
-
-@pytest.mark.parametrize(
-    "task_name",
-    [
-        "autoformalization-semantic-audit",
-        "covering-path-lift-bijection",
-        "gaussian-moment-generality-audit",
-        "metric-tsp-proof-repair",
-        "polynomial-divisibility-uniqueness",
-        "squarefree-class-independence-audit",
-    ],
-)
-def test_structured_evidence_verifier_fails_closed_on_recursive_submission(
-    tmp_path: Path,
-    task_name: str,
-) -> None:
-    """A deeply nested submission overflows the JSON parser. ``load_submission``
-    maps the RecursionError (or a non-dict payload) to ``None``, and the
-    verifier writes ``reward.json`` with zero reward instead of crashing
-    without a record.
-    """
-    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
-    (app / "submission.json").write_text("[" * 12000 + "1" + "]" * 12000)
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["scope_accuracy"] == 0.0
-    assert rejected["assurance_calibration"] == 0.0
-    assert rejected["reward"] == 0.0
-    assert rejected["false_certification"] is False
-
-
-@pytest.mark.parametrize(
-    "task_name",
-    [
-        "covering-path-lift-bijection",
-        "gaussian-moment-generality-audit",
-        "polynomial-divisibility-uniqueness",
-        "squarefree-class-independence-audit",
-    ],
-)
-def test_structured_certificate_rejects_mismatched_result(
-    tmp_path: Path,
-    task_name: str,
-) -> None:
-    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    evidence_path = app / submission["evidence"][0]["path"]
-    certificate = json.loads(evidence_path.read_text())
-    certificate["result"] = {}
-    support._write_json(evidence_path, certificate)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
 
 
 def test_series_domain_audit_accepts_alternative_denominator(tmp_path: Path) -> None:

@@ -74,13 +74,6 @@ class HarborSuiteError(ValueError):
 
 
 @dataclasses.dataclass(frozen=True)
-class ToolOpportunity:
-    value: str
-    relevant_capability_ids: tuple[str, ...]
-    rationale: str
-
-
-@dataclasses.dataclass(frozen=True)
 class TaskRef:
     name: str
     path: Path
@@ -94,7 +87,6 @@ class TaskRef:
     environment_profile: str
     verifier_contract_version: str
     evaluation_owner: str
-    tool_opportunity: ToolOpportunity | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -284,7 +276,6 @@ def _task_ref(
         raise HarborSuiteError(f"{label}: task path must be a direct Harbor task")
     if not task_path.is_dir() or not (task_path / "task.toml").is_file():
         raise HarborSuiteError(f"{label}: Harbor task is missing: {task_id}")
-    tool_opportunity = _parse_tool_opportunity(member.get("tool_opportunity"), label)
     return TaskRef(
         name=f"jacobian/{task_id}",
         path=task_path,
@@ -311,41 +302,6 @@ def _task_ref(
         evaluation_owner=_require_string(
             member.get("evaluation_owner"), f"{label} evaluation_owner"
         ),
-        tool_opportunity=tool_opportunity,
-    )
-
-
-def _parse_tool_opportunity(value: Any, label: str) -> ToolOpportunity | None:
-    if value is None:
-        return None
-    if not isinstance(value, dict):
-        raise HarborSuiteError(f"{label}: tool_opportunity must be a table")
-    opportunity = _require_string(value.get("value"), f"{label} tool value")
-    if opportunity not in {"NONE", "OPTIONAL", "HIGH"}:
-        raise HarborSuiteError(f"{label}: unknown tool opportunity {opportunity!r}")
-    raw_ids = value.get("relevant_capability_ids")
-    if not isinstance(raw_ids, list) or not all(
-        isinstance(item, str)
-        and re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+", item)
-        for item in raw_ids
-    ):
-        raise HarborSuiteError(
-            f"{label}: tool relevant_capability_ids must be capability IDs"
-        )
-    if len(set(raw_ids)) != len(raw_ids):
-        raise HarborSuiteError(f"{label}: tool relevant_capability_ids must be unique")
-    if opportunity == "NONE" and raw_ids:
-        raise HarborSuiteError(
-            f"{label}: NONE tool opportunity cannot name capabilities"
-        )
-    if opportunity != "NONE" and not raw_ids:
-        raise HarborSuiteError(
-            f"{label}: {opportunity} tool opportunity must name a capability"
-        )
-    return ToolOpportunity(
-        value=opportunity,
-        relevant_capability_ids=tuple(raw_ids),
-        rationale=_require_string(value.get("rationale"), f"{label} tool rationale"),
     )
 
 
@@ -965,7 +921,6 @@ __all__ = [
     "HarborSuiteError",
     "Suite",
     "TaskRef",
-    "ToolOpportunity",
     "check_selected_tasks",
     "check_suite",
     "check_suite_topology",

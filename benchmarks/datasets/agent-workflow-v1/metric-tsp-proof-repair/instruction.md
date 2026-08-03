@@ -8,8 +8,7 @@ retaining first visits, and an optimal Hamiltonian cycle. Report all exact
 weights so the concrete trace demonstrates why exactness is unsupported while
 the repaired guarantee holds.
 
-Represent the repaired generic claim through the structured shortcut-cost
-relation and approximation-factor fields in `submission_schema.json`. Write
-`submission.json` to that exact schema. Write `evidence/certificate.json` with
-exactly `schema_version`, `task_id`, `result`, and `limitations`, matching the
-submission, and bind the file with its SHA-256 digest.
+Write `submission.json` to the exact agent-visible `submission_schema.json`.
+Put a concise proof repair and weight calculation in `evidence/answer.txt`,
+include a `RESULT_JSON:` line containing the submitted result as JSON, and bind
+the file with its SHA-256 digest.

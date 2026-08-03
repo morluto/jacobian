@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jacobian.invalid/benchmarks/schemas/suite-entry.schema.json",
   "title": "Harbor dataset member fragment",
-  "description": "Authoritative membership and provenance record for one direct Harbor task bundle. Tool-opportunity labels are evaluator-only and are never mounted into task or verifier containers.",
+  "description": "Authoritative membership and provenance record for one direct Harbor task bundle.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "task_id", "task_name", "evaluation_kind", "domain", "field", "provenance_class", "provenance_ref", "assurance_ceiling", "required_provider", "environment_profile", "verifier_contract_version", "evaluation_owner"],
@@ -19,27 +19,6 @@
     "required_provider": {"type": "string", "minLength": 1},
     "environment_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
     "verifier_contract_version": {"type": "string", "pattern": "^[0-9]+$"},
-    "evaluation_owner": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"},
-    "tool_opportunity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["value", "relevant_capability_ids", "rationale"],
-      "properties": {
-        "value": {"enum": ["NONE", "OPTIONAL", "HIGH"]},
-        "relevant_capability_ids": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"}
-        },
-        "rationale": {"type": "string", "minLength": 1}
-      },
-      "allOf": [
-        {
-          "if": {"properties": {"value": {"const": "NONE"}}},
-          "then": {"properties": {"relevant_capability_ids": {"maxItems": 0}}},
-          "else": {"properties": {"relevant_capability_ids": {"minItems": 1}}}
-        }
-      ]
-    }
+    "evaluation_owner": {"type": "string", "pattern": "^jacobian/[a-z0-9][a-z0-9-]*$"}
   }
 }

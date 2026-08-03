@@ -2,7 +2,7 @@ schema_version = "1.4"
 artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/jcb-postdoc-004"
-version = "1.0.0"
+version = "2.0.0"
 description = "Research diagnostic: Written on the Wall II Conjecture 194: discover an 18-vertex obstruction"
 keywords = ["research", "diagnostic", "mathematical-sciences", "extremal graph theory", "Hamiltonian paths", "counterexample search"]
 [metadata]
@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["research", "diagnostic", "answer-visible", "offline", "extremal-graph-theory", "hamiltonian-paths", "counterexample-search"]
 case_version = "research-diagnostics-v1"
 contamination_class = "public-answer-visible-diagnostic"
-fixture_digest = "sha256:b330ad2bc97cc1ad42ed11ad3ee4d646a42438755dd6ff08646f6ebc193770ca"
+fixture_digest = "sha256:cc04ceff88324e46a21e5a9acf63d2d2803b42638277a4f56ac8a9c7ed286b04"
 derivation = "Unlike the supplied-witness closure cases, this task asks the agent to discover a compact structured counterexample while using exact graph invariants to guide and check the search."
 historical_fit = "PARTIAL"
 current_status = "PARTIAL"

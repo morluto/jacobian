@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exponents", "coefficient"],
+      "properties": {
+        "exponents": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "integer", "minimum": 0, "maximum": 5},
+            {"type": "integer", "minimum": 0, "maximum": 5},
+            {"type": "integer", "minimum": 0, "maximum": 5}
+          ],
+          "items": false
+        },
+        "coefficient": {
+          "type": "integer",
+          "not": {"const": 0},
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["degree", "A", "B", "C"],
+      "properties": {
+        "degree": {"type": "integer", "enum": [4, 5]},
+        "A": {"type": "array", "maxItems": 21, "items": {"$ref": "#/$defs/term"}},
+        "B": {"type": "array", "maxItems": 21, "items": {"$ref": "#/$defs/term"}},
+        "C": {"type": "array", "maxItems": 21, "items": {"$ref": "#/$defs/term"}}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "non_double_flats", "relations"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "non_double_flats": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 9,
+        "items": {"type": "integer", "minimum": 1, "maximum": 9}
+      }
+    },
+    "relations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["f", "g"],
+      "properties": {
+        "f": {"$ref": "#/$defs/relation"},
+        "g": {"$ref": "#/$defs/relation"}
+      }
+    }
+  }
+}

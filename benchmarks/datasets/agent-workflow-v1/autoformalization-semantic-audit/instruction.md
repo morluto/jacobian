@@ -10,8 +10,8 @@ Supply exact integer-vector certificates for both semantic defects:
 2. a two-dimensional instance with a nonzero vector orthogonal in the genuine
    dot-product sense, but not coordinatewise annihilated.
 
-No Lean runtime is part of this task. Record that boundary with the structured
-limitation code `LEAN_COMPILATION_NOT_ASSESSED`. Write `submission.json` to the
-exact agent-visible `submission_schema.json`. Write `evidence/audit.json` with
-exactly `schema_version`, `task_id`, `result`, and `limitations`, matching the
-submission, and bind that file with its SHA-256 digest.
+Do not claim that either Lean declaration compiles: no Lean runtime is part of
+this task. Write `submission.json` to the exact agent-visible
+`submission_schema.json`. Put a concise audit in `evidence/answer.txt`, include a
+`RESULT_JSON:` line containing the submitted result as JSON, and bind that file
+with its SHA-256 digest.

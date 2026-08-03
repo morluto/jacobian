@@ -6,7 +6,7 @@
   "source_sha256": "sha256:6c5f94a56c53f0e14b9fc6a75f249fc4b0b04cf25a1d06c56f6e8d44f479f7f1",
   "task": {
     "task_id": "graph-counterexample",
-    "task_digest": "sha256:c84e764a7a14969f5a37235da0ca1b3ab452f45c57d65bed806059c1a278961d",
+    "task_digest": "sha256:549a04a5648c0894415be4196447bbd82187764439a141640c0e88958a607bf3",
     "verifier_sha256": "sha256:3c362a6b02663942f9732f8aa682cf7e6b211703953cd1d659fc3f794d59c8bd"
   },
   "execution": {

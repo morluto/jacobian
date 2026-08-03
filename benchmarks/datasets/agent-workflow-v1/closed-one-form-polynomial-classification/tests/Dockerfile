@@ -5,4 +5,3 @@ COPY expected.json input.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \
     python -c 'import json; assert json.load(open("/tests/expected.json"))["task_id"] == "jacobian/closed-one-form-polynomial-classification"'
-ENTRYPOINT ["/tests/test.sh"]

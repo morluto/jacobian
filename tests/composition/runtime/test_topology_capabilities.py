@@ -34,6 +34,10 @@ _PROJECTIVE_PLANE_FACETS = [
 ]
 
 
+def _result_payload(fresh_complete_runtime, result) -> dict[str, Any]:
+    return fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
+
+
 def _materialize(
     fresh_complete_runtime, presentation: dict[str, Any]
 ) -> dict[str, Any]:
@@ -44,7 +48,7 @@ def _materialize(
         )
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
-    return result.output["result"]["complex"]
+    return _result_payload(fresh_complete_runtime, result)["complex"]
 
 
 def _betti(
@@ -67,7 +71,10 @@ def _betti(
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    return tuple(group["betti_number"] for group in result.output["result"]["groups"])
+    return tuple(
+        group["betti_number"]
+        for group in _result_payload(fresh_complete_runtime, result)["groups"]
+    )
 
 
 def test_topology_bundle_exposes_four_atomic_capabilities(
@@ -120,7 +127,8 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
         )
     )
 
-    complex_ = result.output["result"]["complex"]
+    payload = _result_payload(fresh_complete_runtime, result)
+    complex_ = payload["complex"]
     assert complex_["vertices"] == ["a", "b", "c"]
     assert complex_["maximal_simplices"] == [
         ["a", "b"],
@@ -130,12 +138,12 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     assert complex_["f_vector"] == [3, 3]
     assert complex_["closure_size"] == 6
     assert complex_["empty_simplex_stored"] is False
-    assert result.output["result"]["completeness"] == "COMPLETE_FACE_CLOSURE"
+    assert payload["completeness"] == "COMPLETE_FACE_CLOSURE"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert len(result.artifact_uris) == 2
     assert (
         fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
-        == (result.output["result"])
+        == payload
     )
 
 
@@ -146,7 +154,7 @@ def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
         fresh_complete_runtime,
         {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]},
     )
-    integer = fresh_complete_runtime.core.capabilities.invoke(
+    integer_result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="topology.simplicial_complex.chain_complex.compute",
             input={
@@ -155,8 +163,9 @@ def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
                 "convention": "UNREDUCED",
             },
         )
-    ).output["result"]
-    mod_two_reduced = fresh_complete_runtime.core.capabilities.invoke(
+    )
+    integer = _result_payload(fresh_complete_runtime, integer_result)
+    mod_two_reduced_result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="topology.simplicial_complex.chain_complex.compute",
             input={
@@ -166,7 +175,8 @@ def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
                 "convention": "REDUCED",
             },
         )
-    ).output["result"]
+    )
+    mod_two_reduced = _result_payload(fresh_complete_runtime, mod_two_reduced_result)
 
     assert integer["boundary_matrices"][2]["entries"] == [
         {"row": 0, "column": 0, "value": 1},
@@ -314,7 +324,7 @@ def test_integral_homology_exposes_free_and_torsion_generators(
 
     assert circle_result.execution.status is ExecutionStatus.COMPLETED
     assert circle_result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    circle_groups = circle_result.output["result"]["groups"]
+    circle_groups = _result_payload(fresh_complete_runtime, circle_result)["groups"]
     assert [group["betti_number"] for group in circle_groups] == [1, 1]
     assert [group["torsion_coefficients"] for group in circle_groups] == [[], []]
     assert all(
@@ -324,7 +334,9 @@ def test_integral_homology_exposes_free_and_torsion_generators(
     )
 
     assert projective_result.execution.status is ExecutionStatus.COMPLETED
-    projective_groups = projective_result.output["result"]["groups"]
+    projective_groups = _result_payload(fresh_complete_runtime, projective_result)[
+        "groups"
+    ]
     assert [group["betti_number"] for group in projective_groups] == [1, 0, 0]
     assert [group["torsion_coefficients"] for group in projective_groups] == [
         [],
@@ -364,7 +376,7 @@ def test_reduced_integral_homology_uses_the_augmentation_kernel(
         )
     )
 
-    group = result.output["result"]["groups"][0]
+    group = _result_payload(fresh_complete_runtime, result)["groups"][0]
     assert group["outgoing_boundary_rank"] == 1
     assert group["betti_number"] == 2
     assert len(group["free_generators"]) == 2

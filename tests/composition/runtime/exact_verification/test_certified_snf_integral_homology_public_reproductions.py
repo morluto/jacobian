@@ -45,6 +45,10 @@ def _suite() -> dict[str, list[dict[str, Any]]]:
     return {"smith_cases": smith, "homology_cases": homology}
 
 
+def _result_payload(runtime, computed) -> dict[str, Any]:
+    return runtime.core.store.get(computed.output["result_uri"]).payload
+
+
 def test_public_certified_smith_cases_reach_checker_bound_results(
     authorized_complete_runtime,
 ) -> None:
@@ -55,7 +59,8 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
                 input={"matrix": case["matrix"]},
             )
         )
-        certificate = computed.output["result"]["certificate"]
+        result = _result_payload(authorized_complete_runtime, computed)
+        certificate = result["certificate"]
         assert certificate["rank"] == case["expected_rank"]
         assert certificate["invariant_factors"] == case["expected_invariant_factors"]
         assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
@@ -64,10 +69,7 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
             CapabilityRequest(
                 capability_id="matrix.normal_form.smith.certified.verify",
                 mode=CapabilityMode.VERIFY,
-                input={
-                    "input": {"matrix": case["matrix"]},
-                    "candidate": computed.output["result"],
-                },
+                input={"result_uri": computed.output["result_uri"]},
             )
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED
@@ -85,16 +87,20 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
                 input=case["presentation"],
             )
         )
+        materialized_payload = _result_payload(
+            authorized_complete_runtime, materialized
+        )
+        complex_ = materialized_payload["complex"]
         computed = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="topology.simplicial_homology.integral.compute",
                 input={
-                    "complex": materialized.output["result"]["complex"],
+                    "complex": complex_,
                     "convention": case["convention"],
                 },
             )
         )
-        groups = computed.output["result"]["groups"]
+        groups = _result_payload(authorized_complete_runtime, computed)["groups"]
         assert [group["betti_number"] for group in groups] == (
             case["expected_free_ranks"]
         )
@@ -103,18 +109,11 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
         )
         assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
-        integral_input = {
-            "complex": materialized.output["result"]["complex"],
-            "convention": case["convention"],
-        }
         verified = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="topology.simplicial_homology.integral.verify",
                 mode=CapabilityMode.VERIFY,
-                input={
-                    "input": integral_input,
-                    "candidate": computed.output["result"],
-                },
+                input={"result_uri": computed.output["result_uri"]},
             )
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED

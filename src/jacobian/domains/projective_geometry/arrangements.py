@@ -16,8 +16,8 @@ from jacobian.contracts.projective_geometry import (
 )
 from jacobian.domains._examples import example
 from jacobian.operations import (
-    ComputedOperation,
-    ComputedOperationFactory,
+    MaterializedOperation,
+    MaterializedOperationFactory,
     OperationFailure,
 )
 
@@ -141,7 +141,7 @@ def materialize_projective_line_flats(
     )
 
 
-_FACTORY = ComputedOperationFactory(
+_FACTORY = MaterializedOperationFactory(
     OperationFailure(
         code="PROJECTIVE_ARRANGEMENT_NOT_APPLICABLE",
         stage="projective_arrangement_computation",
@@ -152,8 +152,9 @@ _FACTORY = ComputedOperationFactory(
     )
 )
 
-PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: ComputedOperation[
+PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: MaterializedOperation[
     ProjectiveLineArrangementRequest,
+    ProjectiveLineArrangementResult,
     ProjectiveLineArrangementResult,
 ] = _FACTORY(
     "geometry.projective_line_arrangement.flats.materialize",
@@ -173,6 +174,7 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: ComputedOperation[
     "flats",
     "exact",
     relation_id="geometry.projective_line_arrangement.flats.relation",
+    version="3",
     invocation_examples=(
         example(
             "two_coordinate_lines",

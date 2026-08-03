@@ -14,10 +14,10 @@ The `poset` bundle exposes four atomic capabilities:
 - `poset.linear_extensions.count`; and
 - `poset.mobius_function.compute`.
 
-`poset.result.verify` independently replays stored results from all four
-producers when bundled checker authorization is enabled. It is a separate
-verification capability; exact and deterministic producer output does not
-self-certify.
+Each producer has a separate verifier when bundled checker authorization is
+enabled: `poset.finite.verify`, `poset.width.verify`,
+`poset.linear_extensions.verify`, and `poset.mobius_function.verify`. Exact
+and deterministic producer output does not self-certify.
 
 ## Finite-poset materialization
 

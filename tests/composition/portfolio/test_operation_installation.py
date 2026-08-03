@@ -22,7 +22,9 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
     MaterializedOperation,
+    MaterializedOperationFactory,
     OperationExecutionFailure,
+    OperationFailure,
 )
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
@@ -236,6 +238,25 @@ def test_materialized_operation_omits_preview_without_projection(
     assert fresh_complete_runtime.core.store.get(result.artifact_uris[1]).payload == {
         "doubled": 8
     }
+
+
+def test_materialized_factory_derives_terminal_materialize_relation_id() -> None:
+    operation = MaterializedOperationFactory(
+        OperationFailure(
+            code="SYNTHETIC_NOT_APPLICABLE",
+            stage="synthetic_computation",
+            hint="Use a synthetic value.",
+        )
+    )(
+        "synthetic.materialize",
+        "Materialize a synthetic value",
+        "Materialize one synthetic value with durable lineage.",
+        _SyntheticRequest,
+        _SyntheticResult,
+        lambda request: _SyntheticResult(doubled=request.value * 2),
+    )
+
+    assert operation.relation_id == "synthetic.relation"
 
 
 def test_materialized_operation_fails_closed_before_artifact_writes(

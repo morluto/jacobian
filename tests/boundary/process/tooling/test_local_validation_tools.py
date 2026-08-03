@@ -317,6 +317,31 @@ def test_plan_falls_back_for_delete_rename_and_untracked_changes(
         assert fallback is not None
 
 
+def test_plan_rejects_non_exact_ownership_override(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    planner = _planner_tree(tmp_path, monkeypatch)
+    manifest = tmp_path / ".github/local-test-ownership.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        '{"version": 1, "overrides": {'
+        '"generated/schema.json": ["tests/unit/contracts/test_schema.py"]'
+        "}}",
+        encoding="utf-8",
+    )
+    test = tmp_path / "tests/unit/contracts/test_schema.py"
+    test.parent.mkdir(parents=True)
+    test.write_text("def test_public_schema(): pass\n", encoding="utf-8")
+
+    tests, fallback = planner.exact_tests(
+        [planner.Change("D", "generated/schema.json")]
+    )
+
+    assert tests == []
+    assert fallback == "generated/schema.json: D changes are not exact"
+
+
 def test_plan_falls_back_for_changed_test_support_module(
     tmp_path: Path,
     monkeypatch,

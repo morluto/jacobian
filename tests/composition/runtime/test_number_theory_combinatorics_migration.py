@@ -319,10 +319,8 @@ def test_powerful_number_decision_preserves_a_complete_factor_witness(
     }
     assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    input_uri, result_uri = result.artifact_uris
-    assert service.store.get(result_uri).manifest.parents == (input_uri,)
-    assert result.relationships[0].source_artifact_uris == (input_uri,)
-    assert result.relationships[0].target_artifact_uris == (result_uri,)
+    assert result.artifact_uris == ()
+    assert result.relationships == ()
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "-72"])

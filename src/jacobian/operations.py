@@ -182,6 +182,7 @@ class MaterializedOperationFactory:
         relation_id: str | None = None,
         preview: Callable[[ResultT], ResultT] | None = None,
         preview_complete: bool = False,
+        version: str = "2",
     ) -> MaterializedOperation[RequestT, ResultT, ResultT]:
         def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
             try:
@@ -202,14 +203,26 @@ class MaterializedOperationFactory:
             preview_model=result_model,
             preview=preview,
             preview_complete=preview_complete,
+            version=version,
         )
 
 
 def _relation_id(capability_id: str) -> str:
-    for verb in ("compute", "decide", "enumerate", "solve", "transform"):
-        marker = f".{verb}."
-        if marker in capability_id:
-            return capability_id.replace(marker, ".relation.", 1)
+    segments = capability_id.split(".")
+    for index, segment in enumerate(segments):
+        if segment in {
+            "classify",
+            "compute",
+            "count",
+            "decide",
+            "enumerate",
+            "evaluate",
+            "materialize",
+            "solve",
+            "transform",
+        }:
+            segments[index] = "relation"
+            return ".".join(segments)
     raise ValueError(
         f"capability ID has no supported operation segment: {capability_id}"
     )

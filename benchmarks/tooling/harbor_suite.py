@@ -695,7 +695,7 @@ def _is_ignored_python_cache(path: Path) -> bool:
         relative = path
     return (
         subprocess.run(
-            ["git", "check-ignore", "--quiet", "--no-index", "--", str(relative)],
+            ["git", "check-ignore", "--quiet", "--", str(relative)],
             cwd=ROOT,
             capture_output=True,
             check=False,

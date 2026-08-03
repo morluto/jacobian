@@ -13,9 +13,10 @@ The explicit `combinatorics` bundle includes two generic, bounded operations:
 - `combinatorics.generating_function.coefficients.compute`.
 
 They complement rather than replace the named Fibonacci, consecutive-Fibonacci,
-and Lucas capabilities. `combinatorics.result.verify` independently replays a
-stored result from either generic producer when bundled checker authorization
-is enabled.
+and Lucas capabilities. `combinatorics.recurrence.linear.verify` and
+`combinatorics.generating_function.coefficients.verify` independently replay
+the corresponding producer result when bundled checker authorization is
+enabled.
 
 ## Constant-coefficient recurrence evaluation
 

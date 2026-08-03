@@ -15,6 +15,8 @@ from jacobian.operations import (
     ComputedOperation,
     ComputedOperationFactory,
     ComputedOutcome,
+    MaterializedOperation,
+    MaterializedOperationFactory,
     OperationExecutionFailure,
     OperationFailure,
 )
@@ -26,6 +28,9 @@ _polynomial_operation_factory = ComputedOperationFactory(
         hint="Check the declared ring, variable, and operation budgets.",
         exceptions=(TypeError, ValueError),
     )
+)
+_materialized_polynomial_operation_factory = MaterializedOperationFactory(
+    _polynomial_operation_factory.failure
 )
 
 
@@ -64,7 +69,54 @@ def polynomial_operation[
         invocation_examples=invocation_examples,
         relation_id=relation_id,
     )
-    implementation = declared.implementation
+    return replace(
+        declared,
+        implementation=_with_polynomial_output_budget(declared.implementation),
+    )
+
+
+def materialized_polynomial_operation[
+    RequestT: ContractModel,
+    ResultT: ContractModel,
+](
+    capability_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    relation_id: str | None = None,
+    version: str = "2",
+) -> MaterializedOperation[RequestT, ResultT, ResultT]:
+    """Declare an exact polynomial operation with durable result lineage."""
+
+    declared = _materialized_polynomial_operation_factory(
+        capability_id,
+        title,
+        description,
+        request_model,
+        result_model,
+        operation,
+        *tags,
+        invocation_examples=invocation_examples,
+        relation_id=relation_id,
+        version=version,
+    )
+    return replace(
+        declared,
+        implementation=_with_polynomial_output_budget(declared.implementation),
+    )
+
+
+def _with_polynomial_output_budget[
+    RequestT: ContractModel,
+    ResultT: ContractModel,
+](
+    implementation: Callable[[RequestT], ComputedOutcome[ResultT]],
+) -> Callable[[RequestT], ComputedOutcome[ResultT]]:
+    """Add polynomial-specific bounded-output handling to an operation."""
 
     def execute(request: RequestT) -> ComputedOutcome[ResultT]:
         try:
@@ -89,4 +141,4 @@ def polynomial_operation[
                 )
             raise
 
-    return replace(declared, implementation=execute)
+    return execute

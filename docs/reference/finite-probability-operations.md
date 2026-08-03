@@ -36,11 +36,16 @@ probability claim.
 
 ## Independent verification
 
-`probability.result.verify` accepts the stored result URI of any operation
-above. The operator-authorized checker runs in a clean process and uses only
-standard-library rational arithmetic for the mathematical replay. It binds the
-source and result artifacts, semantics, candidate digest, witness format, and
-complete contribution ledger.
+Each producer has a per-producer verifier: `probability.finite_distribution.raw_moment.verify`,
+`probability.finite_distribution.event_probability.verify`,
+`probability.finite_distribution.condition.verify`,
+`probability.finite_distribution.pushforward.verify`, and
+`probability.finite_distribution.convolution.verify`. The operator-authorized
+checker runs in a clean process and uses only standard-library rational
+arithmetic for the mathematical replay. These inline producers accept a typed
+input and candidate; verification materializes and binds both artifacts with
+the semantics, candidate digest, witness format, and complete contribution
+ledger.
 
 The checker replays normalization, event membership, conditional division,
 pushforward aggregation, or every convolution pair as appropriate. A producer

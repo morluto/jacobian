@@ -107,12 +107,11 @@ async def main() -> None:
         )
         assert computed["execution"]["status"] == "COMPLETED"
         assert computed["assurance"]["level"] == "COMPUTED"
-        result_uri = computed["output"]["result_uri"]
 
         verification_descriptor = await tool(
             client,
             "capability.describe",
-            {"capability_id": "polynomial.result.verify"},
+            {"capability_id": "polynomial.gcd.verify"},
         )
         assert verification_descriptor["capability"]["modes"] == ["VERIFY"]
 
@@ -120,13 +119,18 @@ async def main() -> None:
             client,
             "capability.invoke",
             {
-                "capability_id": "polynomial.result.verify",
+                "capability_id": "polynomial.gcd.verify",
                 "mode": "VERIFY",
-                "payload": {"result_uri": result_uri},
+                "payload": {
+                    "input": {
+                        "left": polynomial(-1, 0, 1),
+                        "right": polynomial(0, 1, 1),
+                    },
+                    "candidate": computed["output"]["result"],
+                },
             },
         )
         assert verified["output"]["status"] == "VERIFIED"
-        assert verified["output"]["result_uri"] == result_uri
         assert verified["output"]["verification_record_uri"] is not None
 
 

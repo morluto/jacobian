@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 from copy import deepcopy
+from typing import Any
 
 import pytest
 
@@ -44,6 +45,13 @@ def _polynomial(
     }
 
 
+def _result_payload(
+    runtime: JacobianRuntime,
+    computed: Any,
+) -> dict[str, Any]:
+    return runtime.core.store.get(computed.output["result_uri"]).payload
+
+
 def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
     frontier_runtime: JacobianRuntime,
 ) -> None:
@@ -74,7 +82,8 @@ def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"]["non_double_flats"] == [
+    payload = _result_payload(frontier_runtime, result)
+    assert payload["non_double_flats"] == [
         ["1", "2", "3"],
         ["1", "4", "5"],
         ["1", "6", "7"],
@@ -84,12 +93,12 @@ def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
         ["3", "6", "8"],
         ["4", "7", "9"],
     ]
-    assert result.output["result"]["multiplicity_histogram"] == [
+    assert payload["multiplicity_histogram"] == [
         {"multiplicity": 2, "flat_count": 9},
         {"multiplicity": 3, "flat_count": 7},
         {"multiplicity": 4, "flat_count": 1},
     ]
-    assert result.output["result"]["pair_count_total"] == 36
+    assert payload["pair_count_total"] == 36
     verified = frontier_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("geometry.projective_line_arrangement.flats.verify"),
@@ -134,7 +143,7 @@ def test_arrangement_checker_rejects_schema_valid_forged_normalization(
             },
         )
     )
-    forged = deepcopy(computed.output["result"])
+    forged = deepcopy(_result_payload(frontier_runtime, computed))
     forged["normalized_lines"][0]["coefficients"]["coordinates"] = [
         "1",
         "1",
@@ -192,7 +201,7 @@ def test_hamiltonian_path_decision_has_independent_replay(
         )
     )
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert computed.output["result"]["decision"] == decision
+    assert _result_payload(frontier_runtime, computed)["decision"] == decision
 
     verified = frontier_runtime.core.capabilities.invoke(
         CapabilityRequest(
@@ -219,7 +228,7 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     )
 
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    result = computed.output["result"]
+    result = _result_payload(frontier_runtime, computed)
     assert result["status"] == "FOUND"
     assert result["first_syzygy_degree"] == 1
     assert [(item["rank"], item["nullity"]) for item in result["degree_maps"]] == [
@@ -261,7 +270,7 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
         "kernel_vector",
         "partial_derivative",
     ):
-        forged = deepcopy(computed.output["result"])
+        forged = deepcopy(_result_payload(frontier_runtime, computed))
         if name == "map_digest":
             forged["degree_maps"][0]["matrix_digest"] = f"sha256:{'0' * 64}"
         elif name == "rank_minor":
@@ -309,7 +318,7 @@ def test_hamiltonian_checker_rejects_a_forged_negative_decision(
             },
         )
     )
-    forged = deepcopy(computed.output["result"])
+    forged = deepcopy(_result_payload(frontier_runtime, computed))
     forged["decision"] = "DOES_NOT_EXIST"
     forged["path"] = []
     installation = frontier_runtime.portfolio.domain_bundles["graph_optimization"]
@@ -346,7 +355,9 @@ def test_sparse_map_detail_is_explicitly_opt_in(
             },
         )
     )
-    entries = computed.output["result"]["degree_maps"][0]["sparse_entries"]
+    entries = _result_payload(frontier_runtime, computed)["degree_maps"][0][
+        "sparse_entries"
+    ]
     assert entries
     assert entries == sorted(entries, key=lambda item: (item["row"], item["column"]))
 
@@ -402,7 +413,10 @@ def test_nine_line_challenge_mdr_values_are_end_to_end_verified(
             )
         )
         assert computed.execution.status is ExecutionStatus.COMPLETED
-        assert computed.output["result"]["first_syzygy_degree"] == expected_degree
+        assert (
+            _result_payload(frontier_runtime, computed)["first_syzygy_degree"]
+            == expected_degree
+        )
         verified = frontier_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),

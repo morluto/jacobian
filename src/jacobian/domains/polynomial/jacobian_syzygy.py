@@ -26,7 +26,7 @@ from jacobian.contracts.polynomials import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.domains.polynomial._support import polynomial_operation
+from jacobian.domains.polynomial._support import materialized_polynomial_operation
 from jacobian.domains.polynomial.operations import _poly, _rational, _symbols, _wire
 
 
@@ -299,7 +299,7 @@ def compute_graded_jacobian_syzygy(
     )
 
 
-GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
+GRADED_JACOBIAN_SYZYGY_CAPABILITY = materialized_polynomial_operation(
     "polynomial.jacobian_syzygy.minimum_degree.compute",
     "Compute the first graded Jacobian syzygy degree",
     (
@@ -320,6 +320,7 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
     "rank",
     "kernel",
     "exact",
+    version="3",
     invocation_examples=(
         CapabilityInvocationExample(
             name="labelled-linear-factor-product",

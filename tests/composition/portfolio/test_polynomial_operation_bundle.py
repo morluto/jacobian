@@ -215,16 +215,8 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
     ):
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-        assert len(result.artifact_uris) == 2
-        input_artifact = runtime.core.store.get(result.artifact_uris[0])
-        output_artifact = runtime.core.store.get(result.artifact_uris[1])
-        assert output_artifact.manifest.parents == (input_artifact.artifact_uri,)
-        assert result.relationships[0].source_artifact_uris == (
-            input_artifact.artifact_uri,
-        )
-        assert result.relationships[0].target_artifact_uris == (
-            output_artifact.artifact_uri,
-        )
+        assert result.artifact_uris == ()
+        assert result.relationships == ()
 
     invalid_result = _invoke(
         runtime,

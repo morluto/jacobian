@@ -3,7 +3,7 @@
 [Documentation home](../index.md)
 
 - Capability: `probability.graph_reliability.connection_probability.compute`
-- Verification: `probability.result.verify`
+- Verification: `probability.graph_reliability.connection_probability.verify`
 - Producer: pinned Python-FLINT exact rational arithmetic
 - Checker: isolated standard-library `Fraction` enumeration and graph traversal
 

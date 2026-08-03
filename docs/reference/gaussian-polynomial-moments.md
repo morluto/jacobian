@@ -4,7 +4,7 @@
 
 - Status: Current implementation reference; contract is experimental
 - Capability: `probability.gaussian_polynomial.moment.compute`
-- Verification: `probability.result.verify`
+- Verification: `probability.gaussian_polynomial.moment.verify`
 - Producer: pinned Python-FLINT exact rational arithmetic
 - Checker: isolated Python standard-library `Fraction` coefficient contraction
 
@@ -150,7 +150,7 @@ produce no verification record and no promoted conclusion.
   `READY_NOT_RUN`; no autonomous model control/treatment runs are claimed.
 - Control: the catalog without the Gaussian operation.
 - Treatment: the catalog with the producer and authorized
-  `probability.result.verify`.
+  `probability.gaussian_polynomial.moment.verify`.
 - Independent oracle: a separately implemented standard-library coefficient
   contraction over generated sparse polynomials.
 - Primary metrics: fixed-order correctness, checker-bound completion, false

@@ -15,10 +15,11 @@ simplicial complexes:
 - `topology.simplicial_homology.compute`
 - `topology.simplicial_homology.integral.compute`
 
-Each producer remains `COMPUTED`. Operator-authorized independent replay is
-the only path in this family to `VERIFIED`. The first three outcomes use
-`topology.result.verify`; integral homology has the dedicated
-`topology.simplicial_homology.integral.verify` capability.
+Operator-authorized independent replay is the only path in this family to
+`VERIFIED`. Each producer has its own verifier: `topology.simplicial_complex.verify`,
+`topology.simplicial_complex.chain_complex.verify`,
+`topology.simplicial_homology.verify`, and
+`topology.simplicial_homology.integral.verify`.
 
 ## Canonical finite complexes
 

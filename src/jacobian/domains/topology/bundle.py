@@ -70,8 +70,7 @@ def build_topology_bundle() -> DomainBundle:
         ),
         assurance_basis=(
             "exact deterministic finite computation; independent verification is "
-            "available through topology.result.verify or the dedicated integral "
-            "homology verifier"
+            "available through the corresponding per-producer topology verifier"
         ),
         checker_declarations=TOPOLOGY_EXACT_REPLAY_CHECKERS,
     )

@@ -70,7 +70,11 @@ from jacobian.domains.number_theory import build_number_theory_bundle
 from jacobian.domains.sequences import build_sequence_bundle
 from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
-from jacobian.operations import BoundedSearchOperation
+from jacobian.operations import (
+    BoundedSearchOperation,
+    ComputedOperation,
+    MaterializedOperation,
+)
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -270,10 +274,16 @@ def test_representative_payloads_invoke_all_operations(
                 result.diagnostics,
             )
             assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+            if isinstance(operation, ComputedOperation):
+                assert result.artifact_uris == ()
+                assert result.relationships == ()
+                assert result.output["backend_version"] == bundle.backend_version
+                continue
             if isinstance(operation, BoundedSearchOperation):
                 assert len(result.artifact_uris) == 3
                 assert len(result.obligations) == 1
             else:
+                assert isinstance(operation, MaterializedOperation)
                 assert len(result.artifact_uris) == 2
                 assert result.output["backend_version"] == bundle.backend_version
             assert result.relationships[0].relation_id == operation.relation_id
@@ -281,11 +291,9 @@ def test_representative_payloads_invoke_all_operations(
             assert service.store.get(result_uri).manifest.parents == (input_uri,), (
                 f"{operation.capability_id}: parent mismatch"
             )
-            expected_output = (
-                result.output
-                if isinstance(operation, BoundedSearchOperation)
-                else result.output["result"]
-            )
-            assert service.store.get(result_uri).payload == expected_output, (
-                f"{operation.capability_id}: materialized payload mismatch"
-            )
+            stored_result = service.store.get(result_uri)
+            assert isinstance(stored_result.payload, dict)
+            if isinstance(operation, BoundedSearchOperation):
+                assert stored_result.payload == result.output, (
+                    f"{operation.capability_id}: materialized payload mismatch"
+                )

@@ -25,6 +25,10 @@ _DIAMOND = {
 }
 
 
+def _result_payload(fresh_complete_runtime, result) -> dict[str, Any]:
+    return fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
+
+
 def _materialize(
     fresh_complete_runtime, presentation: dict[str, Any]
 ) -> dict[str, Any]:
@@ -35,7 +39,7 @@ def _materialize(
         )
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
-    return result.output["result"]["poset"]
+    return _result_payload(fresh_complete_runtime, result)["poset"]
 
 
 def _invoke(
@@ -90,7 +94,8 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
             input=_DIAMOND,
         )
     )
-    poset = result.output["result"]["poset"]
+    payload = _result_payload(fresh_complete_runtime, result)
+    poset = payload["poset"]
     assert poset["elements"] == ["0", "1", "a", "b"]
     assert poset["strict_order_pairs"] == [
         {"lower": "0", "upper": "1"},
@@ -106,7 +111,7 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     assert len(result.artifact_uris) == 2
     assert (
         fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
-        == (result.output["result"])
+        == payload
     )
 
 
@@ -163,14 +168,14 @@ def test_width_and_linear_extension_reference_cases(
     expected_count: int,
 ) -> None:
     poset = _materialize(fresh_complete_runtime, presentation)
-    width = _invoke(fresh_complete_runtime, "poset.width.compute", poset).output[
-        "result"
-    ]
-    count = _invoke(
+    width_result = _invoke(fresh_complete_runtime, "poset.width.compute", poset)
+    width = _result_payload(fresh_complete_runtime, width_result)
+    count_result = _invoke(
         fresh_complete_runtime,
         "poset.linear_extensions.count",
         poset,
-    ).output["result"]
+    )
+    count = _result_payload(fresh_complete_runtime, count_result)
     assert width["width"] == expected_width
     assert len(width["maximum_antichain"]) == expected_width
     assert len(width["minimum_chain_cover"]) == expected_width
@@ -181,9 +186,10 @@ def test_width_and_linear_extension_reference_cases(
 
 def test_width_dual_certificate_covers_diamond_exactly(fresh_complete_runtime) -> None:
     poset = _materialize(fresh_complete_runtime, _DIAMOND)
-    result = _invoke(fresh_complete_runtime, "poset.width.compute", poset).output[
-        "result"
-    ]
+    result = _result_payload(
+        fresh_complete_runtime,
+        _invoke(fresh_complete_runtime, "poset.width.compute", poset),
+    )
     assert result["maximum_antichain"] == ["a", "b"]
     assert (
         sorted(
@@ -201,20 +207,22 @@ def test_mobius_complete_and_selected_scopes_are_distinct(
     fresh_complete_runtime,
 ) -> None:
     poset = _materialize(fresh_complete_runtime, _DIAMOND)
-    complete = _invoke(
+    complete_result = _invoke(
         fresh_complete_runtime,
         "poset.mobius_function.compute",
         poset,
         scope="COMPLETE_MATRIX",
         intervals=[],
-    ).output["result"]
-    selected = _invoke(
+    )
+    complete = _result_payload(fresh_complete_runtime, complete_result)
+    selected_result = _invoke(
         fresh_complete_runtime,
         "poset.mobius_function.compute",
         poset,
         scope="SELECTED_INTERVALS",
         intervals=[{"lower": "0", "upper": "1"}],
-    ).output["result"]
+    )
+    selected = _result_payload(fresh_complete_runtime, selected_result)
     values = {
         (item["lower"], item["upper"]): item["value"] for item in complete["values"]
     }
@@ -242,13 +250,14 @@ def test_mobius_ledger_is_canonical_across_branching_topological_orders(
             "interpretation": "COVER_EDGES",
         },
     )
-    result = _invoke(
+    computed = _invoke(
         fresh_complete_runtime,
         "poset.mobius_function.compute",
         poset,
         scope="SELECTED_INTERVALS",
         intervals=[{"lower": "a", "upper": "e"}],
-    ).output["result"]
+    )
+    result = _result_payload(fresh_complete_runtime, computed)
     value = result["values"][0]
     assert value["value"] == 1
     assert [item["intermediate"] for item in value["recurrence_contributions"]] == [
@@ -316,24 +325,24 @@ def test_relabeling_preserves_scalar_poset_outcomes(fresh_complete_runtime) -> N
             "interpretation": "COVER_EDGES",
         },
     )
-    assert (
-        _invoke(fresh_complete_runtime, "poset.width.compute", first).output["result"][
-            "width"
-        ]
-        == (
-            _invoke(fresh_complete_runtime, "poset.width.compute", second).output[
-                "result"
-            ]["width"]
-        )
+    first_width = _result_payload(
+        fresh_complete_runtime,
+        _invoke(fresh_complete_runtime, "poset.width.compute", first),
     )
-    assert (
-        _invoke(fresh_complete_runtime, "poset.linear_extensions.count", first).output[
-            "result"
-        ]["count"]
-        == _invoke(
-            fresh_complete_runtime, "poset.linear_extensions.count", second
-        ).output["result"]["count"]
+    second_width = _result_payload(
+        fresh_complete_runtime,
+        _invoke(fresh_complete_runtime, "poset.width.compute", second),
     )
+    assert first_width["width"] == second_width["width"]
+    first_count = _result_payload(
+        fresh_complete_runtime,
+        _invoke(fresh_complete_runtime, "poset.linear_extensions.count", first),
+    )
+    second_count = _result_payload(
+        fresh_complete_runtime,
+        _invoke(fresh_complete_runtime, "poset.linear_extensions.count", second),
+    )
+    assert first_count["count"] == second_count["count"]
 
 
 def test_invalid_poset_request_fails_before_artifact_writes(

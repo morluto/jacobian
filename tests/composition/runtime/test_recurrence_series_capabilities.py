@@ -144,7 +144,8 @@ def test_linear_recurrence_exposes_requested_values_and_complete_replay(
     assert sparse.output["result"]["replay_scope_end"] == 7
     assert [item["index"] for item in sparse.output["result"]["values"]] == [0, 2, 7]
     assert len(sparse.output["result"]["replay_prefix"]) == 8
-    assert len(sparse.artifact_uris) == 2
+    assert sparse.artifact_uris == ()
+    assert sparse.relationships == ()
 
 
 def test_large_rational_results_cross_the_python_conversion_limit_safely(

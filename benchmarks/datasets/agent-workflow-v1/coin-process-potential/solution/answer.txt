@@ -1,0 +1,1 @@
+With weights 2i-1 and pair coefficient -2, the potential decreases by exactly one when the coin at the current head count is flipped.  Its minimum on the k-head layer is k, so every nonterminal state has positive potential and reaches zero after exactly that many steps.  Summing over the Boolean cube gives total 159744 and mean 39.

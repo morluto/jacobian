@@ -1,0 +1,44 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/knight-cycle-game-strategy"
+version = "1.0.0"
+description = "Certify matching lower and upper strategies for a knight-conflict board game."
+keywords = ["game-strategy", "knight-graph", "cycle-partition", "invariant"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+field = "combinatorial-game-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-snapshot"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["strategy-certificate", "graph-partition", "adversarial-game", "offline"]
+case_version = "agent-workflow-v1"
+contamination_class = "public-solution-known-certificate-required"
+fixture_digest = "sha256:cbc5abba3cf13d14dbf163881dede26d2893138e1f131acee6a26651f5f299db"
+derivation = "Derived from AI-MO/CombiBench test_with_solution row 92 at revision 882ba08befd0856f5364db1e53d58c7e2cf704f9."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -154,11 +154,18 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
                     server
                     for server in servers
                     if server
-                    != {
-                        "name": "jacobian",
-                        "transport": "streamable-http",
-                        "url": "http://jacobian:8000/mcp",
-                    }
+                    not in (
+                        {
+                            "name": "jacobian",
+                            "transport": "streamable-http",
+                            "url": "http://127.0.0.1:8000/mcp",
+                        },
+                        {
+                            "name": "jacobian",
+                            "transport": "streamable-http",
+                            "url": "http://jacobian:8000/mcp",
+                        },
+                    )
                 ]
                 if remaining:
                     agent["mcp_servers"] = remaining

@@ -1,0 +1,101 @@
+{
+  "task_id": "jacobian/cyclic-vector-inequality",
+  "conclusion": "SHARP_CONSTANT_CERTIFIED",
+  "result": {
+    "constant_squared": "1/2",
+    "dimension": 6,
+    "vectors": [
+      {
+        "index": 1,
+        "first_variable": 1,
+        "second_constant": 1,
+        "second_variable": 2
+      },
+      {
+        "index": 2,
+        "first_variable": 2,
+        "second_constant": 1,
+        "second_variable": 3
+      },
+      {
+        "index": 3,
+        "first_variable": 3,
+        "second_constant": 1,
+        "second_variable": 4
+      },
+      {
+        "index": 4,
+        "first_variable": 4,
+        "second_constant": 1,
+        "second_variable": 5
+      },
+      {
+        "index": 5,
+        "first_variable": 5,
+        "second_constant": 1,
+        "second_variable": 6
+      },
+      {
+        "index": 6,
+        "first_variable": 6,
+        "second_constant": 1,
+        "second_variable": 1
+      }
+    ],
+    "aggregate": {
+      "first_constant": 0,
+      "first_coefficients": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "second_constant": 6,
+      "second_coefficients": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    "completed_square": {
+      "lhs_coefficients": [
+        4,
+        -24,
+        36
+      ],
+      "square_coefficients": [
+        2,
+        -6
+      ]
+    },
+    "equality_witness": {
+      "values": [
+        "1/2",
+        "1/2",
+        "1/2",
+        "1/2",
+        "1/2",
+        "1/2"
+      ],
+      "term_norm_squared": "1/2",
+      "attained_constant_squared": "1/2"
+    }
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "the cyclic vector inequality at dimension n = 6",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:f9098c171bdfdd045ed02e26544160d66a32a943aa8918d663ac99263658a4f8"
+    }
+  ],
+  "limitations": [
+    "The verifier does not replay the trusted norm inequalities in a proof assistant."
+  ]
+}

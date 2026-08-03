@@ -39,7 +39,8 @@
         "extra_allowed_hosts": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"type": "string", "minLength": 1}
+          "items": {"type": "string", "minLength": 1},
+          "description": "Run-specific hostnames merged into the environment network baseline for the agent phase."
         }
       }
     },
@@ -60,7 +61,11 @@
               "version": {"type": "string", "minLength": 1},
               "prompt_template_path": {"type": "string", "minLength": 1},
               "reasoning_effort": {"type": "string", "minLength": 1},
-              "web_search": {"type": "string", "minLength": 1}
+              "web_search": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Codex web-search mode for observation jobs (for example, disabled)."
+              }
             }
           },
           "mcp_servers": {

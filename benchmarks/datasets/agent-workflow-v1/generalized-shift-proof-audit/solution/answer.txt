@@ -1,0 +1,4 @@
+The frozen proof is invalid in four independent ways: bounded displacement does
+not imply injectivity, the scaled unnormalised DFT has squared norm N/4, an
+upper comparison with Hilbert--Schmidt norm cannot yield the asserted operator
+norm lower bound, and sqrt(1-m) is not real for m at least two.

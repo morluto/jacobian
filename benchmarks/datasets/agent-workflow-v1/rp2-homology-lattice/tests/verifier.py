@@ -168,11 +168,15 @@ def _coordinate_matrix(
             row.append(boundary.get(edge, 0))
         expected.append(row)
     matrix = value["cycle_coordinate_matrix"]
-    if not isinstance(matrix, list) or len(matrix) != 10 or any(
-        not isinstance(row, list)
-        or len(row) != 10
-        or any(type(item) is not int for item in row)
-        for row in matrix
+    if (
+        not isinstance(matrix, list)
+        or len(matrix) != 10
+        or any(
+            not isinstance(row, list)
+            or len(row) != 10
+            or any(type(item) is not int for item in row)
+            for row in matrix
+        )
     ):
         return None
     transposed = [list(column) for column in zip(*expected, strict=True)]
@@ -257,10 +261,7 @@ def _evidence(value: object, result: object) -> bool:
         return False
     return (
         bound == result
-        and all(
-            word in text.casefold()
-            for word in ("cycle", "determinant", "z/2z")
-        )
+        and all(word in text.casefold() for word in ("cycle", "determinant", "z/2z"))
         and _evidence_denies_proof_assistant(text)
     )
 

@@ -1,0 +1,126 @@
+{
+  "task_id": "jacobian/ratio-test-boundary-separation",
+  "conclusion": "RATIO_BOUNDARY_INCONCLUSIVE",
+  "result": {
+    "ratio_limit": "1",
+    "divergent_witness": {
+      "term": "1/n",
+      "ratio": "n/(n+1)",
+      "ratio_error": "1/(n+1)",
+      "blocks": [
+        {
+          "level": 2,
+          "start": 4,
+          "end": 7,
+          "count": 4,
+          "term_lower_bound": "1/8",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 3,
+          "start": 8,
+          "end": 15,
+          "count": 8,
+          "term_lower_bound": "1/16",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 4,
+          "start": 16,
+          "end": 31,
+          "count": 16,
+          "term_lower_bound": "1/32",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 5,
+          "start": 32,
+          "end": 63,
+          "count": 32,
+          "term_lower_bound": "1/64",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 6,
+          "start": 64,
+          "end": 127,
+          "count": 64,
+          "term_lower_bound": "1/128",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 7,
+          "start": 128,
+          "end": 255,
+          "count": 128,
+          "term_lower_bound": "1/256",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 8,
+          "start": 256,
+          "end": 511,
+          "count": 256,
+          "term_lower_bound": "1/512",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 9,
+          "start": 512,
+          "end": 1023,
+          "count": 512,
+          "term_lower_bound": "1/1024",
+          "block_lower_bound": "1/2"
+        },
+        {
+          "level": 10,
+          "start": 1024,
+          "end": 2047,
+          "count": 1024,
+          "term_lower_bound": "1/2048",
+          "block_lower_bound": "1/2"
+        }
+      ]
+    },
+    "convergent_witness": {
+      "term": "1/(n*(n+1))",
+      "telescoping_identity": "1/n-1/(n+1)",
+      "ratio": "n/(n+2)",
+      "ratio_error": "2/(n+2)",
+      "checkpoints": [
+        {
+          "N": 3,
+          "partial_sum": "3/4",
+          "tail": "1/4"
+        },
+        {
+          "N": 7,
+          "partial_sum": "7/8",
+          "tail": "1/8"
+        },
+        {
+          "N": 12,
+          "partial_sum": "12/13",
+          "tail": "1/13"
+        },
+        {
+          "N": 25,
+          "partial_sum": "25/26",
+          "tail": "1/26"
+        }
+      ]
+    }
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "positive rational series indexed by n >= 1",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:132e08fa6f598dec4e1b6618c1521043de6e7dd30311b502f41907933546374d"
+    }
+  ],
+  "limitations": [
+    "The verifier does not machine-prove the quantified limit arguments in a proof assistant."
+  ]
+}

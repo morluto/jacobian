@@ -197,9 +197,7 @@ def test_evidence_without_hidden_keyword_is_accepted(tmp_path: Path) -> None:
         "The cycle-coordinate matrix has determinant -2, so the quotient "
         "lattice has order 2 and H1 is Z/2Z."
     )
-    evidence.write_text(
-        prose + ("\n" + marker_line + "\n" if marker_line else "\n")
-    )
+    evidence.write_text(prose + ("\n" + marker_line + "\n" if marker_line else "\n"))
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     assert support._run_verifier(task, app, logs)["reward"] == 1.0

@@ -167,3 +167,49 @@ def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == pytest.approx(1.0)
+
+
+def test_collision_out_of_bounds_is_rejected(tmp_path: Path) -> None:
+    """Collision indices outside the schema-declared [-20, 20] range must be
+    rejected even though they satisfy the mathematical collision equation."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["result"]["collision"] = {
+        "first_index": 1000,
+        "second_index": 1001,
+        "alpha_first": 1,
+        "alpha_second": 0,
+    }
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_oversized_diagonal_entries_is_rejected(tmp_path: Path) -> None:
+    """More diagonal entries than the schema-declared maxItems of 8 must be
+    rejected."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["result"]["norm_direction"]["diagonal_entries"] = [
+        {"numerator": 1, "denominator": 1} for _ in range(9)
+    ]
+    submission["result"]["norm_direction"]["operator_norm_squared"] = {
+        "numerator": 1,
+        "denominator": 1,
+    }
+    submission["result"]["norm_direction"]["hilbert_schmidt_norm_squared"] = {
+        "numerator": 9,
+        "denominator": 1,
+    }
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_oversized_submission_is_rejected(tmp_path: Path) -> None:
+    """An oversized submission.json must be rejected without crashing."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    (app / "submission.json").write_text('{"a": 1' + ", " * (2 * 1024 * 1024) + "}")
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0

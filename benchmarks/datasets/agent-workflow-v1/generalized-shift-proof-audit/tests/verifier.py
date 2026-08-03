@@ -56,7 +56,10 @@ def certificate_valid(result):
             c["alpha_second"],
         )
         collision = (
-            all(type(x) is int for x in (i, j, ai, aj)) and i != j and i + ai == j + aj
+            all(type(x) is int for x in (i, j, ai, aj))
+            and all(-20 <= x <= 20 for x in (i, j, ai, aj))
+            and i != j
+            and i + ai == j + aj
         )
 
         f = result["fourier_block"]
@@ -83,7 +86,7 @@ def certificate_valid(result):
         hs2 = sum(x * x for x in entries)
         norms = (
             d["valid_relation"] == "OPERATOR_NORM_LE_HILBERT_SCHMIDT_NORM"
-            and len(entries) >= 2
+            and 2 <= len(entries) <= 8
             and sum(x != 0 for x in entries) >= 2
             and rat(d["operator_norm_squared"]) == op2
             and rat(d["hilbert_schmidt_norm_squared"]) == hs2
@@ -128,7 +131,12 @@ def evidence_valid(evidence, result):
 
 
 def main():
-    submission = load_submission()
+    submission_path = W / "submission.json"
+    try:
+        oversized = submission_path.stat().st_size > 1_048_576
+    except OSError:
+        oversized = True
+    submission = None if oversized else load_submission()
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,

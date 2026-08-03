@@ -460,4 +460,4 @@ clean: ## Remove local caches, build outputs, and coverage artifacts.
 docs-linkcheck: ## Check relative Markdown links in project docs.
 	npx --yes markdown-link-check@3.15.0 \
 		--config .markdown-link-check.json -q \
-		README.md AGENTS.md CONTRIBUTING.md docs
+		README.md README.zh-CN.md AGENTS.md CONTRIBUTING.md docs

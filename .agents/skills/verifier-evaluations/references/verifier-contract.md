@@ -26,6 +26,7 @@ Prefer a small sequence of total predicates:
 
 ```text
 load bounded regular submission
+  → bind visible input to one bounded regular frozen input
   → validate envelope and exact types
   → validate shape, bounds, and cardinality
   → validate semantic mathematics
@@ -38,6 +39,10 @@ load bounded regular submission
 Every stage must turn malformed input into a false predicate, not an uncaught
 exception. Catch file, JSON, recursion, and resource errors at the boundary;
 do not wrap the whole verifier in a broad exception that hides a real bug.
+Perform the visible-input binding before parsing visible JSON. Use the frozen
+verifier copy as the semantic source after binding succeeds; frozen files may
+have task-specific names, so discover or declare the sole candidate rather
+than assuming `/tests/input.json` exists.
 
 ## Type and semantic traps
 
@@ -63,6 +68,9 @@ do not wrap the whole verifier in a broad exception that hides a real bug.
   conservative bound appropriate to the verifier memory limit.
 - Bind the evidence digest to the exact result or certificate being scored.
   A valid digest for unrelated content is not evidence for the claim.
+- If evidence validity is reward-bearing, reject unrelated nonempty prose.
+  Publish the mathematical explanation obligations and test acceptable
+  paraphrases; do not substitute hidden marker syntax or keyword soup.
 - Keep evidence parsing bounded and type-sensitive. A marker containing JSON
   must parse to the expected object, not merely be present.
 
@@ -91,7 +99,7 @@ do not wrap the whole verifier in a broad exception that hides a real bug.
 | Semantics | wrong answer, equivalent unreduced rational, reordered/scaled witness |
 | Evidence | empty list, duplicate descriptors, wrong path, wrong digest, unrelated result, symlink, traversal |
 | Scope | wrong source revision, incomplete claim, empty or arbitrary limitations, affirmative forbidden claim |
-| Runtime | missing file, permission error, malformed JSON, timeout-shaped input; assert reward artifact exists |
+| Runtime | missing file, permission error, malformed JSON and wrong-shaped JSON in the submission and visible input, timeout-shaped input; assert reward artifact exists |
 
 At least one test in each family should mutate a canonical submission and then
 rebind any evidence digest deliberately. Tests should assert observable reward

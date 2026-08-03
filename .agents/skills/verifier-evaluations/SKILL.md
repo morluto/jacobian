@@ -30,6 +30,10 @@ the Harbor skill owns dataset layout and repository commands.
    For each edge, identify malformed input, resource exhaustion, path escape,
    false assurance, and exception paths. A verifier must produce a deterministic
    reward artifact for every submission, including malformed submissions.
+   Bind the agent-visible input to the sole frozen verifier input before any
+   task-specific JSON parse, key access, or computation. After equality is
+   established, evaluate semantics from the frozen verifier copy rather than
+   reparsing attacker-controlled workspace bytes.
 
 3. Implement fail-closed checks. Validate exact types, cardinalities, ranges,
    and object shapes before indexing, iterating, hashing, or constructing sets.
@@ -48,8 +52,10 @@ the Harbor skill owns dataset layout and repository commands.
 5. Make prose requirements structural. Do not award credit because a response
    contains words such as “duplicate”, “line”, or “region”. Prefer typed result
    fields, exact evidence bindings, frozen limitation values, and clause-aware
-   semantic checks. Any unavoidable text predicate must be documented in the
-   visible contract and tested with equivalent phrasing.
+   semantic checks. Removing an undocumented JSON marker does not justify
+   accepting any nonempty file. Any reward-bearing prose obligation must be
+   documented in the visible contract, reject unrelated text, and accept
+   mathematically equivalent phrasing.
 
 6. Build adversarial fixtures before trusting the Oracle. Cover the public
    contract itself, including a correct witness with the permitted assurance
@@ -57,7 +63,8 @@ the Harbor skill owns dataset layout and repository commands.
    the canonical witness, alternate valid witnesses, wrong mathematics,
    booleans and floats,
    unreduced rationals, missing and extra fields, empty and unhashable nested
-   values, out-of-range values, oversized and malformed files, symlink and
+   values, out-of-range values, malformed JSON and valid JSON of the wrong
+   top-level shape for both submissions and agent-visible inputs, oversized files, symlink and
    traversal evidence, wrong digests, duplicate evidence descriptors, missing
    limitations, false `VERIFIED`, and assertions that the verifier still emits
    `reward.json` without crashing.
@@ -98,6 +105,10 @@ detailed checklist and anti-pattern catalogue.
   when `bool` must be rejected.
 - Reading an unbounded submission or hashing every evidence item before checking
   that the list has the required cardinality.
+- Parsing or indexing the agent-visible input before proving byte-for-byte
+  equality with the frozen verifier input.
+- Replacing a hidden evidence marker with `bool(text.strip())` while evidence
+  validity still contributes to reward.
 - Treating a full Oracle reward as proof that malformed submissions are safe.
 - Requiring undocumented lexical tokens or a preferred proof strategy.
 - Returning one monolithic “correct” flag for all diagnostic dimensions.

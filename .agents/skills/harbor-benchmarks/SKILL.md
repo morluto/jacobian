@@ -93,6 +93,12 @@ witnesses where the task permits them. Report protocol or assurance failures
 alongside mathematical correctness so an aggregate zero is not misread as a
 wrong mathematical answer.
 
+Bind `/app/input.json` to the sole bounded regular frozen input before parsing
+or indexing visible data. Evaluate the mathematical source from the frozen
+`/tests` copy after binding; task bundles may use a task-specific frozen input
+filename rather than `/tests/input.json`. Reward-bearing prose evidence must
+have visible mathematical obligations and reject unrelated nonempty text.
+
 Keep Jacobian out of task bundles. Attach it only through the Harbor job's agent
 configuration and MCP sidecar. Keep credentials, raw caches, host paths,
 floating dependencies, and Oracle/verifier material out of agent-visible
@@ -124,13 +130,22 @@ contract change:
    snapshot only for an intentional evaluation or publication event.
 2. Parse/check every canonical task selected by member fragments and reject
    missing, duplicate, ambiguous, or escaping references.
-3. Run every task through the dataset's Oracle job and require full applicable
-   reward.
-4. Exercise deliberate failures: empty or malformed output, wrong answers,
+3. Run the planner-selected Oracle scope and require full applicable reward.
+   For a task-local change, run every selected task. For shared support or a
+   broad mechanical fan-out, run `make harbor-check`, the hand-written changed
+   task Oracles selected by the planner, and leave capped full-dataset sweeps to
+   the merge queue unless the operator explicitly requests a local full sweep.
+   Report any deferred Oracle scope as a proof gap.
+4. Exercise deliberate failures: empty or malformed output, malformed and
+   wrong-shaped visible input, wrong answers,
    forged or escaped evidence, incomplete scope, mismatched claims, timeouts,
    false assurance, and correct witnesses with unsupported assurance claims.
 5. Confirm alternate valid witnesses pass and scan task bundles for leakage,
    secrets, host paths, raw caches, and floating dependencies.
+
+After generated verifier Python or validation tests change, run the repository
+format check (`make lint-full` or the planner-selected equivalent), not only
+`ruff check`; lint success does not imply Ruff formatting success.
 
 ### Validation regression layout (`agent-workflow-v1`)
 

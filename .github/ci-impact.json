@@ -378,6 +378,10 @@
         "tests/support/runtime_fixtures.py",
         "tests/support/services.py",
         "tests/support/state.py",
+        "tests/support/artifacts.py",
+        "tests/support/capabilities.py",
+        "tests/support/capability_installations.py",
+        "tests/support/polynomials.py",
         "tests/conftest.py"
       ],
       "suites": [

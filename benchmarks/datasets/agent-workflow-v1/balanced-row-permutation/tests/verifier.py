@@ -17,14 +17,24 @@ TESTS = Path("/tests")
 TASK_ID = "jacobian/balanced-row-permutation"
 CONCLUSION = "BALANCED_ROW_PERMUTATION_CONSTRUCTED"
 SCOPE = "the frozen 8 by 6 matrix"
+LIMITATION = (
+    "This finite construction does not prove the general theorem in a proof assistant."
+)
+MAX_EVIDENCE_BYTES = 64 * 1024
 
 
 def _source_is_bound() -> bool:
     try:
+        workspace_input = WORKSPACE / "input.json"
+        if (
+            workspace_input.is_symlink()
+            or workspace_input.resolve().parent != WORKSPACE.resolve()
+        ):
+            return False
         hidden = (TESTS / "input.json").read_bytes()
         data = json.loads(hidden)
         return bool(
-            (WORKSPACE / "input.json").read_bytes() == hidden
+            workspace_input.read_bytes() == hidden
             and data["source"]["revision"] == "882ba08befd0856f5364db1e53d58c7e2cf704f9"
             and data["source"]["row"] == 34
         )
@@ -58,9 +68,11 @@ def _result(value: object) -> bool:
         result_row = output[row]
         if (
             not isinstance(permutation, list)
+            or any(type(position) is not int for position in permutation)
             or sorted(permutation) != list(range(6))
             or not isinstance(result_row, list)
             or len(result_row) != 6
+            or any(type(symbol) is not int for symbol in result_row)
             or result_row != [matrix[row][position] for position in permutation]
         ):
             return False
@@ -110,6 +122,8 @@ def _evidence(value: object) -> bool:
     if path is None:
         return False
     try:
+        if not path.is_file() or path.stat().st_size > MAX_EVIDENCE_BYTES:
+            return False
         text = path.read_text().casefold()
     except (OSError, UnicodeError):
         return False
@@ -127,27 +141,37 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
-    correct = bool(
-        protocol
-        and isinstance(submission, dict)
-        and _source_is_bound()
+    envelope = isinstance(submission, dict)
+    mathematical = bool(
+        envelope and _source_is_bound() and _result(submission.get("result"))
+    )
+    evidence_valid = bool(envelope and _evidence(submission.get("evidence")))
+    scope_accurate = bool(
+        envelope
         and submission.get("scope") == SCOPE
         and submission.get("completeness") == "COMPLETE"
-        and submission.get("claimed_assurance") == "COMPUTED"
-        and _result(submission.get("result"))
-        and _evidence(submission.get("evidence"))
-        and any(
-            "general theorem" in item.casefold()
-            for item in submission.get("limitations", [])
-        )
+        and submission.get("limitations") == [LIMITATION]
     )
-    score = 1.0 if correct and not false_certification else 0.0
+    assurance_calibrated = bool(
+        envelope
+        and submission.get("claimed_assurance") == "COMPUTED"
+        and not false_certification
+    )
+    correct_score = 1.0 if mathematical else 0.0
+    evidence_score = 1.0 if evidence_valid else 0.0
+    scope_score = 1.0 if scope_accurate else 0.0
+    assurance_score = 1.0 if assurance_calibrated else 0.0
+    reward = (
+        min(correct_score, evidence_score, scope_score, assurance_score)
+        if protocol
+        else 0.0
+    )
     return {
-        "correctness": score,
-        "evidence_validity": score,
-        "scope_accuracy": score,
-        "assurance_calibration": score,
-        "reward": score,
+        "correctness": correct_score,
+        "evidence_validity": evidence_score,
+        "scope_accuracy": scope_score,
+        "assurance_calibration": assurance_score,
+        "reward": reward,
         "false_certification": false_certification,
     }
 

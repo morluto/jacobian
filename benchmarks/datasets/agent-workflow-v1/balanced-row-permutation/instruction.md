@@ -7,7 +7,7 @@ contains exactly two copies of each symbol.
 Submit the six column layers in order.  Each layer must assign every row to one
 unused input position, record the corresponding symbol, and exhibit the
 required two-of-each-symbol balance.  Also submit the resulting matrix and the
-six row permutations.
+eight row permutations, one for each input row.
 
 The verifier independently checks the global occurrence premise, every
 position binding, exactly-once use of all input positions, all row

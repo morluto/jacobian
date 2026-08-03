@@ -72,3 +72,58 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == 0.0
     assert result["false_certification"] is True
+
+
+def test_boolean_row_position_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["row_permutations"][0][:2] = [False, True]
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_symlinked_workspace_input_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    original = app / "input-original.json"
+    (app / "input.json").rename(original)
+    (app / "input.json").symlink_to(original)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_affirmative_general_theorem_claim_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = ["A proof assistant verifies the general theorem."]
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_oversized_evidence_is_rejected_without_crashing(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    (app / "evidence" / "answer.txt").write_text(
+        "column row source position exactly " + "x" * 65536
+    )
+    submission["evidence"][0]["sha256"] = support._digest(
+        app / "evidence" / "answer.txt"
+    )
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0

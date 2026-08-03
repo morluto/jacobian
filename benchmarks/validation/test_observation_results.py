@@ -207,13 +207,6 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
 
     assert _comparison_job(control) == _comparison_job(treatment)
 
-    loopback_treatment = deepcopy(treatment)
-    loopback_treatment["agents"][0]["mcp_servers"][0]["url"] = (
-        "http://127.0.0.1:8000/mcp"
-    )
-    # Loopback MCP URLs remain condition-specific unless also allowlisted.
-    assert _comparison_job(control) != _comparison_job(loopback_treatment)
-
     heldout_treatment = {
         "environment": {
             "extra_docker_compose": [

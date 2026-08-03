@@ -44,7 +44,7 @@ def test_task_gap_records_preserve_only_historical_provenance() -> None:
     paths = sorted(
         Path("benchmarks/datasets/agent-workflow-v1").glob("*/analysis/gap.json")
     )
-    assert len(paths) == 65
+    assert len(paths) == 66
     for path in paths:
         record = json.loads(path.read_text(encoding="utf-8"))
         assert record["provenance_status"] == "historical"

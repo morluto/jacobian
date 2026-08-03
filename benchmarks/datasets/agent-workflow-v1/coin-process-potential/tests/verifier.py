@@ -6,6 +6,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    ASSURANCE_LEVELS,
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
@@ -18,6 +19,7 @@ TESTS = Path("/tests")
 TASK_ID = "jacobian/coin-process-potential"
 CONCLUSION = "TERMINATION_AND_MEAN_CERTIFIED"
 SCOPE = "all 4096 states of the frozen 12-coin process"
+LIMITATION = "This certificate applies only to the frozen 12-coin instance (n=12)."
 N = 12
 
 
@@ -124,6 +126,16 @@ def _evidence(value: object) -> bool:
 
 
 def _evaluate(submission: object) -> dict[str, float | bool]:
+    # Structural envelope validity accepts any assurance level so that a
+    # false VERIFIED claim corrupts only assurance calibration, not the
+    # independent evidence and scope diagnostics.
+    structure_valid = strict_submission_contract(
+        submission,
+        task_id=TASK_ID,
+        conclusion=CONCLUSION,
+        allowed_assurances=ASSURANCE_LEVELS,
+        verification_record="forbidden",
+    )
     protocol = strict_submission_contract(
         submission,
         task_id=TASK_ID,
@@ -138,18 +150,15 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     source_bound = _source_is_bound()
     result_correct = bool(is_submission and _result(submission.get("result")))
     evidence_valid = bool(
-        protocol and is_submission and _evidence(submission.get("evidence"))
+        structure_valid and is_submission and _evidence(submission.get("evidence"))
     )
     scope_accurate = bool(
-        protocol
+        structure_valid
         and is_submission
         and source_bound
         and submission.get("scope") == SCOPE
         and submission.get("completeness") == "COMPLETE"
-        and any(
-            isinstance(item, str) and "arbitrary n" in item.casefold()
-            for item in submission.get("limitations", [])
-        )
+        and submission.get("limitations") == [LIMITATION]
     )
     assurance_calibrated = bool(
         protocol

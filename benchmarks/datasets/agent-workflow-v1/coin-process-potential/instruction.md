@@ -21,4 +21,6 @@ digest integrity only; mathematical scoring comes from the structured
 certificate rather than keyword matching.
 
 Do not claim proof-assistant verification.  This is an exact finite-state
-certificate for `n=12` only.
+certificate for `n=12` only.  The `limitations` array must contain exactly
+this one entry: `This certificate applies only to the frozen 12-coin
+instance (n=12).`

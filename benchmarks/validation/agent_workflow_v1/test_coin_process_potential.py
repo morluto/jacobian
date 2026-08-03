@@ -110,3 +110,40 @@ def test_conservative_assurance_preserves_other_dimensions(tmp_path: Path) -> No
     assert result["scope_accuracy"] == 1.0
     assert result["assurance_calibration"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_false_verified_preserves_evidence_and_scope(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "VERIFIED"
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["false_certification"] is True
+    assert result["reward"] == 0.0
+
+
+def test_generality_claim_in_limitations_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = ["This proves the result for arbitrary n."]
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_fixed_scope_limitation_without_keyword_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "This certificate applies only to the frozen 12-coin instance (n=12)."
+    ]
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["scope_accuracy"] == 1.0
+    assert result["reward"] == 1.0

@@ -50,6 +50,6 @@
     }
   ],
   "limitations": [
-    "This exhaustive finite-state computation is not a proof-assistant theorem for arbitrary n."
+    "This certificate applies only to the frozen 12-coin instance (n=12)."
   ]
 }

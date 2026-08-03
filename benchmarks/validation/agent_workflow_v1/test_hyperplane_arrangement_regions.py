@@ -106,3 +106,25 @@ def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
     assert result["scope_accuracy"] == 1.0
     assert result["assurance_calibration"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_float_region_total_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["regions"] = 64.0
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_affirmative_limitation_with_unrelated_negation_is_rejected(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "A proof assistant verified this result; no limitations apply."
+    ]
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0

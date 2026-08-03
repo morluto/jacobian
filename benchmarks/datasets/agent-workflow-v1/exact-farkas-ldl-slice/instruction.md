@@ -16,3 +16,8 @@ Floating-point eigenvalues and discovery artifacts are not proof evidence.
 
 Write `submission.json` and digest-bind
 `evidence/farkas-slice-certificate.json`. Claim at most `COMPUTED`.
+
+The digest-bound evidence file must be a JSON object with exactly four keys:
+`schema_version` (the string `"1"`), `task_id` (the task identifier),
+`result` (the same result object placed in `submission.json`), and
+`limitations` (the same limitations list placed in `submission.json`).

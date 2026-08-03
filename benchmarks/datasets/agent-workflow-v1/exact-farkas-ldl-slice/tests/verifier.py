@@ -162,12 +162,19 @@ def _result_ok(result, frozen):
 
 
 def main():
-    submission, frozen = load_submission(), _load_frozen()
+    submission_path = W / "submission.json"
+    try:
+        oversized = submission_path.stat().st_size > 1_048_576
+    except OSError:
+        oversized = True
+    submission = None if oversized else load_submission()
+    frozen = _load_frozen()
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
     math_correct = bool(contract and _result_ok(submission.get("result"), frozen))

@@ -1180,3 +1180,41 @@ def test_exact_farkas_slice_rejects_full_certificate_overclaim(tmp_path: Path) -
     rejected = support._run_verifier(task, app, logs)
     assert rejected["scope_accuracy"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_exact_farkas_slice_rejects_checked_assurance_above_ceiling(
+    tmp_path: Path,
+) -> None:
+    """CHECKED is above the COMPUTED ceiling and must force reward to zero."""
+    task, app, logs = _prepare_farkas_slice_case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "CHECKED"
+    _bind_farkas_slice(app, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+
+
+def test_exact_farkas_slice_rejects_oversized_submission(tmp_path: Path) -> None:
+    """An oversized submission.json must be rejected without crashing."""
+    task, app, logs = _prepare_farkas_slice_case(tmp_path)
+    (app / "submission.json").write_text('{"a": 1' + ", " * (2 * 1024 * 1024) + "}")
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_exact_farkas_slice_rejects_missing_evidence_envelope(tmp_path: Path) -> None:
+    """Evidence that stores the result directly without the required envelope
+    must be rejected so the agent-visible schema and instruction are honest."""
+    task, app, logs = _prepare_farkas_slice_case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path = app / "evidence" / "farkas-slice-certificate.json"
+    support._write_json(evidence_path, submission["result"])
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

@@ -18,6 +18,10 @@ TESTS = Path("/tests")
 TASK_ID = "jacobian/rp2-homology-lattice"
 CONCLUSION = "INTEGRAL_H1_CERTIFIED"
 SCOPE = "the frozen six-vertex ten-facet simplicial complex"
+LIMITATION = (
+    "This does not prove in a proof assistant that the geometric realization is "
+    "the real projective plane."
+)
 
 
 def _input() -> dict:
@@ -85,6 +89,16 @@ def _result(value: object) -> bool:
         "determinant",
         "homology",
     }:
+        return False
+    if not all(
+        isinstance(value[field], list)
+        for field in (
+            "spanning_tree",
+            "non_tree_edges",
+            "facet_order",
+            "cycle_coordinate_matrix",
+        )
+    ):
         return False
     data = _input()
     vertices = set(data["vertices"])
@@ -197,10 +211,7 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
         and submission.get("claimed_assurance") == "COMPUTED"
         and _result(submission.get("result"))
         and _evidence(submission.get("evidence"), submission.get("result"))
-        and any(
-            "proof assistant" in item.casefold()
-            for item in submission.get("limitations", [])
-        )
+        and submission.get("limitations") == [LIMITATION]
     )
     score = 1.0 if correct and not false_certification else 0.0
     return {

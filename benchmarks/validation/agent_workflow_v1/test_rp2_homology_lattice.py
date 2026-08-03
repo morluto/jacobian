@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from benchmarks.validation.agent_workflow_v1 import support
 
 TASK = "rp2-homology-lattice"
@@ -82,3 +84,27 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == 0.0
     assert result["false_certification"] is True
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["spanning_tree", "non_tree_edges", "facet_order", "cycle_coordinate_matrix"],
+)
+def test_malformed_result_collections_are_cleanly_rejected(
+    tmp_path: Path, field: str
+) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"][field] = None
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_affirmative_proof_assistant_claim_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "A proof assistant verifies that the geometric realization is RP2."
+    ]
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0

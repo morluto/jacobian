@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import pytest
 
+from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityMode,
@@ -54,9 +55,12 @@ def test_recurrence_and_series_results_are_independently_verified(
     )
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="combinatorics.result.verify",
+            capability_id=derive_verification_capability_id(capability_id),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": payload,
+                "candidate": computed.output["result"],
+            },
         )
     )
     assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
@@ -77,25 +81,17 @@ def test_checker_rejects_contract_valid_false_results(
     computed = runtime.core.capabilities.invoke(
         CapabilityRequest(capability_id=capability_id, input=payload)
     )
-    stored = runtime.core.store.get(computed.output["result_uri"])
-    forged_payload = deepcopy(stored.payload)
+    forged_candidate = deepcopy(computed.output["result"])
     if capability_id == "combinatorics.recurrence.linear.evaluate":
-        forged_payload["replay_prefix"][7] = _q(14)
-        forged_payload["values"][7]["value"] = _q(14)
+        forged_candidate["replay_prefix"][7] = _q(14)
+        forged_candidate["values"][7]["value"] = _q(14)
     else:
-        forged_payload["coefficients"][7] = _q(22)
-    forged = runtime.core.artifacts.put(
-        schema_uri=stored.manifest.schema_uri,
-        semantics_uri=stored.manifest.semantics_uri,
-        parents=stored.manifest.parents,
-        payload=forged_payload,
-        summary="adversarial contract-valid exact combinatorics result",
-    )
+        forged_candidate["coefficients"][7] = _q(22)
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="combinatorics.result.verify",
+            capability_id=derive_verification_capability_id(capability_id),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": forged.artifact_uri},
+            input={"input": payload, "candidate": forged_candidate},
         )
     )
     assert rejected.execution.status is ExecutionStatus.COMPLETED
@@ -111,7 +107,7 @@ def test_checker_runtime_binds_only_independent_source(
     descriptor = next(
         item
         for item in authorized_complete_runtime.core.capabilities.catalog().capabilities
-        if item.capability_id == "combinatorics.result.verify"
+        if item.capability_id == "combinatorics.recurrence.linear.verify"
     )
     assert descriptor.provider_runtime is not None
     assert {
@@ -124,24 +120,28 @@ def test_checker_replays_a_result_above_python_default_integer_digit_limit(
     authorized_complete_runtime,
 ) -> None:
     large = "9" * 64
+    recurrence_input = {
+        "coefficients": [{"num": large, "den": "1"}],
+        "initial_values": [{"num": large, "den": "1"}],
+        "coefficient_convention": _RECURRENCE_CONVENTION,
+        "scope": "INDICES",
+        "term_count": None,
+        "indices": [68],
+    }
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.recurrence.linear.evaluate",
-            input={
-                "coefficients": [{"num": large, "den": "1"}],
-                "initial_values": [{"num": large, "den": "1"}],
-                "coefficient_convention": _RECURRENCE_CONVENTION,
-                "scope": "INDICES",
-                "term_count": None,
-                "indices": [68],
-            },
+            input=recurrence_input,
         )
     )
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="combinatorics.result.verify",
+            capability_id="combinatorics.recurrence.linear.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": recurrence_input,
+                "candidate": computed.output["result"],
+            },
         )
     )
 

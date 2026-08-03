@@ -143,7 +143,7 @@ async def _remote_tenant_scenario(port: int) -> None:
             assert "fixture.increment" in catalog.contents[0].text
             created_artifact_uri = None
             if create:
-                await client.call_tool(
+                created = await client.call_tool(
                     "capability.invoke",
                     {
                         "capability_id": "fixture.increment",
@@ -151,19 +151,8 @@ async def _remote_tenant_scenario(port: int) -> None:
                         "payload": {"value": 4},
                     },
                 )
-                created = await client.call_tool(
-                    "capability.invoke",
-                    {
-                        "capability_id": "integer.compute.gcd",
-                        "mode": "EXPLORE",
-                        "payload": {"left": "84", "right": "30"},
-                    },
-                )
-                created_artifact_uri = next(
-                    block.uri
-                    for block in created.content
-                    if block.type == "resource_link"
-                )
+                assert isinstance(created.structured_content, dict)
+                created_artifact_uri = created.structured_content["episode_uri"]
             searched = await client.call_tool(
                 "capability.invoke",
                 {

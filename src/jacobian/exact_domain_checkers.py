@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -31,17 +31,23 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import WitnessEnvelope
 from jacobian.contracts.exact_domain_verification import (
-    ExactDomainResultVerificationOutput,
+    ExactComputedVerificationOutput,
+    ExactComputedVerificationRequest,
     ExactDomainResultVerificationRequest,
 )
 from jacobian.contracts.results import (
     Conclusion,
+    ContractModel,
     Execution,
     ExecutionStatus,
     Verification,
 )
 from jacobian.operation_installation import InstalledDomainBundle
-from jacobian.operations import DomainBundle
+from jacobian.operations import (
+    BoundedSearchOperation,
+    DomainBundle,
+    MaterializedOperation,
+)
 from jacobian.providers.flint_runtime import (
     certified_snf_checker_provider_runtime,
     combinatorics_exact_checker_provider_runtime,
@@ -78,6 +84,7 @@ class ExactDomainCheckerInstallation:
 @dataclass(frozen=True, slots=True)
 class _InstalledDeclaration:
     declaration: ExactReplayCheckerDeclaration
+    result_model: type[ContractModel]
     input_schema_uri: str
     result_schema_uri: str
     semantics_uri: str
@@ -251,7 +258,15 @@ def install_exact_domain_verification(
     bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
     authorize: bool,
 ) -> tuple[tuple[CapabilityAdapter, ...], ExactDomainCheckerInstallation]:
-    """Authorize exact replay and expose domain-owned verification capabilities."""
+    """Authorize exact replay and expose per-producer verification capabilities.
+
+    Each authorized exact replay declaration becomes one
+    :class:`ExactComputedVerificationAdapter` exposing a per-producer typed
+    verifier contract for inline results. The verifier capability ID, title,
+    description, and tags come from the declaration's verification metadata,
+    which is always complete after construction (explicit or strictly derived
+    by stripping the producer verb and appending ``.verify``).
+    """
 
     installed = install_exact_domain_checkers(
         checkers,
@@ -273,226 +288,44 @@ def install_exact_domain_verification(
         checker_id is not None for checker_id in installation.checker_ids.values()
     ):
         return (), installation
-    declarations_by_domain = {
-        domain_id: tuple(
-            _installed_declaration(installed_bundle, declaration, installation)
-            for declaration in declaration_bundle.checker_declarations
-            if declaration.capability_id in installed_bundle.result_schema_uris
-            and installation.checker_ids.get(declaration.capability_id) is not None
-        )
-        for domain_id, (declaration_bundle, installed_bundle) in bundles.items()
-    }
-    all_polynomial_declarations = declarations_by_domain.get("polynomial", ())
-    polynomial_declarations = tuple(
-        declaration
-        for declaration in all_polynomial_declarations
-        if declaration.declaration.verification_capability_id is None
-    )
-    matrix_declarations = declarations_by_domain.get("matrix", ())
-    certified_snf_declarations = declarations_by_domain.get("certified_snf", ())
-    graph_declarations = tuple(
-        declaration
-        for domain_id in ("graph_optimization", "graph_invariants", "graph_symmetry")
-        for declaration in declarations_by_domain.get(domain_id, ())
-    )
-    number_theory_declarations = declarations_by_domain.get("number_theory", ())
-    projective_declarations = declarations_by_domain.get("projective_geometry", ())
-    probability_declarations = declarations_by_domain.get("probability", ())
-    combinatorics_declarations = declarations_by_domain.get("combinatorics", ())
-    all_topology_declarations = declarations_by_domain.get("topology", ())
-    topology_declarations = tuple(
-        declaration
-        for declaration in all_topology_declarations
-        if declaration.declaration.verification_capability_id is None
-    )
-    poset_declarations = declarations_by_domain.get("poset", ())
-    dedicated_declarations = (
-        *(
-            declaration
-            for declaration in all_polynomial_declarations
-            if declaration.declaration.verification_capability_id is not None
-        ),
-        *certified_snf_declarations,
-        *graph_declarations,
-        *number_theory_declarations,
-        *projective_declarations,
-        *(
-            declaration
-            for declaration in all_topology_declarations
-            if declaration.declaration.verification_capability_id is not None
-        ),
-    )
-    dedicated_adapters: tuple[CapabilityAdapter, ...] = tuple(
-        ExactDomainResultVerificationAdapter(
-            capability_id=_verification_metadata(declaration)[0],
-            title=_verification_metadata(declaration)[1],
-            description=_verification_metadata(declaration)[2],
-            tags=declaration.declaration.verification_tags,
-            store=store,
-            schemas=schemas,
-            artifacts=artifacts,
-            verification=verification,
-            declarations=(declaration,),
-            witness_schema_uri=witness_schema_uri,
-            provider_runtime=installation.provider_runtimes[
-                _provider_runtime_key(declaration.declaration)
-            ],
-        )
-        for declaration in dedicated_declarations
-    )
     adapters: list[CapabilityAdapter] = []
-    if polynomial_declarations:
+    result_models = {
+        operation.capability_id: operation.result_model
+        for bundle, _installed_bundle in bundles.values()
+        for operation in bundle.capabilities
+    }
+    stored_producers = {
+        operation.capability_id
+        for bundle, _installed_bundle in bundles.values()
+        for operation in bundle.capabilities
+        if isinstance(operation, (MaterializedOperation, BoundedSearchOperation))
+    }
+    for installed_bundle, declaration in _available_declaration_bundles(bundles):
+        if declaration.capability_id not in installed_bundle.result_schema_uris:
+            continue
+        if installation.checker_ids.get(declaration.capability_id) is None:
+            continue
+        installed_declaration = _installed_declaration(
+            installed_bundle,
+            declaration,
+            installation,
+            result_models[declaration.capability_id],
+        )
         adapters.append(
-            ExactDomainResultVerificationAdapter(
-                capability_id="polynomial.result.verify",
-                title="Verify an exact polynomial result",
-                description=(
-                    "Independently replay one supported stored polynomial result "
-                    "against its exact input lineage."
-                ),
-                tags=("verification", "exact", "polynomial"),
+            ExactComputedVerificationAdapter(
+                declaration=installed_declaration,
                 store=store,
                 schemas=schemas,
                 artifacts=artifacts,
                 verification=verification,
-                declarations=polynomial_declarations,
                 witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes["python-flint"],
+                provider_runtime=installation.provider_runtimes[
+                    _provider_runtime_key(declaration)
+                ],
+                stored_result_input=declaration.capability_id in stored_producers,
             )
         )
-    if matrix_declarations:
-        adapters.append(
-            ExactDomainResultVerificationAdapter(
-                capability_id="matrix.result.verify",
-                title="Verify an exact matrix result",
-                description=(
-                    "Independently replay one supported stored matrix result "
-                    "against its exact input lineage."
-                ),
-                tags=("verification", "exact", "matrix"),
-                store=store,
-                schemas=schemas,
-                artifacts=artifacts,
-                verification=verification,
-                declarations=matrix_declarations,
-                witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes["python-flint"],
-            )
-        )
-    if probability_declarations:
-        adapters.append(
-            ExactDomainResultVerificationAdapter(
-                capability_id="probability.result.verify",
-                title="Verify an exact finite-probability result",
-                description=(
-                    "Independently replay one supported stored finite-probability "
-                    "result against its exact input lineage."
-                ),
-                tags=("verification", "exact", "probability", "finite"),
-                store=store,
-                schemas=schemas,
-                artifacts=artifacts,
-                verification=verification,
-                declarations=probability_declarations,
-                witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes["finite-probability"],
-            )
-        )
-    if combinatorics_declarations:
-        adapters.append(
-            ExactDomainResultVerificationAdapter(
-                capability_id="combinatorics.result.verify",
-                title="Verify an exact recurrence or rational-series result",
-                description=(
-                    "Independently replay one stored bounded linear recurrence or "
-                    "rational generating-function coefficient result against its "
-                    "exact input lineage."
-                ),
-                tags=(
-                    "verification",
-                    "exact",
-                    "combinatorics",
-                    "recurrence",
-                    "generating-function",
-                ),
-                store=store,
-                schemas=schemas,
-                artifacts=artifacts,
-                verification=verification,
-                declarations=combinatorics_declarations,
-                witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes["combinatorics"],
-            )
-        )
-    if topology_declarations:
-        adapters.append(
-            ExactDomainResultVerificationAdapter(
-                capability_id="topology.result.verify",
-                title="Verify an exact simplicial-topology result",
-                description=(
-                    "Independently reconstruct one finite complex and replay its "
-                    "oriented boundaries or prime-field homology quotient evidence."
-                ),
-                tags=(
-                    "verification",
-                    "exact",
-                    "topology",
-                    "simplicial-homology",
-                ),
-                store=store,
-                schemas=schemas,
-                artifacts=artifacts,
-                verification=verification,
-                declarations=topology_declarations,
-                witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes["topology"],
-            )
-        )
-    if poset_declarations:
-        adapters.append(
-            ExactDomainResultVerificationAdapter(
-                capability_id="poset.result.verify",
-                title="Verify an exact finite-poset result",
-                description=(
-                    "Independently reconstruct one finite poset and replay its "
-                    "closure, Dilworth witnesses, ideal recurrence, or Möbius values."
-                ),
-                tags=(
-                    "verification",
-                    "exact",
-                    "poset",
-                    "partial-order",
-                ),
-                store=store,
-                schemas=schemas,
-                artifacts=artifacts,
-                verification=verification,
-                declarations=poset_declarations,
-                witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes["poset"],
-            )
-        )
-    adapters.extend(dedicated_adapters)
     return tuple(adapters), installation
-
-
-def _verification_metadata(
-    installed: _InstalledDeclaration,
-) -> tuple[str, str, str]:
-    declaration = installed.declaration
-    if (
-        declaration.verification_capability_id is None
-        or declaration.verification_title is None
-        or declaration.verification_description is None
-    ):
-        raise ValueError(
-            "separately exposed exact replay requires verification metadata"
-        )
-    return (
-        declaration.verification_capability_id,
-        declaration.verification_title,
-        declaration.verification_description,
-    )
 
 
 def _available_declaration_bundles(
@@ -539,12 +372,14 @@ def _installed_declaration(
     bundle: InstalledDomainBundle,
     declaration: ExactReplayCheckerDeclaration,
     installation: ExactDomainCheckerInstallation,
+    result_model: type[ContractModel],
 ) -> _InstalledDeclaration:
     checker_id = installation.checker_ids[declaration.capability_id]
     if checker_id is None:
         raise ValueError("exact-domain checker is not authorized")
     return _InstalledDeclaration(
         declaration=declaration,
+        result_model=result_model,
         input_schema_uri=bundle.input_schema_uris[declaration.request_model],
         result_schema_uri=bundle.result_schema_uris[declaration.capability_id],
         semantics_uri=bundle.semantics_uri,
@@ -552,47 +387,67 @@ def _installed_declaration(
     )
 
 
-class ExactDomainArtifactError(ValueError):
-    """A result is not one of the exactly bound supported producer artifacts."""
+class ExactComputedVerificationAdapter:
+    """Verify one exact producer result from inline input and candidate.
 
-
-class ExactDomainResultVerificationAdapter:
-    """Verify one stored exact producer result using independent bounded replay."""
+    The verifier validates the inline input and candidate against the
+    producer's input and result schemas and checks the authorized checker's
+    bounded input scope before any artifact write. It then materializes the
+    exact input and candidate as artifacts within verification and reuses the
+    existing witness, checker, ``VerificationService``, and immutable
+    replay-record path.
+    """
 
     def __init__(
         self,
         *,
-        capability_id: str,
-        title: str,
-        description: str,
-        tags: tuple[str, ...],
+        declaration: _InstalledDeclaration,
         store: ArtifactRepository,
         schemas: SchemaRegistry,
         artifacts: ArtifactService,
         verification: VerificationService,
-        declarations: tuple[_InstalledDeclaration, ...],
         witness_schema_uri: str,
         provider_runtime: CapabilityProviderRuntime,
+        stored_result_input: bool,
     ) -> None:
         self.store = store
         self.schemas = schemas
         self.artifacts = artifacts
         self.verification = verification
-        self.declarations_by_schema = {
-            declaration.result_schema_uri: declaration for declaration in declarations
-        }
+        self.declaration = declaration
         self.witness_schema_uri = witness_schema_uri
+        self.stored_result_input = stored_result_input
+        generic_request_model: Any = ExactComputedVerificationRequest
+        self.input_model = generic_request_model[
+            declaration.declaration.request_model,
+            declaration.result_model,
+        ]
+        verification_capability_id = declaration.declaration.verification_capability_id
+        verification_title = declaration.declaration.verification_title
+        verification_description = declaration.declaration.verification_description
+        if (
+            verification_capability_id is None
+            or verification_title is None
+            or verification_description is None
+        ):
+            raise ValueError(
+                "exact replay declaration has incomplete verifier metadata"
+            )
         self._descriptor = CapabilityDescriptor(
-            capability_id=capability_id,
+            capability_id=verification_capability_id,
             version="1",
-            title=title,
-            description=description,
+            title=verification_title,
+            description=verification_description,
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
             modes=(CapabilityMode.VERIFY,),
-            input_schema=model_schema(ExactDomainResultVerificationRequest),
-            output_schema=model_schema(ExactDomainResultVerificationOutput),
-            tags=tags,
+            input_schema=model_schema(
+                ExactDomainResultVerificationRequest
+                if stored_result_input
+                else self.input_model
+            ),
+            output_schema=model_schema(ExactComputedVerificationOutput),
+            tags=declaration.declaration.verification_tags,
         )
 
     @property
@@ -600,40 +455,41 @@ class ExactDomainResultVerificationAdapter:
         return self._descriptor
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        validated = ExactDomainResultVerificationRequest.model_validate(request.input)
-        try:
-            declaration, input_artifact, result_artifact, semantics_artifact = (
-                self._resolve(validated.result_uri)
+        declaration = self.declaration
+        source_artifacts: tuple[StoredArtifact, StoredArtifact, StoredArtifact] | None
+        normalized_candidate: dict[str, object] | None
+        if self.stored_result_input:
+            source_artifacts = self._resolve_stored_result(request)
+            normalized_input = source_artifacts[0].payload
+            normalized_candidate = None
+        else:
+            source_artifacts = None
+            normalized_input, normalized_candidate = self._validated_inline_payloads(
+                request
             )
-        except (ExactDomainArtifactError, StorageError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="INVALID_EXACT_DOMAIN_RESULT",
-                    stage="artifact_resolution",
-                    message=str(exc),
-                    path="result_uri",
-                    hint=(
-                        "Pass a result_uri returned by one supported exact "
-                        "polynomial, matrix, graph, probability, projective-"
-                        "geometry, topology, poset, or combinatorics producer."
-                    ),
-                )
-            ) from exc
-
+        # Check the authorized checker's bounded input scope before any artifact write.
         if not _checker_supports(
             declaration.declaration.capability_id,
-            input_artifact.payload,
+            normalized_input,
         ):
-            output = ExactDomainResultVerificationOutput(
+            output = ExactComputedVerificationOutput(
                 status="UNSUPPORTED",
                 conclusion="UNKNOWN",
                 operation_id=declaration.declaration.capability_id,
-                input_uri=input_artifact.artifact_uri,
-                result_uri=result_artifact.artifact_uri,
+                input_uri=(
+                    source_artifacts[0].artifact_uri
+                    if source_artifacts is not None
+                    else None
+                ),
+                result_uri=(
+                    source_artifacts[1].artifact_uri
+                    if source_artifacts is not None
+                    else None
+                ),
                 checker_id=declaration.checker_id,
                 detail=(
-                    "The authorized checker does not support this result's bounded "
-                    "input scope; no mathematical conclusion follows."
+                    "The authorized checker does not support this input's bounded "
+                    "scope; no mathematical conclusion follows."
                 ),
             )
             return CapabilityResult(
@@ -648,11 +504,15 @@ class ExactDomainResultVerificationAdapter:
                         "operation_id": declaration.declaration.capability_id,
                         "scope_supported": False,
                     },
-                    artifact_uri=input_artifact.artifact_uri,
+                    artifact_uri=(
+                        source_artifacts[0].artifact_uri
+                        if source_artifacts is not None
+                        else None
+                    ),
                 ),
                 completeness=CapabilityCompleteness(
                     status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                    basis="the result lies outside this checker's declared scope",
+                    basis="the input lies outside this checker's declared scope",
                     assurance_level=CapabilityAssuranceLevel.COMPUTED,
                 ),
                 assurance=CapabilityAssurance(
@@ -663,11 +523,18 @@ class ExactDomainResultVerificationAdapter:
                     ),
                 ),
                 artifact_uris=(
-                    input_artifact.artifact_uri,
-                    result_artifact.artifact_uri,
+                    (source_artifacts[0].artifact_uri, source_artifacts[1].artifact_uri)
+                    if source_artifacts is not None
+                    else ()
                 ),
             )
-
+        if source_artifacts is None:
+            if normalized_candidate is None:
+                raise AssertionError("inline replay candidate was not validated")
+            source_artifacts = self._materialize_inline_payloads(
+                normalized_input, normalized_candidate
+            )
+        input_artifact, result_artifact, semantics_artifact = source_artifacts
         witness = put_witness_envelope(
             self.artifacts,
             witness_schema_uri=self.witness_schema_uri,
@@ -684,11 +551,25 @@ class ExactDomainResultVerificationAdapter:
                 f"{declaration.declaration.capability_id} independent replay witness"
             ),
         )
+        return self._verify_materialized_relation(
+            request,
+            input_artifact,
+            result_artifact,
+            self.store.get(witness.artifact_uri),
+        )
+
+    def _verify_materialized_relation(
+        self,
+        request: CapabilityRequest,
+        input_artifact: StoredArtifact,
+        result_artifact: StoredArtifact,
+        witness: StoredArtifact,
+    ) -> CapabilityResult:
         checked = self.verification.verify_witness(
             claim_uri=input_artifact.artifact_uri,
             candidate_uri=result_artifact.artifact_uri,
             witness_uri=witness.artifact_uri,
-            checker_id=declaration.checker_id,
+            checker_id=self.declaration.checker_id,
             include_artifact_metadata=True,
             include_semantics_artifact=True,
         )
@@ -698,55 +579,34 @@ class ExactDomainResultVerificationAdapter:
             and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
-        status: Literal["VERIFIED", "REJECTED", "TIMEOUT", "CANCELLED", "ERROR"]
-        if verified:
-            status = "VERIFIED"
-        elif checked.execution.status is ExecutionStatus.COMPLETED:
-            status = "REJECTED"
-        elif checked.execution.status is ExecutionStatus.TIMEOUT:
-            status = "TIMEOUT"
-        elif checked.execution.status is ExecutionStatus.CANCELLED:
-            status = "CANCELLED"
-        else:
-            status = "ERROR"
-        detail = checked.execution.detail
-        if detail is None and checked.input.errors:
-            detail = checked.input.errors[0]
-        if detail is None:
-            detail = (
+        status = self._verification_status(checked.execution.status, verified)
+        detail = checked.execution.detail or (
+            checked.input.errors[0]
+            if checked.input.errors
+            else (
                 "the authorized independent checker accepted the exact result"
                 if verified
                 else "the exact result was not independently accepted"
             )
-        output = ExactDomainResultVerificationOutput(
-            status=status,
-            conclusion="TRUE" if verified else "UNKNOWN",
-            operation_id=declaration.declaration.capability_id,
-            input_uri=input_artifact.artifact_uri,
-            result_uri=result_artifact.artifact_uri,
-            witness_uri=witness.artifact_uri,
-            checker_id=declaration.checker_id,
-            verification_record_uri=(
-                checked.verification_record_uri if verified else None
-            ),
-            detail=detail,
         )
         record_uri = checked.verification_record_uri if verified else None
-        artifact_uris = [
+        artifact_uris = (
             input_artifact.artifact_uri,
             result_artifact.artifact_uri,
             witness.artifact_uri,
-        ]
-        if record_uri is not None:
-            artifact_uris.append(record_uri)
-        assurance_level = (
-            CapabilityAssuranceLevel.VERIFIED
-            if verified
-            else (
-                CapabilityAssuranceLevel.COMPUTED
-                if checked.execution.status is ExecutionStatus.COMPLETED
-                else CapabilityAssuranceLevel.HEURISTIC
-            )
+            *((record_uri,) if record_uri is not None else ()),
+        )
+        completed = checked.execution.status is ExecutionStatus.COMPLETED
+        output = ExactComputedVerificationOutput(
+            status=status,
+            conclusion="TRUE" if verified else "UNKNOWN",
+            operation_id=self.declaration.declaration.capability_id,
+            input_uri=input_artifact.artifact_uri,
+            result_uri=result_artifact.artifact_uri,
+            witness_uri=witness.artifact_uri,
+            checker_id=self.declaration.checker_id,
+            verification_record_uri=record_uri,
+            detail=detail,
         )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
@@ -757,7 +617,7 @@ class ExactDomainResultVerificationAdapter:
             scope=CapabilityScope(
                 description="the complete stored exact operation input and result",
                 parameters={
-                    "operation_id": declaration.declaration.capability_id,
+                    "operation_id": self.declaration.declaration.capability_id,
                     "input_uri": input_artifact.artifact_uri,
                     "result_uri": result_artifact.artifact_uri,
                 },
@@ -768,70 +628,139 @@ class ExactDomainResultVerificationAdapter:
                 basis="direct exact replay makes no search-completeness claim",
                 assurance_level=(
                     CapabilityAssuranceLevel.COMPUTED
-                    if checked.execution.status is ExecutionStatus.COMPLETED
+                    if completed
                     else CapabilityAssuranceLevel.HEURISTIC
                 ),
             ),
             assurance=CapabilityAssurance(
-                level=assurance_level,
-                basis=(
-                    "accepted in a clean process by the operator-authorized "
-                    "independent exact replay checker"
+                level=(
+                    CapabilityAssuranceLevel.VERIFIED
                     if verified
                     else (
-                        "checker replay completed without accepting the candidate; "
-                        "no opposite conclusion follows"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
+                        CapabilityAssuranceLevel.COMPUTED
+                        if completed
+                        else CapabilityAssuranceLevel.HEURISTIC
+                    )
+                ),
+                basis=(
+                    "accepted in a clean process by the operator-authorized independent exact replay checker"
+                    if verified
+                    else (
+                        "checker replay completed without accepting the candidate; no opposite conclusion follows"
+                        if completed
                         else "checker replay did not complete; no conclusion follows"
                     )
                 ),
                 verification_record_uri=record_uri,
             ),
-            artifact_uris=tuple(artifact_uris),
+            artifact_uris=artifact_uris,
         )
 
-    def _resolve(
-        self, result_uri: str
-    ) -> tuple[
-        _InstalledDeclaration,
-        StoredArtifact,
-        StoredArtifact,
-        StoredArtifact,
-    ]:
-        result = self.store.get(result_uri)
-        declaration = self.declarations_by_schema.get(result.manifest.schema_uri)
-        if declaration is None:
-            raise ExactDomainArtifactError(
-                "artifact schema is not a supported exact-domain result"
-            )
-        if result.manifest.semantics_uri != declaration.semantics_uri:
-            raise ExactDomainArtifactError(
-                "result semantics do not match the declared producer"
-            )
-        if len(result.manifest.parents) != 1:
-            raise ExactDomainArtifactError(
-                "result lineage must identify exactly one producer input"
-            )
-        input_artifact = self.store.get(result.manifest.parents[0])
-        if (
-            input_artifact.manifest.schema_uri != declaration.input_schema_uri
-            or input_artifact.manifest.semantics_uri != declaration.semantics_uri
-        ):
-            raise ExactDomainArtifactError(
-                "result parent is not the exact declared producer input"
-            )
+    @staticmethod
+    def _verification_status(
+        execution_status: ExecutionStatus, verified: bool
+    ) -> Literal["VERIFIED", "REJECTED", "TIMEOUT", "CANCELLED", "ERROR"]:
+        if verified:
+            return "VERIFIED"
+        statuses: dict[ExecutionStatus, Literal["REJECTED", "TIMEOUT", "CANCELLED"]] = {
+            ExecutionStatus.COMPLETED: "REJECTED",
+            ExecutionStatus.TIMEOUT: "TIMEOUT",
+            ExecutionStatus.CANCELLED: "CANCELLED",
+        }
+        return statuses.get(execution_status, "ERROR")
+
+    def _validated_inline_payloads(
+        self, request: CapabilityRequest
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        declaration = self.declaration
         try:
-            self.schemas.validate(declaration.result_schema_uri, result.payload)
-            self.schemas.validate(
+            validated = self.input_model.model_validate(request.input)
+            normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
-                input_artifact.payload,
+                validated.input.model_dump(mode="json"),
+            )
+            normalized_candidate = self.schemas.validate(
+                declaration.result_schema_uri,
+                validated.candidate.model_dump(mode="json"),
             )
         except (SchemaRegistryError, ValidationError, ValueError) as exc:
-            raise ExactDomainArtifactError(
-                "stored operation artifacts do not satisfy their contracts"
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_EXACT_DOMAIN_INPUT",
+                    stage="request_validation",
+                    message=str(exc),
+                    hint=(
+                        "input must satisfy the producer request contract and "
+                        "candidate must satisfy its result contract."
+                    ),
+                )
             ) from exc
-        semantics = self.store.get(declaration.semantics_uri)
-        return declaration, input_artifact, result, semantics
+        return normalized_input, normalized_candidate
+
+    def _materialize_inline_payloads(
+        self,
+        normalized_input: dict[str, object],
+        normalized_candidate: dict[str, object],
+    ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
+        declaration = self.declaration
+        input_put = self.artifacts.put(
+            schema_uri=declaration.input_schema_uri,
+            semantics_uri=declaration.semantics_uri,
+            payload=normalized_input,
+            summary=f"{declaration.declaration.capability_id} exact input",
+        )
+        result_put = self.artifacts.put(
+            schema_uri=declaration.result_schema_uri,
+            semantics_uri=declaration.semantics_uri,
+            payload=normalized_candidate,
+            parents=(input_put.artifact_uri,),
+            summary=f"{declaration.declaration.capability_id} exact candidate",
+        )
+        return (
+            self.store.get(input_put.artifact_uri),
+            self.store.get(result_put.artifact_uri),
+            self.store.get(declaration.semantics_uri),
+        )
+
+    def _resolve_stored_result(
+        self, request: CapabilityRequest
+    ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
+        """Resolve the declared producer's exact materialized lineage."""
+
+        declaration = self.declaration
+        try:
+            result_uri = ExactDomainResultVerificationRequest.model_validate(
+                request.input
+            ).result_uri
+            result_artifact = self.store.get(result_uri)
+            if (
+                result_artifact.manifest.schema_uri != declaration.result_schema_uri
+                or result_artifact.manifest.semantics_uri != declaration.semantics_uri
+                or len(result_artifact.manifest.parents) != 1
+            ):
+                raise ValueError("result_uri is not this producer's exact result")
+            input_artifact = self.store.get(result_artifact.manifest.parents[0])
+            if (
+                input_artifact.manifest.schema_uri != declaration.input_schema_uri
+                or input_artifact.manifest.semantics_uri != declaration.semantics_uri
+            ):
+                raise ValueError("result lineage does not identify the producer input")
+            self.schemas.validate(declaration.input_schema_uri, input_artifact.payload)
+            self.schemas.validate(
+                declaration.result_schema_uri, result_artifact.payload
+            )
+            semantics_artifact = self.store.get(declaration.semantics_uri)
+        except (SchemaRegistryError, StorageError, ValidationError, ValueError) as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_EXACT_DOMAIN_RESULT",
+                    stage="artifact_resolution",
+                    message=str(exc),
+                    path="result_uri",
+                    hint="Pass the result_uri returned by this exact producer.",
+                )
+            ) from exc
+        return input_artifact, result_artifact, semantics_artifact
 
 
 def _checker_supports(operation_id: str, payload: object) -> bool:
@@ -873,9 +802,8 @@ def _checker_supports(operation_id: str, payload: object) -> bool:
 
 
 __all__ = [
-    "ExactDomainArtifactError",
+    "ExactComputedVerificationAdapter",
     "ExactDomainCheckerInstallation",
-    "ExactDomainResultVerificationAdapter",
     "install_exact_domain_checkers",
     "install_exact_domain_verification",
 ]

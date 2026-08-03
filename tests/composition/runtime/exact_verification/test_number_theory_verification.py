@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 import pytest
 
 from jacobian.contracts.capabilities import (
@@ -27,10 +29,11 @@ def test_prime_factorization_result_uses_independent_python_flint_replay(
 ) -> None:
     producer_id = "integer.compute.prime_factorization"
     verifier_id = "integer.prime_factorization.verify"
+    producer_payload = {"value": value}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=producer_id,
-            input={"value": value},
+            input=producer_payload,
         )
     )
 
@@ -38,7 +41,7 @@ def test_prime_factorization_result_uses_independent_python_flint_replay(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
 
@@ -64,28 +67,21 @@ def test_prime_factorization_result_uses_independent_python_flint_replay(
 def test_prime_factorization_verifier_rejects_incomplete_factor_list(
     authorized_complete_runtime,
 ) -> None:
+    producer_payload = {"value": "360"}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.compute.prime_factorization",
-            input={"value": "360"},
+            input=producer_payload,
         )
     )
-    result_artifact = authorized_complete_runtime.core.store.get(
-        computed.output["result_uri"]
-    )
-    false_result = authorized_complete_runtime.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=result_artifact.manifest.semantics_uri,
-        parents=result_artifact.manifest.parents,
-        payload={"factors": result_artifact.payload["factors"][:-1]},
-        summary="adversarial incomplete prime factorization result",
-    )
+    forged_candidate = deepcopy(computed.output["result"])
+    forged_candidate["factors"] = forged_candidate["factors"][:-1]
 
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.prime_factorization.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": false_result.artifact_uri},
+            input={"input": producer_payload, "candidate": forged_candidate},
         )
     )
 
@@ -102,10 +98,11 @@ def test_powerful_number_result_uses_independent_python_flint_replay(
 ) -> None:
     producer_id = "integer.decide.powerful"
     verifier_id = "integer.powerful.verify"
+    producer_payload = {"value": value}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=producer_id,
-            input={"value": value},
+            input=producer_payload,
         )
     )
 
@@ -113,7 +110,7 @@ def test_powerful_number_result_uses_independent_python_flint_replay(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
 
@@ -128,20 +125,16 @@ def test_powerful_number_result_uses_independent_python_flint_replay(
 def test_powerful_number_verifier_rejects_schema_valid_wrong_factor_product(
     authorized_complete_runtime,
 ) -> None:
+    producer_payload = {"value": "72"}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.decide.powerful",
-            input={"value": "72"},
+            input=producer_payload,
         )
     )
-    result_artifact = authorized_complete_runtime.core.store.get(
-        computed.output["result_uri"]
-    )
-    false_result = authorized_complete_runtime.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=result_artifact.manifest.semantics_uri,
-        parents=result_artifact.manifest.parents,
-        payload={
+    forged_candidate = deepcopy(computed.output["result"])
+    forged_candidate.update(
+        {
             "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
             "is_powerful": True,
             "factors": [
@@ -149,15 +142,14 @@ def test_powerful_number_verifier_rejects_schema_valid_wrong_factor_product(
                 {"prime": "3", "power": 2},
             ],
             "violating_primes": [],
-        },
-        summary="adversarial wrong powerful-number factor product",
+        }
     )
 
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.powerful.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": false_result.artifact_uri},
+            input={"input": producer_payload, "candidate": forged_candidate},
         )
     )
 
@@ -172,10 +164,11 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
 ) -> None:
     producer_id = "modular.polynomial_residue_image.compute"
     verifier_id = "modular.polynomial_residue_image.verify"
+    producer_payload = _modular_residue_payload()
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=producer_id,
-            input=_modular_residue_payload(),
+            input=producer_payload,
         )
     )
 
@@ -183,7 +176,7 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
 
@@ -209,10 +202,11 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
 def test_modular_residue_verifier_rejects_source_result_substitution(
     authorized_complete_runtime,
 ) -> None:
+    source_payload = _modular_residue_payload()
     source_result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.compute",
-            input=_modular_residue_payload(),
+            input=source_payload,
         )
     )
     substituted_result = authorized_complete_runtime.core.capabilities.invoke(
@@ -221,25 +215,13 @@ def test_modular_residue_verifier_rejects_source_result_substitution(
             input=_modular_residue_payload(coefficient="3"),
         )
     )
-    source_artifact = authorized_complete_runtime.core.store.get(
-        source_result.output["result_uri"]
-    )
-    candidate_artifact = authorized_complete_runtime.core.store.get(
-        substituted_result.output["result_uri"]
-    )
-    rebound_candidate = authorized_complete_runtime.core.artifacts.put(
-        schema_uri=candidate_artifact.manifest.schema_uri,
-        semantics_uri=candidate_artifact.manifest.semantics_uri,
-        parents=source_artifact.manifest.parents,
-        payload=candidate_artifact.payload,
-        summary="adversarial modular residue source-result substitution",
-    )
+    forged_candidate = deepcopy(substituted_result.output["result"])
 
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": rebound_candidate.artifact_uri},
+            input={"input": source_payload, "candidate": forged_candidate},
         )
     )
 

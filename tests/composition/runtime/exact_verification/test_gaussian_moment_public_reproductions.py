@@ -56,9 +56,12 @@ def test_public_gaussian_moment_reproductions_reach_checker_bound_results(
 
         verified = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
-                capability_id="probability.result.verify",
+                capability_id="probability.gaussian_polynomial.moment.verify",
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={
+                    "input": case["request"],
+                    "candidate": computed.output["result"],
+                },
             )
         )
 

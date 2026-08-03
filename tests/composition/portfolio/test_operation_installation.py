@@ -21,6 +21,7 @@ from jacobian.operations import (
     DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
+    MaterializedOperation,
     OperationExecutionFailure,
 )
 from jacobian.provider_runtime import known_provider_runtime
@@ -37,6 +38,10 @@ class _SyntheticResult(ContractModel):
 
 class _BoundedResult(ContractModel):
     complete: bool
+
+
+class _SyntheticPreview(ContractModel):
+    summary: str
 
 
 def _synthetic_bundle() -> DomainBundle:
@@ -101,7 +106,7 @@ def _install(runtime: JacobianRuntime, bundle: DomainBundle) -> None:
         runtime.core.capabilities.register(adapter)
 
 
-def test_synthetic_bundle_installs_and_materializes_typed_result(
+def test_synthetic_bundle_returns_an_inline_typed_result(
     fresh_complete_runtime,
 ) -> None:
     _install(fresh_complete_runtime, _synthetic_bundle())
@@ -126,14 +131,148 @@ def test_synthetic_bundle_installs_and_materializes_typed_result(
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == {"doubled": 12}
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.artifact_uris == ()
+    assert result.relationships == ()
+    assert result.scope is not None
+    assert result.scope.parameters == {"value": 6}
+    assert result.scope.artifact_uri is None
+
+
+def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
+    fresh_complete_runtime,
+) -> None:
+    bundle = _synthetic_bundle()
+    materialized = MaterializedOperation(
+        capability_id="synthetic.materialize.double",
+        title="Materialize a doubled integer",
+        description="Materialize one doubled integer with lineage and a typed preview.",
+        request_model=_SyntheticRequest,
+        result_model=_SyntheticResult,
+        implementation=lambda request: ComputedSuccess(
+            _SyntheticResult(doubled=request.value * 2)
+        ),
+        relation_id="synthetic.relation.materialize",
+        tags=("synthetic",),
+        preview_model=_SyntheticPreview,
+        preview=lambda result: _SyntheticPreview(summary=f"doubled={result.doubled}"),
+        preview_complete=True,
+    )
+    _install(fresh_complete_runtime, replace(bundle, capabilities=(materialized,)))
+
+    descriptor = next(
+        descriptor
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+        if descriptor.capability_id == "synthetic.materialize.double"
+    )
+    assert descriptor.read_only is False
+    assert descriptor.records_episode is True
+    assert set(descriptor.output_schema["properties"]) == {
+        "input_uri",
+        "result_uri",
+        "preview",
+        "preview_complete",
+        "backend_version",
+    }
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="synthetic.materialize.double",
+            input={"value": 6},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert len(result.artifact_uris) == 2
-    input_artifact = fresh_complete_runtime.core.store.get(result.artifact_uris[0])
-    output_artifact = fresh_complete_runtime.core.store.get(result.artifact_uris[1])
+    input_uri, result_uri = result.artifact_uris
+    assert result.output["input_uri"] == input_uri
+    assert result.output["result_uri"] == result_uri
+    assert result.output["backend_version"] == "synthetic-1"
+    assert result.output["preview"] == {"summary": "doubled=12"}
+    assert result.output["preview_complete"] is True
+    assert result.scope is not None
+    assert result.scope.artifact_uri == input_uri
+    assert result.scope.parameters == {"input_uri": input_uri}
+    input_artifact = fresh_complete_runtime.core.store.get(input_uri)
+    output_artifact = fresh_complete_runtime.core.store.get(result_uri)
     assert input_artifact.payload == {"value": 6}
     assert output_artifact.payload == {"doubled": 12}
-    assert output_artifact.manifest.parents == (result.artifact_uris[0],)
-    assert result.relationships[0].source_artifact_uris == (result.artifact_uris[0],)
-    assert result.relationships[0].target_artifact_uris == (result.artifact_uris[1],)
+    assert output_artifact.manifest.parents == (input_uri,)
+    assert result.relationships[0].relation_id == "synthetic.relation.materialize"
+    assert result.relationships[0].source_artifact_uris == (input_uri,)
+    assert result.relationships[0].target_artifact_uris == (result_uri,)
+
+
+def test_materialized_operation_omits_preview_without_projection(
+    fresh_complete_runtime,
+) -> None:
+    bundle = _synthetic_bundle()
+    materialized = MaterializedOperation(
+        capability_id="synthetic.materialize.no_preview",
+        title="Materialize a doubled integer without preview",
+        description="Materialize one doubled integer with lineage but no inline preview.",
+        request_model=_SyntheticRequest,
+        result_model=_SyntheticResult,
+        implementation=lambda request: ComputedSuccess(
+            _SyntheticResult(doubled=request.value * 2)
+        ),
+        relation_id="synthetic.relation.no_preview",
+        tags=("synthetic",),
+    )
+    _install(fresh_complete_runtime, replace(bundle, capabilities=(materialized,)))
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="synthetic.materialize.no_preview",
+            input={"value": 4},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert len(result.artifact_uris) == 2
+    assert result.output["preview"] is None
+    assert result.output["preview_complete"] is False
+    assert result.output["backend_version"] == "synthetic-1"
+    assert fresh_complete_runtime.core.store.get(result.artifact_uris[1]).payload == {
+        "doubled": 8
+    }
+
+
+def test_materialized_operation_fails_closed_before_artifact_writes(
+    fresh_complete_runtime,
+) -> None:
+    bundle = _synthetic_bundle()
+    not_applicable = CapabilityDiagnostic(
+        code="SYNTHETIC_NOT_APPLICABLE",
+        stage="synthetic_computation",
+        message="Thirteen is excluded from this synthetic operation.",
+    )
+    materialized = MaterializedOperation(
+        capability_id="synthetic.materialize.excluded",
+        title="Materialize a doubled integer that excludes thirteen",
+        description="Exercise fail-closed materialization.",
+        request_model=_SyntheticRequest,
+        result_model=_SyntheticResult,
+        implementation=lambda _request: ComputedNotApplicable(not_applicable),
+        relation_id="synthetic.relation.excluded",
+        tags=("synthetic",),
+        preview_model=_SyntheticPreview,
+        preview=lambda result: _SyntheticPreview(summary=f"doubled={result.doubled}"),
+        preview_complete=True,
+    )
+    _install(fresh_complete_runtime, replace(bundle, capabilities=(materialized,)))
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="synthetic.materialize.excluded",
+            input={"value": 13},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "SYNTHETIC_NOT_APPLICABLE"
+    assert result.artifact_uris == ()
+    assert result.episode_uri is None
 
 
 def test_synthetic_bundle_fails_closed_before_artifact_writes(

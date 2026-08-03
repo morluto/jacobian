@@ -2,22 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
 import threading
-from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from mcp_types import CallToolResult, ContentBlock, ResourceLink, TextContent
-
-from jacobian.adapters.mcp.constants import (
-    CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
-    CAPABILITY_STANDARD_FIELD_BYTE_LIMIT,
-    CAPABILITY_STANDARD_INCLUDED_FIELD_BYTE_LIMIT,
-    CAPABILITY_STANDARD_OUTPUT_BYTE_LIMIT,
-)
+from jacobian.adapters.mcp.constants import CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
 from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityDiscoveryCursorError
@@ -32,183 +23,14 @@ from jacobian.contracts.capabilities import (
 
 _LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
-CapabilityInvocationView = Literal["SUMMARY", "STANDARD", "FULL"]
-CapabilityProjectionStrategy = Literal[
-    "FULL_INLINE",
-    "COMPACT_URI_TEXT",
-    "COMPACT_URI_TEXT_RESOURCE_LINK",
-]
 
 if TYPE_CHECKING:
     from jacobian.runtime.model import JacobianRuntime
 
 
-def _compact_json(value: object) -> str:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-
-
-def _json_bytes(value: object) -> bytes:
-    return _compact_json(value).encode("utf-8")
-
-
 def _mcp_text_json_bytes(value: object) -> bytes:
     """Measure JSON as FastMCP renders structured tool results."""
     return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
-
-
-def _json_digest(value: object) -> str:
-    return f"sha256:{hashlib.sha256(_json_bytes(value)).hexdigest()}"
-
-
-def _json_kind(value: object) -> str:
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, str):
-        return "string"
-    if isinstance(value, int | float):
-        return "number"
-    if isinstance(value, list | tuple):
-        return "array"
-    if isinstance(value, dict):
-        return "object"
-    return type(value).__name__
-
-
-def _json_pointer_segment(value: str) -> str:
-    return value.replace("~", "~0").replace("/", "~1")
-
-
-def _invocation_text_projection(
-    result: CapabilityResult,
-    *,
-    view: CapabilityInvocationView,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Project model-visible text without changing the canonical result."""
-
-    canonical = result.model_dump(mode="json")
-    canonical_bytes = _json_bytes(canonical)
-    canonical_digest = f"sha256:{hashlib.sha256(canonical_bytes).hexdigest()}"
-    projected = dict(canonical)
-    output = canonical["output"]
-    output_bytes = _json_bytes(output)
-    omitted: list[dict[str, Any]] = []
-
-    if view == "SUMMARY":
-        projected["output"] = {}
-        if output:
-            omitted.append(
-                {
-                    "path": "/output",
-                    "json_type": "object",
-                    "byte_count": len(output_bytes),
-                    "sha256": _json_digest(output),
-                }
-            )
-    elif (
-        view == "STANDARD"
-        and result.episode_uri is not None
-        and len(output_bytes) > CAPABILITY_STANDARD_OUTPUT_BYTE_LIMIT
-    ):
-        included: dict[str, Any] = {}
-        included_bytes = 0
-        for key in sorted(output):
-            value = output[key]
-            value_bytes = _json_bytes(value)
-            is_scalar = not isinstance(value, dict | list | tuple)
-            fits_field = len(value_bytes) <= CAPABILITY_STANDARD_FIELD_BYTE_LIMIT
-            fits_total = (
-                included_bytes + len(value_bytes)
-                <= CAPABILITY_STANDARD_INCLUDED_FIELD_BYTE_LIMIT
-            )
-            if is_scalar or (fits_field and fits_total):
-                included[key] = value
-                included_bytes += len(value_bytes)
-                continue
-            omitted.append(
-                {
-                    "path": f"/output/{_json_pointer_segment(key)}",
-                    "json_type": _json_kind(value),
-                    "byte_count": len(value_bytes),
-                    "sha256": _json_digest(value),
-                }
-            )
-        projected["output"] = included
-
-    output_complete = not omitted
-    projection = {
-        "projection_version": "1",
-        "view": view,
-        "canonical_result_in_structured_content": True,
-        "output_complete": output_complete,
-        "logical_payload_bytes": len(canonical_bytes),
-        "full_result_sha256": canonical_digest,
-        "full_result_episode_uri": result.episode_uri,
-        "omitted_output_fields": omitted,
-    }
-    if not output_complete:
-        projection["recovery"] = (
-            "Read full_result_episode_uri for the durable canonical result, or invoke "
-            'again with view="FULL" when no durable result is available.'
-        )
-    if view != "FULL":
-        projected["mcp_projection"] = projection
-    return projected, projection
-
-
-def _capability_call_tool_result(
-    result: CapabilityResult,
-    *,
-    view: CapabilityInvocationView,
-    projection_strategy: CapabilityProjectionStrategy = (
-        "COMPACT_URI_TEXT_RESOURCE_LINK"
-    ),
-) -> CallToolResult:
-    if projection_strategy == "FULL_INLINE":
-        view = "FULL"
-    canonical = result.model_dump(mode="json")
-    projected, projection = _invocation_text_projection(result, view=view)
-    text = _compact_json(canonical if view == "FULL" else projected)
-    model_visible_bytes = len(text.encode("utf-8"))
-    content: list[ContentBlock] = [TextContent(type="text", text=text)]
-    if (
-        projection_strategy == "COMPACT_URI_TEXT_RESOURCE_LINK"
-        and result.episode_uri is not None
-    ):
-        content.append(
-            ResourceLink(
-                name="jacobian-capability-result",
-                title="Durable capability result",
-                uri=result.episode_uri,
-                description=(
-                    "Read the durable canonical capability result when the text "
-                    "projection omits output fields."
-                ),
-                mime_type="application/json",
-                size=len(_json_bytes(canonical)),
-            )
-        )
-    return CallToolResult(
-        _meta={
-            "jacobian": {
-                "result_view": view,
-                "logical_payload_bytes": projection["logical_payload_bytes"],
-                "model_visible_payload_bytes": model_visible_bytes,
-                "full_result_sha256": projection["full_result_sha256"],
-                "full_result_episode_uri": projection["full_result_episode_uri"],
-                "output_complete": projection["output_complete"],
-            }
-        },
-        content=content,
-        structured_content=canonical,
-        is_error=False,
-    )
 
 
 _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
@@ -283,9 +105,6 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
-if TYPE_CHECKING:
-    from jacobian.runtime.model import JacobianRuntime
-
 
 def _invoke_capability_with_cancellation(
     runtime: Any,
@@ -295,11 +114,6 @@ def _invoke_capability_with_cancellation(
     with bounded_process_cancellation(cancellation_event):
         result: CapabilityResult = runtime.core.capabilities.invoke(request)
         return result
-
-
-def _consume_cancelled_worker_result(task: asyncio.Task[CapabilityResult]) -> None:
-    with suppress(BaseException):
-        task.result()
 
 
 def _capability_inspection_extensions(

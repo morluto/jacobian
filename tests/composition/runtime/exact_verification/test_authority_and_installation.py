@@ -57,7 +57,13 @@ def test_probability_verification_installs_without_polynomial_or_matrix_bundles(
     )
 
     assert [adapter.descriptor.capability_id for adapter in adapters] == [
-        "probability.result.verify"
+        "probability.finite_distribution.raw_moment.verify",
+        "probability.finite_distribution.event_probability.verify",
+        "probability.finite_distribution.condition.verify",
+        "probability.finite_distribution.pushforward.verify",
+        "probability.finite_distribution.convolution.verify",
+        "probability.gaussian_polynomial.moment.verify",
+        "probability.graph_reliability.connection_probability.verify",
     ]
     assert any(installation.checker_ids.values())
 
@@ -69,7 +75,7 @@ def test_operator_can_leave_exact_result_verification_unavailable(
     adapters = _install_verification(fresh_complete_runtime, authorize=False)
 
     assert adapters == ()
-    assert {"polynomial.result.verify", "matrix.result.verify"}.isdisjoint(
+    assert {"polynomial.gcd.verify", "matrix.multiply.verify"}.isdisjoint(
         {
             descriptor.capability_id
             for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
@@ -106,7 +112,7 @@ def test_unavailable_flint_replay_preserves_runtime_and_reports_diagnostics(
             for descriptor in runtime.core.capabilities.catalog().capabilities
         }
         assert "matrix.normal_form.rref.compute" in capability_ids
-        assert "matrix.result.verify" not in capability_ids
+        assert "matrix.normal_form.rref.verify" not in capability_ids
         assert "graph.hamiltonian_path.verify" in capability_ids
 
         installation = runtime.portfolio.exact_domain_checkers

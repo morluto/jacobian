@@ -64,7 +64,10 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
             CapabilityRequest(
                 capability_id="matrix.normal_form.smith.certified.verify",
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={
+                    "input": {"matrix": case["matrix"]},
+                    "candidate": computed.output["result"],
+                },
             )
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED
@@ -100,11 +103,18 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
         )
         assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
+        integral_input = {
+            "complex": materialized.output["result"]["complex"],
+            "convention": case["convention"],
+        }
         verified = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="topology.simplicial_homology.integral.verify",
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={
+                    "input": integral_input,
+                    "candidate": computed.output["result"],
+                },
             )
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED

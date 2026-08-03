@@ -24,7 +24,10 @@ from jacobian.contracts.capabilities import (
     CapabilityResult,
     CapabilityScope,
 )
-from jacobian.contracts.domain_operations import ComputedOperationOutput
+from jacobian.contracts.domain_operations import (
+    ComputedOperationOutput,
+    MaterializedOperationOutput,
+)
 from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
 from jacobian.operations import (
     BoundedSearchInterrupted,
@@ -35,6 +38,7 @@ from jacobian.operations import (
     ComputedOperation,
     DomainBundle,
     DomainOperation,
+    MaterializedOperation,
     OperationExecutionFailure,
 )
 from jacobian.schema_registry import SchemaRegistry, model_schema
@@ -167,6 +171,8 @@ class OperationInstaller:
     ) -> CapabilityAdapter:
         if isinstance(operation, ComputedOperation):
             return ComputedOperationAdapter(operation, bundle, resources)
+        if isinstance(operation, MaterializedOperation):
+            return MaterializedOperationAdapter(operation, bundle, resources)
         if isinstance(operation, BoundedSearchOperation):
             return BoundedSearchOperationAdapter(operation, bundle, resources)
         raise TypeError(f"unsupported domain operation: {type(operation).__name__}")
@@ -207,6 +213,8 @@ class ComputedOperationAdapter:
             modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
+            read_only=True,
+            records_episode=False,
             tags=operation.tags,
             invocation_examples=operation.invocation_examples,
         )
@@ -240,27 +248,116 @@ class ComputedOperationAdapter:
         validated_result = self.operation.result_model.model_validate(
             outcome.value.model_dump(mode="python")
         )
-        request_payload = validated_request.model_dump(mode="json")
-        result_payload = validated_result.model_dump(mode="json")
+        output = self.output_model(
+            result=validated_result,
+            backend_version=self.bundle.backend_version,
+        )
+        return CapabilityResult(
+            capability_id=self.operation.capability_id,
+            capability_version=self.operation.version,
+            mode=request.mode,
+            execution=Execution(
+                status=ExecutionStatus.COMPLETED,
+                runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
+            ),
+            output=output.model_dump(mode="json"),
+            scope=CapabilityScope(
+                description=self.bundle.scope_description,
+                parameters=validated_request.model_dump(mode="json"),
+            ),
+            completeness=CapabilityCompleteness(
+                status=CapabilityCompletenessStatus.COMPLETE,
+                basis=self.bundle.completeness_basis,
+                assurance_level=CapabilityAssuranceLevel.COMPUTED,
+            ),
+            assurance=CapabilityAssurance(
+                level=CapabilityAssuranceLevel.COMPUTED,
+                basis=self.bundle.assurance_basis,
+            ),
+        )
 
+
+class MaterializedOperationAdapter:
+    """Materialize a finite producer result with exact input/result lineage."""
+
+    def __init__(
+        self,
+        operation: MaterializedOperation[Any, Any, Any],
+        bundle: DomainBundle,
+        resources: _OperationResources,
+    ) -> None:
+        self.operation = operation
+        self.bundle = bundle
+        self.resources = resources
+        self.preview_model = operation.preview_model or operation.result_model
+        self.output_model = MaterializedOperationOutput[self.preview_model]  # type: ignore[name-defined]
+        self._descriptor = CapabilityDescriptor(
+            capability_id=operation.capability_id,
+            version=operation.version,
+            title=operation.title,
+            description=operation.description,
+            provider=bundle.provider_runtime.provider,
+            provider_runtime=bundle.provider_runtime,
+            modes=(CapabilityMode.EXPLORE,),
+            input_schema=model_schema(operation.request_model),
+            output_schema=model_schema(self.output_model),
+            tags=operation.tags,
+            invocation_examples=operation.invocation_examples,
+        )
+
+    @property
+    def descriptor(self) -> CapabilityDescriptor:
+        return self._descriptor
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        try:
+            validated_request = self.operation.request_model.model_validate(
+                request.input
+            )
+        except ValidationError as exc:
+            raise CapabilityInvocationError(
+                self.operation.invalid_request
+                or self.bundle.diagnostics.invalid_request
+            ) from exc
+        started = time.monotonic()
+        outcome = self.operation.implementation(validated_request)
+        if isinstance(outcome, ComputedNotApplicable):
+            raise CapabilityInvocationError(outcome.diagnostic)
+        if isinstance(outcome, OperationExecutionFailure):
+            return _execution_failure_result(
+                operation=self.operation,
+                request=request,
+                outcome=outcome,
+                started=started,
+            )
+        result = self.operation.result_model.model_validate(
+            outcome.value.model_dump(mode="python")
+        )
         input_uri = self.resources.artifacts.put(
             schema_uri=self.resources.input_schema_uris[self.operation.request_model],
             semantics_uri=self.resources.semantics_uri,
-            payload=request_payload,
-            summary=f"{self.operation.capability_id} exact input",
+            payload=validated_request.model_dump(mode="json"),
+            summary=f"{self.operation.capability_id} materialized input",
         ).artifact_uri
         result_uri = self.resources.artifacts.put(
             schema_uri=self.resources.result_schema_uris[self.operation.capability_id],
             semantics_uri=self.resources.semantics_uri,
-            payload=result_payload,
+            payload=result.model_dump(mode="json"),
             parents=(input_uri,),
-            summary=f"{self.operation.capability_id} exact result",
+            summary=f"{self.operation.capability_id} materialized result",
         ).artifact_uri
-
+        preview = (
+            self.preview_model.model_validate(
+                self.operation.preview(result).model_dump(mode="python")
+            )
+            if self.operation.preview is not None
+            else None
+        )
         output = self.output_model(
             input_uri=input_uri,
             result_uri=result_uri,
-            result=validated_result,
+            preview=preview,
+            preview_complete=self.operation.preview_complete,
             backend_version=self.bundle.backend_version,
         )
         return CapabilityResult(

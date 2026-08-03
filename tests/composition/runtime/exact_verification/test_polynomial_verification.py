@@ -68,21 +68,30 @@ def _install_verification(
     return adapters
 
 
+def _gcd_input() -> dict[str, object]:
+    return {
+        "left": _poly(-1, 0, 1),
+        "right": _poly(0, 1, 1),
+    }
+
+
 def _computed_gcd(fresh_complete_runtime: JacobianRuntime):
     return fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.compute.gcd",
-            input={
-                "left": _poly(-1, 0, 1),
-                "right": _poly(0, 1, 1),
-            },
+            input=_gcd_input(),
         )
     )
 
 
 def test_public_seam_verifies_exact_producer_result(fresh_complete_runtime) -> None:
     adapters = _install_verification(fresh_complete_runtime, authorize=True)
-    provider_runtime = adapters[0].descriptor.provider_runtime
+    gcd_adapter = next(
+        adapter
+        for adapter in adapters
+        if adapter.descriptor.capability_id == "polynomial.gcd.verify"
+    )
+    provider_runtime = gcd_adapter.descriptor.provider_runtime
     assert provider_runtime is not None
     assert {
         component["provider"]
@@ -92,16 +101,18 @@ def test_public_seam_verifies_exact_producer_result(fresh_complete_runtime) -> N
 
     verified = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="polynomial.result.verify",
+            capability_id="polynomial.gcd.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": _gcd_input(),
+                "candidate": computed.output["result"],
+            },
         )
     )
 
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == "polynomial.compute.gcd"
-    assert verified.output["result_uri"] == computed.output["result_uri"]
     assert verified.output["verification_record_uri"] is not None
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert len(verified.artifact_uris) == 4
@@ -111,29 +122,25 @@ def test_public_seam_rejects_validly_shaped_false_result(
     fresh_complete_runtime,
 ) -> None:
     _install_verification(fresh_complete_runtime, authorize=True)
-    computed = _computed_gcd(fresh_complete_runtime)
-    input_uri = computed.output["input_uri"]
-    installed = fresh_complete_runtime.portfolio.domain_bundles["polynomial"]
-    false_result = fresh_complete_runtime.core.artifacts.put(
-        schema_uri=installed.result_schema_uris["polynomial.compute.gcd"],
-        semantics_uri=installed.semantics_uri,
-        parents=(input_uri,),
-        payload={
-            "gcd": _poly(1),
-            "bezout": {
-                "left_multiplier": _poly(),
-                "right_multiplier": _poly(),
-            },
-            "normalization": "MONIC",
+    _computed_gcd(fresh_complete_runtime)
+
+    false_candidate = {
+        "gcd": _poly(1),
+        "bezout": {
+            "left_multiplier": _poly(),
+            "right_multiplier": _poly(),
         },
-        summary="adversarial false GCD candidate",
-    )
+        "normalization": "MONIC",
+    }
 
     rejected = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="polynomial.result.verify",
+            capability_id="polynomial.gcd.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": false_result.artifact_uri},
+            input={
+                "input": _gcd_input(),
+                "candidate": false_candidate,
+            },
         )
     )
 
@@ -148,22 +155,26 @@ def test_public_seam_reports_valid_multivariate_result_as_unsupported(
     fresh_complete_runtime,
 ) -> None:
     _install_verification(fresh_complete_runtime, authorize=True)
+    resultant_input = {
+        "left": _poly_xy(((1, 0), 1), ((0, 1), 1)),
+        "right": _poly_xy(((1, 0), 1), ((0, 0), 1)),
+        "elimination_variable": "x",
+    }
     computed = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.compute.resultant",
-            input={
-                "left": _poly_xy(((1, 0), 1), ((0, 1), 1)),
-                "right": _poly_xy(((1, 0), 1), ((0, 0), 1)),
-                "elimination_variable": "x",
-            },
+            input=resultant_input,
         )
     )
 
     checked = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="polynomial.result.verify",
+            capability_id="polynomial.resultant.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": resultant_input,
+                "candidate": computed.output["result"],
+            },
         )
     )
 

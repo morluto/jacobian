@@ -77,18 +77,15 @@ relationships, open obligations, assurance, diagnostics, and artifact URIs
 independently. COMPLETED does not by itself establish a mathematical conclusion.
 One invocation covers only its exact supplied input or claim. Repeating finite or
 bounded instances does not widen that scope to an all-orders or all-parameters claim.
-The default `view="STANDARD"` keeps the canonical result in MCP structured content
-while bounding large model-visible output fields. Its `mcp_projection` reports exact
-logical and model-visible byte counts, digests every omission, and points to the
-durable full result episode. Use `view="SUMMARY"` only when output fields are not
-needed, or `view="FULL"` when the complete result must also appear in text.
-Synchronous SAT and SMT requests are capped at 150 seconds so structured TIMEOUT or
-CANCELLED diagnostics can arrive before remote transport deadlines. Partition larger
-searches; retrying a cancelled call starts a new computation.
+The canonical complete `CapabilityResult` is returned directly as MCP structured
+content; follow returned `artifact://` and `episode_uri` references instead of
+requesting large payloads inline. Synchronous SAT and SMT requests are capped at 150
+seconds so structured TIMEOUT or CANCELLED diagnostics can arrive before remote
+transport deadlines. Partition larger searches; retrying a cancelled call starts a
+new computation.
 
 Examples:
 - `{"capability_id":"integer.compute.gcd","mode":"EXPLORE","payload":{"left":"84","right":"30"}}`
-- `{"capability_id":"integer.compute.gcd","mode":"EXPLORE","view":"SUMMARY","payload":{"left":"84","right":"30"}}`
 - `{"capability_id":"polynomial.identity.verify","mode":"VERIFY","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
 
 These demonstrate valid envelopes, not a required sequence or research strategy.
@@ -132,13 +129,9 @@ Compose `capability.invoke` calls in whatever sequence the mathematical investig
 requires. Inspect execution, scope, completeness, relationships, obligations,
 assurance, diagnostics, and artifacts as separate result dimensions.
 
-Invocation results have two synchronized representations. MCP structured content is
-the canonical complete `CapabilityResult`. Model-visible text defaults to the
-`STANDARD` view: small outputs remain complete, while large fields are replaced by
-typed byte counts and SHA-256 digests. The accompanying `mcp_projection` states
-whether output is complete, reports logical payload bytes, and links to the durable
-full episode when one was recorded. Request `view="SUMMARY"` to omit output or
-`view="FULL"` to place the canonical complete result in text as well.
+`capability.invoke` returns the canonical complete `CapabilityResult` directly as MCP
+structured content. Follow returned `artifact://` and `episode_uri` references to
+read durable results instead of requesting large payloads inline.
 
 `capability://catalog` is the complete machine-readable installed inventory.
 `capability.describe` is the agent-oriented discovery and exact-inspection surface.

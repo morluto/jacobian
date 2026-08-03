@@ -17,7 +17,6 @@ from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.resources import FunctionResource, TextResource
 from mcp.shared.exceptions import MCPError
-from mcp_types import CallToolResult, TextContent
 
 from jacobian import __version__
 from jacobian.adapters.mcp.context import (
@@ -34,7 +33,6 @@ from jacobian.adapters.mcp.guidance import (
     SERVER_DESCRIPTION,
     SERVER_INSTRUCTIONS,
 )
-from jacobian.adapters.mcp.projections import CapabilityProjectionStrategy
 from jacobian.adapters.mcp.remote import TenantRuntimeRouter
 from jacobian.adapters.mcp.resources import _register_resources_and_prompts
 from jacobian.adapters.mcp.tooling import (
@@ -64,25 +62,6 @@ class JacobianMCPServer(MCPServer[AppState]):
             argument_model.model_config["extra"] = "forbid"
             argument_model.model_rebuild(force=True)
             tool.parameters = argument_model.model_json_schema(by_alias=True)
-
-    async def call_tool(
-        self,
-        name: str,
-        arguments: dict[str, Any],
-        context: Any | None = None,
-    ) -> Any:
-        try:
-            return await super().call_tool(name, arguments, context)
-        except ToolError as exc:
-            return CallToolResult(
-                content=[
-                    TextContent(
-                        type="text",
-                        text=_public_tool_error(name, exc),
-                    )
-                ],
-                is_error=True,
-            )
 
 
 class JacobianCoreExtension(Extension):
@@ -237,23 +216,13 @@ class JacobianCoreExtension(Extension):
             raise
         except Exception as exc:
             _LOGGER.warning("MCP tool %s failed", params.name, exc_info=exc)
-            result = CallToolResult(
-                content=[
-                    TextContent(
-                        type="text",
-                        text=_public_tool_error(params.name, exc),
-                    )
-                ],
-                is_error=True,
-            )
             _log_tool_call(
                 params.name,
                 started,
                 argument_digest,
                 status="error",
-                result=result,
             )
-            return result
+            raise ToolError(_public_tool_error(params.name, exc)) from exc
         _log_tool_call(
             params.name,
             started,
@@ -315,7 +284,6 @@ async def _runtime_lifespan(
     *,
     runtime: JacobianRuntime | None,
     tenant_router: TenantRuntimeRouter | None,
-    projection_strategy: CapabilityProjectionStrategy,
 ) -> AsyncIterator[AppState]:
     if runtime is not None:
         _start_lean_warmup(runtime)
@@ -323,7 +291,6 @@ async def _runtime_lifespan(
         yield AppState(
             runtime=runtime,
             tenant_router=tenant_router,
-            projection_strategy=projection_strategy,
         )
     finally:
         if runtime is not None:
@@ -346,20 +313,11 @@ def create_server(
     capability_policy: CapabilityPolicy | None = None,
     max_tenant_runtimes: int | None = None,
     tenant_idle_timeout_seconds: float | None = None,
-    _projection_strategy: CapabilityProjectionStrategy = (
-        "COMPACT_URI_TEXT_RESOURCE_LINK"
-    ),
 ) -> MCPServer[AppState]:
     """Create a local or tenant-routed adapter over a Jacobian runtime."""
 
     if tenant_isolation and capability_exclusions:
         raise ValueError("capability exclusions are supported only by local evaluation")
-    if _projection_strategy not in {
-        "FULL_INLINE",
-        "COMPACT_URI_TEXT",
-        "COMPACT_URI_TEXT_RESOURCE_LINK",
-    }:
-        raise ValueError("unsupported internal MCP projection strategy")
 
     # Keep ``--help`` and ``--version`` independent of the MCP runtime's
     # heavier imports and shutdown hooks.
@@ -421,7 +379,6 @@ def create_server(
             server,
             runtime=runtime,
             tenant_router=tenant_router,
-            projection_strategy=_projection_strategy,
         ) as state:
             yield state
 

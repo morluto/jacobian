@@ -59,9 +59,14 @@ def test_public_small_graph_reliability_reaches_checker_bound_results(
 
         verified = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
-                capability_id="probability.result.verify",
+                capability_id=(
+                    "probability.graph_reliability.connection_probability.verify"
+                ),
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={
+                    "input": case["request"],
+                    "candidate": computed.output["result"],
+                },
             )
         )
         assert verified.output["status"] == "VERIFIED"

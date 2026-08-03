@@ -8,10 +8,6 @@ from typing import Literal
 _LOGGER = logging.getLogger(__name__)
 CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
-CapabilityInvocationView = Literal["SUMMARY", "STANDARD", "FULL"]
-CAPABILITY_STANDARD_OUTPUT_BYTE_LIMIT = 8_192
-CAPABILITY_STANDARD_FIELD_BYTE_LIMIT = 2_048
-CAPABILITY_STANDARD_INCLUDED_FIELD_BYTE_LIMIT = 6_144
 _CAPABILITY_SCOPE_RULE = {
     "conclusion_scope": "Only the exact supplied input or claim is covered.",
     "bounded_repetition": (

@@ -62,7 +62,10 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
             CapabilityRequest(
                 capability_id="graph.symmetry.generator_orbits.verify",
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={
+                    "input": case["request"],
+                    "candidate": computed.output["result"],
+                },
             )
         )
         assert verified.output["status"] == "VERIFIED"

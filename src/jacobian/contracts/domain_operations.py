@@ -7,9 +7,17 @@ from jacobian.contracts.results import ContractModel
 
 
 class ComputedOperationOutput[ResultT: ContractModel](ContractModel):
-    """Artifact-linked output whose mathematical value remains domain typed."""
+    """Inline typed computed result with backend provenance, no artifacts."""
+
+    result: ResultT
+    backend_version: str
+
+
+class MaterializedOperationOutput[PreviewT: ContractModel](ContractModel):
+    """Artifact-linked output with an optional typed preview of the result."""
 
     input_uri: ArtifactUri
     result_uri: ArtifactUri
-    result: ResultT
+    preview: PreviewT | None = None
+    preview_complete: bool = False
     backend_version: str

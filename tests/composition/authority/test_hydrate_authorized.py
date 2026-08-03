@@ -58,7 +58,7 @@ def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> Non
 
     assert _audit_count(tmp_path) == 0
     # Atomic / resource verify surfaces may still appear; domain checkers must not.
-    assert "polynomial.result.verify" not in _verify_ids(runtime)
+    assert "polynomial.gcd.verify" not in _verify_ids(runtime)
     assert "sat.model.verify" not in _verify_ids(runtime)
     assert "matrix.determinant.verify" not in _verify_ids(runtime)
 
@@ -68,5 +68,5 @@ def test_authorized_runtime_hydrates_reference_checkers(
 ) -> None:
     ids = _verify_ids(authorized_complete_runtime)
     assert "sat.model.verify" in ids
-    assert "polynomial.result.verify" in ids
-    assert "matrix.result.verify" in ids
+    assert "polynomial.gcd.verify" in ids
+    assert "matrix.multiply.verify" in ids

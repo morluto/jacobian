@@ -63,7 +63,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             capability_ids = await _catalog(client)
             assert {
                 "polynomial.compute.gcd",
-                "polynomial.result.verify",
+                "polynomial.gcd.verify",
             } <= capability_ids
 
             producer = await _tool(
@@ -74,34 +74,35 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             verifier = await _tool(
                 client,
                 "capability.describe",
-                {"capability_id": "polynomial.result.verify"},
+                {"capability_id": "polynomial.gcd.verify"},
             )
             assert producer["capability"]["modes"] == ["EXPLORE"]
             assert verifier["capability"]["modes"] == ["VERIFY"]
 
+            gcd_input = {
+                "left": _polynomial(-1, 0, 1),
+                "right": _polynomial(0, 1, 1),
+            }
             computed = await _tool(
                 client,
                 "capability.invoke",
                 {
                     "capability_id": "polynomial.compute.gcd",
                     "mode": "EXPLORE",
-                    "payload": {
-                        "left": _polynomial(-1, 0, 1),
-                        "right": _polynomial(0, 1, 1),
-                    },
+                    "payload": gcd_input,
                 },
             )
             assert computed["execution"]["status"] == "COMPLETED"
             assert computed["assurance"]["level"] == "COMPUTED"
-            result_uri = computed["output"]["result_uri"]
+            candidate = computed["output"]["result"]
 
             verified = await _tool(
                 client,
                 "capability.invoke",
                 {
-                    "capability_id": "polynomial.result.verify",
+                    "capability_id": "polynomial.gcd.verify",
                     "mode": "VERIFY",
-                    "payload": {"result_uri": result_uri},
+                    "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
             assert verified["output"]["status"] == "VERIFIED"
@@ -120,9 +121,9 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 client,
                 "capability.invoke",
                 {
-                    "capability_id": "polynomial.result.verify",
+                    "capability_id": "polynomial.gcd.verify",
                     "mode": "VERIFY",
-                    "payload": {"result_uri": result_uri},
+                    "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
             assert replayed["output"]["status"] == "VERIFIED"
@@ -140,18 +141,19 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
         async with Client(server, raise_exceptions=True) as client:
             capability_ids = await _catalog(client)
             assert "polynomial.compute.gcd" in capability_ids
-            assert "polynomial.result.verify" not in capability_ids
+            assert "polynomial.gcd.verify" not in capability_ids
 
+            gcd_input = {
+                "left": _polynomial(-1, 0, 1),
+                "right": _polynomial(0, 1, 1),
+            }
             computed = await _tool(
                 client,
                 "capability.invoke",
                 {
                     "capability_id": "polynomial.compute.gcd",
                     "mode": "EXPLORE",
-                    "payload": {
-                        "left": _polynomial(-1, 0, 1),
-                        "right": _polynomial(0, 1, 1),
-                    },
+                    "payload": gcd_input,
                 },
             )
             assert computed["execution"]["status"] == "COMPLETED"
@@ -162,9 +164,12 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 client,
                 "capability.invoke",
                 {
-                    "capability_id": "polynomial.result.verify",
+                    "capability_id": "polynomial.gcd.verify",
                     "mode": "VERIFY",
-                    "payload": {"result_uri": computed["output"]["result_uri"]},
+                    "payload": {
+                        "input": gcd_input,
+                        "candidate": computed["output"]["result"],
+                    },
                 },
             )
             assert unavailable["execution"]["status"] == "ERROR"

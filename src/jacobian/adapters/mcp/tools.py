@@ -6,13 +6,11 @@ import logging
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context
-from mcp_types import CallToolResult
 from pydantic import Field, StrictInt
 
 from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE
-from jacobian.adapters.mcp.context import AppState, _projection_strategy, _runtime
+from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.adapters.mcp.projections import (
-    _capability_call_tool_result,
     _capability_descriptor_view,
     _capability_discovery_response,
     _capability_inspection_extensions,
@@ -29,7 +27,6 @@ from jacobian.contracts.capabilities import (
 
 _LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
-CapabilityInvocationView = Literal["SUMMARY", "STANDARD", "FULL"]
 
 
 async def capability_describe(
@@ -224,19 +221,13 @@ async def capability_invoke(
     capability_id: str,
     payload: dict[str, Any],
     mode: CapabilityMode = CapabilityMode.EXPLORE,
-    view: CapabilityInvocationView = "STANDARD",
     ctx: Context[AppState, Any] | None = None,
-) -> Annotated[CallToolResult, CapabilityResult]:
+) -> CapabilityResult:
     active_runtime = _runtime(ctx)
-    result = await _invoke_capability_attempt(
+    return await _invoke_capability_attempt(
         active_runtime,
         capability_id=capability_id,
         payload=payload,
         mode=mode,
         ctx=ctx,
-    )
-    return _capability_call_tool_result(
-        result,
-        view=view,
-        projection_strategy=_projection_strategy(ctx),
     )

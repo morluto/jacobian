@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -92,28 +93,28 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
 def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     authorized_complete_runtime,
 ) -> None:
+    producer_input = {
+        "graph": {
+            "vertices": ["center", "x", "y", "z"],
+            "edges": [
+                ["center", "x"],
+                ["center", "y"],
+                ["center", "z"],
+            ],
+        }
+    }
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.compute",
-            input={
-                "graph": {
-                    "vertices": ["center", "x", "y", "z"],
-                    "edges": [
-                        ["center", "x"],
-                        ["center", "y"],
-                        ["center", "z"],
-                    ],
-                }
-            },
+            input=producer_input,
         )
     )
-    result_uri = computed.artifact_uris[1]
 
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": result_uri},
+            input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
 
@@ -140,26 +141,22 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
         for component in provider_runtime.configuration["components"]
     } == {"jacobian.graph-exact-checker-source"}
 
-    result_artifact = authorized_complete_runtime.core.store.get(result_uri)
-    false_result = authorized_complete_runtime.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=result_artifact.manifest.semantics_uri,
-        parents=result_artifact.manifest.parents,
-        payload={
+    false_candidate = deepcopy(computed.output["result"])
+    false_candidate.update(
+        {
             "maximum_matching_cardinality": 0,
             "witness_edges": [],
             "certificate": {
-                **result_artifact.payload["certificate"],
+                **false_candidate["certificate"],
                 "upper_bound": 0,
             },
-        },
-        summary="adversarial feasible but nonmaximum matching result",
+        }
     )
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": false_result.artifact_uri},
+            input={"input": producer_input, "candidate": false_candidate},
         )
     )
 
@@ -193,15 +190,16 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
     result_field: str,
     expected: int,
 ) -> None:
+    producer_input = {
+        "graph": {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [["a", "b"], ["b", "c"], ["c", "d"]],
+        }
+    }
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=producer_id,
-            input={
-                "graph": {
-                    "vertices": ["a", "b", "c", "d"],
-                    "edges": [["a", "b"], ["b", "c"], ["c", "d"]],
-                }
-            },
+            input=producer_input,
         )
     )
 
@@ -209,7 +207,7 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
 
@@ -228,21 +226,13 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
     assert provider_runtime is not None
     assert provider_runtime.provider == "jacobian.graph-exact-checkers"
 
-    result_artifact = authorized_complete_runtime.core.store.get(
-        computed.output["result_uri"]
-    )
-    false_result = authorized_complete_runtime.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=result_artifact.manifest.semantics_uri,
-        parents=result_artifact.manifest.parents,
-        payload={**result_artifact.payload, result_field: 0},
-        summary=f"adversarial false {result_field} result",
-    )
+    false_candidate = deepcopy(computed.output["result"])
+    false_candidate[result_field] = 0
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": false_result.artifact_uri},
+            input={"input": producer_input, "candidate": false_candidate},
         )
     )
 
@@ -266,17 +256,18 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
             ["3", "5"],
         ],
     }
+    producer_input = {"graph": graph}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.compute",
-            input={"graph": graph},
+            input=producer_input,
         )
     )
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
 
@@ -284,7 +275,6 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == "graph.distance_matrix.compute"
-    assert verified.output["result_uri"] == computed.output["result_uri"]
     assert verified.output["verification_record_uri"] is not None
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["verification_record_uri"] in verified.artifact_uris
@@ -322,28 +312,17 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert maximum_distance == 2
     assert maximizing_vertices == ["5"]
 
-    result_artifact = authorized_complete_runtime.core.store.get(
-        computed.output["result_uri"]
-    )
-    order = len(result_artifact.payload["vertices"])
-    false_result = authorized_complete_runtime.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=result_artifact.manifest.semantics_uri,
-        parents=result_artifact.manifest.parents,
-        payload={
-            **result_artifact.payload,
-            "distances": [
-                [0 if source == target else 1 for target in range(order)]
-                for source in range(order)
-            ],
-        },
-        summary="adversarial metric-shaped but false graph distance matrix",
-    )
+    false_candidate = deepcopy(computed.output["result"])
+    order = len(false_candidate["vertices"])
+    false_candidate["distances"] = [
+        [0 if source == target else 1 for target in range(order)]
+        for source in range(order)
+    ]
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": false_result.artifact_uri},
+            input={"input": producer_input, "candidate": false_candidate},
         )
     )
 

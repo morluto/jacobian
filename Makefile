@@ -15,15 +15,20 @@ ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
+PUBLIC_COMMANDS := help setup check check-changed ci-plan test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e docs-linkcheck harbor-plan harbor-check-task harbor-oracle-task npm-test test-all-ci check-static deploy-check
 
 # A timeout is a lane-level containment policy.  It intentionally does not live
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-linkcheck deploy-check
+.PHONY: help help-all uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
-	@awk 'BEGIN {FS = ":.*## "; printf "Jacobian developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian common developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / && ($$1 in wanted) {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@printf '\nAdvanced lifecycle and diagnostic commands are hidden from the daily index. Use `make help-all` to list them.\n'
+
+help-all: ## Show every low-level and lifecycle developer command.
+	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { \
@@ -83,8 +88,41 @@ test-plan: ## Print local validation selected for BASE..HEAD and working changes
 	@test -n "$(BASE)" || { echo "BASE is required (for example: make test-plan BASE=origin/main)" >&2; exit 2; }
 	@$(UV_RUN) python .github/scripts/plan-local-tests --base "$(BASE)"
 
+ci-plan: ## Print the hosted CI lane plan for BASE..HEAD and working changes.
+	@set -eu; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	base_sha=$$(git rev-parse "$(or $(BASE),origin/main)"); \
+	head_sha=$$(git rev-parse HEAD); \
+	changed_paths=$$({ \
+		git diff --name-only "$(or $(BASE),origin/main)" HEAD; \
+		git diff --name-only HEAD; \
+		git diff --cached --name-only; \
+		git ls-files --others --exclude-standard; \
+	} | sort -u); \
+	printf '%s\n' "$$changed_paths" > "$$tmp_dir/changed-paths.txt"; \
+	$(UV_RUN) python .github/scripts/classify-ci-paths -- $$changed_paths > "$$tmp_dir/plan.txt"; \
+	$(UV_RUN) python .github/scripts/emit-plan-receipt \
+		--kind product-ci --event pull_request \
+		--base "$$base_sha" --head "$$head_sha" \
+		--planner .github/scripts/classify-ci-paths \
+		--config .github/ci-impact.json --config tests/topology.toml \
+		--config .github/scripts/validate-ci-plan \
+		--config .github/workflows/ci.yml --config Makefile \
+		--plan-file "$$tmp_dir/plan.txt" \
+		--paths-file "$$tmp_dir/changed-paths.txt" \
+		--output "$$tmp_dir/receipt.json" >/dev/null; \
+	echo "Hosted CI lanes:"; \
+	cat "$$tmp_dir/plan.txt"; \
+	echo "Plan receipt:"; \
+	cat "$$tmp_dir/receipt.json"
+
 test-changed: ## Run changed-path tests, defaulting BASE to origin/main.
 	@$(UV_RUN) python .github/scripts/plan-local-tests --base "$(or $(BASE),origin/main)" --execute
+
+check-changed: ## Run format, types, and exact changed-path tests.
+	$(MAKE) lint typecheck
+	$(MAKE) test-changed BASE="$(or $(BASE),origin/main)"
 
 define run_topology_lane
 	PYTEST_ADDOPTS="$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
@@ -124,9 +162,7 @@ test-e2e: ## Run complete user-visible CLI/workflow scenarios serially.
 test-compatibility: ## Run the small supported-version import/API compatibility smoke suite.
 	$(UV_RUN) pytest -n 0 --timeout=30 --timeout-method=thread tests/unit/tooling/test_ci_compatibility.py $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-affected: ## Execute planner-selected exact nodes or their fail-closed lanes.
-	@test -n "$(BASE)" || { echo "BASE is required (for example: make test-affected BASE=origin/main)" >&2; exit 2; }
-	@$(UV_RUN) python .github/scripts/plan-local-tests --base "$(BASE)" --execute
+test-affected: test-changed ## Compatibility alias for the changed-path planner.
 
 test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
 	$(MAKE) test-unit
@@ -181,28 +217,66 @@ precommit: ## Fix and run every routine local handoff check.
 check-static: lint-full typecheck test-architecture todo-check build ## Run CI-owned static checks plus a local package build.
 
 harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
-	@changed_paths=$$({ \
+	@set -eu; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	base_sha=""; \
+	base_arg=""; \
+	if [ -n "$(BASE)" ]; then \
+		base_sha=$$(git rev-parse "$(BASE)"); \
+		base_arg="--base $$base_sha"; \
+	fi; \
+	head_sha=$$(git rev-parse HEAD); \
+	changed_paths=$$({ \
 		if [ -n "$(BASE)" ]; then git diff --name-only "$(BASE)" HEAD; fi; \
 		git diff --name-only HEAD; \
 		git ls-files --others --exclude-standard; \
 	} | sort -u); \
-	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks $(if $(BASE),--base "$(BASE)",) -- $$changed_paths
+	printf '%s\n' "$$changed_paths" > "$$tmp_dir/changed-paths.txt"; \
+	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks \
+		$$base_arg --head "$$head_sha" -- $$changed_paths > "$$tmp_dir/plan.txt"; \
+	$(UV_RUN) python .github/scripts/emit-plan-receipt \
+		--kind benchmark --event pull_request \
+		--base "$$base_sha" --head "$$head_sha" \
+		--planner .github/scripts/plan-benchmarks \
+		--config .github/scripts/validate-benchmark-plan \
+		--config benchmarks/registry.toml \
+		--config benchmarks/environment-profiles.toml \
+		--config .github/workflows/benchmarks.yml \
+		--config Makefile \
+		--config tools/check_benchmark_adapters.py \
+		--config tools/check_benchmark_contracts.py \
+		--config tools/check_harbor_dataset.py \
+		--config tools/sync_harbor_verifier_support.py \
+		--plan-file "$$tmp_dir/plan.txt" \
+		--paths-file "$$tmp_dir/changed-paths.txt" \
+		--output "$$tmp_dir/receipt.json" >/dev/null; \
+	echo "Benchmark plan:"; \
+	cat "$$tmp_dir/plan.txt"; \
+	echo "Plan receipt:"; \
+	cat "$$tmp_dir/receipt.json"
 
 harbor-sync: ## Update vendored verifier support and deterministic task digests.
 	$(HARBOR_PYTHON) tools/sync_harbor_verifier_support.py --write
 	$(HARBOR_PYTHON) tools/check_harbor_dataset.py --write
 
-harbor-validate: ## Run all repository-owned Harbor checks under the pinned Harbor runtime.
+harbor-contracts: ## Check Harbor sync, task topology, schemas, and generated records.
 	$(HARBOR_PYTHON) tools/sync_harbor_verifier_support.py --check
 	$(HARBOR_PYTHON) tools/check_harbor_dataset.py --check
 	$(HARBOR_PYTHON) tools/check_benchmark_contracts.py
+
+harbor-adapter-checks: ## Check every repository-owned Harbor adapter.
 	@set -eu; for adapter_dir in benchmarks/adapters/*; do \
 		test -d "$$adapter_dir" || continue; \
 		$(MAKE) --no-print-directory harbor-adapter-check \
 			ADAPTER="$${adapter_dir##*/}"; \
 	done
+
+harbor-validation-tests: ## Run Harbor's host-side validation test suite.
 	$(UV_RUN) pytest -n $(HARBOR_VALIDATION_WORKERS) \
 		$(PYTEST_DIAGNOSTIC_ARGS) benchmarks/validation $(PYTEST_ARGS)
+
+harbor-validate: harbor-contracts harbor-adapter-checks harbor-validation-tests ## Run all repository-owned Harbor checks under the pinned Harbor runtime.
 
 harbor-check: harbor-validate ## Run Harbor topology, digest, provenance, and host-side validation checks.
 

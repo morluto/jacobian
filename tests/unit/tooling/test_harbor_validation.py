@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from benchmarks.tooling.harbor_suite import (
@@ -106,6 +107,24 @@ def test_validate_task_topology_forbids_raw_interpreter_caches(
     (cache / "verifier.cpython-312.pyc").write_bytes(b"cache")
     failures = validate_task_topology(suite, task)
     assert any("cache" in f for f in failures)
+
+
+def test_validate_task_topology_ignores_gitignored_interpreter_caches(
+    tmp_path: Path, patched_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import benchmarks.tooling.harbor_suite as harbor_suite
+
+    monkeypatch.setattr(
+        harbor_suite.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0),
+    )
+    suite, task = _make_suite_with_task(tmp_path)
+    cache = task / "tests" / "__pycache__"
+    cache.mkdir()
+    (cache / "verifier.cpython-312.pyc").write_bytes(b"cache")
+
+    assert validate_task_topology(suite, task) == []
 
 
 def test_validate_task_visibility_detects_host_path(

@@ -30,6 +30,21 @@ The canonical local commands are the semantic targets `make test-unit`,
 `make test-lean`, and `make test-e2e`. `make test-all-ci` is an explicit,
 exceptional full local reproduction.
 
+Planning has three intentionally different entry points:
+
+```sh
+make test-plan BASE=origin/main   # exact local selectors or lane fallback
+make ci-plan BASE=origin/main     # hosted CI semantic lanes
+make harbor-plan BASE=origin/main # benchmark contracts and Oracle scope
+```
+
+The hosted CI and Harbor plans are evidence plans, not test commands. They
+report why a lane is selected, deferred, or escalated, and emit a temporary
+receipt bound to the event, base/head revisions, changed-path digest, planner
+digest, configuration digests, and canonical plan digest. `make harbor-plan`
+uses the pinned Harbor runtime because task digests are part of the plan
+contract.
+
 ## Purpose
 
 Jacobian is a mathematical capability toolbox with a fail-closed verification
@@ -72,9 +87,13 @@ make test-e2e
 make test-stress
 make test-ordering PYTEST_ARGS=--randomly-seed=17
 make check
+make check-changed BASE=origin/main
 make check-static
 make test-all-ci
 make docs-linkcheck
+make ci-plan BASE=origin/main
+make test-plan BASE=origin/main
+make harbor-plan BASE=origin/main
 make clean
 ```
 
@@ -149,6 +168,16 @@ override applies without an extra push. Overrides are additive only and
 cannot weaken the plan selected from changed paths. A scheduled validation
 workflow separately exercises repeated property stress, alternate ordering
 seeds, and optional providers outside the pull-request critical path.
+
+Benchmark validation is decomposed into evidence roles even though CI shares
+one checkout for the deterministic contract gate: Harbor support synchronization,
+task topology and digests, schemas and generated records, adapter checks, host
+validation tests, and Oracle execution. A task README is documentation; a task
+instruction, environment, manifest, or member record is executable evaluation
+input. Shared environment profiles and execution-control changes may escalate
+to merge-queue portfolio evidence. Ignored Python bytecode is excluded from
+source validation, while committed or explicitly unignored cache files remain
+invalid.
 
 The build lane produces the source distribution and wheel once. Its dependent
 package-validation job downloads that artifact and exercises both installed

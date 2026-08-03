@@ -28,9 +28,6 @@ from jacobian.providers.sympy_runtime import (
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-pytestmark = pytest.mark.usefixtures("attached_complete_runtime")
-
-
 def _variable(name: str) -> dict[str, Any]:
     return {"kind": "variable", "name": name}
 

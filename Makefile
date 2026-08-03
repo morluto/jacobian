@@ -4,6 +4,9 @@ UV_RUN := uv run --locked
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
 HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
+# Validation pytest is process-isolated under xdist; Path monkeypatches stay
+# worker-local. Oracle/adapter Make targets remain serial.
+HARBOR_VALIDATION_WORKERS ?= 2
 PYTEST_ARGS ?=
 TESTS ?=
 EVAL_ARGS ?=
@@ -198,7 +201,8 @@ harbor-validate: ## Run all repository-owned Harbor checks under the pinned Harb
 		$(MAKE) --no-print-directory harbor-adapter-check \
 			ADAPTER="$${adapter_dir##*/}"; \
 	done
-	$(UV_RUN) pytest -n 0 benchmarks/validation
+	$(UV_RUN) pytest -n $(HARBOR_VALIDATION_WORKERS) \
+		$(PYTEST_DIAGNOSTIC_ARGS) benchmarks/validation $(PYTEST_ARGS)
 
 harbor-check: harbor-validate ## Run Harbor topology, digest, provenance, and host-side validation checks.
 

@@ -1,0 +1,1 @@
+{"task_id":"jacobian/coin-process-potential","source":{"dataset":"AI-MO/CombiBench","revision":"882ba08befd0856f5364db1e53d58c7e2cf704f9","row":94,"theorem_name":"imo_2019_p5","license":"MIT"},"n":12,"state_encoding":"bit i-1 is coin position i","transition":"if popcount(x)=k>0, flip bit k-1","terminal_state":0}

@@ -42,25 +42,16 @@ def _source_is_bound() -> bool:
         return False
 
 
-def _result(value: object) -> bool:
-    if not isinstance(value, dict) or set(value) != {
-        "row_permutations",
-        "balanced_matrix",
-        "column_layers",
-    }:
-        return False
-    data = json.loads((TESTS / "input.json").read_text())
-    matrix = data["matrix"]
-    permutations = value["row_permutations"]
-    output = value["balanced_matrix"]
-    layers = value["column_layers"]
+def _row_permutation_matches(
+    matrix: list[list[int]],
+    permutations: object,
+    output: object,
+) -> bool:
     if (
         not isinstance(permutations, list)
         or len(permutations) != 8
         or not isinstance(output, list)
         or len(output) != 8
-        or not isinstance(layers, list)
-        or len(layers) != 6
     ):
         return False
     for row in range(8):
@@ -76,37 +67,68 @@ def _result(value: object) -> bool:
             or result_row != [matrix[row][position] for position in permutation]
         ):
             return False
-    for column, layer in enumerate(layers):
-        if not isinstance(layer, list) or len(layer) != 8:
+    return True
+
+
+def _layer_matches(
+    matrix: list[list[int]],
+    permutations: list[object],
+    output: list[object],
+    column: int,
+    layer: object,
+) -> bool:
+    if not isinstance(layer, list) or len(layer) != 8:
+        return False
+    seen_rows: set[int] = set()
+    symbols: list[int] = []
+    for entry in layer:
+        if not isinstance(entry, dict) or set(entry) != {
+            "row",
+            "input_position",
+            "symbol",
+        }:
             return False
-        seen_rows: set[int] = set()
-        symbols: list[int] = []
-        for entry in layer:
-            if not isinstance(entry, dict) or set(entry) != {
-                "row",
-                "input_position",
-                "symbol",
-            }:
-                return False
-            row = entry["row"]
-            position = entry["input_position"]
-            symbol = entry["symbol"]
-            if (
-                type(row) is not int
-                or type(position) is not int
-                or type(symbol) is not int
-                or row not in range(8)
-                or position not in range(6)
-                or row in seen_rows
-                or permutations[row][column] != position
-                or matrix[row][position] != symbol
-                or output[row][column] != symbol
-            ):
-                return False
-            seen_rows.add(row)
-            symbols.append(symbol)
-        if Counter(symbols) != Counter({1: 2, 2: 2, 3: 2, 4: 2}):
+        row = entry["row"]
+        position = entry["input_position"]
+        symbol = entry["symbol"]
+        if (
+            type(row) is not int
+            or type(position) is not int
+            or type(symbol) is not int
+            or row not in range(8)
+            or position not in range(6)
+            or row in seen_rows
+            or permutations[row][column] != position
+            or matrix[row][position] != symbol
+            or output[row][column] != symbol
+        ):
             return False
+        seen_rows.add(row)
+        symbols.append(symbol)
+    return Counter(symbols) == Counter({1: 2, 2: 2, 3: 2, 4: 2})
+
+
+def _result(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "row_permutations",
+        "balanced_matrix",
+        "column_layers",
+    }:
+        return False
+    data = json.loads((TESTS / "input.json").read_text())
+    matrix = data["matrix"]
+    permutations = value["row_permutations"]
+    output = value["balanced_matrix"]
+    layers = value["column_layers"]
+    if not _row_permutation_matches(matrix, permutations, output):
+        return False
+    if not isinstance(layers, list) or len(layers) != 6:
+        return False
+    if not all(
+        _layer_matches(matrix, permutations, output, column, layer)
+        for column, layer in enumerate(layers)
+    ):
+        return False
     global_counts = Counter(item for row in matrix for item in row)
     return global_counts == Counter({1: 12, 2: 12, 3: 12, 4: 12})
 

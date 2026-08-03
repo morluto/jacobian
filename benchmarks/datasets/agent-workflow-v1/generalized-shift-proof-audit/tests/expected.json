@@ -1,0 +1,1 @@
+{"task_id":"jacobian/generalized-shift-proof-audit","conclusion":"FROZEN_PROOF_INVALID","required_scope":"AUDIT_THE_FOUR_FROZEN_STEPS_ONLY","maximum_assurance":"COMPUTED","required_limitations":["TRUE_SHIFT_COMPLEXITY_SUPREMUM_NOT_DETERMINED","NO_INFINITE_DIMENSIONAL_OPERATOR_THEOREM_VERIFIED"]}

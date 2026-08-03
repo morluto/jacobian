@@ -6,6 +6,7 @@ import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
+from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityMode,
@@ -13,7 +14,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import build_geometry_bundle
-from jacobian.geometry_verification import install_geometry_checker
+from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
@@ -49,17 +50,18 @@ class _GeometryRuntime:
 
 def _runtime_with_geometry_checker(root: Path) -> _GeometryRuntime:
     runtime = _GeometryRuntime(root)
-    adapter, _installation = install_geometry_checker(
+    bundle = build_geometry_bundle()
+    adapters, _installation = install_exact_domain_verification(
         runtime.store,
         runtime.schemas,
         runtime.artifacts,
-        runtime.geometry,
         runtime.verification,
         runtime.checkers,
-        authorize_checker=True,
+        bundles={"geometry": (bundle, runtime.geometry)},
+        authorize=True,
     )
-    assert adapter is not None
-    runtime.capabilities.register(adapter)
+    for adapter in adapters:
+        runtime.capabilities.register(adapter)
     return runtime
 
 
@@ -68,18 +70,19 @@ def test_geometry_checker_availability_does_not_grant_authority(
 ) -> None:
     runtime = _GeometryRuntime(tmp_path)
 
-    adapter, installation = install_geometry_checker(
+    bundle = build_geometry_bundle()
+    adapters, installation = install_exact_domain_verification(
         runtime.store,
         runtime.schemas,
         runtime.artifacts,
-        runtime.geometry,
         runtime.verification,
         runtime.checkers,
-        authorize_checker=False,
+        bundles={"geometry": (bundle, runtime.geometry)},
+        authorize=False,
     )
 
-    assert adapter is None
-    assert installation.checker_id is None
+    assert adapters == ()
+    assert all(checker_id is None for checker_id in installation.checker_ids.values())
 
 
 @pytest.mark.parametrize(
@@ -137,15 +140,15 @@ def test_selected_geometry_results_verify_through_public_dispatch(
 
     verified = runtime.capabilities.invoke(
         CapabilityRequest(
-            capability_id="geometry.result.verify",
+            capability_id=derive_verification_capability_id(operation_id),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": payload, "candidate": computed.output["result"]},
         )
     )
 
     assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED_RESULT"
+    assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == operation_id
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.assurance.verification_record_uri is not None
@@ -155,28 +158,20 @@ def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
     tmp_path: Path,
 ) -> None:
     runtime = _runtime_with_geometry_checker(tmp_path)
-    computed = runtime.capabilities.invoke(
+    runtime.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.points.compute.squared_distance",
             input={"first": P0, "second": PXY},
         )
     )
-    geometry = runtime.geometry
-    mutated = runtime.artifacts.put(
-        schema_uri=geometry.result_schema_uris[
-            "geometry.points.compute.squared_distance"
-        ],
-        semantics_uri=geometry.semantics_uri,
-        payload={"value": {"num": "7", "den": "1"}},
-        parents=(computed.output["input_uri"],),
-        summary="adversarial wrong squared distance",
-    )
-
     rejected = runtime.capabilities.invoke(
         CapabilityRequest(
-            capability_id="geometry.result.verify",
+            capability_id="geometry.points.squared_distance.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": mutated.artifact_uri},
+            input={
+                "input": {"first": P0, "second": PXY},
+                "candidate": {"value": {"num": "7", "den": "1"}},
+            },
         )
     )
 
@@ -191,32 +186,25 @@ def test_schema_valid_false_simple_polygon_decision_is_rejected(
     tmp_path: Path,
 ) -> None:
     runtime = _runtime_with_geometry_checker(tmp_path)
-    computed = runtime.capabilities.invoke(
+    runtime.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.polygon.simple.decide",
             input={"points": [P0, PXY, PY, PX]},
         )
     )
-    mutated = runtime.artifacts.put(
-        schema_uri=runtime.geometry.result_schema_uris[
-            "geometry.polygon.simple.decide"
-        ],
-        semantics_uri=runtime.geometry.semantics_uri,
-        payload={
-            "vertex_count": 4,
-            "is_simple": True,
-            "checked_edge_pairs": 6,
-            "witness": None,
-        },
-        parents=(computed.output["input_uri"],),
-        summary="adversarial false simple-polygon decision",
-    )
-
     rejected = runtime.capabilities.invoke(
         CapabilityRequest(
-            capability_id="geometry.result.verify",
+            capability_id="geometry.polygon.simple.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": mutated.artifact_uri},
+            input={
+                "input": {"points": [P0, PXY, PY, PX]},
+                "candidate": {
+                    "vertex_count": 4,
+                    "is_simple": True,
+                    "checked_edge_pairs": 6,
+                    "witness": None,
+                },
+            },
         )
     )
 

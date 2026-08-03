@@ -62,17 +62,19 @@ capability ID.
 
 ## Independent verification
 
-`geometry.result.verify` now supports the three operations above, convex hull,
-and the previously supported distance, midpoint, orientation, and centroid
-operations. The operator-authorized checker runs in a clean process and
-imports neither SymPy nor geometry producer modules.
+Each exact producer has its own `.verify` capability: for example,
+`geometry.points.convex_hull.verify`,
+`geometry.points.squared_distance.verify`, and
+`geometry.polygon.simple.verify`. The operator-authorized checker runs in a
+clean process and imports neither SymPy nor geometry producer modules.
 
 For segment and polygon results it independently replays rational
 determinants, interval containment, all required edge pairs, exact ray
 crossings, and boundary tests. Convex hull replay uses an independent monotone
-chain implementation. Verification binds the exact input artifact, result
-artifact, semantics, candidate digest, and witness envelope. Producers remain
-`COMPUTED`; only an accepted bound checker run returns `VERIFIED`.
+chain implementation. Inline producer verification validates the typed input
+and candidate before materializing the verification-bound artifacts, then
+binds their semantics, candidate digest, and witness envelope. Producers
+remain `COMPUTED`; only an accepted bound checker run returns `VERIFIED`.
 
 Delaunay/Voronoi construction, arbitrary algebraic coordinates, three-
 dimensional geometry, and H/V polyhedral conversion remain separate provider

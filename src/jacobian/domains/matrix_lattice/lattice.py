@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -20,9 +21,9 @@ from jacobian.contracts.matrix_operations import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.operations import (
-    ComputedOperation,
     ComputedOutcome,
     ComputedSuccess,
+    MaterializedOperation,
     OperationExecutionFailure,
 )
 from jacobian.providers.flint_runtime import python_flint_lll_provider_runtime
@@ -148,8 +149,8 @@ def reduce_lattice_basis(
     return ComputedSuccess(result)
 
 
-LATTICE_CAPABILITIES = (
-    ComputedOperation(
+LATTICE_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+    MaterializedOperation(
         capability_id="lattice.basis.reduce",
         title="Reduce an exact integer lattice basis",
         description=(
@@ -168,5 +169,6 @@ LATTICE_CAPABILITIES = (
                 {"basis": {"entries": [["1"]]}},
             ),
         ),
+        version="3",
     ),
 )

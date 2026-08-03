@@ -51,6 +51,27 @@ def _registration(runtime: CapabilityProviderRuntime) -> CheckerRegistration:
     )
 
 
+def _source_tree_runtime(
+    *,
+    configuration: dict[str, str] | None = None,
+) -> CapabilityProviderRuntime:
+    return CapabilityProviderRuntime(
+        provider="tests.source-tree",
+        availability=CapabilityProviderAvailability.AVAILABLE,
+        version="1",
+        digest="sha256:" + "e" * 64,
+        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        platform="any",
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        configuration=(
+            {"entrypoint": "jacobian_checkers.reject:check"}
+            if configuration is None
+            else configuration
+        ),
+    )
+
+
 def test_checker_registration_accepts_bound_python_distribution_runtime() -> None:
     registration = _registration(_python_distribution_runtime())
 
@@ -59,6 +80,34 @@ def test_checker_registration_accepts_bound_python_distribution_runtime() -> Non
         registration.provider_runtime.digest_kind
         is CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
     )
+
+
+def test_checker_registration_accepts_remeasurable_source_tree_runtime() -> None:
+    registration = _registration(_source_tree_runtime())
+
+    assert registration.provider_runtime is not None
+    assert (
+        registration.provider_runtime.digest_kind
+        is CapabilityProviderDigestKind.SOURCE_TREE
+    )
+
+
+def test_checker_registration_rejects_source_tree_runtime_without_entrypoint() -> None:
+    with pytest.raises(
+        ValidationError, match="source runtime must name its entrypoint"
+    ):
+        _registration(_source_tree_runtime(configuration={}))
+
+
+def test_checker_registration_rejects_source_tree_runtime_for_other_entrypoint() -> (
+    None
+):
+    with pytest.raises(ValidationError, match="must bind the checker entrypoint"):
+        _registration(
+            _source_tree_runtime(
+                configuration={"entrypoint": "jacobian_checkers.other:check"}
+            )
+        )
 
 
 @pytest.mark.parametrize(

@@ -19,6 +19,21 @@ _PRESENTATION = {
 }
 
 
+def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
+    return runtime.core.store.get(computed.output["result_uri"]).payload
+
+
+def _forged_result_uri(runtime: Any, computed: Any, payload: dict[str, Any]) -> str:
+    source = runtime.core.store.get(computed.output["result_uri"])
+    return runtime.core.store.put(
+        schema_uri=source.manifest.schema_uri,
+        semantics_uri=source.manifest.semantics_uri,
+        payload=payload,
+        parents=source.manifest.parents,
+        summary="forged topology result",
+    ).artifact_uri
+
+
 def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
     materialized = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
@@ -26,7 +41,7 @@ def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
             input=_PRESENTATION,
         )
     )
-    complex_ = materialized.output["result"]["complex"]
+    complex_ = _result_payload(authorized_complete_runtime, materialized)["complex"]
     chain_input = {
         "complex": complex_,
         "coefficient_ring": "PRIME_FIELD",
@@ -62,7 +77,7 @@ def test_topology_results_are_independently_verified(
     authorized_complete_runtime,
     result_index: int,
 ) -> None:
-    producer_id, producer_input, computed = _computed_cases(
+    producer_id, _producer_input, computed = _computed_cases(
         authorized_complete_runtime
     )[result_index]
 
@@ -70,10 +85,7 @@ def test_topology_results_are_independently_verified(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
             mode=CapabilityMode.VERIFY,
-            input={
-                "input": producer_input,
-                "candidate": computed.output["result"],
-            },
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
@@ -88,10 +100,10 @@ def test_topology_results_are_independently_verified(
 def test_topology_checker_rejects_forged_cycle_evidence(
     authorized_complete_runtime,
 ) -> None:
-    producer_id, producer_input, homology = _computed_cases(
+    producer_id, _producer_input, homology = _computed_cases(
         authorized_complete_runtime
     )[2]
-    forged_candidate = deepcopy(homology.output["result"])
+    forged_candidate = deepcopy(_result_payload(authorized_complete_runtime, homology))
     forged_groups = [dict(group) for group in forged_candidate["groups"]]
     forged_group = dict(forged_groups[1])
     forged_cycles = [dict(vector) for vector in forged_group["cycle_basis"]]
@@ -104,7 +116,11 @@ def test_topology_checker_rejects_forged_cycle_evidence(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
             mode=CapabilityMode.VERIFY,
-            input={"input": producer_input, "candidate": forged_candidate},
+            input={
+                "result_uri": _forged_result_uri(
+                    authorized_complete_runtime, homology, forged_candidate
+                )
+            },
         )
     )
 
@@ -120,7 +136,9 @@ def test_integral_homology_has_a_dedicated_independent_verifier(
 ) -> None:
     materialized = _computed_cases(authorized_complete_runtime)[0][2]
     integral_input = {
-        "complex": materialized.output["result"]["complex"],
+        "complex": _result_payload(authorized_complete_runtime, materialized)[
+            "complex"
+        ],
         "convention": "UNREDUCED",
     }
     computed = authorized_complete_runtime.core.capabilities.invoke(
@@ -133,10 +151,7 @@ def test_integral_homology_has_a_dedicated_independent_verifier(
         CapabilityRequest(
             capability_id="topology.simplicial_homology.integral.verify",
             mode=CapabilityMode.VERIFY,
-            input={
-                "input": integral_input,
-                "candidate": computed.output["result"],
-            },
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
@@ -152,7 +167,9 @@ def test_integral_homology_checker_rejects_a_forged_free_generator(
 ) -> None:
     materialized = _computed_cases(authorized_complete_runtime)[0][2]
     integral_input = {
-        "complex": materialized.output["result"]["complex"],
+        "complex": _result_payload(authorized_complete_runtime, materialized)[
+            "complex"
+        ],
         "convention": "UNREDUCED",
     }
     computed = authorized_complete_runtime.core.capabilities.invoke(
@@ -161,7 +178,7 @@ def test_integral_homology_checker_rejects_a_forged_free_generator(
             input=integral_input,
         )
     )
-    forged_candidate = deepcopy(computed.output["result"])
+    forged_candidate = deepcopy(_result_payload(authorized_complete_runtime, computed))
     groups = [dict(group) for group in forged_candidate["groups"]]
     group = dict(groups[1])
     generators = [dict(item) for item in group["free_generators"]]
@@ -177,7 +194,11 @@ def test_integral_homology_checker_rejects_a_forged_free_generator(
         CapabilityRequest(
             capability_id="topology.simplicial_homology.integral.verify",
             mode=CapabilityMode.VERIFY,
-            input={"input": integral_input, "candidate": forged_candidate},
+            input={
+                "result_uri": _forged_result_uri(
+                    authorized_complete_runtime, computed, forged_candidate
+                )
+            },
         )
     )
 

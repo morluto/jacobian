@@ -17,6 +17,7 @@ _VERB_SEGMENTS: tuple[str, ...] = (
     "materialize",
     "evaluate",
     "count",
+    "classify",
 )
 
 

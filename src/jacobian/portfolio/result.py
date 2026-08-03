@@ -25,7 +25,6 @@ from jacobian.contracts.lean import LeanEnvironment
 from jacobian.exact_domain_checkers import ExactDomainCheckerInstallation
 from jacobian.finite_coverage import FiniteCoverageInstallation
 from jacobian.finite_partition import FinitePartitionInstallation
-from jacobian.geometry_verification import GeometryCheckerInstallation
 from jacobian.graphs.coloring import GraphColoringInstallation
 from jacobian.graphs.composition import GraphCompositionInstallation
 from jacobian.graphs.installation import GraphInstallation
@@ -263,7 +262,6 @@ class PortfolioInstallation:
     portfolio_outcomes: tuple[BundleInstallation, ...] = ()
 
     # --- Verification ---
-    geometry_checker: GeometryCheckerInstallation | None = None
     exact_domain_checkers: ExactDomainCheckerInstallation | None = None
 
     # --- Universal algebra ---

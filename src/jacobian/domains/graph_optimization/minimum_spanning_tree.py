@@ -20,9 +20,9 @@ from jacobian.contracts.graph_optimization import (
 )
 from jacobian.operations import (
     ComputedNotApplicable,
-    ComputedOperation,
     ComputedOutcome,
     ComputedSuccess,
+    MaterializedOperation,
 )
 
 if TYPE_CHECKING:
@@ -179,10 +179,11 @@ def _execute(
         )
 
 
-MINIMUM_SPANNING_TREE_CAPABILITY: ComputedOperation[
+MINIMUM_SPANNING_TREE_CAPABILITY: MaterializedOperation[
     GraphMinimumSpanningTreeRequest,
     GraphMinimumSpanningTreeResult,
-] = ComputedOperation(
+    GraphMinimumSpanningTreeResult,
+] = MaterializedOperation(
     capability_id="graph.spanning_tree.minimum.compute",
     title="Exact weighted minimum spanning tree",
     description=(
@@ -243,6 +244,7 @@ MINIMUM_SPANNING_TREE_CAPABILITY: ComputedOperation[
             },
         ),
     ),
+    version="3",
 )
 
 

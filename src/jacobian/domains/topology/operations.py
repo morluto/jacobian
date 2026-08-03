@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from jacobian.contracts.certified_snf import CertifiedIntegerMatrix
 from jacobian.contracts.topology import (
@@ -40,7 +41,7 @@ from jacobian.domains._certified_snf import (
     smith_reduce,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedOperation, ComputedSuccess
+from jacobian.operations import ComputedSuccess, MaterializedOperation
 
 
 def _materialized_complex(
@@ -633,8 +634,8 @@ _CIRCLE = {
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
 }
 
-TOPOLOGY_CAPABILITIES = (
-    ComputedOperation(
+TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+    MaterializedOperation(
         capability_id="topology.simplicial_complex.materialize",
         title="Materialize a finite simplicial complex",
         description=(
@@ -661,8 +662,9 @@ TOPOLOGY_CAPABILITIES = (
                 _CIRCLE,
             ),
         ),
+        version="3",
     ),
-    ComputedOperation(
+    MaterializedOperation(
         capability_id="topology.simplicial_complex.chain_complex.compute",
         title="Compute an oriented simplicial chain complex",
         description=(
@@ -680,8 +682,9 @@ TOPOLOGY_CAPABILITIES = (
             "boundary-matrix",
             "exact",
         ),
+        version="3",
     ),
-    ComputedOperation(
+    MaterializedOperation(
         capability_id="topology.simplicial_homology.compute",
         title="Compute finite-field simplicial homology",
         description=(
@@ -700,8 +703,9 @@ TOPOLOGY_CAPABILITIES = (
             "prime-field",
             "exact",
         ),
+        version="3",
     ),
-    ComputedOperation(
+    MaterializedOperation(
         capability_id="topology.simplicial_homology.integral.compute",
         title="Compute transformation-certified integral simplicial homology",
         description=(
@@ -762,6 +766,7 @@ TOPOLOGY_CAPABILITIES = (
                 },
             ),
         ),
+        version="3",
     ),
 )
 

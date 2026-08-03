@@ -52,6 +52,11 @@ def _qq(rows: list[list[int]]) -> dict[str, object]:
     }
 
 
+def _result_payload(services: DomainTestServices, result: object) -> dict[str, object]:
+    result_uri = result.output["result_uri"]  # type: ignore[attr-defined]
+    return services.core.store.get(result_uri).payload
+
+
 def test_exact_matrix_domain_results_and_lineage(
     matrix_domain_services: DomainTestServices,
 ) -> None:
@@ -174,12 +179,8 @@ def test_exact_matrix_domain_results_and_lineage(
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert result.output["result"] == expected
-        assert len(result.artifact_uris) == 2
-        source = runtime.core.store.get(result.artifact_uris[0])
-        produced = runtime.core.store.get(result.artifact_uris[1])
-        assert produced.manifest.parents == (source.artifact_uri,)
-        assert result.relationships[0].source_artifact_uris == (source.artifact_uri,)
-        assert result.relationships[0].target_artifact_uris == (produced.artifact_uri,)
+        assert result.artifact_uris == ()
+        assert result.episode_uri is None
 
 
 def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
@@ -469,13 +470,12 @@ def test_lattice_lll_returns_exact_left_transformation(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    computed = _result_payload(runtime, result)
     reduced = [
-        [int(value) for value in row]
-        for row in result.output["result"]["reduced_basis"]["entries"]
+        [int(value) for value in row] for row in computed["reduced_basis"]["entries"]
     ]
     transformation = [
-        [int(value) for value in row]
-        for row in result.output["result"]["transformation"]["entries"]
+        [int(value) for value in row] for row in computed["transformation"]["entries"]
     ]
     assert reduced == [
         [
@@ -486,8 +486,8 @@ def test_lattice_lll_returns_exact_left_transformation(
         ]
         for row in range(2)
     ]
-    assert result.output["result"]["delta"] == "0.99"
-    assert result.output["result"]["eta"] == "0.51"
+    assert computed["delta"] == "0.99"
+    assert computed["eta"] == "0.51"
     assert len(result.artifact_uris) == 2
 
 

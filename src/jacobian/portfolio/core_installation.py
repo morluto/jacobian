@@ -10,7 +10,6 @@ from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.finite_partition import install_finite_partition
-from jacobian.geometry_verification import install_geometry_checker
 from jacobian.graphs.coloring import install_graph_coloring_capabilities
 from jacobian.graphs.installation import install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
@@ -212,20 +211,6 @@ class CoreApplicationInstaller:
         plan: PortfolioPlan,
     ) -> None:
         ctx = self.context
-        geometry = result.installed_bundle("geometry")
-        if geometry is not None:
-            geometry_adapter, result.geometry_checker = install_geometry_checker(
-                ctx.store,
-                ctx.schemas,
-                ctx.artifacts,
-                geometry,
-                ctx.verification,
-                ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
-            )
-            if geometry_adapter is not None:
-                self.context.register_capability(geometry_adapter)
-
         exact_bundles = {
             bundle.domain_id: (bundle, result.domain_bundles[bundle.domain_id])
             for bundle in plan.domain_bundles

@@ -31,7 +31,7 @@ from jacobian.contracts.posets import (
     linear_extension_memo_digest,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedOperation, ComputedSuccess
+from jacobian.operations import ComputedSuccess, MaterializedOperation
 
 
 def _presentation_graph(request: FinitePosetRequest) -> nx.DiGraph[str]:
@@ -314,8 +314,8 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_CAPABILITIES = (
-    ComputedOperation(
+FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+    MaterializedOperation(
         capability_id="poset.finite.materialize",
         title="Materialize a canonical finite poset",
         description=(
@@ -341,8 +341,9 @@ FINITE_POSET_CAPABILITIES = (
                 _DIAMOND,
             ),
         ),
+        version="3",
     ),
-    ComputedOperation(
+    MaterializedOperation(
         capability_id="poset.width.compute",
         title="Compute finite-poset width with dual witnesses",
         description=(
@@ -361,8 +362,9 @@ FINITE_POSET_CAPABILITIES = (
             "dilworth",
             "exact",
         ),
+        version="3",
     ),
-    ComputedOperation(
+    MaterializedOperation(
         capability_id="poset.linear_extensions.count",
         title="Count linear extensions of a bounded finite poset",
         description=(
@@ -380,8 +382,9 @@ FINITE_POSET_CAPABILITIES = (
             "order-ideal",
             "dynamic-programming",
         ),
+        version="3",
     ),
-    ComputedOperation(
+    MaterializedOperation(
         capability_id="poset.mobius_function.compute",
         title="Compute finite-poset Möbius values",
         description=(
@@ -399,6 +402,7 @@ FINITE_POSET_CAPABILITIES = (
             "interval",
             "exact",
         ),
+        version="3",
     ),
 )
 

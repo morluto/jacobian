@@ -21,6 +21,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInstallTier,
     CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
@@ -48,6 +49,7 @@ from jacobian.operations import (
     DomainBundle,
     MaterializedOperation,
 )
+from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers.flint_runtime import (
     certified_snf_checker_provider_runtime,
     combinatorics_exact_checker_provider_runtime,
@@ -69,6 +71,18 @@ from jacobian.verification import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
+_ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
+    "jacobian_checkers.exact_domain_operations": "python-flint",
+    "jacobian_checkers.graph_exact_operations": "finite-graph",
+    "jacobian_checkers.exact_probability_operations": "finite-probability",
+    "jacobian_checkers.recurrence_series": "combinatorics",
+    "jacobian_checkers.jacobian_syzygy": "graded-syzygy",
+    "jacobian_checkers.projective_arrangements": "projective-arrangement",
+    "jacobian_checkers.simplicial_topology": "topology",
+    "jacobian_checkers.certified_snf": "certified-snf",
+    "jacobian_checkers.finite_posets": "poset",
+    "jacobian_checkers.exact_geometry": "geometry",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,30 +106,12 @@ class _InstalledDeclaration:
 
 
 def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
-    if declaration.entrypoint_module == "jacobian_checkers.exact_domain_operations":
-        return "python-flint"
-    if declaration.entrypoint_module == "jacobian_checkers.graph_exact_operations":
-        return "finite-graph"
-    if (
-        declaration.entrypoint_module
-        == "jacobian_checkers.exact_probability_operations"
-    ):
-        return "finite-probability"
-    if declaration.entrypoint_module == "jacobian_checkers.recurrence_series":
-        return "combinatorics"
-    if declaration.entrypoint_module == "jacobian_checkers.jacobian_syzygy":
-        return "graded-syzygy"
-    if declaration.entrypoint_module == "jacobian_checkers.projective_arrangements":
-        return "projective-arrangement"
-    if declaration.entrypoint_module == "jacobian_checkers.simplicial_topology":
-        return "topology"
-    if declaration.entrypoint_module == "jacobian_checkers.certified_snf":
-        return "certified-snf"
-    if declaration.entrypoint_module == "jacobian_checkers.finite_posets":
-        return "poset"
-    raise ValueError(
-        "exact replay checker declaration uses an unsupported provider runtime"
-    )
+    try:
+        return _ENTRYPOINT_PROVIDER_RUNTIME_KEYS[declaration.entrypoint_module]
+    except KeyError as exc:
+        raise ValueError(
+            "exact replay checker declaration uses an unsupported provider runtime"
+        ) from exc
 
 
 def install_exact_domain_checkers(
@@ -137,6 +133,14 @@ def install_exact_domain_checkers(
         "graded-syzygy": graded_syzygy_checker_provider_runtime(),
         "projective-arrangement": (projective_arrangement_checker_provider_runtime()),
         "topology": topology_exact_checker_provider_runtime(),
+        "geometry": source_provider_runtime(
+            "jacobian.exact-geometry-checker",
+            version="1",
+            entrypoint="jacobian_checkers.exact_geometry:check_exact_geometry",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-rational-replay", "clean-process-checker"),
+        ),
     }
     checker_ids: dict[str, str | None] = {}
     declarations_by_id: dict[str, ExactReplayCheckerDeclaration] = {}
@@ -243,6 +247,18 @@ def install_exact_domain_checkers(
             ),
             "topology": topology_exact_checker_provider_runtime(
                 checker_ids=authorized_ids["topology"]
+            ),
+            "geometry": source_provider_runtime(
+                "jacobian.exact-geometry-checker",
+                version="1",
+                entrypoint="jacobian_checkers.exact_geometry:check_exact_geometry",
+                install_tier=CapabilityInstallTier.T1,
+                license_id="MIT",
+                features=(
+                    "standard-library-rational-replay",
+                    "clean-process-checker",
+                ),
+                checker_ids=authorized_ids["geometry"],
             ),
         },
     )

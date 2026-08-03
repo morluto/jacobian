@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domains.geometry.checkers import GEOMETRY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.geometry.lines import LINE_CAPABILITIES
 from jacobian.domains.geometry.points import POINT_CAPABILITIES
 from jacobian.domains.geometry.polygons import POLYGON_CAPABILITIES
@@ -59,4 +60,5 @@ def build_geometry_bundle() -> DomainBundle:
             "not independently verified"
         ),
         assurance_basis="exact SymPy rational geometry; no independent checker invoked",
+        checker_declarations=GEOMETRY_EXACT_REPLAY_CHECKERS,
     )

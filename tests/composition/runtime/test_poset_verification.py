@@ -25,6 +25,21 @@ _PRESENTATION = {
 }
 
 
+def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
+    return runtime.core.store.get(computed.output["result_uri"]).payload
+
+
+def _forged_result_uri(runtime: Any, computed: Any, payload: dict[str, Any]) -> str:
+    source = runtime.core.store.get(computed.output["result_uri"])
+    return runtime.core.store.put(
+        schema_uri=source.manifest.schema_uri,
+        semantics_uri=source.manifest.semantics_uri,
+        payload=payload,
+        parents=source.manifest.parents,
+        summary="forged finite poset result",
+    ).artifact_uri
+
+
 def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
     materialized = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
@@ -32,7 +47,7 @@ def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
             input=_PRESENTATION,
         )
     )
-    poset = materialized.output["result"]["poset"]
+    poset = _result_payload(authorized_complete_runtime, materialized)["poset"]
     width_input = {"poset": poset}
     width = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
@@ -67,17 +82,14 @@ def test_poset_results_are_independently_verified(
     authorized_complete_runtime,
     result_index: int,
 ) -> None:
-    producer_id, producer_input, computed = _computed_cases(
+    producer_id, _producer_input, computed = _computed_cases(
         authorized_complete_runtime
     )[result_index]
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
             mode=CapabilityMode.VERIFY,
-            input={
-                "input": producer_input,
-                "candidate": computed.output["result"],
-            },
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
     assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
@@ -91,14 +103,20 @@ def test_poset_results_are_independently_verified(
 def test_poset_checker_rejects_forged_width_certificate(
     authorized_complete_runtime,
 ) -> None:
-    producer_id, producer_input, width = _computed_cases(authorized_complete_runtime)[1]
-    forged_candidate = deepcopy(width.output["result"])
+    producer_id, _producer_input, width = _computed_cases(authorized_complete_runtime)[
+        1
+    ]
+    forged_candidate = deepcopy(_result_payload(authorized_complete_runtime, width))
     forged_candidate["maximum_antichain"] = ["0", "1"]
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
             mode=CapabilityMode.VERIFY,
-            input={"input": producer_input, "candidate": forged_candidate},
+            input={
+                "result_uri": _forged_result_uri(
+                    authorized_complete_runtime, width, forged_candidate
+                )
+            },
         )
     )
     assert rejected.execution.status is ExecutionStatus.COMPLETED

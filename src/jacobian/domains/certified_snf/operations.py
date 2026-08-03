@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jacobian.contracts.certified_snf import (
     CertifiedSmithNormalFormRequest,
     CertifiedSmithNormalFormResult,
 )
 from jacobian.domains._certified_snf import certificate_from_reduction, smith_reduce
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedOperation, ComputedSuccess
+from jacobian.operations import ComputedSuccess, MaterializedOperation
 
 
 def _certified_smith(
@@ -27,8 +29,8 @@ def _certified_smith(
     )
 
 
-CERTIFIED_SNF_CAPABILITIES = (
-    ComputedOperation(
+CERTIFIED_SNF_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+    MaterializedOperation(
         capability_id="matrix.normal_form.smith.certified.compute",
         title="Compute a transformation-certified Smith normal form",
         description=(
@@ -61,6 +63,7 @@ CERTIFIED_SNF_CAPABILITIES = (
                 },
             ),
         ),
+        version="3",
     ),
 )
 

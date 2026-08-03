@@ -24,6 +24,11 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
+def _result_payload(services: DomainTestServices, result: object) -> dict[str, object]:
+    result_uri = result.output["result_uri"]  # type: ignore[attr-defined]
+    return services.core.store.get(result_uri).payload
+
+
 def test_cycle_rotation_has_one_vertex_and_one_edge_orbit(
     domain_services: DomainTestServices,
 ) -> None:
@@ -56,7 +61,7 @@ def test_cycle_rotation_has_one_vertex_and_one_edge_orbit(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    computed = result.output["result"]
+    computed = _result_payload(domain_services, result)
     assert computed["vertex_orbits"] == [
         {
             "orbit_index": 0,
@@ -115,7 +120,7 @@ def test_colored_path_reflection_preserves_declared_classes(
         )
     )
 
-    computed = result.output["result"]
+    computed = _result_payload(domain_services, result)
     assert [orbit["members"] for orbit in computed["vertex_orbits"]] == [
         ["a", "c"],
         ["b"],
@@ -143,7 +148,7 @@ def test_empty_generator_set_materializes_identity_subgroup_orbits(
         )
     )
 
-    computed = result.output["result"]
+    computed = _result_payload(domain_services, result)
     assert computed["generator_count"] == 0
     assert [orbit["members"] for orbit in computed["vertex_orbits"]] == [["a"], ["b"]]
     assert [orbit["members"] for orbit in computed["edge_orbits"]] == [[["a", "b"]]]

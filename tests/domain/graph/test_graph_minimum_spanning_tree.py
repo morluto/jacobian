@@ -54,6 +54,11 @@ def _weighted_graph(
     return {"vertices": vertices, "edges": edges}
 
 
+def _result_payload(services: DomainTestServices, result: object) -> dict[str, object]:
+    result_uri = result.output["result_uri"]  # type: ignore[attr-defined]
+    return services.core.store.get(result_uri).payload
+
+
 def test_exact_weighted_minimum_spanning_tree_and_lineage(
     graph_optimization_services: DomainTestServices,
 ) -> None:
@@ -77,7 +82,7 @@ def test_exact_weighted_minimum_spanning_tree_and_lineage(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.output["result"] == {
+    assert _result_payload(graph_optimization_services, result) == {
         "result_schema_version": "1",
         "status": "EXACT",
         "vertices": ["a", "b", "c", "d"],
@@ -152,11 +157,12 @@ def test_disconnected_and_empty_graphs_have_complete_no_tree_outcomes(
         )
 
         assert result.execution.status is ExecutionStatus.COMPLETED
-        assert result.output["result"]["status"] == "NO_SPANNING_TREE"
-        assert result.output["result"]["components"] == expected_components
-        assert result.output["result"]["tree_edges"] == []
-        assert result.output["result"]["total_weight"] is None
-        assert result.output["result"]["completion"] == "COMPLETE"
+        computed = _result_payload(graph_optimization_services, result)
+        assert computed["status"] == "NO_SPANNING_TREE"
+        assert computed["components"] == expected_components
+        assert computed["tree_edges"] == []
+        assert computed["total_weight"] is None
+        assert computed["completion"] == "COMPLETE"
 
 
 def test_equal_weight_ties_are_deterministic_under_input_reordering(
@@ -182,12 +188,15 @@ def test_equal_weight_ties_are_deterministic_under_input_reordering(
     )
 
     outputs = [
-        graph_optimization_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="graph.spanning_tree.minimum.compute",
-                input={"graph": graph},
-            )
-        ).output["result"]
+        _result_payload(
+            graph_optimization_services,
+            graph_optimization_services.core.capabilities.invoke(
+                CapabilityRequest(
+                    capability_id="graph.spanning_tree.minimum.compute",
+                    input={"graph": graph},
+                )
+            ),
+        )
         for graph in (first, second)
     ]
 
@@ -232,7 +241,7 @@ def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"]["total_weight"] == _q(6)
+    assert _result_payload(graph_optimization_services, result)["total_weight"] == _q(6)
 
 
 def test_weighted_graph_contract_rejects_parallel_edges_and_oversized_weights() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
+from typing import Any
 
 from jacobian.contracts.graph_symmetry import (
     GraphEdgeOrbit,
@@ -11,7 +12,7 @@ from jacobian.contracts.graph_symmetry import (
     GraphVertexOrbit,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedOperation, ComputedSuccess
+from jacobian.operations import ComputedSuccess, MaterializedOperation
 
 
 def _canonical_edge(left: str, right: str) -> tuple[str, str]:
@@ -127,8 +128,8 @@ def _generator_orbits(
     )
 
 
-GRAPH_SYMMETRY_CAPABILITIES = (
-    ComputedOperation(
+GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+    MaterializedOperation(
         capability_id="graph.symmetry.generator_orbits.compute",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
@@ -177,6 +178,7 @@ GRAPH_SYMMETRY_CAPABILITIES = (
                 },
             ),
         ),
+        version="3",
     ),
 )
 

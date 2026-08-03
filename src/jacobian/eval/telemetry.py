@@ -32,11 +32,9 @@ _RESOURCE_READ_TOOL_NAMES = frozenset(
 class _McpResourceTelemetry:
     links_returned: int = 0
     link_uris: list[str] = field(default_factory=list)
-    link_output_complete: dict[str, bool] = field(default_factory=dict)
     read_attempts: int = 0
     read_uris: list[str] = field(default_factory=list)
     read_successes: int = 0
-    unnecessary_reads: int = 0
     uri_preservation_attempts: int = 0
     uri_preservation_successes: int = 0
     digest_preservation_successes: int = 0
@@ -172,30 +170,14 @@ def _record_mcp_resource_telemetry(
     link_uris = _mcp_resource_link_uris(item)
     telemetry.links_returned += len(link_uris)
     telemetry.link_uris.extend(link_uris)
-    text_payload = _mcp_text_payload(item)
-    projection = (
-        text_payload.get("mcp_projection")
-        if isinstance(text_payload, Mapping)
-        else None
-    )
-    output_complete = (
-        projection.get("output_complete") if isinstance(projection, Mapping) else None
-    )
-    for uri in link_uris:
-        telemetry.link_output_complete.setdefault(uri, True)
-        if isinstance(output_complete, bool):
-            telemetry.link_output_complete[uri] = output_complete
-
     resource_read_uri = _mcp_resource_read_uri(item)
     if resource_read_uri is None:
         return
     telemetry.read_attempts += 1
     telemetry.read_uris.append(resource_read_uri)
     read_failed = _mcp_resource_read_failed(item)
-    if resource_read_uri in telemetry.link_output_complete:
+    if resource_read_uri in telemetry.link_uris:
         telemetry.uri_preservation_attempts += 1
-        if telemetry.link_output_complete[resource_read_uri]:
-            telemetry.unnecessary_reads += 1
     if read_failed:
         return
     telemetry.read_successes += 1
@@ -203,7 +185,7 @@ def _record_mcp_resource_telemetry(
         item,
         resource_read_uri,
     )
-    if resource_read_uri in telemetry.link_output_complete and uri_preserved:
+    if resource_read_uri in telemetry.link_uris and uri_preserved:
         telemetry.uri_preservation_successes += 1
     if digest_preserved:
         telemetry.digest_preservation_successes += 1
@@ -243,37 +225,13 @@ def _mcp_model_visible_bytes(item: Mapping[str, Any]) -> int:
     return byte_count
 
 
-def _jacobian_result_meta(item: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    result = item.get("result")
-    if not isinstance(result, Mapping):
-        return None
-    for key in ("_meta", "meta"):
-        metadata = result.get(key)
-        if not isinstance(metadata, Mapping):
-            continue
-        jacobian = metadata.get("jacobian")
-        if isinstance(jacobian, Mapping):
-            return jacobian
-    return None
-
-
 def _mcp_logical_payload_bytes(
     item: Mapping[str, Any],
     *,
     text_payload: Mapping[str, Any] | None,
     structured_payload: Mapping[str, Any] | None,
 ) -> int | None:
-    metadata = _jacobian_result_meta(item)
-    if metadata is not None:
-        value = metadata.get("logical_payload_bytes")
-        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-            return value
-    if text_payload is not None:
-        projection = text_payload.get("mcp_projection")
-        if isinstance(projection, Mapping):
-            value = projection.get("logical_payload_bytes")
-            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-                return value
+    del item
     if structured_payload is not None:
         return _serialized_bytes(structured_payload)
     if text_payload is not None:
@@ -517,7 +475,6 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
         "mcp_resource_read_attempts": resource_telemetry.read_attempts,
         "mcp_resource_read_uris": resource_telemetry.read_uris,
         "mcp_resource_read_successes": resource_telemetry.read_successes,
-        "mcp_resource_unnecessary_reads": resource_telemetry.unnecessary_reads,
         "mcp_resource_uri_preservation_attempts": (
             resource_telemetry.uri_preservation_attempts
         ),

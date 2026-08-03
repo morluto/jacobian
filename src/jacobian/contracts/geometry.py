@@ -7,7 +7,6 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.results import ContractModel
 
@@ -348,35 +347,3 @@ class GeometryConvexHullResult(ContractModel):
 class GeometryCircleResult(ContractModel):
     center: RationalPoint2D
     radius_squared: CanonicalRational
-
-
-class GeometryOperationOutput(ContractModel):
-    input_uri: ArtifactUri
-    result_uri: ArtifactUri
-    result: dict[str, object]
-    backend_version: str
-
-
-class GeometryVerificationRequest(ContractModel):
-    result_uri: ArtifactUri
-
-
-class GeometryVerificationOutput(ContractModel):
-    status: Literal["VERIFIED_RESULT", "REJECTED", "TIMEOUT", "CANCELLED", "ERROR"]
-    conclusion: Literal["TRUE", "UNKNOWN"]
-    operation_id: Literal[
-        "geometry.points.compute.convex_hull",
-        "geometry.points.compute.squared_distance",
-        "geometry.segment.compute.midpoint",
-        "geometry.segments.intersection.compute",
-        "geometry.polygon.simple.decide",
-        "geometry.polygon.point.classify",
-        "geometry.triangle.compute.orientation",
-        "geometry.triangle.compute.centroid",
-    ]
-    input_uri: ArtifactUri
-    result_uri: ArtifactUri
-    witness_uri: ArtifactUri
-    checker_id: str
-    verification_record_uri: ArtifactUri | None = None
-    detail: str

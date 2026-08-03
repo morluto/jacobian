@@ -158,14 +158,6 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
         "assurance": {"level": "COMPUTED"},
         "completeness": {"status": "COMPLETE"},
     }
-    projection = {
-        **canonical,
-        "output": {"status": "FOUND"},
-        "mcp_projection": {
-            "logical_payload_bytes": 12_345,
-            "output_complete": False,
-        },
-    }
     event = {
         "type": "item.completed",
         "item": {
@@ -179,15 +171,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
             "status": "completed",
             "result": {
                 "isError": False,
-                "_meta": {
-                    "jacobian": {
-                        "logical_payload_bytes": 12_345,
-                        "model_visible_payload_bytes": len(
-                            json.dumps(projection).encode("utf-8")
-                        ),
-                    }
-                },
-                "content": [{"type": "text", "text": json.dumps(projection)}],
+                "content": [{"type": "text", "text": json.dumps(canonical)}],
                 "structured_content": canonical,
             },
         },
@@ -197,7 +181,11 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
 
     telemetry = parse_agent_transcript(transcript)
 
-    assert telemetry["mcp_logical_payload_bytes"] == 12_345
+    assert telemetry["mcp_logical_payload_bytes"] == len(
+        json.dumps(
+            canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+    )
     assert telemetry["mcp_logical_payload_observed_calls"] == 1
     assert telemetry["mcp_wire_bytes"] > telemetry["mcp_model_visible_bytes"]
     assert telemetry["capability_invocations"][0]["output"] == canonical["output"]
@@ -235,15 +223,8 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
     unnecessary_uri, second_read = read_event("b")
     malformed_uri = "artifact://sha256/" + ("f" * 64)
 
-    def link_event(link_uri: str, *, output_complete: bool | None) -> dict[str, object]:
-        content = []
-        if output_complete is not None:
-            projection = {
-                "capability_id": "graph.search.atlas",
-                "mcp_projection": {"output_complete": output_complete},
-            }
-            content.append({"type": "text", "text": json.dumps(projection)})
-        content.append({"type": "resource_link", "uri": link_uri})
+    def link_event(link_uri: str) -> dict[str, object]:
+        content = [{"type": "resource_link", "uri": link_uri}]
         return {
             "type": "item.completed",
             "item": {
@@ -263,9 +244,9 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
         "\n".join(
             json.dumps(event)
             for event in (
-                link_event(uri, output_complete=False),
-                link_event(unnecessary_uri, output_complete=True),
-                link_event(malformed_uri, output_complete=False),
+                link_event(uri),
+                link_event(unnecessary_uri),
+                link_event(malformed_uri),
                 first_read,
                 second_read,
                 _tool_event(
@@ -286,7 +267,6 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
     assert telemetry["mcp_resource_read_attempts"] == 3
     assert telemetry["mcp_resource_read_uris"] == [uri, unnecessary_uri, malformed_uri]
     assert telemetry["mcp_resource_read_successes"] == 3
-    assert telemetry["mcp_resource_unnecessary_reads"] == 1
     assert telemetry["mcp_resource_uri_preservation_attempts"] == 3
     assert telemetry["mcp_resource_uri_preservation_successes"] == 2
     assert telemetry["mcp_resource_digest_preservation_successes"] == 2

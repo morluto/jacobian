@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -29,6 +30,21 @@ def _compute(authorized_complete_runtime):
     )
 
 
+def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
+    return runtime.core.store.get(computed.output["result_uri"]).payload
+
+
+def _forged_result_uri(runtime: Any, computed: Any, payload: dict[str, Any]) -> str:
+    source = runtime.core.store.get(computed.output["result_uri"])
+    return runtime.core.store.put(
+        schema_uri=source.manifest.schema_uri,
+        semantics_uri=source.manifest.semantics_uri,
+        payload=payload,
+        parents=source.manifest.parents,
+        summary="forged certified Smith result",
+    ).artifact_uri
+
+
 def test_certified_smith_result_is_independently_verified(
     authorized_complete_runtime,
 ) -> None:
@@ -37,10 +53,7 @@ def test_certified_smith_result_is_independently_verified(
         CapabilityRequest(
             capability_id="matrix.normal_form.smith.certified.verify",
             mode=CapabilityMode.VERIFY,
-            input={
-                "input": _matrix_payload(),
-                "candidate": computed.output["result"],
-            },
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
@@ -55,7 +68,7 @@ def test_certified_smith_checker_rejects_a_forged_relation(
     authorized_complete_runtime,
 ) -> None:
     computed = _compute(authorized_complete_runtime)
-    forged_candidate = deepcopy(computed.output["result"])
+    forged_candidate = deepcopy(_result_payload(authorized_complete_runtime, computed))
     certificate = dict(forged_candidate["certificate"])
     left = dict(certificate["left_transformation"])
     entries = [list(row) for row in left["entries"]]
@@ -68,7 +81,11 @@ def test_certified_smith_checker_rejects_a_forged_relation(
         CapabilityRequest(
             capability_id="matrix.normal_form.smith.certified.verify",
             mode=CapabilityMode.VERIFY,
-            input={"input": _matrix_payload(), "candidate": forged_candidate},
+            input={
+                "result_uri": _forged_result_uri(
+                    authorized_complete_runtime, computed, forged_candidate
+                )
+            },
         )
     )
 

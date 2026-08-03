@@ -28,6 +28,11 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
+def _result_payload(services: DomainTestServices, result: object) -> dict[str, object]:
+    result_uri = result.output["result_uri"]  # type: ignore[attr-defined]
+    return services.core.store.get(result_uri).payload
+
+
 def _minor_determinant(matrix: list[list[int]]) -> int:
     size = len(matrix)
     if size == 0:
@@ -96,7 +101,7 @@ def test_certified_smith_materializes_both_full_basis_changes(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    certificate = result.output["result"]["certificate"]
+    certificate = _result_payload(domain_services, result)["certificate"]
     assert certificate["diagonal"]["entries"] == [["2", "0"], ["0", "4"]]
     assert certificate["invariant_factors"] == ["2", "4"]
     assert certificate["relation"] == ("DIAGONAL_EQUALS_LEFT_TIMES_SOURCE_TIMES_RIGHT")
@@ -172,7 +177,7 @@ def test_dense_bounded_input_can_materialize_large_basis_changes(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    certificate = result.output["result"]["certificate"]
+    certificate = _result_payload(domain_services, result)["certificate"]
     result_integers = [
         value
         for matrix_name in (

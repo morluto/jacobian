@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from tests.support.rationals import rational_payload as _q
 
@@ -38,6 +39,21 @@ def _connected_payload() -> dict[str, object]:
     }
 
 
+def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
+    return runtime.core.store.get(computed.output["result_uri"]).payload
+
+
+def _forged_result_uri(runtime: Any, computed: Any, payload: dict[str, Any]) -> str:
+    source = runtime.core.store.get(computed.output["result_uri"])
+    return runtime.core.store.put(
+        schema_uri=source.manifest.schema_uri,
+        semantics_uri=source.manifest.semantics_uri,
+        payload=payload,
+        parents=source.manifest.parents,
+        summary="forged minimum spanning tree result",
+    ).artifact_uri
+
+
 def test_weighted_minimum_spanning_tree_is_independently_verified(
     authorized_complete_runtime,
 ) -> None:
@@ -52,16 +68,15 @@ def test_weighted_minimum_spanning_tree_is_independently_verified(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
             mode=CapabilityMode.VERIFY,
-            input={
-                "input": payload,
-                "candidate": computed.output["result"],
-            },
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert computed.output["result"]["total_weight"] == _q(3)
+    assert _result_payload(authorized_complete_runtime, computed)["total_weight"] == _q(
+        3
+    )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["conclusion"] == "TRUE"
@@ -85,7 +100,7 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
             input=payload,
         )
     )
-    forged_candidate = deepcopy(computed.output["result"])
+    forged_candidate = deepcopy(_result_payload(authorized_complete_runtime, computed))
     forged_candidate["tree_edges"] = [
         _edge("a", "b", 1),
         _edge("a", "d", 4),
@@ -124,7 +139,11 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
             mode=CapabilityMode.VERIFY,
-            input={"input": payload, "candidate": forged_candidate},
+            input={
+                "result_uri": _forged_result_uri(
+                    authorized_complete_runtime, computed, forged_candidate
+                )
+            },
         )
     )
 
@@ -154,14 +173,14 @@ def test_disconnected_no_spanning_tree_result_is_completely_replayed(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
             mode=CapabilityMode.VERIFY,
-            input={
-                "input": payload,
-                "candidate": computed.output["result"],
-            },
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
-    assert computed.output["result"]["status"] == "NO_SPANNING_TREE"
+    assert (
+        _result_payload(authorized_complete_runtime, computed)["status"]
+        == "NO_SPANNING_TREE"
+    )
     assert verified.output["status"] == "VERIFIED"
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.execution.detail == (

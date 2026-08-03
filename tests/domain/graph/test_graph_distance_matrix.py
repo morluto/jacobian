@@ -67,12 +67,9 @@ def test_distance_matrix_is_complete_canonical_and_lineage_bound(
         "distances": [[0, 1, 2], [1, 0, 1], [2, 1, 0]],
         "connected": True,
     }
-    assert len(result.artifact_uris) == 2
-    input_uri, matrix_uri = result.artifact_uris
-    assert domain_services.core.store.get(matrix_uri).manifest.parents == (input_uri,)
-    assert result.relationships[0].relation_id == "graph.distance_matrix.relation"
-    assert result.relationships[0].source_artifact_uris == (input_uri,)
-    assert result.relationships[0].target_artifact_uris == (matrix_uri,)
+    assert result.artifact_uris == ()
+    assert result.episode_uri is None
+    assert result.relationships == ()
 
 
 def test_distance_matrix_represents_disconnected_pairs_with_null(

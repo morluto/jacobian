@@ -60,13 +60,14 @@ class CheckerRegistration(ContractModel):
             not in {
                 CapabilityProviderDigestKind.EXECUTABLE,
                 CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+                CapabilityProviderDigestKind.SOURCE_TREE,
                 CapabilityProviderDigestKind.COMPOSITE,
             }
             or runtime.digest is None
         ):
             raise ValueError(
                 "checker provider runtime must identify an available executable, "
-                "Python distribution, or fully bound composite"
+                "Python distribution, remeasurable source tree, or fully bound composite"
             )
         if (
             runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE
@@ -83,6 +84,14 @@ class CheckerRegistration(ContractModel):
                 raise ValueError(
                     "checker Python distribution runtime must name its "
                     "distribution and import"
+                )
+        if runtime.digest_kind is CapabilityProviderDigestKind.SOURCE_TREE:
+            entrypoint = runtime.configuration.get("entrypoint")
+            if not isinstance(entrypoint, str):
+                raise ValueError("checker source runtime must name its entrypoint")
+            if entrypoint != self.entrypoint:
+                raise ValueError(
+                    "checker source runtime entrypoint must bind the checker entrypoint"
                 )
         if runtime.checker_ids:
             raise ValueError(

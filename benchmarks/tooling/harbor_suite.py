@@ -686,6 +686,29 @@ def _agent_environment_failures(suite: Suite, task_dir: Path, rel: str) -> list[
     return failures
 
 
+def _is_ignored_interpreter_cache(path: Path) -> bool:
+    try:
+        relative = path.relative_to(ROOT)
+    except ValueError:
+        relative = path
+    return (
+        subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--quiet",
+                "--no-index",
+                "--",
+                str(relative),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
 def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
     failures: list[str] = []
     rel = task_dir.relative_to(ROOT).as_posix()
@@ -695,36 +718,13 @@ def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
     for path in task_dir.rglob("*"):
         if path.is_symlink():
             failures.append(f"{rel}: symlink is forbidden")
-        if path.name == "__pycache__" or path.suffix in {".pyc", ".pyo"}:
-            # Python creates these ignored files during ordinary local verifier
-            # tests.  They are not benchmark source and should not make a
-            # developer clean the worktree before running this contract gate.
-            # Preserve the integrity check for committed or explicitly
-            # unignored cache material.
-            try:
-                relative = path.relative_to(ROOT)
-            except ValueError:
-                relative = path
-            ignored = (
-                subprocess.run(
-                    [
-                        "git",
-                        "check-ignore",
-                        "--quiet",
-                        "--no-index",
-                        "--",
-                        str(relative),
-                    ],
-                    cwd=ROOT,
-                    capture_output=True,
-                    check=False,
-                ).returncode
-                == 0
+        if (
+            path.name == "__pycache__" or path.suffix in {".pyc", ".pyo"}
+        ) and not _is_ignored_interpreter_cache(path):
+            # Committed or explicitly unignored cache material remains invalid.
+            failures.append(
+                f"{path.relative_to(ROOT)}: raw interpreter cache is forbidden"
             )
-            if not ignored:
-                failures.append(
-                    f"{path.relative_to(ROOT)}: raw interpreter cache is forbidden"
-                )
     try:
         failures.extend(_task_manifest_failures(suite, task_dir, rel))
     except HarborSuiteError as exc:

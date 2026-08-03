@@ -102,6 +102,7 @@ ci-plan: ## Print the hosted CI lane plan for BASE..HEAD and working changes.
 	} | sort -u); \
 	printf '%s\n' "$$changed_paths" > "$$tmp_dir/changed-paths.txt"; \
 	$(UV_RUN) python .github/scripts/classify-ci-paths -- $$changed_paths > "$$tmp_dir/plan.txt"; \
+	$(UV_RUN) python .github/scripts/validate-ci-plan < "$$tmp_dir/plan.txt"; \
 	$(UV_RUN) python .github/scripts/emit-plan-receipt \
 		--kind product-ci --event pull_request \
 		--base "$$base_sha" --head "$$head_sha" \
@@ -235,6 +236,7 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	printf '%s\n' "$$changed_paths" > "$$tmp_dir/changed-paths.txt"; \
 	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks \
 		$$base_arg --head "$$head_sha" -- $$changed_paths > "$$tmp_dir/plan.txt"; \
+	$(UV_RUN) python .github/scripts/validate-benchmark-plan < "$$tmp_dir/plan.txt"; \
 	$(UV_RUN) python .github/scripts/emit-plan-receipt \
 		--kind benchmark --event pull_request \
 		--base "$$base_sha" --head "$$head_sha" \

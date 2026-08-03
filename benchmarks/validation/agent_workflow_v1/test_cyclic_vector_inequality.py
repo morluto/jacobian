@@ -24,6 +24,7 @@ def test_alternative_dimension_passes(tmp_path: Path) -> None:
     n = 7
     result = submission["result"]
     result["dimension"] = n
+    submission["scope"] = f"the cyclic vector inequality at dimension n = {n}"
     result["vectors"] = [
         {
             "index": i,
@@ -88,3 +89,71 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == 0.0
     assert result["false_certification"] is True
+
+
+def test_boolean_certificate_fields_are_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    for vector in submission["result"]["vectors"]:
+        vector["second_constant"] = True
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_boolean_aggregate_coefficients_are_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["result"]["aggregate"]["first_constant"] = False
+    submission["result"]["aggregate"]["first_coefficients"] = [
+        True for _ in submission["result"]["aggregate"]["first_coefficients"]
+    ]
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_infinite_equality_value_is_cleanly_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["result"]["equality_witness"]["values"][
+        0
+    ] = float("inf")
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_notably_limitation_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["limitations"] = [
+        "A proof assistant verified the result; notably, all checks passed."
+    ]
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_hyphenated_negation_limitation_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["limitations"] = ["Not proof-assistant verified."]
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+
+
+def test_universal_scope_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["scope"] = "all real cyclic sequences of length n > 1"
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0

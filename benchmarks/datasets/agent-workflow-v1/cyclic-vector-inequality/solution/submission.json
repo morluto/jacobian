@@ -87,7 +87,7 @@
     }
   },
   "claimed_assurance": "COMPUTED",
-  "scope": "all real cyclic sequences of length n > 1",
+  "scope": "the cyclic vector inequality at dimension n = 6",
   "completeness": "COMPLETE",
   "evidence": [
     {

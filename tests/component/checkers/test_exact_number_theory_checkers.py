@@ -10,7 +10,7 @@ from tests.component.checkers.exact_domain_checker_support import (
     _NUMBER_THEORY_CASES,
     _request,
 )
-from tests.unit.contracts.artifacts import canonical_digest as _digest
+from tests.support.artifacts import canonical_digest as _digest
 
 from jacobian_checkers.exact_domain_operations import (
     check_integer_powerful_number,

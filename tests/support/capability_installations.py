@@ -1,3 +1,5 @@
+"""Focused capability installation support shared by owning test lanes."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -15,7 +17,7 @@ def install_capability_bundle(
     tmp_path: Path,
     installer: Callable[..., tuple[Any, Any]],
 ) -> tuple[Any, Any, ArtifactRepository]:
-    """Build a minimal store and install one capability bundle for focused tests."""
+    """Build a minimal store and install one capability bundle."""
 
     store = ArtifactRepository(tmp_path / "store")
     schemas = SchemaRegistry(store)

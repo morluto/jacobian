@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.component.capabilities.installations import install_capability_bundle
-from tests.unit.contracts.polynomials import univariate_term as _term
+from tests.support.capability_installations import install_capability_bundle
+from tests.support.polynomials import univariate_term as _term
 
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (

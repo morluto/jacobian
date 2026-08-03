@@ -348,6 +348,8 @@ def test_reentrant_load_raises() -> None:
 
 def test_concurrent_load_calls_callable_once() -> None:
     barrier = threading.Barrier(16)
+    load_started = threading.Event()
+    release_load = threading.Event()
     calls = 0
     call_lock = threading.Lock()
     results: list[str] = []
@@ -356,10 +358,8 @@ def test_concurrent_load_calls_callable_once() -> None:
         with call_lock:
             nonlocal calls
             calls += 1
-        # Hold the load briefly so other threads pile up on the lock.
-        import time
-
-        time.sleep(0.01)
+        load_started.set()
+        assert release_load.wait(timeout=2)
         return "implementation"
 
     loader = LazyLoader(load, component_id="provider.concurrent")
@@ -371,6 +371,8 @@ def test_concurrent_load_calls_callable_once() -> None:
     threads = [threading.Thread(target=worker) for _ in range(16)]
     for thread in threads:
         thread.start()
+    assert load_started.wait(timeout=1)
+    release_load.set()
     for thread in threads:
         thread.join()
 

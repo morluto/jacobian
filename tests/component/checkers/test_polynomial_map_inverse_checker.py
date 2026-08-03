@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import artifact_uri as _uri
+from tests.support.artifacts import artifact_uri as _uri
 
 from jacobian_checkers.polynomial_maps import check_map_inverse
 

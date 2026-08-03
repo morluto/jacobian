@@ -6,8 +6,8 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import artifact_uri as _uri
-from tests.unit.contracts.artifacts import canonical_digest as _digest
+from tests.support.artifacts import artifact_uri as _uri
+from tests.support.artifacts import canonical_digest as _digest
 
 import jacobian_checkers.finite_posets as checker_module
 from jacobian.contracts.posets import (

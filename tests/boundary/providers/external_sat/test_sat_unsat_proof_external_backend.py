@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from tests.component.capabilities.capabilities import invoke_capability as _invoke
+from tests.support.capabilities import invoke_capability as _invoke
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,

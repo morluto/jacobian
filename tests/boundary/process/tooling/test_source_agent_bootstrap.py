@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -70,6 +71,10 @@ def test_bootstrap_dry_run_and_client_preflight_fail_closed() -> None:
     assert script.index("status --porcelain") < script.index("uv python find")
 
 
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="requires git to initialize a test checkout",
+)
 def test_nonexistent_checkout_directory_uses_git_directory_ignore_semantics(
     tmp_path: Path,
 ) -> None:

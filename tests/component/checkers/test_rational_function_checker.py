@@ -4,9 +4,9 @@ import copy
 from typing import Any
 
 import pytest
+from tests.support.artifacts import artifact_uri as _uri
+from tests.support.artifacts import json_digest as _digest
 from tests.support.rationals import rational_payload as _rational
-from tests.unit.contracts.artifacts import artifact_uri as _uri
-from tests.unit.contracts.artifacts import json_digest as _digest
 
 from jacobian_checkers.rational_functions import check_rational_function_identity
 

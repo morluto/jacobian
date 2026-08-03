@@ -294,10 +294,18 @@ def test_tenant_router_restores_failed_eviction_and_shutdown_waits_for_leases(
     with pytest.raises(TenantRuntimeLimitError, match="tenant limit"):
         router.lease_for("beta")
     first.fail_close = False
+    close_entered = threading.Event()
+    original_close = router.close
+
+    def close_after_signaling() -> None:
+        close_entered.set()
+        original_close()
+
+    router.close = close_after_signaling  # type: ignore[method-assign]
     closed = threading.Event()
     closer = threading.Thread(target=lambda: (router.close(), closed.set()))
     closer.start()
-    time.sleep(0.05)
+    assert close_entered.wait(timeout=2)
     assert not closed.is_set()
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
         router.lease_for("beta")

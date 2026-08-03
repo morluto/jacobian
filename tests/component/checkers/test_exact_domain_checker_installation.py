@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.unit.contracts.artifacts import artifact_uri as _uri
+from tests.support.artifacts import artifact_uri as _uri
 
 import jacobian.exact_domain_checkers as exact_domain_checkers
 from jacobian.contracts.capabilities import CapabilityProviderAvailability

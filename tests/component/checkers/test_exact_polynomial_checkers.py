@@ -9,8 +9,8 @@ from tests.component.checkers.exact_domain_checker_support import (
     _rational_poly,
     _request,
 )
+from tests.support.artifacts import canonical_digest as _digest
 from tests.support.rationals import rational_payload as _q
-from tests.unit.contracts.artifacts import canonical_digest as _digest
 
 from jacobian_checkers.exact_domain_operations import (
     check_polynomial_square_free,

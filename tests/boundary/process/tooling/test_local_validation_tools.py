@@ -70,7 +70,7 @@ def test_clean_test_plan_selects_no_lanes() -> None:
 def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
     result = subprocess.run(
         [
-            os.fspath(ROOT / ".venv/bin/python"),
+            sys.executable,
             "tools/test_topology.py",
             "domain",
             "--dry-run",

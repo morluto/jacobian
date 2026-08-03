@@ -1,7 +1,7 @@
 from typing import Any, cast
 
 import pytest
-from tests.component.capabilities.capabilities import invoke_capability as _invoke
+from tests.support.capabilities import invoke_capability as _invoke
 
 from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (

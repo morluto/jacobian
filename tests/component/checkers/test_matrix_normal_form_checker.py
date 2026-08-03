@@ -4,8 +4,8 @@ import copy
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import artifact_uri as _uri
-from tests.unit.contracts.artifacts import json_digest as _digest
+from tests.support.artifacts import artifact_uri as _uri
+from tests.support.artifacts import json_digest as _digest
 
 from jacobian_checkers.matrix_normal_forms import check_hermite_normal_form
 

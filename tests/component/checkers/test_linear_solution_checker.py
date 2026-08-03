@@ -4,8 +4,8 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from tests.support.artifacts import canonical_digest as _digest
 from tests.support.rationals import rational_payload as _q
-from tests.unit.contracts.artifacts import canonical_digest as _digest
 
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,

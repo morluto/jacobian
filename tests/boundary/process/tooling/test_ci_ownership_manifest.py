@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+import pytest
+
 OWNERSHIP = Path(__file__).parents[4] / ".github" / "ci-impact.json"
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="CI ownership manifest tests require git ls-files",
+)
 
 
 def test_every_lean_python_test_has_explicit_lean_ownership() -> None:

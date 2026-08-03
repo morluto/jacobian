@@ -13,7 +13,6 @@ than private ``_closed`` flags wherever possible.
 from __future__ import annotations
 
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -113,8 +112,17 @@ def test_close_quiesces_search_workers_before_closing_store(
     runtime.services.search._launch("experiment://runtime-close-regression")
     assert worker_started.wait(timeout=1)
 
+    close_entered = threading.Event()
+    original_close = runtime.close
+
+    def close_after_signaling() -> None:
+        close_entered.set()
+        original_close()
+
+    monkeypatch.setattr(runtime, "close", close_after_signaling)
+
     def release_after_close_begins() -> None:
-        time.sleep(0.05)
+        close_entered.wait(timeout=2)
         release_worker.set()
 
     releaser = threading.Thread(target=release_after_close_begins)
@@ -161,7 +169,18 @@ def test_close_quiesces_enumeration_workers_before_closing_store(
     )
     assert worker_started.wait(timeout=1)
 
-    releaser = threading.Thread(target=lambda: (time.sleep(0.05), release_worker.set()))
+    close_entered = threading.Event()
+    original_close = runtime.close
+
+    def close_after_signaling() -> None:
+        close_entered.set()
+        original_close()
+
+    monkeypatch.setattr(runtime, "close", close_after_signaling)
+
+    releaser = threading.Thread(
+        target=lambda: (close_entered.wait(timeout=2), release_worker.set())
+    )
     releaser.start()
     runtime.close()
     releaser.join(timeout=1)
@@ -268,8 +287,17 @@ def test_close_waits_for_a_reserved_search_start_through_worker_launch(
     starter.start()
     assert start_reserved.wait(timeout=1)
 
+    close_entered = threading.Event()
+    original_close = runtime.close
+
+    def close_after_signaling() -> None:
+        close_entered.set()
+        original_close()
+
+    monkeypatch.setattr(runtime, "close", close_after_signaling)
+
     def release_after_close_begins() -> None:
-        time.sleep(0.05)
+        close_entered.wait(timeout=2)
         release_start.set()
 
     releaser = threading.Thread(target=release_after_close_begins)
@@ -326,7 +354,18 @@ def test_close_waits_for_a_reserved_enumeration_start_through_worker_launch(
     starter = threading.Thread(target=start_enumeration)
     starter.start()
     assert start_reserved.wait(timeout=1)
-    releaser = threading.Thread(target=lambda: (time.sleep(0.05), release_start.set()))
+    close_entered = threading.Event()
+    original_close = runtime.close
+
+    def close_after_signaling() -> None:
+        close_entered.set()
+        original_close()
+
+    monkeypatch.setattr(runtime, "close", close_after_signaling)
+
+    releaser = threading.Thread(
+        target=lambda: (close_entered.wait(timeout=2), release_start.set())
+    )
     releaser.start()
     runtime.close()
     starter.join(timeout=1)

@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import canonical_digest as _digest
+from tests.support.artifacts import canonical_digest as _digest
 
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,

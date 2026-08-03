@@ -4,7 +4,7 @@ import sqlite3
 from typing import Any
 
 import pytest
-from tests.unit.contracts.polynomials import univariate_term as _term
+from tests.support.polynomials import univariate_term as _term
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,

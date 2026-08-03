@@ -1,3 +1,5 @@
+"""Small artifact and digest builders shared across semantic test lanes."""
+
 from __future__ import annotations
 
 import hashlib

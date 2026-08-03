@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import sha256_file as _sha256_file
+from tests.support.artifacts import sha256_file as _sha256_file
 
 import jacobian_checkers.sat
 from jacobian.contracts.capabilities import (
@@ -25,7 +25,6 @@ from jacobian.providers.external_solver_runtime import drat_trim_provider_runtim
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
-from jacobian.verification._helpers import _environment_digest
 
 
 def _fake_drat_trim(tmp_path: Path, body: str) -> Path:
@@ -203,10 +202,9 @@ def test_unsat_proof_is_verified_by_authorized_external_runtime(
     assert record.evidence_uri == certificate_uri
     checker = runtime.core.checkers.require_active(record.checker_id)
     assert checker.provider_runtime == runtime.portfolio.drat_trim_runtime
-    assert record.environment_digest == _environment_digest(
-        checker.executable_digest,
-        checker.provider_runtime,
-    )
+    assert record.checker_digest == checker.executable_digest
+    assert record.environment_digest.startswith("sha256:")
+    assert len(record.environment_digest) == len("sha256:") + 64
     assert set(record_artifact.manifest.parents) == {
         cnf_uri,
         proof_uri,

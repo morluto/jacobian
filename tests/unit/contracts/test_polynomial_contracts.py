@@ -172,13 +172,16 @@ def test_bounded_rational_scalars_deduplicate_equivalents() -> None:
 
 def test_collision_search_accepts_exact_grid_within_limit() -> None:
     # Loose upper bound is 136**2 = 18496; exact deduplicated grid is 87**2 = 7569.
-    PolynomialCollisionSearchRequest.model_validate(
+    request = PolynomialCollisionSearchRequest.model_validate(
         {
             "map": _identity_map(2),
             "max_abs_numerator": 8,
             "max_denominator": 8,
         }
     )
+    assert request.max_abs_numerator == 8
+    assert request.max_denominator == 8
+    assert len(request.map.variables) == 2
 
 
 def test_collision_search_rejects_exact_grid_over_limit() -> None:
@@ -193,13 +196,16 @@ def test_collision_search_rejects_exact_grid_over_limit() -> None:
 
 
 def test_system_search_accepts_exact_grid_within_limit() -> None:
-    PolynomialSystemRationalSearchRequest.model_validate(
+    request = PolynomialSystemRationalSearchRequest.model_validate(
         {
             "system": _linear_system(2),
             "max_abs_numerator": 8,
             "max_denominator": 8,
         }
     )
+    assert request.max_abs_numerator == 8
+    assert request.max_denominator == 8
+    assert len(request.system.variables) == 2
 
 
 def test_system_search_rejects_exact_grid_over_limit() -> None:

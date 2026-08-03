@@ -22,10 +22,28 @@ def test_distribution_version_returns_none_for_missing_distribution() -> None:
     assert distribution_version("definitely-not-a-real-distribution-xyz") is None
 
 
-def test_distribution_version_does_not_import_the_package() -> None:
+def test_distribution_version_does_not_import_the_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Reading metadata must not require importing the named package. A name
     # that is not a valid importable module still resolves through metadata.
-    assert distribution_version("jacobian") == distribution_version("jacobian")
+    import sys
+
+    import jacobian.providers.metadata as metadata_module
+
+    requested: list[str] = []
+
+    def lookup(name: str) -> str:
+        requested.append(name)
+        return "1.2.3"
+
+    monkeypatch.setattr(metadata_module, "_version_cache", {})
+    monkeypatch.setattr(metadata_module, "version", lookup)
+    module_name = "distribution_only_fixture"
+    sys.modules.pop(module_name, None)
+    assert metadata_module.distribution_version("distribution-only-fixture") == "1.2.3"
+    assert requested == ["distribution-only-fixture"]
+    assert module_name not in sys.modules
 
 
 def test_distribution_summary_returns_typed_record() -> None:

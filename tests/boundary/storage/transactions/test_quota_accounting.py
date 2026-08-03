@@ -127,7 +127,11 @@ def test_blob_writes_do_not_rescan_the_blob_tree(
         raise AssertionError("blob writes must use durable quota accounting")
 
     monkeypatch.setattr(Path, "iterdir", unexpected_scan)
-    store._write_blob(b"constant-time quota accounting")
+    data = b"constant-time quota accounting"
+    digest = store._write_blob(data)
+
+    assert store._blob_path(digest).read_bytes() == data
+    assert store._blob_bytes_committed() == len(data)
 
 
 def test_store_open_reconciles_stale_quota_metadata(tmp_path: Path) -> None:

@@ -89,6 +89,7 @@ def test_even_jacobi_denominator_fails_before_artifact_writes(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.artifact_uris == ()
+    assert result.diagnostics[0].code == "INVALID_NUMBER_THEORY_REQUEST"
 
 
 def test_chinese_remainder_returns_canonical_exact_solution(tmp_path: Path) -> None:
@@ -117,6 +118,7 @@ def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.artifact_uris == ()
     assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
+    assert result.diagnostics[0].code == "NUMBER_THEORY_OPERATION_NOT_APPLICABLE"
 
 
 @pytest.mark.parametrize("residue", [-1, 3])
@@ -337,6 +339,7 @@ def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.artifact_uris == ()
+    assert result.diagnostics[0].code == "INVALID_NUMBER_THEORY_REQUEST"
 
 
 @pytest.mark.parametrize(

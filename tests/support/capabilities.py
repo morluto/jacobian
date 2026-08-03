@@ -1,3 +1,5 @@
+"""Capability test builders shared across semantic test lanes."""
+
 from __future__ import annotations
 
 from typing import Any

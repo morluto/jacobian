@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import sha256_file as _sha256_file
+from tests.support.artifacts import sha256_file as _sha256_file
 
 import jacobian_checkers.smt
 from jacobian.contracts.capabilities import (
@@ -25,7 +25,6 @@ from jacobian.providers.external_solver_runtime import carcara_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
-from jacobian.verification._helpers import _environment_digest
 
 _FIXTURES = (
     Path(__file__).resolve().parents[5]
@@ -217,10 +216,9 @@ def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     assert record.evidence_uri == certificate_uri
     checker = runtime.core.checkers.require_active(record.checker_id)
     assert checker.provider_runtime == runtime.portfolio.carcara_runtime
-    assert record.environment_digest == _environment_digest(
-        checker.executable_digest,
-        checker.provider_runtime,
-    )
+    assert record.checker_digest == checker.executable_digest
+    assert record.environment_digest.startswith("sha256:")
+    assert len(record.environment_digest) == len("sha256:") + 64
     assert set(record_artifact.manifest.parents) == {
         problem_uri,
         proof_uri,

@@ -1,3 +1,5 @@
+"""Small polynomial payload builders shared across semantic test lanes."""
+
 from __future__ import annotations
 
 

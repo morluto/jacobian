@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.unit.contracts.polynomials import univariate_term as _term
+from tests.support.polynomials import univariate_term as _term
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,

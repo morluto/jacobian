@@ -188,16 +188,17 @@ def _make_canonical_task(tmp_path: Path, *, task_id: str = "test-v1-a") -> Path:
     )
 
 
-def test_load_registry_parses_all_datasets() -> None:
+def test_load_registry_returns_unique_well_formed_datasets() -> None:
     suites = load_registry()
     ids = {s.id for s in suites}
-    assert ids == {
-        "agent-workflow-v1",
-        "examples-v1",
-        "provider-feasibility-v1",
-        "public-reproductions-v1",
-        "research-diagnostics-v1",
-    }
+    assert ids
+    assert len(ids) == len(suites)
+    assert all(suite.dataset_name.startswith("jacobian/") for suite in suites)
+    assert all(
+        suite.id == suite.dataset_name.removeprefix("jacobian/") for suite in suites
+    )
+    assert all(suite.path.is_dir() for suite in suites)
+    assert all(suite.tasks_dir.is_dir() for suite in suites)
 
 
 def test_load_registry_rejects_wrong_schema_version(

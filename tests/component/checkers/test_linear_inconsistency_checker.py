@@ -3,8 +3,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from tests.support.artifacts import canonical_digest as _digest
 from tests.support.rationals import rational_payload as _q
-from tests.unit.contracts.artifacts import canonical_digest as _digest
 
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,

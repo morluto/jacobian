@@ -4,6 +4,7 @@ import os
 import shutil
 import sqlite3
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -33,12 +34,16 @@ pytestmark = []
 def plugin_runtime(
     tmp_path: Path,
     complete_portfolio_template: Path,
-) -> JacobianRuntime:
+) -> Iterator[JacobianRuntime]:
     """Runtime rooted at ``tmp_path/state`` so plugin packages can live beside it."""
 
     state = tmp_path / "state"
     shutil.copytree(complete_portfolio_template, state)
-    return create_runtime(state)
+    runtime = create_runtime(state)
+    try:
+        yield runtime
+    finally:
+        runtime.close()
 
 
 def _install_external_plugin(

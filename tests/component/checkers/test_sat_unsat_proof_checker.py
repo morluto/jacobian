@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.unit.contracts.artifacts import sha256_file as _sha256_file
+from tests.support.artifacts import sha256_file as _sha256_file
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json

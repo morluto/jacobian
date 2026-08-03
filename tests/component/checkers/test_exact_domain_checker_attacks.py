@@ -11,8 +11,8 @@ from tests.component.checkers.exact_domain_checker_support import (
     _CASES,
     _mutate_numeric_leaf,
 )
-from tests.unit.contracts.artifacts import artifact_uri as _uri
-from tests.unit.contracts.artifacts import canonical_digest as _digest
+from tests.support.artifacts import artifact_uri as _uri
+from tests.support.artifacts import canonical_digest as _digest
 
 import jacobian_checkers.exact_domain_operations as checker_module
 from jacobian_checkers.graph_exact_operations import check_graph_induced_tree_maximum

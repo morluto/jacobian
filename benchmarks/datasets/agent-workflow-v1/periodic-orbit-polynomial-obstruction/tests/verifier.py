@@ -4,12 +4,29 @@ from pathlib import Path
 from verifier_support import (
     false_verified_claim,
     load_submission,
-    read_evidence_json,
+    resolve_evidence,
     strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
 MAX_SUBMISSION_BYTES = 1_048_576
+MAX_INPUT_BYTES = 1_048_576
+MAX_EVIDENCE_BYTES = 1_048_576
+
+_ASSURANCE_ORDER = {
+    "UNVERIFIED": 0,
+    "COMPUTED": 1,
+    "CHECKED": 2,
+    "VERIFIED": 3,
+}
+
+# Acceptable proof-step identifiers.  The schema exposes a finite enum so the
+# agent knows the expected format without seeing the exact answer as a single
+# const; the verifier accepts only the correct one.
+_INFINITE_PRIME_STEP = (
+    "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)"
+)
+_POLYNOMIAL_IDENTITY_STEP = "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"
 
 
 def _load_submission():
@@ -28,13 +45,19 @@ def _load_submission():
 
 
 def _load_frozen_input():
+    """Load the frozen input, bounding the workspace copy before reading."""
     try:
-        raw = (E / "input.json").read_bytes()
+        frozen_path = E / "input.json"
+        workspace_path = W / "input.json"
+        if frozen_path.is_symlink() or workspace_path.is_symlink():
+            return {}
         if (
-            (W / "input.json").is_symlink()
-            or (E / "input.json").is_symlink()
-            or (W / "input.json").read_bytes() != raw
+            not workspace_path.is_file()
+            or workspace_path.stat().st_size > MAX_INPUT_BYTES
         ):
+            return {}
+        raw = frozen_path.read_bytes()
+        if workspace_path.read_bytes() != raw:
             return {}
         value = json.loads(raw)
     except (OSError, ValueError):
@@ -50,6 +73,31 @@ def _is_int(value):
 def _int_list(value):
     """Validate a list of exact integers, rejecting booleans and floats."""
     return isinstance(value, list) and all(_is_int(item) for item in value)
+
+
+def _json_equal(left, right):
+    """Compare two JSON values without Python's bool/int coercion."""
+    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, sort_keys=True, separators=(",", ":")
+    )
+
+
+def _read_bounded_evidence(descriptor, *, expected_path):
+    """Resolve and parse evidence, rejecting oversized files before parsing."""
+    target = resolve_evidence(
+        descriptor,
+        expected_path=expected_path,
+        workspace=W,
+    )
+    if target is None:
+        return None
+    try:
+        if target.stat().st_size > MAX_EVIDENCE_BYTES:
+            return None
+        value = json.loads(target.read_text())
+    except (OSError, ValueError, RecursionError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _reduction(item):
@@ -105,6 +153,8 @@ def _result_is_valid(result, frozen):
         if isinstance(reductions, list)
         else []
     )
+    infinite_step = result["infinite_prime_step"]
+    identity_step = result["polynomial_identity_step"]
     return bool(
         frozen.get("orbit_basis") == ["F(pq)", "F(p)", "F(q)", "F(1)"]
         and result["orbit_basis"] == frozen["orbit_basis"]
@@ -112,10 +162,10 @@ def _result_is_valid(result, frozen):
         and result["orbit_divisibility"] == "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
         and len(parsed) == 2
         and set(parsed) == {"p", "q"}
-        and result["infinite_prime_step"]
-        == "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)"
-        and result["polynomial_identity_step"]
-        == "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"
+        and isinstance(infinite_step, str)
+        and infinite_step == _INFINITE_PRIME_STEP
+        and isinstance(identity_step, str)
+        and identity_step == _POLYNOMIAL_IDENTITY_STEP
     )
 
 
@@ -135,7 +185,7 @@ def main():
         and isinstance(submission.get("evidence"), list)
         and len(submission["evidence"]) == 1
     ):
-        evidence = read_evidence_json(
+        evidence = _read_bounded_evidence(
             submission["evidence"][0],
             expected_path="evidence/periodic-orbit-certificate.json",
         )
@@ -144,8 +194,8 @@ def main():
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == submission.get("result")
-        and evidence["limitations"] == submission.get("limitations")
+        and _json_equal(evidence["result"], submission.get("result"))
+        and _json_equal(evidence["limitations"], submission.get("limitations"))
     )
     envelope = bool(
         contract
@@ -158,11 +208,27 @@ def main():
         contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
+    claimed = (
+        submission.get("claimed_assurance") if isinstance(submission, dict) else None
+    )
+    ceiling = expected["maximum_assurance"]
+    assurance_within_ceiling = bool(
+        contract
+        and isinstance(claimed, str)
+        and isinstance(ceiling, str)
+        and claimed in _ASSURANCE_ORDER
+        and ceiling in _ASSURANCE_ORDER
+        and _ASSURANCE_ORDER[claimed] <= _ASSURANCE_ORDER[ceiling]
+    )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
     correct = bool(
-        math_correct and evidence_valid and envelope and not false_certification
+        math_correct
+        and evidence_valid
+        and envelope
+        and assurance_within_ceiling
+        and not false_certification
     )
     reward = 0 if not correct else 0.9 + 0.1 * assurance
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

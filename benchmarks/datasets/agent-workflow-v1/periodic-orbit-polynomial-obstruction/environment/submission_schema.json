@@ -11,8 +11,8 @@
       "modular_reductions":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"object","additionalProperties":false,"required":["modulus","residue_basis","residue_coefficients","conclusion"],"properties":{
         "modulus":{"enum":["p","q"]},"residue_basis":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"string"}},"residue_coefficients":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer"}},"conclusion":{"enum":["p_DIVIDES_P(q)-P(1)","q_DIVIDES_P(p)-P(1)"]}
       }}},
-      "infinite_prime_step":{"type":"string","maxLength":256},
-      "polynomial_identity_step":{"type":"string","maxLength":256}
+      "infinite_prime_step":{"enum":["FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)","FOR_EACH_PRIME_p_ALL_OTHER_PRIMES_q_DIVIDE_P(p)-P(1)_SO_P(p)=P(1)","ALL_PRIMES_DIVIDE_P(1)_SO_P_IS_CONSTANT","INFINITE_PRIMES_GIVE_DISTINCT_VALUES_OF_P"]},
+      "polynomial_identity_step":{"enum":["P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES","P_EQUALS_CONSTANT_P(0)_ON_INFINITELY_MANY_PRIMES","P_IS_NONCONSTANT_ON_INFINITELY_MANY_PRIMES","P_EQUALS_IDENTITY_ON_ALL_PRIMES"]}
     }},
     "claimed_assurance":{"enum":["UNVERIFIED","COMPUTED","CHECKED","VERIFIED"]},
     "scope":{"const":"ALL_FUNCTIONS_Z_TO_Z_WITH_FINITE_ITERATE_FIXED_POINT_COUNTS_AND_ALL_P_IN_Z[x]"},

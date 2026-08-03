@@ -98,3 +98,72 @@ def test_verified_claim_is_rejected(tmp_path: Path) -> None:
     support._write_json(submission_path, submission)
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == 0.0
+
+
+def test_checked_assurance_above_computed_ceiling_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """CHECKED is above the COMPUTED ceiling and must force reward to zero."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["claimed_assurance"] = "CHECKED"
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["reward"] == 0.0
+
+
+def test_missing_required_limitations_lose_scope_credit(tmp_path: Path) -> None:
+    """Omitting the required limitations must not earn scope credit."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["limitations"] = []
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] < 1.0
+
+
+def test_undeclared_nested_certificate_field_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """An extra field in a nested certificate object must be rejected."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["result"]["fourier_block"]["extra_field"] = 0
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_deeply_nested_evidence_is_rejected(tmp_path: Path) -> None:
+    """Deeply nested JSON in the evidence file must not crash the verifier."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    evidence_path = app / "evidence" / "audit-certificate.json"
+    nested = "0"
+    for _ in range(10000):
+        nested = f"[{nested}]"
+    evidence_path.write_text(nested)
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
+    support._write_json(submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+
+
+def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
+    """Schema-valid unreduced rationals must receive full reward."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["result"]["norm_direction"]["diagonal_entries"] = [
+        {"numerator": 6, "denominator": 2},
+        {"numerator": 8, "denominator": 2},
+    ]
+    submission["result"]["norm_direction"]["operator_norm_squared"] = {
+        "numerator": 32,
+        "denominator": 2,
+    }
+    submission["result"]["norm_direction"]["hilbert_schmidt_norm_squared"] = {
+        "numerator": 50,
+        "denominator": 2,
+    }
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["reward"] == pytest.approx(1.0)

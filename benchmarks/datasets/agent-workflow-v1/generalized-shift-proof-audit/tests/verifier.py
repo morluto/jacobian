@@ -19,10 +19,7 @@ def rat(value):
     n, d = value["numerator"], value["denominator"]
     if type(n) is not int or type(d) is not int or d <= 0:
         raise ValueError
-    q = Fraction(n, d)
-    if (q.numerator, q.denominator) != (n, d):
-        raise ValueError
-    return q
+    return Fraction(n, d)
 
 
 def frozen_valid():
@@ -63,6 +60,8 @@ def certificate_valid(result):
         )
 
         f = result["fourier_block"]
+        if set(f) != {"size", "operator_norm_squared"}:
+            return False
         n = f["size"]
         fourier = (
             type(n) is int
@@ -72,6 +71,13 @@ def certificate_valid(result):
         )
 
         d = result["norm_direction"]
+        if set(d) != {
+            "valid_relation",
+            "diagonal_entries",
+            "operator_norm_squared",
+            "hilbert_schmidt_norm_squared",
+        }:
+            return False
         entries = [rat(x) for x in d["diagonal_entries"]]
         op2 = max(abs(x) for x in entries) ** 2
         hs2 = sum(x * x for x in entries)
@@ -85,6 +91,8 @@ def certificate_valid(result):
         )
 
         r = result["radical_domain"]
+        if set(r) != {"m", "radicand", "real_status"}:
+            return False
         m = r["m"]
         radical = (
             type(m) is int
@@ -115,7 +123,7 @@ def evidence_valid(evidence, result):
             and target.stat().st_size <= 1_048_576
             and json.loads(target.read_text()) == result
         )
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return False
 
 
@@ -126,7 +134,7 @@ def main():
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
     result = submission.get("result") if isinstance(submission, dict) else None
@@ -136,6 +144,7 @@ def main():
         contract
         and submission.get("scope") == expected["required_scope"]
         and submission.get("completeness") == "COMPLETE"
+        and submission.get("limitations") == expected["required_limitations"]
     )
     assurance = bool(
         contract

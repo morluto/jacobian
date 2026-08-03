@@ -1,0 +1,1 @@
+{"task_id":"jacobian/polynomial-root-localization-certificate","parameter_basis":["1","a","b","c"],"assumptions":["1-a>=0","a-b>=0","b-c>=0","c>=0"],"polynomial":{"variable":"x","coefficients_ascending":["c","b","a","1"]},"reciprocal_polynomial":{"variable":"z","coefficients_ascending":["1","a","b","c"]},"target":"all complex roots lambda satisfy |lambda|<=1"}

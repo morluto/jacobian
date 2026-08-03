@@ -1,0 +1,1 @@
+{"task_id":"jacobian/cyclic-vector-inequality","source":{"dataset":"AI4Math/IneqMath","revision":"3c7c32c786eb77117f3476d7f6d9af8419fa6ecc","split":"dev","row":12,"data_id":"12","license":"CC-BY-SA-4.0"},"dimension_min":5,"dimension_max":12,"indexing":"cyclic","assurance_ceiling":"COMPUTED"}

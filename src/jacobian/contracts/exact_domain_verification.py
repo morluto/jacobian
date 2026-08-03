@@ -8,11 +8,10 @@ authorized checker's scope, materializes the exact input and candidate as
 artifacts only within verification, and then reuses the existing witness,
 checker, ``VerificationService``, and immutable replay-record path.
 
-Bounded-search and materialized producers are covered by the same inline
-contract: the agent supplies the bounded search's input and its candidate
-result, and the verifier materializes and replays the exact relation. The
-search's separate optimality-obligation artifact is not part of the exact
-replay relation and remains outside this contract.
+Materialized and bounded-search producers retain their typed ``result_uri``
+verifier input. The verifier resolves the producer's exact persisted lineage;
+the search's separate optimality-obligation artifact remains outside the exact
+replay relation.
 """
 
 from __future__ import annotations

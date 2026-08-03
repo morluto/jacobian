@@ -1,1 +1,25 @@
-{"task_id":"jacobian/jcb-postdoc-014","conclusion":"DISPROVED","result":{"expected_conclusion":"DISPROVED","answer_visible_summary":"Both arrangements have non-double flats exactly as listed and weak combinatorics (n2,n3,n4)=(9,7,1). The graded maps Phi_h,q:(Q[x,y,z]_q)^3 -> Q[x,y,z]_(q+8) are injective through q=3 for both; Phi_f,4 has one-dimensional kernel while Phi_g,4 is injective and Phi_g,5 has four-dimensional kernel. Thus mdr(f)=4 and mdr(g)=5.","boundary_statement":"There is no domain-owned multivariate homogeneous-component materializer or Jacobian-syzygy/minimal-degree capability that constructs Phi_h,q, preserves its grading semantics, and certifies the first nonzero kernel.","key_facts":{"mdr_f":"4","mdr_g":"5","same_flats":"true"}},"claimed_assurance":"COMPUTED","scope":"jacobian/jcb-postdoc-014 answer-visible diagnostic","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:6631b4e345f3dd8038b4b49aef496e36418b38dc8c19c68cd23a1d9cd95b4341"}],"limitations":[]}
+{
+  "task_id": "jacobian/jcb-postdoc-014",
+  "conclusion": "DISPROVED",
+  "result": {
+    "certificate_path": "evidence/syzygy-certificate.json",
+    "same_non_double_flats": true,
+    "mdr": {
+      "f": 4,
+      "g": 5
+    }
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "jacobian/jcb-postdoc-014 public answer-visible exact graded relation diagnostic",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/syzygy-certificate.json",
+      "sha256": "sha256:89c98d42c0863a7dbbef4143826cd0a1e466a26c3b9ba57fa1534abc0514a6c0"
+    }
+  ],
+  "limitations": [
+    "PUBLIC_ANSWER_VISIBLE",
+    "BENCHMARK_VERIFIER_NOT_PRODUCT_AUTHORITY"
+  ]
+}

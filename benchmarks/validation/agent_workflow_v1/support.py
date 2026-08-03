@@ -24,6 +24,9 @@ VERIFICATION_RECORD_TASKS = (
     "sat-witness",
 )
 RATIONAL_TASK = "rational-linear-solution"
+# Curated COMPUTED-ceiling sample for oracle + naked-VERIFIED assurance checks.
+# Do not auto-expand to every COMPUTED task; add a name only when that contract
+# is the intended coverage and no leaf already owns the smoke.
 RESOURCE_DERIVED_TASKS = (
     "autoformalization-semantic-audit",
     "calendar-good-days-audit",

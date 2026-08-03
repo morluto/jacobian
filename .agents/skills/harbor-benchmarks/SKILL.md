@@ -11,6 +11,11 @@ integrity, dataset identity, Oracle validation, and Jacobian observation
 configuration; it does not prescribe the mathematical strategy an evaluated
 agent should use.
 
+For detailed verifier design, adversarial fixture coverage, diagnostic scoring,
+and evaluation-integrity review, also use the repository's
+`verifier-evaluations` skill. Keep this skill focused on Harbor packaging,
+dataset identity, repository gates, and observation plumbing.
+
 ## Choose the evaluation boundary
 
 Classify the work before editing a task:
@@ -114,6 +119,21 @@ contract change:
    and false assurance.
 5. Confirm alternate valid witnesses pass and scan task bundles for leakage,
    secrets, host paths, raw caches, and floating dependencies.
+
+### Validation regression layout (`agent-workflow-v1`)
+
+Put new or changed task verifier attack tests in a **per-task leaf module**:
+
+`benchmarks/validation/agent_workflow_v1/test_<task_id_with_underscores>.py`
+
+Do **not** append to a shared `test_task_regressions_*.py` dump (those files
+are gone; do not recreate them). Suite-wide contracts stay in
+`test_generic_verifier_contracts.py` (assurance / fail-closed attacks over
+`VERIFIER_TASKS`) and the small fixed samples in
+`test_result_json_evidence_policy.py`. Edit `RESOURCE_DERIVED_TASKS` or
+`VERIFICATION_RECORD_TASKS` in `support.py` only when the task shares that exact
+assurance or scoring contract. Keep task-local prepare/bind helpers in the leaf;
+do not grow a shared fixture module every PR edits.
 
 Do not treat `harbor sync` as a local digest calculator when the task is not
 published. Membership is authoritative in the member record and task content

@@ -11,11 +11,24 @@
     "type": "docker",
     "force_build": true,
     "delete": true,
-    "extra_docker_compose": []
+    "extra_docker_compose": [],
+    "extra_allowed_hosts": [
+      "api.openai.com",
+      "auth.openai.com",
+      "chatgpt.com",
+      "deb.debian.org",
+      "nodejs.org",
+      "npmjs.org",
+      "registry.npmjs.org",
+      "raw.githubusercontent.com"
+    ]
   },
   "agents": [
     {
-      "name": "codex"
+      "name": "codex",
+      "kwargs": {
+        "web_search": "disabled"
+      }
     }
   ],
   "datasets": [

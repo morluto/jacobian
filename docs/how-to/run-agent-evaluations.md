@@ -33,12 +33,14 @@ export CODEX_FORCE_AUTH_JSON=1
 ```
 
 The checked-in agent-workflow observation jobs deliberately do not attach a
-host-proxy overlay. Their selected task environments use Harbor's
-`no-network` policy; Jacobian is an internal Compose service reached only over
-loopback in the shared egress-control namespace. Use a pre-provisioned agent
-runtime when the agent itself must also remain offline. Stock Harbor Codex
-setup installs missing packages and the CLI from the network, so it cannot
-start in these tasks without an explicitly networked agent phase.
+host-proxy overlay. They grant Harbor's agent environment a small explicit
+allowlist for Codex setup and the configured model provider; Codex web search
+is disabled so web results do not confound Jacobian tool-use observations.
+The `agent-eval` Make target enforces this with `EVAL_AGENT_KWARGS`; keep the
+default unless a separate web-enabled experiment is intentional.
+Jacobian remains an internal Compose service reached only over loopback in the
+shared egress-control namespace. The task TOMLs retain their no-network
+baseline; the observation job is the explicit online evaluation boundary.
 
 ## Run with Jacobian
 
@@ -73,7 +75,8 @@ Harbor's `--mcp-config` option.
 The treatment Compose file adds a Docker healthcheck that runs Jacobian's
 MCP-level readiness probe. Harbor waits for `service_healthy` before starting
 `main`; the probe validates the MCP tools and required capability over
-`127.0.0.1:8000` without opening external networking.
+`127.0.0.1:8000` without requiring a published Jacobian port. The Codex
+adapter receives `web_search=disabled` through the `agent-eval` invocation.
 
 ## Docker and Daytona
 
@@ -118,7 +121,8 @@ export JACOBIAN_MODEL='your-model'
 
 If the run stalls at `starting environment`, Docker may be building the task
 image or waiting on the Jacobian healthcheck. Check the Docker Compose logs and
-confirm that the selected image contains `jacobian.adapters.mcp.readiness`.
+confirm that the selected image contains `jacobian.adapters.mcp.readiness` and
+that the model provider is covered by the job's allowlist.
 
 If the treatment agent reports no Jacobian tools, confirm that
 `JACOBIAN_ENABLED=1` is set and that the treatment job includes the external

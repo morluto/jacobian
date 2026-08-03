@@ -8,6 +8,7 @@ OBSERVATION_PYTHON ?= $(UV_RUN) --with harbor==$(HARBOR_VERSION) python
 PYTEST_ARGS ?=
 TESTS ?=
 EVAL_ARGS ?=
+EVAL_AGENT_KWARGS ?= web_search=disabled
 STRESS_COUNT ?= 3
 ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
@@ -320,6 +321,7 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, DATASET=agent-work
 		-c "$(EVAL_CONFIG)" \
 		-a codex \
 		-m "$${JACOBIAN_MODEL}" \
+		$(foreach kw,$(EVAL_AGENT_KWARGS),--agent-kwarg "$(kw)") \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
 		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS) > "$(EVAL_RESOLVED_CONFIG)"; \
@@ -329,6 +331,7 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, DATASET=agent-work
 		-c "$(EVAL_CONFIG)" \
 		-a codex \
 		-m "$${JACOBIAN_MODEL}" \
+		$(foreach kw,$(EVAL_AGENT_KWARGS),--agent-kwarg "$(kw)") \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
 		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS); \

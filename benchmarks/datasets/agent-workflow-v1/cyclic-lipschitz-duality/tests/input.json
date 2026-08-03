@@ -1,0 +1,1 @@
+{"task_id":"jacobian/cyclic-lipschitz-duality","cycle_size":60,"marked_indices":[12,24,36,48,60],"sum_constraint":"sum(a_i)=0","edge_constraint":"|a_i-a_(i+1)|<=1 cyclic","objective":"sum marked a_i"}

@@ -34,7 +34,7 @@ def test_network_policy_is_independent_of_image_profile() -> None:
             modes = set(re.findall(r'network_mode = "([^"]+)"', task_toml))
             observed.setdefault(task.environment_profile, set()).update(modes)
 
-    assert observed["core-python"] >= {"no-network", "public"}
+    assert observed["core-python"] == {"no-network"}
 
 
 def test_dataset_roots_never_commit_mutable_publication_manifests() -> None:

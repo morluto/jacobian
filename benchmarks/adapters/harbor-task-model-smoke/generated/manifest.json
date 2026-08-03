@@ -3,6 +3,6 @@
   "dataset": "agent-workflow-v1",
   "generator_version": "1",
   "source_row": "task-model-smoke/graph-counterexample",
-  "task_digest": "sha256:549a04a5648c0894415be4196447bbd82187764439a141640c0e88958a607bf3",
+  "task_digest": "sha256:c84e764a7a14969f5a37235da0ca1b3ab452f45c57d65bed806059c1a278961d",
   "task_id": "graph-counterexample"
 }

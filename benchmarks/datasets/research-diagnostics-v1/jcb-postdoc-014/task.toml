@@ -2,7 +2,7 @@ schema_version = "1.4"
 artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/jcb-postdoc-014"
-version = "1.0.0"
+version = "2.0.0"
 description = "Research diagnostic: Nine-line counterexample to combinatorial determination of Jacobian-relation degree"
 keywords = ["research", "diagnostic", "mathematical-sciences", "algebraic geometry", "commutative algebra", "exact linear algebra"]
 [metadata]
@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["research", "diagnostic", "answer-visible", "offline", "algebraic-geometry", "commutative-algebra", "exact-linear-algebra"]
 case_version = "research-diagnostics-v1"
 contamination_class = "public-answer-visible-diagnostic"
-fixture_digest = "sha256:e6ae500ff77215fb781c0bd02c38c06afed9b6885d28a9a3bff2bff30cd98468"
+fixture_digest = "sha256:f664651eacddbad9976b2cce12f651d4651323c6f5a0976c6c690868d7f5dde8"
 derivation = "Two rational arrangements of nine projective lines have isomorphic intersection lattices but different minimal degrees of Jacobian relations. The decisive computation is an exact graded-kernel calculation, close to Jacobian's polynomial and rational-linear portfolio but not currently exposed as one domain-owned operation."
 historical_fit = "MISSING"
 current_status = "COVERED"

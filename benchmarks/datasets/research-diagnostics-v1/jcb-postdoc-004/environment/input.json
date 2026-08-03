@@ -1,1 +1,18 @@
-{"task_id":"jacobian/jcb-postdoc-004","challenge_id":"jcb-postdoc-004","problem_statement":"For a connected finite simple graph G, let alpha(G) be its independence number and let l_avg(G) be the average of alpha(G[N(v)]) over all open neighborhoods. Disprove the assertion that alpha(G)<=1+l_avg(G) forces G to have a Hamiltonian path. Produce an explicit graph with at most 20 vertices and prove every part of the counterexample exactly.","prompt":"Use Jacobian MCP, and do not use web search or external knowledge retrieval, to disprove the following assertion: every connected finite simple graph G satisfying alpha(G)<=1+l_avg(G), where l_avg is the average independence number of open neighborhoods, has a Hamiltonian path. Find an explicit counterexample with at most 20 vertices. Return a reproducible graph encoding, exact values of alpha and l_avg, and a rigorous obstruction to a Hamiltonian path. Do not treat failed heuristic path search as a proof.","tier":"COMPOSITIONAL_STRETCH","domains":["extremal graph theory","Hamiltonian paths","counterexample search"]}
+{
+  "task_id": "jacobian/jcb-postdoc-004",
+  "challenge_id": "jcb-postdoc-004",
+  "problem_statement": "For a connected finite simple graph G, let alpha(G) be its independence number and let l_avg(G) be the average of alpha(G[N(v)]) over all open neighborhoods. Disprove the assertion that alpha(G)<=1+l_avg(G) forces G to have a Hamiltonian path. Produce an explicit graph with at most 20 vertices and prove every part of the counterexample exactly.",
+  "constraints": {
+    "minimum_vertices": 1,
+    "maximum_vertices": 20,
+    "vertex_labels": "consecutive integers from 0",
+    "graph_type": "finite connected simple undirected graph",
+    "local_average": "sum_v alpha(G[N(v)]) / |V(G)|"
+  },
+  "tier": "COMPOSITIONAL_STRETCH",
+  "domains": [
+    "extremal graph theory",
+    "Hamiltonian paths",
+    "counterexample search"
+  ]
+}

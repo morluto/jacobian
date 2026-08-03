@@ -12,20 +12,27 @@ from benchmarks.validation.agent_workflow_v1 import support
 _KEYWORD_ONLY_TASKS = (
     "autoformalization-semantic-audit",
     "calendar-good-days-audit",
-    "complex-power-sum-elimination",
-    "distinct-sum-pairing-optimum",
     "modular-cubic-obstruction",
     "random-function-expectation-audit",
-    "well-total-domination-counterexample",
 )
 
 _NO_MARKER_CASES = (
     ("calendar-good-days-audit", None),
-    ("distinct-sum-pairing-optimum", None),
     ("modular-cubic-obstruction", None),
     ("lagrangian-projection-proof-audit", None),
     ("research-status-evidence-audit", 0.2),
-    ("putnam-2adic-induction-audit", None),
+)
+
+_UNDOCUMENTED_MARKER_TASKS = (
+    "complex-power-sum-elimination",
+    "distinct-sum-pairing-optimum",
+    "finite-magma-countermodel",
+    "inverse-distance-remainder-audit",
+    "log-inequality-meta-audit",
+    "nonclosed-projection-image",
+    "putnam-2adic-induction-audit",
+    "rp2-homology-lattice",
+    "well-total-domination-counterexample",
 )
 
 _EMPTY_PROSE_TASKS = (
@@ -80,6 +87,51 @@ def test_evidence_without_result_marker_is_rejected(
     assert rejected["evidence_validity"] == 0.0
     if expected_reward is not None:
         assert rejected["reward"] == pytest.approx(expected_reward)
+
+
+@pytest.mark.parametrize("task_name", _UNDOCUMENTED_MARKER_TASKS)
+def test_undocumented_evidence_markers_are_not_required(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    """Structured mathematical checks, not hidden marker syntax, decide validity."""
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "\n".join(
+            line
+            for line in evidence_path.read_text().splitlines()
+            if not line.startswith(("RESULT_JSON:", "PROOF_JSON:"))
+        )
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("task_name", _UNDOCUMENTED_MARKER_TASKS)
+def test_public_prose_evidence_rejects_unrelated_text(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("This unrelated text is nonempty but proves nothing.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] < 1.0
 
 
 @pytest.mark.parametrize("task_name", _EMPTY_PROSE_TASKS)

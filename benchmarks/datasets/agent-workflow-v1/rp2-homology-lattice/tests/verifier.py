@@ -253,15 +253,20 @@ def _evidence(value: object, result: object) -> bool:
         if path.stat().st_size > MAX_EVIDENCE_BYTES:
             return False
         text = path.read_text()
-        marker = [
-            line[12:] for line in text.splitlines() if line.startswith("RESULT_JSON:")
-        ]
-        bound = json.loads(marker[0]) if len(marker) == 1 else None
-    except (OSError, UnicodeError, ValueError, RecursionError):
+    except (OSError, UnicodeError):
         return False
     return (
-        bound == result
-        and all(word in text.casefold() for word in ("cycle", "determinant", "z/2z"))
+        bool(text.strip())
+        and any(
+            phrase in text.casefold()
+            for phrase in ("cycle lattice", "cycle-coordinate")
+        )
+        and "determinant -2" in text.casefold()
+        and any(
+            phrase in text.casefold()
+            for phrase in ("index 2", "quotient lattice has order 2")
+        )
+        and "z/2z" in text.casefold()
         and _evidence_denies_proof_assistant(text)
     )
 

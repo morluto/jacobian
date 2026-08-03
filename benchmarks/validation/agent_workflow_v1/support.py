@@ -58,6 +58,14 @@ VERIFIER_TASKS = tuple(
         if (ref.path / "tests" / "verifier.py").is_file()
     )
 )
+SINGLE_EVIDENCE_TASKS = tuple(
+    task_name
+    for task_name in VERIFIER_TASKS
+    if json.loads(
+        (TASKS / task_name / "environment" / "submission_schema.json").read_text()
+    )["properties"]["evidence"].get("maxItems")
+    == 1
+)
 
 
 def _task_tree_snapshot() -> dict[str, str]:

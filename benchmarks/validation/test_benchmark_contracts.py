@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from benchmarks.tooling.harbor_suite import (
     load_registry,
     validate_global_task_ids,
 )
+
+ASSURANCE_ORDER = ("UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED")
 
 
 def test_every_committed_benchmark_contract_is_valid() -> None:
@@ -38,6 +41,28 @@ def test_inventory_covers_every_registered_task(
     rendered = json.dumps(inventory)
     assert "verifier_digest" in rendered
     assert "submission_schema_digest" in rendered
+
+
+def test_visible_submission_contracts_match_evidence_and_assurance_limits() -> None:
+    for suite in load_registry():
+        for task in suite.tasks:
+            config = tomllib.loads((task.path / "task.toml").read_text())
+            ceiling = config["metadata"]["assurance_ceiling"]
+            schema = json.loads(
+                (task.path / "environment" / "submission_schema.json").read_text()
+            )
+            properties = schema["properties"]
+            evidence = properties["evidence"]
+            assert evidence.get("minItems") == 1, task.path
+            assert evidence.get("maxItems") == 1, task.path
+
+            assurance = properties["claimed_assurance"]
+            advertised = assurance.get("enum", [assurance.get("const")])
+            ceiling_index = ASSURANCE_ORDER.index(ceiling)
+            assert ceiling in advertised, task.path
+            assert all(
+                value in ASSURANCE_ORDER[: ceiling_index + 1] for value in advertised
+            ), task.path
 
 
 def test_task_gap_records_preserve_only_historical_provenance() -> None:

@@ -31,17 +31,6 @@ PREFIX_LENGTH = 12
 # written. This conservative cap is far above any mathematically meaningful
 # decay rate for a square-summability tail bound.
 MAX_BOUND_EXPONENT = 100
-# Each proof obligation must carry a substantive argument (not a keyword) that
-# names the link it certifies. The result-bound RESULT_JSON marker ties the
-# prose to the exact submitted witness.
-PROOF_OBLIGATIONS = (
-    ("boundedness", ("bound",)),
-    ("closedness", ("closed",)),
-    ("range_identification", ("range", "image")),
-    ("convergence", ("converg", "tail")),
-    ("absent_preimage", ("preimage", "ell2", "summable")),
-)
-MIN_PROOF_ARGUMENT_CHARS = 40
 _RESULT_FIELDS = {
     "space",
     "operator",
@@ -52,6 +41,7 @@ _RESULT_FIELDS = {
     "limit_coordinates",
     "tail_bound",
     "limit_preimage",
+    "proof_obligations",
 }
 _PREFIX_FIELDS = {
     "n",
@@ -62,6 +52,13 @@ _PREFIX_FIELDS = {
 }
 _TAIL_BOUND_FIELDS = {"bound_coefficient", "bound_exponent", "verification_terms"}
 _GROWTH_FIELDS = {"bound_coefficient", "bound_exponent"}
+_PROOF_FIELDS = {
+    "boundedness",
+    "closedness",
+    "range_identification",
+    "convergence",
+    "absent_preimage",
+}
 
 
 def _source() -> dict[str, Any]:
@@ -292,45 +289,12 @@ def _witness(value: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _extract_proof(text: str) -> dict[str, Any] | None:
-    proof_marker = next(
-        (
-            line.removeprefix("PROOF_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("PROOF_JSON:")
-        ),
-        None,
-    )
-    if proof_marker is None:
-        return None
-    try:
-        proof = json.loads(proof_marker)
-    except (ValueError, RecursionError):
-        return None
-    if not isinstance(proof, dict) or set(proof) != {
-        name for name, _ in PROOF_OBLIGATIONS
-    }:
-        return None
-    return proof
-
-
-def _proof_ok(proof: dict[str, Any]) -> bool:
-    for name, terms in PROOF_OBLIGATIONS:
-        argument = proof.get(name)
-        if not isinstance(argument, str) or len(argument) < MIN_PROOF_ARGUMENT_CHARS:
-            return False
-        if not any(term in argument.lower() for term in terms):
-            return False
-    return True
-
-
 def _evidence(value: object, result: object) -> bool:
-    """Require result-bound proof evidence with a substantive argument per link.
-
-    The evidence file must repeat the exact submitted result via a
-    ``RESULT_JSON:`` marker and carry a ``PROOF_JSON:`` block whose obligation
-    fields each contain a non-trivial argument naming the link they certify.
-    """
+    """Require agent-visible proof obligations and one bound inspectability artifact."""
+    if not isinstance(result, dict) or not _proof_obligations_ok(
+        result.get("proof_obligations")
+    ):
+        return False
     if not isinstance(value, list) or len(value) != 1:
         return False
     if not evidence_list_is_bound(value, expected_path="evidence/answer.txt"):
@@ -344,13 +308,51 @@ def _evidence(value: object, result: object) -> bool:
         text = path.read_text()
     except (OSError, UnicodeError):
         return False
-    result_marker = "RESULT_JSON: " + json.dumps(
-        result, sort_keys=True, separators=(",", ":")
+    normalized = text.casefold()
+    return (
+        all(
+            fragment in normalized
+            for fragment in (
+                "bounded",
+                "closed",
+                "projection",
+                "range",
+                "preimage",
+                "diverges",
+            )
+        )
+        and "tail" in normalized
+        and "bound" in normalized
     )
-    if result_marker not in text:
+
+
+def _proof_obligations_ok(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != _PROOF_FIELDS:
         return False
-    proof = _extract_proof(text)
-    return proof is not None and _proof_ok(proof)
+    arguments: dict[str, str] = {}
+    for name, argument in value.items():
+        if not isinstance(argument, str) or not 40 <= len(argument) <= 4096:
+            return False
+        arguments[name] = argument.casefold()
+    return bool(
+        "bounded" in arguments["boundedness"]
+        and any(term in arguments["boundedness"] for term in ("weight", "norm", "<="))
+        and "closed" in arguments["closedness"]
+        and any(term in arguments["closedness"] for term in ("graph", "subspace"))
+        and "range" in arguments["range_identification"]
+        and any(
+            term in arguments["range_identification"] for term in ("project", "image")
+        )
+        and "converg" in arguments["convergence"]
+        and "tail" in arguments["convergence"]
+        and any(term in arguments["convergence"] for term in ("zero", "tends"))
+        and "preimage" in arguments["absent_preimage"]
+        and any(
+            term in arguments["absent_preimage"]
+            for term in ("not in ell2", "not square", "not summable")
+        )
+        and "diverg" in arguments["absent_preimage"]
+    )
 
 
 def _limitation_is_valid(value: str) -> bool:

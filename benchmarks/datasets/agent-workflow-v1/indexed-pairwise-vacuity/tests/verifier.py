@@ -8,6 +8,7 @@ from verifier_support import (
     false_verified_claim,
     resolve_evidence,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 E = Path("/tests")
@@ -324,7 +325,7 @@ def _evidence_valid(evidence, result):
 
 def main():
     submission = _load_exact_submission()
-    source = json.loads((E / "input.json").read_text())
+    source = json.loads(next(E.glob("*input*.json")).read_text())
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
@@ -332,7 +333,11 @@ def main():
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    math_correct = bool(contract and _valid_result(submission.get("result"), source))
+    math_correct = bool(
+        workspace_input_is_bound()
+        and contract
+        and _valid_result(submission.get("result"), source)
+    )
     evidence_valid = bool(
         contract
         and _evidence_valid(submission.get("evidence"), submission.get("result"))

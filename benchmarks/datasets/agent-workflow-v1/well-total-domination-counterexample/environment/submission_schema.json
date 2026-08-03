@@ -60,7 +60,7 @@
       }
     },
     "claimed_assurance": {
-      "enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]
+      "enum": ["UNVERIFIED","COMPUTED"]
     },
     "scope": {
       "const": "jacobian/well-total-domination-counterexample supplied five-vertex graph"

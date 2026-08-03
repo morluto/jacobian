@@ -1,6 +1,8 @@
 # jacobian/sat-erdos-schur-f4
 
-Determine the Erdos-Schur number f(4) and justify both bounds.
+Determine the Erdos-Schur number f(4), submit an explicit sum-free partition
+for the lower bound, and rely on the independent verifier-owned CSP replay for
+the upper bound.
 
 ## Field
 
@@ -23,8 +25,9 @@ logic
 - timeout_sec (verifier): 120.0
 - environment_mode: separate
 
-The task is self-contained and offline. The instruction names no tool,
-capability, or invocation order. The verifier is a separate clean-room Python
-script that scores correctness, evidence validity, scope accuracy, assurance
-calibration, and aggregate reward; a wrong result or an unsupported VERIFIED
-claim forces the reward to zero.
+The task is self-contained and offline. The instruction names no agent tool,
+capability, or invocation order. The verifier reconstructs and exhausts the
+finite coloring CSP with propagation and color-symmetry reduction, while the
+submitted partition is checked directly. It scores correctness, evidence validity, scope
+accuracy, assurance calibration, and aggregate reward; a wrong result or an
+unsupported VERIFIED claim forces the reward to zero.

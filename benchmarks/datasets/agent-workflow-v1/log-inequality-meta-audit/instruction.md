@@ -9,4 +9,6 @@ the response followed the original request to prove the claim.
 Return the exact algebraic comparison certificate requested by the schema.
 Write `submission.json` to the exact agent-visible `submission_schema.json`.
 Put a concise audit in `evidence/answer.txt`, and bind that file with its
-SHA-256 digest.
+SHA-256 digest. The audit must state the Pythagorean counterexample, the exact
+integer-power comparison, the false universal conclusion, and why score zero
+matches the instruction-following rubric.

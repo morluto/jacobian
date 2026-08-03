@@ -258,9 +258,8 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	echo "Plan receipt:"; \
 	cat "$$tmp_dir/receipt.json"
 
-harbor-sync: ## Update vendored verifier support and deterministic task digests.
+harbor-sync: ## Update vendored verifier support and verifier checksum labels.
 	$(HARBOR_PYTHON) tools/sync_harbor_verifier_support.py --write
-	$(HARBOR_PYTHON) tools/check_harbor_dataset.py --write
 
 harbor-contracts: ## Check Harbor sync, task topology, schemas, and generated records.
 	$(HARBOR_PYTHON) tools/sync_harbor_verifier_support.py --check

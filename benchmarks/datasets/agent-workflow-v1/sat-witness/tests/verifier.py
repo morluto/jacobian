@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from verifier_support import evidence_list_is_bound, resolve_evidence, sha256_uri
+from verifier_support import (
+    evidence_list_is_bound,
+    resolve_evidence,
+    sha256_uri,
+    workspace_input_is_bound,
+)
 
 W = Path("/app")
 E = Path("/tests")
@@ -112,7 +117,7 @@ def main():
         s = json.loads((W / "submission.json").read_text())
     except (OSError, ValueError):
         s = None
-    x = json.loads((W / "input.json").read_text())
+    x = json.loads(next(E.glob("*input*.json")).read_text())
     e = json.loads((E / "expected.json").read_text())
     required = {
         "task_id",
@@ -138,6 +143,8 @@ def main():
         and isinstance(s.get("result"), dict)
         and isinstance(s.get("scope"), str)
         and isinstance(s.get("limitations"), list)
+        and isinstance(s.get("evidence"), list)
+        and len(s["evidence"]) == 1
         and isinstance(s.get("claimed_assurance"), str)
         and s.get("claimed_assurance")
         in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
@@ -172,7 +179,12 @@ def main():
     )
     claimed_verified = isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
     record_bound = _record_is_bound(s, x, a, sat) if isinstance(s, dict) else False
-    math_correct = bool(math_contract and result.get("status") == "SATISFIABLE" and sat)
+    math_correct = bool(
+        workspace_input_is_bound()
+        and math_contract
+        and result.get("status") == "SATISFIABLE"
+        and sat
+    )
     correct = bool(contract and math_correct and (not claimed_verified or record_bound))
     good = _answer_evidence(s) if contract else False
     if claimed_verified:

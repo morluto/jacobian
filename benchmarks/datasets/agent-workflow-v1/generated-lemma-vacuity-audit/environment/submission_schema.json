@@ -61,7 +61,7 @@
         "source_theorem_status": {"const": "NOT_ASSESSED"}
       }
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"type": "string"},
     "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
     "evidence": {

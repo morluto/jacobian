@@ -7,4 +7,6 @@ that refutes the target, and the smaller carrier orders exhaustively checked.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`.
 Put a short calculation or independently replayable witness in
-`evidence/answer.txt`, and include that file's SHA-256 digest in the submission.
+`evidence/answer.txt`. It must describe the operation, the refuting assignment,
+and the one-element minimality check. Include that file's SHA-256 digest in the
+submission.

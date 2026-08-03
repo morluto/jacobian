@@ -16,7 +16,7 @@
       "nonunit_witness": {"$ref": "#/$defs/witness"},
       "finite_testing_role": {"const": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"}
     }},
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"type": "string"},
     "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
     "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},

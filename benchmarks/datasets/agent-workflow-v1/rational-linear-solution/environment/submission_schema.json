@@ -47,11 +47,7 @@
       }
     },
     "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED"
-      ]
+      "enum": ["UNVERIFIED","COMPUTED"]
     },
     "scope": {
       "const": "jacobian/rational-linear-solution complete finite input"
@@ -61,7 +57,7 @@
     },
     "evidence": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 1,"maxItems":1,
       "items": {
         "type": "object",
         "additionalProperties": false,

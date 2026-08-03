@@ -16,6 +16,7 @@ from typing import Any, Literal
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
+MAX_INPUT_BYTES = 16 * 1024 * 1024
 SUBMISSION_FIELDS = frozenset(
     {
         "task_id",
@@ -63,6 +64,8 @@ def load_submission(
     bounded verifier; such input yields a deterministic ``None`` (zero reward).
     """
 
+    if not workspace_input_is_bound():
+        return None
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
@@ -72,12 +75,38 @@ def load_submission(
     return value if isinstance(value, dict) else None
 
 
+def workspace_input_is_bound(
+    visible_path: Path = WORKSPACE / "input.json",
+    *,
+    tests: Path = TESTS,
+) -> bool:
+    """Require the agent-visible input to equal the sole frozen verifier input."""
+
+    try:
+        candidates = tuple(tests.glob("*input*.json"))
+    except OSError:
+        return False
+    if len(candidates) != 1:
+        return False
+    frozen_path = candidates[0]
+    if not all(
+        is_regular_bounded_file(candidate, max_bytes=MAX_INPUT_BYTES)
+        for candidate in (frozen_path, visible_path)
+    ):
+        return False
+    try:
+        return sha256_uri(frozen_path) == sha256_uri(visible_path)
+    except OSError:
+        return False
+
+
 def strict_submission_contract(
     submission: object,
     *,
     task_id: str,
     conclusion: str,
     completeness: str = "COMPLETE",
+    evidence_count: int = 1,
     allowed_assurances: frozenset[str] = ASSURANCE_LEVELS,
     verification_record: Literal[
         "required_when_verified", "optional", "forbidden"
@@ -103,6 +132,7 @@ def strict_submission_contract(
         and isinstance(submission.get("limitations"), list)
         and all(type(item) is str for item in submission.get("limitations", []))
         and isinstance(submission.get("evidence"), list)
+        and len(submission.get("evidence", [])) == evidence_count
         and isinstance(submission.get("claimed_assurance"), str)
         and submission.get("claimed_assurance") in allowed_assurances
     )
@@ -173,12 +203,13 @@ def evidence_list_is_bound(
     evidence: object,
     *,
     expected_path: str = "evidence/answer.txt",
+    expected_count: int = 1,
 ) -> bool:
-    """Require a nonempty list whose every item binds the expected evidence file."""
+    """Require an exact-size list binding the expected evidence file."""
 
     return bool(
         isinstance(evidence, list)
-        and evidence
+        and len(evidence) == expected_count
         and all(
             resolve_evidence(item, expected_path=expected_path) is not None
             for item in evidence
@@ -241,6 +272,7 @@ def false_verified_claim(
 
 __all__ = [
     "ASSURANCE_LEVELS",
+    "MAX_INPUT_BYTES",
     "MAX_SUBMISSION_BYTES",
     "SUBMISSION_FIELDS",
     "TESTS",
@@ -255,4 +287,5 @@ __all__ = [
     "sha256_uri",
     "strict_submission_contract",
     "valid_sha256_uri",
+    "workspace_input_is_bound",
 ]

@@ -39,7 +39,7 @@ def concatenate(month, day):
 
 def main():
     s = load_submission()
-    x = json.loads((W / "input.json").read_text())
+    x = json.loads(next(E.glob("*input*.json")).read_text())
     e = json.loads((E / "expected.json").read_text())
     r = s.get("result") if isinstance(s, dict) else None
     r = r if isinstance(r, dict) else {}

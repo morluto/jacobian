@@ -60,7 +60,7 @@ def _valid_construction(result, source):
 
 def main():
     submission = load_submission()
-    source = json.loads((W / "input.json").read_text())
+    source = json.loads(next(E.glob("*input*.json")).read_text())
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,

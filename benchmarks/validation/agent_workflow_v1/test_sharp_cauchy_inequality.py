@@ -71,12 +71,15 @@ def test_sharp_cauchy_inequality_accepts_cauchy_composition_mode(
     task, app, logs = support._prepare_case(
         tmp_path, "sharp-cauchy-inequality", "computed"
     )
+    original_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(task / "tests"))
     try:
         verifier = runpy.run_path(str(task / "tests" / "verifier.py"))
     finally:
         sys.path.remove(str(task / "tests"))
         sys.modules.pop("verifier_support", None)
+        sys.dont_write_bytecode = original_dont_write_bytecode
     expected = verifier["_expected"]()
 
     def encode(poly):
@@ -175,12 +178,15 @@ def test_sharp_cauchy_inequality_accepts_direct_sos_mode(tmp_path: Path) -> None
     task, app, logs = support._prepare_case(
         tmp_path, "sharp-cauchy-inequality", "computed"
     )
+    original_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(task / "tests"))
     try:
         verifier = runpy.run_path(str(task / "tests" / "verifier.py"))
     finally:
         sys.path.remove(str(task / "tests"))
         sys.modules.pop("verifier_support", None)
+        sys.dont_write_bytecode = original_dont_write_bytecode
     expected = verifier["_expected"]()
 
     def encode(poly):

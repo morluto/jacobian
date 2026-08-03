@@ -131,12 +131,7 @@
       }
     },
     "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+      "enum": ["UNVERIFIED","COMPUTED"]
     },
     "scope": {
       "type": "string"

@@ -17,12 +17,12 @@
         "pin_sha256": {"const": "sha256:fa137d5d1f5ecf74352ecdae2b4fb1b8d6c3433e6e26707c32d898319e1cdc84"}
       }
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"type": "string", "minLength": 1},
     "completeness": {"enum": ["COMPLETE", "UNKNOWN"]},
     "evidence": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 1,"maxItems":1,
       "items": {
         "type": "object",
         "additionalProperties": false,

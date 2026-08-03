@@ -130,11 +130,11 @@ def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
     assert result["reward"] == 0.0
 
 
-def test_input_integrity_is_separate_from_correctness(tmp_path: Path) -> None:
+def test_missing_visible_input_fails_closed(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     (app / "input.json").unlink()
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["input_integrity"] == 0.0
     assert result["reward"] == 0.0
 

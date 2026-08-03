@@ -192,7 +192,7 @@ def parse_point(value):
 
 def main():
     submission = load_submission()
-    input_data = json.loads((W / "input.json").read_text())
+    input_data = json.loads(next(E.glob("*input*.json")).read_text())
     expected = json.loads((E / "expected.json").read_text())
     result = submission.get("result") if isinstance(submission, dict) else None
     result = result if isinstance(result, dict) else {}
@@ -217,7 +217,7 @@ def main():
     coefficients = (
         [q(value) for value in relation] if isinstance(relation, list) else []
     )
-    input_contract = input_data == json.loads((E / "input.json").read_text())
+    input_contract = input_data == json.loads(next(E.glob("*input*.json")).read_text())
 
     zero = (rf_constant(0), rf_constant(0))
     a = zero

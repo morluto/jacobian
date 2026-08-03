@@ -7,10 +7,10 @@
     "task_id": {"const": "jacobian/subspace-direct-sum-counterexample"},
     "conclusion": {"const": "FALSE"},
     "result": {"type": "object", "additionalProperties": false, "required": ["generators", "dependence_coefficients"], "properties": {"generators": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer"}}}, "dependence_coefficients": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer"}}}},
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"const": "subspace-direct-sum-counterexample exact rational-linear witness"},
     "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "evidence": {"type": "array", "minItems": 1,"maxItems":1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
     "limitations": {"type": "array", "items": {"type": "string"}}
   }
 }

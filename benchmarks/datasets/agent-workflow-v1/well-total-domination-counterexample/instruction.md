@@ -7,4 +7,6 @@ dominating sets of different sizes.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`.
 Put a short calculation or independently replayable witness in
-`evidence/answer.txt`, and include that file's SHA-256 digest in the submission.
+`evidence/answer.txt`. It must identify the path, its average degree, and both
+minimal total dominating sets. Include that file's SHA-256 digest in the
+submission.

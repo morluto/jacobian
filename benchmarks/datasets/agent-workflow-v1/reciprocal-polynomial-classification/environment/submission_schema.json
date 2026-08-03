@@ -7,7 +7,7 @@
     "task_id": {"const": "jacobian/reciprocal-polynomial-classification"},
     "conclusion": {"enum": ["FAMILY_MEMBER_CERTIFIED", "INSUFFICIENT_EVIDENCE"]},
     "result": {"$ref": "#/$defs/result"},
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"const": "SUBMITTED_MEMBER_AND_FROZEN_CLASSIFICATION_CHAIN"},
     "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
     "evidence": {

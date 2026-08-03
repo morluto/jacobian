@@ -1,1 +1,3 @@
-f(4)=45: there is a 4-coloring of {1,...,44} with no monochromatic a+b=c, and no such coloring exists for {1,...,45}.
+The submitted four classes partition 1 through 44, and direct pairwise replay
+shows that each class is sum-free. The verifier separately proves the upper
+bound by checking the complete 4-coloring constraint system for 1 through 45.

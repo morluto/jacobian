@@ -137,19 +137,13 @@ def _write_case(
     shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
     if evidence_text is None:
         assert proof is not None
-        marker = "RESULT_JSON: " + json.dumps(
-            result, sort_keys=True, separators=(",", ":")
-        )
-        proof_marker = "PROOF_JSON: " + json.dumps(
-            proof, sort_keys=True, separators=(",", ":")
-        )
-        evidence_text = "Witness certificate.\n\n" + marker + "\n" + proof_marker + "\n"
+        evidence_text = "Witness certificate.\n\n" + "\n\n".join(proof.values()) + "\n"
     (app / "evidence" / "answer.txt").write_text(evidence_text)
     digest = "sha256:" + hashlib.sha256(evidence_text.encode("utf-8")).hexdigest()
     submission = {
         "task_id": "jacobian/nonclosed-projection-image",
         "conclusion": "NONCLOSED_IMAGE_CERTIFIED",
-        "result": result,
+        "result": {**result, "proof_obligations": proof or {}},
         "claimed_assurance": "COMPUTED",
         "scope": SCOPE,
         "completeness": "COMPLETE",
@@ -242,11 +236,11 @@ def test_nonclosed_projection_rejects_keyword_only_proof_argument(
     assert result["reward"] == 0.0
 
 
-def test_nonclosed_projection_rejects_result_marker_mismatch(
+def test_nonclosed_projection_ignores_stale_hidden_result_marker(
     tmp_path: Path,
 ) -> None:
-    # The evidence must bind to the exact submitted result; a stale marker is
-    # not accepted.
+    # The structured submission is authoritative. Legacy marker text in the
+    # human-readable artifact must not become an unadvertised second contract.
     result = _witness(weight_reciprocal_square=False)
     proof = _proof(weight_reciprocal_square=False)
     stale = dict(result)
@@ -260,14 +254,14 @@ def test_nonclosed_projection_rejects_result_marker_mismatch(
         *_write_case(
             tmp_path,
             result=result,
-            proof=None,
+            proof=proof,
             evidence_text=evidence_text,
             label="stale_marker",
         )
     )
     assert out["correctness"] == 1.0
-    assert out["evidence_validity"] == 0.0
-    assert out["reward"] == 0.0
+    assert out["evidence_validity"] == 1.0
+    assert out["reward"] == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(

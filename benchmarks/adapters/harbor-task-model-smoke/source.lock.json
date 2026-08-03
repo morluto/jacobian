@@ -25,9 +25,9 @@
       "task_id": "graph-counterexample",
       "dataset": "agent-workflow-v1",
       "source_row": "task-model-smoke/graph-counterexample",
-      "task_digest": "sha256:0d24a42701dfc131628ce3d86744a384c287c71a6839a8cfbba25051ccf90d2f",
-      "oracle_evidence_digest": "sha256:40f2ed06efdc6efebfae3ed397bee8e7ba1e49ed9c7bd736594285238cd24639",
-      "parity_evidence_digest": "sha256:9abaf2dc8d548af9cadf073a8e2e512e491e4309b89d9043ae1abb6576975aac"
+      "task_digest": "sha256:756166002843ea57d46f3d7cd16c1c8c7b3c00b940db89e3a4c188a77b1fbb8b",
+      "oracle_evidence_digest": "sha256:9158159ea9e9a9592b6740f2600273c2509203317be9d69b89cdcd16a54d432e",
+      "parity_evidence_digest": "sha256:7d2e71f4791cde371f61bcdc4fb1cbe0088dabf4b5680ede7c1a98d1d66b3522"
     }
   ]
 }

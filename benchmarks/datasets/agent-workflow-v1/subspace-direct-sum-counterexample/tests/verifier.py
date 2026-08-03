@@ -109,7 +109,7 @@ def main():
     false_cert = isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
     reward = (
         0.0
-        if not math_correct or false_cert
+        if not math_correct or not ev or false_cert
         else 0.7 + 0.1 * ev + 0.1 * scope + 0.1 * assurance
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

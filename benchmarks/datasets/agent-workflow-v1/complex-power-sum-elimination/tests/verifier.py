@@ -279,19 +279,18 @@ def _evidence_matches_result(evidence: object, result: dict[str, Any]) -> bool:
     try:
         if target.stat().st_size > MAX_EVIDENCE_BYTES:
             return False
-        text = target.read_text()
-        markers = [
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        prose = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip() and not line.startswith("RESULT_JSON:")
-        ]
-        return bool(len(markers) == 1 and json.loads(markers[0]) == result and prose)
-    except (OSError, UnicodeError, ValueError):
+        text = target.read_text().casefold()
+        return all(
+            fragment in text
+            for fragment in (
+                "power sum recurrence",
+                "s^2-10s+8",
+                "r^2-20r+32",
+                "both branches",
+                "norm",
+            )
+        )
+    except (OSError, UnicodeError):
         return False
 
 

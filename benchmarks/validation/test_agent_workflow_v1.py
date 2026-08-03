@@ -18,6 +18,7 @@ REQUIRED_METADATA = {
     "fixture_digest",
     "required_provider",
 }
+ASSURANCE_ORDER = ("UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED")
 
 
 def task_dirs() -> list[Path]:
@@ -58,6 +59,19 @@ def test_agent_workflow_v1_has_flat_tasks_and_authoritative_members() -> None:
         assert not (task / "environment" / "metadata.json").exists()
         assert "metadata.json" not in environment_dockerfile.read_text()
         input_data = json.loads((task / "environment" / "input.json").read_text())
+        submission_schema = json.loads(
+            (task / "environment" / "submission_schema.json").read_text()
+        )
+        assurance_schema = submission_schema["properties"]["claimed_assurance"]
+        advertised_assurances = assurance_schema.get(
+            "enum", [assurance_schema.get("const")]
+        )
+        ceiling_index = ASSURANCE_ORDER.index(metadata["assurance_ceiling"])
+        assert metadata["assurance_ceiling"] in advertised_assurances
+        assert all(
+            assurance in ASSURANCE_ORDER[: ceiling_index + 1]
+            for assurance in advertised_assurances
+        )
         assert input_data["task_id"] == config["task"]["name"]
         assert len(metadata["fixture_digest"]) == len("sha256:") + 64
         instruction = (task / "instruction.md").read_text().lower()

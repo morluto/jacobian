@@ -50,6 +50,23 @@ def test_verifier_scoring_separates_math_from_verification_record(
     assert invalid["false_certification"] is True
 
 
+def test_sat_witness_canonical_verified_solution_is_bound(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, "sat-witness", "computed")
+    submission = json.loads((task / "solution" / "submission.json").read_text())
+    record_path = app / "evidence" / "verification-record.json"
+    record_path.write_bytes(
+        (task / "solution" / "verification-record.json").read_bytes()
+    )
+    submission["verification_record_uri"]["sha256"] = support._digest(record_path)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted["false_certification"] is False
+
+
 def test_rational_solution_rejects_unsupported_verified_claim(
     tmp_path: Path,
 ) -> None:
@@ -89,18 +106,7 @@ def test_resource_derived_oracles_and_assurance_boundary(
     assert unsupported["false_certification"] is True
 
 
-@pytest.mark.parametrize(
-    "task_name",
-    [
-        "autoformalization-semantic-audit",
-        "complex-power-sum-elimination",
-        "divisibility-construction-witness",
-        "finite-magma-countermodel",
-        "metric-tsp-proof-repair",
-        "natural-subtraction-proof-repair",
-        "well-total-domination-counterexample",
-    ],
-)
+@pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
 def test_verifiers_reject_replaced_workspace_inputs(
     tmp_path: Path,
     task_name: str,
@@ -113,6 +119,49 @@ def test_verifiers_reject_replaced_workspace_inputs(
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
+@pytest.mark.parametrize("replacement", ("{", "[]"), ids=("invalid-json", "wrong-shape"))
+def test_verifiers_fail_closed_on_malformed_workspace_inputs(
+    tmp_path: Path,
+    task_name: str,
+    replacement: str,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    (app / "input.json").write_text(replacement)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_verifier_rejects_symlinked_workspace_input(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, support.RATIONAL_TASK, "computed")
+    input_path = app / "input.json"
+    input_path.unlink()
+    frozen_input = next((task / "tests").glob("*input*.json"))
+    input_path.symlink_to(frozen_input)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize("task_name", support.SINGLE_EVIDENCE_TASKS)
+def test_verifiers_enforce_single_evidence_cardinality(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"].append(dict(submission["evidence"][0]))
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] == 0.0
 
 

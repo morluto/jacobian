@@ -17,7 +17,9 @@ The verifier reconstructs the one-skeleton, checks the tree, boundary-of-
 boundary identities, independently derives every cycle coordinate, and
 computes the determinant exactly.  Alternative spanning trees and orderings
 are accepted.  Submit `/app/submission.json` following the supplied schema and
-one bound explanation at `/app/evidence/answer.txt`.
+one bound explanation at `/app/evidence/answer.txt` that states the cycle
+lattice calculation, determinant `-2`, lattice index `2`, and `Z/2Z`
+conclusion.
 
 Do not claim proof-assistant verification.  This task provides exact finite
 chain-complex computation only.

@@ -276,7 +276,7 @@ def _evidence_valid(submission: dict[str, object]) -> bool:
 
 def main() -> None:
     submission = load_submission()
-    source = json.loads((W / "input.json").read_text())
+    source = json.loads(next(E.glob("*input*.json")).read_text())
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
@@ -284,7 +284,7 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    input_bound = source == json.loads((E / "input.json").read_text())
+    input_bound = source == json.loads(next(E.glob("*input*.json")).read_text())
     math_correct = bool(
         contract and input_bound and _replay(submission.get("result"), source)
     )

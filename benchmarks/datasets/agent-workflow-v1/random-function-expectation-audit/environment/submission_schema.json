@@ -18,10 +18,10 @@
         "expected_value": {"type": "string", "description": "The expectation of (f(f(x))-x)^2 over ordered x and f"}
       }
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"const": "random-function-expectation-audit exact finite expectation"},
     "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "evidence": {"type": "array", "minItems": 1,"maxItems":1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
     "limitations": {"type": "array", "items": {"type": "string"}}
   }
 }

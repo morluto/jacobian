@@ -2,7 +2,11 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from verifier_support import authorized_record_is_bound, sha256_uri
+from verifier_support import (
+    authorized_record_is_bound,
+    sha256_uri,
+    workspace_input_is_bound,
+)
 
 W = Path("/app")
 E = Path("/tests")
@@ -37,7 +41,7 @@ def main():
         s = json.loads((W / "submission.json").read_text())
     except (OSError, ValueError):
         s = None
-    x = json.loads((W / "input.json").read_text())
+    x = json.loads(next(E.glob("*input*.json")).read_text())
     e = json.loads(
         (E / "agent-workflow-v1-polynomial-normalization-expected.json").read_text()
     )
@@ -91,6 +95,8 @@ def main():
         and s.get("completeness") == "COMPLETE"
         and isinstance(s.get("scope"), str)
         and isinstance(s.get("limitations"), list)
+        and isinstance(s.get("evidence"), list)
+        and len(s["evidence"]) == 1
         and isinstance(s.get("claimed_assurance"), str)
         and s.get("claimed_assurance")
         in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
@@ -110,7 +116,12 @@ def main():
     )
 
     record_bound = verification_record_is_bound(s) if isinstance(s, dict) else False
-    math_correct = bool(math_contract and got == want and all(len(k) == 2 for k in got))
+    math_correct = bool(
+        workspace_input_is_bound()
+        and math_contract
+        and got == want
+        and all(len(k) == 2 for k in got)
+    )
     correct = bool(
         contract
         and math_correct

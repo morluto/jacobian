@@ -7,7 +7,7 @@
     "task_id": {"const": "jacobian/polynomial-root-localization-certificate"},
     "conclusion": {"enum": ["ROOT_BOUND_CERTIFIED", "INSUFFICIENT_EVIDENCE"]},
     "result": {"$ref": "#/$defs/result"},
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
     "scope": {"const": "ALL_REAL_PARAMETERS_WITH_1_GE_A_GE_B_GE_C_GE_0"},
     "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
     "evidence": {

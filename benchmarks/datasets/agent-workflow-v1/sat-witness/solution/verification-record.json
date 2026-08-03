@@ -1,6 +1,6 @@
 {
   "task_id": "jacobian/sat-witness",
-  "input_sha256": "sha256:0e8ea54fca5a4b8a402389ae6ab391be38e320c8dffc8b6731ca9ce8d30142b8",
+  "input_sha256": "sha256:da24aaeee1ddcef31293b3462e1cd25e6c6df7b9f752c83cd8a65dc9f7c959dc",
   "conclusion": "TRUE",
   "status": "VERIFIED_SATISFYING",
   "assignment": {

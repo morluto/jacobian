@@ -23,7 +23,7 @@ def ev(s):
 
 def main():
     s = sub()
-    x = json.loads((W / "input.json").read_text())
+    x = json.loads(next(E.glob("*input*.json")).read_text())
     expected = json.loads((E / "expected.json").read_text())
     v = {str(a): set() for a in x["vertices"]}
     for a, b in x["edges"]:
@@ -90,7 +90,7 @@ def main():
     false = claimed_verified
     reward = (
         0
-        if not correct or false
+        if not correct or not evidence or false
         else 0.7 * correct + 0.1 * evidence + 0.1 * scope + 0.1 * assurance
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

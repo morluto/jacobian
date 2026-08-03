@@ -24,6 +24,9 @@ your certificate must use them to establish the required affine valuation
 relations and strict gaps symbolically, not only for selected values of `k`.
 
 Write `/app/submission.json` and bind a concise explanation at
-`/app/evidence/answer.txt` by SHA-256. Do not claim `VERIFIED`: the verifier is
+`/app/evidence/answer.txt` by SHA-256. The explanation must include the
+difference factorization, base valuation triple, successor step, target
+valuation transfer, and why finite recurrence values are only sanity checks.
+Do not claim `VERIFIED`: the verifier is
 an independent exact certificate checker, but it does not replay the Lean
 kernel proof.

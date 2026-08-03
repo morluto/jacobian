@@ -1,0 +1,1 @@
+{"task_id":"jacobian/hyperplane-arrangement-regions","source":{"dataset":"ByteDance-Seed/BeyondAIME","revision":"c705198ae1043810b1e1693bd879250b51a7a523","split":"train","row":20,"license":"CC0-1.0"},"vertices":{"A":[0,0,0],"B":[1,0,0],"C":[1,1,0],"D":[0,1,0],"A1":[0,0,1],"B1":[1,0,1],"C1":[1,1,1],"D1":[0,1,1]},"initial_regions":1,"assurance_ceiling":"COMPUTED"}

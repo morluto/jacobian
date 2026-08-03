@@ -1,0 +1,127 @@
+{
+  "task_id": "jacobian/hyperplane-arrangement-regions",
+  "conclusion": "REGION_COUNT_CERTIFIED",
+  "result": {
+    "regions": 64,
+    "ordered_planes": [
+      {
+        "label": "cube_x0",
+        "coefficients": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "increment": 1
+      },
+      {
+        "label": "cube_x1",
+        "coefficients": [
+          1,
+          0,
+          0,
+          1
+        ],
+        "increment": 1
+      },
+      {
+        "label": "cube_y0",
+        "coefficients": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "increment": 3
+      },
+      {
+        "label": "cube_y1",
+        "coefficients": [
+          0,
+          1,
+          0,
+          1
+        ],
+        "increment": 3
+      },
+      {
+        "label": "cube_z0",
+        "coefficients": [
+          0,
+          0,
+          1,
+          0
+        ],
+        "increment": 9
+      },
+      {
+        "label": "cube_z1",
+        "coefficients": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "increment": 9
+      },
+      {
+        "label": "tetra_A1C1D1",
+        "coefficients": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "increment": 0
+      },
+      {
+        "label": "tetra_BC1D1",
+        "coefficients": [
+          0,
+          -1,
+          1,
+          0
+        ],
+        "increment": 9
+      },
+      {
+        "label": "tetra_BA1D1",
+        "coefficients": [
+          1,
+          0,
+          1,
+          1
+        ],
+        "increment": 12
+      },
+      {
+        "label": "tetra_BA1C1",
+        "coefficients": [
+          1,
+          -1,
+          1,
+          1
+        ],
+        "increment": 16
+      }
+    ],
+    "duplicate_groups": [
+      [
+        "cube_z1",
+        "tetra_A1C1D1"
+      ]
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "the ten frozen cube and tetrahedron face planes",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:2f95e9be90ec8ab87b8197ed08417c0ffeba834bb1cdb27898f0a6c22d6f83c4"
+    }
+  ],
+  "limitations": [
+    "The verifier does not formalize the affine-arrangement theorem in a proof assistant."
+  ]
+}

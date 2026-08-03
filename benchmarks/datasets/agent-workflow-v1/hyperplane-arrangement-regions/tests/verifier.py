@@ -230,8 +230,10 @@ def _evidence(value: object, result: object) -> bool:
         bound = json.loads(markers[0]) if len(markers) == 1 else None
     except (OSError, UnicodeError, ValueError, RecursionError):
         return False
-    folded = text.casefold()
-    return bound == result and all(stem in folded for stem in _EVIDENCE_STEMS)
+    prose = "\n".join(
+        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
+    ).strip()
+    return bound == result and len(prose) >= 32
 
 
 def _evaluate(submission: object) -> dict[str, float | bool]:

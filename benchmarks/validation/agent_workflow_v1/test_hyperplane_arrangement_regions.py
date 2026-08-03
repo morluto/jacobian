@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 from benchmarks.validation.agent_workflow_v1 import support
@@ -128,3 +129,26 @@ def test_affirmative_limitation_with_unrelated_negation_is_rejected(
     result = support._run_verifier(task, app, logs)
     assert result["scope_accuracy"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_bound_evidence_accepts_noncanonical_explanation_wording(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    support._bind_result_evidence(app, submission)
+    evidence = app / "evidence" / "answer.txt"
+    marker = next(
+        line
+        for line in evidence.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence.write_text(
+        marker
+        + "\nThe construction is checked by exact affine restrictions and the final count."
+    )
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    support._write_json(app / "submission.json", submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0

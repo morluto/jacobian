@@ -1,0 +1,3 @@
+The matrix is `D-lambda*11^T`. The determinant lemma gives one root, the
+reciprocal of the telescoping sum of `1/(i^3-i)`. Its exact tail above four is
+`8/((n-1)(n+2))`, so the limit and limsup are four.

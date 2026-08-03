@@ -67,17 +67,29 @@ def _result(value: object) -> bool:
     minima = [min(layer) for layer in layer_values]
     total = sum(potentials)
     average = Fraction(total, 1 << N)
+    submitted_minima = value["minimum_by_head_count"]
     submitted_average = value["average_stopping_time"]
+    if (
+        not isinstance(submitted_minima, list)
+        or any(type(item) is not int for item in submitted_minima)
+        or type(value["nonterminal_delta"]) is not int
+        or type(value["state_count"]) is not int
+        or type(value["total_stopping_time"]) is not int
+        or not isinstance(submitted_average, dict)
+        or set(submitted_average) != {"numerator", "denominator"}
+        or type(submitted_average["numerator"]) is not int
+        or type(submitted_average["denominator"]) is not int
+        or submitted_average["denominator"] <= 0
+    ):
+        return False
     return bool(
-        value["minimum_by_head_count"] == minima
+        submitted_minima == minima
         and minima == list(range(N + 1))
         and value["nonterminal_delta"] == -1
         and value["state_count"] == 1 << N
         and value["total_stopping_time"] == total
-        and isinstance(submitted_average, dict)
-        and set(submitted_average) == {"numerator", "denominator"}
-        and submitted_average["numerator"] == average.numerator
-        and submitted_average["denominator"] == average.denominator
+        and submitted_average["numerator"] * average.denominator
+        == average.numerator * submitted_average["denominator"]
     )
 
 
@@ -106,10 +118,9 @@ def _evidence(value: object) -> bool:
     if path is None:
         return False
     try:
-        text = path.read_text().casefold()
+        return bool(path.read_text().strip())
     except (OSError, UnicodeError):
         return False
-    return all(word in text for word in ("potential", "decreases", "minimum", "mean"))
 
 
 def _evaluate(submission: object) -> dict[str, float | bool]:
@@ -123,27 +134,39 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
-    correct = bool(
+    is_submission = isinstance(submission, dict)
+    source_bound = _source_is_bound()
+    result_correct = bool(is_submission and _result(submission.get("result")))
+    evidence_valid = bool(
+        protocol and is_submission and _evidence(submission.get("evidence"))
+    )
+    scope_accurate = bool(
         protocol
-        and isinstance(submission, dict)
-        and _source_is_bound()
+        and is_submission
+        and source_bound
         and submission.get("scope") == SCOPE
         and submission.get("completeness") == "COMPLETE"
-        and submission.get("claimed_assurance") == "COMPUTED"
-        and _result(submission.get("result"))
-        and _evidence(submission.get("evidence"))
         and any(
-            "arbitrary n" in item.casefold()
+            isinstance(item, str) and "arbitrary n" in item.casefold()
             for item in submission.get("limitations", [])
         )
     )
-    score = 1.0 if correct and not false_certification else 0.0
+    assurance_calibrated = bool(
+        protocol
+        and is_submission
+        and submission.get("claimed_assurance") == "COMPUTED"
+        and not false_certification
+    )
+    scores = {
+        "correctness": 1.0 if result_correct and source_bound else 0.0,
+        "evidence_validity": 1.0 if evidence_valid else 0.0,
+        "scope_accuracy": 1.0 if scope_accurate else 0.0,
+        "assurance_calibration": 1.0 if assurance_calibrated else 0.0,
+    }
+    reward = 1.0 if all(score == 1.0 for score in scores.values()) else 0.0
     return {
-        "correctness": score,
-        "evidence_validity": score,
-        "scope_accuracy": score,
-        "assurance_calibration": score,
-        "reward": score,
+        **scores,
+        "reward": reward,
         "false_certification": false_certification,
     }
 

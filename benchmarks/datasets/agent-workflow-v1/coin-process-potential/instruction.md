@@ -13,9 +13,12 @@ each Hamming-weight layer, use it to prove termination for all `2^12` states,
 and compute the exact total and average stopping time.
 
 The verifier independently checks every state, transition, layer minimum, and
-average.  Merely reporting the published average is insufficient.  Submit
-`/app/submission.json` following the schema and one bound explanation at
-`/app/evidence/answer.txt`.
+average from the structured certificate in `submission.json`.  Merely
+reporting the published average is insufficient.  Submit
+`/app/submission.json` following the schema and a nonempty human-readable
+summary at `/app/evidence/answer.txt`.  The prose file is checked for path and
+digest integrity only; mathematical scoring comes from the structured
+certificate rather than keyword matching.
 
 Do not claim proof-assistant verification.  This is an exact finite-state
 certificate for `n=12` only.

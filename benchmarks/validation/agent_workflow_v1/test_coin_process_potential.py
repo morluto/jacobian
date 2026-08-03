@@ -63,3 +63,50 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == 0.0
     assert result["false_certification"] is True
+
+
+def test_boolean_integer_fields_are_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["minimum_by_head_count"][0] = False
+    submission["result"]["minimum_by_head_count"][1] = True
+    submission["result"]["average_stopping_time"]["denominator"] = True
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_equivalent_unreduced_average_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["average_stopping_time"] = {
+        "numerator": 78,
+        "denominator": 2,
+    }
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+
+
+def test_empty_evidence_is_rejected_without_keyword_scoring(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    (app / "evidence" / "answer.txt").write_text("\n")
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_conservative_assurance_preserves_other_dimensions(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0

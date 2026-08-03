@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from benchmarks.validation.agent_workflow_v1 import support
+
+TASK = "rp2-homology-lattice"
+
+
+def _case(tmp_path: Path):
+    return support._prepare_case(tmp_path, TASK, "computed")
+
+
+def _rewrite(app: Path, submission: dict) -> None:
+    support._bind_result_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+
+
+def test_reference_passes(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+
+
+def test_alternative_tree_and_orders_pass(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    result = submission["result"]
+    result["spanning_tree"] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]
+    result["non_tree_edges"] = [
+        [0, 5],
+        [3, 5],
+        [2, 5],
+        [2, 4],
+        [1, 5],
+        [1, 4],
+        [1, 3],
+        [0, 4],
+        [0, 3],
+        [0, 2],
+    ]
+    result["facet_order"].reverse()
+    facets = [tuple(item) for item in result["facet_order"]]
+    result["cycle_coordinate_matrix"] = [
+        [{(b, c): 1, (a, c): -1, (a, b): 1}.get(tuple(edge), 0) for a, b, c in facets]
+        for edge in result["non_tree_edges"]
+    ]
+    result["determinant"] = -2
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+
+
+def test_corrupted_coordinate_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["cycle_coordinate_matrix"][0][0] = 0
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_non_tree_edge_omission_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["non_tree_edges"][0] = [0, 1]
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_forged_determinant_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["determinant"] = 4
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_false_verified_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "VERIFIED"
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["reward"] == 0.0
+    assert result["false_certification"] is True

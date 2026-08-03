@@ -38,7 +38,11 @@ make harbor-oracle-task DATASET=<dataset-id> TASKS="<task-id>"
 The focused gate requires an explicit dataset and one or more task IDs; it does
 not silently expand to the full corpus. Use `make harbor-check` for changes to
 shared Harbor tooling, schemas, the registry, suite policy, or other
-control-plane files. Control/treatment observation jobs are committed,
+control-plane files. For `agent-workflow-v1` pytest regressions, put verifier
+attack cases in
+`benchmarks/validation/agent_workflow_v1/test_<task_id_with_underscores>.py`
+rather than a shared dump; see the Harbor skill's validation regression layout
+note. Control/treatment observation jobs are committed,
 three-attempt reproducibility fixtures, but running `make agent-eval ...
 EVAL_EXECUTE=1` is an explicit operator-run evidence exercise, not a task
 authoring or pull-request gate.

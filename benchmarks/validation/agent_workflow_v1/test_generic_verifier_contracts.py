@@ -90,74 +90,26 @@ def test_resource_derived_oracles_and_assurance_boundary(
 
 
 @pytest.mark.parametrize(
-    ("task_name", "mutate"),
+    "task_name",
     [
-        (
-            "autoformalization-semantic-audit",
-            lambda result: result["operator_mismatch_certificate"].update(
-                dot_product=1
-            ),
-        ),
-        (
-            "calendar-good-days-audit",
-            lambda result: result.update(count=15),
-        ),
-        (
-            "finite-magma-countermodel",
-            lambda result: result["table"][1].__setitem__(1, 2),
-        ),
-        (
-            "gaussian-moment-generality-audit",
-            lambda result: result["v_coefficients"].__setitem__(2, "-1/3"),
-        ),
-        (
-            "matrix-square-zero-counterexample",
-            lambda result: result.update(matrix=[[1, 0], [0, 0]]),
-        ),
-        (
-            "metric-tsp-proof-repair",
-            lambda result: result["weights"].update(optimal=31),
-        ),
-        (
-            "polynomial-tail-counterexample",
-            lambda result: result.update(x2="1"),
-        ),
-        (
-            "polynomial-divisibility-uniqueness",
-            lambda result: result["remainder_x"].__setitem__(0, 3),
-        ),
-        (
-            "subspace-direct-sum-counterexample",
-            lambda result: result.update(dependence_coefficients=[1, 1, 1, 1]),
-        ),
-        (
-            "well-total-domination-counterexample",
-            lambda result: result.update(degree_sum=7),
-        ),
-        (
-            "log-exponent-recovery",
-            lambda result: result.update(value=59),
-        ),
-        (
-            "random-function-expectation-audit",
-            lambda result: result.update(expected_value="2025"),
-        ),
-        (
-            "lagrangian-projection-proof-audit",
-            lambda result: result["lagrangian_defect"][0].__setitem__(1, "0"),
-        ),
+        "autoformalization-semantic-audit",
+        "complex-power-sum-elimination",
+        "divisibility-construction-witness",
+        "finite-magma-countermodel",
+        "metric-tsp-proof-repair",
+        "natural-subtraction-proof-repair",
+        "well-total-domination-counterexample",
     ],
 )
-def test_resource_derived_verifiers_reject_corrupted_witnesses(
+def test_verifiers_reject_replaced_workspace_inputs(
     tmp_path: Path,
     task_name: str,
-    mutate,
 ) -> None:
     task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    mutate(submission["result"])
-    support._write_json(submission_path, submission)
+    input_path = app / "input.json"
+    input_data = json.loads(input_path.read_text())
+    input_data["task_id"] = "tampered"
+    support._write_json(input_path, input_data)
 
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0

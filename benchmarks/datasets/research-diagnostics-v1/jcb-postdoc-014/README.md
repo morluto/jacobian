@@ -10,7 +10,7 @@ algebraic-geometry
 
 - case_version: research-diagnostics-v1
 - contamination_class: public-answer-visible-diagnostic
-- fixture_digest: sha256:347a759aaea2891bf4b633598a1fde7b2635c1a15569f59fc31659eab4d4e47a
+- fixture_digest: sha256:f664651eacddbad9976b2cce12f651d4651323c6f5a0976c6c690868d7f5dde8
 - derivation: Two rational arrangements of nine projective lines have isomorphic intersection lattices but different minimal degrees of Jacobian relations. The decisive computation is an exact graded-kernel calculation, close to Jacobian's polynomial and rational-linear portfolio but not currently exposed as one domain-owned operation.
 
 ## Portfolio status
@@ -30,8 +30,9 @@ algebraic-geometry
 - timeout_sec (verifier): 120.0
 - environment_mode: separate
 
-The task is self-contained and offline. The instruction names no tool,
-capability, or invocation order. The verifier is a separate clean-room Python
-script that scores correctness, evidence validity, scope accuracy, assurance
-calibration, and aggregate reward; a wrong result or an unsupported VERIFIED
-claim forces the reward to zero.
+The task is self-contained and offline. The v2 contract requires exact sparse
+syzygies rather than a public-answer summary. Its clean-room verifier rebuilds
+the arrangements, checks their projective flats, proves lower-degree
+injectivity by exact modular rank, and replays the submitted polynomial
+relations over the integers. Wrong results and unsupported VERIFIED claims
+force reward to zero.

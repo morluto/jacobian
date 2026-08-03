@@ -35,6 +35,11 @@
         "extra_docker_compose": {
           "type": "array",
           "items": {"type": "string", "minLength": 1}
+        },
+        "extra_allowed_hosts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
         }
       }
     },
@@ -54,7 +59,8 @@
             "properties": {
               "version": {"type": "string", "minLength": 1},
               "prompt_template_path": {"type": "string", "minLength": 1},
-              "reasoning_effort": {"type": "string", "minLength": 1}
+              "reasoning_effort": {"type": "string", "minLength": 1},
+              "web_search": {"type": "string", "minLength": 1}
             }
           },
           "mcp_servers": {

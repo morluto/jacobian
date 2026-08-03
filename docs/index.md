@@ -97,8 +97,6 @@ work that has been identified but not necessarily scheduled. The
 [atomic capability portfolio](contributing/atomic-capability-portfolio.md)
 records the formal-first backend research, ordering, installation tradeoffs,
 and evaluation gates used to decide which mathematical slices to build next.
-The [test-suite cost audit](contributing/test-suite-cost-audit.md) records the
-measured test lanes, retained trust-boundary costs, and fast-feedback policy.
 The [nauty/Traces optional-provider spike](contributing/nauty-provider-spike.md)
 records the pinned external-provider reproduction, absence isolation, license
 decision, and unresolved checker gates without registering a capability.

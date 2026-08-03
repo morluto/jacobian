@@ -133,8 +133,6 @@ When coverage is enabled for an exhaustive plan, each compatible Python lane
 writes raw coverage data and a dependent job combines the files before enforcing
 the repository threshold. The shard count and lane policy are owned by
 [`.github/ci-config.json`](../../.github/ci-config.json).
-Measured costs and lane policy are recorded in the
-[test-suite cost audit](../contributing/test-suite-cost-audit.md).
 
 For pull requests, a tested path planner reads
 [`.github/ci-impact.json`](../../.github/ci-impact.json) and makes

@@ -40,8 +40,8 @@ budget. CI owns path-planned correctness lanes and optional environments.
 `make check-static` adds dependency/dead-code checks and a package build when a
 focused change needs them. `make test-all-ci` is the explicit exceptional local
 reproduction of every semantic lane. Run `make help` for the complete command
-index. The measured costs and reasoning behind these lanes are recorded in the
-[test-suite cost audit](docs/contributing/test-suite-cost-audit.md).
+index. Lane ownership and local commands are documented in
+[testing strategy](docs/reference/testing-strategy.md).
 Tests can be narrowed without learning another wrapper:
 
 ```sh

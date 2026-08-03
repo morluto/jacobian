@@ -78,6 +78,17 @@ def test_known_ci_tooling_change_uses_owned_process_tests() -> None:
     assert selected == ["tests/boundary/process/tooling/test_plan_receipt.py"]
 
 
+def test_deleted_ci_tooling_change_cannot_use_owned_process_override() -> None:
+    planner = _load("plan_local_tests_deleted_ci_override", "plan-local-tests")
+
+    selected, fallback = planner.exact_tests(
+        [planner.Change("D", ".github/scripts/emit-plan-receipt")]
+    )
+
+    assert selected == []
+    assert fallback == ".github/scripts/emit-plan-receipt: D changes are not exact"
+
+
 def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
     result = subprocess.run(
         [

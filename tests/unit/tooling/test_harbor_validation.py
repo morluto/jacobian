@@ -127,6 +127,29 @@ def test_validate_task_topology_ignores_gitignored_interpreter_caches(
     assert validate_task_topology(suite, task) == []
 
 
+def test_validate_task_topology_does_not_ignore_tracked_interpreter_caches(
+    tmp_path: Path, patched_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import benchmarks.tooling.harbor_suite as harbor_suite
+
+    calls: list[list[str]] = []
+
+    def check_tracked_cache(args: list[str], **kwargs: object) -> SimpleNamespace:
+        calls.append(args)
+        return SimpleNamespace(returncode=1)
+
+    monkeypatch.setattr(harbor_suite.subprocess, "run", check_tracked_cache)
+    suite, task = _make_suite_with_task(tmp_path)
+    cache = task / "tests" / "__pycache__"
+    cache.mkdir()
+    (cache / "verifier.cpython-312.pyc").write_bytes(b"cache")
+
+    failures = validate_task_topology(suite, task)
+
+    assert any("raw interpreter cache" in failure for failure in failures)
+    assert all("--no-index" not in args for args in calls)
+
+
 def test_validate_task_visibility_detects_host_path(
     tmp_path: Path, patched_root: Path
 ) -> None:

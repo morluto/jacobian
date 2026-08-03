@@ -697,7 +697,6 @@ def _is_ignored_interpreter_cache(path: Path) -> bool:
                 "git",
                 "check-ignore",
                 "--quiet",
-                "--no-index",
                 "--",
                 str(relative),
             ],

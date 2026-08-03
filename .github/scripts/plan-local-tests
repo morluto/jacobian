@@ -215,6 +215,8 @@ def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
 
     for entry in entries:
         path = entry.path
+        if entry.status not in {"A", "M"}:
+            return [], f"{path}: {entry.status} changes are not exact"
         override_nodes = {
             node
             for pattern, nodes in overrides.items()
@@ -231,8 +233,6 @@ def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
             selected.update(override_nodes)
             continue
 
-        if entry.status not in {"A", "M"}:
-            return [], f"{path}: {entry.status} changes are not exact"
         if (
             path in HIGH_IMPACT_PATHS
             or path.startswith(".github/")

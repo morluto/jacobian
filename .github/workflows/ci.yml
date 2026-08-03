@@ -116,7 +116,7 @@ jobs:
             --paths-file "$plan_dir/changed-paths.txt" \
             --output "$plan_dir/plan-receipt.json"
           echo "plan-receipt-digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")" >> "$GITHUB_OUTPUT"
-          echo "Plan receipt: \\`$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")\\`" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Plan receipt: \\x60%s\\x60\\n' "$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")" >> "$GITHUB_STEP_SUMMARY"
           classification=$(sed -n 's/^classification=//p' <<< "$plan_output")
           {
             echo "## CI plan"

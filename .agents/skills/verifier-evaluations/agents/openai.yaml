@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verifier Evaluations"
+  short_description: "Design and audit fail-closed verifiers and evaluation evidence"
+  default_prompt: "Use $verifier-evaluations to design or audit the verifier contract, adversarial fixtures, scoring dimensions, and evaluation evidence."

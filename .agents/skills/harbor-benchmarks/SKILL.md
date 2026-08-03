@@ -11,6 +11,11 @@ integrity, dataset identity, Oracle validation, and Jacobian observation
 configuration; it does not prescribe the mathematical strategy an evaluated
 agent should use.
 
+For detailed verifier design, adversarial fixture coverage, diagnostic scoring,
+and evaluation-integrity review, also use the repository's
+`verifier-evaluations` skill. Keep this skill focused on Harbor packaging,
+dataset identity, repository gates, and observation plumbing.
+
 ## Choose the evaluation boundary
 
 Classify the work before editing a task:

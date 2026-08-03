@@ -1,1 +1,27 @@
-{"task_id":"jacobian/jcb-postdoc-004","conclusion":"COUNTEREXAMPLE_EXISTS","result":{"expected_conclusion":"COUNTEREXAMPLE_EXISTS","answer_visible_summary":"One 18-vertex witness starts with a clique on 0 through 10, adds vertices 11 through 14 adjacent to every clique vertex, and attaches one leaf to each of 11, 12, and 14. It has alpha=4 and l_avg=3, while three leaves force any putative Hamiltonian path to have at least three endpoints.","boundary_statement":"Counterexample strategy and the Hamiltonian obstruction remain agent-owned. There is no single workflow capability that should hide the proposed graph, invariant evidence, and obstruction boundary.","key_facts":{"vertices":"18","alpha":"4","l_avg":"3"}},"claimed_assurance":"COMPUTED","scope":"jacobian/jcb-postdoc-004 answer-visible diagnostic","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:3df8a3d820ad946e355373f2cf3b045ed6854f60c972e6252e173599c7dca2ca"}],"limitations":[]}
+{
+  "task_id": "jacobian/jcb-postdoc-004",
+  "conclusion": "COUNTEREXAMPLE_EXISTS",
+  "result": {
+    "certificate_path": "evidence/counterexample.json",
+    "vertex_count": 18,
+    "independence_number": 4,
+    "local_average": {
+      "numerator": 3,
+      "denominator": 1
+    },
+    "hamiltonian_path_exists": false
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "jacobian/jcb-postdoc-004 public answer-visible witness with at most 20 vertices",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/counterexample.json",
+      "sha256": "sha256:aa1222b03fa2458ad19942419bfaec8d96ed64ad972043f09afb40766fc48b0c"
+    }
+  ],
+  "limitations": [
+    "PUBLIC_ANSWER_VISIBLE",
+    "BENCHMARK_VERIFIER_NOT_PRODUCT_AUTHORITY"
+  ]
+}

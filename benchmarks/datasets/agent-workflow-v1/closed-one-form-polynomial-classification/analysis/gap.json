@@ -1,8 +1,17 @@
 {
-  "benchmark_family": "Regression",
-  "primary_reasoning_objective": "chain-rule proof repair through symbolic integrability classification",
-  "quality_score": 90,
-  "portfolio_gap": "classify a polynomial solution space and reconstruct exact potentials",
-  "shortcut_audit": "The public solution is wrong; copying its dimension 6 fails. Row-space, nullspace independence, and differentiated potentials are replayed.",
-  "expected_discrimination": {"weaker": "copies the source's chain-rule error and dimension 6", "stronger": "repairs the derivative and derives an equivalent constraint and basis certificate", "tool_less": "can solve, but must maintain ten-coordinate and rational-potential consistency"}
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.agent-workflow-v1.capability-gap-analysis",
+  "task_id": "closed-one-form-polynomial-classification",
+  "analysis": {
+    "mathematical_moves": [
+      "Repair the source chain-rule error, derive the exact coefficient constraint space, and reconstruct polynomial potentials."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["PROOF_REPAIR", "SYMBOLIC_CLASSIFICATION"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE_BUT_INCORRECT",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Replay row-space, nullspace, and differentiated-potential certificates independently of the published answer."
+  }
 }

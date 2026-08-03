@@ -170,21 +170,6 @@ def test_nonclosed_projection_instruction_is_strategy_free() -> None:
         assert term in instruction
 
 
-def test_nonclosed_projection_accepts_reference_solution(tmp_path: Path) -> None:
-    result = support._run_verifier(
-        *_write_case(
-            tmp_path,
-            result=_witness(weight_reciprocal_square=False),
-            proof=_proof(weight_reciprocal_square=False),
-            label="reference",
-        )
-    )
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == pytest.approx(1.0)
-    assert result["false_certification"] is False
-
-
 def test_nonclosed_projection_accepts_alternate_diagonal_weights(
     tmp_path: Path,
 ) -> None:

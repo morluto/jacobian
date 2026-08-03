@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from benchmarks.validation.agent_workflow_v1 import support
 
 TASK = "rp2-homology-lattice"
@@ -108,3 +107,50 @@ def test_affirmative_proof_assistant_claim_is_rejected(tmp_path: Path) -> None:
     ]
     _rewrite(app, submission)
     assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_out_of_domain_vertex_is_cleanly_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["spanning_tree"][0] = [0, 6]
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_oversized_evidence_is_rejected_without_crashing(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(evidence.read_text() + "\n" + "x" * 65536)
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_affirmative_proof_assistant_in_evidence_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        evidence.read_text() + "\nA proof assistant verified this result."
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0

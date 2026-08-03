@@ -126,9 +126,21 @@ def _result_ok(result, frozen):
         or frozen.get("coefficient_domain") != "ZZ"
     ):
         return False
-    orbit = [_ratfun(item) for item in result["orbit"]]
-    rhs = [_ratfun(item) for item in result["right_hand_sides"]]
-    values = [_ratfun(item) for item in result["solution_values"]]
+    orbit_raw = result["orbit"]
+    rhs_raw = result["right_hand_sides"]
+    values_raw = result["solution_values"]
+    if (
+        not isinstance(orbit_raw, list)
+        or len(orbit_raw) != 3
+        or not isinstance(rhs_raw, list)
+        or len(rhs_raw) != 3
+        or not isinstance(values_raw, list)
+        or len(values_raw) != 3
+    ):
+        return False
+    orbit = [_ratfun(item) for item in orbit_raw]
+    rhs = [_ratfun(item) for item in rhs_raw]
+    values = [_ratfun(item) for item in values_raw]
     at_x = _ratfun(result["solution_at_x"])
     if any(item is None for item in [*orbit, *rhs, *values, at_x]):
         return False
@@ -142,6 +154,17 @@ def _result_ok(result, frozen):
     if any(not _equal(_add(values[i], values[(i + 1) % 3]), rhs[i]) for i in range(3)):
         return False
     matrix = result["coefficient_matrix"]
+    if (
+        not isinstance(matrix, list)
+        or len(matrix) != 3
+        or any(
+            not isinstance(row, list)
+            or len(row) != 3
+            or any(type(entry) is not int for entry in row)
+            for row in matrix
+        )
+    ):
+        return False
     expected_matrix = [[1, 1, 0], [0, 1, 1], [1, 0, 1]]
     return bool(
         matrix == expected_matrix

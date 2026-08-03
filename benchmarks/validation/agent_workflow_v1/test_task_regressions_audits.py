@@ -1153,3 +1153,74 @@ def test_mobius_functional_equation_rejects_singular_matrix_claim(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_mobius_functional_equation_rejects_scalar_orbit(tmp_path: Path) -> None:
+    """A scalar orbit must be rejected without crashing the verifier."""
+    task, app, logs = _prepare_mobius_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["orbit"] = 0
+    evidence = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    evidence_path = app / "evidence" / "functional-equation-certificate.json"
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_mobius_functional_equation_rejects_short_orbit(tmp_path: Path) -> None:
+    """A short orbit list must be rejected without crashing the verifier."""
+    task, app, logs = _prepare_mobius_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["orbit"] = submission["result"]["orbit"][:1]
+    evidence = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    evidence_path = app / "evidence" / "functional-equation-certificate.json"
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_mobius_functional_equation_rejects_boolean_matrix(tmp_path: Path) -> None:
+    """Booleans in the coefficient matrix must be rejected even though they
+    compare equal to the expected integer matrix."""
+    task, app, logs = _prepare_mobius_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["coefficient_matrix"] = [
+        [True, True, False],
+        [False, True, True],
+        [True, False, True],
+    ]
+    evidence = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    evidence_path = app / "evidence" / "functional-equation-certificate.json"
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0

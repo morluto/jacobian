@@ -14,3 +14,8 @@ recomputes every discriminant; a copied final list is insufficient.
 
 Write `submission.json` and digest-bind
 `evidence/classification-certificate.json`. Claim at most `COMPUTED`.
+
+The digest-bound evidence file must be a JSON object with exactly four keys:
+`schema_version` (the string `"1"`), `task_id` (the task identifier),
+`result` (the same result object placed in `submission.json`), and
+`limitations` (the same limitations list placed in `submission.json`).

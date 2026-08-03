@@ -92,11 +92,27 @@ def _result_ok(result, frozen):
     accepted = {
         tuple(case["coefficients"]) for case in expected if case["all_roots_real"]
     }
-    return bool(
-        result["normalized_second_coefficient"] == -1
+    scalar_ok = (
+        type(result["normalized_second_coefficient"]) is int
+        and result["normalized_second_coefficient"] == -1
+        and type(result["second_power_sum"]) is int
         and result["second_power_sum"] == 3
+        and type(result["root_product_square"]) is int
         and result["root_product_square"] == 1
+        and type(result["maximum_degree"]) is int
         and result["maximum_degree"] == 3
+    )
+    audit_ok = all(
+        isinstance(case, dict)
+        and set(case) == {"coefficients", "degree", "discriminant", "all_roots_real"}
+        and type(case["degree"]) is int
+        and (case["discriminant"] is None or type(case["discriminant"]) is int)
+        and type(case["all_roots_real"]) is bool
+        for case in submitted_audit
+    )
+    return bool(
+        scalar_ok
+        and audit_ok
         and len(submitted_by_coefficients) == len(submitted_audit) == len(expected)
         and submitted_by_coefficients == expected_by_coefficients
         and len(submitted_classification) == len(result["classified_polynomials"])
@@ -105,12 +121,19 @@ def _result_ok(result, frozen):
 
 
 def main():
-    submission, frozen = load_submission(), _load_frozen()
+    submission_path = W / "submission.json"
+    try:
+        symlinked = submission_path.is_symlink()
+    except OSError:
+        symlinked = True
+    submission = None if symlinked else load_submission()
+    frozen = _load_frozen()
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
     math_correct = bool(contract and _result_ok(submission.get("result"), frozen))

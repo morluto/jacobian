@@ -1157,3 +1157,83 @@ def test_real_rooted_sign_polynomials_rejects_corrupted_discriminant(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_real_rooted_sign_polynomials_rejects_checked_assurance_above_ceiling(
+    tmp_path: Path,
+) -> None:
+    """CHECKED is above the COMPUTED ceiling and must force reward to zero."""
+    task, app, logs = _prepare_real_rooted_sign_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["claimed_assurance"] = "CHECKED"
+    evidence = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    evidence_path = app / "evidence" / "classification-certificate.json"
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+
+
+def test_real_rooted_sign_polynomials_rejects_booleans_in_integer_fields(
+    tmp_path: Path,
+) -> None:
+    """Booleans must not be accepted where integers are required."""
+    task, app, logs = _prepare_real_rooted_sign_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["root_product_square"] = True
+    evidence = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    evidence_path = app / "evidence" / "classification-certificate.json"
+    support._write_json(evidence_path, evidence)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_real_rooted_sign_polynomials_rejects_symlinked_submission(
+    tmp_path: Path,
+) -> None:
+    """A symlinked submission.json must be rejected."""
+    task, app, logs = _prepare_real_rooted_sign_case(tmp_path)
+    submission_path = app / "submission.json"
+    external = tmp_path / "external_submission.json"
+    submission_path.rename(external)
+    submission_path.symlink_to(external)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_real_rooted_sign_polynomials_rejects_missing_evidence_envelope(
+    tmp_path: Path,
+) -> None:
+    """Evidence that stores the result directly without the required envelope
+    must be rejected so the agent-visible schema and instruction are honest."""
+    task, app, logs = _prepare_real_rooted_sign_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    evidence_path = app / "evidence" / "classification-certificate.json"
+    support._write_json(evidence_path, submission["result"])
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

@@ -28,6 +28,11 @@
       "complexity": 15
     },
     {
+      "path": "benchmarks/datasets/agent-workflow-v1/knight-cycle-game-strategy/tests/verifier.py",
+      "symbol": "_cycle",
+      "complexity": 15
+    },
+    {
       "path": "benchmarks/datasets/agent-workflow-v1/lean-guard-scope-assurance/tests/verifier.py",
       "symbol": "_result",
       "complexity": 13
@@ -46,6 +51,16 @@
       "path": "benchmarks/datasets/agent-workflow-v1/subset-incidence-determinant/tests/verifier.py",
       "symbol": "_result",
       "complexity": 11
+    },
+    {
+      "path": "benchmarks/datasets/agent-workflow-v1/ternary-distance-code-optimum/tests/verifier.py",
+      "symbol": "_evidence",
+      "complexity": 12
+    },
+    {
+      "path": "benchmarks/datasets/agent-workflow-v1/ternary-distance-code-optimum/tests/verifier.py",
+      "symbol": "_upper_bound",
+      "complexity": 13
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/cddlib/environment/spike.py",

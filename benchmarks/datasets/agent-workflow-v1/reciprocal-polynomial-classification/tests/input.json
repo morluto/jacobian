@@ -1,0 +1,1 @@
+{"task_id":"jacobian/reciprocal-polynomial-classification","functional_equation":"1/P(z)+1/P(1/z)=z+1/z","coefficient_domain":"ZZ","family_index_bounds":{"minimum":6,"maximum":20},"degree_bounds":{"minimum":11,"maximum":39},"target":"discover and exactly certify a nontrivial polynomial solution"}

@@ -1,0 +1,1 @@
+{"task_id":"jacobian/nonlinear-recurrence-crossing-certificate","initial_index":1,"initial_value":56,"recurrence":"a[n+1]=a[n]-1/a[n]","target":{"relation":"a[n]<0","index_upper_exclusive":2002},"sequence_contract":"total_real_sequence_so_all_denominators_are_nonzero"}

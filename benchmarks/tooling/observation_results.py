@@ -157,7 +157,7 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
                     != {
                         "name": "jacobian",
                         "transport": "streamable-http",
-                        "url": "http://jacobian:8000/mcp",
+                        "url": "http://127.0.0.1:8000/mcp",
                     }
                 ]
                 if remaining:

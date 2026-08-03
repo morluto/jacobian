@@ -28,7 +28,7 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
             "task_names": ["graph-counterexample"],
         }
     ]
-    assert job["agents"] == [{"name": "codex"}]
+    assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
 
 
 def test_observation_mcp_config_is_external_to_the_task_job() -> None:
@@ -42,7 +42,7 @@ def test_observation_mcp_config_is_external_to_the_task_job() -> None:
         {
             "name": "jacobian",
             "transport": "streamable-http",
-            "url": "http://jacobian:8000/mcp",
+            "url": "http://127.0.0.1:8000/mcp",
         }
     ]
 

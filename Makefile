@@ -4,9 +4,11 @@ UV_RUN := uv run --locked
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
 HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
+OBSERVATION_PYTHON ?= $(UV_RUN) --with harbor==$(HARBOR_VERSION) python
 PYTEST_ARGS ?=
 TESTS ?=
 EVAL_ARGS ?=
+EVAL_AGENT_KWARGS ?= web_search=disabled
 STRESS_COUNT ?= 3
 ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
@@ -319,19 +321,21 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, DATASET=agent-work
 		-c "$(EVAL_CONFIG)" \
 		-a codex \
 		-m "$${JACOBIAN_MODEL}" \
+		$(foreach kw,$(EVAL_AGENT_KWARGS),--agent-kwarg "$(kw)") \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
 		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS) > "$(EVAL_RESOLVED_CONFIG)"; \
-	$(UV_RUN) python -m benchmarks.tooling.observation_results validate-config \
+	$(OBSERVATION_PYTHON) -m benchmarks.tooling.observation_results validate-config \
 		--config "$(EVAL_RESOLVED_CONFIG)" --condition "$(EVAL_CONDITION)"; \
 	$(HARBOR_RUNNER) run \
 		-c "$(EVAL_CONFIG)" \
 		-a codex \
 		-m "$${JACOBIAN_MODEL}" \
+		$(foreach kw,$(EVAL_AGENT_KWARGS),--agent-kwarg "$(kw)") \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
 		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS); \
-	$(UV_RUN) python -m benchmarks.tooling.observation_results route \
+	$(OBSERVATION_PYTHON) -m benchmarks.tooling.observation_results route \
 		--dataset "$(or $(DATASET),agent-workflow-v1)" \
 		--condition "$(EVAL_CONDITION)" \
 		--config "$(EVAL_RESOLVED_CONFIG)" \

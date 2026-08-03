@@ -22,7 +22,7 @@ MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
 JACOBIAN_SERVER = {
     "name": "jacobian",
     "transport": "streamable-http",
-    "url": "http://jacobian:8000/mcp",
+    "url": "http://127.0.0.1:8000/mcp",
 }
 ROUTING_STATUSES = (
     "NOT_CONFIGURED",

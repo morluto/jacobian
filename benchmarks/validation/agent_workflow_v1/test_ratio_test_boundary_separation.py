@@ -151,3 +151,103 @@ def test_visible_schema_does_not_leak_witness_values() -> None:
         assert convergent[field] == {"type": "string"}
     # The ratio-limit premise is part of the problem statement, not a hidden witness.
     assert result_props["ratio_limit"] == {"const": "1"}
+
+
+def test_dimensions_scored_independently(tmp_path: Path) -> None:
+    """A mathematically correct submission with wrong scope still reports
+    correctness=1.0 so the dimensions are distinguishable.
+    """
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["scope"] = "wrong scope"
+    support._write_json(path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_instruction_prescribes_specific_witnesses() -> None:
+    """The instruction names the specific witnesses so the task contract
+    defines which witnesses are accepted.
+    """
+    text = (support.TASKS / TASK / "instruction.md").read_text().casefold()
+    assert "harmonic" in text
+    assert "1/n" in text
+    assert "telescoping" in text
+    assert "1/(n*(n+1))" in text
+
+
+def test_keyword_only_evidence_is_rejected(tmp_path: Path) -> None:
+    """Evidence containing only the keyword list without an actual boundary
+    explanation is rejected.
+    """
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    marker = "RESULT_JSON:" + json.dumps(
+        submission["result"], sort_keys=True, separators=(",", ":")
+    )
+    evidence_path.write_text(
+        "ratio diverge converge dyadic telescop\n" + marker + "\n",
+        encoding="utf-8",
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unrelated_negation_does_not_satisfy_limitation(tmp_path: Path) -> None:
+    """A limitation where 'No' appears in an unrelated clause but the
+    proof-assistant clause asserts verification is rejected.
+    """
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["limitations"] = [
+        "No uncertainty remains; proof assistant verification was performed."
+    ]
+    support._write_json(path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_oversized_evidence_is_rejected(tmp_path: Path) -> None:
+    """An evidence file exceeding the size bound is rejected before exhausting
+    verifier memory or timeout.
+    """
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("x" * 2_097_152, encoding="utf-8")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unreduced_rational_checkpoints_are_accepted(tmp_path: Path) -> None:
+    """Checkpoint rationals in non-canonical form (e.g. 2/4 for 1/2) are
+    accepted as equivalent Fraction values.
+    """
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["result"]["convergent_witness"]["checkpoints"] = [
+        {"N": 1, "partial_sum": "2/4", "tail": "2/4"},
+        {"N": 2, "partial_sum": "4/6", "tail": "2/6"},
+        {"N": 3, "partial_sum": "6/8", "tail": "2/8"},
+        {"N": 4, "partial_sum": "8/10", "tail": "2/10"},
+    ]
+    support._bind_result_evidence(app, submission)
+    support._write_json(path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["reward"] == 1.0

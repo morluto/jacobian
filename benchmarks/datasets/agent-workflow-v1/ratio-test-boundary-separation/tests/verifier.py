@@ -6,7 +6,6 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     false_verified_claim,
     load_submission,
     resolve_evidence,
@@ -18,6 +17,7 @@ TESTS = Path("/tests")
 TASK_ID = "jacobian/ratio-test-boundary-separation"
 CONCLUSION = "RATIO_BOUNDARY_INCONCLUSIVE"
 SCOPE = "positive rational series indexed by n >= 1"
+MAX_EVIDENCE_BYTES = 1_048_576
 
 _PROOF_ASSISTANT_RE = re.compile(r"proof[ -]assistant", re.IGNORECASE)
 _NEGATION_RE = re.compile(
@@ -30,24 +30,42 @@ _AFFIRMATIVE_VERIFICATION_RE = re.compile(
     r"established|done|carried\s+out)\b",
     re.IGNORECASE,
 )
+_CLAUSE_SPLIT_RE = re.compile(r"[.;,!?\n]+")
+_BOUNDARY_EXPLANATION_RE = re.compile(
+    r"\b(?:inconclusive|cannot\s+decide|cannot\s+determine|does\s+not\s+decide|"
+    r"not\s+decisive|boundary|insufficient)\b",
+    re.IGNORECASE,
+)
+
+
+def _split_clauses(text: str) -> list[str]:
+    return [clause.strip() for clause in _CLAUSE_SPLIT_RE.split(text) if clause.strip()]
 
 
 def _negated_proof_assistant_limitation(item: object) -> bool:
-    """A limitation that negates proof-assistant verification (whole-word match)."""
+    """A limitation whose proof-assistant clause is negated."""
 
     if not isinstance(item, str) or not _PROOF_ASSISTANT_RE.search(item):
         return False
-    return bool(_NEGATION_RE.search(item))
+    for clause in _split_clauses(item):
+        if _PROOF_ASSISTANT_RE.search(clause) and _NEGATION_RE.search(clause):
+            return True
+    return False
 
 
 def _affirmative_proof_assistant_claim(item: object) -> bool:
-    """An un-negated limitation asserting proof-assistant verification happened."""
+    """A limitation whose proof-assistant clause asserts verification happened."""
 
     if not isinstance(item, str) or not _PROOF_ASSISTANT_RE.search(item):
         return False
-    if _NEGATION_RE.search(item):
-        return False
-    return bool(_AFFIRMATIVE_VERIFICATION_RE.search(item))
+    for clause in _split_clauses(item):
+        if not _PROOF_ASSISTANT_RE.search(clause):
+            continue
+        if _NEGATION_RE.search(clause):
+            continue
+        if _AFFIRMATIVE_VERIFICATION_RE.search(clause):
+            return True
+    return False
 
 
 def _fraction(value: object) -> Fraction | None:
@@ -56,10 +74,9 @@ def _fraction(value: object) -> Fraction | None:
     ):
         return None
     try:
-        result = Fraction(value)
+        return Fraction(value)
     except (ValueError, ZeroDivisionError):
         return None
-    return result if str(result) == value else None
 
 
 def _source_is_bound() -> bool:
@@ -107,14 +124,18 @@ def _divergent(value: object) -> bool:
         start = 2**level
         count = 2**level
         lower = Fraction(1, 2 ** (level + 1))
-        if block != {
-            "level": level,
-            "start": start,
-            "end": 2 * start - 1,
-            "count": count,
-            "term_lower_bound": str(lower),
-            "block_lower_bound": "1/2",
-        }:
+        term_lower = _fraction(block["term_lower_bound"])
+        block_lower = _fraction(block["block_lower_bound"])
+        if term_lower is None or block_lower is None:
+            return False
+        if (
+            block["level"] != level
+            or block["start"] != start
+            or block["end"] != 2 * start - 1
+            or block["count"] != count
+            or term_lower != lower
+            or block_lower != Fraction(1, 2)
+        ):
             return False
         if count * lower != Fraction(1, 2):
             return False
@@ -150,6 +171,8 @@ def _convergent(value: object) -> bool:
         seen.add(n)
         partial = _fraction(item["partial_sum"])
         tail = _fraction(item["tail"])
+        if partial is None or tail is None:
+            return False
         if partial != Fraction(n, n + 1) or tail != Fraction(1, n + 1):
             return False
         if partial + tail != 1:
@@ -168,16 +191,14 @@ def _result(value: object) -> bool:
 
 
 def _evidence(value: object, result: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not evidence_list_is_bound(value)
-    ):
+    if not isinstance(value, list) or len(value) != 1:
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
+        if path.stat().st_size > MAX_EVIDENCE_BYTES:
+            return False
         text = path.read_text()
     except (OSError, UnicodeError):
         return False
@@ -198,6 +219,8 @@ def _evidence(value: object, result: object) -> bool:
     folded = prose.casefold()
     return bool(
         bound == result
+        and len(folded) >= 80
+        and _BOUNDARY_EXPLANATION_RE.search(prose)
         and all(
             word in folded
             for word in ("ratio", "diverge", "converge", "dyadic", "telescop")
@@ -216,33 +239,40 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
-    limitations = (
-        submission.get("limitations", []) if isinstance(submission, dict) else []
-    )
+    data = submission if isinstance(submission, dict) else {}
+    limitations = data.get("limitations", [])
     has_negated_limitation = isinstance(limitations, list) and any(
         _negated_proof_assistant_limitation(item) for item in limitations
     )
     has_affirmative_claim = isinstance(limitations, list) and any(
         _affirmative_proof_assistant_claim(item) for item in limitations
     )
-    correct = bool(
+    math_correct = bool(protocol and _source_is_bound() and _result(data.get("result")))
+    evidence_valid = bool(
+        math_correct and _evidence(data.get("evidence"), data.get("result"))
+    )
+    scope_correct = bool(protocol and data.get("scope") == SCOPE)
+    assurance_correct = bool(
         protocol
-        and isinstance(submission, dict)
-        and _source_is_bound()
-        and submission.get("scope") == SCOPE
-        and submission.get("claimed_assurance") == "COMPUTED"
-        and _result(submission.get("result"))
-        and _evidence(submission.get("evidence"), submission.get("result"))
+        and data.get("claimed_assurance") == "COMPUTED"
         and has_negated_limitation
         and not has_affirmative_claim
     )
-    score = 1.0 if correct and not false_certification else 0.0
+    reward = (
+        1.0
+        if math_correct
+        and evidence_valid
+        and scope_correct
+        and assurance_correct
+        and not false_certification
+        else 0.0
+    )
     return {
-        "correctness": score,
-        "evidence_validity": score,
-        "scope_accuracy": score,
-        "assurance_calibration": score,
-        "reward": score,
+        "correctness": float(math_correct),
+        "evidence_validity": float(evidence_valid),
+        "scope_accuracy": float(scope_correct),
+        "assurance_calibration": float(assurance_correct),
+        "reward": reward,
         "false_certification": false_certification,
     }
 

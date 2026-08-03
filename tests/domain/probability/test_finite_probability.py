@@ -76,9 +76,7 @@ def test_finite_raw_moment_preserves_exact_contributions(
     ] == [_rational(1, 2), _rational(9, 2)]
     assert result.output["result"]["verification"] == "UNVERIFIED"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
-    persisted = runtime.core.store.get(result.artifact_uris[1])
-    assert persisted.payload == result.output["result"]
+    assert result.artifact_uris == ()
 
 
 def test_invalid_finite_distribution_fails_before_artifact_writes(
@@ -134,7 +132,7 @@ def test_finite_event_probability_preserves_selected_atom_contributions(
         },
     ]
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
+    assert result.artifact_uris == ()
 
 
 def test_finite_conditioning_returns_one_normalized_distribution(
@@ -324,7 +322,7 @@ def test_gaussian_polynomial_moment_preserves_complete_complex_contraction(
     ]
     assert computed["completeness"] == "COMPLETE_BOUNDED_EXPANSION"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
+    assert result.artifact_uris == ()
 
 
 def test_multivariate_gaussian_polynomial_moment_uses_independence(

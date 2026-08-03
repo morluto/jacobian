@@ -46,9 +46,7 @@ def _invoke(
         CapabilityRequest(capability_id=capability_id, input=payload)
     )
     assert outcome.execution.status is ExecutionStatus.COMPLETED
-    assert len(outcome.artifact_uris) == 2
-    result_artifact = domain_services.core.store.get(outcome.artifact_uris[1])
-    assert result_artifact.manifest.parents == (outcome.artifact_uris[0],)
+    assert outcome.artifact_uris == ()
     return outcome.output["result"]
 
 

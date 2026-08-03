@@ -5,7 +5,9 @@ import json
 from importlib.metadata import version
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
+from mcp.shared.exceptions import MCPError
 
 from jacobian.adapters.mcp.guidance import OPERATING_GUIDE
 from jacobian.adapters.mcp.server import create_server
@@ -75,12 +77,12 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
                 "payload",
                 "mode",
             }
-            unknown_argument = await client.call_tool(
-                "capability.describe",
-                {"capabilty_id": "polynomial.compute.gcd"},
-            )
-            assert unknown_argument.is_error is True
-            assert '"code": "INVALID_INPUT"' in unknown_argument.content[0].text
+            with pytest.raises(MCPError) as unknown_argument:
+                await client.call_tool(
+                    "capability.describe",
+                    {"capabilty_id": "polynomial.compute.gcd"},
+                )
+            assert '"code": "INVALID_INPUT"' in str(unknown_argument.value)
             resources = await client.list_resources()
             resource_inventory = {
                 (resource.name, str(resource.uri), resource.mime_type)

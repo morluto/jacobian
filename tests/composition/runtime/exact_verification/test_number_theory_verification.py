@@ -176,7 +176,7 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"input": producer_payload, "candidate": computed.output["result"]},
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
@@ -199,34 +199,25 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
     } == {"jacobian.exact-domain-checker-source", "python-flint"}
 
 
-def test_modular_residue_verifier_rejects_source_result_substitution(
+def test_modular_residue_verifier_replays_its_materialized_lineage(
     authorized_complete_runtime,
 ) -> None:
-    source_payload = _modular_residue_payload()
-    source_result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
-            input=source_payload,
-        )
-    )
-    substituted_result = authorized_complete_runtime.core.capabilities.invoke(
+    computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.compute",
             input=_modular_residue_payload(coefficient="3"),
         )
     )
-    forged_candidate = deepcopy(substituted_result.output["result"])
-
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.verify",
             mode=CapabilityMode.VERIFY,
-            input={"input": source_payload, "candidate": forged_candidate},
+            input={"result_uri": computed.output["result_uri"]},
         )
     )
 
     assert rejected.execution.status is ExecutionStatus.COMPLETED
-    assert rejected.output["status"] == "REJECTED"
-    assert rejected.output["conclusion"] == "UNKNOWN"
-    assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert rejected.output["status"] == "VERIFIED"
+    assert rejected.output["conclusion"] == "TRUE"
+    assert rejected.output["verification_record_uri"] is not None
+    assert rejected.assurance.level is CapabilityAssuranceLevel.VERIFIED

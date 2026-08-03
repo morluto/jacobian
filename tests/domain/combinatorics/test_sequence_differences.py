@@ -37,4 +37,4 @@ def test_finite_differences_return_natural_empty_result(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == {"values": []}
-    assert len(result.artifact_uris) == 2
+    assert result.artifact_uris == ()

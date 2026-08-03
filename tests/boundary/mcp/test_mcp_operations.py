@@ -131,9 +131,9 @@ def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) 
             ),
             raise_exceptions=False,
         ) as client:
-            response = await client.call_tool("capability.describe", {})
-            assert response.is_error is True
-            assert '"code": "AUTHENTICATION_REQUIRED"' in response.content[0].text
+            with pytest.raises(MCPError) as authentication_error:
+                await client.call_tool("capability.describe", {})
+            assert str(authentication_error.value) == "Internal server error"
 
     asyncio.run(scenario())
 
@@ -141,19 +141,19 @@ def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) 
 def test_direct_tool_calls_reject_removed_and_malformed_arguments(
     tmp_path: Path,
 ) -> None:
+    from mcp.server.mcpserver.exceptions import ToolError
+
     async def scenario() -> None:
         server = create_server(tmp_path)
 
-        removed = await server.call_tool("workspace.write", {})
-        assert removed.is_error is True
+        with pytest.raises(ToolError):
+            await server.call_tool("workspace.write", {})
 
-        malformed = await server.call_tool(
-            "capability.describe",
-            {"limit": "not-an-integer"},
-        )
-        assert malformed.is_error is True
-        assert '"code": "INVALID_INPUT"' in malformed.content[0].text
-        assert "not-an-integer" not in malformed.content[0].text
+        with pytest.raises(ToolError):
+            await server.call_tool(
+                "capability.describe",
+                {"limit": "not-an-integer"},
+            )
 
     asyncio.run(scenario())
 

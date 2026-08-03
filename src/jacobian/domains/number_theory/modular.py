@@ -14,6 +14,7 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.domains._examples import example
 from jacobian.domains.number_theory._support import (
+    materialized_number_theory_operation,
     number_theory_operation,
 )
 from jacobian.domains.number_theory.discrete_logarithm import (
@@ -99,7 +100,7 @@ MODULAR_CAPABILITIES = (
             ),
         ),
     ),
-    number_theory_operation(
+    materialized_number_theory_operation(
         "modular.polynomial_residue_image.compute",
         "Compute modular polynomial residue image",
         (

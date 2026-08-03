@@ -126,10 +126,10 @@ def test_geometry_capabilities_are_distinct_and_every_contract_completes(
             result.diagnostics,
         )
         assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-        assert len(result.artifact_uris) == 2
+        assert result.artifact_uris == ()
 
 
-def test_geometry_exact_outputs_are_inline_and_materialized(domain_services) -> None:
+def test_geometry_exact_outputs_are_inline(domain_services) -> None:
 
     distance = domain_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -149,10 +149,8 @@ def test_geometry_exact_outputs_are_inline_and_materialized(domain_services) -> 
         "center": {"x": ONE, "y": ONE},
         "radius_squared": {"num": "2", "den": "1"},
     }
-    assert (
-        domain_services.core.store.get(distance.output["result_uri"]).payload
-        == distance.output["result"]
-    )
+    assert distance.artifact_uris == ()
+    assert circle.artifact_uris == ()
 
 
 def test_convex_hull_returns_segment_endpoints_for_two_points(
@@ -286,7 +284,7 @@ def test_closed_segment_intersection_preserves_degenerate_classification(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == expected
-    assert len(result.artifact_uris) == 2
+    assert result.artifact_uris == ()
 
 
 @pytest.mark.parametrize(

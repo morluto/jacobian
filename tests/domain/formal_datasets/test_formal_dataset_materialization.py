@@ -27,10 +27,10 @@ def _adapter(tmp_path: Path):
     return installation.adapters[0]
 
 
-def _output(result) -> dict[str, object]:
-    output = result.output["result"]
-    assert isinstance(output, dict)
-    return output
+def _output(adapter, result) -> dict[str, object]:
+    stored = adapter.resources.artifacts.store.get(result.output["result_uri"])
+    assert isinstance(stored.payload, dict)
+    return stored.payload
 
 
 def _environment() -> dict[str, object]:
@@ -112,7 +112,7 @@ def test_supported_row_materializes_deterministically(
         )
     )
 
-    first_output = _output(first)
+    first_output = _output(adapter, first)
     assert first.output == second.output
     assert first.output["result_uri"] == second.output["result_uri"]
     assert str(first_output["row_digest"]).startswith("sha256:")
@@ -136,7 +136,7 @@ def test_materialization_preserves_environment_and_preprocessing(
         )
     )
 
-    output = _output(result)
+    output = _output(adapter, result)
     assert output["normalized_source"] == (
         "import Mathlib  \ntheorem mathd_algebra_1 : (1 : Nat) = 1 := by  \n  rfl  \n"
     )
@@ -177,7 +177,7 @@ def test_preprocessing_reports_only_transformations_that_occurred(
         )
     )
 
-    output = _output(result)
+    output = _output(adapter, result)
     assert [item["applied"] for item in output["preprocessing"]] == [
         False,
         False,
@@ -206,7 +206,7 @@ def test_empty_optional_text_is_preserved_without_a_reported_rewrite(
         )
     )
 
-    output = _output(result)
+    output = _output(adapter, result)
     assert output[field] == ""
     assert [item["applied"] for item in output["preprocessing"]] == [
         True,
@@ -233,7 +233,7 @@ def test_incompatible_environment_has_explicit_diagnostics(tmp_path: Path) -> No
         )
     )
 
-    output = _output(result)
+    output = _output(adapter, result)
     assert {item["code"] for item in output["diagnostics"]} == {
         "EXECUTION_NOT_REQUESTED",
         "LEAN_VERSION_NOT_PINNED_RUNTIME",
@@ -266,7 +266,7 @@ def test_artifact_tampering_is_detected_by_store(tmp_path: Path) -> None:
             input=_proofnet_request(),
         )
     )
-    output = _output(result)
+    output = _output(adapter, result)
     stored = adapter.resources.artifacts.store.get(result.output["result_uri"])
 
     assert stored.payload["row_digest"] == output["row_digest"]
@@ -286,7 +286,7 @@ def test_materialization_preserves_split_and_leading_lines(tmp_path: Path) -> No
         )
     )
 
-    output = _output(result)
+    output = _output(adapter, result)
     assert output["split"] == "test"
     assert output["canonical_row"]["split"] == "test"
     assert str(output["normalized_source"]).startswith("\nimport Mathlib\n")
@@ -312,7 +312,7 @@ def test_materialization_preserves_trailing_spaces_inside_source(
         )
     )
 
-    assert "spaces  \\n" in str(_output(result)["normalized_source"])
+    assert "spaces  \\n" in str(_output(adapter, result)["normalized_source"])
 
 
 def test_model_backed_artifact_rejects_digest_tampering(tmp_path: Path) -> None:
@@ -336,10 +336,10 @@ def test_model_backed_artifact_rejects_digest_tampering(tmp_path: Path) -> None:
         )
     )
     assert result.output == replay.output
-    assert result.output["result"]["split"] == "test"
-    assert result.output["result"]["canonical_row"]["split"] == "test"
     result_uri = result.output["result_uri"]
     stored = store.get(result_uri)
+    assert stored.payload["split"] == "test"
+    assert stored.payload["canonical_row"]["split"] == "test"
     tampered = dict(stored.payload)
     tampered["row_digest"] = "sha256:" + "0" * 64
 

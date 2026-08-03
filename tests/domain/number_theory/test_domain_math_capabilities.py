@@ -37,6 +37,15 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
+def _stored_modular_residue_result(
+    domain_services: DomainTestServices,
+    result,
+) -> dict[str, object]:
+    stored = domain_services.core.store.get(result.output["result_uri"])
+    assert isinstance(stored.payload, dict)
+    return stored.payload
+
+
 def test_representative_exact_domain_results(domain_services) -> None:
     cases = (
         (
@@ -178,7 +187,8 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     assert result.obligations == ()
-    assert result.output["result"] == {
+    stored_result = _stored_modular_residue_result(domain_services, result)
+    assert stored_result == {
         "semantics_version": "modular-polynomial-residue-image.v1",
         "modulus": 7,
         "variable_order": ["x"],
@@ -208,9 +218,9 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
         ],
     }
     input_uri, result_uri = result.artifact_uris
-    stored_result = domain_services.core.store.get(result_uri)
-    assert stored_result.payload == result.output["result"]
-    assert stored_result.manifest.parents == (input_uri,)
+    stored_artifact = domain_services.core.store.get(result_uri)
+    assert stored_artifact.payload == stored_result
+    assert stored_artifact.manifest.parents == (input_uri,)
     assert result.relationships[0].relation_id == (
         "modular.polynomial_residue_image.relation"
     )
@@ -239,7 +249,7 @@ def test_modular_polynomial_residue_image_handles_multivariate_domains(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    output = result.output["result"]
+    output = _stored_modular_residue_result(domain_services, result)
     assert output["normalized_terms"] == [
         {"coefficient": 4, "exponents": [0, 1]},
         {"coefficient": 1, "exponents": [2, 0]},
@@ -265,7 +275,7 @@ def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
             input=_cubic_residue_payload(),
         )
     )
-    corrupted = deepcopy(result.output["result"])
+    corrupted = deepcopy(_stored_modular_residue_result(domain_services, result))
     corrupted["table"].pop()
 
     with pytest.raises(ValidationError, match="complete table length"):
@@ -297,7 +307,7 @@ def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    output = result.output["result"]
+    output = _stored_modular_residue_result(domain_services, result)
     assert output["modulus"] == 823543
     assert output["total_assignments"] == 1
     assert output["image"] == [0]

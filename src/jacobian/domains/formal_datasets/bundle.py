@@ -12,10 +12,10 @@ from jacobian.contracts.formal_datasets import (
 from jacobian.domains._examples import example
 from jacobian.formal_datasets import _materialize_operation
 from jacobian.operations import (
-    ComputedOperation,
     DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
+    MaterializedOperation,
 )
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
@@ -46,7 +46,7 @@ def build_formal_dataset_bundle() -> DomainBundle:
             f"mathlib-{MATHLIB_COMMIT}"
         ),
         capabilities=(
-            ComputedOperation(
+            MaterializedOperation(
                 capability_id="dataset.formal.materialize",
                 title="Materialize one pinned formal-dataset row",
                 description=(
@@ -89,6 +89,7 @@ def build_formal_dataset_bundle() -> DomainBundle:
                         },
                     ),
                 ),
+                version="3",
             ),
         ),
         diagnostics=DomainDiagnostics(

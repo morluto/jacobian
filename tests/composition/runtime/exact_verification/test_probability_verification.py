@@ -14,18 +14,6 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 
-
-def _forged_result_uri(runtime: Any, computed: Any, payload: dict[str, Any]) -> str:
-    source = runtime.core.store.get(computed.output["result_uri"])
-    return runtime.core.artifacts.put(
-        schema_uri=source.manifest.schema_uri,
-        semantics_uri=source.manifest.semantics_uri,
-        parents=source.manifest.parents,
-        payload=payload,
-        summary="adversarial probability result",
-    ).artifact_uri
-
-
 _FAIR_BIT = {
     "atoms": [
         {"value": _q(0), "probability": _q(1, 2)},
@@ -127,7 +115,10 @@ def test_probability_results_are_independently_replayed(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(capability_id),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": payload,
+                "candidate": computed.output["result"],
+            },
         )
     )
 
@@ -149,8 +140,7 @@ def test_probability_checker_rejects_forged_event_mass(
             input=payload,
         )
     )
-    source = authorized_complete_runtime.core.store.get(computed.output["result_uri"])
-    forged_candidate = deepcopy(source.payload)
+    forged_candidate = deepcopy(computed.output["result"])
     forged_candidate["event_probability"] = _q(1)
     forged_candidate["selected_atoms"] = _FAIR_BIT["atoms"]
 
@@ -158,11 +148,7 @@ def test_probability_checker_rejects_forged_event_mass(
         CapabilityRequest(
             capability_id=("probability.finite_distribution.event_probability.verify"),
             mode=CapabilityMode.VERIFY,
-            input={
-                "result_uri": _forged_result_uri(
-                    authorized_complete_runtime, computed, forged_candidate
-                )
-            },
+            input={"input": payload, "candidate": forged_candidate},
         )
     )
 
@@ -188,8 +174,7 @@ def test_probability_checker_rejects_forged_graph_reliability(
             input=payload,
         )
     )
-    source = authorized_complete_runtime.core.store.get(computed.output["result_uri"])
-    forged_candidate = deepcopy(source.payload)
+    forged_candidate = deepcopy(computed.output["result"])
     false_states = [dict(state) for state in forged_candidate["states"]]
     false_states[0]["terminals_connected"] = True
     forged_candidate["states"] = false_states
@@ -201,11 +186,7 @@ def test_probability_checker_rejects_forged_graph_reliability(
                 "probability.graph_reliability.connection_probability.verify"
             ),
             mode=CapabilityMode.VERIFY,
-            input={
-                "result_uri": _forged_result_uri(
-                    authorized_complete_runtime, computed, forged_candidate
-                )
-            },
+            input={"input": payload, "candidate": forged_candidate},
         )
     )
 

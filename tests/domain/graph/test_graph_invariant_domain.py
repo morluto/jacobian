@@ -80,7 +80,7 @@ def test_graph_invariant_family_boundaries_and_witnesses(domain_services) -> Non
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == expected
-        assert len(result.artifact_uris) == 2
+        assert result.artifact_uris == ()
 
     matching = domain_services.core.capabilities.invoke(
         CapabilityRequest(

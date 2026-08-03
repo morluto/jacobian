@@ -50,10 +50,11 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             )
             assert invoke.output_schema == CapabilityResult.model_json_schema()
 
-            with pytest.raises(MCPError):
+            with pytest.raises(MCPError) as unknown:
                 await client.call_tool(
                     "capability.describe", {"unknown_key": "rejected"}
                 )
+            assert '"code": "INVALID_INPUT"' in str(unknown.value)
 
             contract = json.loads(
                 (

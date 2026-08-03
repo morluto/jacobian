@@ -7,6 +7,7 @@ from pathlib import Path
 from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
     resolve_evidence,
     strict_submission_contract,
@@ -21,13 +22,14 @@ LIMITATION = (
     "This finite construction does not prove the general theorem in a proof assistant."
 )
 MAX_EVIDENCE_BYTES = 64 * 1024
+MAX_INPUT_BYTES = 1024 * 1024
 
 
 def _source_is_bound() -> bool:
     try:
         workspace_input = WORKSPACE / "input.json"
         if (
-            workspace_input.is_symlink()
+            not is_regular_bounded_file(workspace_input, max_bytes=MAX_INPUT_BYTES)
             or workspace_input.resolve().parent != WORKSPACE.resolve()
         ):
             return False
@@ -133,7 +135,7 @@ def _result(value: object) -> bool:
     return global_counts == Counter({1: 12, 2: 12, 3: 12, 4: 12})
 
 
-def _evidence(value: object) -> bool:
+def _evidence(value: object, result: object) -> bool:
     if (
         not isinstance(value, list)
         or len(value) != 1
@@ -146,10 +148,22 @@ def _evidence(value: object) -> bool:
     try:
         if not path.is_file() or path.stat().st_size > MAX_EVIDENCE_BYTES:
             return False
-        text = path.read_text().casefold()
+        text = path.read_text()
     except (OSError, UnicodeError):
         return False
-    return all(word in text for word in ("column", "row", "source position", "exactly"))
+    markers = [
+        line[12:].strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    try:
+        bound = json.loads(markers[0]) if len(markers) == 1 else None
+    except (ValueError, RecursionError):
+        return False
+    folded = text.casefold()
+    return bound == result and all(
+        word in folded for word in ("column", "row", "source position", "exactly")
+    )
 
 
 def _evaluate(submission: object) -> dict[str, float | bool]:
@@ -164,10 +178,11 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
         submission, verification_record_bound=False
     )
     envelope = isinstance(submission, dict)
-    mathematical = bool(
-        envelope and _source_is_bound() and _result(submission.get("result"))
+    input_integrity = bool(envelope and _source_is_bound())
+    mathematical = bool(envelope and _result(submission.get("result")))
+    evidence_valid = bool(
+        envelope and _evidence(submission.get("evidence"), submission.get("result"))
     )
-    evidence_valid = bool(envelope and _evidence(submission.get("evidence")))
     scope_accurate = bool(
         protocol
         and envelope
@@ -181,16 +196,24 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
         and not false_certification
     )
     correct_score = 1.0 if mathematical else 0.0
+    input_score = 1.0 if input_integrity else 0.0
     evidence_score = 1.0 if evidence_valid else 0.0
     scope_score = 1.0 if scope_accurate else 0.0
     assurance_score = 1.0 if assurance_calibrated else 0.0
     reward = (
-        min(correct_score, evidence_score, scope_score, assurance_score)
+        min(
+            correct_score,
+            input_score,
+            evidence_score,
+            scope_score,
+            assurance_score,
+        )
         if protocol
         else 0.0
     )
     return {
         "correctness": correct_score,
+        "input_integrity": input_score,
         "evidence_validity": evidence_score,
         "scope_accuracy": scope_score,
         "assurance_calibration": assurance_score,

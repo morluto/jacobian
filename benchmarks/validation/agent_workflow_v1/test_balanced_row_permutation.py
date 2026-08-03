@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from benchmarks.validation.agent_workflow_v1 import support
@@ -126,4 +127,45 @@ def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
     assert result["evidence_validity"] == 1.0
     assert result["scope_accuracy"] == 1.0
     assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_input_integrity_is_separate_from_correctness(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    (app / "input.json").unlink()
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["input_integrity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_keyword_only_evidence_without_result_binding_is_rejected(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text("column row source position exactly\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_symlinked_submission_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    original = app / "submission-original.json"
+    (app / "submission.json").rename(original)
+    (app / "submission.json").symlink_to(original)
+    result = support._run_verifier(task, app, logs)
+    assert result["reward"] == 0.0
+
+
+def test_nonregular_input_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    (app / "input.json").unlink()
+    os.mkfifo(app / "input.json")
+    result = support._run_verifier(task, app, logs)
+    assert result["input_integrity"] == 0.0
     assert result["reward"] == 0.0

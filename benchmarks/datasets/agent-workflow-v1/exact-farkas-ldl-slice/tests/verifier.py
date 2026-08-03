@@ -191,6 +191,7 @@ def main():
     )
     ceiling_ok = bool(
         isinstance(submission, dict)
+        and isinstance(submission.get("claimed_assurance"), str)
         and submission.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED"}
     )
     math_correct = bool(

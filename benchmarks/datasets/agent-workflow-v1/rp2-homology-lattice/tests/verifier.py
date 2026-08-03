@@ -31,17 +31,29 @@ _AFFIRMATIVE_PROOF_ASSISTANT = re.compile(
     r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b",
     re.I,
 )
-_NEGATION = re.compile(r"\b(?:not|no|without|doesn['']?t|cannot|never)\b", re.I)
+_NEGATED_PROOF_ASSISTANT = re.compile(
+    r"\b(?:not|no|without|doesn['']?t|cannot|never)\b[^.;\n]{0,30}"
+    r"\b(?:proof assistant|lean)\b",
+    re.I,
+)
 
 
 def _evidence_denies_proof_assistant(text: str) -> bool:
-    """Reject evidence that affirmatively claims proof-assistant verification."""
+    """Reject evidence that affirmatively claims proof-assistant verification.
+
+    A clause with an affirmative proof-assistant claim is only safe when the
+    negation appears within the same clause and within a small window of the
+    proof-assistant phrase, so an unrelated negation elsewhere in the clause
+    does not rescue a prohibited certification assertion.
+    """
 
     folded = text.casefold()
     if "proof assistant" not in folded and "lean" not in folded:
         return True
     for clause in re.split(r"[.;\n]", folded):
-        if _AFFIRMATIVE_PROOF_ASSISTANT.search(clause) and not _NEGATION.search(clause):
+        if _AFFIRMATIVE_PROOF_ASSISTANT.search(clause) and not (
+            _NEGATED_PROOF_ASSISTANT.search(clause)
+        ):
             return False
     return True
 
@@ -156,17 +168,15 @@ def _coordinate_matrix(
             row.append(boundary.get(edge, 0))
         expected.append(row)
     matrix = value["cycle_coordinate_matrix"]
-    if (
-        not isinstance(matrix, list)
-        or len(matrix) != 10
-        or any(
-            not isinstance(row, list)
-            or len(row) != 10
-            or any(type(item) is not int for item in row)
-            for row in matrix
-        )
-        or matrix != expected
+    if not isinstance(matrix, list) or len(matrix) != 10 or any(
+        not isinstance(row, list)
+        or len(row) != 10
+        or any(type(item) is not int for item in row)
+        for row in matrix
     ):
+        return None
+    transposed = [list(column) for column in zip(*expected, strict=True)]
+    if matrix != expected and matrix != transposed:
         return None
     return expected
 
@@ -249,7 +259,7 @@ def _evidence(value: object, result: object) -> bool:
         bound == result
         and all(
             word in text.casefold()
-            for word in ("cycle", "determinant", "index", "z/2z")
+            for word in ("cycle", "determinant", "z/2z")
         )
         and _evidence_denies_proof_assistant(text)
     )

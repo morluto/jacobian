@@ -154,3 +154,52 @@ def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
     assert result["scope_accuracy"] == 1.0
     assert result["assurance_calibration"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_affirmative_claim_with_unrelated_negation_is_rejected(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        evidence.read_text()
+        + "\nA proof assistant verified this result, not merely computed it."
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_transposed_coordinate_matrix_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    matrix = submission["result"]["cycle_coordinate_matrix"]
+    transposed = [list(column) for column in zip(*matrix, strict=True)]
+    submission["result"]["cycle_coordinate_matrix"] = transposed
+    support._bind_result_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+
+
+def test_evidence_without_hidden_keyword_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    original = evidence.read_text()
+    marker_line = next(
+        (line for line in original.splitlines() if line.startswith("RESULT_JSON:")),
+        None,
+    )
+    prose = (
+        "The cycle-coordinate matrix has determinant -2, so the quotient "
+        "lattice has order 2 and H1 is Z/2Z."
+    )
+    evidence.write_text(
+        prose + ("\n" + marker_line + "\n" if marker_line else "\n")
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0

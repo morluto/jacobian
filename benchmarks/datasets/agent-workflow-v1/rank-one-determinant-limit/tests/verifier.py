@@ -12,6 +12,10 @@ from verifier_support import (
 
 W = Path("/app")
 E = Path("/tests")
+FROZEN_LIMITATIONS = [
+    "NO_FLOATING_POINT_SPECTRAL_EVIDENCE",
+    "NO_GENERAL_MATRIX_FAMILY_BEYOND_THE_FROZEN_RANK_ONE_FORM",
+]
 
 
 def rat(value):
@@ -20,10 +24,7 @@ def rat(value):
     n, d = value["numerator"], value["denominator"]
     if type(n) is not int or type(d) is not int or d <= 0:
         raise ValueError
-    q = Fraction(n, d)
-    if (q.numerator, q.denominator) != (n, d):
-        raise ValueError
-    return q
+    return Fraction(n, d)
 
 
 def frozen_valid():
@@ -61,9 +62,12 @@ def sample_valid(sample):
         )
         linear = -product * reciprocal_sum
         return bool(
-            sample["diagonal_product"] == product
+            type(sample["diagonal_product"]) is int
+            and sample["diagonal_product"] == product
+            and type(sample["determinant_constant"]) is int
             and sample["determinant_constant"] == product
             and linear.denominator == 1
+            and type(sample["determinant_linear"]) is int
             and sample["determinant_linear"] == linear.numerator
             and rat(sample["reciprocal_sum"]) == reciprocal_sum
             and rat(sample["lambda"]) == 1 / reciprocal_sum
@@ -84,7 +88,15 @@ def certificate_valid(result):
         a, b, c = [rat(x) for x in result["partial_fraction_coefficients"]]
         partial = a + b + c == 0 and a - c == 0 and -b == 1
         samples = result["samples"]
-        ns = [sample.get("n") for sample in samples]
+        if not isinstance(samples, list):
+            return False
+        # Validate each sample is a dict before calling .get() so a scalar
+        # element does not raise AttributeError outside the except clause.
+        ns = []
+        for sample in samples:
+            if not isinstance(sample, dict):
+                return False
+            ns.append(sample.get("n"))
         samples_ok = (
             6 <= len(samples) <= 12
             and len(set(ns)) == len(ns)
@@ -139,10 +151,16 @@ def main():
     result = submission.get("result") if isinstance(submission, dict) else None
     correctness = bool(contract and frozen_valid() and certificate_valid(result))
     evidence = bool(contract and evidence_valid(submission.get("evidence"), result))
+    limitations_ok = bool(
+        contract
+        and isinstance(submission.get("limitations"), list)
+        and submission.get("limitations") == FROZEN_LIMITATIONS
+    )
     scope = bool(
         contract
         and submission.get("scope") == expected["required_scope"]
         and submission.get("completeness") == "COMPLETE"
+        and limitations_ok
     )
     assurance = bool(
         contract

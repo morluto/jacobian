@@ -94,3 +94,76 @@ def test_verified_claim_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["false_certification"] is True
     assert result["reward"] == 0.0
+
+
+def test_scalar_sample_elements_rejected_without_crash(tmp_path: Path) -> None:
+    """A malformed submission with scalar sample elements is rejected cleanly
+    instead of crashing with AttributeError before reward.json is written.
+    """
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["result"]["samples"] = [1, 2, 3, 4, 5, 6]
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_empty_limitations_rejected(tmp_path: Path) -> None:
+    """An otherwise valid submission with empty limitations does not receive
+    full reward because the frozen limitations are part of scope scoring.
+    """
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["limitations"] = []
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] < 1.0
+
+
+def test_wrong_limitations_rejected(tmp_path: Path) -> None:
+    """Arbitrary limitation strings do not satisfy the frozen limitations."""
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["limitations"] = ["some other limitation"]
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] < 1.0
+
+
+def test_float_determinant_coefficients_rejected(tmp_path: Path) -> None:
+    """Determinant coefficients serialized as floats are rejected even though
+    Python numeric equality would accept them.
+    """
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    sample = submission["result"]["samples"][0]
+    product = sample["diagonal_product"]
+    sample["diagonal_product"] = float(product)
+    sample["determinant_constant"] = float(product)
+    sample["determinant_linear"] = float(sample["determinant_linear"])
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unreduced_rational_coefficients_accepted(tmp_path: Path) -> None:
+    """Equivalent unreduced rationals (e.g. 2/12 for 1/6) are accepted as the
+    same Fraction value.
+    """
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    # The limit is 4/1; submit as 8/2 (unreduced) — but the limit must equal 4.
+    # Instead, modify a reciprocal_sum that has a non-trivial denominator.
+    # Find a sample whose reciprocal_sum has a reducible representation.
+    sample = submission["result"]["samples"][0]
+    n = sample["n"]
+    reciprocal = sum((Fraction(1, i**3 - i) for i in range(2, n + 1)), Fraction())
+    # Double both numerator and denominator to create an unreduced form.
+    unreduced = {
+        "numerator": reciprocal.numerator * 2,
+        "denominator": reciprocal.denominator * 2,
+    }
+    sample["reciprocal_sum"] = unreduced
+    write_bound(app, submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["reward"] == pytest.approx(1.0)

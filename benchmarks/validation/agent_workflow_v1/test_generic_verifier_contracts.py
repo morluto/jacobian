@@ -123,7 +123,9 @@ def test_verifiers_reject_replaced_workspace_inputs(
 
 
 @pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
-@pytest.mark.parametrize("replacement", ("{", "[]"), ids=("invalid-json", "wrong-shape"))
+@pytest.mark.parametrize(
+    "replacement", ("{", "[]"), ids=("invalid-json", "wrong-shape")
+)
 def test_verifiers_fail_closed_on_malformed_workspace_inputs(
     tmp_path: Path,
     task_name: str,

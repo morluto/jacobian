@@ -2,4 +2,4 @@
 set -eu
 mkdir -p /app/evidence
 cp /solution/submission.json /app/submission.json
-cp /solution/generality-certificate.json /app/evidence/generality-certificate.json
+cp /solution/answer.txt /app/evidence/answer.txt

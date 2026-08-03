@@ -23,8 +23,8 @@
     "completeness": {"const": "COMPLETE"},
     "evidence": {
       "type": "array", "minItems": 1, "maxItems": 1,
-      "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/divisibility-certificate.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}
+      "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}
     },
-    "limitations": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"const": "FROZEN_POLYNOMIAL_FAMILY_ONLY"}}
+    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
   }
 }

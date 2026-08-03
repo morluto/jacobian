@@ -38,6 +38,7 @@
         },
         "extra_allowed_hosts": {
           "type": "array",
+          "uniqueItems": true,
           "items": {"type": "string", "minLength": 1},
           "description": "Run-specific hostnames merged into the environment network baseline for the agent phase."
         }

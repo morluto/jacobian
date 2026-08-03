@@ -27,7 +27,6 @@ RATIONAL_TASK = "rational-linear-solution"
 RESOURCE_DERIVED_TASKS = (
     "autoformalization-semantic-audit",
     "calendar-good-days-audit",
-    "covering-path-lift-bijection",
     "finite-magma-countermodel",
     "gaussian-moment-generality-audit",
     "generated-lemma-vacuity-audit",
@@ -84,19 +83,7 @@ def _write_json(path: Path, value: object) -> None:
 
 
 def _bind_result_evidence(app: Path, submission: dict) -> None:
-    evidence_path = app / submission["evidence"][0]["path"]
-    if evidence_path.suffix == ".json":
-        _write_json(
-            evidence_path,
-            {
-                "schema_version": "1",
-                "task_id": submission["task_id"],
-                "result": submission["result"],
-                "limitations": submission["limitations"],
-            },
-        )
-        submission["evidence"][0]["sha256"] = _digest(evidence_path)
-        return
+    evidence_path = app / "evidence" / "answer.txt"
     lines = evidence_path.read_text().splitlines()
     marker = "RESULT_JSON: " + json.dumps(
         submission["result"], sort_keys=True, separators=(",", ":")
@@ -193,9 +180,8 @@ def _prepare_case(
     (app / "evidence").mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment" / "input.json", app / "input.json")
+    shutil.copy2(task / "solution" / "answer.txt", app / "evidence" / "answer.txt")
     submission = json.loads((task / "solution" / "submission.json").read_text())
-    evidence_path = Path(submission["evidence"][0]["path"])
-    shutil.copy2(task / "solution" / evidence_path.name, app / evidence_path)
     submission.pop("verification_record_uri", None)
 
     if scenario == "computed":

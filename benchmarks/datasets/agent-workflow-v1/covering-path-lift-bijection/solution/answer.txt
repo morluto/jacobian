@@ -1,0 +1,7 @@
+Choose the base path x0,x1,x2. Unique lifting sends x0_0 to x2_1,
+x0_1 to x2_2, and x0_2 to x2_0. Each step is forced because the covering
+map induces a bijection from the neighbors of each cover vertex to the
+neighbors of its image. Lifting the reversed path x2,x1,x0 from those three
+endpoints returns x0_0, x0_1, and x0_2 respectively. Therefore endpoint
+lifting is a bijection between the two fibers, with reverse-path lifting as
+its inverse.

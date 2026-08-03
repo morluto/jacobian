@@ -8,6 +8,6 @@ Prove the frozen universal claim by connecting three layers rather than by const
 
 You may choose any modulus within the frozen bounds. Submit its complete, sorted set of quadratic residues and the exact target residue. The verifier will independently enumerate all zero-, one-, two-, and three-square residue sums; checking only selected decompositions is insufficient.
 
-Write `/app/submission.json` matching the supplied schema. Do not claim machine verification or a classification beyond the frozen theorem. Report the limitation code `SQUAREFREE_KERNEL_LEMMA_NOT_FORMALLY_CHECKED`.
+Write `/app/submission.json` matching the supplied schema. Bind one concise derivation at `/app/evidence/answer.txt`. Do not claim machine verification or a classification beyond the frozen theorem.
 
-Write `/app/evidence/independence-certificate.json` as a JSON object with exactly `schema_version`, `task_id`, `result`, and `limitations`. Use schema version `"1"` and copy the other three values exactly from the submission, so the certificate is unambiguously bound to it.
+Include one line beginning `RESULT_JSON:` in the evidence file, followed by the JSON serialization of the submitted `result` object. The derivation must state the squarefree-kernel product equivalence, the class-size count identity, the distinct-class transversal step, and the concrete modular certificate.

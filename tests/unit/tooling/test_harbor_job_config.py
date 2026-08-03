@@ -42,7 +42,7 @@ def test_observation_mcp_config_is_external_to_the_task_job() -> None:
         {
             "name": "jacobian",
             "transport": "streamable-http",
-            "url": "http://127.0.0.1:8000/mcp",
+            "url": "http://jacobian:8000/mcp",
         }
     ]
 

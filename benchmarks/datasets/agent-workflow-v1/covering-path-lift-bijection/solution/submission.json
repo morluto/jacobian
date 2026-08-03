@@ -24,6 +24,6 @@
   "claimed_assurance": "COMPUTED",
   "scope": "Exact finite graph-cover fiber bijection induced by the submitted path.",
   "completeness": "COMPLETE",
-  "evidence": [{"path": "evidence/path-lifts.json", "sha256": "sha256:5970c14b2733a1a9b0e0cc2c6fb00376b8c7ff10d50c23efaf7674b15f56495a"}],
-  "limitations": ["GENERAL_COVERING_THEOREM_NOT_CERTIFIED"]
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:cc45a522fd284baf8c9da26937e06c3251c16af47d77ed5ecc43389ab1610284"}],
+  "limitations": ["The general topological covering-space theorem is not externally certified."]
 }

@@ -20,6 +20,6 @@
   "claimed_assurance": "COMPUTED",
   "scope": "ALL_FINITE_SETS_OF_POSITIVE_INTEGERS_WITH_2023_SQUARE_PRODUCT_ORDERED_PAIRS",
   "completeness": "COMPLETE",
-  "evidence": [{"path": "evidence/independence-certificate.json", "sha256": "sha256:e6813f65150e2d0123c3289c00499d65fb5adc33f8986e1a805f76e5a6b44266"}],
-  "limitations": ["SQUAREFREE_KERNEL_LEMMA_NOT_FORMALLY_CHECKED"]
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:85a23966430faf9f45c9076550f4eb7f74e49e1d99787951cc629d67b0c9321a"}],
+  "limitations": ["The verifier replays the modular obstruction and structured reduction but does not machine-check a formal proof of the squarefree-kernel lemma."]
 }

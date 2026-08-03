@@ -1,1 +1,8 @@
-{"task_id":"jacobian/jcb-postdoc-004","conclusion":"COUNTEREXAMPLE_EXISTS","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-004","answer-visible diagnostic"],"expected_conclusion":"COUNTEREXAMPLE_EXISTS","expected_key_facts":{"vertices":"18","alpha":"4","l_avg":"3"}}
+{
+  "task_id": "jacobian/jcb-postdoc-004",
+  "conclusion": "COUNTEREXAMPLE_EXISTS",
+  "maximum_assurance": "COMPUTED",
+  "required_scope": "jacobian/jcb-postdoc-004 public answer-visible witness with at most 20 vertices",
+  "required_limitations": ["PUBLIC_ANSWER_VISIBLE", "BENCHMARK_VERIFIER_NOT_PRODUCT_AUTHORITY"],
+  "evidence_path": "evidence/counterexample.json"
+}

@@ -49,8 +49,6 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: "0.11.28"
       - name: Restore benchmark timing history
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -122,8 +120,6 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: "0.11.28"
       - name: Validate benchmark contracts, schemas, and generated records
         run: make harbor-validate
 
@@ -141,8 +137,6 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: "0.11.28"
       - name: Validate vendored verifier support and committed task digests
         run: make harbor-validate
 
@@ -160,8 +154,6 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: "0.11.28"
       - name: Build and validate the content-bound benchmark inventory
         run: make benchmark-inventory
 
@@ -190,8 +182,6 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: "0.11.28"
       - name: Run exact task Oracle
         env:
           DATASET: ${{ matrix.dataset }}
@@ -288,8 +278,6 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: "0.11.28"
       - name: Download Oracle artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

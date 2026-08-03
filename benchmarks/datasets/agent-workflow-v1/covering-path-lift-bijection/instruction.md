@@ -10,11 +10,8 @@ Your certificate must show that every trace projects to its declared base
 path, every step is a cover edge, each lift is the unique available continuation,
 and reverse lifting returns every source point. Merely reporting equal fiber
 cardinalities is incomplete. Write the structured result to `submission.json`
-using `submission_schema.json`. Write `evidence/path-lifts.json` as a JSON
-object with exactly `schema_version`, `task_id`, `result`, and `limitations`.
-Use schema version `"1"`; copy the other three values exactly from the
-submission, then bind that evidence by SHA-256.
+using `submission_schema.json`, explain the construction in
+`evidence/answer.txt`, and bind that evidence by SHA-256.
 
 The verifier checks this finite covering exactly but does not certify the
-general topological theorem, so claim at most `COMPUTED` and report the
-limitation code `GENERAL_COVERING_THEOREM_NOT_CERTIFIED`.
+general topological theorem, so claim at most `COMPUTED`.

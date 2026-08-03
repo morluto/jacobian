@@ -78,19 +78,6 @@ def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> 
     assert "ci:benchmark-full" in workflow
 
 
-def test_benchmark_workflows_pin_the_repository_uv_version() -> None:
-    expected = (ROOT / ".uv-version").read_text(encoding="utf-8").strip()
-    for relative in (
-        ".github/workflows/benchmarks.yml",
-        ".github/workflows/heldout-benchmarks.yml",
-    ):
-        workflow = (ROOT / relative).read_text(encoding="utf-8")
-        setup_count = workflow.count("astral-sh/setup-uv@")
-
-        assert setup_count > 0
-        assert workflow.count(f'version: "{expected}"') == setup_count
-
-
 def test_oracle_workers_do_not_repeat_benchmark_contract_suite() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]

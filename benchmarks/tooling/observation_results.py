@@ -759,19 +759,6 @@ def collect_heldout_evidence(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    config_parser = subparsers.add_parser("validate-config")
-    config_parser.add_argument("--config", type=Path, required=True)
-    config_parser.add_argument(
-        "--condition", choices=("control", "treatment"), required=True
-    )
-    routing_parser = subparsers.add_parser("route")
-    routing_parser.add_argument("--dataset", required=True)
-    routing_parser.add_argument(
-        "--condition", choices=("control", "treatment"), required=True
-    )
-    routing_parser.add_argument("--config", type=Path, required=True)
-    routing_parser.add_argument("--result", type=Path)
-    routing_parser.add_argument("--output", type=Path, required=True)
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("--dataset", required=True)
     validate_parser.add_argument("--condition", required=True)
@@ -792,32 +779,6 @@ def main() -> int:
     compare_parser.add_argument("--treatment", type=Path, required=True)
     compare_parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "validate-config":
-        from benchmarks.tooling.observation_routing import resolved_config_failures
-
-        config = _read_json(args.config)
-        if not isinstance(config, dict):
-            raise HarborSuiteError("resolved Harbor config must be an object")
-        failures = resolved_config_failures(config, condition=args.condition)
-        for failure in failures:
-            print(failure)
-        return 1 if failures else 0
-    if args.command == "route":
-        from benchmarks.tooling.observation_routing import build_routing_observation
-
-        report, failures = build_routing_observation(
-            dataset=args.dataset,
-            condition=args.condition,
-            resolved_config_path=args.config,
-            result_path=args.result,
-        )
-        _validate_contract(report, "routing-observation.schema.json")
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(
-            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
-        print(args.output)
-        return 1 if failures else 0
     if args.command == "validate":
         runtime = _read_json(args.runtime_snapshot) if args.runtime_snapshot else None
         heldout = _read_json(args.heldout_manifest) if args.heldout_manifest else None

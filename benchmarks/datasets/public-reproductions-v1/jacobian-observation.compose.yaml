@@ -1,8 +1,4 @@
 services:
-  main:
-    depends_on:
-      jacobian-ready:
-        condition: service_completed_successfully
   jacobian:
     image: ${JACOBIAN_IMAGE:-jacobian:local}
     command:
@@ -18,23 +14,5 @@ services:
       - /state
     volumes:
       - jacobian-state:/state
-  jacobian-ready:
-    image: ${JACOBIAN_IMAGE:-jacobian:local}
-    entrypoint:
-      - uv
-      - run
-      - --no-sync
-      - python
-      - -m
-      - jacobian.adapters.mcp.readiness
-    command:
-      - http://jacobian:8000/mcp
-      - --require-capability
-      - graph.search.atlas
-      - --timeout-seconds
-      - "120"
-    depends_on:
-      jacobian:
-        condition: service_started
 volumes:
   jacobian-state: {}

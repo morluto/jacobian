@@ -1159,3 +1159,79 @@ def test_periodic_orbit_obstruction_rejects_corrupted_mobius_coefficient(
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_periodic_orbit_obstruction_accepts_sign_equivalent_residue_vectors(
+    tmp_path: Path,
+) -> None:
+    """Divisibility is invariant under multiplication by -1, so [1, -1] is
+    a valid sign-equivalent alternative to [-1, 1] for residue coefficients.
+    """
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    for reduction in submission["result"]["modular_reductions"]:
+        reduction["residue_coefficients"] = [1, -1]
+    _bind_periodic_orbit_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_periodic_orbit_obstruction_rejects_boolean_coefficients(
+    tmp_path: Path,
+) -> None:
+    """Boolean values must not spoof integer coefficients in any array."""
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["exact_period_coefficients"] = [True, -1, -1, True]
+    _bind_periodic_orbit_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_periodic_orbit_obstruction_rejects_boolean_residue_coefficients(
+    tmp_path: Path,
+) -> None:
+    """Boolean values in residue coefficient arrays must also be rejected."""
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["result"]["modular_reductions"][0]["residue_coefficients"] = [True, -1]
+    _bind_periodic_orbit_evidence(app, submission)
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_periodic_orbit_obstruction_rejects_oversized_submission(
+    tmp_path: Path,
+) -> None:
+    """An oversized submission.json must be rejected before parsing to avoid
+    OOM or timeout in the memory-limited verifier container.
+    """
+    task, app, logs = _prepare_periodic_orbit_case(tmp_path)
+    submission_path = app / "submission.json"
+    submission_path.write_text("[" * 2_000_000 + "1" + "]" * 2_000_000)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_periodic_orbit_obstruction_schema_hides_proof_steps() -> None:
+    """The agent-visible schema must not reveal the infinite-prime and
+    polynomial-identity proof step constants.
+    """
+    task = support._task("periodic-orbit-polynomial-obstruction")
+    schema = json.loads((task / "environment" / "submission_schema.json").read_text())
+    result_props = schema["properties"]["result"]["properties"]
+    assert "const" not in result_props["infinite_prime_step"]
+    assert "const" not in result_props["polynomial_identity_step"]

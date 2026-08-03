@@ -67,3 +67,42 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["reward"] == 0.0
     assert result["false_certification"] is True
+
+
+def test_unhashable_duplicate_member_is_cleanly_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["duplicate_groups"] = [["cube_z1", []]]
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+
+
+def test_hyphenated_limitation_phrasing_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = ["Not proof-assistant verified."]
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+
+
+def test_affirmative_proof_assistant_limitation_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = ["A proof assistant verified this result."]
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0

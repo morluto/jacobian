@@ -136,6 +136,16 @@ def test_product_ci_publishes_a_provenance_bound_plan_receipt() -> None:
     assert "plan-receipt-digest" in workflow
 
 
+def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
+    for workflow_name in ("ci.yml", "benchmarks.yml"):
+        workflow = (ROOT / ".github/workflows" / workflow_name).read_text(
+            encoding="utf-8"
+        )
+
+        assert "Plan receipt: \\`$(python" in workflow
+        assert "Plan receipt: \\\\`$(python" not in workflow
+
+
 def test_required_ci_gates_fail_when_the_plan_is_cancelled() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 

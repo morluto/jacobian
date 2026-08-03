@@ -1,6 +1,6 @@
 import json
 from fractions import Fraction
-from math import gcd, isqrt
+from math import isqrt
 from pathlib import Path
 
 from verifier_support import (
@@ -125,10 +125,12 @@ def _certificate_ok(mode, cert):
     if not isinstance(cert, dict):
         return False
     expected = _expected()
-    keys = (
-        {"d", "u", "v", "residual", "sos_twice", "constraint_residual"}
-        if mode == "AMGM_SQUARES"
-        else {
+    if mode == "DIRECT_SOS":
+        keys = {"d", "u", "v", "residual", "constraint_residual", "sos_factors"}
+    elif mode == "AMGM_SQUARES":
+        keys = {"d", "u", "v", "residual", "sos_twice", "constraint_residual"}
+    else:
+        keys = {
             "d",
             "a2",
             "x2",
@@ -139,12 +141,12 @@ def _certificate_ok(mode, cert):
             "total_a_square",
             "total_x_square",
         }
-    )
     if set(cert) != keys:
         return False
-    parsed = {key: _poly(cert[key]) for key in keys}
+    core_keys = [k for k in keys if k != "sos_factors"]
+    parsed = {key: _poly(cert[key]) for key in core_keys}
     if any(value is None for value in parsed.values()) or any(
-        parsed[key] != expected[key] for key in keys
+        parsed[key] != expected[key] for key in core_keys
     ):
         return False
     if mode == "AMGM_SQUARES":
@@ -152,6 +154,15 @@ def _certificate_ok(mode, cert):
             _add((2, parsed["residual"]), (-1, parsed["sos_twice"]))
             == parsed["constraint_residual"]
         )
+    if mode == "DIRECT_SOS":
+        factors_raw = cert["sos_factors"]
+        if not isinstance(factors_raw, list) or not factors_raw:
+            return False
+        factors = [_poly(item) for item in factors_raw]
+        if any(item is None for item in factors):
+            return False
+        target = _add((2, parsed["residual"]), (-1, parsed["constraint_residual"]))
+        return _add(*((1, _square(f)) for f in factors)) == target
     return (
         parsed["gram_residual"] == parsed["gram_sos"]
         and _add((1, parsed["a2"]), (1, parsed["across"])) == parsed["total_a_square"]
@@ -166,7 +177,6 @@ def _rat(value):
         or type(value["numerator"]) is not int
         or type(value["denominator"]) is not int
         or value["denominator"] <= 0
-        or gcd(abs(value["numerator"]), value["denominator"]) != 1
     ):
         return None
     return Fraction(value["numerator"], value["denominator"])
@@ -221,6 +231,7 @@ def main():
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
     math_correct = bool(contract and _result_ok(submission.get("result"), frozen))

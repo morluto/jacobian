@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["difficulty-provisional", "regression", "sharpness", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-dataset-derived-symbolic-proof"
-fixture_digest = "sha256:908c22038b1b64360d7400d9979eaa9da5e97a902f5f9403a672dc8f2c23b3f4"
+fixture_digest = "sha256:bdeddae9eda9a3e64b92b380ba8f2e7c0239b35bd79f0c9ec4764846f414ec88"
 derivation = "Derived from AI4Math/IneqMath train row 1 at revision 3c7c32c786eb77117f3476d7f6d9af8419fa6ecc."
 [agent]
 timeout_sec = 600.0

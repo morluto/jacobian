@@ -1,0 +1,1 @@
+The machine-readable resolution certificate is stored in resolution-proof.json.

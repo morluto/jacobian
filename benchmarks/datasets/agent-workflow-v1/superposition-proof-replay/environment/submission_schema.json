@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/superposition-proof-replay"},
+    "conclusion": {"enum": ["PROOF_RECONSTRUCTED", "NO_PROOF_FOUND", "UNSUPPORTED"]},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axioms", "steps", "root"],
+      "properties": {
+        "axioms": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 8}},
+        "steps": {
+          "type": "array", "minItems": 1, "maxItems": 7,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["child", "parents"],
+            "properties": {
+              "child": {"type": "integer", "minimum": 1, "maximum": 8},
+              "parents": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 8}}
+            }
+          }
+        },
+        "root": {"const": 7}
+      }
+    },
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "scope": {"const": "binary first-order resolution replay over the eight frozen clauses"},
+    "completeness": {"const": "COMPLETE"},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/resolution-proof.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "limitations": {"type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true, "items": {"const": "FROZEN_RESOLUTION_CALCULUS_ONLY"}}
+  }
+}

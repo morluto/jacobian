@@ -207,6 +207,28 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
 
     assert _comparison_job(control) == _comparison_job(treatment)
 
+    heldout_treatment = {
+        "environment": {
+            "extra_docker_compose": [
+                "benchmarks/config/agent-eval-proxy.compose.yaml",
+                "/tmp/rendered/c2.compose.json",
+            ]
+        },
+        "agents": [
+            {
+                "name": "codex",
+                "mcp_servers": [
+                    {
+                        "name": "jacobian",
+                        "transport": "streamable-http",
+                        "url": "http://jacobian:8000/mcp",
+                    }
+                ],
+            }
+        ],
+    }
+    assert _comparison_job(control) == _comparison_job(heldout_treatment)
+
     treatment["environment"]["extra_docker_compose"].append("unexpected.yaml")
     assert _comparison_job(control) != _comparison_job(treatment)
 

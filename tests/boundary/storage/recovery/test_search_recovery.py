@@ -13,6 +13,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from search_orchestration_support import _install_search_plugin, _request
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.discovery import ExperimentState
@@ -22,7 +23,6 @@ from jacobian.contracts.search import (
     SearchStopReason,
 )
 from jacobian.runtime import create_runtime
-from search_orchestration_support import _install_search_plugin, _request
 
 
 def test_resume_rejects_archive_page_rebound_to_another_plugin(

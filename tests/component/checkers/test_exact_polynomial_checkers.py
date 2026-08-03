@@ -3,10 +3,6 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from jacobian_checkers.exact_domain_operations import (
-    check_polynomial_gcd,
-    check_polynomial_square_free,
-)
 from tests.component.checkers.exact_domain_checker_support import (
     _POLY_CASES,
     _poly,
@@ -15,6 +11,10 @@ from tests.component.checkers.exact_domain_checker_support import (
 )
 from tests.support.rationals import rational_payload as _q
 from tests.unit.contracts.artifacts import canonical_digest as _digest
+
+from jacobian_checkers.exact_domain_operations import (
+    check_polynomial_square_free,
+)
 
 
 def test_square_free_checker_normalizes_flint_factors_to_monic_contract() -> None:

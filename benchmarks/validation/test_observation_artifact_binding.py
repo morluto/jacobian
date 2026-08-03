@@ -1,4 +1,5 @@
 """Tests for observation evidence v2 field binding, snapshot/harbor-version resolution, and fail-closed behavior."""
+
 from __future__ import annotations
 
 import json
@@ -11,13 +12,11 @@ from benchmarks.tooling.observation_results import (
     build_observation_evidence,
 )
 from benchmarks.validation.observation_results_support import (
-    _DIGEST,
     _HARBOR_VERSION,
     _SNAPSHOT_ID,
     _write_observation_job,
     _write_result,
 )
-
 
 # ---------------------------------------------------------------------------
 # Normalization integration (v2 bindings)

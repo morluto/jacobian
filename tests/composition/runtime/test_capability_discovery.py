@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from tests.composition.runtime.capability_service_support import (
+    TEST_RUNTIME,
+    DiscoveryAdapter,
+)
 from tests.support.services import DomainTestServices
 
 from jacobian.capability_service import CapabilityError
@@ -14,11 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
 )
 from jacobian.runtime.model import JacobianRuntime
-
-from tests.composition.runtime.capability_service_support import (
-    TEST_RUNTIME,
-    DiscoveryAdapter,
-)
 
 
 def test_installed_capability_discovery_is_compact_deterministic_and_transparent(

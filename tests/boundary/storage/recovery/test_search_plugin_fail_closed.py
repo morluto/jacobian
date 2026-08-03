@@ -10,13 +10,13 @@ counterexample.
 from __future__ import annotations
 
 import pytest
+from search_orchestration_support import _install_search_plugin, _request
 
 from jacobian.contracts.discovery import ExperimentState
 from jacobian.contracts.evidence import WitnessRole
 from jacobian.contracts.search import SearchCheckpoint, SearchStopReason
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StorageLimits
-from search_orchestration_support import _install_search_plugin, _request
 
 
 def test_proposer_timeout_fails_closed(fresh_complete_runtime) -> None:

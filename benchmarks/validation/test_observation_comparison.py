@@ -1,4 +1,5 @@
 """Tests for observation comparison behavior (preserved v2 public contract)."""
+
 from __future__ import annotations
 
 from copy import deepcopy

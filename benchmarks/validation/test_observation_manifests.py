@@ -1,4 +1,5 @@
 """Tests for manifest-driven artifact collection, source-reuse detection, and artifact path hygiene."""
+
 from __future__ import annotations
 
 import json

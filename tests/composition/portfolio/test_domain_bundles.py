@@ -187,9 +187,7 @@ def _all_operation_ids() -> set[str]:
 def test_installed_bundles_expose_operations() -> None:
     actual = _all_operation_ids()
     assert actual, "expected at least one DomainBundle operation"
-    assert len(actual) == sum(
-        len(bundle.capabilities) for bundle in ALL_BUNDLES
-    )
+    assert len(actual) == sum(len(bundle.capabilities) for bundle in ALL_BUNDLES)
 
 
 def test_unique_ids_within_each_bundle() -> None:

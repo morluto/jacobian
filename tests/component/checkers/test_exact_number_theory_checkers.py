@@ -6,17 +6,17 @@ from itertools import product
 from typing import Any
 
 import pytest
+from tests.component.checkers.exact_domain_checker_support import (
+    _NUMBER_THEORY_CASES,
+    _request,
+)
+from tests.unit.contracts.artifacts import canonical_digest as _digest
 
 from jacobian_checkers.exact_domain_operations import (
     check_integer_powerful_number,
     check_integer_prime_factorization,
     check_modular_polynomial_residue_image,
 )
-from tests.component.checkers.exact_domain_checker_support import (
-    _NUMBER_THEORY_CASES,
-    _request,
-)
-from tests.unit.contracts.artifacts import canonical_digest as _digest
 
 
 def _modular_checker_request() -> dict[str, Any]:
@@ -41,8 +41,7 @@ def test_modular_residue_checker_reports_exhaustive_integer_replay() -> None:
 def test_modular_residue_checker_accepts_exact_assignment_bound() -> None:
     assignments = [list(values) for values in product(range(16), repeat=3)]
     residues = [
-        assignment[0] * assignment[1] * assignment[2] % 16
-        for assignment in assignments
+        assignment[0] * assignment[1] * assignment[2] % 16 for assignment in assignments
     ]
     image = sorted(set(residues))
     first_assignments: dict[int, list[int]] = {}

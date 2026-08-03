@@ -1,4 +1,5 @@
 """Tests for observation task-selection normalization and explicit-task path validation."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,7 +9,6 @@ from benchmarks.tooling.observation_selection import (
     validate_explicit_task_path,
 )
 from benchmarks.validation.observation_results_support import _DIGEST
-
 
 # ---------------------------------------------------------------------------
 # Regression for #338: strict dataset/task selection normalization

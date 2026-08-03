@@ -11,11 +11,11 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from search_orchestration_support import _install_search_plugin, _request
 
 from jacobian.contracts.discovery import ExperimentState
 from jacobian.contracts.search import SearchStopReason
 from jacobian.search import SearchError
-from search_orchestration_support import _install_search_plugin, _request
 
 
 def test_search_run_checkpoints_strategy_neutral_lineage(

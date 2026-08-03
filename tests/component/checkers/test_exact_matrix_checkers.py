@@ -3,16 +3,17 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from jacobian_checkers.exact_domain_operations import (
-    check_matrix_nullspace,
-    check_matrix_product,
-)
 from tests.component.checkers.exact_domain_checker_support import (
     _MATRIX_CASES,
     _qq,
 )
 from tests.support.rationals import rational_payload as _q
 from tests.unit.contracts.artifacts import canonical_digest as _digest
+
+from jacobian_checkers.exact_domain_operations import (
+    check_matrix_nullspace,
+    check_matrix_product,
+)
 
 
 def _matrix_product_checker_request() -> dict[str, Any]:

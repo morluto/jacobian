@@ -4,6 +4,7 @@ Imports the checker callables and builds domain-split case tuples so that
 individual domain test modules can reference only their own cases while the
 generic attack module can work over the full ``_CASES`` sequence.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -12,6 +13,7 @@ from typing import Any
 from tests.support.rationals import rational_payload as _q
 from tests.unit.contracts.artifacts import artifact_uri as _uri
 from tests.unit.contracts.artifacts import canonical_digest as _digest
+
 from jacobian_checkers.exact_domain_operations import (
     check_integer_powerful_number,
     check_integer_prime_factorization,
@@ -653,9 +655,7 @@ _GRAPH_CASES: tuple[
                             "edge_weight": _q(4),
                             "tree_path_vertices": ["a", "b", "c"],
                             "maximum_tree_path_weight": _q(2),
-                            "condition": (
-                                "EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT"
-                            ),
+                            "condition": ("EDGE_WEIGHT_GTE_MAXIMUM_TREE_PATH_WEIGHT"),
                         }
                     ],
                     "required_checks": [

@@ -39,7 +39,9 @@ def test_makefile_changes_do_not_route_to_unrelated_provider_lanes() -> None:
 def test_domain_mathematical_sources_skip_storage_mcp_and_e2e() -> None:
     manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
     rule = next(
-        rule for rule in manifest["rules"] if rule["name"] == "domain-mathematical-sources"
+        rule
+        for rule in manifest["rules"]
+        if rule["name"] == "domain-mathematical-sources"
     )
 
     assert set(rule["suites"]) == {

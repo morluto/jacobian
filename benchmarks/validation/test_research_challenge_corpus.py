@@ -20,7 +20,8 @@ def test_research_diagnostics_are_one_public_answer_visible_task_each() -> None:
     task_ids = {path.name for path in tasks}
     assert task_ids, "expected research-diagnostics tasks"
     assert all(
-        path.name.startswith("jcb-postdoc-") and path.name[len("jcb-postdoc-") :].isdigit()
+        path.name.startswith("jcb-postdoc-")
+        and path.name[len("jcb-postdoc-") :].isdigit()
         for path in tasks
     )
     members = sorted((DATASET / "members").glob("*.toml"))

@@ -5,21 +5,20 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-
-from jacobian_checkers.graph_exact_operations import (
-    check_graph_diameter,
-    check_graph_distance_matrix,
-    check_graph_induced_tree_maximum,
-    check_graph_maximum_matching,
-    check_graph_minimum_spanning_tree,
-    check_graph_radius,
-)
 from tests.component.checkers.exact_domain_checker_support import (
     _GRAPH_CASES,
     _request,
 )
 from tests.support.rationals import rational_payload as _q
 from tests.unit.contracts.artifacts import canonical_digest as _digest
+
+from jacobian_checkers.graph_exact_operations import (
+    check_graph_diameter,
+    check_graph_distance_matrix,
+    check_graph_induced_tree_maximum,
+    check_graph_minimum_spanning_tree,
+    check_graph_radius,
+)
 
 
 def _minimum_spanning_tree_checker_request() -> dict[str, Any]:

@@ -613,7 +613,7 @@
       "complexity": 11
     },
     {
-      "path": "tests/component/checkers/test_exact_domain_operation_checkers.py",
+      "path": "tests/component/checkers/exact_domain_checker_support.py",
       "symbol": "_mutate_numeric_leaf",
       "complexity": 13
     },

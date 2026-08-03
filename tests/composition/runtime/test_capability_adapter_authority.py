@@ -10,6 +10,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.composition.runtime.capability_service_support import (
+    ComputedAdapter,
+    CrashingAdapter,
+    ForgedProviderAdapter,
+    ForgedRelationshipVerificationAdapter,
+    ForgedVerifiedAdapter,
+    NotReadyProviderAdapter,
+    OmittedRelationshipArtifactAdapter,
+)
 from tests.support.services import DomainTestServices
 
 from jacobian.capability_service import CapabilityError
@@ -21,16 +30,6 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
-
-from tests.composition.runtime.capability_service_support import (
-    ComputedAdapter,
-    CrashingAdapter,
-    ForgedProviderAdapter,
-    ForgedRelationshipVerificationAdapter,
-    ForgedVerifiedAdapter,
-    NotReadyProviderAdapter,
-    OmittedRelationshipArtifactAdapter,
-)
 
 
 def test_external_adapter_invocation_is_recorded_and_retrievable(

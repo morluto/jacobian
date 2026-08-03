@@ -96,6 +96,15 @@ def test_verified_claim_is_rejected(tmp_path: Path) -> None:
     assert result["reward"] == 0.0
 
 
+def test_checked_claim_above_computed_ceiling_is_rejected(tmp_path: Path) -> None:
+    task, app, logs, submission_path, submission = load_case(tmp_path)
+    submission["claimed_assurance"] = "CHECKED"
+    support._write_json(submission_path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
 def test_scalar_sample_elements_rejected_without_crash(tmp_path: Path) -> None:
     """A malformed submission with scalar sample elements is rejected cleanly
     instead of crashing with AttributeError before reward.json is written.

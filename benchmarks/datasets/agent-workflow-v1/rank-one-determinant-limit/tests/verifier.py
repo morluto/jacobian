@@ -145,7 +145,7 @@ def main():
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
     result = submission.get("result") if isinstance(submission, dict) else None

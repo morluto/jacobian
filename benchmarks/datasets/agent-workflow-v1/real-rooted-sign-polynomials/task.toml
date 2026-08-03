@@ -1,0 +1,38 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/real-rooted-sign-polynomials"
+version = "1.0.0"
+description = "Classify all real-rooted sign-coefficient polynomials with a universal degree bound and exact finite audit."
+keywords = ["real-rooted", "newton-identities", "discriminant", "classification"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+field = "algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-symbolic-proof"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "regression", "classification", "offline"]
+case_version = "agent-workflow-v1"
+contamination_class = "public-dataset-derived-symbolic-proof"
+fixture_digest = "sha256:7b6e7011217b9ad4ebad1ccdbc4d1472366e97640c7cc7b79edfd649961ff174"
+derivation = "Derived from PutnamBench putnam_1968_a6 at revision dfb0a47a1c1ec3a10f2a9acfdf41a2043920f33c."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

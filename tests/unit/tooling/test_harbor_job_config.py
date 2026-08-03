@@ -29,6 +29,16 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
         }
     ]
     assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
+    assert job["environment"]["extra_allowed_hosts"] == [
+        "api.openai.com",
+        "auth.openai.com",
+        "chatgpt.com",
+        "deb.debian.org",
+        "nodejs.org",
+        "npmjs.org",
+        "registry.npmjs.org",
+        "raw.githubusercontent.com",
+    ]
 
 
 def test_observation_mcp_config_is_external_to_the_task_job() -> None:

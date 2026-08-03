@@ -1,0 +1,1 @@
+{"task_id":"jacobian/superposition-proof-replay","conclusion":"PROOF_RECONSTRUCTED","maximum_assurance":"COMPUTED","required_scope":"binary first-order resolution replay over the eight frozen clauses","required_limitation":"FROZEN_RESOLUTION_CALCULUS_ONLY"}

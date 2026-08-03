@@ -1,0 +1,404 @@
+{
+  "task_id": "jacobian/balanced-row-permutation",
+  "conclusion": "BALANCED_ROW_PERMUTATION_CONSTRUCTED",
+  "result": {
+    "row_permutations": [
+      [
+        1,
+        4,
+        5,
+        0,
+        2,
+        3
+      ],
+      [
+        5,
+        0,
+        4,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        2,
+        1,
+        4,
+        3,
+        5
+      ],
+      [
+        0,
+        2,
+        4,
+        3,
+        1,
+        5
+      ],
+      [
+        3,
+        4,
+        0,
+        1,
+        2,
+        5
+      ],
+      [
+        4,
+        1,
+        0,
+        2,
+        3,
+        5
+      ],
+      [
+        2,
+        0,
+        1,
+        3,
+        4,
+        5
+      ],
+      [
+        2,
+        3,
+        0,
+        1,
+        4,
+        5
+      ]
+    ],
+    "balanced_matrix": [
+      [
+        1,
+        2,
+        2,
+        3,
+        3,
+        3
+      ],
+      [
+        1,
+        3,
+        3,
+        4,
+        4,
+        4
+      ],
+      [
+        3,
+        1,
+        4,
+        4,
+        1,
+        3
+      ],
+      [
+        3,
+        4,
+        2,
+        1,
+        3,
+        1
+      ],
+      [
+        4,
+        2,
+        3,
+        3,
+        1,
+        2
+      ],
+      [
+        2,
+        1,
+        4,
+        1,
+        4,
+        4
+      ],
+      [
+        2,
+        4,
+        1,
+        2,
+        2,
+        2
+      ],
+      [
+        4,
+        3,
+        1,
+        2,
+        2,
+        1
+      ]
+    ],
+    "column_layers": [
+      [
+        {
+          "row": 0,
+          "input_position": 1,
+          "symbol": 1
+        },
+        {
+          "row": 1,
+          "input_position": 5,
+          "symbol": 1
+        },
+        {
+          "row": 2,
+          "input_position": 0,
+          "symbol": 3
+        },
+        {
+          "row": 3,
+          "input_position": 0,
+          "symbol": 3
+        },
+        {
+          "row": 4,
+          "input_position": 3,
+          "symbol": 4
+        },
+        {
+          "row": 5,
+          "input_position": 4,
+          "symbol": 2
+        },
+        {
+          "row": 6,
+          "input_position": 2,
+          "symbol": 2
+        },
+        {
+          "row": 7,
+          "input_position": 2,
+          "symbol": 4
+        }
+      ],
+      [
+        {
+          "row": 0,
+          "input_position": 4,
+          "symbol": 2
+        },
+        {
+          "row": 1,
+          "input_position": 0,
+          "symbol": 3
+        },
+        {
+          "row": 2,
+          "input_position": 2,
+          "symbol": 1
+        },
+        {
+          "row": 3,
+          "input_position": 2,
+          "symbol": 4
+        },
+        {
+          "row": 4,
+          "input_position": 4,
+          "symbol": 2
+        },
+        {
+          "row": 5,
+          "input_position": 1,
+          "symbol": 1
+        },
+        {
+          "row": 6,
+          "input_position": 0,
+          "symbol": 4
+        },
+        {
+          "row": 7,
+          "input_position": 3,
+          "symbol": 3
+        }
+      ],
+      [
+        {
+          "row": 0,
+          "input_position": 5,
+          "symbol": 2
+        },
+        {
+          "row": 1,
+          "input_position": 4,
+          "symbol": 3
+        },
+        {
+          "row": 2,
+          "input_position": 1,
+          "symbol": 4
+        },
+        {
+          "row": 3,
+          "input_position": 4,
+          "symbol": 2
+        },
+        {
+          "row": 4,
+          "input_position": 0,
+          "symbol": 3
+        },
+        {
+          "row": 5,
+          "input_position": 0,
+          "symbol": 4
+        },
+        {
+          "row": 6,
+          "input_position": 1,
+          "symbol": 1
+        },
+        {
+          "row": 7,
+          "input_position": 0,
+          "symbol": 1
+        }
+      ],
+      [
+        {
+          "row": 0,
+          "input_position": 0,
+          "symbol": 3
+        },
+        {
+          "row": 1,
+          "input_position": 1,
+          "symbol": 4
+        },
+        {
+          "row": 2,
+          "input_position": 4,
+          "symbol": 4
+        },
+        {
+          "row": 3,
+          "input_position": 3,
+          "symbol": 1
+        },
+        {
+          "row": 4,
+          "input_position": 1,
+          "symbol": 3
+        },
+        {
+          "row": 5,
+          "input_position": 2,
+          "symbol": 1
+        },
+        {
+          "row": 6,
+          "input_position": 3,
+          "symbol": 2
+        },
+        {
+          "row": 7,
+          "input_position": 1,
+          "symbol": 2
+        }
+      ],
+      [
+        {
+          "row": 0,
+          "input_position": 2,
+          "symbol": 3
+        },
+        {
+          "row": 1,
+          "input_position": 2,
+          "symbol": 4
+        },
+        {
+          "row": 2,
+          "input_position": 3,
+          "symbol": 1
+        },
+        {
+          "row": 3,
+          "input_position": 1,
+          "symbol": 3
+        },
+        {
+          "row": 4,
+          "input_position": 2,
+          "symbol": 1
+        },
+        {
+          "row": 5,
+          "input_position": 3,
+          "symbol": 4
+        },
+        {
+          "row": 6,
+          "input_position": 4,
+          "symbol": 2
+        },
+        {
+          "row": 7,
+          "input_position": 4,
+          "symbol": 2
+        }
+      ],
+      [
+        {
+          "row": 0,
+          "input_position": 3,
+          "symbol": 3
+        },
+        {
+          "row": 1,
+          "input_position": 3,
+          "symbol": 4
+        },
+        {
+          "row": 2,
+          "input_position": 5,
+          "symbol": 3
+        },
+        {
+          "row": 3,
+          "input_position": 5,
+          "symbol": 1
+        },
+        {
+          "row": 4,
+          "input_position": 5,
+          "symbol": 2
+        },
+        {
+          "row": 5,
+          "input_position": 5,
+          "symbol": 4
+        },
+        {
+          "row": 6,
+          "input_position": 5,
+          "symbol": 2
+        },
+        {
+          "row": 7,
+          "input_position": 5,
+          "symbol": 1
+        }
+      ]
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "the frozen 8 by 6 matrix",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:a2fd9b5ca1a87bd3d167b720bf9fc45ab6a8a30f4a2ce4fd156dd3553846b9ab"
+    }
+  ],
+  "limitations": [
+    "This finite construction does not prove the general theorem in a proof assistant."
+  ]
+}

@@ -1,0 +1,280 @@
+import json
+import math
+from fractions import Fraction
+from pathlib import Path
+
+from verifier_support import (
+    false_verified_claim,
+    load_submission,
+    read_evidence_json,
+    strict_submission_contract,
+)
+
+W, E = Path("/app"), Path("/tests")
+NEG_INF, POS_INF = "NEGATIVE_INFINITY", "POSITIVE_INFINITY"
+
+
+def _frozen():
+    try:
+        raw = (E / "input.json").read_bytes()
+        if (W / "input.json").is_symlink() or (W / "input.json").read_bytes() != raw:
+            return {}
+        return json.loads(raw)
+    except (OSError, ValueError):
+        return {}
+
+
+def _is_int(value):
+    """Reject booleans and floats; accept only exact Python integers."""
+    return type(value) is int
+
+
+def _rational(value):
+    """Parse a reduced rational object, rejecting booleans and floats."""
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator, denominator = value["numerator"], value["denominator"]
+    if not _is_int(numerator) or not _is_int(denominator) or denominator < 1:
+        return None
+    if math.gcd(numerator, denominator) != 1:
+        return None
+    return Fraction(numerator, denominator)
+
+
+def _extended_bound(value):
+    """Parse an extended rational bound (rational or infinity sentinel)."""
+    if value == NEG_INF:
+        return NEG_INF
+    if value == POS_INF:
+        return POS_INF
+    return _rational(value)
+
+
+def _image(bound):
+    """Compute f(bound) = bound - 1/bound for bound >= 0.
+
+    f is strictly increasing on (0, inf), so the image of an open interval
+    (lower, upper) is (f(lower), f(upper)).  f(0+) = -inf, so a zero lower
+    bound maps to NEGATIVE_INFINITY.
+    """
+    if bound == 0:
+        return NEG_INF
+    return bound - Fraction(1) / bound
+
+
+def _valid_chain(bounds, threshold):
+    """Validate three bounds form a chain from (0, sqrt(threshold)) to negative.
+
+    The chain has three roles:
+    - entry:   (0, U) -> (-inf, V) with U^2 >= threshold, V > 1
+    - terminal: (0, 1) -> (-inf, 0)
+    - bridge:  (1, V) -> (0, W) with W < 1
+
+    Starting from |a| < sqrt(threshold): if a < 0, done; if a > 0 then a in
+    (0, U) so f(a) in (-inf, V).  If f(a) < 0, done (1 step).  If f(a) in
+    (0, 1), terminal gives f(f(a)) < 0 (2 steps).  If f(a) in (1, V), bridge
+    gives f(f(a)) in (0, W) subset (0, 1), then terminal gives f(f(f(a))) < 0
+    (3 steps).  The chain therefore takes at most 3 steps.
+    """
+    terminal = None
+    bridge = None
+    entry = None
+    for bound in bounds:
+        lower, upper, out_lower, out_upper = bound
+        if lower == 0 and upper == 1 and out_lower == NEG_INF and out_upper == 0:
+            terminal = bound
+        elif lower == 1 and out_lower == 0:
+            bridge = bound
+        elif lower == 0 and out_lower == NEG_INF and upper != 1:
+            entry = bound
+    if terminal is None or bridge is None or entry is None:
+        return False
+    entry_upper = entry[1]
+    if not isinstance(entry_upper, Fraction) or entry_upper * entry_upper < threshold:
+        return False
+    entry_output_upper = entry[3]
+    if (
+        not isinstance(entry_output_upper, Fraction)
+        or entry_output_upper <= 1
+        or bridge[1] != entry_output_upper
+    ):
+        return False
+    bridge_output_upper = bridge[3]
+    return isinstance(bridge_output_upper, Fraction) and bridge_output_upper < 1
+
+
+def _result_valid(result, frozen):
+    required = {
+        "potential_identity_coefficients",
+        "initial_potential",
+        "threshold",
+        "decrement_lower_bound",
+        "phase_transitions",
+        "threshold_index_upper",
+        "terminal_bounds",
+        "negative_index_upper",
+    }
+    if not isinstance(result, dict) or set(result) != required:
+        return False
+
+    # Validate potential identity coefficients: d[n+1] = d[n] - 2 + 1/d[n]
+    # in basis [a^2, 1, a^{-2}] = [d, 1, 1/d], so coefficients = [1, -2, 1].
+    coefficients = result["potential_identity_coefficients"]
+    if (
+        not isinstance(coefficients, list)
+        or len(coefficients) != 3
+        or not all(_is_int(c) for c in coefficients)
+        or coefficients != [1, -2, 1]
+    ):
+        return False
+
+    # Validate initial_potential = initial_value^2 (derived from frozen input).
+    initial_value = frozen.get("initial_value")
+    initial_index = frozen.get("initial_index")
+    if not _is_int(initial_value) or not _is_int(initial_index):
+        return False
+    initial_potential = result["initial_potential"]
+    if not _is_int(initial_potential) or initial_potential != initial_value**2:
+        return False
+
+    # Validate threshold is a positive reduced rational.
+    threshold = _rational(result["threshold"])
+    if threshold is None or threshold <= 0:
+        return False
+
+    # Validate decrement_lower_bound = 2 - 1/threshold (derived from threshold).
+    expected_decrement = 2 - Fraction(1) / threshold
+    decrement = _rational(result["decrement_lower_bound"])
+    if decrement is None or decrement != expected_decrement:
+        return False
+
+    # Validate phase_transitions is the minimal step budget.
+    transitions = result["phase_transitions"]
+    if not _is_int(transitions) or transitions < 1:
+        return False
+    potential = Fraction(initial_potential)
+    if not (
+        potential - transitions * expected_decrement < threshold
+        and potential - (transitions - 1) * expected_decrement >= threshold
+    ):
+        return False
+
+    # Validate threshold_index_upper = initial_index + phase_transitions.
+    if (
+        not _is_int(result["threshold_index_upper"])
+        or result["threshold_index_upper"] != initial_index + transitions
+    ):
+        return False
+
+    # Validate terminal bounds: correct images under f(a) = a - 1/a.
+    bounds = result["terminal_bounds"]
+    if not isinstance(bounds, list) or len(bounds) != 3:
+        return False
+    parsed_bounds = []
+    for item in bounds:
+        if not isinstance(item, dict) or set(item) != {
+            "input_lower",
+            "input_upper",
+            "output_lower",
+            "output_upper",
+        }:
+            return False
+        input_lower = _extended_bound(item["input_lower"])
+        input_upper = _extended_bound(item["input_upper"])
+        output_lower = _extended_bound(item["output_lower"])
+        output_upper = _extended_bound(item["output_upper"])
+        if any(
+            b is None for b in (input_lower, input_upper, output_lower, output_upper)
+        ):
+            return False
+        if not isinstance(input_lower, Fraction) or input_lower < 0:
+            return False
+        if not isinstance(input_upper, Fraction) or input_upper <= 0:
+            return False
+        if input_lower >= input_upper:
+            return False
+        if output_lower != _image(input_lower) or output_upper != _image(input_upper):
+            return False
+        parsed_bounds.append((input_lower, input_upper, output_lower, output_upper))
+
+    # Validate the three bounds form a valid chain to a negative term.
+    if not _valid_chain(parsed_bounds, threshold):
+        return False
+
+    # Validate negative_index_upper = threshold_index_upper + 3 (chain length).
+    if (
+        not _is_int(result["negative_index_upper"])
+        or result["negative_index_upper"] != result["threshold_index_upper"] + 3
+    ):
+        return False
+
+    # Validate negative_index_upper < target.index_upper_exclusive.
+    target = frozen.get("target", {})
+    return bool(
+        isinstance(target, dict)
+        and _is_int(target.get("index_upper_exclusive"))
+        and result["negative_index_upper"] < target["index_upper_exclusive"]
+    )
+
+
+def main():
+    submission, frozen = load_submission(), _frozen()
+    expected = json.loads((E / "expected.json").read_text())
+    contract = strict_submission_contract(
+        submission,
+        task_id=expected["task_id"],
+        conclusion=expected["conclusion"],
+        verification_record="forbidden",
+    )
+    math_correct = bool(contract and _result_valid(submission.get("result"), frozen))
+    evidence = None
+    if (
+        contract
+        and isinstance(submission.get("evidence"), list)
+        and len(submission["evidence"]) == 1
+    ):
+        evidence = read_evidence_json(
+            submission["evidence"][0],
+            expected_path="evidence/nonlinear-recurrence-certificate.json",
+        )
+    evidence_valid = bool(
+        evidence
+        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and evidence["schema_version"] == "1"
+        and evidence["task_id"] == expected["task_id"]
+        and evidence["result"] == submission.get("result")
+        and evidence["limitations"] == submission.get("limitations")
+    )
+    envelope = bool(
+        contract
+        and submission.get("scope") == "TOTAL_REAL_RECURRENCE_FROM_A1_EQUALS_56"
+        and submission.get("limitations") == ["ELEMENTARY_REAL_ORDER_LEMMAS_TRUSTED"]
+    )
+    assurance = bool(
+        contract
+        and submission.get("claimed_assurance") == expected["maximum_assurance"]
+    )
+    false_certification = false_verified_claim(
+        submission, verification_record_bound=False
+    )
+    correct = bool(
+        math_correct and evidence_valid and envelope and not false_certification
+    )
+    reward = 0 if not correct else 0.9 + 0.1 * assurance
+    Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps(
+            {
+                "correctness": float(math_correct),
+                "evidence_validity": float(evidence_valid),
+                "scope_accuracy": float(envelope),
+                "assurance_calibration": float(assurance),
+                "reward": reward,
+                "false_certification": false_certification,
+            }
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

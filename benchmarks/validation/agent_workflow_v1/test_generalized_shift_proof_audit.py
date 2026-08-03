@@ -208,7 +208,7 @@ def test_oversized_diagonal_entries_is_rejected(tmp_path: Path) -> None:
 
 def test_oversized_submission_is_rejected(tmp_path: Path) -> None:
     """An oversized submission.json must be rejected without crashing."""
-    task, app, logs, submission_path, submission = load_case(tmp_path)
+    task, app, logs, _submission_path, _submission = load_case(tmp_path)
     (app / "submission.json").write_text('{"a": 1' + ", " * (2 * 1024 * 1024) + "}")
     result = support._run_verifier(task, app, logs)
     assert result["correctness"] == 0.0

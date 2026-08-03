@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/reciprocal-polynomial-classification"},
+    "conclusion": {"enum": ["FAMILY_MEMBER_CERTIFIED", "INSUFFICIENT_EVIDENCE"]},
+    "result": {"$ref": "#/$defs/result"},
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "scope": {"const": "SUBMITTED_MEMBER_AND_FROZEN_CLASSIFICATION_CHAIN"},
+    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
+    "evidence": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/classification-certificate.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}
+    },
+    "limitations": {"const": ["GENERAL_CLASSIFICATION_DEGREE_ARGUMENT_TRUSTED"]}
+  },
+  "$defs": {
+    "term": {"type": "object", "additionalProperties": false, "required": ["exponent", "coefficient"], "properties": {"exponent": {"type": "integer", "minimum": 0, "maximum": 39}, "coefficient": {"type": "integer", "minimum": -1, "maximum": 1}}},
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["m", "polynomial_terms", "quotient_terms", "reverse_terms", "reverse_quotient_constant", "degree", "quotient_degree", "cleared_identity_residual"],
+      "properties": {
+        "m": {"type": "integer", "minimum": 6, "maximum": 20},
+        "polynomial_terms": {"type": "array", "minItems": 6, "maxItems": 20, "items": {"$ref": "#/$defs/term"}},
+        "quotient_terms": {"type": "array", "minItems": 6, "maxItems": 20, "items": {"$ref": "#/$defs/term"}},
+        "reverse_terms": {"type": "array", "minItems": 6, "maxItems": 20, "items": {"$ref": "#/$defs/term"}},
+        "reverse_quotient_constant": {"type": "integer", "enum": [-1, 1]},
+        "degree": {"type": "integer", "minimum": 11, "maximum": 39},
+        "quotient_degree": {"type": "integer", "minimum": 10, "maximum": 38},
+        "cleared_identity_residual": {"type": "array", "maxItems": 0}
+      }
+    }
+  }
+}

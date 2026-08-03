@@ -1,0 +1,1 @@
+{"task_id":"jacobian/periodic-orbit-polynomial-obstruction","domain":"integer_function_iterates","fixed_point_count":"F(n)=#Fix(T^n), finite for every n>=1","candidate":"F(n)=P(n) for a nonconstant P in Z[x]","orbit_basis":["F(pq)","F(p)","F(q)","F(1)"],"required_symbolic_primes":["p","q"],"target":"derive contradiction"}

@@ -212,6 +212,19 @@
       ]
     },
     {
+      "name": "domain-mathematical-sources",
+      "patterns": [
+        "src/jacobian/domains/**"
+      ],
+      "suites": [
+        "unit",
+        "component",
+        "domain",
+        "static",
+        "build"
+      ]
+    },
+    {
       "name": "python-source",
       "patterns": [
         "src/jacobian/**",
@@ -287,9 +300,10 @@
       ]
     },
     {
-      "name": "makefile",
+      "name": "test-topology-runners",
       "patterns": [
-        "Makefile"
+        "tools/**",
+        "tests/topology.toml"
       ],
       "suites": [
         "unit",
@@ -300,6 +314,16 @@
         "process",
         "mcp",
         "e2e",
+        "static",
+        "build"
+      ]
+    },
+    {
+      "name": "makefile",
+      "patterns": [
+        "Makefile"
+      ],
+      "suites": [
         "static",
         "build"
       ]

@@ -14,6 +14,12 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / ".github" / "ci-impact.json"
 TOPOLOGY = ROOT / "tests" / "topology.toml"
 
+# More-specific ownership rules suppress the general python-source catch-all
+# when both match the same path (fnmatch '*' crosses '/').
+_SUPPRESSED_WHEN_PRESENT = {
+    "domain-mathematical-sources": frozenset({"python-source"}),
+}
+
 
 def load_manifest() -> dict[str, Any]:
     with MANIFEST.open(encoding="utf-8") as handle:
@@ -26,7 +32,17 @@ def suites_for_path(path: str, manifest: dict[str, Any]) -> set[str]:
         if any(fnmatchcase(path, pattern) for pattern in rule["patterns"]):
             matching_rules.append(rule)
     if matching_rules:
-        return {str(suite) for rule in matching_rules for suite in rule["suites"]}
+        matched_names = {str(rule["name"]) for rule in matching_rules}
+        suppressed: set[str] = set()
+        for specific, generals in _SUPPRESSED_WHEN_PRESENT.items():
+            if specific in matched_names:
+                suppressed.update(generals)
+        return {
+            str(suite)
+            for rule in matching_rules
+            if str(rule["name"]) not in suppressed
+            for suite in rule["suites"]
+        }
     fallback = manifest["fallback"]
     return set(fallback["suites"])
 

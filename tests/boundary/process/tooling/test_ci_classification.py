@@ -279,7 +279,36 @@ def _expected_plan(classification: str, *enabled: str) -> dict[str, str]:
             ("Makefile",),
             _expected_plan(
                 "selective",
+                "run-static",
+                "run-build",
+            ),
+        ),
+        (
+            ("tools/test_topology.py",),
+            _expected_plan(
+                "selective",
                 *GENERIC_PYTHON_KEYS,
+                "run-static",
+                "run-build",
+            ),
+        ),
+        (
+            ("tests/topology.toml",),
+            _expected_plan(
+                "selective",
+                *GENERIC_PYTHON_KEYS,
+                "run-static",
+                "run-build",
+            ),
+        ),
+        (
+            ("src/jacobian/domains/number_theory/factorization.py",),
+            _expected_plan(
+                "selective",
+                "run-python",
+                "run-unit",
+                "run-component",
+                "run-domain",
                 "run-static",
                 "run-build",
             ),

@@ -30,19 +30,28 @@ def test_makefile_changes_do_not_route_to_unrelated_provider_lanes() -> None:
     manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
     rule = next(rule for rule in manifest["rules"] if rule["name"] == "makefile")
 
-    assert set(rule["suites"]) <= {
+    # Command-index edits stay narrow; lane topology lives in tools/ and
+    # tests/topology.toml under test-topology-runners.
+    assert set(rule["suites"]) == {"static", "build"}
+    assert not {"lean", "npm", "provider"}.intersection(rule["suites"])
+
+
+def test_domain_mathematical_sources_skip_storage_mcp_and_e2e() -> None:
+    manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
+    rule = next(
+        rule for rule in manifest["rules"] if rule["name"] == "domain-mathematical-sources"
+    )
+
+    assert set(rule["suites"]) == {
         "unit",
         "component",
         "domain",
-        "composition",
-        "storage",
-        "process",
-        "mcp",
-        "e2e",
         "static",
         "build",
     }
-    assert not {"lean", "npm"}.intersection(rule["suites"])
+    assert not {"storage", "process", "mcp", "e2e", "lean", "npm"}.intersection(
+        rule["suites"]
+    )
 
 
 def test_global_timeout_is_not_a_pytest_deadline() -> None:

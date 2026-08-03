@@ -234,3 +234,44 @@ The semantic lanes make the resource boundary explicit:
 
 These controls complement the historical measurements above. They do not turn
 machine-local timing into a correctness assertion.
+
+## 2026-08-03 hotspot remediation follow-up
+
+A churn audit found remaining DX bottlenecks after the topology split and the
+agent-workflow per-task leaf migration (#376):
+
+1. **Unused complete-runtime `usefixtures` marks.** Several composition,
+   storage, and provider modules forced `attached_complete_runtime` or
+   `authorized_complete_runtime` construction even when tests never referenced
+   those fixtures. Search orchestration double-paid unused attach plus
+   `fresh_complete_runtime`. On this host, `create_runtime` from an empty state
+   measured about 4.9 seconds. Removing the unused marks kept all assertions
+   and cut `test_graph_composition.py` from **19.7s to 14.0s** wall time
+   (same 11 cases). Search orchestration wall time stayed noise-bound (~66s)
+   because fresh construction dominates; per-case setup dropped about 0.8s when
+   the unused attach was removed.
+
+2. **Harbor validation serial pytest.** `make harbor-validate` collected about
+   1096 tests under `benchmarks/validation`. Path monkeypatches in verifier
+   helpers are process-local and restored in `finally`, so modest xdist is safe.
+   Default is now `HARBOR_VALIDATION_WORKERS=2` (~**14s → 8s** on this host).
+   Oracle and adapter Make targets remain serial. The hardcoded `gap.json`
+   count (merge magnet on every task add) was replaced by a non-empty +
+   historical-provenance check.
+
+3. **Mega-module merge magnets** were split without dropping cases:
+   exact-domain checkers by domain, observation-results by concern, capability
+   service by concern, and search orchestration into lifecycle / recovery /
+   plugin-fail-closed leaves.
+
+4. **CI over-selection.** `Makefile` edits now select only `static` + `build`;
+   lane topology changes live under `tools/**` and `tests/topology.toml`
+   (`test-topology-runners`). Domain packages under `src/jacobian/domains/**`
+   select unit + component + domain + static + build (not storage/mcp/e2e) via
+   `domain-mathematical-sources`, which suppresses the general `python-source`
+   catch-all when both match. Verification-boundary, packaging, and fallback
+   remain fail-closed.
+
+These are single-host observations, not timing gates. Do not recreate shared
+`test_task_regressions_*.py` dumps; keep Harbor attack coverage in per-task
+leaves plus `test_generic_verifier_contracts.py`.

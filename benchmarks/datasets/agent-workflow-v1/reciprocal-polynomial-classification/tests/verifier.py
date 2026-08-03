@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 from verifier_support import (
@@ -9,6 +10,28 @@ from verifier_support import (
 )
 
 W, E = Path("/app"), Path("/tests")
+
+_ASSURANCE_ORDER = {
+    "UNVERIFIED": 0,
+    "COMPUTED": 1,
+    "CHECKED": 2,
+    "VERIFIED": 3,
+}
+
+
+def _integer_value(value):
+    """Accept any schema-valid integral JSON number while rejecting booleans.
+
+    JSON Schema's ``integer`` type accepts numbers with a zero fractional part
+    (e.g. ``8.0``), so the verifier validates mathematical integrality rather
+    than requiring Python's ``int`` representation. Booleans are rejected
+    because ``True == 1`` would otherwise spoof a unit coefficient.
+    """
+    if type(value) is int:
+        return value
+    if type(value) is float and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return None
 
 
 def _load_frozen_input():
@@ -29,22 +52,21 @@ def _parse_terms(value):
     if not isinstance(value, list) or not value:
         return None
     parsed = {}
-    order = []
     for term in value:
         if not isinstance(term, dict) or set(term) != {"exponent", "coefficient"}:
             return None
-        exponent, coefficient = term["exponent"], term["coefficient"]
+        exponent = _integer_value(term["exponent"])
+        coefficient = _integer_value(term["coefficient"])
         if (
-            type(exponent) is not int
+            exponent is None
             or exponent < 0
-            or type(coefficient) is not int
+            or coefficient is None
             or coefficient == 0
             or exponent in parsed
         ):
             return None
         parsed[exponent] = coefficient
-        order.append(exponent)
-    return parsed if order == sorted(order) else None
+    return parsed
 
 
 def _add(left, right, scale=1):
@@ -82,10 +104,10 @@ def _result_is_valid(result, frozen):
     }
     if not isinstance(result, dict) or set(result) != required:
         return False
-    m = result["m"]
+    m = _integer_value(result["m"])
     bounds = frozen.get("family_index_bounds", {})
     if (
-        type(m) is not int
+        m is None
         or not isinstance(bounds, dict)
         or not bounds.get("minimum") <= m <= bounds.get("maximum")
     ):
@@ -113,6 +135,15 @@ def _result_is_valid(result, frozen):
     cleared = _add(polynomial, reciprocal)
     cleared = _add(cleared, _mul({1: 1, -1: 1}, _mul(polynomial, reciprocal)), -1)
 
+    reverse_quotient_constant = _integer_value(result["reverse_quotient_constant"])
+    degree_value = _integer_value(result["degree"])
+    quotient_degree_value = _integer_value(result["quotient_degree"])
+    if (
+        reverse_quotient_constant is None
+        or degree_value is None
+        or quotient_degree_value is None
+    ):
+        return False
     return bool(
         frozen.get("coefficient_domain") == "ZZ"
         and frozen.get("degree_bounds") == {"minimum": 11, "maximum": 39}
@@ -120,9 +151,9 @@ def _result_is_valid(result, frozen):
         and quotient == expected_quotient
         and reverse == expected_reverse
         and reverse == {e: reverse_constant * c for e, c in quotient.items()}
-        and result["reverse_quotient_constant"] == reverse_constant
-        and result["degree"] == degree
-        and result["quotient_degree"] == quotient_degree
+        and reverse_quotient_constant == reverse_constant
+        and degree_value == degree
+        and quotient_degree_value == quotient_degree
         and geometric_left == geometric_right
         and cleared == {}
         and result["cleared_identity_residual"] == []
@@ -168,11 +199,27 @@ def main():
         contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
+    claimed = (
+        submission.get("claimed_assurance") if isinstance(submission, dict) else None
+    )
+    ceiling = expected["maximum_assurance"]
+    assurance_within_ceiling = bool(
+        contract
+        and isinstance(claimed, str)
+        and isinstance(ceiling, str)
+        and claimed in _ASSURANCE_ORDER
+        and ceiling in _ASSURANCE_ORDER
+        and _ASSURANCE_ORDER[claimed] <= _ASSURANCE_ORDER[ceiling]
+    )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
     correct = bool(
-        math_correct and evidence_valid and envelope_correct and not false_certification
+        math_correct
+        and evidence_valid
+        and envelope_correct
+        and assurance_within_ceiling
+        and not false_certification
     )
     reward = 0 if not correct else 0.9 + 0.1 * assurance_correct
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

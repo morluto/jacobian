@@ -47,7 +47,9 @@ def test_keyword_only_evidence_is_accepted_with_bound_result(
     """Keyword-only prose is accepted once RESULT_JSON binds the structured result."""
     task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
     submission = json.loads((app / "submission.json").read_text())
-    (app / "evidence" / "answer.txt").write_text("Brief explanation.\nRESULT_JSON: {}\n")
+    (app / "evidence" / "answer.txt").write_text(
+        "Brief explanation.\nRESULT_JSON: {}\n"
+    )
     support._bind_result_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
 
@@ -107,7 +109,9 @@ def test_evidence_rejects_mismatched_result_marker(
     task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    (app / "evidence" / "answer.txt").write_text("Brief explanation.\nRESULT_JSON: {}\n")
+    (app / "evidence" / "answer.txt").write_text(
+        "Brief explanation.\nRESULT_JSON: {}\n"
+    )
     support._bind_result_evidence(app, submission)
     tampered = json.loads(submission_path.read_text())
     target = tampered["result"]

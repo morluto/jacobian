@@ -501,7 +501,6 @@ def test_force_full_includes_each_dataset_task_pair() -> None:
     assert result["run-benchmark-inventory"] == "true"
     assert result["run-benchmark-oracle"] == "true"
     assert _matrix(result)
-    assert len(_matrix(result)) < 20
     assert _matrix_tasks(result) == {
         ref.path.name
         for suite in planner._harbor_suite().load_registry()

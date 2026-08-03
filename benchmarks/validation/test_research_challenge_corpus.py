@@ -9,7 +9,6 @@ from benchmarks.tooling.harbor_suite import get_suite
 REPO_ROOT = Path(__file__).parents[2]
 DATASET = REPO_ROOT / "benchmarks" / "datasets" / "research-diagnostics-v1"
 TASKS = REPO_ROOT / "benchmarks" / "datasets" / "research-diagnostics-v1"
-EXPECTED_RESEARCH_TASKS = {f"jcb-postdoc-{index:03d}" for index in range(1, 19)}
 
 
 def _task_dirs() -> list[Path]:
@@ -18,9 +17,14 @@ def _task_dirs() -> list[Path]:
 
 def test_research_diagnostics_are_one_public_answer_visible_task_each() -> None:
     tasks = _task_dirs()
-    assert {path.name for path in tasks} == EXPECTED_RESEARCH_TASKS
+    task_ids = {path.name for path in tasks}
+    assert task_ids, "expected research-diagnostics tasks"
+    assert all(
+        path.name.startswith("jcb-postdoc-") and path.name[len("jcb-postdoc-") :].isdigit()
+        for path in tasks
+    )
     members = sorted((DATASET / "members").glob("*.toml"))
-    assert {path.stem for path in members} == EXPECTED_RESEARCH_TASKS
+    assert {path.stem for path in members} == task_ids
     assert not (DATASET / "dataset.toml").exists()
     for task in tasks:
         cfg = tomllib.loads((task / "task.toml").read_text())

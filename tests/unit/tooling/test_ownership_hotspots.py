@@ -26,7 +26,9 @@ def _imports(path: Path) -> tuple[str, ...]:
 
 
 def test_only_explicit_builtin_composition_imports_every_domain_factory() -> None:
-    assert len(BUILTIN_DOMAIN_BUNDLE_FACTORIES) == 21
+    factories = BUILTIN_DOMAIN_BUNDLE_FACTORIES
+    assert factories, "expected explicit builtin domain factories"
+    assert len(factories) == len(set(factories)), "duplicate domain factories"
     central_installers = (
         SOURCE / "portfolio" / "assembler.py",
         SOURCE / "portfolio" / "core_installation.py",

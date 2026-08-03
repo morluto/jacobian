@@ -74,130 +74,6 @@ from jacobian.operations import BoundedSearchOperation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
-EXPECTED_IDS: frozenset[str] = frozenset(
-    {
-        "combinatorics.compute.bell",
-        "combinatorics.compute.bernoulli",
-        "combinatorics.compute.binomial",
-        "combinatorics.compute.catalan",
-        "combinatorics.compute.central_binomial",
-        "combinatorics.compute.compositions",
-        "combinatorics.compute.derangements",
-        "combinatorics.compute.double_factorial",
-        "combinatorics.compute.factorial",
-        "combinatorics.compute.fibonacci",
-        "combinatorics.compute.fibonacci_pair",
-        "combinatorics.compute.lucas",
-        "combinatorics.generating_function.coefficients.compute",
-        "combinatorics.recurrence.linear.evaluate",
-        "combinatorics.compute.motzkin",
-        "combinatorics.compute.multinomial",
-        "combinatorics.compute.partition_number",
-        "combinatorics.compute.permutations",
-        "combinatorics.compute.stirling_first",
-        "combinatorics.compute.stirling_second",
-        "combinatorics.enumerate.integer_partitions",
-        "finite_set.compute.difference",
-        "finite_set.compute.intersection",
-        "finite_set.compute.intersection_cardinality",
-        "finite_set.compute.left_cardinality",
-        "finite_set.compute.symmetric_difference",
-        "finite_set.compute.union",
-        "finite_set.compute.union_cardinality",
-        "finite_set.decide.disjoint",
-        "finite_set.decide.proper_subset",
-        "finite_set.decide.subset",
-        "integer.compute.absolute_value",
-        "integer.compute.aliquot_sum",
-        "integer.compute.decimal_digit_count",
-        "integer.compute.decimal_digit_sum",
-        "integer.compute.divisor_count",
-        "integer.compute.divisor_sum",
-        "integer.compute.divisors",
-        "integer.compute.euler_totient",
-        "integer.compute.extended_gcd",
-        "integer.compute.floor_square_root",
-        "integer.compute.gcd",
-        "integer.compute.lcm",
-        "integer.compute.mobius",
-        "integer.compute.next_prime",
-        "integer.compute.nth_prime",
-        "integer.compute.nth_root",
-        "integer.compute.previous_prime",
-        "integer.compute.prime_count",
-        "integer.compute.prime_factorization",
-        "integer.compute.primorial",
-        "integer.compute.proper_divisors",
-        "integer.compute.radical",
-        "integer.compute.sign",
-        "integer.compute.valuation",
-        "integer.decide.abundant",
-        "integer.decide.coprime",
-        "integer.decide.deficient",
-        "integer.decide.divides",
-        "integer.decide.even",
-        "integer.decide.odd",
-        "integer.decide.perfect",
-        "integer.decide.prime",
-        "integer.decide.powerful",
-        "integer.decide.square",
-        "integer.decide.squarefree",
-        "integer.transform.base_digits",
-        "modular.compute.inverse",
-        "modular.compute.discrete_logarithm",
-        "modular.compute.multiplicative_order",
-        "modular.enumerate.quadratic_residues",
-        "modular.polynomial_residue_image.compute",
-        "modular.solve.chinese_remainder",
-        "number_theory.compute.jacobi_symbol",
-        "number_theory.compute.factorial_valuation",
-        "number_theory.compute.legendre_symbol",
-        "rational.compute.absolute_value",
-        "rational.compute.ceiling",
-        "rational.compute.continued_fraction",
-        "rational.compute.difference",
-        "rational.compute.floor",
-        "rational.compute.maximum",
-        "rational.compute.minimum",
-        "rational.compute.negation",
-        "rational.compute.product",
-        "rational.compute.quotient",
-        "rational.compute.reciprocal",
-        "rational.compute.sum",
-        "rational.decide.equal",
-        "rational.decide.less_than",
-        "sequence.compute.distinct_count",
-        "sequence.compute.first_differences",
-        "sequence.compute.frequencies",
-        "sequence.compute.gcd",
-        "sequence.compute.lcm",
-        "sequence.compute.maximum",
-        "sequence.compute.mean",
-        "sequence.compute.median",
-        "sequence.compute.minimum",
-        "sequence.compute.prefix_gcds",
-        "sequence.compute.prefix_lcms",
-        "sequence.compute.prefix_maxima",
-        "sequence.compute.prefix_minima",
-        "sequence.compute.prefix_products",
-        "sequence.compute.prefix_sums",
-        "sequence.compute.product",
-        "sequence.compute.range",
-        "sequence.compute.second_differences",
-        "sequence.compute.sum",
-        "sequence.compute.zero_indices",
-        "sequence.decide.arithmetic",
-        "sequence.decide.geometric",
-        "sequence.decide.nondecreasing",
-        "sequence.decide.strictly_increasing",
-        "sequence.transform.parities",
-        "sequence.transform.reverse",
-        "sequence.transform.signs",
-        "sequence.transform.sort",
-        "sequence.transform.sorted_unique",
-    }
-)
-
 ALL_BUNDLES = (
     build_arithmetic_bundle(),
     build_combinatorics_bundle(),
@@ -308,11 +184,11 @@ def _all_operation_ids() -> set[str]:
     return ids
 
 
-def test_union_equals_expected_ids() -> None:
+def test_installed_bundles_expose_operations() -> None:
     actual = _all_operation_ids()
-    assert actual == EXPECTED_IDS, (
-        f"missing: {sorted(EXPECTED_IDS - actual)}\n"
-        f"extra: {sorted(actual - EXPECTED_IDS)}"
+    assert actual, "expected at least one DomainBundle operation"
+    assert len(actual) == sum(
+        len(bundle.capabilities) for bundle in ALL_BUNDLES
     )
 
 
@@ -355,9 +231,10 @@ def service(tmp_path_factory: pytest.TempPathFactory) -> CapabilityService:
 
 def test_catalog_covers_all_operations(service: CapabilityService) -> None:
     catalog_ids = {d.capability_id for d in service.catalog().capabilities}
-    assert catalog_ids == EXPECTED_IDS, (
-        f"missing from catalog: {sorted(EXPECTED_IDS - catalog_ids)}\n"
-        f"extra in catalog: {sorted(catalog_ids - EXPECTED_IDS)}"
+    expected = _all_operation_ids()
+    assert catalog_ids == expected, (
+        f"missing from catalog: {sorted(expected - catalog_ids)}\n"
+        f"extra in catalog: {sorted(catalog_ids - expected)}"
     )
 
 

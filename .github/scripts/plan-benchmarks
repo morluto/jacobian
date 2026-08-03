@@ -9,10 +9,11 @@ The emitted plan is a versioned, tamper-evident contract.  It binds the chosen
 lanes to the triggering event and the base/head (or merge-group) SHA, records a
 digest of the planner itself, and records a digest of the benchmark topology so
 downstream jobs can confirm they are validating the exact tree the planner saw.
-The plan selects three independent validation lanes -- record/schema conformance,
-prospective digest/record freshness, and merge-group inventory validation -- in
-addition to the Docker Oracle lane.  Unknown benchmark paths fail closed to the
-full portfolio.
+The plan selects independent evidence roles -- record/schema conformance,
+prospective digest/record freshness, merge-group inventory validation, and the
+Docker Oracle lane. CI may execute deterministic roles in one checkout when
+they share the same contract gate; it must not duplicate the expensive work.
+Unknown benchmark paths fail closed to the full portfolio.
 """
 
 from __future__ import annotations

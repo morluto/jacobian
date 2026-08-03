@@ -200,10 +200,6 @@
       "suites": [
         "unit",
         "component",
-        "domain",
-        "composition",
-        "storage",
-        "process",
         "mcp",
         "e2e",
         "npm",
@@ -261,6 +257,26 @@
         "static",
         "build"
       ]
+    },
+    {
+      "name": "ci-planning-tools",
+      "patterns": [
+        ".github/local-test-ownership.json",
+        ".github/scripts/classify-ci-paths",
+        ".github/scripts/emit-plan-receipt",
+        ".github/scripts/plan-local-tests",
+        ".github/scripts/validate-ci-plan"
+      ],
+      "suites": ["unit", "process", "static", "build"]
+    },
+    {
+      "name": "benchmark-ci-automation",
+      "patterns": [
+        ".github/scripts/plan-benchmarks",
+        ".github/scripts/validate-benchmark-plan",
+        ".github/workflows/benchmarks.yml"
+      ],
+      "suites": ["unit", "process", "static", "build"]
     },
     {
       "name": "ci-scripts",

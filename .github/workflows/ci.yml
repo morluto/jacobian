@@ -26,6 +26,7 @@ jobs:
       contents: read
     outputs:
       classification: ${{ steps.classify.outputs.classification }}
+      plan-receipt-digest: ${{ steps.classify.outputs.plan-receipt-digest }}
       run-python: ${{ steps.classify.outputs.run-python }}
       run-unit: ${{ steps.classify.outputs.run-unit }}
       run-component: ${{ steps.classify.outputs.run-component }}
@@ -66,8 +67,13 @@ jobs:
         name: Classify changed paths
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: >-
+            ${{ github.event.pull_request.base.sha ||
+                github.event.merge_group.base_sha || '' }}
+          HEAD_SHA: >-
+            ${{ github.event.pull_request.head.sha ||
+                github.event.merge_group.head_sha ||
+                github.sha }}
           FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           FORCE_LEAN: ${{ contains(github.event.pull_request.labels.*.name, 'ci:lean') }}
         run: |
@@ -91,6 +97,26 @@ jobs:
 
           printf '%s\n' "$plan_output" | .github/scripts/validate-ci-plan
           printf '%s\n' "$plan_output" >> "$GITHUB_OUTPUT"
+          plan_dir="$RUNNER_TEMP/jacobian-ci-plan"
+          mkdir -p "$plan_dir"
+          printf '%s\n' "$plan_output" > "$plan_dir/plan.txt"
+          printf '%s\n' "${changed_paths[@]}" > "$plan_dir/changed-paths.txt"
+          python .github/scripts/emit-plan-receipt \
+            --kind product-ci \
+            --event "$EVENT_NAME" \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --planner .github/scripts/classify-ci-paths \
+            --config .github/ci-impact.json \
+            --config tests/topology.toml \
+            --config .github/scripts/validate-ci-plan \
+            --config .github/workflows/ci.yml \
+            --config Makefile \
+            --plan-file "$plan_dir/plan.txt" \
+            --paths-file "$plan_dir/changed-paths.txt" \
+            --output "$plan_dir/plan-receipt.json"
+          echo "plan-receipt-digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")" >> "$GITHUB_OUTPUT"
+          echo "Plan receipt: \\`$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")\\`" >> "$GITHUB_STEP_SUMMARY"
           classification=$(sed -n 's/^classification=//p' <<< "$plan_output")
           {
             echo "## CI plan"
@@ -101,6 +127,12 @@ jobs:
             echo "$plan_output"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload CI plan receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-plan-receipt
+          path: ${{ runner.temp }}/jacobian-ci-plan/plan-receipt.json
+          retention-days: 14
       - name: Prepare domain timing hint
         if: steps.classify.outputs.run-domain == 'true'
         env:
@@ -137,7 +169,7 @@ jobs:
   lint:
     name: Lint & Format
     needs: plan
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -146,21 +178,11 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_STATIC: ${{ needs.plan.outputs.run-static }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_STATIC" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_STATIC" in true|false) ;; *) exit 1 ;; esac
       - if: needs.plan.outputs.run-static == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -191,7 +213,7 @@ jobs:
   docs:
     name: Documentation
     needs: plan
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -200,21 +222,11 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_DOCS: ${{ needs.plan.outputs.run-docs }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_DOCS" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_DOCS" in true|false) ;; *) exit 1 ;; esac
       - if: needs.plan.outputs.run-docs == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -225,7 +237,7 @@ jobs:
   security-audit:
     name: Security Audit
     needs: plan
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -234,21 +246,11 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_SECURITY: ${{ needs.plan.outputs.run-security }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_SECURITY" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_SECURITY" in true|false) ;; *) exit 1 ;; esac
       - if: needs.plan.outputs.run-security == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -646,7 +648,7 @@ jobs:
 
   python-test:
     name: Python Tests
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     needs:
       [plan, unit-test, domain-test, composition-test, process-test, semantic-lane-test, compatibility-test]
     runs-on: ubuntu-latest
@@ -669,51 +671,21 @@ jobs:
           SEMANTIC_RESULT: ${{ needs.semantic-lane-test.result }}
           COMPATIBILITY_RESULT: ${{ needs.compatibility-test.result }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_PYTHON" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_UNIT" in
-            true) test "$UNIT_RESULT" = "success" ;;
-            false) test "$UNIT_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_DOMAIN" in
-            true) test "$DOMAIN_RESULT" = "success" ;;
-            false) test "$DOMAIN_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_COMPOSITION" in
-            true) test "$COMPOSITION_RESULT" = "success" ;;
-            false) test "$COMPOSITION_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_PROCESS" in
-            true) test "$PROCESS_RESULT" = "success" ;;
-            false) test "$PROCESS_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_PYTHON" in true|false) ;; *) exit 1 ;; esac
+          case "$RUN_UNIT" in true) test "$UNIT_RESULT" = success ;; false) test "$UNIT_RESULT" = skipped ;; *) exit 1 ;; esac
+          case "$RUN_DOMAIN" in true) test "$DOMAIN_RESULT" = success ;; false) test "$DOMAIN_RESULT" = skipped ;; *) exit 1 ;; esac
+          case "$RUN_COMPOSITION" in true) test "$COMPOSITION_RESULT" = success ;; false) test "$COMPOSITION_RESULT" = skipped ;; *) exit 1 ;; esac
+          case "$RUN_PROCESS" in true) test "$PROCESS_RESULT" = success ;; false) test "$PROCESS_RESULT" = skipped ;; *) exit 1 ;; esac
           case "$PRODUCT_LANE_MATRIX" in
-            '{"include":[]}') test "$SEMANTIC_RESULT" = "skipped" ;;
-            '{"include":['*) test "$SEMANTIC_RESULT" = "success" ;;
+            '{"include":[]}') test "$SEMANTIC_RESULT" = skipped ;;
+            '{"include":['*) test "$SEMANTIC_RESULT" = success ;;
             *) exit 1 ;;
           esac
-          case "$RUN_COMPATIBILITY" in
-            true) test "$COMPATIBILITY_RESULT" = "success" ;;
-            false) test "$COMPATIBILITY_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
+          case "$RUN_COMPATIBILITY" in true) test "$COMPATIBILITY_RESULT" = success ;; false) test "$COMPATIBILITY_RESULT" = skipped ;; *) exit 1 ;; esac
 
   lean-test-run:
     name: Lean Runtime
@@ -739,7 +711,7 @@ jobs:
 
   lean-test:
     name: Lean Tests
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     needs: [plan, lean-test-run]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -750,26 +722,15 @@ jobs:
           RUN_LEAN: ${{ needs.plan.outputs.run-lean }}
           LEAN_RESULT: ${{ needs.lean-test-run.result }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_LEAN" in
-            true) test "$LEAN_RESULT" = "success" ;;
-            false) test "$LEAN_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_LEAN" in true) test "$LEAN_RESULT" = success ;; false) test "$LEAN_RESULT" = skipped ;; *) exit 1 ;; esac
 
   coverage:
     name: Coverage
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
@@ -792,36 +753,14 @@ jobs:
           PROCESS_RESULT: ${{ needs.process-test.result }}
           SEMANTIC_RESULT: ${{ needs.semantic-lane-test.result }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_COVERAGE" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_UNIT" in
-            true) test "$UNIT_RESULT" = "success" ;;
-            false) test "$UNIT_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_DOMAIN" in
-            true) test "$DOMAIN_RESULT" = "success" ;;
-            false) test "$DOMAIN_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_COMPOSITION" in
-            true) test "$COMPOSITION_RESULT" = "success" ;;
-            false) test "$COMPOSITION_RESULT" = "skipped" ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_COVERAGE" in true|false) ;; *) exit 1 ;; esac
+          case "$RUN_UNIT" in true) test "$UNIT_RESULT" = success ;; false) test "$UNIT_RESULT" = skipped ;; *) exit 1 ;; esac
+          case "$RUN_DOMAIN" in true) test "$DOMAIN_RESULT" = success ;; false) test "$DOMAIN_RESULT" = skipped ;; *) exit 1 ;; esac
+          case "$RUN_COMPOSITION" in true) test "$COMPOSITION_RESULT" = success ;; false) test "$COMPOSITION_RESULT" = skipped ;; *) exit 1 ;; esac
           if [ "$RUN_COVERAGE" = "true" ]; then
             test "$COMPOSITION_RESULT" = "success"
             test "$RUN_PROCESS" = "true"
@@ -921,7 +860,7 @@ jobs:
   duplicate-code:
     name: Duplicate Code Detection
     needs: plan
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -930,21 +869,11 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_DUPLICATE: ${{ needs.plan.outputs.run-duplicate }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_DUPLICATE" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_DUPLICATE" in true|false) ;; *) exit 1 ;; esac
       - if: needs.plan.outputs.run-duplicate == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -959,7 +888,7 @@ jobs:
   npm-package:
     name: npm Package
     needs: plan
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -968,21 +897,11 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_NPM: ${{ needs.plan.outputs.run-npm }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_NPM" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_NPM" in true|false) ;; *) exit 1 ;; esac
       - if: needs.plan.outputs.run-npm == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1002,7 +921,7 @@ jobs:
   build:
     name: Build
     needs: plan
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1011,21 +930,11 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_BUILD: ${{ needs.plan.outputs.run-build }}
         run: |
-          case "$PLAN_RESULT" in
-            success) ;;
-            cancelled)
-              echo "Upstream plan was cancelled; treating gate as non-failure"
-              exit 0
-              ;;
-            *)
-              echo "Upstream plan did not succeed: $PLAN_RESULT"
-              exit 1
-              ;;
-          esac
-          case "$RUN_BUILD" in
-            true|false) ;;
-            *) exit 1 ;;
-          esac
+          test "$PLAN_RESULT" = success || {
+            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
+            exit 1
+          }
+          case "$RUN_BUILD" in true|false) ;; *) exit 1 ;; esac
       - if: needs.plan.outputs.run-build == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

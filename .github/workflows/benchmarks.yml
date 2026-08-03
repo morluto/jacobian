@@ -40,6 +40,7 @@ jobs:
       benchmark-oracle-scope: ${{ steps.plan.outputs.benchmark-oracle-scope }}
       benchmark-oracle-matrix: ${{ steps.plan.outputs.benchmark-oracle-matrix }}
       benchmark-plan-reasons: ${{ steps.plan.outputs.benchmark-plan-reasons }}
+      benchmark-plan-receipt-digest: ${{ steps.plan.outputs.benchmark-plan-receipt-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -98,16 +99,46 @@ jobs:
           )
           printf '%s\n' "$plan_output" | python .github/scripts/validate-benchmark-plan
           printf '%s\n' "$plan_output" >> "$GITHUB_OUTPUT"
+          plan_dir="$RUNNER_TEMP/jacobian-benchmark-plan"
+          mkdir -p "$plan_dir"
+          printf '%s\n' "$plan_output" > "$plan_dir/plan.txt"
+          printf '%s\n' "${changed_paths[@]}" > "$plan_dir/changed-paths.txt"
+          python .github/scripts/emit-plan-receipt \
+            --kind benchmark \
+            --event "$EVENT_NAME" \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --planner .github/scripts/plan-benchmarks \
+            --config .github/scripts/validate-benchmark-plan \
+            --config benchmarks/registry.toml \
+            --config benchmarks/environment-profiles.toml \
+            --config .github/workflows/benchmarks.yml \
+            --config Makefile \
+            --config tools/check_benchmark_adapters.py \
+            --config tools/check_benchmark_contracts.py \
+            --config tools/check_harbor_dataset.py \
+            --config tools/sync_harbor_verifier_support.py \
+            --plan-file "$plan_dir/plan.txt" \
+            --paths-file "$plan_dir/changed-paths.txt" \
+            --output "$plan_dir/plan-receipt.json"
+          echo "benchmark-plan-receipt-digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")" >> "$GITHUB_OUTPUT"
           {
             echo "## Benchmark plan"
             echo
             echo '```text'
             echo "$plan_output"
             echo '```'
+            echo "Plan receipt: \\`$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")\\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload benchmark plan receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-plan-receipt
+          path: ${{ runner.temp }}/jacobian-benchmark-plan/plan-receipt.json
+          retention-days: 14
 
-  record-schema:
-    name: Benchmark Record & Schema Checks
+  contracts:
+    name: Benchmark Contracts, Records & Digests
     needs: plan
     if: needs.plan.outputs.run-benchmark-record-schema == 'true'
     runs-on: ubuntu-latest
@@ -120,24 +151,7 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-      - name: Validate benchmark contracts, schemas, and generated records
-        run: make harbor-validate
-
-  prospective-digest:
-    name: Benchmark Prospective Digest Checks
-    needs: plan
-    if: needs.plan.outputs.run-benchmark-prospective-digest == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-      - name: Validate vendored verifier support and committed task digests
+      - name: Validate benchmark contracts, schemas, records, and digests
         run: make harbor-validate
 
   inventory:
@@ -159,14 +173,12 @@ jobs:
 
   oracle:
     name: Benchmark Oracle (${{ matrix.dataset }}/${{ matrix.shard }})
-    needs: [plan, record-schema, prospective-digest]
+    needs: [plan, contracts]
     if: >-
       ${{ always() &&
       needs.plan.result == 'success' &&
       needs.plan.outputs.run-benchmark-oracle == 'true' &&
-      needs.record-schema.result == 'success' &&
-      (needs.plan.outputs.run-benchmark-prospective-digest == 'false' ||
-      needs.prospective-digest.result == 'success') }}
+      needs.contracts.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -200,8 +212,8 @@ jobs:
 
   validation:
     name: Benchmark Validation
-    if: ${{ !cancelled() }}
-    needs: [plan, record-schema, prospective-digest, inventory, oracle]
+    if: ${{ always() }}
+    needs: [plan, contracts, inventory, oracle]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -213,8 +225,7 @@ jobs:
           PROSPECTIVE_DIGEST_FLAG: ${{ needs.plan.outputs.run-benchmark-prospective-digest }}
           INVENTORY_FLAG: ${{ needs.plan.outputs.run-benchmark-inventory }}
           ORACLE_FLAG: ${{ needs.plan.outputs.run-benchmark-oracle }}
-          RECORD_SCHEMA_RESULT: ${{ needs.record-schema.result }}
-          PROSPECTIVE_DIGEST_RESULT: ${{ needs.prospective-digest.result }}
+          CONTRACTS_RESULT: ${{ needs.contracts.result }}
           INVENTORY_RESULT: ${{ needs.inventory.result }}
           ORACLE_RESULT: ${{ needs.oracle.result }}
         run: |
@@ -249,15 +260,20 @@ jobs:
                 ;;
             esac
           }
-          check_lane "$RECORD_SCHEMA_FLAG" "$RECORD_SCHEMA_RESULT" "record-schema"
-          check_lane "$PROSPECTIVE_DIGEST_FLAG" "$PROSPECTIVE_DIGEST_RESULT" "prospective-digest"
+          # Record/schema and prospective-digest are evidence roles owned by
+          # one deterministic contracts job.  They must not create duplicate
+          # checkouts and duplicate Harbor validation runs.
+          case "$RECORD_SCHEMA_FLAG" in
+            true) test "$CONTRACTS_RESULT" = "success" ;;
+            false) test "$CONTRACTS_RESULT" = "skipped" ;;
+            *) echo "invalid record-schema plan flag: $RECORD_SCHEMA_FLAG" >&2; exit 1 ;;
+          esac
           check_lane "$INVENTORY_FLAG" "$INVENTORY_RESULT" "inventory"
           check_lane "$ORACLE_FLAG" "$ORACLE_RESULT" "oracle"
           case "$PLAN_CHECK" in
             true) ;;
             false)
-              test "$RECORD_SCHEMA_RESULT" = skipped
-              test "$PROSPECTIVE_DIGEST_RESULT" = skipped
+              test "$CONTRACTS_RESULT" = skipped
               test "$INVENTORY_RESULT" = skipped
               test "$ORACLE_RESULT" = skipped
               ;;

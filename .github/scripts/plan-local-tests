@@ -215,15 +215,6 @@ def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
 
     for entry in entries:
         path = entry.path
-        if entry.status not in {"A", "M"}:
-            return [], f"{path}: {entry.status} changes are not exact"
-        if (
-            path in HIGH_IMPACT_PATHS
-            or path.startswith(".github/")
-            or path.endswith("/conftest.py")
-        ):
-            return [], f"{path}: shared infrastructure has broad impact"
-
         override_nodes = {
             node
             for pattern, nodes in overrides.items()
@@ -239,6 +230,15 @@ def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
                 return [], f"{path}: ownership override is not a test selector"
             selected.update(override_nodes)
             continue
+
+        if entry.status not in {"A", "M"}:
+            return [], f"{path}: {entry.status} changes are not exact"
+        if (
+            path in HIGH_IMPACT_PATHS
+            or path.startswith(".github/")
+            or path.endswith("/conftest.py")
+        ):
+            return [], f"{path}: shared infrastructure has broad impact"
 
         if path.startswith("tests/") and path.endswith(".py"):
             if Path(path).name.startswith("test_"):
@@ -334,6 +334,7 @@ def _lane_for_path(path: str) -> str | None:
                 pattern.rstrip("/") + "/"
             )
         return False
+
     for lane in lanes:
         if not isinstance(lane, dict) or not isinstance(lane.get("name"), str):
             continue
@@ -429,7 +430,10 @@ def main() -> None:
         if tests:
             commands = focused_commands(tests)
             if not commands:
-                print("cannot execute: selected tests have no unique topology lane", file=sys.stderr)
+                print(
+                    "cannot execute: selected tests have no unique topology lane",
+                    file=sys.stderr,
+                )
                 raise SystemExit(2)
         elif fallback:
             commands = [command for lane in lanes for command in COMMANDS[lane]]

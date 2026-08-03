@@ -4,9 +4,9 @@
 The planner emits a versioned plan bound to the triggering event and the
 base/head (or merge-group) SHA, a digest of the planner, and a digest of the
 benchmark topology.  This validator enforces the full fail-closed contract:
-every expected key is present, SHA bindings are well formed, the independent
-record/schema, prospective-digest, inventory, and Oracle lanes are mutually
-consistent, and an unselected lane is never confused with a failed one.
+every expected key is present, SHA bindings are well formed, the record/schema,
+prospective-digest, inventory, and Oracle evidence roles are mutually
+consistent, and an unselected role is never confused with a failed one.
 """
 
 from __future__ import annotations
@@ -164,6 +164,9 @@ def main() -> None:
     reasons = _json_array(plan["benchmark-plan-reasons"], "benchmark plan reasons")
     if not all(isinstance(reason, str) and reason for reason in reasons):
         fail("benchmark plan reasons must be non-empty strings")
+
+    if prospective_digest and not record_schema:
+        fail("run-benchmark-prospective-digest requires record/schema checks")
 
     topology = plan["benchmark-topology-digest"]
     if run_check:

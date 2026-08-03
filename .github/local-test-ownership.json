@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "overrides": {
+    ".github/ci-impact.json": [
+      "tests/boundary/process/tooling/test_ci_classification.py",
+      "tests/unit/tooling/test_ci_execution_policy.py"
+    ],
+    ".github/scripts/classify-ci-paths": [
+      "tests/boundary/process/tooling/test_ci_classification.py",
+      "tests/unit/tooling/test_ci_execution_policy.py"
+    ],
+    ".github/scripts/emit-plan-receipt": [
+      "tests/boundary/process/tooling/test_plan_receipt.py"
+    ],
+    ".github/scripts/plan-benchmarks": [
+      "tests/boundary/process/tooling/test_benchmark_classification.py",
+      "tests/unit/tooling/test_ci_execution_policy.py"
+    ]
+  }
+}

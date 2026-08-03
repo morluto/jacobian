@@ -100,13 +100,18 @@ def test_exact_farkas_slice_rejects_full_certificate_overclaim(tmp_path: Path) -
 def test_exact_farkas_slice_rejects_checked_assurance_above_ceiling(
     tmp_path: Path,
 ) -> None:
-    """CHECKED is above the COMPUTED ceiling and must force reward to zero."""
+    """CHECKED is above the COMPUTED ceiling and must force reward to zero.
+
+    Mathematical correctness remains independent of the assurance ceiling.
+    """
     task, app, logs = _prepare_farkas_slice_case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["claimed_assurance"] = "CHECKED"
     _bind_farkas_slice(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["assurance_calibration"] == 0.0
     assert rejected["reward"] == 0.0
 
 

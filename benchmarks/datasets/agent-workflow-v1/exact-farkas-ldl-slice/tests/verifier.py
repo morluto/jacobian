@@ -5,25 +5,33 @@ from pathlib import Path
 
 from verifier_support import (
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
+MAX_INPUT_BYTES = 1_048_576
+MAX_SUBMISSION_BYTES = 1_048_576
+MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen():
     try:
-        raw = (E / "input.json").read_bytes()
-        if (
-            (W / "input.json").is_symlink()
-            or (E / "input.json").is_symlink()
-            or (W / "input.json").read_bytes() != raw
+        frozen_path = E / "input.json"
+        workspace_path = W / "input.json"
+        if not is_regular_bounded_file(
+            frozen_path, max_bytes=MAX_INPUT_BYTES
+        ) or not is_regular_bounded_file(
+            workspace_path, max_bytes=MAX_INPUT_BYTES
         ):
             return {}
+        raw = frozen_path.read_bytes()
+        if workspace_path.read_bytes() != raw:
+            return {}
         value = json.loads(raw)
-    except (OSError, UnicodeError, ValueError):
+    except (OSError, UnicodeError, ValueError, RecursionError, MemoryError):
         return {}
     return value if isinstance(value, dict) else {}
 
@@ -163,31 +171,45 @@ def _result_ok(result, frozen):
 
 def main():
     submission_path = W / "submission.json"
-    try:
-        oversized = submission_path.stat().st_size > 1_048_576
-    except OSError:
-        oversized = True
-    submission = None if oversized else load_submission()
+    submission = (
+        load_submission()
+        if is_regular_bounded_file(
+            submission_path, max_bytes=MAX_SUBMISSION_BYTES
+        )
+        else None
+    )
     frozen = _load_frozen()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
+    # Structure may recognize above-ceiling assurances so correctness stays
+    # independent of the COMPUTED ceiling; reward still fails closed below.
+    structure_ok = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    math_correct = bool(contract and _result_ok(submission.get("result"), frozen))
+    ceiling_ok = bool(
+        isinstance(submission, dict)
+        and submission.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED"}
+    )
+    math_correct = bool(
+        structure_ok and _result_ok(submission.get("result"), frozen)
+    )
     evidence = None
     if (
-        contract
+        structure_ok
         and isinstance(submission.get("evidence"), list)
         and len(submission["evidence"]) == 1
     ):
-        evidence = read_evidence_json(
-            submission["evidence"][0],
-            expected_path="evidence/farkas-slice-certificate.json",
-        )
+        evidence_path = W / "evidence" / "farkas-slice-certificate.json"
+        if is_regular_bounded_file(
+            evidence_path, max_bytes=MAX_EVIDENCE_BYTES
+        ):
+            evidence = read_evidence_json(
+                submission["evidence"][0],
+                expected_path="evidence/farkas-slice-certificate.json",
+            )
     evidence_valid = bool(
         evidence
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
@@ -197,7 +219,7 @@ def main():
         and evidence["limitations"] == submission.get("limitations")
     )
     scope_ok = bool(
-        contract
+        structure_ok
         and submission.get("scope")
         == "SCALAR_SIGNS_AND_ONE_4X4_PRINCIPAL_SUBMATRIX_ONLY"
         and submission.get("limitations")
@@ -207,13 +229,20 @@ def main():
         ]
     )
     assurance_ok = bool(
-        contract
+        structure_ok
+        and ceiling_ok
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
-    correct = math_correct and evidence_valid and scope_ok and not false_certification
+    correct = (
+        math_correct
+        and evidence_valid
+        and scope_ok
+        and ceiling_ok
+        and not false_certification
+    )
     reward = 0 if not correct else 0.9 + 0.1 * assurance_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(

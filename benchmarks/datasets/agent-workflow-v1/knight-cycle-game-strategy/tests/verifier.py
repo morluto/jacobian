@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,11 @@ from verifier_support import (
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
+
+_FORBIDDEN_ASSURANCE_RE = re.compile(
+    r"\bverified\b",
+    re.IGNORECASE,
+)
 
 
 def _source() -> dict[str, Any]:
@@ -157,8 +163,14 @@ def _evidence(value: object) -> bool:
     if path is None:
         return False
     try:
-        text = path.read_text().casefold()
+        raw_text = path.read_text()
     except (OSError, UnicodeError):
+        return False
+    text = raw_text.casefold()
+    # Reject evidence that asserts an assurance level outside the authorized
+    # envelope. The task ceiling is COMPUTED, so a "verified" claim hidden in
+    # the prose is false certification and must not earn evidence validity.
+    if _FORBIDDEN_ASSURANCE_RE.search(raw_text):
         return False
     return len(text) >= 220 and all(
         term in text

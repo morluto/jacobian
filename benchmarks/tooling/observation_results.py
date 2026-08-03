@@ -130,6 +130,28 @@ def _object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+_JACOBIAN_MCP_SERVERS = frozenset(
+    (
+        json.dumps(
+            {
+                "name": "jacobian",
+                "transport": "streamable-http",
+                "url": "http://127.0.0.1:8000/mcp",
+            },
+            sort_keys=True,
+        ),
+        json.dumps(
+            {
+                "name": "jacobian",
+                "transport": "streamable-http",
+                "url": "http://jacobian:8000/mcp",
+            },
+            sort_keys=True,
+        ),
+    )
+)
+
+
 def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
     """Normalize only the frozen Jacobian treatment additions.
 
@@ -153,12 +175,7 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
                 remaining = [
                     server
                     for server in servers
-                    if server
-                    != {
-                        "name": "jacobian",
-                        "transport": "streamable-http",
-                        "url": "http://127.0.0.1:8000/mcp",
-                    }
+                    if json.dumps(server, sort_keys=True) not in _JACOBIAN_MCP_SERVERS
                 ]
                 if remaining:
                     agent["mcp_servers"] = remaining

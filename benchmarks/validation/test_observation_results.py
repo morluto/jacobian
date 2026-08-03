@@ -207,6 +207,12 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
 
     assert _comparison_job(control) == _comparison_job(treatment)
 
+    service_treatment = deepcopy(treatment)
+    service_treatment["agents"][0]["mcp_servers"][0]["url"] = (
+        "http://jacobian:8000/mcp"
+    )
+    assert _comparison_job(control) == _comparison_job(service_treatment)
+
     treatment["environment"]["extra_docker_compose"].append("unexpected.yaml")
     assert _comparison_job(control) != _comparison_job(treatment)
 

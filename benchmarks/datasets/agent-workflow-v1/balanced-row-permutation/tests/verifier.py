@@ -147,7 +147,8 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     )
     evidence_valid = bool(envelope and _evidence(submission.get("evidence")))
     scope_accurate = bool(
-        envelope
+        protocol
+        and envelope
         and submission.get("scope") == SCOPE
         and submission.get("completeness") == "COMPLETE"
         and submission.get("limitations") == [LIMITATION]

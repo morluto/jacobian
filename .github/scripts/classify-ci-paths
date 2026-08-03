@@ -18,6 +18,9 @@ TOPOLOGY = ROOT / "tests" / "topology.toml"
 # when both match the same path (fnmatch '*' crosses '/').
 _SUPPRESSED_WHEN_PRESENT = {
     "domain-mathematical-sources": frozenset({"python-source"}),
+    "npm-facing-adapter": frozenset({"python-source"}),
+    "ci-planning-tools": frozenset({"ci-scripts"}),
+    "benchmark-ci-automation": frozenset({"ci-scripts", "ci-automation"}),
 }
 
 

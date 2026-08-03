@@ -36,6 +36,14 @@ def test_makefile_changes_do_not_route_to_unrelated_provider_lanes() -> None:
     assert not {"lean", "npm", "provider"}.intersection(rule["suites"])
 
 
+def test_makefile_exposes_separate_local_and_hosted_plans() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "ci-plan:" in makefile
+    assert "test-plan:" in makefile
+    assert "harbor-plan:" in makefile
+
+
 def test_domain_mathematical_sources_skip_storage_mcp_and_e2e() -> None:
     manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
     rule = next(
@@ -52,6 +60,18 @@ def test_domain_mathematical_sources_skip_storage_mcp_and_e2e() -> None:
         "build",
     }
     assert not {"storage", "process", "mcp", "e2e", "lean", "npm"}.intersection(
+        rule["suites"]
+    )
+
+
+def test_benchmark_ci_changes_do_not_trigger_product_semantic_lanes() -> None:
+    manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
+    rule = next(
+        rule for rule in manifest["rules"] if rule["name"] == "benchmark-ci-automation"
+    )
+
+    assert set(rule["suites"]) == {"unit", "process", "static", "build"}
+    assert not {"domain", "composition", "storage", "mcp", "e2e"}.intersection(
         rule["suites"]
     )
 
@@ -93,9 +113,34 @@ def test_oracle_workers_do_not_repeat_benchmark_contract_suite() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]
 
-    assert "needs: [plan, record-schema, prospective-digest]" in oracle
+    assert "needs: [plan, contracts]" in oracle
     assert "make harbor-oracle-task" in oracle
     assert "make harbor-oracle DATASET" not in oracle
+
+
+def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
+    workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+
+    assert workflow.count("run: make harbor-validate") == 1
+    assert "  contracts:" in workflow
+    assert "  prospective-digest:" not in workflow
+    assert "python .github/scripts/emit-plan-receipt" in workflow
+    assert "benchmark-plan-receipt" in workflow
+
+
+def test_product_ci_publishes_a_provenance_bound_plan_receipt() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "python .github/scripts/emit-plan-receipt" in workflow
+    assert "ci-plan-receipt" in workflow
+    assert "plan-receipt-digest" in workflow
+
+
+def test_required_ci_gates_fail_when_the_plan_is_cancelled() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "treating gate as non-failure" not in workflow
+    assert workflow.count("if: ${{ always() }}") >= 8
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:

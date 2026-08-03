@@ -197,11 +197,22 @@ def test_prospective_digest_lane_requires_checks() -> None:
 def test_record_schema_lane_must_run_when_checks_run() -> None:
     plan = _plan()
     plan["run-benchmark-record-schema"] = "false"
+    plan["run-benchmark-prospective-digest"] = "false"
 
     result = _run(plan)
 
     assert result.returncode != 0
     assert "record-schema" in result.stderr
+
+
+def test_prospective_digest_lane_requires_record_schema() -> None:
+    plan = _plan()
+    plan["run-benchmark-record-schema"] = "false"
+
+    result = _run(plan)
+
+    assert result.returncode != 0
+    assert "record/schema" in result.stderr
 
 
 def test_oracle_plan_requires_a_nonempty_matrix() -> None:

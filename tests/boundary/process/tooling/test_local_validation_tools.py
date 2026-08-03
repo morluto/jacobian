@@ -67,6 +67,17 @@ def test_clean_test_plan_selects_no_lanes() -> None:
     assert planner.classify([]) == {"classification": "clean"}
 
 
+def test_known_ci_tooling_change_uses_owned_process_tests() -> None:
+    planner = _load("plan_local_tests_ci_override", "plan-local-tests")
+
+    selected, fallback = planner.exact_tests(
+        [planner.Change("M", ".github/scripts/emit-plan-receipt")]
+    )
+
+    assert fallback is None
+    assert selected == ["tests/boundary/process/tooling/test_plan_receipt.py"]
+
+
 def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
     result = subprocess.run(
         [

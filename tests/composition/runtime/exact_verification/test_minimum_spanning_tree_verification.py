@@ -92,14 +92,33 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
         _edge("b", "c", 1),
     ]
     forged_candidate["total_weight"] = _q(6)
-    forged_candidate["optimality_certificate"]["checks"][0]["non_tree_edge"] = ["a", "c"]
+    forged_candidate["optimality_certificate"]["checks"][0]["non_tree_edge"] = [
+        "a",
+        "c",
+    ]
     forged_candidate["optimality_certificate"]["checks"][0]["edge_weight"] = _q(2)
-    forged_candidate["optimality_certificate"]["checks"][0]["tree_path_vertices"] = ["a", "b", "c"]
-    forged_candidate["optimality_certificate"]["checks"][0]["maximum_tree_path_weight"] = _q(1)
-    forged_candidate["optimality_certificate"]["checks"][1]["non_tree_edge"] = ["c", "d"]
+    forged_candidate["optimality_certificate"]["checks"][0]["tree_path_vertices"] = [
+        "a",
+        "b",
+        "c",
+    ]
+    forged_candidate["optimality_certificate"]["checks"][0][
+        "maximum_tree_path_weight"
+    ] = _q(1)
+    forged_candidate["optimality_certificate"]["checks"][1]["non_tree_edge"] = [
+        "c",
+        "d",
+    ]
     forged_candidate["optimality_certificate"]["checks"][1]["edge_weight"] = _q(1)
-    forged_candidate["optimality_certificate"]["checks"][1]["tree_path_vertices"] = ["c", "b", "a", "d"]
-    forged_candidate["optimality_certificate"]["checks"][1]["maximum_tree_path_weight"] = _q(4)
+    forged_candidate["optimality_certificate"]["checks"][1]["tree_path_vertices"] = [
+        "c",
+        "b",
+        "a",
+        "d",
+    ]
+    forged_candidate["optimality_certificate"]["checks"][1][
+        "maximum_tree_path_weight"
+    ] = _q(4)
 
     rejected = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(

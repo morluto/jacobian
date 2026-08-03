@@ -141,8 +141,14 @@ def main():
         contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
+    false_certification = bool(
+        isinstance(submission, dict)
+        and submission.get("claimed_assurance") == "VERIFIED"
+    )
     reward = (
-        0.0 if not correctness else 0.7 + 0.1 * evidence + 0.1 * scope + 0.1 * assurance
+        0.0
+        if not correctness or false_certification
+        else 0.7 + 0.1 * evidence + 0.1 * scope + 0.1 * assurance
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier") / "reward.json").write_text(
@@ -153,6 +159,7 @@ def main():
                 "scope_accuracy": float(scope),
                 "assurance_calibration": float(assurance),
                 "reward": reward,
+                "false_certification": false_certification,
             }
         )
     )

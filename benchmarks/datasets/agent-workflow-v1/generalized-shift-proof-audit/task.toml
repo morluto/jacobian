@@ -21,7 +21,7 @@ category = "mathematics"
 tags = ["research-diagnostic", "proof-diagnosis", "exact-certificate", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-generated-proof"
-fixture_digest = "sha256:e3e2b135212a5077590611c710edfe4dc35e7c51e130d6dd5e1520230eb3421f"
+fixture_digest = "sha256:4e9fd6958132e25f8200f1f71ac8d9e45d705b1e9d7285f376048beb41b3c502"
 derivation = "Derived from Xerv-AI/GRAD train row 26 at revision 71595210590450202b7b69225bc07e9e01b13c5c (MIT)."
 
 [agent]

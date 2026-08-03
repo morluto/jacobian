@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import stat
 from pathlib import Path
 from typing import Any, Literal
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
+MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 SUBMISSION_FIELDS = frozenset(
     {
         "task_id",
@@ -29,6 +31,18 @@ SUBMISSION_FIELDS = frozenset(
 ASSURANCE_LEVELS = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"})
 
 
+def is_regular_bounded_file(path: Path, *, max_bytes: int) -> bool:
+    """Reject symlinks, non-regular files, and oversized files before reading."""
+
+    try:
+        status = path.lstat()
+    except OSError:
+        return False
+    if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
+        return False
+    return status.st_size <= max_bytes
+
+
 def sha256_uri(path: Path) -> str:
     """Hash a regular evidence file without following a replacement symlink."""
 
@@ -42,11 +56,18 @@ def sha256_uri(path: Path) -> str:
 def load_submission(
     path: Path = WORKSPACE / "submission.json",
 ) -> dict[str, Any] | None:
-    """Parse a submission as one JSON object, rejecting malformed input."""
+    """Parse a submission as one JSON object, rejecting malformed input.
 
+    Rejects symlinks, non-regular files, and oversized submissions before
+    reading so a malformed or hostile submission cannot OOM or block the
+    bounded verifier; such input yields a deterministic ``None`` (zero reward).
+    """
+
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
     try:
         value = json.loads(path.read_text())
-    except (OSError, ValueError, RecursionError):
+    except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -220,12 +241,14 @@ def false_verified_claim(
 
 __all__ = [
     "ASSURANCE_LEVELS",
+    "MAX_SUBMISSION_BYTES",
     "SUBMISSION_FIELDS",
     "TESTS",
     "WORKSPACE",
     "authorized_record_is_bound",
     "evidence_list_is_bound",
     "false_verified_claim",
+    "is_regular_bounded_file",
     "load_submission",
     "read_evidence_json",
     "resolve_evidence",

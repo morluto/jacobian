@@ -1,0 +1,1 @@
+The machine-readable certificate is stored in root-bound-certificate.json.

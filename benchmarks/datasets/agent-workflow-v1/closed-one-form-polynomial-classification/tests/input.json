@@ -1,0 +1,6 @@
+{
+  "coefficient_order": ["1", "x", "y", "x^2", "xy", "y^2", "x^3", "x^2y", "xy^2", "y^3"],
+  "degree_bound": 3,
+  "one_form": "f(x,y) dx + f(y,x) dy",
+  "domain": "R2"
+}

@@ -1,0 +1,8 @@
+{
+  "benchmark_family": "Regression",
+  "primary_reasoning_objective": "chain-rule proof repair through symbolic integrability classification",
+  "quality_score": 90,
+  "portfolio_gap": "classify a polynomial solution space and reconstruct exact potentials",
+  "shortcut_audit": "The public solution is wrong; copying its dimension 6 fails. Row-space, nullspace independence, and differentiated potentials are replayed.",
+  "expected_discrimination": {"weaker": "copies the source's chain-rule error and dimension 6", "stronger": "repairs the derivative and derives an equivalent constraint and basis certificate", "tool_less": "can solve, but must maintain ten-coordinate and rational-potential consistency"}
+}

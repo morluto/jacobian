@@ -1,15 +1,14 @@
 from __future__ import annotations
+
 import json
 from pathlib import Path
+
 import pytest
 from benchmarks.validation.agent_workflow_v1 import support
 
 TASK = "real-rooted-sign-polynomials"
 
 
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
 def _prepare_real_rooted_sign_case(tmp_path: Path):
     task, app, logs = support._prepare_case(
         tmp_path, "real-rooted-sign-polynomials", "computed"
@@ -151,3 +150,7 @@ def test_real_rooted_sign_polynomials_rejects_missing_evidence_envelope(
     support._write_json(evidence_path, submission["result"])
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

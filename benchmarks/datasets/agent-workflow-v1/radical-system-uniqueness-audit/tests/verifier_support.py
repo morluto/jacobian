@@ -17,6 +17,7 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
+MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 SUBMISSION_FIELDS = frozenset(
     {
         "task_id",
@@ -167,7 +168,9 @@ def resolve_evidence(
         target = unresolved.resolve(strict=True)
     except OSError:
         return None
-    if not target.is_relative_to(root) or not target.is_file():
+    if not target.is_relative_to(root) or not is_regular_bounded_file(
+        target, max_bytes=MAX_EVIDENCE_BYTES
+    ):
         return None
     try:
         if descriptor["sha256"] != sha256_uri(target):
@@ -194,7 +197,7 @@ def read_evidence_json(
         return None
     try:
         value = json.loads(target.read_text())
-    except (OSError, ValueError, RecursionError):
+    except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
 

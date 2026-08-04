@@ -113,7 +113,10 @@ def test_checker_runtime_binds_only_independent_source(
     assert {
         component["provider"]
         for component in descriptor.provider_runtime.configuration["components"]
-    } == {"jacobian.combinatorics-exact-checker-source"}
+    } == {
+        "jacobian.additive-combinatorics-checker-source",
+        "jacobian.combinatorics-exact-checker-source",
+    }
 
 
 def test_checker_replays_a_result_above_python_default_integer_digit_limit(

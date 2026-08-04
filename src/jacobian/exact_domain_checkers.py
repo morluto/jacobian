@@ -21,6 +21,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityInstallTier,
     CapabilityMode,
     CapabilityProviderAvailability,
@@ -76,6 +77,7 @@ _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
     "jacobian_checkers.graph_exact_operations": "finite-graph",
     "jacobian_checkers.exact_probability_operations": "finite-probability",
     "jacobian_checkers.recurrence_series": "combinatorics",
+    "jacobian_checkers.additive_combinatorics": "combinatorics",
     "jacobian_checkers.jacobian_syzygy": "graded-syzygy",
     "jacobian_checkers.projective_arrangements": "projective-arrangement",
     "jacobian_checkers.simplicial_topology": "topology",
@@ -464,6 +466,14 @@ class ExactComputedVerificationAdapter:
             ),
             output_schema=model_schema(ExactComputedVerificationOutput),
             tags=declaration.declaration.verification_tags,
+            accepted_input_kinds=(
+                (CapabilityInputKind.TYPED_ARTIFACT,)
+                if stored_result_input
+                else (CapabilityInputKind.STRUCTURED_REQUEST,)
+            ),
+            accepted_artifact_types=(
+                (declaration.result_schema_uri,) if stored_result_input else ()
+            ),
         )
 
     @property

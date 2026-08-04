@@ -332,19 +332,25 @@ def combinatorics_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
 ) -> CapabilityProviderRuntime:
-    """Bind recurrence and rational-series checker source without SymPy."""
+    """Bind exact combinatorics checker source without producer dependencies."""
 
     try:
         version, _, license_files = _jacobian_identity()
     except ProviderRuntimeError:
-        source = _unavailable_runtime(
+        recurrence_source = _unavailable_runtime(
             provider="jacobian.combinatorics-exact-checker-source",
             install_tier=CapabilityInstallTier.T1,
             license_id="MIT",
-            diagnostic="The exact combinatorics checker source could not be identified.",
+            diagnostic="The recurrence checker source could not be identified.",
+        )
+        additive_source = _unavailable_runtime(
+            provider="jacobian.additive-combinatorics-checker-source",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            diagnostic="The additive-combinatorics checker source could not be identified.",
         )
     else:
-        source = source_provider_runtime(
+        recurrence_source = source_provider_runtime(
             "jacobian.combinatorics-exact-checker-source",
             version=version,
             entrypoint=(
@@ -355,11 +361,26 @@ def combinatorics_exact_checker_provider_runtime(
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
         )
+        additive_source = source_provider_runtime(
+            "jacobian.additive-combinatorics-checker-source",
+            version=version,
+            entrypoint=("jacobian_checkers.additive_combinatorics:check_integer_sidon"),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            license_files=license_files,
+            features=(
+                "clean-process-replay",
+                "fixed-order-extension-exhaustion",
+                "standard-library-only",
+            ),
+        )
     return composite_provider_runtime(
         "jacobian.combinatorics-exact-checkers",
-        components=(source,),
+        components=(recurrence_source, additive_source),
         features=(
             "clean-process-replay",
+            "additive-difference-set-replay",
+            "fixed-order-extension-exhaustion",
             "linear-recurrence-replay",
             "rational-series-residual-replay",
             "standard-library-only",

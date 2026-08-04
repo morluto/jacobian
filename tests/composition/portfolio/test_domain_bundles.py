@@ -19,8 +19,11 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.combinatorics import (
+    CyclicDifferenceSetExtensionRequest,
+    CyclicPerfectDifferenceSetRequest,
     FibonacciPairRequest,
     IntegerPartitionEnumerationRequest,
+    IntegerSidonRequest,
     LinearRecurrenceEvaluationRequest,
     RationalGeneratingFunctionCoefficientsRequest,
 )
@@ -94,6 +97,12 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (FibonacciPairRequest, {"n": 5}),
     (CombNonnegPairRequest, {"n": 5, "k": 2}),
     (CombIntegerListRequest, {"values": ["2", "1", "1"]}),
+    (IntegerSidonRequest, {"elements": ["1", "2", "4"]}),
+    (CyclicPerfectDifferenceSetRequest, {"modulus": 7, "residues": [0, 1, 3]}),
+    (
+        CyclicDifferenceSetExtensionRequest,
+        {"base_elements": ["0", "1"], "target_order": 3},
+    ),
     (IntegerPartitionEnumerationRequest, {"n": 5, "max_parts": 3}),
     (
         LinearRecurrenceEvaluationRequest,

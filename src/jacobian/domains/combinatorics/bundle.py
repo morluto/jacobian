@@ -7,6 +7,7 @@ import platform
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.domains.combinatorics.checkers import COMBINATORICS_EXACT_REPLAY_CHECKERS
 from jacobian.domains.combinatorics.counting import COUNTING_CAPABILITIES
+from jacobian.domains.combinatorics.difference_sets import DIFFERENCE_SET_CAPABILITIES
 from jacobian.domains.combinatorics.partitions import PARTITION_CAPABILITIES
 from jacobian.domains.combinatorics.recurrence import RECURRENCE_CAPABILITIES
 from jacobian.operations import (
@@ -46,6 +47,7 @@ def build_combinatorics_bundle() -> DomainBundle:
             *COUNTING_CAPABILITIES,
             *PARTITION_CAPABILITIES,
             *RECURRENCE_CAPABILITIES,
+            *DIFFERENCE_SET_CAPABILITIES,
         ),
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(

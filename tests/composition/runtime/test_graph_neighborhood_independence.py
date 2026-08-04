@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityRequest,
 )
@@ -86,3 +87,13 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["conclusion"] == Conclusion.TRUE.value
     assert verified.output["verification_record_uri"]
+
+    descriptor = next(
+        item
+        for item in authorized_complete_runtime.core.capabilities.catalog().capabilities
+        if item.capability_id == "graph.compute.neighborhood_independence"
+    )
+    assert descriptor.accepted_input_kinds == (CapabilityInputKind.TYPED_ARTIFACT,)
+    assert descriptor.accepted_artifact_types == (
+        authorized_complete_runtime.portfolio.graph.graph_schema_uri,
+    )

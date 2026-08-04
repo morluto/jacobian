@@ -186,12 +186,23 @@ before invocation. Do not infer a verifier ID or payload from naming
 conventions: checker availability depends on operator authorization and the
 installed runtime.
 
-Two bounded portfolio examples show the intended boundary:
+Bounded portfolio examples show the intended boundary:
 
 - `graph.hamiltonian_path.decide` returns either a complete spanning path
   witness or a negative decision after exhausting its order-18 state space.
   `graph.hamiltonian_path.verify` checks a positive witness directly and
   independently exhausts negative instances.
+- `combinatorics.integer_set.sidon.decide` materializes the complete ordered
+  integer-difference profile. `combinatorics.cyclic_difference_set.perfect.decide`
+  similarly materializes every nonzero cyclic residue multiplicity.
+  `combinatorics.cyclic_difference_set.extension.decide` asks only a bounded,
+  fixed-order direct-containment question in the derived modulus `k(k-1)+1`;
+  its negative result is durable and records the exact candidate-space size.
+  The corresponding `.verify` capabilities use a standard-library checker
+  module that imports no producer code. Negative extension replay enumerates
+  every candidate with `itertools.combinations`, independently of the
+  producer's pruned depth-first search. See
+  [Additive-combinatorics decisions](additive-combinatorics-decisions.md).
 - `polynomial.jacobian_syzygy.minimum_degree.compute` constructs the graded
   maps from degree zero through the first kernel or a declared finite bound.
   The source can be a canonical sparse polynomial or a labelled product of

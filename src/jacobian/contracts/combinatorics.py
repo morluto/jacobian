@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from fractions import Fraction
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 
 from jacobian.canonical import (
     CanonicalLimits,
@@ -29,7 +29,28 @@ MAX_RATIONAL_SERIES_TRUNCATION_ORDER = 512
 MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS = 64
 MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS = 32_768
 MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES = 10 * 1024 * 1024
+MAX_SIDON_SET_SIZE = 32
+MAX_CYCLIC_DIFFERENCE_SET_MODULUS = 4_096
+MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES = 50_000
+MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS = 3
 _LOG10_2 = math.log10(2)
+
+AdditiveInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]*)$",
+        max_length=128,
+        strict=True,
+    ),
+]
+AdditiveDifferenceInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]*)$",
+        max_length=129,
+        strict=True,
+    ),
+]
 
 
 def _fraction_wire(value: Fraction) -> dict[str, str]:
@@ -257,6 +278,252 @@ class NonnegativeIntegerRequest(ContractModel):
 class NonnegativePairRequest(ContractModel):
     n: StrictInt = Field(ge=0, le=_MAX_N)
     k: StrictInt = Field(ge=0, le=_MAX_N)
+
+
+class IntegerSidonRequest(ContractModel):
+    """One bounded finite integer set for ordered-difference replay."""
+
+    elements: tuple[AdditiveInteger, ...] = Field(max_length=MAX_SIDON_SET_SIZE)
+
+    @model_validator(mode="after")
+    def require_unique_elements(self) -> Self:
+        if len(set(self.elements)) != len(self.elements):
+            raise ValueError("Sidon input elements must be unique")
+        return self
+
+
+class OrderedIntegerDifference(ContractModel):
+    minuend: AdditiveInteger
+    subtrahend: AdditiveInteger
+    difference: AdditiveDifferenceInteger
+
+
+class IntegerSidonResult(ContractModel):
+    """Complete ordered-difference profile and exact Sidon decision."""
+
+    semantics_version: Literal["integer-sidon.ordered-differences.v1"]
+    normalized_elements: tuple[AdditiveInteger, ...] = Field(
+        max_length=MAX_SIDON_SET_SIZE
+    )
+    ordered_differences: tuple[OrderedIntegerDifference, ...] = Field(
+        max_length=MAX_SIDON_SET_SIZE * (MAX_SIDON_SET_SIZE - 1)
+    )
+    is_sidon: StrictBool
+    exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-stdlib"] = "python-stdlib"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_complete_ordered_difference_profile(self) -> Self:
+        values = tuple(int(value) for value in self.normalized_elements)
+        if values != tuple(sorted(set(values))):
+            raise ValueError("normalized Sidon elements must be sorted and unique")
+        expected = tuple(
+            (left, right, left - right)
+            for left in values
+            for right in values
+            if left != right
+        )
+        actual = tuple(
+            (
+                int(record.minuend),
+                int(record.subtrahend),
+                int(record.difference),
+            )
+            for record in self.ordered_differences
+        )
+        if actual != expected:
+            raise ValueError(
+                "ordered differences must cover every distinct ordered pair canonically"
+            )
+        if self.is_sidon != (len({item[2] for item in expected}) == len(expected)):
+            raise ValueError("Sidon decision must match the ordered differences")
+        return self
+
+
+class CyclicPerfectDifferenceSetRequest(ContractModel):
+    """One canonical residue set and modulus for exact PDS decision."""
+
+    modulus: StrictInt = Field(ge=2, le=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
+    residues: tuple[StrictInt, ...] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def require_canonical_residue_set(self) -> Self:
+        if len(set(self.residues)) != len(self.residues):
+            raise ValueError("PDS residues must be unique")
+        if any(residue < 0 or residue >= self.modulus for residue in self.residues):
+            raise ValueError("PDS residues must be canonical modulo the modulus")
+        return self
+
+
+class CyclicDifferenceMultiplicity(ContractModel):
+    residue: StrictInt = Field(ge=1, lt=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
+    multiplicity: StrictInt = Field(ge=0, le=4_096)
+
+
+class CyclicPerfectDifferenceSetResult(ContractModel):
+    """Complete nonzero cyclic difference profile and exact PDS decision."""
+
+    semantics_version: Literal["cyclic-perfect-difference-set.v1"]
+    modulus: StrictInt = Field(ge=2, le=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
+    normalized_residues: tuple[StrictInt, ...] = Field(min_length=1, max_length=64)
+    order: StrictInt = Field(ge=1, le=64)
+    expected_modulus: StrictInt = Field(ge=1, le=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
+    difference_multiplicities: tuple[CyclicDifferenceMultiplicity, ...] = Field(
+        min_length=1,
+        max_length=MAX_CYCLIC_DIFFERENCE_SET_MODULUS - 1,
+    )
+    missing_residues: tuple[StrictInt, ...] = Field(
+        max_length=MAX_CYCLIC_DIFFERENCE_SET_MODULUS - 1
+    )
+    repeated_residues: tuple[StrictInt, ...] = Field(
+        max_length=MAX_CYCLIC_DIFFERENCE_SET_MODULUS - 1
+    )
+    is_perfect: StrictBool
+    exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-stdlib"] = "python-stdlib"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_complete_cyclic_profile(self) -> Self:
+        residues = self.normalized_residues
+        if residues != tuple(sorted(set(residues))):
+            raise ValueError("normalized PDS residues must be sorted and unique")
+        if any(residue < 0 or residue >= self.modulus for residue in residues):
+            raise ValueError("normalized PDS residues must lie in the modulus")
+        if self.order != len(residues):
+            raise ValueError("PDS order must equal the residue-set cardinality")
+        if self.expected_modulus != self.order * (self.order - 1) + 1:
+            raise ValueError("expected_modulus must equal k(k-1)+1")
+        profile = self.difference_multiplicities
+        if tuple(item.residue for item in profile) != tuple(range(1, self.modulus)):
+            raise ValueError(
+                "cyclic difference profile must cover every nonzero residue"
+            )
+        missing = tuple(item.residue for item in profile if item.multiplicity == 0)
+        repeated = tuple(item.residue for item in profile if item.multiplicity > 1)
+        if self.missing_residues != missing or self.repeated_residues != repeated:
+            raise ValueError("missing and repeated residues must match the profile")
+        expected_perfect = (
+            self.modulus == self.expected_modulus and not missing and not repeated
+        )
+        if self.is_perfect != expected_perfect:
+            raise ValueError("PDS decision must match the complete residue profile")
+        return self
+
+
+class CyclicDifferenceSetExtensionRequest(ContractModel):
+    """A fixed-order direct-containment question in the derived cyclic group."""
+
+    base_elements: tuple[AdditiveInteger, ...] = Field(min_length=1, max_length=64)
+    target_order: StrictInt = Field(ge=2, le=64)
+
+    @model_validator(mode="after")
+    def require_bounded_complete_candidate_space(self) -> Self:
+        if len(set(self.base_elements)) != len(self.base_elements):
+            raise ValueError("extension base elements must be unique")
+        modulus = self.target_order * (self.target_order - 1) + 1
+        if modulus > MAX_CYCLIC_DIFFERENCE_SET_MODULUS:
+            raise ValueError("derived extension modulus exceeds the supported bound")
+        base_residues = {int(value) % modulus for value in self.base_elements}
+        additional = self.target_order - len(base_residues)
+        if additional < 0:
+            raise ValueError("target_order is smaller than the reduced base set")
+        if additional > MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS:
+            raise ValueError("extension request requires too many added elements")
+        candidates = math.comb(modulus - len(base_residues), additional)
+        if candidates > MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES:
+            raise ValueError(
+                "extension candidate space exceeds the complete-search bound"
+            )
+        return self
+
+
+def _extension_result_candidate_count(
+    *,
+    target_order: int,
+    modulus: int,
+    base_residues: tuple[int, ...],
+) -> int:
+    expected_modulus = target_order * (target_order - 1) + 1
+    if modulus != expected_modulus:
+        raise ValueError("extension modulus must equal k(k-1)+1")
+    if base_residues != tuple(sorted(set(base_residues))):
+        raise ValueError("base residues must be sorted and unique")
+    if any(residue < 0 or residue >= modulus for residue in base_residues):
+        raise ValueError("base residues must lie in the derived modulus")
+    additional = target_order - len(base_residues)
+    if additional < 0 or additional > MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS:
+        raise ValueError(
+            "extension result lies outside the supported added-element bound"
+        )
+    return math.comb(modulus - len(base_residues), additional)
+
+
+def _require_positive_extension_shape(
+    *,
+    target_order: int,
+    modulus: int,
+    base_residues: tuple[int, ...],
+    extension: tuple[int, ...],
+    coverage: str,
+) -> None:
+    if coverage != "WITNESS":
+        raise ValueError("positive extension decisions require witness coverage")
+    if extension != tuple(sorted(set(extension))):
+        raise ValueError("extension witness must be sorted and unique")
+    if len(extension) != target_order:
+        raise ValueError("extension witness must have target_order residues")
+    if any(residue < 0 or residue >= modulus for residue in extension):
+        raise ValueError("extension witness residues must lie in the derived modulus")
+    if not set(base_residues) <= set(extension):
+        raise ValueError("extension witness must contain the reduced base set")
+
+
+class CyclicDifferenceSetExtensionResult(ContractModel):
+    """A witness or complete negative decision for one fixed PDS order."""
+
+    semantics_version: Literal["cyclic-pds-extension.fixed-order.v1"]
+    target_order: StrictInt = Field(ge=2, le=64)
+    modulus: StrictInt = Field(ge=2, le=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
+    base_residues: tuple[StrictInt, ...] = Field(min_length=1, max_length=64)
+    candidate_space_size: StrictInt = Field(
+        ge=1, le=MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES
+    )
+    decision: Literal["EXTENDS", "DOES_NOT_EXTEND"]
+    extension: tuple[StrictInt, ...] = Field(max_length=64)
+    coverage: Literal["WITNESS", "ALL_CANDIDATES"]
+    exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-stdlib"] = "python-stdlib"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_fixed_order_scope_and_decision_shape(self) -> Self:
+        expected_candidates = _extension_result_candidate_count(
+            target_order=self.target_order,
+            modulus=self.modulus,
+            base_residues=self.base_residues,
+        )
+        if self.candidate_space_size != expected_candidates:
+            raise ValueError(
+                "candidate_space_size must cover the exact combination space"
+            )
+        if self.decision == "EXTENDS":
+            _require_positive_extension_shape(
+                target_order=self.target_order,
+                modulus=self.modulus,
+                base_residues=self.base_residues,
+                extension=self.extension,
+                coverage=self.coverage,
+            )
+        elif self.extension or self.coverage != "ALL_CANDIDATES":
+            raise ValueError(
+                "negative extension decisions require empty witness and full coverage"
+            )
+        return self
 
 
 class IntegerListRequest(ContractModel):

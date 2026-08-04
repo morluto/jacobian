@@ -19,6 +19,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
@@ -86,6 +87,8 @@ class GraphNeighborhoodIndependenceAdapter:
                 "independence-number",
                 "exact-computation",
             ),
+            accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
+            accepted_artifact_types=(resources.graph.graph_schema_uri,),
         )
 
     @property

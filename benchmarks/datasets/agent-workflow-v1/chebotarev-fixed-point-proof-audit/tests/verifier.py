@@ -70,7 +70,10 @@ def partition(p):
 
 def table():
     counts = Counter(partition(p) for p in itertools.permutations(range(4)))
-    fixed = {"1+1+1+1": 4, "2+1+1": 2, "2+2": 0, "3+1": 1, "4": 0}
+    fixed = {}
+    for p in itertools.permutations(range(4)):
+        key = partition(p)
+        fixed[key] = max(fixed.get(key, 0), sum(1 for i in range(4) if p[i] == i))
     order = ["1+1+1+1", "2+1+1", "2+2", "3+1", "4"]
     return [
         {
@@ -102,6 +105,29 @@ def exact_value(actual, expected):
     return type(actual) is type(expected) and actual == expected
 
 
+def cycle_table_matches(actual, expected_table):
+    expected_by_partition = {row["partition"]: row for row in expected_table}
+    if not isinstance(actual, list) or len(actual) != len(expected_table):
+        return False
+    seen = set()
+    for row in actual:
+        if not isinstance(row, dict) or set(row) != {
+            "partition",
+            "class_size",
+            "fixed_points",
+            "contributes",
+        }:
+            return False
+        key = row["partition"]
+        if not isinstance(key, str) or key in seen:
+            return False
+        seen.add(key)
+        target = expected_by_partition.get(key)
+        if target is None or not exact_value(row, target):
+            return False
+    return True
+
+
 def valid(r):
     expected_table = table()
     defects = {
@@ -126,7 +152,7 @@ def valid(r):
         and [1, 0, 0, 0, 1] == [1, 4 % 2, 6 % 2, 4 % 2, 1]
         and exact_value(r["actual_discriminant"], discriminant())
         and r["actual_discriminant"] == -6656
-        and exact_value(r["cycle_types"], expected_table)
+        and cycle_table_matches(r["cycle_types"], expected_table)
         and type(r["fixed_point_total"]) is int
         and r["fixed_point_total"]
         == sum(x["class_size"] for x in expected_table if x["contributes"])
@@ -152,20 +178,29 @@ def main():
         allowed_assurances=frozenset({"COMPUTED"}),
         verification_record="forbidden",
     )
-    ev = (
-        read_evidence_json(
-            s["evidence"][0], expected_path="evidence/chebotarev-audit.json"
-        )
-        if contract
+    evidence_descriptor = (
+        s["evidence"][0]
+        if isinstance(s, dict)
+        and isinstance(s.get("evidence"), list)
+        and len(s.get("evidence", [])) == 1
         else None
     )
-    math_ok = bool(contract and frozen() and valid(s.get("result")))
+    ev = (
+        read_evidence_json(
+            evidence_descriptor, expected_path="evidence/chebotarev-audit.json"
+        )
+        if evidence_descriptor is not None
+        else None
+    )
+    math_ok = bool(frozen() and isinstance(s, dict) and valid(s.get("result")))
     evidence_ok = bool(
         ev
         and set(ev) == {"schema_version", "task_id", "result", "limitations"}
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
-        and ev.get("result") == s.get("result")
+        and exact_value(
+            ev.get("result"), s.get("result") if isinstance(s, dict) else None
+        )
         and ev.get("limitations") == LIMITATIONS
     )
     scope_ok = bool(

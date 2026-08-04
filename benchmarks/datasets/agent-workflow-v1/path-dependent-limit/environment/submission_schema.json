@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "properties": {
+    "task_id": {"const": "jacobian/path-dependent-limit"},
+    "conclusion": {"const": "ALL_LINEAR_PATHS_ZERO_BUT_LIMIT_DOES_NOT_EXIST"},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exponent_p",
+        "function",
+        "origin_value",
+        "line_certificate",
+        "nonlinear_paths"
+      ],
+      "properties": {
+        "exponent_p": {"type": "integer", "minimum": 1, "maximum": 5},
+        "function": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "numerator_x_power",
+            "numerator_y_power",
+            "denominator_terms"
+          ],
+          "properties": {
+            "numerator_x_power": {"type": "integer"},
+            "numerator_y_power": {"type": "integer"},
+            "denominator_terms": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["x_power", "y_power"],
+                "properties": {
+                  "x_power": {"type": "integer", "minimum": 0},
+                  "y_power": {"type": "integer", "minimum": 0}
+                }
+              }
+            }
+          }
+        },
+        "origin_value": {"const": "0"},
+        "line_certificate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "axes_zero",
+            "numerator_order",
+            "denominator_leading_order",
+            "quotient_order",
+            "arbitrary_nonzero_slope_limit"
+          ],
+          "properties": {
+            "axes_zero": {"const": true},
+            "numerator_order": {"type": "integer"},
+            "denominator_leading_order": {"type": "integer"},
+            "quotient_order": {"type": "integer"},
+            "arbitrary_nonzero_slope_limit": {"const": "0"}
+          }
+        },
+        "nonlinear_paths": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["c", "y_x_power", "limit"],
+            "properties": {
+              "c": {
+                "type": "string",
+                "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$"
+              },
+              "y_x_power": {"type": "integer"},
+              "limit": {
+                "type": "string",
+                "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
+    "scope": {
+      "const": "all straight lines through (0,0) and submitted nonlinear rational paths"
+    },
+    "completeness": {"const": "COMPLETE"},
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"const": "evidence/answer.txt"},
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    }
+  }
+}

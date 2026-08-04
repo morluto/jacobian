@@ -1,4 +1,0 @@
-Erdős Problem 707: a Sidon set forbidden in every finite perfect difference set
-
-Expected conclusion: DISPROVED.
-Oracle summary: The five-element set is Sidon and cannot occur inside a perfect difference set for any modulus. The source gives a projective-plane/polarity obstruction and a reproducible Lean proof; checking finitely many moduli is not the universal argument.

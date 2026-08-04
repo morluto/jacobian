@@ -1,12 +1,26 @@
-# Erdős Problem 707: a Sidon set forbidden in every finite perfect difference set
+# Erdős Problem 707: finite exact evidence and a public universal result
 
-A finite set A of integers is Sidon if all differences a-b with a,b in A and a != b are distinct. A finite set B is a perfect difference set modulo n if its ordered differences represent every nonzero residue modulo n exactly once. Prove that A={1,2,4,8,13} is Sidon but is not contained in any perfect difference set modulo any positive integer n.
+Let `A = {1,2,4,8,13}`. An integer set is Sidon when its ordered differences
+`a-b`, for distinct elements, are all different. A `k`-element perfect
+difference set lives modulo `k(k-1)+1` and represents every nonzero residue
+exactly once by its ordered differences.
 
-This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
-public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. The installed portfolio lacks perfect-difference-set semantics, cyclic-projective-plane constructions, the universal obstruction checker, and the paper's pinned Lean environment.
+The public answer-visible result says that `A` is Sidon but is not contained in
+any finite perfect difference set. Reproduce the following independently
+checkable finite core:
 
-Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
-reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence
-list. Claim `COMPUTED` assurance only; do not claim `VERIFIED`. Treat timeout, error, or
-incomplete search as a non-conclusion, not as evidence for or against the claim.
+- all 20 ordered integer differences of `A`;
+- complete fixed-order extension decisions for `k=5,6,7`, using direct
+  containment of the reduced residues of `A` modulo `k(k-1)+1`;
+- the exact number of candidate supersets examined for each fixed order.
+
+Write that evidence to `evidence/finite-core.json` and bind its SHA-256 digest
+in `submission.json`. Follow the exact schemas in `input.json` and
+`submission_schema.json`. The fixed-order checks must cover every candidate,
+not a sample. The public universal result may be reported, but this task does
+not supply its projective-geometric or formal obstruction certificate: set
+`universal_obstruction_replayed` to `false` and do not claim that the three
+finite searches prove the universal statement.
+
+The maximum allowed assurance is `COMPUTED`. Timeout, error, an incomplete
+enumeration, or failure to find an extension is not a negative conclusion.

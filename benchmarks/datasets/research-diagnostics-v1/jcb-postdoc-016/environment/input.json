@@ -1,1 +1,9 @@
-{"task_id":"jacobian/jcb-postdoc-016","challenge_id":"jcb-postdoc-016","problem_statement":"Call n powerful when every prime p dividing n also satisfies p^2 divides n. The global conjecture states that no n,n+1,n+2 are all powerful. A public Lean artifact verifies the bounded statement for every n with n+2 <= 10^14. Determine what the installed Jacobian portfolio can independently establish about this bounded statement and explain exactly what, if anything, follows about the unbounded conjecture.","prompt":"Use Jacobian MCP, and do not use web search or external knowledge retrieval, to assess the powerful-number problem. A number n is powerful if each prime divisor p of n has p^2 dividing n. The public reference result is a kernel-checked proof that no three consecutive powerful numbers occur with n+2 <= 10^14; the unbounded conjecture remains open. Use current capabilities to obtain any honest exact bounded evidence you can, identify what certificate or environment would be required to replay the 10^14 claim, and state explicitly whether the global conjecture has been proved.","tier":"CAPABILITY_GAP_PROBE","domains":["computational number theory","formal verification","bounded exhaustive search"]}
+{
+  "task_id": "jacobian/jcb-postdoc-016",
+  "challenge_id": "jcb-postdoc-016",
+  "definition": "EVERY_PRIME_EXPONENT_AT_LEAST_TWO",
+  "finite_window": {"first": "8", "last": "16"},
+  "triple_starts": ["8", "9", "10", "11", "12", "13", "14"],
+  "public_bounded_reference": {"largest_member_at_most": "100000000000000", "artifact_available": false},
+  "global_conjecture_status": "OPEN"
+}

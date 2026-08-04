@@ -1,1 +1,16 @@
-{"task_id":"jacobian/jcb-postdoc-015","conclusion":"DISPROVED","result":{"expected_conclusion":"DISPROVED","answer_visible_summary":"The five-element set is Sidon and cannot occur inside a perfect difference set for any modulus. The source gives a projective-plane/polarity obstruction and a reproducible Lean proof; checking finitely many moduli is not the universal argument.","boundary_statement":"The installed portfolio lacks perfect-difference-set semantics, cyclic-projective-plane constructions, the universal obstruction checker, and the paper's pinned Lean environment.","key_facts":{"sidon":"true","contained_in_perfect_difference_set":"false"}},"claimed_assurance":"COMPUTED","scope":"jacobian/jcb-postdoc-015 answer-visible diagnostic","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:966751374c37f97a3714ea52689d0cf88d5e7cd5cddf5f779e6b2aa7d7624b5d"}],"limitations":[]}
+{
+  "task_id": "jacobian/jcb-postdoc-015",
+  "conclusion": "DISPROVED",
+  "result": {
+    "evidence_path": "evidence/finite-core.json",
+    "sidon": true,
+    "fixed_orders_checked": [5, 6, 7],
+    "public_universal_result": "A_IS_NOT_CONTAINED_IN_ANY_FINITE_PERFECT_DIFFERENCE_SET",
+    "universal_obstruction_replayed": false
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "jacobian/jcb-postdoc-015 exact finite core for orders 5,6,7 plus public answer-visible universal result",
+  "completeness": "COMPLETE",
+  "evidence": [{"path":"evidence/finite-core.json","sha256":"sha256:a075fb30d5f04e6b099006eac19e8fb482f440fcfd1d3b94db7d53019ada0d01"}],
+  "limitations": ["PUBLIC_UNIVERSAL_OBSTRUCTION_NOT_REPLAYED", "FINITE_ORDERS_DO_NOT_PROVE_UNIVERSAL_RESULT"]
+}

@@ -2,8 +2,8 @@ schema_version = "1.4"
 artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/jcb-postdoc-015"
-version = "1.0.0"
-description = "Research diagnostic: Erdős Problem 707: a Sidon set forbidden in every finite perfect difference set"
+version = "2.0.0"
+description = "Research diagnostic: Erdős Problem 707 finite Sidon and fixed-order extension evidence"
 keywords = ["research", "diagnostic", "mathematical-sciences", "additive combinatorics", "finite geometry", "modular arithmetic"]
 [metadata]
 evaluation_kind = "research-diagnostic"
@@ -19,12 +19,12 @@ category = "mathematics"
 tags = ["research", "diagnostic", "answer-visible", "offline", "additive-combinatorics", "finite-geometry", "modular-arithmetic"]
 case_version = "research-diagnostics-v1"
 contamination_class = "public-answer-visible-diagnostic"
-fixture_digest = "sha256:4bcdbf75a5a115cb6e8f7da9587b566c17ca8482f9c7f99d06f8d24242aae5f4"
-derivation = "The conjecture that every finite Sidon set extends to a finite perfect difference set was a long-standing Erdős prize problem. The five-element Mian-Chowla prefix is a counterexample, with a reproducible Lean artifact, but Jacobian currently has only low-level finite-set and modular primitives rather than the required design-theoretic obstruction."
+fixture_digest = "sha256:c1f3f9159027b5c49d4467e67f3bf4ccb27c4df73553b7d10130ad021aff4014"
+derivation = "The public universal counterexample is paired with independently replayable Sidon differences and complete fixed-order extension searches for orders 5, 6, and 7; those finite searches are explicitly not the universal obstruction."
 historical_fit = "MISSING"
-current_status = "OPEN_GAP"
-evaluation_status = "BLOCKED_ON_INTERVENTION"
-next_action = "Return to workflow discovery before proposing a broad perfect-difference-set contract."
+current_status = "BOUNDED_CAPABILITY_AVAILABLE"
+evaluation_status = "PUBLIC_REPRODUCTION_READY"
+next_action = "Run public Oracle validation, then evaluate capability discovery on protected transformed fixed-order cases."
 
 [agent]
 timeout_sec = 600.0

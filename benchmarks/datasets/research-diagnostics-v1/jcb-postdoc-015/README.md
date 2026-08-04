@@ -1,37 +1,20 @@
 # jacobian/jcb-postdoc-015
 
-Research diagnostic: Erdős Problem 707: a Sidon set forbidden in every finite perfect difference set
+Research diagnostic for Erdős Problem 707. The task keeps the public universal
+counterexample answer visible while requiring structural evidence for the
+integer Sidon property and complete fixed-order extension decisions at orders
+5, 6, and 7.
 
-## Field
+## Provenance and status
 
-additive-combinatorics
+- case version: `research-diagnostics-v1`
+- contamination class: `public-answer-visible-diagnostic`
+- fixture digest: `sha256:c1f3f9159027b5c49d4467e67f3bf4ccb27c4df73553b7d10130ad021aff4014`
+- current status: `BOUNDED_CAPABILITY_AVAILABLE`
+- evaluation status: `PUBLIC_REPRODUCTION_READY`
+- maximum assurance: `COMPUTED`
 
-## Provenance
-
-- case_version: research-diagnostics-v1
-- contamination_class: public-answer-visible-diagnostic
-- fixture_digest: sha256:8445cbf54afc420565219be7b70803de16d208c3422a096bec5374b89a231ef8
-- derivation: The conjecture that every finite Sidon set extends to a finite perfect difference set was a long-standing Erdős prize problem. The five-element Mian-Chowla prefix is a counterexample, with a reproducible Lean artifact, but Jacobian currently has only low-level finite-set and modular primitives rather than the required design-theoretic obstruction.
-
-## Portfolio status
-
-- historical_fit: `MISSING`
-- current_status: `OPEN_GAP`
-- evaluation_status: `BLOCKED_ON_INTERVENTION`
-- next_action: Return to workflow discovery before proposing a broad perfect-difference-set contract.
-
-## Contract
-
-- schema_version: 1.4
-- difficulty: hard
-- maximum_assurance: COMPUTED
-- agent-visible verification record schema: no
-- timeout_sec (agent): 600.0
-- timeout_sec (verifier): 120.0
-- environment_mode: separate
-
-The task is self-contained and offline. The instruction names no tool,
-capability, or invocation order. The verifier is a separate clean-room Python
-script that scores correctness, evidence validity, scope accuracy, assurance
-calibration, and aggregate reward; a wrong result or an unsupported VERIFIED
-claim forces the reward to zero.
+The clean-room verifier recomputes all ordered differences and enumerates every
+fixed-order candidate using only the Python standard library. It intentionally
+does not certify the public universal obstruction. This public Oracle is a
+regression and workflow diagnostic, not held-out causal evidence.

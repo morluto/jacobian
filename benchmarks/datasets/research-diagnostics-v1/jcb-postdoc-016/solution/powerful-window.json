@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "definition": "EVERY_PRIME_EXPONENT_AT_LEAST_TWO",
+  "values": [
+    {"value":"8","factors":[{"prime":"2","power":3}],"is_powerful":true,"violating_primes":[]},
+    {"value":"9","factors":[{"prime":"3","power":2}],"is_powerful":true,"violating_primes":[]},
+    {"value":"10","factors":[{"prime":"2","power":1},{"prime":"5","power":1}],"is_powerful":false,"violating_primes":["2","5"]},
+    {"value":"11","factors":[{"prime":"11","power":1}],"is_powerful":false,"violating_primes":["11"]},
+    {"value":"12","factors":[{"prime":"2","power":2},{"prime":"3","power":1}],"is_powerful":false,"violating_primes":["3"]},
+    {"value":"13","factors":[{"prime":"13","power":1}],"is_powerful":false,"violating_primes":["13"]},
+    {"value":"14","factors":[{"prime":"2","power":1},{"prime":"7","power":1}],"is_powerful":false,"violating_primes":["2","7"]},
+    {"value":"15","factors":[{"prime":"3","power":1},{"prime":"5","power":1}],"is_powerful":false,"violating_primes":["3","5"]},
+    {"value":"16","factors":[{"prime":"2","power":4}],"is_powerful":true,"violating_primes":[]}
+  ],
+  "triple_checks": [
+    {"start":"8","members":["8","9","10"],"non_powerful_witnesses":["10"],"all_powerful":false},
+    {"start":"9","members":["9","10","11"],"non_powerful_witnesses":["10","11"],"all_powerful":false},
+    {"start":"10","members":["10","11","12"],"non_powerful_witnesses":["10","11","12"],"all_powerful":false},
+    {"start":"11","members":["11","12","13"],"non_powerful_witnesses":["11","12","13"],"all_powerful":false},
+    {"start":"12","members":["12","13","14"],"non_powerful_witnesses":["12","13","14"],"all_powerful":false},
+    {"start":"13","members":["13","14","15"],"non_powerful_witnesses":["13","14","15"],"all_powerful":false},
+    {"start":"14","members":["14","15","16"],"non_powerful_witnesses":["14","15"],"all_powerful":false}
+  ],
+  "bounded_reference": {"largest_member_at_most":"100000000000000","replayed":false},
+  "global_conjecture_status": "OPEN"
+}

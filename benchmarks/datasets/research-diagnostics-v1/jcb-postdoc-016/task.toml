@@ -2,8 +2,8 @@ schema_version = "1.4"
 artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/jcb-postdoc-016"
-version = "1.0.0"
-description = "Research diagnostic: Erdős Problem 364: kernel-checked finite range versus an unbounded powerful-number conjecture"
+version = "2.0.0"
+description = "Research diagnostic: Erdős Problem 364 exact local powerful-number checks versus an unbounded conjecture"
 keywords = ["research", "diagnostic", "mathematical-sciences", "computational number theory", "formal verification", "bounded exhaustive search"]
 [metadata]
 evaluation_kind = "research-diagnostic"
@@ -19,12 +19,12 @@ category = "mathematics"
 tags = ["research", "diagnostic", "answer-visible", "offline", "computational-number-theory", "formal-verification", "bounded-exhaustive-search"]
 case_version = "research-diagnostics-v1"
 contamination_class = "public-answer-visible-diagnostic"
-fixture_digest = "sha256:59f5ae71bc5d27c96705e323c75f72fd1ad43f81a5cd437fa8b569abb0415440"
-derivation = "The conjecture that three consecutive powerful numbers do not exist remains open, while a separate artifact kernel-checks the finite range through 10^14. This is an unusually clean test of bounded-certificate ingestion, exact scope, and resistance to promoting massive finite verification into an unbounded theorem."
+fixture_digest = "sha256:1e8f2277d84016562c4fea73ca77e0beb1304f2628614be160143b43533ba1b6"
+derivation = "The open universal conjecture and public 10^14 reference are separated from an independently replayable local window with complete factorizations and seven consecutive-triple checks."
 historical_fit = "MISSING"
-current_status = "OPEN_GAP"
-evaluation_status = "BLOCKED_ON_INTERVENTION"
-next_action = "Implement and independently check the atomic powerful-number predicate first; keep the 10^14 chunk replay as a separate provider- and format-bound candidate."
+current_status = "ATOMIC_CAPABILITY_AVAILABLE"
+evaluation_status = "PUBLIC_REPRODUCTION_READY"
+next_action = "Run public Oracle validation; keep the 10^14 artifact replay as a separate provider- and format-bound proposal."
 
 [agent]
 timeout_sec = 600.0

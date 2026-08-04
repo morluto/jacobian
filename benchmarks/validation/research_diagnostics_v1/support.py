@@ -14,7 +14,16 @@ DATASET = ROOT / "benchmarks" / "datasets" / "research-diagnostics-v1"
 TASK_EVIDENCE = {
     "jcb-postdoc-004": "counterexample.json",
     "jcb-postdoc-014": "syzygy-certificate.json",
+    "jcb-postdoc-015": "finite-core.json",
+    "jcb-postdoc-016": "powerful-window.json",
     "jcb-postdoc-019": "nullstellensatz-certificate.json",
+}
+TASK_EVIDENCE_SCHEMAS = {
+    "jcb-postdoc-004": "certificate_schema.json",
+    "jcb-postdoc-014": "certificate_schema.json",
+    "jcb-postdoc-015": "evidence_schema.json",
+    "jcb-postdoc-016": "evidence_schema.json",
+    "jcb-postdoc-019": "certificate_schema.json",
 }
 
 

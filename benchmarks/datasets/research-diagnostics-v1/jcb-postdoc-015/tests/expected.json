@@ -1,1 +1,8 @@
-{"task_id":"jacobian/jcb-postdoc-015","conclusion":"DISPROVED","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-015","answer-visible diagnostic"],"expected_conclusion":"DISPROVED","expected_key_facts":{"sidon":"true","contained_in_perfect_difference_set":"false"}}
+{
+  "task_id": "jacobian/jcb-postdoc-015",
+  "conclusion": "DISPROVED",
+  "maximum_assurance": "COMPUTED",
+  "scope": "jacobian/jcb-postdoc-015 exact finite core for orders 5,6,7 plus public answer-visible universal result",
+  "orders": [5, 6, 7],
+  "candidate_counts": [1, 26, 703]
+}

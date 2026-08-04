@@ -28,6 +28,8 @@ def test_structured_oracle_receives_full_reward(
     }
     if task_name == "jcb-postdoc-019":
         expected["protocol_compliance"] = 1.0
+    if task_name in {"jcb-postdoc-015", "jcb-postdoc-016"}:
+        expected["limitation_accuracy"] = 1.0
     assert result == expected
 
 
@@ -40,7 +42,7 @@ def test_oracle_submission_and_certificate_match_agent_visible_schemas(
         (task / "environment" / "submission_schema.json").read_text()
     )
     certificate_schema = json.loads(
-        (task / "environment" / "certificate_schema.json").read_text()
+        (task / "environment" / support.TASK_EVIDENCE_SCHEMAS[task_name]).read_text()
     )
     submission = json.loads((task / "solution" / "submission.json").read_text())
     certificate = json.loads(
@@ -268,6 +270,64 @@ def test_graph_verifier_rejects_boolean_summary_scalar(tmp_path: Path) -> None:
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     submission["result"]["local_average"]["denominator"] = True
+    support.write_json(submission_path, submission)
+
+    result = support.run_verifier(task, app, logs)
+
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing-difference", "wrong-candidate-count", "false-negative-decision"),
+)
+def test_sidon_extension_verifier_rejects_corrupted_finite_core(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    task, app, logs = support.prepare_case(tmp_path, "jcb-postdoc-015")
+    evidence_path = app / "evidence" / "finite-core.json"
+    evidence = json.loads(evidence_path.read_text())
+    if mutation == "missing-difference":
+        evidence["ordered_differences"].pop()
+    elif mutation == "wrong-candidate-count":
+        evidence["fixed_order_checks"][1]["candidate_space_size"] = 25
+    else:
+        evidence["fixed_order_checks"][2]["decision"] = "EXTENDS"
+    support.write_json(evidence_path, evidence)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"][0]["sha256"] = support.digest(evidence_path)
+    support.write_json(submission_path, submission)
+
+    result = support.run_verifier(task, app, logs)
+
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("wrong-factor-power", "missing-value", "wrong-triple-witness"),
+)
+def test_powerful_window_verifier_rejects_corrupted_finite_evidence(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    task, app, logs = support.prepare_case(tmp_path, "jcb-postdoc-016")
+    evidence_path = app / "evidence" / "powerful-window.json"
+    evidence = json.loads(evidence_path.read_text())
+    if mutation == "wrong-factor-power":
+        evidence["values"][2]["factors"][0]["power"] = 2
+    elif mutation == "missing-value":
+        evidence["values"].pop()
+    else:
+        evidence["triple_checks"][0]["non_powerful_witnesses"] = []
+    support.write_json(evidence_path, evidence)
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["evidence"][0]["sha256"] = support.digest(evidence_path)
     support.write_json(submission_path, submission)
 
     result = support.run_verifier(task, app, logs)

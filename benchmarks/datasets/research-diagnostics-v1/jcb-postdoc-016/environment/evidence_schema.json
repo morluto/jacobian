@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "definition", "values", "triple_checks", "bounded_reference", "global_conjecture_status"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "definition": {"const": "EVERY_PRIME_EXPONENT_AT_LEAST_TWO"},
+    "values": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "factors", "is_powerful", "violating_primes"],
+        "properties": {
+          "value": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+          "factors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["prime", "power"],
+              "properties": {
+                "prime": {"type": "string", "pattern": "^(?:[2-9]|[1-9][0-9]+)$"},
+                "power": {"type": "integer", "minimum": 1}
+              }
+            }
+          },
+          "is_powerful": {"type": "boolean"},
+          "violating_primes": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "triple_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "members", "non_powerful_witnesses", "all_powerful"],
+        "properties": {
+          "start": {"type": "string"},
+          "members": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}},
+          "non_powerful_witnesses": {"type": "array", "items": {"type": "string"}},
+          "all_powerful": {"type": "boolean"}
+        }
+      }
+    },
+    "bounded_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["largest_member_at_most", "replayed"],
+      "properties": {
+        "largest_member_at_most": {"type": "string"},
+        "replayed": {"type": "boolean"}
+      }
+    },
+    "global_conjecture_status": {"enum": ["OPEN"]}
+  }
+}

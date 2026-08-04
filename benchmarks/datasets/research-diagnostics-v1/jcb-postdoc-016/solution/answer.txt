@@ -1,4 +1,0 @@
-Erdős Problem 364: kernel-checked finite range versus an unbounded powerful-number conjecture
-
-Expected conclusion: NO_GLOBAL_CONCLUSION_EXPECTED.
-Oracle summary: The exact bounded statement through 10^14 is kernel-checked by the referenced artifact. Its scope is finite. The global no-three-consecutive-powerful-numbers conjecture remains open, and current Jacobian does not install the artifact's environment or its chunk-certificate replay.

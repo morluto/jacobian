@@ -1,12 +1,19 @@
-# Erdős Problem 364: kernel-checked finite range versus an unbounded powerful-number conjecture
+# Erdős Problem 364: exact local checks versus an unbounded conjecture
 
-Call n powerful when every prime p dividing n also satisfies p^2 divides n. The global conjecture states that no n,n+1,n+2 are all powerful. A public Lean artifact verifies the bounded statement for every n with n+2 <= 10^14. Determine what the installed Jacobian portfolio can independently establish about this bounded statement and explain exactly what, if anything, follows about the unbounded conjecture.
+A positive integer is powerful when every prime in its factorization has
+exponent at least two. The public reference result checks that no three
+consecutive powerful numbers occur with the largest member at most `10^14`;
+the corresponding unbounded conjecture remains open.
 
-This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
-public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. It lacks a powerful-number predicate/batch enumerator, the 3,524-chunk certificate format and checker, and the pinned external Lean environment. More finite checks cannot increase the conclusion beyond their declared bound.
+Produce an independently replayable finite diagnostic for every integer from
+8 through 16. Record the complete prime factorization, the exact powerful
+decision, and every violating prime. Then check each consecutive triple
+starting at 8 through 14 and record all non-powerful witnesses in that triple.
+Write the structured evidence to `evidence/powerful-window.json`, bind its
+SHA-256 digest in `submission.json`, and follow the exact public schemas.
 
-Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
-reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence
-list. Claim `COMPUTED` assurance only; do not claim `VERIFIED`. Treat timeout, error, or
-incomplete search as a non-conclusion, not as evidence for or against the claim.
+The public `10^14` artifact and its pinned replay environment are not included.
+Set `bounded_reference_replayed` to `false`; do not extrapolate the local
+window to `10^14` or to all positive integers. The maximum allowed assurance is
+`COMPUTED`. Timeout, error, incomplete factorization, or incomplete coverage is
+a non-conclusion.

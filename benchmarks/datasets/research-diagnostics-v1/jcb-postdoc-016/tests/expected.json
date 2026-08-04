@@ -1,1 +1,9 @@
-{"task_id":"jacobian/jcb-postdoc-016","conclusion":"NO_GLOBAL_CONCLUSION","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-016","answer-visible diagnostic"],"expected_conclusion":"NO_GLOBAL_CONCLUSION_EXPECTED","expected_key_facts":{"bounded_through":"10^14","global_conjecture":"open"}}
+{
+  "task_id": "jacobian/jcb-postdoc-016",
+  "conclusion": "NO_GLOBAL_CONCLUSION",
+  "maximum_assurance": "COMPUTED",
+  "scope": "jacobian/jcb-postdoc-016 exact values 8 through 16 and seven consecutive triples; public 10^14 reference not replayed",
+  "first": 8,
+  "last": 16,
+  "triple_starts": [8, 9, 10, 11, 12, 13, 14]
+}

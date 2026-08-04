@@ -1,1 +1,10 @@
-{"task_id":"jacobian/jcb-postdoc-015","challenge_id":"jcb-postdoc-015","problem_statement":"A finite set A of integers is Sidon if all differences a-b with a,b in A and a != b are distinct. A finite set B is a perfect difference set modulo n if its ordered differences represent every nonzero residue modulo n exactly once. Prove that A={1,2,4,8,13} is Sidon but is not contained in any perfect difference set modulo any positive integer n.","prompt":"Use Jacobian MCP, and do not use web search or external knowledge retrieval, to investigate the following additive-combinatorics statement. Prove that A={1,2,4,8,13} is Sidon and that for no positive modulus n is A contained in a perfect difference set modulo n. Use exact modular or finite evidence where available. If the installed portfolio cannot certify the universal obstruction, state the missing mathematical operation or formal environment precisely and do not generalize from a bounded modulus search.","tier":"CAPABILITY_GAP_PROBE","domains":["additive combinatorics","finite geometry","modular arithmetic"]}
+{
+  "task_id": "jacobian/jcb-postdoc-015",
+  "challenge_id": "jcb-postdoc-015",
+  "integer_set": ["1", "2", "4", "8", "13"],
+  "fixed_orders": [5, 6, 7],
+  "perfect_difference_set_modulus": "k(k-1)+1",
+  "containment_semantics": "DIRECT_CONTAINMENT_OF_REDUCED_RESIDUES",
+  "public_universal_result": "A_IS_NOT_CONTAINED_IN_ANY_FINITE_PERFECT_DIFFERENCE_SET",
+  "universal_obstruction_artifact_available": false
+}

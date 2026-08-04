@@ -7,6 +7,10 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import CapabilityAssuranceLevel, CapabilityRequest
+from jacobian.contracts.combinatorics import (
+    MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
+    MAX_ADDITIVE_INTEGER_LENGTH,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 
@@ -96,3 +100,43 @@ def test_fixed_order_extension_returns_a_complete_positive_witness(
     assert stored.payload["decision"] == "EXTENDS"
     assert stored.payload["coverage"] == "WITNESS"
     assert stored.payload["extension"] == [0, 1, 3]
+
+
+def test_integer_sidon_accepts_the_widest_canonical_difference(
+    domain_services: DomainTestServices,
+) -> None:
+    """The result bound must hold every ordered difference of accepted inputs.
+
+    The largest accepted positive value uses every ``AdditiveInteger``
+    character for digits, while the most-negative accepted value spends one
+    character on the sign. Their ordered difference reaches one extra digit,
+    and the negative direction adds the sign back, so the canonical difference
+    string is exactly ``MAX_ADDITIVE_INTEGER_LENGTH + 2`` characters. A bound
+    of ``+1`` (the previous value) rejects this valid public request.
+    """
+    largest_positive = "9" * MAX_ADDITIVE_INTEGER_LENGTH
+    most_negative = "-" + "9" * (MAX_ADDITIVE_INTEGER_LENGTH - 1)
+    assert len(largest_positive) == MAX_ADDITIVE_INTEGER_LENGTH
+    assert len(most_negative) == MAX_ADDITIVE_INTEGER_LENGTH
+
+    computed = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="combinatorics.integer_set.sidon.decide",
+            input={"elements": [largest_positive, most_negative]},
+        )
+    )
+
+    result = computed.output["result"]
+    assert computed.execution.status is ExecutionStatus.COMPLETED
+    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result["is_sidon"] is True
+    difference_strings = {
+        record["difference"] for record in result["ordered_differences"]
+    }
+    # The negative direction is the tight case: sign + (L+1) digits = L+2 chars.
+    widest_negative = "-" + "1" + "0" + "9" * (MAX_ADDITIVE_INTEGER_LENGTH - 2) + "8"
+    assert len(widest_negative) == MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH
+    assert widest_negative in difference_strings
+    assert max(len(value) for value in difference_strings) == (
+        MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH
+    )

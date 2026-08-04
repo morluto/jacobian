@@ -33,13 +33,23 @@ MAX_SIDON_SET_SIZE = 32
 MAX_CYCLIC_DIFFERENCE_SET_MODULUS = 4_096
 MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES = 50_000
 MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS = 3
+# An ``AdditiveInteger`` canonical string is at most
+# ``MAX_ADDITIVE_INTEGER_LENGTH`` characters: a positive value may use every
+# character for digits, while a negative value spends one character on the
+# leading ``-``. The widest ordered difference ``minuend - subtrahend`` pairs
+# the largest accepted positive value with the most-negative accepted value
+# (or vice versa), so its magnitude reaches ``(10**L - 1) + (10**(L - 1) - 1)``,
+# which carries one extra digit; the negative sign then adds one more
+# character. The result bound is therefore the input bound plus two.
+MAX_ADDITIVE_INTEGER_LENGTH = 128
+MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH = MAX_ADDITIVE_INTEGER_LENGTH + 2
 _LOG10_2 = math.log10(2)
 
 AdditiveInteger = Annotated[
     str,
     StringConstraints(
         pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=128,
+        max_length=MAX_ADDITIVE_INTEGER_LENGTH,
         strict=True,
     ),
 ]
@@ -47,7 +57,7 @@ AdditiveDifferenceInteger = Annotated[
     str,
     StringConstraints(
         pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=129,
+        max_length=MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
         strict=True,
     ),
 ]

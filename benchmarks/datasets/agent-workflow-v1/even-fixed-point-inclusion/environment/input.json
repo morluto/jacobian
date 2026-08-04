@@ -1,0 +1,1 @@
+{"task_id":"jacobian/even-fixed-point-inclusion","source":{"dataset":"ryanliu112/CombiBench","revision":"882ba08befd0856f5364db1e53d58c7e2cf704f9","split":"train","row":25,"theorem_name":"brualdi_ch6_11","license":"MIT"},"permutation_size":8,"forbidden_fixed_values":[2,4,6,8]}

@@ -1,0 +1,1 @@
+{"limitations":["FINITE_PERMUTATIONS_OF_SIZE_8","NO_GENERAL_ROOK_POLYNOMIAL_PROOF"],"result":{"exact_even_fixed_histogram":[24024,12864,3024,384,24],"inclusion_sum":24024,"signed_inclusion_terms":[40320,-20160,4320,-480,24]},"schema_version":"1","task_id":"jacobian/even-fixed-point-inclusion"}

@@ -1,13 +1,16 @@
 Construct a strictly positive continuous function on `[1,+infinity)` for which
 the improper integral diverges but the series of integer samples converges.
 
-Use the baseline `b(x)=x^-2`. For each integer `n>=1`, add a height-one
-triangular spike centered at `n+1/2`, with half-width `alpha/n`, where you choose
-any canonical rational `0 < alpha <= 1/4`. Submit the exact first twelve spike
-supports and areas, the twelve integer samples, and the general symbolic series
-classifications.
+Submit the exact first twelve spike supports and areas, the twelve integer
+samples, and the general symbolic series classifications. Each spike support
+must be disjoint from every other support and must avoid every integer. The
+spike areas must form a divergent series while the integer samples form a
+convergent series.
 
-Your certificate must show that the supports are disjoint and avoid every
-integer, the spike areas form `alpha * sum(1/n)`, and the samples remain
-`sum(1/n^2)`. Write `/app/submission.json` and digest-bound
-`/app/evidence/answer.txt`. Claim at most `COMPUTED`.
+Your certificate at `/app/evidence/answer.txt` must show that the supports are
+disjoint and avoid every integer, the spike areas form a divergent series, and
+the samples form a convergent series. Write `/app/submission.json` and
+digest-bound `/app/evidence/answer.txt`. Each rational field in the submission
+must be a canonical reduced fraction string of at most 100 characters, and the
+evidence file must be at most 16 MiB. Claim at most `COMPUTED`; `UNVERIFIED` is
+also accepted.

@@ -5,9 +5,12 @@ from itertools import pairwise
 from pathlib import Path
 
 from verifier_support import (
+    ASSURANCE_LEVELS,
+    SUBMISSION_FIELDS,
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
 )
 
@@ -17,10 +20,18 @@ LIMITATIONS = [
     "TWELVE_EXACT_SPIKES_PLUS_GENERAL_FORMULA",
     "NO_PROOF_ASSISTANT_VERIFICATION",
 ]
+ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
+MAX_RATIONAL_LEN = 100
+EVIDENCE_KEYWORDS = (
+    "disjoint",
+    "integer",
+    "diverg",
+    "converg",
+)
 
 
 def fraction(value):
-    if not isinstance(value, str) or len(value) > 100:
+    if not isinstance(value, str) or len(value) > MAX_RATIONAL_LEN:
         raise ValueError
     if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value) is None:
         raise ValueError
@@ -44,6 +55,35 @@ def expected_spike(n, alpha):
     }
 
 
+def _valid_spikes(spikes, alpha):
+    if not isinstance(spikes, list) or len(spikes) != 12:
+        return False
+    if any(
+        not isinstance(spike, dict) or type(spike.get("n")) is not int
+        for spike in spikes
+    ):
+        return False
+    expected = {n: expected_spike(n, alpha) for n in range(1, 13)}
+    by_n = {}
+    for spike in spikes:
+        n = spike["n"]
+        if n in by_n or spike != expected.get(n):
+            return False
+        by_n[n] = spike
+    if set(by_n) != set(expected):
+        return False
+    ordered = [by_n[n] for n in sorted(by_n)]
+    for left, right in pairwise(ordered):
+        if fraction(left["right"]) >= fraction(right["left"]):
+            return False
+    for spike in spikes:
+        left, right = fraction(spike["left"]), fraction(spike["right"])
+        n = spike["n"]
+        if left <= n or right >= n + 1:
+            return False
+    return True
+
+
 def valid_result(result):
     if not isinstance(result, dict) or set(result) != {
         "alpha",
@@ -62,30 +102,70 @@ def valid_result(result):
         return False
     if result["baseline_power"] != 2 or result["spike_height"] != "1":
         return False
-    spikes = result.get("spikes")
-    if not isinstance(spikes, list) or len(spikes) != 12:
+    if not _valid_spikes(result.get("spikes"), alpha):
         return False
-    if any(
-        not isinstance(spike, dict) or type(spike.get("n")) is not int
-        for spike in spikes
-    ):
-        return False
-    if spikes != [expected_spike(n, alpha) for n in range(1, 13)]:
-        return False
-    for left, right in pairwise(spikes):
-        if fraction(left["right"]) >= fraction(right["left"]):
-            return False
-    for spike in spikes:
-        left, right = fraction(spike["left"]), fraction(spike["right"])
-        n = spike["n"]
-        if left <= n or right >= n + 1:
-            return False
     return bool(
         result["integral_classification"]
         == {"spike_area_series": "alpha*sum(1/n)", "status": "DIVERGENT"}
         and result["sample_series_classification"]
         == {"sample_series": "sum(1/n^2)", "status": "CONVERGENT"}
     )
+
+
+def structural_contract(submission, *, task_id, conclusion):
+    """Assurance-neutral envelope check for math/evidence/scope dimensions.
+
+    Accepts any well-formed assurance level (including an overclaimed
+    ``VERIFIED``) so that a false certification zeros only the assurance
+    calibration dimension and the aggregate reward, not the independently
+    computed mathematical correctness, evidence validity, or scope accuracy.
+    """
+
+    if not isinstance(submission, dict):
+        return False
+    verified = submission.get("claimed_assurance") == "VERIFIED"
+    fields = frozenset(SUBMISSION_FIELDS)
+    if verified:
+        fields = frozenset(SUBMISSION_FIELDS | {"verification_record_uri"})
+    return bool(
+        frozenset(submission) == fields
+        and submission.get("task_id") == task_id
+        and submission.get("conclusion") == conclusion
+        and submission.get("completeness") == "COMPLETE_FOR_DECLARED_FAMILY"
+        and isinstance(submission.get("result"), dict)
+        and isinstance(submission.get("scope"), str)
+        and isinstance(submission.get("limitations"), list)
+        and all(type(item) is str for item in submission.get("limitations", []))
+        and isinstance(submission.get("evidence"), list)
+        and len(submission.get("evidence", [])) == 1
+        and isinstance(submission.get("claimed_assurance"), str)
+        and submission.get("claimed_assurance") in ASSURANCE_LEVELS
+    )
+
+
+def evidence_content_valid(submission):
+    """Reject empty or unrelated certificate evidence.
+
+    The public instruction requires the certificate to show support
+    disjointness, integer avoidance, and the two series arguments. A
+    digest-bound file of unrelated or empty bytes must not score as valid
+    evidence even though its path and hash match.
+    """
+
+    evidence = submission.get("evidence")
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if not text.strip():
+        return False
+    lowered = text.lower()
+    return all(keyword in lowered for keyword in EVIDENCE_KEYWORDS)
 
 
 def frozen():
@@ -100,27 +180,35 @@ def frozen():
 def main():
     expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
+    structural = structural_contract(
+        submission,
+        task_id=expected["task_id"],
+        conclusion=expected["conclusion"],
+    )
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         completeness="COMPLETE_FOR_DECLARED_FAMILY",
-        allowed_assurances=frozenset({"COMPUTED"}),
+        allowed_assurances=ALLOWED_ASSURANCES,
         verification_record="forbidden",
     )
-    math_ok = bool(contract and frozen() and valid_result(submission.get("result")))
-    evidence_ok = bool(
-        contract
+    math_ok = bool(structural and frozen() and valid_result(submission.get("result")))
+    evidence_bound = bool(
+        structural
         and evidence_list_is_bound(
             submission.get("evidence"), expected_path="evidence/answer.txt"
         )
     )
+    evidence_ok = bool(evidence_bound and evidence_content_valid(submission))
     scope_ok = bool(
-        contract
+        structural
         and submission.get("scope") == expected["required_scope"]
         and submission.get("limitations") == LIMITATIONS
     )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
+    assurance_ok = bool(
+        contract and submission.get("claimed_assurance") in ALLOWED_ASSURANCES
+    )
     false_cert = false_verified_claim(submission, verification_record_bound=False)
     correct = math_ok and evidence_ok and scope_ok and not false_cert
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

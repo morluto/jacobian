@@ -4,10 +4,13 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+from benchmarks.validation.agent_workflow_v1 import support
+
 ROOT = Path(__file__).resolve().parents[3]
 TASK = (
     ROOT / "benchmarks/datasets/agent-workflow-v1/continuous-spike-integral-separation"
 )
+TASK_NAME = "continuous-spike-integral-separation"
 
 
 def load_verifier():
@@ -18,6 +21,7 @@ def load_verifier():
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     spec.loader.exec_module(module)
+    sys.modules.pop("verifier_support", None)
     return module
 
 
@@ -63,6 +67,104 @@ def test_rejects_finite_or_reversed_classification():
     assert not verifier.valid_result(bad)
 
 
-def test_contract_has_computed_ceiling():
+def test_contract_allows_unverified_and_computed():
     schema = json.loads((TASK / "environment/submission_schema.json").read_text())
-    assert schema["properties"]["claimed_assurance"] == {"const": "COMPUTED"}
+    assert schema["properties"]["claimed_assurance"] == {
+        "enum": ["UNVERIFIED", "COMPUTED"]
+    }
+
+
+def test_rejects_boolean_spike_index():
+    verifier = load_verifier()
+    bad = candidate()
+    bad["spikes"][0]["n"] = True
+    assert not verifier.valid_result(bad)
+
+
+def test_accepts_permuted_spike_order():
+    verifier = load_verifier()
+    good = candidate()
+    good["spikes"] = list(reversed(good["spikes"]))
+    assert verifier.valid_result(good)
+
+
+def test_rejects_rational_exceeding_published_bound():
+    verifier = load_verifier()
+    bad = candidate()
+    bad["alpha"] = "1/" + "0" * 100
+    assert not verifier.valid_result(bad)
+
+
+def _case(tmp_path: Path):
+    return support._prepare_case(tmp_path, TASK_NAME, "computed")
+
+
+def _rewrite(app: Path, submission: dict) -> None:
+    support._write_json(app / "submission.json", submission)
+
+
+def test_canonical_computed_submission_passes(tmp_path: Path):
+    task, app, logs = _case(tmp_path)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 1.0
+    assert result["reward"] == 1.0
+    assert result["false_certification"] is False
+
+
+def test_overclaimed_verified_keeps_correctness_decoupled(tmp_path: Path):
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "VERIFIED"
+    submission["verification_record_uri"] = {
+        "path": "evidence/verification-record.json",
+        "sha256": support._digest(app / "evidence" / "answer.txt"),
+    }
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["false_certification"] is True
+    assert result["reward"] == 0.0
+
+
+def test_unverified_assurance_passes_with_partial_credit(tmp_path: Path):
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 1.0
+    assert result["reward"] == 1.0
+    assert result["false_certification"] is False
+
+
+def test_rejects_empty_evidence(tmp_path: Path):
+    task, app, logs = _case(tmp_path)
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_rejects_unrelated_evidence(tmp_path: Path):
+    task, app, logs = _case(tmp_path)
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("lorem ipsum dolor sit amet\n")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0

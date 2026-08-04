@@ -6,7 +6,7 @@
   "properties": {
     "task_id": {"const": "jacobian/continuous-spike-integral-separation"},
     "conclusion": {"const": "VALID_INTEGRAL_SERIES_SEPARATOR"},
-    "claimed_assurance": {"const": "COMPUTED"},
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
     "scope": {"const": "INFINITE_DECLARED_SPIKE_FAMILY_WITH_TWELVE_EXACT_INSTANCES"},
     "completeness": {"const": "COMPLETE_FOR_DECLARED_FAMILY"},
     "result": {
@@ -14,15 +14,15 @@
       "additionalProperties": false,
       "required": ["alpha", "baseline_power", "spike_height", "spikes", "integral_classification", "sample_series_classification"],
       "properties": {
-        "alpha": {"type": "string"},
+        "alpha": {"type": "string", "maxLength": 100},
         "baseline_power": {"const": 2},
         "spike_height": {"const": "1"},
-        "spikes": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"type": "object", "additionalProperties": false, "required": ["n", "center", "half_width", "left", "right", "area", "integer_sample"], "properties": {"n": {"type": "integer", "minimum": 1, "maximum": 12}, "center": {"type": "string"}, "half_width": {"type": "string"}, "left": {"type": "string"}, "right": {"type": "string"}, "area": {"type": "string"}, "integer_sample": {"type": "string"}}}},
+        "spikes": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"type": "object", "additionalProperties": false, "required": ["n", "center", "half_width", "left", "right", "area", "integer_sample"], "properties": {"n": {"type": "integer", "minimum": 1, "maximum": 12}, "center": {"type": "string", "maxLength": 100}, "half_width": {"type": "string", "maxLength": 100}, "left": {"type": "string", "maxLength": 100}, "right": {"type": "string", "maxLength": 100}, "area": {"type": "string", "maxLength": 100}, "integer_sample": {"type": "string", "maxLength": 100}}}},
         "integral_classification": {"const": {"spike_area_series": "alpha*sum(1/n)", "status": "DIVERGENT"}},
         "sample_series_classification": {"const": {"sample_series": "sum(1/n^2)", "status": "CONVERGENT"}}
       }
     },
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}, "description": "Evidence file must be a regular file of at most 16 MiB (16777216 bytes)."},
     "limitations": {"const": ["STANDARD_HARMONIC_AND_P_SERIES_CRITERIA_TRUSTED", "TWELVE_EXACT_SPIKES_PLUS_GENERAL_FORMULA", "NO_PROOF_ASSISTANT_VERIFICATION"]}
   }
 }

@@ -4,8 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.contracts.combinatorics import (
+    CyclicDifferenceMultiplicity,
     CyclicDifferenceSetExtensionRequest,
     CyclicDifferenceSetExtensionResult,
+    CyclicPerfectDifferenceSetResult,
     IntegerSidonRequest,
     IntegerSidonResult,
 )
@@ -58,5 +60,41 @@ def test_positive_extension_result_rejects_residue_outside_modulus() -> None:
             candidate_space_size=5,
             decision="EXTENDS",
             extension=(0, 1, 7),
+            coverage="WITNESS",
+        )
+
+
+def test_pds_result_rejects_false_difference_multiplicities() -> None:
+    """A profile that claims every nonzero residue appears once must match
+    the actual cyclic differences of the reported residues."""
+    with pytest.raises(ValidationError, match="must match the normalized residues"):
+        CyclicPerfectDifferenceSetResult(
+            semantics_version="cyclic-perfect-difference-set.v1",
+            modulus=7,
+            normalized_residues=(0, 1, 2),
+            order=3,
+            expected_modulus=7,
+            difference_multiplicities=tuple(
+                CyclicDifferenceMultiplicity(residue=r, multiplicity=1)
+                for r in range(1, 7)
+            ),
+            missing_residues=(),
+            repeated_residues=(),
+            is_perfect=True,
+        )
+
+
+def test_positive_extension_result_rejects_non_perfect_witness() -> None:
+    """An EXTENDS witness must be an actual perfect difference set, not just
+    a sorted superset of the base with the right cardinality."""
+    with pytest.raises(ValidationError, match="perfect difference set"):
+        CyclicDifferenceSetExtensionResult(
+            semantics_version="cyclic-pds-extension.fixed-order.v1",
+            target_order=3,
+            modulus=7,
+            base_residues=(0, 1),
+            candidate_space_size=5,
+            decision="EXTENDS",
+            extension=(0, 1, 2),
             coverage="WITNESS",
         )

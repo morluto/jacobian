@@ -402,6 +402,19 @@ class CyclicPerfectDifferenceSetResult(ContractModel):
             raise ValueError(
                 "cyclic difference profile must cover every nonzero residue"
             )
+        actual_counts: dict[int, int] = {
+            residue: 0 for residue in range(1, self.modulus)
+        }
+        for left in residues:
+            for right in residues:
+                if left == right:
+                    continue
+                actual_counts[(left - right) % self.modulus] += 1
+        reported = {item.residue: item.multiplicity for item in profile}
+        if reported != actual_counts:
+            raise ValueError(
+                "difference multiplicities must match the normalized residues"
+            )
         missing = tuple(item.residue for item in profile if item.multiplicity == 0)
         repeated = tuple(item.residue for item in profile if item.multiplicity > 1)
         if self.missing_residues != missing or self.repeated_residues != repeated:
@@ -480,6 +493,16 @@ def _require_positive_extension_shape(
         raise ValueError("extension witness residues must lie in the derived modulus")
     if not set(base_residues) <= set(extension):
         raise ValueError("extension witness must contain the reduced base set")
+    witness_counts: dict[int, int] = {
+        residue: 0 for residue in range(1, modulus)
+    }
+    for left in extension:
+        for right in extension:
+            if left == right:
+                continue
+            witness_counts[(left - right) % modulus] += 1
+    if witness_counts != {residue: 1 for residue in range(1, modulus)}:
+        raise ValueError("extension witness must be a perfect difference set")
 
 
 class CyclicDifferenceSetExtensionResult(ContractModel):

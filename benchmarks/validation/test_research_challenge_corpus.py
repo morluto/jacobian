@@ -71,7 +71,7 @@ def test_research_status_overlay_is_folded_into_task_maintainer_metadata() -> No
     for task in _task_dirs():
         cfg = tomllib.loads((task / "task.toml").read_text())
         metadata = cfg["metadata"]
-        assert _REQUIRED_STATUS_FIELDS <= metadata.keys()
+        assert metadata.keys() >= _REQUIRED_STATUS_FIELDS
         for field, allowed in _STATUS_VOCABULARY.items():
             assert metadata[field] in allowed, (
                 f"{task.name}: unsupported {field} value {metadata[field]!r}; "

@@ -6,6 +6,7 @@ from verifier_support import (
     load_submission,
     read_evidence_json,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -21,12 +22,7 @@ DEFECTS = {
 
 
 def frozen():
-    try:
-        return (W / "input.json").read_bytes() == (
-            T / "input.json"
-        ).read_bytes() and not (W / "input.json").is_symlink()
-    except OSError:
-        return False
+    return workspace_input_is_bound()
 
 
 def divisors_in_interval(n):
@@ -101,6 +97,13 @@ def valid(r):
 def main():
     expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
+    structure_valid = strict_submission_contract(
+        s,
+        task_id=expected["task_id"],
+        conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}),
+        verification_record="optional",
+    )
     contract = strict_submission_contract(
         s,
         task_id=expected["task_id"],
@@ -116,7 +119,7 @@ def main():
             expected_path="evidence/unit-fraction-repair.json",
             max_bytes=MAX_EVIDENCE_BYTES,
         )
-        if contract
+        if structure_valid
         else None
     )
     evidence_ok = bool(
@@ -128,7 +131,7 @@ def main():
         and ev.get("limitations") == LIMITATIONS
     )
     scope_ok = bool(
-        contract
+        structure_valid
         and s.get("scope") == "EXHAUSTIVE_N_1_THROUGH_2025"
         and s.get("completeness") == "COMPLETE"
         and s.get("limitations") == LIMITATIONS

@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["difficulty-provisional", "regression", "proof-repair", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-dataset-derived-proof-repair"
-fixture_digest = "sha256:d5d4529b832be0792258d2d4be631c068006da791dde94207092fa620fc69f01"
+fixture_digest = "sha256:29007081cdc08da796db86c83874620205063023e6fe4d7f233ce51c504a75e5"
 derivation = "Derived from Xerv-AI/GRAD train row 27 at revision 71595210590450202b7b69225bc07e9e01b13c5c (MIT)."
 [agent]
 timeout_sec = 600.0

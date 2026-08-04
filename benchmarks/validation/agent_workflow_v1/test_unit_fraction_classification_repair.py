@@ -58,3 +58,17 @@ def test_rejects_single_bit_coverage_tamper(tmp_path: Path):
     s["result"]["membership_bitmap_hex"] = bitmap.hex()
     rewrite(app, s)
     assert support._run_verifier(task, app, logs)["correctness"] == 0.0
+
+
+def test_decouples_evidence_and_scope_from_assurance(tmp_path: Path):
+    """An otherwise exact submission claiming VERIFIED must retain
+    evidence_validity and scope_accuracy while failing assurance and reward."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "invalid")
+    s = json.loads((app / "submission.json").read_text())
+    rewrite(app, s)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0

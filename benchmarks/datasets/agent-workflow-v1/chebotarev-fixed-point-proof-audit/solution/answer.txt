@@ -1,0 +1,1 @@
+The proposed proof fails before its density conclusion: the mod-2 reduction is `(x+1)^4`, the discriminant is `-6656`, and double transpositions have no fixed points. Conditional on the stated `S4` premise, 15 of 24 elements fix a root, giving density `5/8` and encoded answer `508`.

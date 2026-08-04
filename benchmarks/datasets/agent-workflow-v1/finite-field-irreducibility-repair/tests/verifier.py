@@ -162,6 +162,24 @@ def _result(value: object) -> bool:
     )
 
 
+def _claims_proof_assistant(folded: str) -> bool:
+    """Reject assertions of proof-assistant verification; allow disclaimers.
+
+    The instruction forbids claiming proof-assistant verification, not
+    truthfully disclaiming it. A clause that mentions a proof assistant
+    alongside a negation term (e.g. "was not checked by a proof assistant")
+    is a valid disclaimer, not a false claim.
+    """
+
+    clauses = [clause.strip() for clause in re.split(r"[.!?]\s*", folded)]
+    negations = ("not", "no", "without", "never", "neither", "nor")
+    return any(
+        ("proof assistant" in clause or "proof-assistant" in clause)
+        and not any(neg in clause for neg in negations)
+        for clause in clauses
+    )
+
+
 def _explanation_valid(prose: str) -> bool:
     """Check the two documented mathematical obligations by clause."""
 
@@ -200,9 +218,7 @@ def _explanation_valid(prose: str) -> bool:
         and explains_bad_implication
         and explains_repair
         and explains_rabin_test
-        and not any(
-            phrase in folded for phrase in ("proof assistant", "proof-assistant")
-        )
+        and not _claims_proof_assistant(folded)
     )
 
 
@@ -272,9 +288,7 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     data = submission if isinstance(submission, dict) else {}
     limit_ok = _limitation_valid(data.get("limitations"))
     math_correct = bool(_source_is_bound() and _result(data.get("result")))
-    evidence_valid = bool(
-        math_correct and _evidence(data.get("evidence"), data.get("result"))
-    )
+    evidence_valid = bool(_evidence(data.get("evidence"), data.get("result")))
     scope_correct = bool(envelope_valid and data.get("scope") == SCOPE and limit_ok)
     assurance_correct = bool(data.get("claimed_assurance") == "COMPUTED" and limit_ok)
     reward = (

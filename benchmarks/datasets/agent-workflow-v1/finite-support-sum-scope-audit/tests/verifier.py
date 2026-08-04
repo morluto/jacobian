@@ -13,6 +13,33 @@ from verifier_support import (
 W, E = Path("/app"), Path("/tests")
 
 
+def _json_equal(a: object, b: object) -> bool:
+    """Structural JSON equality that rejects bool where int is expected.
+
+    Python's ``==`` treats ``True == 1`` and ``False == 0`` as equal, so an
+    evidence file that substitutes a boolean for an integer field would match
+    the submitted result. This helper recursively requires exact types for
+    scalars (``bool`` is never equal to ``int``) and element-wise equality
+    for lists and dicts.
+    """
+
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return type(a) is type(b) and a == b
+    if isinstance(a, str) and isinstance(b, str):
+        return a == b
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(
+            _json_equal(x, y) for x, y in zip(a, b, strict=True)
+        )
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_json_equal(a[k], b[k]) for k in a)
+    if a is None or b is None:
+        return a is None and b is None
+    return False
+
+
 def _rat(value):
     if (
         not isinstance(value, dict)
@@ -124,8 +151,8 @@ def main():
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == result
-        and evidence["limitations"] == submission.get("limitations")
+        and _json_equal(evidence["result"], result)
+        and _json_equal(evidence["limitations"], submission.get("limitations"))
     )
     scope_ok = bool(
         contract

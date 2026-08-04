@@ -1,0 +1,1 @@
+The source reverses both local conclusions: 3 may divide a primitive norm exactly once, while an inert prime cannot divide a primitive norm at all.

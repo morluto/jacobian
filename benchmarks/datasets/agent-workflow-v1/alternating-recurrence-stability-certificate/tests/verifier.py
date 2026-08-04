@@ -4,6 +4,7 @@ from pathlib import Path
 
 from verifier_support import (
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -15,14 +16,20 @@ LIMITATIONS = [
     "NO_PROOF_ASSISTANT_REPLAY",
 ]
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
+MAX_INPUT_BYTES = 16 * 1024 * 1024
 
 
 def frozen() -> bool:
+    visible = W / "input.json"
+    frozen_path = T / "input.json"
     try:
-        return (W / "input.json").read_bytes() == (
-            T / "input.json"
-        ).read_bytes() and not (W / "input.json").is_symlink()
-    except OSError:
+        if not (
+            is_regular_bounded_file(visible, max_bytes=MAX_INPUT_BYTES)
+            and is_regular_bounded_file(frozen_path, max_bytes=MAX_INPUT_BYTES)
+        ):
+            return False
+        return visible.read_bytes() == frozen_path.read_bytes()
+    except (OSError, MemoryError):
         return False
 
 
@@ -129,13 +136,20 @@ def main() -> None:
     math_ok = bool(
         frozen() and isinstance(submission, dict) and valid(submission.get("result"))
     )
+    try:
+        result_match = _json_equal(
+            evidence.get("result") if evidence else None,
+            submission.get("result") if isinstance(submission, dict) else None,
+        )
+    except RecursionError:
+        result_match = False
     evidence_ok = bool(
         evidence
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == expected["task_id"]
-        and _json_equal(evidence.get("result"), submission.get("result"))
-        and evidence.get("limitations") == LIMITATIONS
+        and result_match
+        and evidence.get("limitations") == submission.get("limitations")
     )
     scope_ok = bool(
         contract

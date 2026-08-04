@@ -22,8 +22,8 @@ contamination_class = "public-answer-visible-diagnostic"
 fixture_digest = "sha256:c1f3f9159027b5c49d4467e67f3bf4ccb27c4df73553b7d10130ad021aff4014"
 derivation = "The public universal counterexample is paired with independently replayable Sidon differences and complete fixed-order extension searches for orders 5, 6, and 7; those finite searches are explicitly not the universal obstruction."
 historical_fit = "MISSING"
-current_status = "BOUNDED_CAPABILITY_AVAILABLE"
-evaluation_status = "PUBLIC_REPRODUCTION_READY"
+current_status = "PARTIAL"
+evaluation_status = "RUNNABLE_PUBLIC_REPRODUCTION"
 next_action = "Run public Oracle validation, then evaluate capability discovery on protected transformed fixed-order cases."
 
 [agent]

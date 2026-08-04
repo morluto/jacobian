@@ -66,8 +66,7 @@ def valid_result(result):
     if not isinstance(spikes, list) or len(spikes) != 12:
         return False
     if any(
-        not isinstance(spike, dict)
-        or type(spike.get("n")) is not int
+        not isinstance(spike, dict) or type(spike.get("n")) is not int
         for spike in spikes
     ):
         return False

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "properties": {
+    "task_id": {"const": "jacobian/quartic-chebotarev-proof-repair"},
+    "conclusion": {"enum": ["FROZEN_PROOF_REPAIRED", "FROZEN_PROOF_VALID", "INSUFFICIENT_EVIDENCE"]},
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["shifted_polynomial", "eisenstein_prime", "discriminant", "discriminant_factorization", "frobenius_factorization", "galois_group", "cycle_count", "density", "encoded_answer", "source_defects"],
+      "properties": {
+        "shifted_polynomial": {"const": [-2, 0, 6, 4, 1]},
+        "eisenstein_prime": {"const": 2},
+        "discriminant": {"const": -6656},
+        "discriminant_factorization": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sign", "prime_powers"],
+          "properties": {
+            "sign": {"const": -1},
+            "prime_powers": {
+              "const": [{"prime": 2, "exponent": 9}, {"prime": 13, "exponent": 1}]
+            }
+          }
+        },
+        "frobenius_factorization": {
+          "type": "object", "additionalProperties": false,
+          "required": ["prime", "linear", "cubic"],
+          "properties": {
+            "prime": {"enum": [3, 5, 7, 17]},
+            "linear": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+            "cubic": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer"}}
+          }
+        },
+        "galois_group": {"const": "S4"},
+        "cycle_count": {
+          "type": "object", "additionalProperties": false,
+          "required": ["identity", "transposition", "three_cycle", "fixed_point_free", "with_fixed_point", "group_order"],
+          "properties": {
+            "identity": {"const": 1}, "transposition": {"const": 6},
+            "three_cycle": {"const": 8}, "fixed_point_free": {"const": 9},
+            "with_fixed_point": {"const": 15}, "group_order": {"const": 24}
+          }
+        },
+        "density": {"const": [5, 8]},
+        "encoded_answer": {"const": 508},
+        "source_defects": {
+          "type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true,
+          "items": {"enum": ["MOD_2_IRREDUCIBILITY_FALSE", "DISCRIMINANT_VALUE_FALSE", "DOUBLE_TRANSPOSITIONS_MISCOUNTED_AS_FIXED_POINT_ELEMENTS", "DENSITY_AND_ENCODED_ANSWER_FALSE"]}
+        }
+      }
+    },
+    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
+    "scope": {"type": "string"},
+    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  }
+}

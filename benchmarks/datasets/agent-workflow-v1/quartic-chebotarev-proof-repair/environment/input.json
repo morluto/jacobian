@@ -1,0 +1,30 @@
+{
+  "task_id": "jacobian/quartic-chebotarev-proof-repair",
+  "source": {
+    "dataset": "Xerv-AI/GRAD",
+    "repository": "https://huggingface.co/datasets/Xerv-AI/GRAD",
+    "revision": "71595210590450202b7b69225bc07e9e01b13c5c",
+    "split": "train",
+    "row_index": 2,
+    "row_sha256": "sha256:26404f5cbfbeac8a8e02fce8369d781fb5424ebb99cf45fb7905994b665a6efd",
+    "license": "MIT"
+  },
+  "problem": {
+    "polynomial_coefficients_ascending": [1, -4, 0, 0, 1],
+    "question": "Find the Dirichlet density of primes for which x^4-4x+1 has a root modulo p, then return 100a+b for reduced density a/b.",
+    "frozen_answer": 304
+  },
+  "frozen_explanation_claims": {
+    "mod_2_polynomial_is_irreducible": true,
+    "discriminant": "2^8*17",
+    "galois_group": "S4",
+    "fixed_point_elements": 18,
+    "density": "3/4"
+  },
+  "trusted_theorems": [
+    "Eisenstein's criterion",
+    "Dedekind factorization-cycle correspondence at unramified primes",
+    "A transitive subgroup of S4 containing a 3-cycle and an odd permutation is S4",
+    "Chebotarev density theorem"
+  ]
+}

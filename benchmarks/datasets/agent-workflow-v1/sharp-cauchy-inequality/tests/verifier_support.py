@@ -17,7 +17,6 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 SUBMISSION_FIELDS = frozenset(
     {
         "task_id",
@@ -33,7 +32,7 @@ SUBMISSION_FIELDS = frozenset(
 ASSURANCE_LEVELS = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"})
 
 
-def is_regular_bounded_file(path: Path, *, max_bytes: int) -> bool:
+def is_regular_bounded_file(path: Path, *, max_bytes: int | None) -> bool:
     """Reject symlinks, non-regular files, and oversized files before reading."""
 
     try:
@@ -42,7 +41,7 @@ def is_regular_bounded_file(path: Path, *, max_bytes: int) -> bool:
         return False
     if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
         return False
-    return status.st_size <= max_bytes
+    return max_bytes is None or status.st_size <= max_bytes
 
 
 def sha256_uri(path: Path) -> str:
@@ -147,6 +146,7 @@ def resolve_evidence(
     *,
     expected_path: str,
     workspace: Path = WORKSPACE,
+    max_bytes: int | None = None,
 ) -> Path | None:
     """Resolve one digest-bound evidence file without escapes or symlinks."""
 
@@ -172,7 +172,7 @@ def resolve_evidence(
     except OSError:
         return None
     if not target.is_relative_to(root) or not is_regular_bounded_file(
-        target, max_bytes=MAX_EVIDENCE_BYTES
+        target, max_bytes=max_bytes
     ):
         return None
     try:
@@ -188,6 +188,7 @@ def read_evidence_json(
     *,
     expected_path: str,
     workspace: Path = WORKSPACE,
+    max_bytes: int | None = None,
 ) -> dict[str, Any] | None:
     """Resolve and parse a digest-bound evidence object."""
 
@@ -195,6 +196,7 @@ def read_evidence_json(
         descriptor,
         expected_path=expected_path,
         workspace=workspace,
+        max_bytes=max_bytes,
     )
     if target is None:
         return None
@@ -210,6 +212,7 @@ def evidence_list_is_bound(
     *,
     expected_path: str = "evidence/answer.txt",
     expected_count: int = 1,
+    max_bytes: int | None = None,
 ) -> bool:
     """Require an exact-size list binding the expected evidence file."""
 
@@ -217,7 +220,8 @@ def evidence_list_is_bound(
         isinstance(evidence, list)
         and len(evidence) == expected_count
         and all(
-            resolve_evidence(item, expected_path=expected_path) is not None
+            resolve_evidence(item, expected_path=expected_path, max_bytes=max_bytes)
+            is not None
             for item in evidence
         )
     )

@@ -1,0 +1,1 @@
+{"task_id":"jacobian/finite-field-irreducibility-repair","conclusion":"BAD_REDUCTION_DIAGNOSED_AND_IRREDUCIBILITY_REPAIRED","maximum_assurance":"COMPUTED","required_scope":"the irreducibility step for x^4-4x+1 only"}

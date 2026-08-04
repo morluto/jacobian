@@ -83,6 +83,25 @@ def table():
     ]
 
 
+def exact_value(actual, expected):
+    if isinstance(expected, dict):
+        return (
+            isinstance(actual, dict)
+            and set(actual) == set(expected)
+            and all(exact_value(actual[key], expected[key]) for key in expected)
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(
+                exact_value(value, target)
+                for value, target in zip(actual, expected, strict=True)
+            )
+        )
+    return type(actual) is type(expected) and actual == expected
+
+
 def valid(r):
     expected_table = table()
     defects = {
@@ -103,15 +122,22 @@ def valid(r):
             "encoded_answer",
             "defects",
         }
-        and r["mod2_factor"] == "(x+1)^4"
+        and exact_value(r["mod2_factor"], "(x+1)^4")
         and [1, 0, 0, 0, 1] == [1, 4 % 2, 6 % 2, 4 % 2, 1]
-        and r["actual_discriminant"] == discriminant() == -6656
-        and r["cycle_types"] == expected_table
-        and sum(x["class_size"] for x in expected_table if x["contributes"])
-        == r["fixed_point_total"]
+        and exact_value(r["actual_discriminant"], discriminant())
+        and r["actual_discriminant"] == -6656
+        and exact_value(r["cycle_types"], expected_table)
+        and type(r["fixed_point_total"]) is int
+        and r["fixed_point_total"]
+        == sum(x["class_size"] for x in expected_table if x["contributes"])
         == 15
-        and r["density"] == {"numerator": 5, "denominator": 8}
+        and exact_value(r["density"], {"numerator": 5, "denominator": 8})
+        and type(r["encoded_answer"]) is int
         and r["encoded_answer"] == 508
+        and isinstance(r["defects"], list)
+        and len(r["defects"]) == len(defects)
+        and all(type(value) is str for value in r["defects"])
+        and len(set(r["defects"])) == len(r["defects"])
         and set(r["defects"]) == defects
     )
 

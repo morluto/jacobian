@@ -164,3 +164,68 @@ def test_evidence_validity_independent_of_correctness(tmp_path: Path) -> None:
     assert result["correctness"] == 0.0
     assert result["evidence_validity"] == 1.0
     assert result["reward"] == 0.0
+
+
+def test_synonymous_formal_verification_claim_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    _rewrite_prose(app, _REFERENCE_PROSE + " Lean 4 formally verified this proof.")
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_synonymous_machine_checked_claim_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    _rewrite_prose(app, _REFERENCE_PROSE + " This result was machine-checked by Coq.")
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_truthful_formal_verification_disclaimer_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    _rewrite_prose(
+        app,
+        _REFERENCE_PROSE
+        + " This result was not formally verified by any theorem prover.",
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def _rewrite_marker(app: Path, marker_result: dict) -> None:
+    """Replace the RESULT_JSON marker while preserving the prose."""
+
+    evidence = app / "evidence" / "answer.txt"
+    lines = evidence.read_text().splitlines()
+    prose_lines = [line for line in lines if not line.startswith("RESULT_JSON:")]
+    marker = "RESULT_JSON:" + json.dumps(
+        marker_result, sort_keys=True, separators=(",", ":")
+    )
+    evidence.write_text("\n".join(prose_lines) + "\n" + marker + "\n")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+
+
+def test_boolean_in_marker_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    marker_result = dict(submission["result"])
+    marker_result["rabin_gcd_degree"] = False
+    _rewrite_marker(app, marker_result)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_boolean_coefficient_in_marker_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    marker_result = dict(submission["result"])
+    marker_result["bad_reduction"] = [True, False, False, False, True]
+    _rewrite_marker(app, marker_result)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0

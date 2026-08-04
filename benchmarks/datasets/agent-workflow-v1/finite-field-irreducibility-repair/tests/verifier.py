@@ -39,6 +39,33 @@ def _int_list(value: object, *, min_len: int, max_len: int) -> bool:
     )
 
 
+def _json_equal(a: object, b: object) -> bool:
+    """Structural JSON equality that rejects bool where int is expected.
+
+    Python's ``==`` treats ``True == 1`` and ``False == 0`` as equal, so a
+    marker that substitutes a boolean for an integer field would match the
+    validated result. This helper recursively requires exact types for
+    scalars (``bool`` is never equal to ``int``) and element-wise equality
+    for lists and dicts.
+    """
+
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return type(a) is type(b) and a == b
+    if isinstance(a, str) and isinstance(b, str):
+        return a == b
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(
+            _json_equal(x, y) for x, y in zip(a, b, strict=True)
+        )
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_json_equal(a[k], b[k]) for k in a)
+    if a is None or b is None:
+        return a is None and b is None
+    return False
+
+
 def _trim(a: list[int], p: int) -> list[int]:
     a = [x % p for x in a]
     while len(a) > 1 and a[-1] == 0:
@@ -162,19 +189,64 @@ def _result(value: object) -> bool:
     )
 
 
+_FORMAL_CLAIM_PHRASES = (
+    "proof assistant",
+    "proof-assistant",
+    "formally verified",
+    "formal verification",
+    "formally checked",
+    "formally proved",
+    "formally proven",
+    "machine checked",
+    "machine-checked",
+    "machine verified",
+    "machine-verified",
+    "theorem prover",
+    "theorem proving",
+)
+_PROVER_NAMES = (
+    "lean",
+    "coq",
+    "isabelle",
+    "agda",
+    "metamath",
+    "pvs",
+    "acl2",
+    "hol4",
+    "mizar",
+)
+_VERIFY_VERBS = (
+    "verified",
+    "proved",
+    "proven",
+    "checked",
+    "confirmed",
+    "certified",
+    "formal",
+)
+
+
 def _claims_proof_assistant(folded: str) -> bool:
-    """Reject assertions of proof-assistant verification; allow disclaimers.
+    """Reject assertions of proof-assistant or formal verification; allow disclaimers.
 
     The instruction forbids claiming proof-assistant verification, not
-    truthfully disclaiming it. A clause that mentions a proof assistant
-    alongside a negation term (e.g. "was not checked by a proof assistant")
-    is a valid disclaimer, not a false claim.
+    truthfully disclaiming it. A clause that mentions a proof assistant or
+    formal verification alongside a negation term (e.g. "was not checked by a
+    proof assistant") is a valid disclaimer, not a false claim. Affirmative
+    claims using synonymous phrasing such as "Lean 4 formally verified this
+    proof" are also rejected.
     """
 
     clauses = [clause.strip() for clause in re.split(r"[.!?]\s*", folded)]
     negations = ("not", "no", "without", "never", "neither", "nor")
     return any(
-        ("proof assistant" in clause or "proof-assistant" in clause)
+        (
+            any(phrase in clause for phrase in _FORMAL_CLAIM_PHRASES)
+            or any(
+                name in clause and any(verb in clause for verb in _VERIFY_VERBS)
+                for name in _PROVER_NAMES
+            )
+        )
         and not any(neg in clause for neg in negations)
         for clause in clauses
     )
@@ -250,7 +322,7 @@ def _evidence(value: object, result: object) -> bool:
     prose = "\n".join(
         line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
     )
-    return bool(bound == result and _explanation_valid(prose))
+    return bool(_json_equal(bound, result) and _explanation_valid(prose))
 
 
 def _limitation_valid(limits: object) -> bool:

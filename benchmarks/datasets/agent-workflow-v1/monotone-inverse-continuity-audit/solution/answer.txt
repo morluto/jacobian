@@ -1,0 +1,5 @@
+Choose f(x)=x for x<0 and f(x)=2x+2 for x>=0. Both branches are strictly
+increasing and the positive jump makes every cross-branch comparison strict.
+The image is [-2,0) union [2,6], so 1 lies between the endpoint values but has
+no preimage. Thus strict monotonicity without continuity does not give the
+claimed interval image or a two-sided inverse on that full interval.

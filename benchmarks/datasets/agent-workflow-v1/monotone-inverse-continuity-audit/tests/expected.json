@@ -1,0 +1,7 @@
+{
+  "task_id": "jacobian/monotone-inverse-continuity-audit",
+  "conclusion": "CONTINUITY_IS_NECESSARY",
+  "required_scope": "DECLARED_PIECEWISE_RATIONAL_FAMILY_ON_CLOSED_INTERVAL",
+  "maximum_assurance": "COMPUTED",
+  "limitations": ["The certificate covers only the declared piecewise rational family and does not machine-check the source Lean declaration."]
+}

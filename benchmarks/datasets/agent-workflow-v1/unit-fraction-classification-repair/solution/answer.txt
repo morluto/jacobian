@@ -1,0 +1,1 @@
+Exhaustive divisor replay for `1 <= n <= 2025` gives 827 qualifying integers, not 2022. In particular, 3, 5, and 8 contradict the published classification, while each submitted positive witness reconstructs an exact pair `x<y<2x`.

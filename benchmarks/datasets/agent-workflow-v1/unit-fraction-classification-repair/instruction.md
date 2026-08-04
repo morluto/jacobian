@@ -1,0 +1,5 @@
+# Repair a flawed unit-fraction classification
+
+The frozen solution derives `(x-n)(y-n)=n^2` correctly, but then makes invalid divisibility claims and reports 2022 qualifying integers through 2025. Recompute the exact classification using `d=x-n`, for which a valid solution exists exactly when `d|n^2` and `n/2<d<n`.
+
+Submit the complete membership vector for `n=1..2025` as a 508-character little-endian bit-packed hexadecimal string (bit `n-1`; unused final bits zero), the corrected count, at least ten distinct valid `(n,d)` witnesses, three required nonmember counterexamples, and all diagnosed defects. The evidence artifact must be a JSON object with exactly `schema_version`, `task_id`, `result`, and `limitations`, using `schema_version: "1"`, the submitted task identifier, and exact copies of the submitted `result` and `limitations`; keep it at or below 16 MiB. Claim only `COMPUTED`. The verifier independently enumerates every divisor condition and reconstructs `(x,y)` for each witness.

@@ -226,39 +226,108 @@ _VERIFY_VERBS = (
 )
 
 
+def _assertion_is_negated(clause: str, phrase: str) -> bool:
+    """Check whether a negation word appears before the matched phrase.
+
+    A negation after the phrase (e.g. "not merely") does not negate the
+    verification assertion itself. A negation word anywhere before the
+    phrase in the same clause counts as disclaiming it.
+    """
+
+    negations = ("not", "no", "without", "never", "neither", "nor", "n't")
+    idx = clause.find(phrase)
+    if idx < 0:
+        return False
+    prefix = clause[:idx]
+    words = prefix.split()
+    return any(w in negations for w in words)
+
+
 def _claims_proof_assistant(folded: str) -> bool:
     """Reject assertions of proof-assistant or formal verification; allow disclaimers.
 
     The instruction forbids claiming proof-assistant verification, not
-    truthfully disclaiming it. A clause that mentions a proof assistant or
-    formal verification alongside a negation term (e.g. "was not checked by a
-    proof assistant") is a valid disclaimer, not a false claim. Affirmative
-    claims using synonymous phrasing such as "Lean 4 formally verified this
-    proof" are also rejected.
+    truthfully disclaiming it. A negation directly preceding the verification
+    phrase (e.g. "was not checked by a proof assistant") makes it a valid
+    disclaimer. A negation elsewhere in the clause (e.g. "not merely") does
+    not negate the assertion. Affirmative claims using synonymous phrasing
+    such as "Lean 4 formally verified this proof" are also rejected.
     """
 
     clauses = [clause.strip() for clause in re.split(r"[.!?]\s*", folded)]
-    negations = ("not", "no", "without", "never", "neither", "nor")
-    return any(
-        (
-            any(phrase in clause for phrase in _FORMAL_CLAIM_PHRASES)
-            or any(
-                name in clause and any(verb in clause for verb in _VERIFY_VERBS)
-                for name in _PROVER_NAMES
-            )
-        )
-        and not any(neg in clause for neg in negations)
-        for clause in clauses
-    )
+    for clause in clauses:
+        for phrase in _FORMAL_CLAIM_PHRASES:
+            if phrase in clause and not _assertion_is_negated(clause, phrase):
+                return True
+        for name in _PROVER_NAMES:
+            if (
+                name in clause
+                and any(verb in clause for verb in _VERIFY_VERBS)
+                and not any(
+                    _assertion_is_negated(clause, verb)
+                    for verb in _VERIFY_VERBS
+                    if verb in clause
+                )
+            ):
+                return True
+    return False
+
+
+_MATH_CONTEXT = (
+    "polynomial",
+    "modular",
+    "modulo",
+    "prime",
+    "reduction",
+    "factor",
+    "factorization",
+    "degree",
+    "remainder",
+    "field",
+    "finite field",
+    "rational",
+    "over q",
+    "irreducib",
+    "reducib",
+    "gcd",
+    "rabin",
+    "frobenius",
+    "x^",
+    "f(x)",
+    "x^4",
+    "x^2",
+    "p^2",
+    "p^4",
+    "implication",
+    "criterion",
+    "test",
+)
+
+
+def _is_substantive_clause(clause: str) -> bool:
+    """Reject token-dump clauses that lack mathematical context.
+
+    A clause like "The reducible wallpaper is invalid" contains the trigger
+    keywords but no polynomial or modular-arithmetic context. Require at least
+    8 words and a mathematical context word beyond the trigger keywords.
+    """
+
+    words = clause.split()
+    return len(words) >= 8 and any(ctx in clause for ctx in _MATH_CONTEXT)
 
 
 def _explanation_valid(prose: str) -> bool:
-    """Check the two documented mathematical obligations by clause."""
+    """Check the two documented mathematical obligations by clause.
+
+    Each obligation must appear in a substantive clause that contains
+    mathematical context, not just trigger keywords in unrelated prose.
+    """
 
     folded = prose.casefold()
     clauses = [clause.strip() for clause in re.split(r"[.!?]\s*", folded)]
     explains_bad_implication = any(
-        "reducible" in clause
+        _is_substantive_clause(clause)
+        and "reducible" in clause
         and any(
             phrase in clause
             for phrase in (
@@ -273,7 +342,8 @@ def _explanation_valid(prose: str) -> bool:
         for clause in clauses
     )
     explains_repair = any(
-        "irreducible" in clause
+        _is_substantive_clause(clause)
+        and "irreducible" in clause
         and any(phrase in clause for phrase in ("rational", "over q"))
         and any(
             phrase in clause
@@ -282,7 +352,9 @@ def _explanation_valid(prose: str) -> bool:
         for clause in clauses
     )
     explains_rabin_test = any(
-        any(word in clause for word in ("rabin", "frobenius")) and "gcd" in clause
+        _is_substantive_clause(clause)
+        and any(word in clause for word in ("rabin", "frobenius"))
+        and "gcd" in clause
         for clause in clauses
     )
     return bool(
@@ -322,7 +394,10 @@ def _evidence(value: object, result: object) -> bool:
     prose = "\n".join(
         line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
     )
-    return bool(_json_equal(bound, result) and _explanation_valid(prose))
+    try:
+        return bool(_json_equal(bound, result) and _explanation_valid(prose))
+    except RecursionError:
+        return False
 
 
 def _limitation_valid(limits: object) -> bool:
@@ -362,7 +437,9 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     math_correct = bool(_source_is_bound() and _result(data.get("result")))
     evidence_valid = bool(_evidence(data.get("evidence"), data.get("result")))
     scope_correct = bool(envelope_valid and data.get("scope") == SCOPE and limit_ok)
-    assurance_correct = bool(data.get("claimed_assurance") == "COMPUTED" and limit_ok)
+    assurance_correct = bool(
+        data.get("claimed_assurance") in ("UNVERIFIED", "COMPUTED") and limit_ok
+    )
     reward = (
         1.0
         if protocol

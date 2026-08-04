@@ -229,3 +229,51 @@ def test_boolean_coefficient_in_marker_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_deeply_nested_marker_does_not_crash(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    nested: list = []
+    for _ in range(700):
+        nested = [nested]
+    _rewrite_marker(app, nested)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_affirmative_claim_with_distant_negation_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    _rewrite_prose(
+        app,
+        _REFERENCE_PROSE
+        + " Lean 4 formally verified this proof, not merely checked it.",
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_token_dump_explanation_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    _rewrite_prose(
+        app,
+        "The reducible wallpaper is invalid. "
+        "This test shows rational irreducible wallpaper. "
+        "Rabin gcd. " + ("Unrelated filler text. " * 20),
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    support._write_json(path, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["assurance_calibration"] == 1.0
+    assert result["reward"] == 1.0
+    assert result["false_certification"] is False

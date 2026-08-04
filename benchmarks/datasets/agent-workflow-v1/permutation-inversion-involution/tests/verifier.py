@@ -7,6 +7,7 @@ from verifier_support import (
     load_submission,
     read_evidence_json,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -14,13 +15,16 @@ LIMITATIONS = ["FINITE_N_EQUALS_7", "NO_PROOF_ASSISTANT_REPLAY"]
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 
 
+def _json_equal(left, right):
+    """Compare two JSON values without Python's bool/int coercion."""
+
+    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, sort_keys=True, separators=(",", ":")
+    )
+
+
 def frozen():
-    try:
-        return (W / "input.json").read_bytes() == (
-            T / "input.json"
-        ).read_bytes() and not (W / "input.json").is_symlink()
-    except OSError:
-        return False
+    return workspace_input_is_bound()
 
 
 def inv(p):
@@ -102,6 +106,16 @@ def valid(r):
         ):
             return False
     total = sum(map(inv, perms))
+    if not all(
+        type(r[key]) is int
+        for key in (
+            "fixed_point_count",
+            "pair_count",
+            "pair_inversion_sum",
+            "total_inversions",
+        )
+    ):
+        return False
     return (
         fixed == r["fixed_point_count"] == 0
         and r["pair_count"] == 2520
@@ -142,7 +156,7 @@ def main():
         and set(ev) == {"schema_version", "task_id", "result", "limitations"}
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
-        and ev.get("result") == s.get("result")
+        and _json_equal(ev.get("result"), s.get("result"))
         and ev.get("limitations") == LIMITATIONS
     )
     scope_ok = bool(

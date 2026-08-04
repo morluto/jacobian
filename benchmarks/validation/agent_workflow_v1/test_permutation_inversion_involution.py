@@ -107,3 +107,36 @@ def test_boolean_permutation_entry_is_rejected(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["correctness"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_boolean_result_field_is_rejected(tmp_path: Path) -> None:
+    """A boolean ``False`` equals integer ``0`` under Python equality but must
+    be rejected in the integer result fields."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["fixed_point_count"] = False
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_type_sensitive_evidence_comparison(tmp_path: Path) -> None:
+    """An evidence certificate that replaces an integer ``0`` with boolean
+    ``False`` must be rejected even though Python treats them as equal."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": dict(submission["result"]),
+        "limitations": submission["limitations"],
+    }
+    evidence["result"]["fixed_point_count"] = False
+    raw = json.dumps(evidence, separators=(",", ":")).encode()
+    (app / "evidence" / "permutation-involution-certificate.json").write_bytes(raw)
+    submission["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0

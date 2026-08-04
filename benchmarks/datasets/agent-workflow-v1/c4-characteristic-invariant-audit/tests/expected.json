@@ -1,0 +1,1 @@
+{"task_id":"jacobian/c4-characteristic-invariant-audit","conclusion":"INVARIANTS_NOT_EQUIVALENT","maximum_assurance":"COMPUTED","required_scope":"exact finite comparison of induced-C4 count and C4-free characteristic"}

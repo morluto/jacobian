@@ -1,0 +1,12 @@
+{
+  "task_id": "jacobian/c4-characteristic-invariant-audit",
+  "source": {"repository": "google-deepmind/formal-conjectures", "revision": "b2e608fc52d765510915a244bb69b1a2741acc3c", "issue": 4423},
+  "proposed_invariant": "countInducedC4(G)",
+  "historical_invariant": "1 if G has no C4 subgraph, otherwise 0; chords are allowed in a detected C4",
+  "witness_contracts": [
+    {"role": "C4_FREE_ZERO_COUNT", "min_vertices": 6, "max_vertices": 9},
+    {"role": "MULTIPLE_INDUCED_C4", "min_vertices": 6, "max_vertices": 9},
+    {"role": "CHORDED_C4_ZERO_INDUCED", "min_vertices": 5, "max_vertices": 9}
+  ],
+  "audit_scope": {"finite_graph_semantics": true, "lean_compilation": false, "corrected_conjecture_truth": "NOT_ASSESSED"}
+}

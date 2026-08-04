@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -8,11 +9,138 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
 )
 
 ORDER = [(0, 0), (1, 0), (0, 1), (2, 0), (1, 1), (0, 2), (3, 0), (2, 1), (1, 2), (0, 3)]
 TARGET = [[0, 0, 0, 0, 1, -2, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 1, 0, -3]]
+
+
+def _integer(value):
+    return type(value) is int
+
+
+def _canonical_fraction(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        fraction = Fraction(value)
+    except (ValueError, ZeroDivisionError):
+        return None
+    return fraction if str(fraction) == value else None
+
+
+def _valid_vector(vector):
+    return (
+        isinstance(vector, list)
+        and len(vector) == 10
+        and all(_integer(value) for value in vector)
+    )
+
+
+def _valid_potential(potential):
+    if not isinstance(potential, dict) or set(potential) != {"terms"}:
+        return False
+    terms = potential["terms"]
+    if not isinstance(terms, list):
+        return False
+    seen = set()
+    for term in terms:
+        if not isinstance(term, dict) or set(term) != {
+            "coefficient",
+            "x_power",
+            "y_power",
+        }:
+            return False
+        coefficient = _canonical_fraction(term["coefficient"])
+        x_power, y_power = term["x_power"], term["y_power"]
+        if (
+            coefficient is None
+            or not _integer(x_power)
+            or not _integer(y_power)
+            or not 0 <= x_power <= 4
+            or not 0 <= y_power <= 4
+            or coefficient == 0
+            or (x_power, y_power) in seen
+        ):
+            return False
+        seen.add((x_power, y_power))
+    return True
+
+
+def _valid_scope(scope):
+    if not isinstance(scope, str):
+        return False
+    normalized = " ".join(scope.casefold().split())
+    required = ("closed polynomial one-form", "swapped", "degree at most three", "r2")
+    if not all(term in normalized for term in required):
+        return False
+    return not re.search(
+        r"\b(?:not|no|without|excluding)\b[^.]*closed polynomial one-form",
+        normalized,
+    )
+
+
+def _valid_limitations(limitations):
+    if not isinstance(limitations, list) or not limitations:
+        return False
+    normalized = " ".join(
+        " ".join(item.casefold().split())
+        for item in limitations
+        if isinstance(item, str)
+    )
+    return bool(normalized) and all(
+        term in normalized
+        for term in ("poincare lemma", "arbitrary smooth forms", "not")
+    )
+
+
+def _valid_derivation_evidence(evidence):
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
+    try:
+        lines = target.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    if len(lines) != 6:
+        return False
+    fields = {}
+    for line in lines:
+        key, separator, value = line.partition(":")
+        if not separator or key in fields or not value.strip():
+            return False
+        fields[key] = " ".join(value.casefold().split())
+    if set(fields) != {
+        "CHAIN_RULE",
+        "CONSTRAINTS",
+        "RANK",
+        "DIMENSION",
+        "POTENTIALS",
+        "LIMITATION",
+    }:
+        return False
+    compact = {key: value.replace(" ", "") for key, value in fields.items()}
+    return (
+        "d/dxf(y,x)" in compact["CHAIN_RULE"]
+        and "f_y(y,x)" in compact["CHAIN_RULE"]
+        and all(
+            term in compact["CONSTRAINTS"]
+            for term in ("a_11", "2*a_02=0", "a_21", "3*a_03=0")
+        )
+        and fields["RANK"] == "2"
+        and fields["DIMENSION"] == "8"
+        and "every" in fields["POTENTIALS"]
+        and "f_x=f(x,y)" in compact["POTENTIALS"]
+        and "f_y=f(y,x)" in compact["POTENTIALS"]
+        and all(
+            term in fields["LIMITATION"]
+            for term in ("poincare lemma", "arbitrary smooth forms", "not")
+        )
+    )
 
 
 def rank(matrix):
@@ -51,10 +179,32 @@ def derivative(terms, axis):
 
 def valid_result(result):
     try:
+        if not isinstance(result, dict) or set(result) != {
+            "constraints",
+            "rank",
+            "dimension",
+            "basis",
+            "potentials",
+        }:
+            return False
         constraints, basis = result["constraints"], result["basis"]
+        potentials = result["potentials"]
+        if (
+            not isinstance(constraints, list)
+            or len(constraints) != 2
+            or not all(_valid_vector(row) for row in constraints)
+            or not isinstance(basis, list)
+            or len(basis) != 8
+            or not all(_valid_vector(vector) for vector in basis)
+            or not isinstance(potentials, list)
+            or len(potentials) != 8
+            or not all(_valid_potential(potential) for potential in potentials)
+            or not _integer(result["rank"])
+            or not _integer(result["dimension"])
+        ):
+            return False
         valid = (
-            set(result) == {"constraints", "rank", "dimension", "basis", "potentials"}
-            and result["rank"] == 2
+            result["rank"] == 2
             and result["dimension"] == 8
             and rank(constraints) == 2
             and rank(constraints + TARGET) == 2
@@ -64,7 +214,7 @@ def valid_result(result):
                 for vector in basis
             )
         )
-        for vector, potential in zip(basis, result["potentials"], strict=True):
+        for vector, potential in zip(basis, potentials, strict=True):
             expected = {
                 ORDER[i]: Fraction(value) for i, value in enumerate(vector) if value
             }
@@ -73,7 +223,7 @@ def valid_result(result):
                 (y, x): value for (x, y), value in expected.items()
             }
         return valid
-    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, IndexError):
         return False
 
 
@@ -86,17 +236,18 @@ def main():
         verification_record="forbidden",
     )
     data = submission if isinstance(submission, dict) else {}
-    math_correct = bool(contract and valid_result(data.get("result")))
+    math_correct = bool(valid_result(data.get("result")))
     evidence_valid = bool(
-        contract
-        and evidence_list_is_bound(
+        evidence_list_is_bound(
             data.get("evidence"), expected_path="evidence/answer.txt"
         )
+        and _valid_derivation_evidence(data.get("evidence"))
     )
-    scope_correct = bool(
-        contract and "degree at most three" in str(data.get("scope", "")).casefold()
+    scope_correct = _valid_scope(data.get("scope"))
+    limitations_correct = _valid_limitations(data.get("limitations"))
+    assurance_correct = (
+        data.get("claimed_assurance") == "COMPUTED" and limitations_correct
     )
-    assurance_correct = bool(contract and data.get("claimed_assurance") == "COMPUTED")
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )

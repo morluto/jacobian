@@ -1,1 +1,6 @@
-The published chain-rule step is wrong. The corrected coefficient space has dimension 8; the structured submission supplies an independently replayable classification and eight exact potentials.
+CHAIN_RULE: d/dx f(y,x) = f_y(y,x)
+CONSTRAINTS: a_11 - 2*a_02 = 0; a_21 - 3*a_03 = 0
+RANK: 2
+DIMENSION: 8
+POTENTIALS: Every listed potential satisfies F_x=f(x,y) and F_y=f(y,x).
+LIMITATION: The analytic Poincare lemma and arbitrary smooth forms are not checked.

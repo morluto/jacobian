@@ -77,7 +77,8 @@ def _valid_scope(scope):
     if not all(term in normalized for term in required):
         return False
     return not re.search(
-        r"\b(?:not|no|without|excluding)\b[^.]*closed polynomial one-form",
+        r"(?:\b(?:not|no|without|excluding)\b[^.]*\bclosed polynomial one-form\b|"
+        r"\bclosed polynomial one-form\b[^.]*\b(?:not|no|without|excluding)\b)",
         normalized,
     )
 
@@ -90,9 +91,10 @@ def _valid_limitations(limitations):
         for item in limitations
         if isinstance(item, str)
     )
-    return bool(normalized) and all(
-        term in normalized
-        for term in ("poincare lemma", "arbitrary smooth forms", "not")
+    return bool(
+        normalized
+        and re.search(r"poincare lemma[^.]*\bnot\b[^.]*\bcheck", normalized)
+        and re.search(r"arbitrary smooth forms[^.]*\bnot\b[^.]*\bcheck", normalized)
     )
 
 
@@ -129,7 +131,7 @@ def _valid_derivation_evidence(evidence):
         and "f_y(y,x)" in compact["CHAIN_RULE"]
         and all(
             term in compact["CONSTRAINTS"]
-            for term in ("a_11", "2*a_02=0", "a_21", "3*a_03=0")
+            for term in ("a_11-2*a_02=0", "a_21-3*a_03=0")
         )
         and fields["RANK"] == "2"
         and fields["DIMENSION"] == "8"
@@ -243,7 +245,7 @@ def main():
         )
         and _valid_derivation_evidence(data.get("evidence"))
     )
-    scope_correct = _valid_scope(data.get("scope"))
+    scope_correct = bool(contract and _valid_scope(data.get("scope")))
     limitations_correct = _valid_limitations(data.get("limitations"))
     assurance_correct = (
         data.get("claimed_assurance") == "COMPUTED" and limitations_correct

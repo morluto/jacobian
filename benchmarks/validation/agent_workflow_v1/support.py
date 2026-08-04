@@ -169,6 +169,7 @@ def _run_verifier(task: Path, app: Path, logs: Path) -> dict:
     try:
         pathlib.Path = mapped_path  # type: ignore[assignment]
         sys.dont_write_bytecode = True
+        sys.modules.pop("verifier_support", None)
         sys.path.insert(0, str(task / "tests"))
         runpy.run_path(str(task / "tests" / "verifier.py"), run_name="__main__")
     finally:

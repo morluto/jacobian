@@ -1,0 +1,1 @@
+The unique choice is `a_0=1/9`, so the requested reciprocal is 9; every nonzero homogeneous perturbation eventually destroys monotonicity on one parity.

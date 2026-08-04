@@ -1,0 +1,1 @@
+Twenty-five distinct positive evens and thirty-seven distinct positive odds attain objective 384 with total 2025. The complete odd-count frontier proves that every feasible count pair has objective at most 384.

@@ -148,8 +148,8 @@ def main():
     result = data.get("result", {})
     math_correct = _math_claim_is_correct(result)
     evidence_valid = _evidence_is_valid(data.get("evidence"))
-    scope_correct = _scope_is_positive(data.get("scope"))
-    assurance_correct = data.get("claimed_assurance") == "COMPUTED"
+    scope_correct = bool(contract and _scope_is_positive(data.get("scope")))
+    assurance_correct = bool(contract and data.get("claimed_assurance") == "COMPUTED")
     false_certification = bool(
         false_verified_claim(submission, verification_record_bound=False)
     )

@@ -140,3 +140,41 @@ def test_type_sensitive_evidence_comparison(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_boolean_trace_inversions_is_rejected(tmp_path: Path) -> None:
+    """A boolean ``False`` equals integer ``0`` under Python equality but must
+    be rejected in the trace inversion-count fields."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["traces"][0]["inversions"] = False
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_boolean_trace_transformed_entry_is_rejected(tmp_path: Path) -> None:
+    """A boolean entry in the ``transformed`` list equals an integer under
+    Python equality but must be rejected as a non-exact-integer value."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["traces"][0]["transformed"][0] = True
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_decouples_scope_from_assurance(tmp_path: Path) -> None:
+    """An otherwise exact submission claiming ``VERIFIED`` must retain
+    scope_accuracy while failing assurance and reward."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "invalid")
+    submission = json.loads((app / "submission.json").read_text())
+    _rewrite(app, submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0

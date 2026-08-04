@@ -100,8 +100,13 @@ def valid(r):
         seen.add(p)
         q = transform(name, p, mul, off)
         if (
-            row["transformed"] != list(q)
+            not isinstance(row["transformed"], list)
+            or len(row["transformed"]) != 7
+            or any(type(value) is not int for value in row["transformed"])
+            or row["transformed"] != list(q)
+            or type(row["inversions"]) is not int
             or row["inversions"] != inv(p)
+            or type(row["transformed_inversions"]) is not int
             or row["transformed_inversions"] != inv(q)
         ):
             return False
@@ -132,7 +137,7 @@ def main():
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}),
-        verification_record="forbidden",
+        verification_record="optional",
     )
     contract = strict_submission_contract(
         s,
@@ -157,10 +162,10 @@ def main():
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
         and _json_equal(ev.get("result"), s.get("result"))
-        and ev.get("limitations") == LIMITATIONS
+        and _json_equal(ev.get("limitations"), s.get("limitations"))
     )
     scope_ok = bool(
-        contract
+        structure_valid
         and s.get("scope") == "ALL_PERMUTATIONS_OF_1_THROUGH_7"
         and s.get("completeness") == "COMPLETE"
         and s.get("limitations") == LIMITATIONS

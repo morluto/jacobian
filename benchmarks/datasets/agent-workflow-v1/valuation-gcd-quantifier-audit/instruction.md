@@ -6,6 +6,11 @@ valuations is zero for at least one prime dividing `n`.” Audit this translatio
 Write `/app/submission.json` following the supplied schema and one bound JSON
 evidence file at `evidence/valuation-audit.json`.
 
+The evidence file must be a JSON object with exactly these keys:
+`schema_version` (the string `"1"`), `task_id` (matching the submission's
+`task_id`), `result` (the same result object as the submission), and
+`limitations` (the same limitations array as the submission).
+
 Submit:
 
 1. a valuation countermodel on at least three distinct primes where the weak

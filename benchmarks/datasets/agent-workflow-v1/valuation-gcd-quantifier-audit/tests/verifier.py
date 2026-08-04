@@ -12,6 +12,19 @@ from verifier_support import (
 W, E = Path("/app"), Path("/tests")
 
 
+def _json_equal(a, b):
+    """Deep equality that rejects bool/int coercion (True == 1 in Python)."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, dict):
+        return set(a) == set(b) and all(_json_equal(a[k], b[k]) for k in a)
+    if isinstance(a, list):
+        return len(a) == len(b) and all(
+            _json_equal(x, y) for x, y in zip(a, b, strict=True)
+        )
+    return a == b
+
+
 def _frozen_ok():
     try:
         raw = (E / "input.json").read_bytes()
@@ -25,7 +38,11 @@ def _frozen_ok():
 
 
 def _prime(n):
-    return type(n) is int and n >= 2 and all(n % d for d in range(2, int(n**0.5) + 1))
+    return (
+        type(n) is int
+        and 2 <= n <= 97
+        and all(n % d for d in range(2, int(n**0.5) + 1))
+    )
 
 
 def _rows(value):
@@ -59,9 +76,12 @@ def _countermodel(rows):
     parsed = _rows(rows)
     if not parsed:
         return False
-    minima = [min(exps) for _, exps in parsed]
     values = _numbers(parsed)
-    return minima.count(0) >= 1 and any(m > 0 for m in minima) and gcd(*values) > 1
+    has_zero_min_with_positive_max = any(
+        min(exps) == 0 and max(exps) > 0 for _, exps in parsed
+    )
+    has_positive_min = any(min(exps) > 0 for _, exps in parsed)
+    return has_zero_min_with_positive_max and has_positive_min and gcd(*values) > 1
 
 
 def _repair(rows):
@@ -74,7 +94,7 @@ def _repair(rows):
     n = 1
     for p, exps in parsed:
         k = max(exps)
-        if not 2 <= k <= 6 or min(exps) != 0 or sum(exps) != 3 * k:
+        if not 1 <= k <= 6 or min(exps) != 0 or sum(exps) != 3 * k:
             return False
         n *= p**k
     values = _numbers(parsed)
@@ -98,7 +118,7 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    result = submission.get("result") if contract else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(
         isinstance(result, dict)
         and set(result) == {"defect", "countermodel", "repair"}
@@ -121,7 +141,7 @@ def main():
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == result
+        and _json_equal(evidence["result"], result)
         and evidence["limitations"] == submission.get("limitations")
     )
     scope_ok = bool(

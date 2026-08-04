@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import itertools
 import math
+from collections import Counter
+from collections.abc import Iterator
 from fractions import Fraction
 from itertools import pairwise
 from typing import Annotated, Literal, Self
@@ -367,6 +370,43 @@ class CyclicPerfectDifferenceSetRequest(ContractModel):
         return self
 
 
+def _cyclic_difference_multiplicities(
+    residues: tuple[int, ...],
+    modulus: int,
+) -> dict[int, int]:
+    """Recompute nonzero cyclic difference multiplicities from the residue set.
+
+    The authoritative result-model validators use this clean-room recompute to
+    reject forged but internally self-consistent profiles: a producer regression
+    that materializes an incorrect ``COMPUTED`` result cannot pass the boundary
+    even when the submitted multiplicity fields agree with the decision flag.
+    """
+
+    counts: Counter[int] = Counter(
+        (left - right) % modulus
+        for left in residues
+        for right in residues
+        if left != right
+    )
+    return {residue: counts.get(residue, 0) for residue in range(1, modulus)}
+
+
+def _is_perfect_difference_set(
+    residues: tuple[int, ...],
+    modulus: int,
+) -> bool:
+    """Decide the perfect-difference-set property from the residue set."""
+
+    if modulus != len(residues) * (len(residues) - 1) + 1:
+        return False
+    return all(
+        multiplicity == 1
+        for multiplicity in _cyclic_difference_multiplicities(
+            residues, modulus
+        ).values()
+    )
+
+
 class CyclicDifferenceMultiplicity(ContractModel):
     residue: StrictInt = Field(ge=1, lt=MAX_CYCLIC_DIFFERENCE_SET_MODULUS)
     multiplicity: StrictInt = Field(ge=0, le=4_096)
@@ -411,6 +451,13 @@ class CyclicPerfectDifferenceSetResult(ContractModel):
         if tuple(item.residue for item in profile) != tuple(range(1, self.modulus)):
             raise ValueError(
                 "cyclic difference profile must cover every nonzero residue"
+            )
+        recomputed = _cyclic_difference_multiplicities(residues, self.modulus)
+        if any(
+            item.multiplicity != recomputed[item.residue] for item in profile
+        ):
+            raise ValueError(
+                "cyclic difference multiplicities must be derived from the residues"
             )
         missing = tuple(item.residue for item in profile if item.multiplicity == 0)
         repeated = tuple(item.residue for item in profile if item.multiplicity > 1)
@@ -490,6 +537,41 @@ def _require_positive_extension_shape(
         raise ValueError("extension witness residues must lie in the derived modulus")
     if not set(base_residues) <= set(extension):
         raise ValueError("extension witness must contain the reduced base set")
+    if not _is_perfect_difference_set(extension, modulus):
+        raise ValueError(
+            "extension witness must be a perfect difference set of the derived modulus"
+        )
+
+
+def _enumerate_extension_candidates(
+    base_residues: tuple[int, ...],
+    target_order: int,
+    modulus: int,
+) -> Iterator[tuple[int, ...]]:
+    """Yield every target_order residue superset of the reduced base set."""
+
+    base_set = set(base_residues)
+    available = tuple(
+        residue for residue in range(modulus) if residue not in base_set
+    )
+    additional = target_order - len(base_residues)
+    for combination in itertools.combinations(available, additional):
+        yield tuple(sorted((*base_residues, *combination)))
+
+
+def _find_extension_witness(
+    base_residues: tuple[int, ...],
+    target_order: int,
+    modulus: int,
+) -> tuple[int, ...] | None:
+    """Return one perfect extension witness, or ``None`` if none exists."""
+
+    for candidate in _enumerate_extension_candidates(
+        base_residues, target_order, modulus
+    ):
+        if _is_perfect_difference_set(candidate, modulus):
+            return candidate
+    return None
 
 
 class CyclicDifferenceSetExtensionResult(ContractModel):
@@ -533,6 +615,13 @@ class CyclicDifferenceSetExtensionResult(ContractModel):
             raise ValueError(
                 "negative extension decisions require empty witness and full coverage"
             )
+        else:
+            if _find_extension_witness(
+                self.base_residues, self.target_order, self.modulus
+            ) is not None:
+                raise ValueError(
+                    "negative extension decision must match the exhaustive search"
+                )
         return self
 
 

@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from verifier_support import (
+    ASSURANCE_LEVELS,
     false_verified_claim,
     load_submission,
     resolve_evidence,
@@ -258,6 +259,13 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
+    envelope_valid = strict_submission_contract(
+        submission,
+        task_id=TASK_ID,
+        conclusion=CONCLUSION,
+        allowed_assurances=ASSURANCE_LEVELS,
+        verification_record="forbidden",
+    )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
@@ -267,7 +275,7 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     evidence_valid = bool(
         math_correct and _evidence(data.get("evidence"), data.get("result"))
     )
-    scope_correct = bool(data.get("scope") == SCOPE and limit_ok)
+    scope_correct = bool(envelope_valid and data.get("scope") == SCOPE and limit_ok)
     assurance_correct = bool(data.get("claimed_assurance") == "COMPUTED" and limit_ok)
     reward = (
         1.0

@@ -65,6 +65,12 @@ def valid_result(result):
     spikes = result.get("spikes")
     if not isinstance(spikes, list) or len(spikes) != 12:
         return False
+    if any(
+        not isinstance(spike, dict)
+        or type(spike.get("n")) is not int
+        for spike in spikes
+    ):
+        return False
     if spikes != [expected_spike(n, alpha) for n in range(1, 13)]:
         return False
     for left, right in pairwise(spikes):

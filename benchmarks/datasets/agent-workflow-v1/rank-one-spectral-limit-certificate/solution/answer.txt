@@ -1,1 +1,0 @@
-The determinant lemma gives one root, the reciprocal cubic sum telescopes, and the exact root tends to 4.

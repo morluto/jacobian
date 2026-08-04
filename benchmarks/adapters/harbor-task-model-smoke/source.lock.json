@@ -1,20 +1,5 @@
 {
-  "schema_version": "1",
   "adapter_id": "harbor-task-model-smoke",
-  "source": {
-    "url": "https://github.com/laude-institute/harbor",
-    "revision": "v0.20.0",
-    "sha256": "sha256:6c5f94a56c53f0e14b9fc6a75f249fc4b0b04cf25a1d06c56f6e8d44f479f7f1",
-    "license": "Apache-2.0",
-    "redistribution": "metadata-only"
-  },
-  "selection": {
-    "included_rows": [
-      "task-model-smoke/graph-counterexample"
-    ],
-    "excluded_rows": [],
-    "rule": "one deterministic task-model reference row"
-  },
   "dependencies": {
     "harbor": "==0.20.0",
     "jsonschema": "==4.25.1",
@@ -22,12 +7,27 @@
   },
   "outputs": [
     {
-      "task_id": "graph-counterexample",
       "dataset": "agent-workflow-v1",
-      "source_row": "task-model-smoke/graph-counterexample",
-      "task_digest": "sha256:128c5dced2fb31c8626d578c189d7b91537faae0fa171edff41a5dd5e0269cad",
       "oracle_evidence_digest": "sha256:12c972f39f8faf584479c2d4cba4be624d723ecfd346e6950a437536c3e7a439",
-      "parity_evidence_digest": "sha256:c9e6fbd2f37f92ced3d30a3d4c9f0d650f7b76f5234d2fdda449a44797a86100"
+      "parity_evidence_digest": "sha256:c9e6fbd2f37f92ced3d30a3d4c9f0d650f7b76f5234d2fdda449a44797a86100",
+      "source_row": "task-model-smoke/graph-counterexample",
+      "task_digest": "sha256:5c14ffb7867124125425828309809fd50af99753225e1bb99e3f29b0ed62ef3d",
+      "task_id": "graph-counterexample"
     }
-  ]
+  ],
+  "schema_version": "1",
+  "selection": {
+    "excluded_rows": [],
+    "included_rows": [
+      "task-model-smoke/graph-counterexample"
+    ],
+    "rule": "one deterministic task-model reference row"
+  },
+  "source": {
+    "license": "Apache-2.0",
+    "redistribution": "metadata-only",
+    "revision": "v0.20.0",
+    "sha256": "sha256:6c5f94a56c53f0e14b9fc6a75f249fc4b0b04cf25a1d06c56f6e8d44f479f7f1",
+    "url": "https://github.com/laude-institute/harbor"
+  }
 }

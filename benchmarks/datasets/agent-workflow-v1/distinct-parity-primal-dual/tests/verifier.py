@@ -40,6 +40,25 @@ def frontier():
     return rows
 
 
+def exact_value(actual, expected):
+    if isinstance(expected, dict):
+        return (
+            isinstance(actual, dict)
+            and set(actual) == set(expected)
+            and all(exact_value(actual[key], expected[key]) for key in expected)
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(
+                exact_value(value, target)
+                for value, target in zip(actual, expected, strict=True)
+            )
+        )
+    return type(actual) is type(expected) and actual == expected
+
+
 def valid(r):
     if not isinstance(r, dict) or set(r) != {
         "even_numbers",
@@ -64,8 +83,9 @@ def valid(r):
     objective = 5 * len(evens) + 7 * len(odds)
     rows = frontier()
     return (
-        r["objective"] == objective == 384
-        and r["frontier"] == rows
+        type(r["objective"]) is int
+        and r["objective"] == objective == 384
+        and exact_value(r["frontier"], rows)
         and max(row["objective"] for row in rows) == 384
     )
 

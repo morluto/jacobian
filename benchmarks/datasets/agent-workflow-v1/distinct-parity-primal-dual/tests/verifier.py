@@ -59,6 +59,23 @@ def exact_value(actual, expected):
     return type(actual) is type(expected) and actual == expected
 
 
+def frontier_matches(submitted, expected):
+    if not isinstance(submitted, list) or len(submitted) != len(expected):
+        return False
+    expected_by_odd = {row["odd_count"]: row for row in expected}
+    seen = set()
+    for row in submitted:
+        if not isinstance(row, dict) or "odd_count" not in row:
+            return False
+        key = row["odd_count"]
+        if key in seen or key not in expected_by_odd:
+            return False
+        seen.add(key)
+        if not exact_value(row, expected_by_odd[key]):
+            return False
+    return True
+
+
 def valid(r):
     if not isinstance(r, dict) or set(r) != {
         "even_numbers",
@@ -85,7 +102,7 @@ def valid(r):
     return (
         type(r["objective"]) is int
         and r["objective"] == objective == 384
-        and exact_value(r["frontier"], rows)
+        and frontier_matches(r["frontier"], rows)
         and max(row["objective"] for row in rows) == 384
     )
 
@@ -107,9 +124,12 @@ def main():
         if contract
         else None
     )
-    math_ok = bool(contract and frozen() and valid(s.get("result")))
+    input_bound = frozen()
+    math_ok = bool(isinstance(s, dict) and valid(s.get("result")))
     evidence_ok = bool(
-        ev
+        contract
+        and input_bound
+        and ev
         and set(ev) == {"schema_version", "task_id", "result", "limitations"}
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
@@ -118,13 +138,21 @@ def main():
     )
     scope_ok = bool(
         contract
+        and input_bound
         and s.get("scope") == "ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025"
         and s.get("completeness") == "COMPLETE"
         and s.get("limitations") == LIMITATIONS
     )
     assurance_ok = bool(contract and s.get("claimed_assurance") == "COMPUTED")
     false_cert = false_verified_claim(s, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
+    correct = bool(
+        contract
+        and input_bound
+        and math_ok
+        and evidence_ok
+        and scope_ok
+        and not false_cert
+    )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(

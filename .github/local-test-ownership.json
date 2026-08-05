@@ -17,7 +17,9 @@
       "tests/unit/tooling/test_ci_execution_policy.py"
     ],
     ".github/scripts/plan-local-tests": [
-      "tests/boundary/process/tooling/test_local_validation_tools.py",
+      "tests/unit/tooling/test_plan_local_tests.py",
+      "tests/boundary/process/tooling/test_topology_runner.py",
+      "tests/boundary/process/tooling/test_cli_import_surface.py",
       "tests/unit/tooling/test_ci_planner_catalog.py"
     ],
     ".github/scripts/validate-ci-plan": [
@@ -28,9 +30,8 @@
       "tests/boundary/process/tooling/test_benchmark_classification.py"
     ],
     "tools/test_topology.py": [
-      "tests/unit/tooling/test_topology_runner.py",
-      "tests/unit/tooling/test_topology_manifest.py",
-      "tests/boundary/process/tooling/test_local_validation_tools.py"
+      "tests/boundary/process/tooling/test_topology_runner.py",
+      "tests/unit/tooling/test_topology_manifest.py"
     ],
     "tools/check_doc_commands.py": [
       "tests/unit/tooling/test_doc_commands.py"

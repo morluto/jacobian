@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
-import subprocess
 import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -10,11 +8,11 @@ from types import ModuleType
 
 import pytest
 
-ROOT = Path(__file__).parents[4]
+ROOT = Path(__file__).parents[3]
 SCRIPTS = ROOT / ".github" / "scripts"
 
 
-def _load(name: str, filename: str) -> ModuleType:
+def _load_script_module(name: str, filename: str) -> ModuleType:
     loader = SourceFileLoader(name, str(SCRIPTS / filename))
     spec = importlib.util.spec_from_loader(name, loader)
     assert spec is not None
@@ -28,7 +26,7 @@ def test_plan_combines_commit_worktree_staged_and_untracked_changes(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    planner = _load("plan_local_tests", "plan-local-tests")
+    planner = _load_script_module("plan_local_tests", "plan-local-tests")
     responses = {
         ("diff", "--name-status", "base..HEAD"): [
             planner.Change("M", "committed.py"),
@@ -47,7 +45,7 @@ def test_plan_combines_commit_worktree_staged_and_untracked_changes(
         "git_paths",
         lambda *args: ["untracked.py"],
     )
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(planner.subprocess, "run", lambda *args, **kwargs: None)
 
     assert [
         (change.status, change.path) for change in planner.changed_entries("base")
@@ -61,13 +59,13 @@ def test_plan_combines_commit_worktree_staged_and_untracked_changes(
 
 
 def test_clean_test_plan_selects_no_lanes() -> None:
-    planner = _load("plan_local_tests_clean", "plan-local-tests")
+    planner = _load_script_module("plan_local_tests_clean", "plan-local-tests")
 
     assert planner.classify([]) == {"classification": "clean"}
 
 
 def test_known_ci_tooling_change_uses_owned_process_tests() -> None:
-    planner = _load("plan_local_tests_ci_override", "plan-local-tests")
+    planner = _load_script_module("plan_local_tests_ci_override", "plan-local-tests")
 
     selected, fallback = planner.exact_tests(
         [planner.Change("M", ".github/scripts/emit-plan-receipt")]
@@ -77,17 +75,31 @@ def test_known_ci_tooling_change_uses_owned_process_tests() -> None:
     assert selected == ["tests/boundary/process/tooling/test_plan_receipt.py"]
 
 
-def test_explicit_missing_path_is_treated_as_a_delete(
-    monkeypatch, tmp_path: Path
+def test_explicit_paths_report_missing_files_as_deletes(
+    monkeypatch, tmp_path: Path, capsys
 ) -> None:
-    planner = _load("plan_local_tests_explicit_delete", "plan-local-tests")
+    planner = _load_script_module("plan_local_tests_explicit_paths", "plan-local-tests")
     monkeypatch.setattr(planner, "ROOT", tmp_path)
-    (tmp_path / "present.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        planner,
+        "classify",
+        lambda paths: {"classification": "selective", "run-unit": "true"},
+    )
+    present = tmp_path / "tests" / "unit" / "test_present.py"
+    present.parent.mkdir(parents=True)
+    present.write_text("def test_present(): pass\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["plan-local-tests", "--paths", "tests/unit/test_present.py", "removed.py"],
+    )
 
-    assert planner._explicit_entries(["present.py", "removed.py"]) == [
-        planner.Change("M", "present.py"),
-        planner.Change("D", "removed.py"),
-    ]
+    planner.main()
+    output = capsys.readouterr().out
+
+    assert "present.py" in output
+    assert "removed.py" in output
+    assert "removed.py: D changes are not exact" in output
 
 
 @pytest.mark.parametrize(
@@ -96,16 +108,17 @@ def test_explicit_missing_path_is_treated_as_a_delete(
         (
             ".github/scripts/plan-local-tests",
             {
-                "tests/boundary/process/tooling/test_local_validation_tools.py",
+                "tests/boundary/process/tooling/test_cli_import_surface.py",
+                "tests/boundary/process/tooling/test_topology_runner.py",
+                "tests/unit/tooling/test_plan_local_tests.py",
                 "tests/unit/tooling/test_ci_planner_catalog.py",
             },
         ),
         (
             "tools/test_topology.py",
             {
-                "tests/boundary/process/tooling/test_local_validation_tools.py",
+                "tests/boundary/process/tooling/test_topology_runner.py",
                 "tests/unit/tooling/test_topology_manifest.py",
-                "tests/unit/tooling/test_topology_runner.py",
             },
         ),
         (
@@ -118,7 +131,7 @@ def test_new_tooling_changes_use_narrow_owned_tests(
     path: str,
     expected: set[str],
 ) -> None:
-    planner = _load("plan_local_tests_owned_tools", "plan-local-tests")
+    planner = _load_script_module("plan_local_tests_owned_tools", "plan-local-tests")
 
     selected, fallback = planner.exact_tests([planner.Change("M", path)])
 
@@ -127,7 +140,9 @@ def test_new_tooling_changes_use_narrow_owned_tests(
 
 
 def test_deleted_ci_tooling_change_cannot_use_owned_process_override() -> None:
-    planner = _load("plan_local_tests_deleted_ci_override", "plan-local-tests")
+    planner = _load_script_module(
+        "plan_local_tests_deleted_ci_override", "plan-local-tests"
+    )
 
     selected, fallback = planner.exact_tests(
         [planner.Change("D", ".github/scripts/emit-plan-receipt")]
@@ -137,224 +152,15 @@ def test_deleted_ci_tooling_change_cannot_use_owned_process_override() -> None:
     assert fallback == ".github/scripts/emit-plan-receipt: D changes are not exact"
 
 
-def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
-    result = subprocess.run(
-        [
-            sys.executable,
-            "tools/test_topology.py",
-            "domain",
-            "--dry-run",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    assert "tests/domain" in result.stdout
-    assert "--timeout 120" in result.stdout
-
-
-def test_harbor_execution_check_stays_out_of_the_full_verifier_corpus() -> None:
-    result = subprocess.run(
-        ["make", "--dry-run", "harbor-execution-check"],
-        cwd=ROOT,
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "tools/check_harbor_dataset.py --check" in result.stdout
-    assert "tools/check_benchmark_contracts.py" in result.stdout
-    assert "tests/unit/tooling/test_harbor*.py" in result.stdout
-    assert "benchmarks/validation" not in result.stdout
-    assert "harbor-oracle" not in result.stdout
-
-
-def test_make_semantic_lane_forwards_pytest_arguments() -> None:
-    result = subprocess.run(
-        [
-            "make",
-            "--dry-run",
-            "test-process",
-            "TESTS=tests/boundary/process/tooling/test_local_validation_tools.py",
-            "PYTEST_ARGS=-k target_test --junitxml=pytest.xml",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    assert '--pytest-args "--durations=10 -k target_test --junitxml=pytest.xml"' in (
-        result.stdout
-    )
-
-
-def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None:
-    from benchmarks.tooling.command_runner import ToolCommandStatus
-    from tools import test_topology
-
-    topology = test_topology.load_topology()
-    observed: dict[str, object] = {}
-
-    class FakeResult:
-        status = ToolCommandStatus.EXITED
-        exit_code = 0
-        stdout = b"all tests passed\n"
-        stderr = b""
-
-    def fake_run_tool_command(request: object) -> FakeResult:
-        observed.update(
-            executable=request.executable,  # type: ignore[attr-defined]
-            arguments=request.arguments,  # type: ignore[attr-defined]
-            cwd=request.cwd,  # type: ignore[attr-defined]
-            environment=request.environment,  # type: ignore[attr-defined]
-            timeout_seconds=request.timeout_seconds,  # type: ignore[attr-defined]
-        )
-        return FakeResult()
-
-    monkeypatch.setattr(
-        test_topology,
-        "run_tool_command",
-        fake_run_tool_command,
-    )
-
-    rc = test_topology.run_lane(
-        topology,
-        "unit",
-        ["tests/unit/tooling/test_fixture_architecture.py"],
-        ["-q"],
-    )
-
-    assert rc == 0
-    # Must use the active interpreter verbatim, not resolved (which loses the venv).
-    assert observed["executable"] == sys.executable
-    assert observed["arguments"] == (
-        "-m",
-        "pytest",
-        "tests/unit/tooling/test_fixture_architecture.py",
-        "-q",
-        "--timeout",
-        "10",
-    )
-    environment = observed["environment"]
-    assert environment is not None
-    assert environment["JACOBIAN_TEST_LANE"] == "unit"
-    assert observed["timeout_seconds"] == 3600.0
-
-
-def test_topology_runner_forwards_child_stdout_and_stderr(monkeypatch, capfd) -> None:
-    from benchmarks.tooling.command_runner import ToolCommandStatus
-    from tools import test_topology
-
-    topology = test_topology.load_topology()
-
-    class FakeResult:
-        status = ToolCommandStatus.EXITED
-        exit_code = 1
-        stdout = b"FAILED tests/unit/test_bad.py\n"
-        stderr = b"Error: assertion failed\n"
-
-    monkeypatch.setattr(
-        test_topology,
-        "run_tool_command",
-        lambda request: FakeResult(),
-    )
-
-    rc = test_topology.run_lane(topology, "unit", ["tests/unit/test_bad.py"], [])
-
-    assert rc == 1
-    captured = capfd.readouterr()
-    assert "FAILED tests/unit/test_bad.py" in captured.out
-    assert "Error: assertion failed" in captured.err
-
-
-def test_topology_runner_emits_diagnostic_on_timeout(monkeypatch, capfd) -> None:
-    from benchmarks.tooling.command_runner import ToolCommandStatus
-    from tools import test_topology
-
-    topology = test_topology.load_topology()
-
-    class FakeResult:
-        status = ToolCommandStatus.TIMED_OUT
-        exit_code = None
-        stdout = b""
-        stderr = b""
-        diagnostic = "deadline exceeded"
-        stdout_exceeded = False
-        stderr_exceeded = False
-
-    monkeypatch.setattr(
-        test_topology,
-        "run_tool_command",
-        lambda request: FakeResult(),
-    )
-
-    rc = test_topology.run_lane(topology, "unit", [], [])
-
-    assert rc == 1
-    captured = capfd.readouterr()
-    assert "deadline exceeded" in captured.err
-
-
-@pytest.mark.parametrize("surface", ["help", "version"])
-def test_cheap_cli_surfaces_do_not_import_runtime_or_math_backends(
-    surface: str,
-) -> None:
-    probe = """
-import json
-import sys
-
-if sys.argv[1] == "help":
-    from jacobian.cli import app
-    app(args=["--help"], prog_name="jacobian", standalone_mode=False)
-else:
-    import jacobian
-    assert jacobian.__version__
-
-forbidden = (
-    "jacobian.adapters.mcp.server",
-    "jacobian.domains",
-    "jacobian.lean_frontend.service",
-    "sympy",
-    "cvc5",
-    "flint",
-    "z3",
-)
-loaded = sorted(
-    name
-    for name in sys.modules
-    if any(name == prefix or name.startswith(prefix + ".") for prefix in forbidden)
-)
-print("JACOBIAN_IMPORT_SURFACE=" + json.dumps(loaded))
-"""
-    completed = subprocess.run(
-        [sys.executable, "-c", probe, surface],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    marker = next(
-        line
-        for line in completed.stdout.splitlines()
-        if line.startswith("JACOBIAN_IMPORT_SURFACE=")
-    )
-
-    assert json.loads(marker.partition("=")[2]) == []
-
-
 def test_plan_preserves_both_sides_of_rename(monkeypatch) -> None:
-    planner = _load("plan_local_tests_rename", "plan-local-tests")
-    completed = subprocess.CompletedProcess(
+    planner = _load_script_module("plan_local_tests_rename", "plan-local-tests")
+    completed = planner.subprocess.CompletedProcess(
         args=[],
         returncode=0,
         stdout="R100\tsrc/jacobian/old.py\tsrc/jacobian/new.py\n",
         stderr="",
     )
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: completed)
+    monkeypatch.setattr(planner.subprocess, "run", lambda *args, **kwargs: completed)
 
     assert planner.git_changes("diff", "--name-status") == [
         planner.Change("R", "src/jacobian/old.py"),
@@ -363,7 +169,9 @@ def test_plan_preserves_both_sides_of_rename(monkeypatch) -> None:
 
 
 def _planner_tree(tmp_path: Path, monkeypatch) -> ModuleType:
-    planner = _load(f"plan_local_tests_{tmp_path.name}", "plan-local-tests")
+    planner = _load_script_module(
+        f"plan_local_tests_{tmp_path.name}", "plan-local-tests"
+    )
     monkeypatch.setattr(planner, "ROOT", tmp_path)
     monkeypatch.setattr(
         planner,
@@ -661,7 +469,7 @@ def test_plan_labels_focused_commands_without_printing_lane_fallbacks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    planner = _load("plan_local_tests_focused_output", "plan-local-tests")
+    planner = _load_script_module("plan_local_tests_focused_output", "plan-local-tests")
     monkeypatch.setenv("PATHS", '["tools/check_doc_commands.py"]')
     monkeypatch.setattr(sys, "argv", ["plan-local-tests"])
 

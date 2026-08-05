@@ -1,12 +1,176 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from tools.test_topology import lane_environment, load_topology, main, pytest_command
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
+
+
+def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/test_topology.py",
+            "domain",
+            "--dry-run",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "tests/domain" in result.stdout
+    assert "--timeout 120" in result.stdout
+
+
+def test_harbor_execution_check_stays_out_of_the_full_verifier_corpus() -> None:
+    result = subprocess.run(
+        ["make", "--dry-run", "harbor-execution-check"],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "tools/check_harbor_dataset.py --check" in result.stdout
+    assert "tools/check_benchmark_contracts.py" in result.stdout
+    assert "tests/unit/tooling/test_harbor*.py" in result.stdout
+    assert "benchmarks/validation" not in result.stdout
+    assert "harbor-oracle" not in result.stdout
+
+
+def test_make_semantic_lane_forwards_pytest_arguments() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "--dry-run",
+            "test-process",
+            "TESTS=tests/boundary/process/tooling/test_topology_runner.py",
+            "PYTEST_ARGS=-k target_test --junitxml=pytest.xml",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert '--pytest-args "--durations=10 -k target_test --junitxml=pytest.xml"' in (
+        result.stdout
+    )
+
+
+def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None:
+    from benchmarks.tooling.command_runner import ToolCommandStatus
+    from tools import test_topology
+
+    topology = test_topology.load_topology()
+    observed: dict[str, object] = {}
+
+    class FakeResult:
+        status = ToolCommandStatus.EXITED
+        exit_code = 0
+        stdout = b"all tests passed\n"
+        stderr = b""
+
+    def fake_run_tool_command(request: object) -> FakeResult:
+        observed.update(
+            executable=request.executable,  # type: ignore[attr-defined]
+            arguments=request.arguments,  # type: ignore[attr-defined]
+            cwd=request.cwd,  # type: ignore[attr-defined]
+            environment=request.environment,  # type: ignore[attr-defined]
+            timeout_seconds=request.timeout_seconds,  # type: ignore[attr-defined]
+        )
+        return FakeResult()
+
+    monkeypatch.setattr(
+        test_topology,
+        "run_tool_command",
+        fake_run_tool_command,
+    )
+
+    rc = test_topology.run_lane(
+        topology,
+        "unit",
+        ["tests/unit/tooling/test_fixture_architecture.py"],
+        ["-q"],
+    )
+
+    assert rc == 0
+    # Must use the active interpreter verbatim, not resolved (which loses the venv).
+    assert observed["executable"] == sys.executable
+    assert observed["arguments"] == (
+        "-m",
+        "pytest",
+        "tests/unit/tooling/test_fixture_architecture.py",
+        "-q",
+        "--timeout",
+        "10",
+    )
+    environment = observed["environment"]
+    assert environment is not None
+    assert environment["JACOBIAN_TEST_LANE"] == "unit"
+    assert observed["timeout_seconds"] == 3600.0
+
+
+def test_topology_runner_forwards_child_stdout_and_stderr(monkeypatch, capfd) -> None:
+    from benchmarks.tooling.command_runner import ToolCommandStatus
+    from tools import test_topology
+
+    topology = test_topology.load_topology()
+
+    class FakeResult:
+        status = ToolCommandStatus.EXITED
+        exit_code = 1
+        stdout = b"FAILED tests/unit/test_bad.py\n"
+        stderr = b"Error: assertion failed\n"
+
+    monkeypatch.setattr(
+        test_topology,
+        "run_tool_command",
+        lambda request: FakeResult(),
+    )
+
+    rc = test_topology.run_lane(topology, "unit", ["tests/unit/test_bad.py"], [])
+
+    assert rc == 1
+    captured = capfd.readouterr()
+    assert "FAILED tests/unit/test_bad.py" in captured.out
+    assert "Error: assertion failed" in captured.err
+
+
+def test_topology_runner_emits_diagnostic_on_timeout(monkeypatch, capfd) -> None:
+    from benchmarks.tooling.command_runner import ToolCommandStatus
+    from tools import test_topology
+
+    topology = test_topology.load_topology()
+
+    class FakeResult:
+        status = ToolCommandStatus.TIMED_OUT
+        exit_code = None
+        stdout = b""
+        stderr = b""
+        diagnostic = "deadline exceeded"
+        stdout_exceeded = False
+        stderr_exceeded = False
+
+    monkeypatch.setattr(
+        test_topology,
+        "run_tool_command",
+        lambda request: FakeResult(),
+    )
+
+    rc = test_topology.run_lane(topology, "unit", [], [])
+
+    assert rc == 1
+    captured = capfd.readouterr()
+    assert "deadline exceeded" in captured.err
 
 
 def test_focused_selector_does_not_start_configured_workers() -> None:
@@ -15,15 +179,12 @@ def test_focused_selector_does_not_start_configured_workers() -> None:
     command = pytest_command(
         topology,
         "process",
-        ["tests/boundary/process/tooling/test_local_validation_tools.py::test_x"],
+        ["tests/boundary/process/tooling/test_topology_runner.py::test_x"],
     )
 
     assert "-n" not in command
     assert "--dist" not in command
-    assert (
-        "tests/boundary/process/tooling/test_local_validation_tools.py::test_x"
-        in command
-    )
+    assert "tests/boundary/process/tooling/test_topology_runner.py::test_x" in command
 
 
 def test_full_parallel_lane_retains_configured_workers() -> None:
@@ -130,7 +291,7 @@ def test_dry_run_forwards_explicit_pytest_arguments(capsys) -> None:
         [
             "process",
             "--pytest-args=-k target_test --junitxml=pytest.xml",
-            "tests/boundary/process/tooling/test_local_validation_tools.py",
+            "tests/boundary/process/tooling/test_topology_runner.py",
             "--dry-run",
         ]
     )

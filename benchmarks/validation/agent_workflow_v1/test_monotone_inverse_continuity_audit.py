@@ -116,3 +116,15 @@ def test_rejects_evidence_without_result_marker(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_reports_tampered_input_separately_from_math_correctness(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    (app / "input.json").write_text("{", encoding="utf-8")
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["input_binding"] == 0.0
+    assert rejected["reward"] == 0.0

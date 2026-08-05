@@ -103,13 +103,14 @@ def _evidence_matches_result(submission):
         return False
     if not text.strip():
         return False
-    marker = None
-    for line in text.splitlines():
-        if line.startswith("RESULT_JSON:"):
-            marker = line[len("RESULT_JSON:") :].strip()
-            break
-    if marker is None:
+    markers = [
+        line[len("RESULT_JSON:") :].strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
         return False
+    marker = markers[0]
     try:
         parsed = json.loads(marker)
     except (ValueError, RecursionError, MemoryError):

@@ -150,6 +150,21 @@ def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> Non
     assert reward["reward"] == 0.0
 
 
+def test_malformed_assurance_preserves_scope_diagnostic(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["claimed_assurance"] = []
+
+    reward = _verify(tmp_path, submission)
+
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["assurance_calibration"] == 0.0
+    assert reward["reward"] == 0.0
+    assert reward["false_certification"] is False
+
+
 def test_evidence_comparison_uses_exact_json_types(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     task, app, logs = _prepare(tmp_path, submission)

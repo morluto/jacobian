@@ -64,6 +64,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
     "c4-characteristic-invariant-audit",
+    "extremal-subset-sum-semantic-audit",
     "necklace-burnside-certificate",
     "pythagorean-generator-recurrence",
 )

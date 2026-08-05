@@ -52,21 +52,12 @@ RESOURCE_DERIVED_TASKS = (
     "well-total-domination-counterexample",
 )
 # Tasks whose verifier reports scope independently of assurance typing.
-SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
-    "grid-independent-set-transfer",
-    "image-complement-commutation",
-    "lp-integrability-separator",
-    "necklace-burnside-certificate",
-    "pythagorean-generator-recurrence",
-    "prime-power-divisibility-gap-audit",
-)
-# Tasks whose scope diagnostic remains independent when the assurance value
-# itself bypasses the public schema's string validation.
-UNHASHABLE_ASSURANCE_SCOPE_TASKS = ("prime-power-divisibility-gap-audit",)
+SCOPE_INDEPENDENT_ASSURANCE_TASKS = ("prime-power-divisibility-gap-audit",)
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
+    "extremal-subset-sum-semantic-audit",
     "necklace-burnside-certificate",
     "prime-power-divisibility-gap-audit",
     "pythagorean-generator-recurrence",

@@ -148,7 +148,10 @@ def main() -> None:
     )
     math_correct = _result(data.get("result"), _load())
     evidence_valid = _evidence(data.get("evidence"), data.get("result"))
-    scope_correct = data.get("scope") == expected["required_scope"]
+    scope_correct = bool(
+        type(data.get("claimed_assurance")) is str
+        and data.get("scope") == expected["required_scope"]
+    )
     assurance_correct = data.get("claimed_assurance") == expected["maximum_assurance"]
     false_certification = false_verified_claim(
         submission, verification_record_bound=False

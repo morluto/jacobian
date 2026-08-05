@@ -330,6 +330,66 @@ def test_rejects_pronoun_negated_inverse_failure(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
+@pytest.mark.parametrize(
+    "opening",
+    [
+        "Both affine pieces are not strictly increasing even though their slopes "
+        "are positive.",
+        "Both branches are strictly increasing, but not both slopes are positive.",
+    ],
+)
+def test_rejects_broader_negated_monotonicity_claims(
+    tmp_path: Path, opening: str
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(
+        opening + " The positive jump makes all cross-branch comparisons strict. Their "
+        "image ranges leave a missing gap between the limiting values, and the gap "
+        "witness has no preimage, so the full-interval inverse fails.\n" + marker + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "inverse_claim", ["The inverse is not a failure.", "The inverse isn't failing."]
+)
+def test_rejects_broader_negated_inverse_failure(
+    tmp_path: Path, inverse_claim: str
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(
+        "Both branches are strictly increasing because their slopes are positive. "
+        "The positive jump makes all cross-branch comparisons strict. Their image "
+        "ranges leave a missing gap between the limiting values, and the gap "
+        "witness has no preimage. " + inverse_claim + "\n" + marker + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_malformed_assurance_zeroes_scope_accuracy(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
@@ -398,6 +458,24 @@ def test_rejects_malformed_result_json_after_valid_prose(tmp_path: Path) -> None
         if not line.startswith("RESULT_JSON:")
     )
     evidence_path.write_text(prose + "\nRESULT_JSON:{\n", encoding="utf-8")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_rejects_non_json_unicode_whitespace_in_result_marker(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    text = evidence_path.read_text()
+    evidence_path.write_text(
+        text.replace("RESULT_JSON: {", "RESULT_JSON: {\u00a0", 1), encoding="utf-8"
+    )
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
 

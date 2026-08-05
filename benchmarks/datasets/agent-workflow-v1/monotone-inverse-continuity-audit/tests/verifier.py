@@ -97,6 +97,8 @@ class _ProseScanner:
         self._sentence_has_inverse = False
         self._sentence_has_contradiction = False
         self.contradicts_inverse_failure = False
+        self.contradicts_increasing = False
+        self.contradicts_positive_slopes = False
         self.branch_subject = False
         self.strictly_increasing = False
         self.positive_slopes = False
@@ -132,6 +134,8 @@ class _ProseScanner:
                     r"\s+not|cannot)\s+fail(?:s|ed|ing)?|"
                     r"(?:doesn|don|didn|won|wouldn|can|couldn|shouldn|mustn)"
                     r"['\u2019]?t\s+fail(?:s|ed|ing)?|succeeds?|works?)\b"
+                    r"|\b(?:(?:is|are)\s+not|(?:isn|aren)['\u2019]?t)\s+"
+                    r"(?:a\s+)?fail(?:ure|ing)?\b|\bnever\s+fails?\b"
                 ),
             ),
             ("sentence", re.compile(r"[.!?;]")),
@@ -172,6 +176,8 @@ class _ProseScanner:
             and self.inverse_term
             and self.failure_term
             and not self.contradicts_inverse_failure
+            and not self.contradicts_increasing
+            and not self.contradicts_positive_slopes
         )
 
     def _scan_obligations(self, text):
@@ -211,6 +217,27 @@ class _ProseScanner:
         self.inverse_term |= bool(re.search(r"\b(?:inverse|preimage)\b", text))
         self.failure_term |= bool(
             re.search(r"\b(?:no|not|fail(?:s|ure)?|without|omits?)\b", text)
+        )
+        self.contradicts_increasing |= bool(
+            re.search(
+                r"\b(?:branch(?:es)?|pieces?)\b[^.!?;]{0,32}\b"
+                r"(?:(?:are|is)\s+not|(?:aren|isn)['\u2019]?t)\s+strictly\s+"
+                r"(?:increas(?:e|es|ing|ed)|monotone)\b|"
+                r"\bnot\b[^.!?;]{0,24}\b(?:branch(?:es)?|pieces?)\b"
+                r"[^.!?;]{0,32}\bstrictly\s+"
+                r"(?:increas(?:e|es|ing|ed)|monotone)\b",
+                text,
+            )
+        )
+        self.contradicts_positive_slopes |= bool(
+            re.search(
+                r"\bslopes?\b[^.!?;]{0,16}\b"
+                r"(?:(?:are|is)\s+not|(?:aren|isn)['\u2019]?t)\s+"
+                r"(?:strictly\s+)?positive\b|"
+                r"\bnot\s+(?:both|all|the|their)\b[^.!?;]{0,24}\bslopes?\b"
+                r"[^.!?;]{0,16}\b(?:are|is)\s+(?:strictly\s+)?positive\b",
+                text,
+            )
         )
 
     def _record_branch(self, start, end):
@@ -279,7 +306,7 @@ class _MarkerScanner:
         if self._overflowed:
             return
         for character in text:
-            if not self._in_string and character.isspace():
+            if not self._in_string and character in " \t\r\n":
                 continue
             if len(self._characters) >= self._compact_limit:
                 self._overflowed = True

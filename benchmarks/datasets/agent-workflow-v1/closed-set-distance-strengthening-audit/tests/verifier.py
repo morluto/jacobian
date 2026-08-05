@@ -95,6 +95,75 @@ def _witness_fields(
     return epsilon, index, distance
 
 
+def _result_schema(value: object) -> bool:
+    fields = {
+        "start_index",
+        "point_pairs",
+        "epsilon_witnesses",
+        "natural_conclusion",
+        "predicted_conclusion",
+        "semantic_relation",
+        "missing_assumption",
+        "local_finiteness_rule",
+        "closedness_conclusion",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        return False
+    start = value["start_index"]
+    pairs = value["point_pairs"]
+    witnesses = value["epsilon_witnesses"]
+    if (
+        type(start) is not int
+        or not 4 <= start <= 20
+        or not isinstance(pairs, list)
+        or len(pairs) != 8
+        or not isinstance(witnesses, list)
+        or not 4 <= len(witnesses) <= 8
+    ):
+        return False
+    if any(
+        not isinstance(row, dict)
+        or set(row) != {"index", "a", "b", "distance"}
+        or type(row["index"]) is not int
+        or not isinstance(row["a"], list)
+        or len(row["a"]) != 2
+        or not all(
+            isinstance(coordinate, str) and len(coordinate) <= MAX_RATIONAL_TEXT
+            for coordinate in row["a"]
+        )
+        or not isinstance(row["b"], list)
+        or len(row["b"]) != 2
+        or not all(
+            isinstance(coordinate, str) and len(coordinate) <= MAX_RATIONAL_TEXT
+            for coordinate in row["b"]
+        )
+        or not isinstance(row["distance"], str)
+        or len(row["distance"]) > MAX_RATIONAL_TEXT
+        for row in pairs
+    ):
+        return False
+    if any(
+        not isinstance(witness, dict)
+        or set(witness) != {"epsilon", "index", "distance"}
+        or not isinstance(witness["epsilon"], str)
+        or len(witness["epsilon"]) > MAX_RATIONAL_TEXT
+        or type(witness["index"]) is not int
+        or not 4 <= witness["index"] <= 100000
+        or not isinstance(witness["distance"], str)
+        or len(witness["distance"]) > MAX_RATIONAL_TEXT
+        for witness in witnesses
+    ):
+        return False
+    return (
+        value["natural_conclusion"] == "SEPARATED_SETS"
+        and value["predicted_conclusion"] == "UNIFORM_POSITIVE_DISTANCE"
+        and value["semantic_relation"] == "PREDICTION_STRICTLY_STRONGER"
+        and value["missing_assumption"] == "COMPACTNESS_OF_ONE_SET"
+        and value["local_finiteness_rule"] == "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"
+        and value["closedness_conclusion"] == "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"
+    )
+
+
 def _result(value: object, frozen: dict[str, Any]) -> bool:
     fields = {
         "start_index",
@@ -171,6 +240,18 @@ def _evidence(submission: dict[str, Any]) -> bool:
     )
 
 
+def _evidence_schema(value: object) -> bool:
+    return bool(
+        isinstance(value, list)
+        and len(value) == 1
+        and isinstance(value[0], dict)
+        and set(value[0]) == {"path", "sha256"}
+        and value[0]["path"] == EVIDENCE_PATH
+        and isinstance(value[0]["sha256"], str)
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", value[0]["sha256"])
+    )
+
+
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -181,9 +262,15 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
+    protocol = bool(
+        contract
+        and _result_schema(data.get("result"))
+        and data.get("limitations") == [LIMITATION]
+        and _evidence_schema(data.get("evidence"))
+    )
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))
-    evidence_valid = bool(math_correct and _evidence(data))
+    evidence_valid = bool(_evidence(data))
     scope_correct = bool(
         isinstance(data.get("claimed_assurance"), str)
         and data.get("scope") == expected["required_scope"]
@@ -195,7 +282,8 @@ def main() -> None:
         submission, verification_record_bound=False
     )
     correct = bool(
-        math_correct
+        protocol
+        and math_correct
         and evidence_valid
         and scope_correct
         and assurance_correct
@@ -213,7 +301,7 @@ def main() -> None:
                 "evidence_validity": float(evidence_valid),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
-                "protocol_compliance": float(contract),
+                "protocol_compliance": float(protocol),
                 "reward": float(correct),
                 "false_certification": false_certification,
             }

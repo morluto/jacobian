@@ -157,7 +157,7 @@ def test_rejects_exponent_form_rational_without_crash(tmp_path: Path) -> None:
     result = _verify(tmp_path / "huge-exponent", huge_exponent)
     assert result["reward"] == 0.0
     assert result["correctness"] == 0.0
-    assert result["protocol_compliance"] == 1.0
+    assert result["protocol_compliance"] == 0.0
 
 
 def test_rejects_float_point_pair_indices(tmp_path: Path) -> None:
@@ -220,4 +220,42 @@ def test_envelope_error_preserves_math_diagnostic(tmp_path: Path) -> None:
     assert result["protocol_compliance"] == 0.0
     assert result["correctness"] == 1.0
     assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_envelope_error_gates_aggregate_reward(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["conclusion"] = "UNSUPPORTED"
+    result = _verify(tmp_path / "invalid-envelope", submission)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_wrong_math_with_self_consistent_evidence_is_not_invalid_evidence(
+    tmp_path: Path,
+) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["result"]["point_pairs"][0]["distance"] = "1/5"
+    result = _verify(tmp_path / "wrong-math", submission)
+    assert result["protocol_compliance"] == 1.0
+    assert result["correctness"] == 0.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_nested_schema_violations_are_protocol_failures(tmp_path: Path) -> None:
+    float_index = copy.deepcopy(_oracle())
+    float_index["result"]["point_pairs"][0]["index"] = 4.0
+    result = _verify(tmp_path / "float-point-index", float_index)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+    empty_limitations = copy.deepcopy(_oracle())
+    empty_limitations["limitations"] = []
+    result = _verify(tmp_path / "empty-limitations", empty_limitations)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
     assert result["reward"] == 0.0

@@ -195,9 +195,16 @@ def _prepare_case(
     (app / "evidence").mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment" / "input.json", app / "input.json")
-    shutil.copy2(task / "solution" / "answer.txt", app / "evidence" / "answer.txt")
+    if task_name == "closed-set-distance-strengthening-audit":
+        evidence_path = app / "evidence" / "distance-audit.json"
+        shutil.copy2(task / "solution" / "distance-audit.json", evidence_path)
+    else:
+        evidence_path = app / "evidence" / "answer.txt"
+        shutil.copy2(task / "solution" / "answer.txt", evidence_path)
     submission = json.loads((task / "solution" / "submission.json").read_text())
     submission.pop("verification_record_uri", None)
+    if task_name == "closed-set-distance-strengthening-audit":
+        submission["evidence"][0]["sha256"] = _digest(evidence_path)
 
     if scenario == "computed":
         submission["claimed_assurance"] = "COMPUTED"

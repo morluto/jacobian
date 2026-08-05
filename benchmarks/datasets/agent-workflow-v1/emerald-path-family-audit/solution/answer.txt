@@ -1,0 +1,1 @@
+Take alpha=3/2 and beta=1/2. On even indices the value is n; on odd indices it is n+1/2, so its floor is always n and the alternating path stays within distance one of the diagonal.

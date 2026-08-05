@@ -574,28 +574,14 @@ def plan(
     by_task, suites_by_id = _membership()
     topology_digest = _topology_digest(list(suites_by_id.values()))
 
-    # A main push repeats the deterministic contract lanes for the landed tree
-    # without rerunning the same Docker Oracle portfolio after merge-queue
-    # validation.  Inventory validation is the merge queue's responsibility.
-    if event == "push":
-        return _emit(
-            event=event,
-            base=base,
-            head=head,
-            planner_digest=planner_digest,
-            topology_digest=topology_digest,
-            mode="changed",
-            run_check=True,
-            record_schema=True,
-            prospective_digest=True,
-            inventory=False,
-            run_oracle=False,
-            scope="none",
-            matrix=[],
-            reasons=["main push repeats contracts; merge queue owns Oracle evidence"],
-        )
-
-    integration = event == "merge_group"
+    # Both merge-group validation and a landed main push are integration
+    # boundaries.  A repository may permit direct merges, so a push cannot
+    # assume that a merge-group run already owns Oracle evidence deferred by
+    # the pull-request task cap or by integration-only path classification.
+    # Replaying after a merge queue is intentionally conservative: avoiding
+    # that duplication requires a content-bound evidence handoff, not an
+    # assumption that a merge-group run occurred.
+    integration = event in {"merge_group", "push"}
     classification = _classify_benchmark_paths(
         benchmark_paths, suites_by_id, integration=integration
     )

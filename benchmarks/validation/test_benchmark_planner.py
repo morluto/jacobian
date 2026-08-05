@@ -403,6 +403,27 @@ def test_large_task_set_is_deferred_from_pull_request_to_merge_queue() -> None:
     assert set(task_ids) <= _matrix_tasks(merge_group)
 
 
+def test_large_task_set_deferred_on_pull_request_runs_on_main_push() -> None:
+    by_task, _suites = planner._membership()
+    task_ids = sorted(by_task)[:9]
+    paths = [
+        f"benchmarks/datasets/{dataset}/{task_id}/tests/verifier.py"
+        for task_id in task_ids
+        for dataset, _path in by_task[task_id]
+    ]
+
+    pull_request = planner.plan(paths, event="pull_request")
+    push = planner.plan(paths, event="push")
+
+    assert pull_request["run-benchmark-oracle"] == "false"
+    assert push["run-benchmark-oracle"] == "true"
+    assert push["benchmark-oracle-scope"] == "changed-tasks"
+    assert push["benchmark-plan-mode"] == "integration"
+    assert push["run-benchmark-inventory"] == "true"
+    assert set(task_ids) <= _matrix_tasks(push)
+    _assert_plan_valid(push)
+
+
 def test_documentation_changes_do_not_consume_the_oracle_task_cap() -> None:
     by_task, _suites = planner._membership()
     task_ids = sorted(by_task)[:9]
@@ -423,17 +444,17 @@ def test_documentation_changes_do_not_consume_the_oracle_task_cap() -> None:
     assert _matrix_tasks(result) == {task_ids[0]}
 
 
-def test_main_push_runs_contracts_without_inventory_or_oracle() -> None:
+def test_main_push_owns_integration_oracle_and_inventory() -> None:
     result = planner.plan(["benchmarks/tooling/verifier_support.py"], event="push")
 
     assert result["run-benchmark-check"] == "true"
     assert result["run-benchmark-record-schema"] == "true"
     assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-inventory"] == "false"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
-    assert result["benchmark-plan-mode"] == "changed"
-    assert _matrix(result) == []
+    assert result["run-benchmark-inventory"] == "true"
+    assert result["run-benchmark-oracle"] == "true"
+    assert result["benchmark-oracle-scope"] == "all"
+    assert result["benchmark-plan-mode"] == "integration"
+    assert _matrix(result)
     _assert_plan_valid(result)
 
 

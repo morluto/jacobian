@@ -20,11 +20,33 @@ from benchmarks.tooling.heldout_bundle import (
 )
 from benchmarks.tooling.observation_comparison import compare_evidence
 from benchmarks.tooling.observation_results import (
+    _heldout_plan_failures,
     _mark_invoked_if_capability_used,
     collect_heldout_evidence,
 )
 
 ROOT = Path(__file__).parents[2]
+
+
+@pytest.mark.parametrize("runs", (["bad-run"], None))
+def test_heldout_evidence_rejects_malformed_run_entries(runs: object) -> None:
+    selected, failures = _heldout_plan_failures(
+        {
+            "runs": runs,
+            "pair_count": 1,
+            "manifest_digest": "sha256:" + "a" * 64,
+            "plan_digest": "sha256:" + "b" * 64,
+        },
+        {
+            "plan_digest": "sha256:" + "b" * 64,
+            "manifest_digest": "sha256:" + "a" * 64,
+            "status": "COMPLETE",
+        },
+        "C1",
+    )
+
+    assert selected == []
+    assert any("held-out plan runs" in failure for failure in failures)
 
 
 def _manifest() -> dict:

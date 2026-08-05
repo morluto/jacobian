@@ -63,6 +63,7 @@ validation does not depend on files from the agent context.
 
 ```sh
 make harbor-plan BASE=origin/main
+make harbor-execution-check
 make harbor-check-task DATASET=agent-workflow-v1 TASKS="task-id"
 make benchmark-inventory OUTPUT=/tmp/benchmark-inventory.json
 make benchmark-snapshot DATASET=agent-workflow-v1
@@ -79,12 +80,15 @@ make provider-eval PROVIDER=cgal
 from the fixed `agent-workflow-v1` snapshots. Its task bundles are solvable
 without Jacobian and do not yet include the later comparison harness.
 
-`harbor-check-task` and `harbor-oracle-task` require an explicit dataset and
-task selection and are the normal gates for a leaf task. The full
-`harbor-check`/`harbor-oracle` paths remain for shared tooling, schemas,
-registry, suite policy, and control-plane changes. `harbor-oracle` requires
-`TASKS` unless `FULL=1` is explicitly supplied; `harbor-oracle-all` is the
-intentional full-portfolio sweep.
+`harbor-execution-check` is the focused local gate for job JSON, MCP
+configuration, Compose overlays, and their execution helpers. It checks Harbor
+contracts and the owning tooling tests without running the task-specific
+verifier regression corpus. `harbor-check-task` and `harbor-oracle-task`
+require an explicit dataset and task selection and are the normal gates for a
+leaf task. The full `harbor-check`/`harbor-oracle` paths remain for shared
+tooling, schemas, registry, suite policy, and control-plane changes.
+`harbor-oracle` requires `TASKS` unless `FULL=1` is explicitly supplied;
+`harbor-oracle-all` is the intentional full-portfolio sweep.
 
 Pull requests run contract checks and exact Oracles for changed executable
 tasks; large multi-task edits defer that matrix to the merge queue. Merge-queue

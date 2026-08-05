@@ -30,6 +30,17 @@ paths only for shared Harbor tooling, schemas, registry, suite policy, or
 other control-plane changes. Pass `TASKS="..."` for a bounded dataset Oracle;
 pass `FULL=1` only when a complete dataset sweep is intentional.
 
+For changes limited to Harbor job JSON, MCP configuration, Compose overlays,
+or their execution helpers, use the focused local handoff instead:
+
+```sh
+make harbor-execution-check
+```
+
+This checks repository Harbor contracts and the execution-configuration unit
+tests without running the task-specific verifier regression corpus, an Oracle,
+Docker, or a model.
+
 Task README and `benchmarks/validation/` changes do not require an Oracle;
 they affect documentation or deterministic host-side validation. Changes to a
 task's executable input or clean-room verifier do require the exact selected

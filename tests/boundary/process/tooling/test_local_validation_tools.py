@@ -155,6 +155,23 @@ def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
     assert "--timeout 120" in result.stdout
 
 
+def test_harbor_execution_check_stays_out_of_the_full_verifier_corpus() -> None:
+    result = subprocess.run(
+        ["make", "--dry-run", "harbor-execution-check"],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "tools/check_harbor_dataset.py --check" in result.stdout
+    assert "tools/check_benchmark_contracts.py" in result.stdout
+    assert "tests/unit/tooling/test_harbor*.py" in result.stdout
+    assert "benchmarks/validation" not in result.stdout
+    assert "harbor-oracle" not in result.stdout
+
+
 def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None:
     from benchmarks.tooling.command_runner import ToolCommandStatus
     from tools import test_topology

@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | Documentation or benchmark README/validation | `make docs-command-check` and `make docs-linkcheck` | No Oracle is needed |
 | Python behavior | `make test-plan BASE=<revision>` and the selected semantic lane | Finish with `make check` |
+| Harbor job, MCP, Compose, or execution configuration | `make harbor-execution-check` | Escalate to `make harbor-check` only when shared benchmark validation also changes |
 | Benchmark task input or verifier | `make harbor-check-task DATASET=... TASKS=...` | Run `make harbor-oracle-task ...` for the selected task |
 | Deployment entrypoint | `make deploy-check` | Include affected process checks for code changes |
 
@@ -115,6 +116,7 @@ make docs-linkcheck
 make ci-plan BASE=origin/main
 make test-plan BASE=origin/main
 make harbor-plan BASE=origin/main
+make harbor-execution-check
 make clean
 ```
 
@@ -201,6 +203,13 @@ input. Shared environment profiles and execution-control changes may escalate
 to merge-queue portfolio evidence. Ignored Python bytecode is excluded from
 source validation, while committed or explicitly unignored cache files remain
 invalid.
+
+Local execution-configuration work has its own focused handoff. `make
+harbor-execution-check` validates repository-wide Harbor contracts and the
+unit tests that own job JSON, MCP configuration, Compose overlays, and their
+execution helpers. It deliberately excludes the task-specific mathematical
+verifier regressions under `benchmarks/validation/`; `make harbor-check`
+retains that full integration role. Neither command starts an Oracle or model.
 
 The build lane produces the source distribution and wheel once. Its dependent
 package-validation job downloads that artifact and exercises both installed

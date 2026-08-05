@@ -8,6 +8,7 @@ from verifier_support import (
     load_submission,
     read_evidence_json,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
@@ -16,13 +17,15 @@ LIMITATION = "The verifier replays exact rational instances and trusts the stand
 
 
 def _frozen() -> dict[str, Any]:
+    """Load the frozen verifier input from the hidden tests copy.
+
+    Mathematical validation always uses the frozen verifier input, independent
+    of whether the agent-visible input is bound.  Input binding is reported as
+    a separate diagnostic via ``workspace_input_is_bound``.
+    """
     try:
-        visible, hidden = WORKSPACE / "input.json", TESTS / "input.json"
-        if (
-            visible.is_symlink()
-            or hidden.is_symlink()
-            or visible.read_bytes() != hidden.read_bytes()
-        ):
+        hidden = TESTS / "input.json"
+        if hidden.is_symlink():
             return {}
         value = json.loads(hidden.read_text())
     except (OSError, ValueError):
@@ -39,9 +42,10 @@ def _rational(value: object) -> Fraction | None:
         return None
     try:
         parsed = Fraction(value)
+        normalized = str(parsed)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
+    return parsed if normalized == value else None
 
 
 def _point(value: object) -> tuple[Fraction, Fraction] | None:
@@ -49,6 +53,39 @@ def _point(value: object) -> tuple[Fraction, Fraction] | None:
         return None
     coordinates = tuple(_rational(item) for item in value)
     return None if any(item is None for item in coordinates) else coordinates
+
+
+def _pair_row(row: object, index: int) -> bool:
+    if (
+        not isinstance(row, dict)
+        or set(row) != {"index", "a", "b", "distance"}
+        or _integer(row["index"]) is None
+        or row["index"] != index
+    ):
+        return False
+    a, b, distance = _point(row["a"]), _point(row["b"]), _rational(row["distance"])
+    return (
+        a == (Fraction(index), Fraction(0))
+        and b == (Fraction(index), Fraction(1, index))
+        and distance == Fraction(1, index)
+    )
+
+
+def _witness_fields(
+    witness: object,
+) -> tuple[Fraction, int, Fraction] | None:
+    if not isinstance(witness, dict) or set(witness) != {
+        "epsilon",
+        "index",
+        "distance",
+    }:
+        return None
+    epsilon = _rational(witness["epsilon"])
+    index = _integer(witness["index"])
+    distance = _rational(witness["distance"])
+    if epsilon is None or index is None or distance is None or not (epsilon > 0):
+        return None
+    return epsilon, index, distance
 
 
 def _result(value: object, frozen: dict[str, Any]) -> bool:
@@ -79,19 +116,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     ):
         return False
     for offset, row in enumerate(pairs):
-        index = start + offset
-        if (
-            not isinstance(row, dict)
-            or set(row) != {"index", "a", "b", "distance"}
-            or row["index"] != index
-        ):
-            return False
-        a, b, distance = _point(row["a"]), _point(row["b"]), _rational(row["distance"])
-        if (
-            a != (Fraction(index), Fraction(0))
-            or b != (Fraction(index), Fraction(1, index))
-            or distance != Fraction(1, index)
-        ):
+        if not _pair_row(row, start + offset):
             return False
     witnesses = value["epsilon_witnesses"]
     if not isinstance(witnesses, list) or not 4 <= len(witnesses) <= 8:
@@ -99,22 +124,10 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     prior_epsilon: Fraction | None = None
     prior_index = start - 1
     for witness in witnesses:
-        if not isinstance(witness, dict) or set(witness) != {
-            "epsilon",
-            "index",
-            "distance",
-        }:
+        parsed = _witness_fields(witness)
+        if parsed is None:
             return False
-        epsilon = _rational(witness["epsilon"])
-        index = _integer(witness["index"])
-        distance = _rational(witness["distance"])
-        if (
-            epsilon is None
-            or index is None
-            or distance is None
-            or not (0 < epsilon < 1)
-        ):
-            return False
+        epsilon, index, distance = parsed
         if (
             index < start
             or index > 100000
@@ -161,6 +174,7 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
+    input_bound = workspace_input_is_bound()
     math_correct = bool(contract and _result(data.get("result"), _frozen()))
     evidence_valid = bool(math_correct and _evidence(data))
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
@@ -175,6 +189,7 @@ def main() -> None:
         and evidence_valid
         and scope_correct
         and assurance_correct
+        and input_bound
         and LIMITATION in data.get("limitations", [])
         and not false_certification
     )
@@ -184,6 +199,7 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
+                "input_binding": float(input_bound),
                 "evidence_validity": float(evidence_valid),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),

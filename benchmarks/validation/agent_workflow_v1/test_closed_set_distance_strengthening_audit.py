@@ -7,6 +7,11 @@ from pathlib import Path
 from benchmarks.validation.agent_workflow_v1.support import _run_verifier
 
 TASK = "closed-set-distance-strengthening-audit"
+LIMITATION = (
+    "The verifier replays exact rational instances and trusts the standard "
+    "theorem that locally finite Euclidean subsets are closed; it does not "
+    "machine-prove the universal topological argument."
+)
 
 
 def _oracle() -> dict[str, object]:
@@ -19,20 +24,26 @@ def _oracle() -> dict[str, object]:
     )
 
 
-def _prepare(tmp_path: Path, submission: dict[str, object]):
+def _prepare(
+    tmp_path: Path,
+    submission: dict[str, object],
+    *,
+    evidence_payload: dict[str, object] | None = None,
+):
     task = Path("benchmarks/datasets/agent-workflow-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
     (app / "evidence").mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-        "limitations": submission["limitations"],
-    }
+    if evidence_payload is None:
+        evidence_payload = {
+            "schema_version": "1",
+            "task_id": f"jacobian/{TASK}",
+            "result": submission["result"],
+            "limitations": submission["limitations"],
+        }
     evidence_path = app / "evidence/distance-audit.json"
-    evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
+    evidence_path.write_text(json.dumps(evidence_payload, separators=(",", ":")))
     submission["evidence"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     )
@@ -92,3 +103,92 @@ def test_rejects_noncanonical_rational_and_false_certification(tmp_path: Path) -
     verified = copy.deepcopy(_oracle())
     verified["claimed_assurance"] = "VERIFIED"
     assert _verify(tmp_path / "verified", verified)["false_certification"] is True
+
+
+# ---------------------------------------------------------------------------
+# Adversarial regression tests for PR #493 review threads.
+# -----------------------------------------------------------------------
+
+
+def test_accepts_epsilon_witnesses_above_one(tmp_path: Path) -> None:
+    """T2: the public contract allows any positive epsilon; no hidden < 1 bound."""
+    submission = copy.deepcopy(_oracle())
+    submission["result"]["epsilon_witnesses"] = [
+        {"epsilon": "2", "index": 4, "distance": "1/4"},
+        {"epsilon": "3/2", "index": 6, "distance": "1/6"},
+        {"epsilon": "1", "index": 11, "distance": "1/11"},
+        {"epsilon": "1/2", "index": 21, "distance": "1/21"},
+    ]
+    result = _verify(tmp_path / "epsilon-above-one", submission)
+    assert result["reward"] == 1.0
+    assert result["correctness"] == 1.0
+
+
+def test_rejects_paraphrased_limitation_but_preserves_correctness(
+    tmp_path: Path,
+) -> None:
+    """T1: a paraphrased limitation is rejected, but math stays correct."""
+    submission = copy.deepcopy(_oracle())
+    submission["limitations"] = [
+        "The verifier checks exact rational instances and relies on the known "
+        "theorem that locally finite Euclidean sets are closed without a "
+        "machine proof of the general argument."
+    ]
+    result = _verify(tmp_path / "paraphrased", submission)
+    assert result["reward"] == 0.0
+    assert result["correctness"] == 1.0
+
+
+def test_rejects_exponent_form_rational_without_crash(tmp_path: Path) -> None:
+    """T3: exponent-form rationals must fail closed, not crash the verifier."""
+    for field in ("distance", "a", "b"):
+        submission = copy.deepcopy(_oracle())
+        if field in ("a", "b"):
+            submission["result"]["point_pairs"][0][field][0] = "1e4301"
+        else:
+            submission["result"]["point_pairs"][0][field] = "1e4301"
+        result = _verify(tmp_path / f"exponent-{field}", submission)
+        assert result["reward"] == 0.0
+        assert result["correctness"] == 0.0
+
+
+def test_rejects_float_point_pair_indices(tmp_path: Path) -> None:
+    """T4: float indices like 4.0 must not bypass integer validation."""
+    submission = copy.deepcopy(_oracle())
+    for _i, row in enumerate(submission["result"]["point_pairs"]):
+        row["index"] = float(row["index"])
+    result = _verify(tmp_path / "float-indices", submission)
+    assert result["reward"] == 0.0
+    assert result["correctness"] == 0.0
+
+
+def test_rejects_evidence_without_schema_version(tmp_path: Path) -> None:
+    """T5: evidence missing the published schema_version field is rejected."""
+    submission = copy.deepcopy(_oracle())
+    payload = {
+        "task_id": f"jacobian/{TASK}",
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    result = _run_verifier(
+        *_prepare(tmp_path / "no-schema-version", submission, evidence_payload=payload)
+    )
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+    assert result["correctness"] == 1.0
+
+
+def test_tampered_input_preserves_correctness_and_gates_reward(
+    tmp_path: Path,
+) -> None:
+    """T6: input binding is a separate diagnostic; math stays correct."""
+    submission = copy.deepcopy(_oracle())
+    task, app, logs = _prepare(tmp_path / "tampered-input", submission)
+    input_path = app / "input.json"
+    input_data = json.loads(input_path.read_text())
+    input_data["task_id"] = "tampered"
+    input_path.write_text(json.dumps(input_data))
+    result = _run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["input_binding"] == 0.0
+    assert result["reward"] == 0.0

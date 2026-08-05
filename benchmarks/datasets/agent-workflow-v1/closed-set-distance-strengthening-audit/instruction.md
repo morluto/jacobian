@@ -13,5 +13,9 @@ canonical rational epsilons in strictly decreasing order, each paired with an in
 
 Identify the natural and predicted conclusions, their semantic relationship, the missing assumption,
 and the local-finiteness rule that makes both infinite sets closed. Write `/app/submission.json` and
-one digest-bound JSON evidence file at `evidence/distance-audit.json`, repeating exactly the task ID,
-result, and limitations. Maximum assurance is `COMPUTED`.
+one digest-bound JSON evidence file at `evidence/distance-audit.json`. The evidence file must be a
+JSON object with exactly the fields `schema_version` (the string `"1"`), `task_id`, `result`, and
+`limitations`, repeating the submission's task ID, result, and limitations. Include this exact
+limitation in the `limitations` array: "The verifier replays exact rational instances and trusts the
+standard theorem that locally finite Euclidean subsets are closed; it does not machine-prove the
+universal topological argument." Maximum assurance is `COMPUTED`.

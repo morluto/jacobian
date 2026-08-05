@@ -11,6 +11,7 @@ _CURL_OUTPUT = re.compile(r"\bcurl\s+-fsSL\s+\S+\s+-o\s+(\S+)")
 # Split Dockerfile RUN chains into individual commands so that ordering can be
 # checked across logical commands, not just physical lines.
 _COMMAND_SPLIT = re.compile(r"\s*(?P<operator>&&|;|\|\|)\s*")
+_PIPELINE_SPLIT = re.compile(r"\s*(?<!\|)\|(?!\|)\s*")
 
 
 def _logical_commands(contents: str) -> list[str]:
@@ -69,7 +70,16 @@ def _target_used_unsafely(contents: str, target: str, verify_text: str) -> bool:
             verified = False
             continue  # the download itself; it invalidates prior verification
         if "sha256sum -c -" in cmd:
-            if verify_text in cmd and downloaded and operator in (None, "&&"):
+            pipeline = _PIPELINE_SPLIT.split(cmd)
+            # POSIX sh uses the last pipeline stage's status, so a trailing
+            # command such as tee can otherwise mask checksum failure.
+            checksum_is_pipeline_status = "sha256sum -c -" in pipeline[-1]
+            if (
+                verify_text in cmd
+                and downloaded
+                and operator in (None, "&&")
+                and checksum_is_pipeline_status
+            ):
                 verified = True
             continue  # a different target's verification, or a stale file
         if not verified:
@@ -129,6 +139,18 @@ def test_download_verify_use_sequence_is_accepted() -> None:
     )
 
     assert not _target_used_unsafely(safe_sequence, target, verification)
+
+
+def test_checksum_pipeline_status_must_gate_use() -> None:
+    target = "/opt/provider/pkg.tgz"
+    verification = f"{target} | sha256sum -c -"
+    unsafe_sequence = (
+        f"curl -fsSL https://example.test/pkg.tgz -o {target} && "
+        f"printf '%s  %s\\n' deadbeef {target} | sha256sum -c - | "
+        f"tee /tmp/check.log && tar -xzf {target}"
+    )
+
+    assert _target_used_unsafely(unsafe_sequence, target, verification)
 
 
 @pytest.mark.parametrize(

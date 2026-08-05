@@ -6,19 +6,19 @@ version = "1.0.0"
 description = "Audit a uniform-distance strengthening of closed-set separation."
 keywords = ["autoformalization", "metric-space", "semantic-audit", "counterexample-family"]
 [metadata]
-evaluation_kind = "workflow"
+evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
 field = "topology"
 assurance_ceiling = "COMPUTED"
-answer_visibility = "hidden-at-runtime"
-provenance_class = "public-autoformalization-semantic-audit"
+answer_visibility = "public"
+provenance_class = "public-autoformalization-public-reproduction"
 required_provider = "core"
 author_name = "Jacobian contributors"
 difficulty = "hard"
 category = "mathematics"
 tags = ["difficulty-provisional", "assurance", "semantic-strengthening", "offline"]
 case_version = "agent-workflow-v1"
-contamination_class = "public-dataset-derived-autoformalization"
+contamination_class = "public-answer-visible-reproduction"
 fixture_digest = "sha256:4887f3c35c1fff78f76fe950d4e357794fe9c77d27cef2ed302bcce0962de841"
 derivation = "Derived from PAug/ProofNetVerif test row 18 at revision 91183e5b12d64374827bf2782db629b5b0f8f319 (MIT)."
 [agent]

@@ -150,6 +150,14 @@ def test_rejects_exponent_form_rational_without_crash(tmp_path: Path) -> None:
         result = _verify(tmp_path / f"exponent-{field}", submission)
         assert result["reward"] == 0.0
         assert result["correctness"] == 0.0
+        assert result["protocol_compliance"] == 1.0
+
+    huge_exponent = copy.deepcopy(_oracle())
+    huge_exponent["result"]["point_pairs"][0]["distance"] = "1e" + "9" * 100_000
+    result = _verify(tmp_path / "huge-exponent", huge_exponent)
+    assert result["reward"] == 0.0
+    assert result["correctness"] == 0.0
+    assert result["protocol_compliance"] == 1.0
 
 
 def test_rejects_float_point_pair_indices(tmp_path: Path) -> None:
@@ -191,4 +199,15 @@ def test_tampered_input_preserves_correctness_and_gates_reward(
     result = _run_verifier(task, app, logs)
     assert result["correctness"] == 1.0
     assert result["input_binding"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_envelope_error_preserves_math_diagnostic(tmp_path: Path) -> None:
+    """A duplicate evidence descriptor is protocol-invalid, not mathematically wrong."""
+    submission = copy.deepcopy(_oracle())
+    submission["evidence"].append(copy.deepcopy(submission["evidence"][0]))
+    result = _verify(tmp_path / "duplicate-evidence", submission)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0

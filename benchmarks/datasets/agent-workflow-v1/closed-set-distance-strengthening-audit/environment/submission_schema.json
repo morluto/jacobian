@@ -1,28 +1,176 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
   "properties": {
-    "task_id": {"const": "jacobian/closed-set-distance-strengthening-audit"},
-    "conclusion": {"const": "UNIFORM_DISTANCE_STRENGTHENING_INVALID"},
-    "result": {
-      "type": "object", "additionalProperties": false,
-      "required": ["start_index", "point_pairs", "epsilon_witnesses", "natural_conclusion", "predicted_conclusion", "semantic_relation", "missing_assumption", "local_finiteness_rule", "closedness_conclusion"],
-      "properties": {
-        "start_index": {"type": "integer", "minimum": 4, "maximum": 20},
-        "point_pairs": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "object", "additionalProperties": false, "required": ["index", "a", "b", "distance"], "properties": {"index": {"type": "integer"}, "a": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}}, "b": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}}, "distance": {"type": "string"}}}},
-        "epsilon_witnesses": {"type": "array", "minItems": 4, "maxItems": 8, "items": {"type": "object", "additionalProperties": false, "required": ["epsilon", "index", "distance"], "properties": {"epsilon": {"type": "string"}, "index": {"type": "integer", "minimum": 4, "maximum": 100000}, "distance": {"type": "string"}}}},
-        "natural_conclusion": {"const": "SEPARATED_SETS"},
-        "predicted_conclusion": {"const": "UNIFORM_POSITIVE_DISTANCE"},
-        "semantic_relation": {"const": "PREDICTION_STRICTLY_STRONGER"},
-        "missing_assumption": {"const": "COMPACTNESS_OF_ONE_SET"},
-        "local_finiteness_rule": {"const": "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"},
-        "closedness_conclusion": {"const": "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"}
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"const": "COMPUTED"},
-    "scope": {"const": "PROOFNETVERIF_TEST_ROW_18_SEMANTIC_ALIGNMENT"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/distance-audit.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
-  }
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "UNIFORM_DISTANCE_STRENGTHENING_INVALID"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/distance-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "The verifier replays exact rational instances and trusts the standard theorem that locally finite Euclidean subsets are closed; it does not machine-prove the universal topological argument."
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "closedness_conclusion": {
+          "const": "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"
+        },
+        "epsilon_witnesses": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "distance": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "epsilon": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "index": {
+                "maximum": 100000,
+                "minimum": 4,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "epsilon",
+              "index",
+              "distance"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 4,
+          "type": "array"
+        },
+        "local_finiteness_rule": {
+          "const": "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"
+        },
+        "missing_assumption": {
+          "const": "COMPACTNESS_OF_ONE_SET"
+        },
+        "natural_conclusion": {
+          "const": "SEPARATED_SETS"
+        },
+        "point_pairs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "a": {
+                "items": {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              "b": {
+                "items": {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              "distance": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "index": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "index",
+              "a",
+              "b",
+              "distance"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "predicted_conclusion": {
+          "const": "UNIFORM_POSITIVE_DISTANCE"
+        },
+        "semantic_relation": {
+          "const": "PREDICTION_STRICTLY_STRONGER"
+        },
+        "start_index": {
+          "maximum": 20,
+          "minimum": 4,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_index",
+        "point_pairs",
+        "epsilon_witnesses",
+        "natural_conclusion",
+        "predicted_conclusion",
+        "semantic_relation",
+        "missing_assumption",
+        "local_finiteness_rule",
+        "closedness_conclusion"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "PROOFNETVERIF_TEST_ROW_18_SEMANTIC_ALIGNMENT",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/closed-set-distance-strengthening-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

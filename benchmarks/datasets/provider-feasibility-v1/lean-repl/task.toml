@@ -1,5 +1,5 @@
 schema_version = "1.4"
-artifacts = ["/app/submission.json", "/app/evidence"]
+artifacts = ["/app/input.json", "/app/submission.json", "/app/evidence"]
 
 [task]
 name = "jacobian/lean-repl"

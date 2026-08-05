@@ -4,6 +4,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /opt/provider && \
     curl -fsSL https://github.com/leanprover/lean4/releases/download/v4.31.0/lean-4.31.0-linux.tar.zst -o /opt/provider/lean.tar.zst && \
+    printf '%s  %s\n' 07a633cc8d9151cbc08825ea4cdda50d4b02a2c9cb852c0131b13046f49cad7f /opt/provider/lean.tar.zst | sha256sum -c - && \
     tar --use-compress-program=unzstd -xf /opt/provider/lean.tar.zst -C /opt/provider && \
     git init /opt/provider/repl && \
     git -C /opt/provider/repl remote add origin https://github.com/leanprover-community/repl.git && \

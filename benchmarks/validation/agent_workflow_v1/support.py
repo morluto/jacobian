@@ -56,12 +56,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "closed-set-distance-strengthening-audit",
     "apollonius-gap-repair",
     "emerald-path-family-audit",
-    "grid-independent-set-transfer",
-    "image-complement-commutation",
-    "lp-integrability-separator",
-    "necklace-burnside-certificate",
     "prime-power-divisibility-gap-audit",
-    "pythagorean-generator-recurrence",
     "sine-integral-asymptotic-audit",
     "steiner-triple-system-27",
 )

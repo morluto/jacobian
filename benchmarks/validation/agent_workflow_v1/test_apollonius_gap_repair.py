@@ -186,3 +186,42 @@ def test_unsupported_assurance_is_a_protocol_failure(tmp_path: Path) -> None:
     assert reward["assurance_calibration"] == 0.0
     assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0
+
+
+def test_unencodable_rational_fails_closed(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["result"]["multiplier"] = "\ud800"
+    support._write_json(app / "submission.json", submission)
+
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_evidence_lines_reject_extra_spaces(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    path = app / "evidence/answer.txt"
+    path.write_text(" " + path.read_text())
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    )
+    support._write_json(app / "submission.json", submission)
+
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_extra_limitation_is_reported_in_its_own_dimension(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["limitations"].append("extra")
+    support._write_json(app / "submission.json", submission)
+
+    reward = support._run_verifier(task, app, logs)
+    assert reward["limitations_accuracy"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0

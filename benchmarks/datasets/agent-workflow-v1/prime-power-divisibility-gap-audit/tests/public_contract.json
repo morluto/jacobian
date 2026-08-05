@@ -1,0 +1,341 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "PRIMEWISE_TO_MODULUS_INFERENCE_INVALID"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/divisibility-audit.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+    ]
+  },
+  "public_notes": "The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string \"1\"), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved. JSON numbers with integral values are valid wherever the submission schema declares type integer; booleans and non-integral numbers are not.",
+  "required_artifact_filenames": [
+    "evidence/divisibility-audit.json"
+  ],
+  "schema_definitions": {
+    "evidence_envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "const": [
+            "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/result"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/prime-power-divisibility-gap-audit"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "$ref": "#/properties/result"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE",
+    "enum": null,
+    "pattern": null
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "prime",
+      "exponent",
+      "coprime_factor",
+      "modulus",
+      "cycle_count",
+      "cycle_groups",
+      "total_sum",
+      "p_valuation_modulus",
+      "p_valuation_total",
+      "local_statement",
+      "global_statement",
+      "missing_condition"
+    ],
+    "properties": {
+      "prime": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 29
+      },
+      "exponent": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 6
+      },
+      "coprime_factor": {
+        "const": 1
+      },
+      "modulus": {
+        "type": "integer",
+        "minimum": 4,
+        "maximum": 10000
+      },
+      "cycle_count": {
+        "type": "integer",
+        "minimum": 4
+      },
+      "cycle_groups": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 6,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "multiplicity",
+            "cycle_sum"
+          ],
+          "properties": {
+            "multiplicity": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cycle_sum": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "total_sum": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "p_valuation_modulus": {
+        "type": "integer",
+        "minimum": 2
+      },
+      "p_valuation_total": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "local_statement": {
+        "const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
+      },
+      "global_statement": {
+        "const": "TOTAL_NOT_DIVISIBLE_BY_M"
+      },
+      "missing_condition": {
+        "const": "PRIME_POWER_MULTIPLICITIES"
+      }
+    }
+  },
+  "submission_schema": {
+    "$defs": {
+      "evidence_envelope": {
+        "additionalProperties": false,
+        "properties": {
+          "limitations": {
+            "const": [
+              "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+            ]
+          },
+          "result": {
+            "$ref": "#/$defs/result"
+          },
+          "schema_version": {
+            "const": "1"
+          },
+          "task_id": {
+            "const": "jacobian/prime-power-divisibility-gap-audit"
+          }
+        },
+        "required": [
+          "schema_version",
+          "task_id",
+          "result",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "$ref": "#/properties/result"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/prime-power-divisibility-gap-audit"
+      },
+      "conclusion": {
+        "const": "PRIMEWISE_TO_MODULUS_INFERENCE_INVALID"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prime",
+          "exponent",
+          "coprime_factor",
+          "modulus",
+          "cycle_count",
+          "cycle_groups",
+          "total_sum",
+          "p_valuation_modulus",
+          "p_valuation_total",
+          "local_statement",
+          "global_statement",
+          "missing_condition"
+        ],
+        "properties": {
+          "prime": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 29
+          },
+          "exponent": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 6
+          },
+          "coprime_factor": {
+            "const": 1
+          },
+          "modulus": {
+            "type": "integer",
+            "minimum": 4,
+            "maximum": 10000
+          },
+          "cycle_count": {
+            "type": "integer",
+            "minimum": 4
+          },
+          "cycle_groups": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "multiplicity",
+                "cycle_sum"
+              ],
+              "properties": {
+                "multiplicity": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cycle_sum": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "total_sum": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "p_valuation_modulus": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "p_valuation_total": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "local_statement": {
+            "const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
+          },
+          "global_statement": {
+            "const": "TOTAL_NOT_DIVISIBLE_BY_M"
+          },
+          "missing_condition": {
+            "const": "PRIME_POWER_MULTIPLICITIES"
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "const": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE",
+        "type": "string"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/divisibility-audit.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+        ]
+      }
+    }
+  },
+  "task_id": "jacobian/prime-power-divisibility-gap-audit",
+  "verification_record": null
+}

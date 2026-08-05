@@ -1,0 +1,349 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "PROOF_REPAIRED_AND_REPLAYED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "FROZEN_FRAGMENT_NOT_FULL_UPSTREAM_DATABASE",
+      "NO_EXTERNAL_METAMATH_KERNEL_REPLAY"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "expression": {
+      "items": {
+        "maxLength": 8,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "minItems": 2,
+      "type": "array"
+    },
+    "step": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "wu",
+            "wv",
+            "ww",
+            "h1",
+            "h2",
+            "wi",
+            "a1i",
+            "mpd"
+          ]
+        },
+        "position": {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stack_depth": {
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "stack_top": {
+          "$ref": "#/$defs/expression"
+        },
+        "substitution": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array"
+          },
+          "propertyNames": {
+            "enum": [
+              "u",
+              "v",
+              "w"
+            ]
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "position",
+        "label",
+        "substitution",
+        "stack_depth",
+        "stack_top"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "FROZEN_METAMATH_STYLE_ASSERTION_REGISTRY",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "changed_positions": {
+        "items": {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "final_expression": {
+        "$ref": "#/$defs/expression"
+      },
+      "repaired_proof": {
+        "items": {
+          "enum": [
+            "wu",
+            "wv",
+            "ww",
+            "h1",
+            "h2",
+            "wi",
+            "a1i",
+            "mpd"
+          ]
+        },
+        "maxItems": 11,
+        "minItems": 11,
+        "type": "array"
+      },
+      "trace": {
+        "items": {
+          "$ref": "#/$defs/step"
+        },
+        "maxItems": 11,
+        "minItems": 11,
+        "type": "array"
+      }
+    },
+    "required": [
+      "repaired_proof",
+      "changed_positions",
+      "trace",
+      "final_expression"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "expression": {
+        "items": {
+          "maxLength": 8,
+          "minLength": 1,
+          "type": "string"
+        },
+        "maxItems": 20,
+        "minItems": 2,
+        "type": "array"
+      },
+      "step": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "enum": [
+              "wu",
+              "wv",
+              "ww",
+              "h1",
+              "h2",
+              "wi",
+              "a1i",
+              "mpd"
+            ]
+          },
+          "position": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stack_depth": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "stack_top": {
+            "$ref": "#/$defs/expression"
+          },
+          "substitution": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "minItems": 1,
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "u",
+                "v",
+                "w"
+              ]
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "position",
+          "label",
+          "substitution",
+          "stack_depth",
+          "stack_top"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "PROOF_REPAIRED_AND_REPLAYED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "FROZEN_FRAGMENT_NOT_FULL_UPSTREAM_DATABASE",
+          "NO_EXTERNAL_METAMATH_KERNEL_REPLAY"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "changed_positions": {
+            "items": {
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "final_expression": {
+            "$ref": "#/$defs/expression"
+          },
+          "repaired_proof": {
+            "items": {
+              "enum": [
+                "wu",
+                "wv",
+                "ww",
+                "h1",
+                "h2",
+                "wi",
+                "a1i",
+                "mpd"
+              ]
+            },
+            "maxItems": 11,
+            "minItems": 11,
+            "type": "array"
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/$defs/step"
+            },
+            "maxItems": 11,
+            "minItems": 11,
+            "type": "array"
+          }
+        },
+        "required": [
+          "repaired_proof",
+          "changed_positions",
+          "trace",
+          "final_expression"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "FROZEN_METAMATH_STYLE_ASSERTION_REGISTRY",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/metamath-syllogism-repair"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/metamath-syllogism-repair",
+  "verification_record": null
+}

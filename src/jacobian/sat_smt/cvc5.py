@@ -13,11 +13,7 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import (
-    BoundedProcessResult,
-    bounded_process_cancelled,
-    run_bounded_process,
-)
+from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import loads_strict_json
 from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
 from jacobian.contracts.capabilities import (
@@ -41,6 +37,12 @@ from jacobian.contracts.smt import (
     SmtUnsatProofFindOutput,
     SmtUnsatProofFindRequest,
 )
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessResult,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.providers.external_solver_runtime import CVC5_VERSION
 from jacobian.sat_smt.cvc5_worker import (
     CVC5_PROOF_LIMIT,
@@ -48,6 +50,7 @@ from jacobian.sat_smt.cvc5_worker import (
 )
 from jacobian.sat_smt.smt import ResolvedSmtProblem, SmtArtifactService
 from jacobian.schema_registry import model_schema
+from jacobian.worker_environment import worker_environment
 
 CVC5_STDOUT_LIMIT = 4_096
 CVC5_STDERR_LIMIT = 64_000
@@ -110,27 +113,18 @@ class _Cvc5Backend:
                 request.logic,
                 str(request.resource_budget.wall_seconds * 1000),
             ]
-            try:
-                completed = run_bounded_process(
-                    command,
-                    input_bytes=b"",
+            completed = execute_process(
+                ProcessRequest(
+                    executable=command[0],
+                    arguments=tuple(command[1:]),
+                    environment=worker_environment(locale="C"),
+                    cwd=str(root),
                     timeout_seconds=float(request.resource_budget.wall_seconds),
-                    environment={
-                        **os.environ,
-                        "LANG": "C",
-                        "LC_ALL": "C",
-                        "TZ": "UTC",
-                    },
-                    stdout_limit=CVC5_STDOUT_LIMIT,
-                    stderr_limit=CVC5_STDERR_LIMIT,
+                    stdin_bytes=b"",
+                    stdout_limit_bytes=CVC5_STDOUT_LIMIT,
+                    stderr_limit_bytes=CVC5_STDERR_LIMIT,
                 )
-            except OSError:
-                return _run_failure(
-                    started,
-                    code="CVC5_EXECUTION_FAILED",
-                    stage="solver_execution",
-                    message="The isolated pinned cvc5 worker could not be started.",
-                )
+            )
             operational = _operational_failure(started, completed)
             if operational is not None:
                 return operational
@@ -457,9 +451,16 @@ def _scope(resolved: ResolvedSmtProblem) -> CapabilityScope:
 
 def _operational_failure(
     started: float,
-    completed: BoundedProcessResult,
+    completed: ProcessResult,
 ) -> _Cvc5Run | None:
-    if completed.cancelled:
+    if completed.termination is ProcessTermination.START_FAILED:
+        return _run_failure(
+            started,
+            code="CVC5_EXECUTION_FAILED",
+            stage="solver_execution",
+            message="The isolated pinned cvc5 worker could not be started.",
+        )
+    if completed.termination is ProcessTermination.CANCELLED:
         return _run_failure(
             started,
             status=ExecutionStatus.CANCELLED,
@@ -471,7 +472,7 @@ def _operational_failure(
                 "was retained."
             ),
         )
-    if completed.stdout_exceeded or completed.stderr_exceeded:
+    if completed.termination is ProcessTermination.OUTPUT_LIMIT_EXCEEDED:
         return _run_failure(
             started,
             code="CVC5_OUTPUT_LIMIT_EXCEEDED",
@@ -481,7 +482,7 @@ def _operational_failure(
                 "solver evidence was retained."
             ),
         )
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return _run_failure(
             started,
             status=ExecutionStatus.TIMEOUT,

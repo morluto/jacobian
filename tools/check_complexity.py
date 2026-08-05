@@ -5,13 +5,20 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from benchmarks.tooling.command_runner import (  # noqa: E402
+    ToolCommandStatus,
+    run_operator_command,
+)
+
 DEFAULT_BASELINE = ROOT / "tools" / "c901-baseline.json"
 DEFAULT_PATHS = ("src", "tests", "benchmarks", "tools", ".github/scripts")
 _MESSAGE = re.compile(r"`(?P<symbol>.+)` is too complex \((?P<complexity>\d+) > \d+\)")
@@ -226,8 +233,7 @@ def run_ruff(
 ) -> tuple[ComplexityViolation, ...]:
     """Run Ruff with the ratchet limit while ignoring inline suppressions."""
 
-    command = [
-        "ruff",
+    arguments = (
         "check",
         *paths,
         "--select",
@@ -237,19 +243,26 @@ def run_ruff(
         f"lint.mccabe.max-complexity={max_complexity}",
         "--output-format",
         "json",
-    ]
-    completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
     )
-    if completed.returncode not in {0, 1}:
-        detail = completed.stderr.strip() or completed.stdout.strip()
+    result = run_operator_command(
+        "ruff",
+        arguments,
+        cwd=ROOT,
+        timeout_seconds=300.0,
+        stdout_limit_bytes=16 * 1024 * 1024,
+        stderr_limit_bytes=4 * 1024 * 1024,
+    )
+    if result.status is not ToolCommandStatus.EXITED:
+        detail = result.diagnostic or result.stderr.decode(errors="replace")[:1024]
+        raise ComplexityBaselineError(f"Ruff C901 scan failed: {detail}")
+    if result.exit_code not in {0, 1}:
+        detail = (
+            result.stderr.decode(errors="replace").strip()
+            or result.stdout.decode(errors="replace").strip()
+        )
         raise ComplexityBaselineError(f"Ruff C901 scan failed: {detail}")
     return parse_ruff_output(
-        completed.stdout,
+        result.stdout.decode("utf-8", errors="strict"),
         root=ROOT,
         max_complexity=max_complexity,
     )

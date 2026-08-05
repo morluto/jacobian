@@ -1,0 +1,228 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "SOURCE_FACTOR_OF_TWO_REPAIRED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "const": "Finite exhaustive replay covers n=3,4,5,6 only; it does not machine-prove the symbolic formula for every n."
+    },
+    "maxItems": 1,
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "ordered edge pairs over all labeled simple graphs",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "formula": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "free_edge_factor_exponent": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "incident_ordered_pair_factor": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "pair_semantics": {
+        "enum": [
+          "ORDERED",
+          "UNORDERED"
+        ]
+      },
+      "probe_values": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "coefficient": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "n": {
+              "maximum": 6,
+              "minimum": 3,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "n",
+            "coefficient"
+          ],
+          "type": "object"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "pair_semantics",
+      "incident_ordered_pair_factor",
+      "free_edge_factor_exponent",
+      "formula",
+      "probe_values"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "SOURCE_FACTOR_OF_TWO_REPAIRED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "const": "Finite exhaustive replay covers n=3,4,5,6 only; it does not machine-prove the symbolic formula for every n."
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "formula": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "free_edge_factor_exponent": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "incident_ordered_pair_factor": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "pair_semantics": {
+            "enum": [
+              "ORDERED",
+              "UNORDERED"
+            ]
+          },
+          "probe_values": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "coefficient": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "n": {
+                  "maximum": 6,
+                  "minimum": 3,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "n",
+                "coefficient"
+              ],
+              "type": "object"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "pair_semantics",
+          "incident_ordered_pair_factor",
+          "free_edge_factor_exponent",
+          "formula",
+          "probe_values"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "ordered edge pairs over all labeled simple graphs",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/edge-pair-ordering-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/edge-pair-ordering-audit",
+  "verification_record": null
+}

@@ -78,7 +78,7 @@ independently. COMPLETED does not by itself establish a mathematical conclusion.
 One invocation covers only its exact supplied input or claim. Repeating finite or
 bounded instances does not widen that scope to an all-orders or all-parameters claim.
 The canonical complete `CapabilityResult` is returned directly as MCP structured
-content; follow returned `artifact://` and `episode_uri` references instead of
+content; follow returned `artifact://` references instead of
 requesting large payloads inline. Synchronous SAT and SMT requests are capped at 150
 seconds so structured TIMEOUT or CANCELLED diagnostics can arrive before remote
 transport deadlines. Partition larger searches; retrying a cancelled call starts a
@@ -130,7 +130,7 @@ requires. Inspect execution, scope, completeness, relationships, obligations,
 assurance, diagnostics, and artifacts as separate result dimensions.
 
 `capability.invoke` returns the canonical complete `CapabilityResult` directly as MCP
-structured content. Follow returned `artifact://` and `episode_uri` references to
+structured content. Follow returned `artifact://` references to
 read durable results instead of requesting large payloads inline.
 
 `capability://catalog` is the complete machine-readable installed inventory.

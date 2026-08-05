@@ -1,0 +1,321 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "PROPOSED_FORMALIZATION_FAITHFUL",
+      "PROPOSED_FORMALIZATION_NOT_FAITHFUL",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "defects": {
+        "items": {
+          "enum": [
+            "MISSING_DIMENSION_PREMISE",
+            "DOT_PRODUCT_REPLACED_BY_COORDINATEWISE_ZERO",
+            "OTHER"
+          ]
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "missing_premise_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "const": 1
+          },
+          "forced_y": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 8,
+            "type": "array"
+          }
+        },
+        "required": [
+          "dimension",
+          "x",
+          "forced_y"
+        ],
+        "type": "object"
+      },
+      "operator_mismatch_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinate_products": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "dimension": {
+            "const": 2
+          },
+          "dot_product": {
+            "type": "integer"
+          },
+          "x": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 8,
+            "type": "array"
+          }
+        },
+        "required": [
+          "dimension",
+          "x",
+          "y",
+          "dot_product",
+          "coordinate_products"
+        ],
+        "type": "object"
+      },
+      "semantic_status": {
+        "enum": [
+          "EQUIVALENT",
+          "NOT_EQUIVALENT",
+          "NOT_ASSESSED"
+        ]
+      }
+    },
+    "required": [
+      "semantic_status",
+      "defects",
+      "missing_premise_certificate",
+      "operator_mismatch_certificate"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "PROPOSED_FORMALIZATION_FAITHFUL",
+          "PROPOSED_FORMALIZATION_NOT_FAITHFUL",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "defects": {
+            "items": {
+              "enum": [
+                "MISSING_DIMENSION_PREMISE",
+                "DOT_PRODUCT_REPLACED_BY_COORDINATEWISE_ZERO",
+                "OTHER"
+              ]
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "missing_premise_certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "dimension": {
+                "const": 1
+              },
+              "forced_y": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              "x": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "type": "array"
+              }
+            },
+            "required": [
+              "dimension",
+              "x",
+              "forced_y"
+            ],
+            "type": "object"
+          },
+          "operator_mismatch_certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "coordinate_products": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              "dimension": {
+                "const": 2
+              },
+              "dot_product": {
+                "type": "integer"
+              },
+              "x": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              "y": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "type": "array"
+              }
+            },
+            "required": [
+              "dimension",
+              "x",
+              "y",
+              "dot_product",
+              "coordinate_products"
+            ],
+            "type": "object"
+          },
+          "semantic_status": {
+            "enum": [
+              "EQUIVALENT",
+              "NOT_EQUIVALENT",
+              "NOT_ASSESSED"
+            ]
+          }
+        },
+        "required": [
+          "semantic_status",
+          "defects",
+          "missing_premise_certificate",
+          "operator_mismatch_certificate"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/autoformalization-semantic-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/autoformalization-semantic-audit",
+  "verification_record": null
+}

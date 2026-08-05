@@ -1,26 +1,16 @@
-"""Minimal environment shared by local worker subprocesses."""
+"""Minimal deterministic environment for local worker subprocesses.
+
+No host variable is forwarded by default.  ``PATH``, ``PYTHONPATH``, ``HOME``,
+proxy variables, credential variables, locale variables, and arbitrary host
+variables are all absent unless a caller explicitly authorizes them through
+*extra_variables* or *overrides*.  *path_prefix* constructs ``PATH`` solely
+from the supplied authorized directories; the ambient host ``PATH`` is never
+appended.
+"""
 
 from __future__ import annotations
 
 import os
-
-_PORTABLE_VARIABLES = (
-    "PATH",
-    "PYTHONPATH",
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "TMPDIR",
-)
-_WINDOWS_VARIABLES = (
-    "SYSTEMROOT",
-    "WINDIR",
-    "COMSPEC",
-    "PATHEXT",
-    "TEMP",
-    "TMP",
-)
 
 _DEFAULT_LOCALE = "C.UTF-8"
 
@@ -32,34 +22,32 @@ def worker_environment(
     path_prefix: str | None = None,
     locale: str = _DEFAULT_LOCALE,
 ) -> dict[str, str]:
-    """Return only variables needed to start a deterministic Python worker.
+    """Return a deterministic worker environment with no ambient host leakage.
 
-    *extra_variables* are passed through from the host environment when
-    present. *overrides* take precedence over both host pass-through and the
-    deterministic defaults. *path_prefix* is prepended to ``PATH`` when
-    provided. *locale* sets ``LANG`` and ``LC_ALL`` (default ``C.UTF-8``).
+    The returned mapping contains only the deterministic defaults
+    (``PYTHONHASHSEED``, ``PYTHONDONTWRITEBYTECODE``, ``TZ``, ``LANG``,
+    ``LC_ALL``).  *extra_variables* explicitly opts specific host variables
+    back in, copied from the host environment only when present; this is an
+    explicit caller authorization, not a default.  *overrides* take
+    precedence over both the defaults and any opted-in host values.
+    *path_prefix* becomes the whole ``PATH`` (a toolchain-only path); the
+    ambient host ``PATH`` is never appended.  *locale* sets ``LANG`` and
+    ``LC_ALL`` (default ``C.UTF-8``).
     """
 
-    selected: tuple[str, ...] = _PORTABLE_VARIABLES + extra_variables
-    if os.name == "nt":
-        selected += _WINDOWS_VARIABLES
-    environment = {
-        name: value for name in selected if (value := os.environ.get(name)) is not None
+    environment: dict[str, str] = {
+        "PYTHONHASHSEED": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TZ": "UTC",
+        "LANG": locale,
+        "LC_ALL": locale,
     }
-    environment.update(
-        {
-            "PYTHONHASHSEED": "0",
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "TZ": "UTC",
-            "LANG": locale,
-            "LC_ALL": locale,
-        }
-    )
+    for name in extra_variables:
+        value = os.environ.get(name)
+        if value is not None:
+            environment[name] = value
     if path_prefix:
-        existing = environment.get("PATH", "")
-        environment["PATH"] = (
-            f"{path_prefix}{os.pathsep}{existing}" if existing else path_prefix
-        )
+        environment["PATH"] = path_prefix
     if overrides:
         environment.update(overrides)
     return environment

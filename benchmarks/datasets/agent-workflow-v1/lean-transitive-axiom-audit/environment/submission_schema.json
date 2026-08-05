@@ -1,1 +1,85 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/lean-transitive-axiom-audit"},"conclusion":{"enum":["SHALLOW_REPORTS_INCOMPLETE","INCOMPLETE_AUDIT"]},"result":{"type":"object","required":["cases"],"properties":{"cases":{"type":"array","minItems":2,"maxItems":2}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1},"limitations":{"type":"array","items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "SHALLOW_REPORTS_INCOMPLETE",
+        "INCOMPLETE_AUDIT"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "properties": {
+        "cases": {
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "cases"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/lean-transitive-axiom-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

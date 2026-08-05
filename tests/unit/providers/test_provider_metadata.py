@@ -86,3 +86,50 @@ def test_missing_distribution_is_not_cached(
     assert provider_metadata.distribution_summary("provider-later") is None
     assert provider_metadata.distribution_summary("provider-later") is not None
     assert calls == 2
+
+
+@dataclass
+class _NamelessDistribution:
+    requested_name: str
+    recorded_name: object
+
+    @property
+    def metadata(self) -> dict[str, object]:
+        return {"Name": self.recorded_name}
+
+    @property
+    def version(self) -> str:
+        return "1.0"
+
+
+@pytest.mark.parametrize("recorded", [None, ""])
+def test_distribution_summary_falls_back_to_requested_name_when_name_missing_or_empty(
+    isolated_metadata_cache: None,
+    monkeypatch: pytest.MonkeyPatch,
+    recorded: object,
+) -> None:
+    del isolated_metadata_cache
+    monkeypatch.setattr(
+        provider_metadata,
+        "distribution",
+        lambda name: _NamelessDistribution(name, recorded),
+    )
+    summary = provider_metadata.distribution_summary("provider-alpha")
+    assert summary is not None
+    assert summary.name == "provider-alpha"
+    assert summary.version == "1.0"
+
+
+def test_distribution_summary_falls_back_when_name_is_non_str(
+    isolated_metadata_cache: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del isolated_metadata_cache
+    monkeypatch.setattr(
+        provider_metadata,
+        "distribution",
+        lambda name: _NamelessDistribution(name, 42),
+    )
+    summary = provider_metadata.distribution_summary("provider-alpha")
+    assert summary is not None
+    assert summary.name == "provider-alpha"

@@ -1,1 +1,197 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/cyclic-vector-inequality"},"conclusion":{"const":"SHARP_CONSTANT_CERTIFIED"},"result":{"type":"object","additionalProperties":false,"required":["constant_squared","dimension","vectors","aggregate","completed_square","equality_witness"],"properties":{"constant_squared":{"const":"1/2"},"dimension":{"type":"integer","minimum":5,"maximum":12},"vectors":{"type":"array","minItems":5,"maxItems":12,"items":{"type":"object","additionalProperties":false,"required":["index","first_variable","second_constant","second_variable"],"properties":{"index":{"type":"integer"},"first_variable":{"type":"integer"},"second_constant":{"const":1},"second_variable":{"type":"integer"}}}},"aggregate":{"type":"object","additionalProperties":false,"required":["first_constant","first_coefficients","second_constant","second_coefficients"],"properties":{"first_constant":{"const":0},"first_coefficients":{"type":"array","items":{"type":"integer"}},"second_constant":{"type":"integer"},"second_coefficients":{"type":"array","items":{"type":"integer"}}}},"completed_square":{"type":"object","additionalProperties":false,"required":["lhs_coefficients","square_coefficients"],"properties":{"lhs_coefficients":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer"}},"square_coefficients":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer"}}}},"equality_witness":{"type":"object","additionalProperties":false,"required":["values","term_norm_squared","attained_constant_squared"],"properties":{"values":{"type":"array","items":{"const":"1/2"}},"term_norm_squared":{"const":"1/2"},"attained_constant_squared":{"const":"1/2"}}}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string","pattern":"^the cyclic vector inequality at dimension n = ([5-9]|1[012])$"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "SHARP_CONSTANT_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregate": {
+          "additionalProperties": false,
+          "properties": {
+            "first_coefficients": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "first_constant": {
+              "const": 0
+            },
+            "second_coefficients": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "second_constant": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "first_constant",
+            "first_coefficients",
+            "second_constant",
+            "second_coefficients"
+          ],
+          "type": "object"
+        },
+        "completed_square": {
+          "additionalProperties": false,
+          "properties": {
+            "lhs_coefficients": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "square_coefficients": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "lhs_coefficients",
+            "square_coefficients"
+          ],
+          "type": "object"
+        },
+        "constant_squared": {
+          "const": "1/2"
+        },
+        "dimension": {
+          "maximum": 12,
+          "minimum": 5,
+          "type": "integer"
+        },
+        "equality_witness": {
+          "additionalProperties": false,
+          "properties": {
+            "attained_constant_squared": {
+              "const": "1/2"
+            },
+            "term_norm_squared": {
+              "const": "1/2"
+            },
+            "values": {
+              "items": {
+                "const": "1/2"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "values",
+            "term_norm_squared",
+            "attained_constant_squared"
+          ],
+          "type": "object"
+        },
+        "vectors": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "first_variable": {
+                "type": "integer"
+              },
+              "index": {
+                "type": "integer"
+              },
+              "second_constant": {
+                "const": 1
+              },
+              "second_variable": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "index",
+              "first_variable",
+              "second_constant",
+              "second_variable"
+            ],
+            "type": "object"
+          },
+          "maxItems": 12,
+          "minItems": 5,
+          "type": "array"
+        }
+      },
+      "required": [
+        "constant_squared",
+        "dimension",
+        "vectors",
+        "aggregate",
+        "completed_square",
+        "equality_witness"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "pattern": "^the cyclic vector inequality at dimension n = ([5-9]|1[012])$",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/cyclic-vector-inequality"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

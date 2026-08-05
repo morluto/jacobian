@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -242,7 +241,7 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
         runtime.verification,
         "_run_checker",
         lambda **_kwargs: (_ for _ in ()).throw(
-            subprocess.TimeoutExpired("determinant-checker", 1)
+            TimeoutError("checker execution timed out")
         ),
     )
 

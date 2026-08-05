@@ -160,8 +160,7 @@ accepts its artifact.
 derives its output schema, validates the returned value, serializes
 model-visible `content`, and supplies the same typed value in
 `structured_content`. Small, bounded mathematical outputs remain inline in the
-result. An empty `artifact_uris` with `episode_uri: null` means the value was not
-retained.
+result. An empty `artifact_uris` means the value was not retained.
 
 Capabilities return resource URIs only when their mathematical outcome needs
 durable identity, independent retrieval, replay, resumability, evidence
@@ -259,9 +258,9 @@ is operator-controlled and outside the model-facing MCP surface.
 
 Operators may additionally constrain visible and invocable capabilities by
 exact ID, domain, tag, or mode. The
-`COMPUTE_VERIFY_NO_RETRIEVAL` profile denies retrieval-tagged capabilities and
-`knowledge.search`; it is intended for evaluation isolation where only
-computation and independent verification should be available. Catalog and
+`COMPUTE_VERIFY_NO_RETRIEVAL` profile denies retrieval-tagged capabilities; it
+is intended for evaluation isolation where only computation and independent
+verification should be available. Catalog and
 discovery responses bind the active policy profile and digest. A direct call to
 a hidden capability fails with `CAPABILITY_POLICY_DENIED`. Capability policy
 changes availability only: it cannot install a checker, authorize one, or

@@ -1,0 +1,287 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "FALLBACK_ZERO_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "blocks": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "block_sum_power_lower_bound": {
+              "type": "integer"
+            },
+            "level": {
+              "type": "integer"
+            },
+            "term_count": {
+              "type": "integer"
+            },
+            "upper_power_of_two": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "level",
+            "term_count",
+            "upper_power_of_two",
+            "block_sum_power_lower_bound"
+          ],
+          "type": "object"
+        },
+        "maxItems": 9,
+        "minItems": 9,
+        "type": "array"
+      },
+      "critical_line_relation": {
+        "const": "REAL_PART_NOT_ONE_HALF"
+      },
+      "general_block_power_exponent": {
+        "additionalProperties": false,
+        "properties": {
+          "constant": {
+            "type": "integer"
+          },
+          "level_coefficient": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level_coefficient",
+          "constant"
+        ],
+        "type": "object"
+      },
+      "real_part": {
+        "type": "string"
+      },
+      "reciprocal_denominator": {
+        "maximum": 7,
+        "minimum": 3,
+        "type": "integer"
+      },
+      "returned_value": {
+        "const": 0
+      },
+      "summability_status": {
+        "const": "DIVERGENT"
+      },
+      "zero_classification": {
+        "const": "FALLBACK_ARTIFACT"
+      }
+    },
+    "required": [
+      "reciprocal_denominator",
+      "real_part",
+      "general_block_power_exponent",
+      "blocks",
+      "summability_status",
+      "returned_value",
+      "zero_classification",
+      "critical_line_relation"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "FALLBACK_ZERO_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "block_sum_power_lower_bound": {
+                  "type": "integer"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "term_count": {
+                  "type": "integer"
+                },
+                "upper_power_of_two": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "level",
+                "term_count",
+                "upper_power_of_two",
+                "block_sum_power_lower_bound"
+              ],
+              "type": "object"
+            },
+            "maxItems": 9,
+            "minItems": 9,
+            "type": "array"
+          },
+          "critical_line_relation": {
+            "const": "REAL_PART_NOT_ONE_HALF"
+          },
+          "general_block_power_exponent": {
+            "additionalProperties": false,
+            "properties": {
+              "constant": {
+                "type": "integer"
+              },
+              "level_coefficient": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "level_coefficient",
+              "constant"
+            ],
+            "type": "object"
+          },
+          "real_part": {
+            "type": "string"
+          },
+          "reciprocal_denominator": {
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "returned_value": {
+            "const": 0
+          },
+          "summability_status": {
+            "const": "DIVERGENT"
+          },
+          "zero_classification": {
+            "const": "FALLBACK_ARTIFACT"
+          }
+        },
+        "required": [
+          "reciprocal_denominator",
+          "real_part",
+          "general_block_power_exponent",
+          "blocks",
+          "summability_status",
+          "returned_value",
+          "zero_classification",
+          "critical_line_relation"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/series-domain-junk-zero"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/series-domain-junk-zero",
+  "verification_record": null
+}

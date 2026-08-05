@@ -1,0 +1,207 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/inversion-audit.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "FINITE_N4_REPLAY",
+      "NO_LEAN_ELABORATION"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/inversion-audit.json"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "FROZEN_N4_ALL_PERMUTATIONS",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "complement_relation": {
+        "const": "IMPLEMENTED_PLUS_INTENDED_EQUALS_PAIR_COUNT_PER_PERMUTATION"
+      },
+      "implemented_aggregate": {
+        "type": "integer"
+      },
+      "implemented_count": {
+        "maximum": 6,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "intended_aggregate": {
+        "type": "integer"
+      },
+      "intended_count": {
+        "maximum": 6,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "pair_count": {
+        "const": 6
+      },
+      "witness_permutation": {
+        "items": {
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "witness_permutation",
+      "implemented_count",
+      "intended_count",
+      "implemented_aggregate",
+      "intended_aggregate",
+      "pair_count",
+      "complement_relation"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/inversion-audit.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "FINITE_N4_REPLAY",
+          "NO_LEAN_ELABORATION"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "complement_relation": {
+            "const": "IMPLEMENTED_PLUS_INTENDED_EQUALS_PAIR_COUNT_PER_PERMUTATION"
+          },
+          "implemented_aggregate": {
+            "type": "integer"
+          },
+          "implemented_count": {
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "intended_aggregate": {
+            "type": "integer"
+          },
+          "intended_count": {
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pair_count": {
+            "const": 6
+          },
+          "witness_permutation": {
+            "items": {
+              "maximum": 3,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "witness_permutation",
+          "implemented_count",
+          "intended_count",
+          "implemented_aggregate",
+          "intended_aggregate",
+          "pair_count",
+          "complement_relation"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "FROZEN_N4_ALL_PERMUTATIONS",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/inversion-aggregate-mask-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/inversion-aggregate-mask-audit",
+  "verification_record": null
+}

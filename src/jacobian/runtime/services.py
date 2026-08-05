@@ -17,7 +17,6 @@ from jacobian.experiment_router import ExperimentRouter
 from jacobian.experiments import ExperimentService
 from jacobian.matrices.linear import LinearArtifactService
 from jacobian.matrices.normal_forms import MatrixNormalFormArtifactService
-from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
 from jacobian.plugin_execution import PluginExecutor
 from jacobian.plugins.registry import PluginRegistry
@@ -51,7 +50,6 @@ class CoreServices:
     linear: LinearArtifactService
     matrix_normal_forms: MatrixNormalFormArtifactService
     polynomial_expressions: PolynomialExpressionArtifactService
-    memory: ResearchMemory
     plugins: PluginRegistry
     checkers: CheckerRegistry
     capabilities: CapabilityService

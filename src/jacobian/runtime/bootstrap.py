@@ -8,7 +8,6 @@ from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
 from jacobian.matrices.linear import install_linear_artifacts
 from jacobian.matrices.normal_forms import install_matrix_normal_form_artifacts
-from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
 from jacobian.plugins.registry import PluginRegistry
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
@@ -44,7 +43,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
                 schemas,
                 artifacts,
             )
-        memory = ResearchMemory(store, schemas)
         plugins = PluginRegistry(store, schemas)
         checkers = CheckerRegistry(store)
         checkers.bind_existing_when_omitted = (
@@ -52,7 +50,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
         )
         capabilities = CapabilityService(
             store,
-            memory,
             policy=options.capability_policy,
         )
         reasoning_log = ReasoningLogService(store)
@@ -66,7 +63,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
             linear=linear,
             matrix_normal_forms=matrix_normal_forms,
             polynomial_expressions=polynomial_expressions,
-            memory=memory,
             plugins=plugins,
             checkers=checkers,
             capabilities=capabilities,

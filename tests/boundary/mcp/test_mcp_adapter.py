@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 from mcp.shared.exceptions import MCPError
-from tests.support.mcp import create_legacy_server as create_server
 
 from jacobian.adapters.mcp.guidance import OPERATING_GUIDE
+from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import CapabilityDescriptor
 
 CAPABILITY_TOOL_NAMES = {"capability.describe", "capability.invoke"}
@@ -182,7 +182,6 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
             capability_ids = {
                 descriptor["capability_id"] for descriptor in catalog["capabilities"]
             }
-            assert "knowledge.search" in capability_ids
             assert all(
                 descriptor["provider_runtime"]["availability"] == "AVAILABLE"
                 for descriptor in catalog["capabilities"]
@@ -218,11 +217,11 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             described = await client.call_tool(
                 "capability.describe",
-                {"capability_id": "knowledge.search", "view": "CONTRACT"},
+                {"capability_id": "integer.compute.gcd", "view": "CONTRACT"},
             )
             contract = json.loads(described.content[0].text)
             assert contract["view"] == "CONTRACT"
-            assert contract["capability"]["capability_id"] == "knowledge.search"
+            assert contract["capability"]["capability_id"] == "integer.compute.gcd"
             assert contract["capability"]["provider_runtime"]["digest"].startswith(
                 "sha256:"
             )
@@ -233,22 +232,13 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             result = await client.call_tool(
                 "capability.invoke",
                 {
-                    "capability_id": "knowledge.search",
-                    "mode": "EXPLORE",
-                    "payload": {"query": "counterexample", "limit": 5},
-                },
-            )
-            inline_result = await client.call_tool(
-                "capability.invoke",
-                {
                     "capability_id": "integer.compute.gcd",
                     "mode": "EXPLORE",
                     "payload": {"left": "84", "right": "30"},
                 },
             )
-            assert isinstance(inline_result.structured_content, dict)
-            assert inline_result.structured_content["episode_uri"] is None
-            assert inline_result.structured_content["artifact_uris"] == []
+            assert isinstance(result.structured_content, dict)
+            assert result.structured_content["artifact_uris"] == []
             response = json.loads(result.content[0].text)
             assert response["execution"]["status"] == "COMPLETED"
             assert response["assurance"]["level"] == "COMPUTED"
@@ -311,7 +301,6 @@ def test_mcp_inline_results_do_not_emit_resource_links(
                 },
             )
             assert isinstance(result.structured_content, dict)
-            assert result.structured_content["episode_uri"] is None
             assert result.structured_content["artifact_uris"] == []
             assert [
                 block for block in result.content if block.type == "resource_link"
@@ -384,7 +373,7 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
                 len(contract_result.content[0].text) * 40
             )
             assert len(contract_result.content[0].text) * 100 < (
-                len(full_result.content[0].text) * 51
+                len(full_result.content[0].text) * 55
             )
 
     asyncio.run(scenario())

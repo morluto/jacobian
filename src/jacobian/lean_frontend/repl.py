@@ -2,27 +2,21 @@
 
 from __future__ import annotations
 
-import os
-import queue
-import re
 import shutil
-import signal
-import subprocess
 import threading
 import time
 import weakref
 from collections.abc import Mapping
-from contextlib import suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    canonicalize_json,
-    loads_strict_json,
-)
 from jacobian.contracts.lean import LeanEnvironment
+from jacobian.process_policy import (
+    BoundedInteractiveProcess,
+    InteractiveProcessError,
+    InteractiveProcessRequest,
+)
 from jacobian.references import LeanCheckerInstallation
 from jacobian.worker_environment import worker_environment
 
@@ -69,9 +63,7 @@ class PersistentLeanRepl:
         self._base_command = base_command
         self._policy = policy
         self._lock = threading.Lock()
-        self._process: subprocess.Popen[str] | None = None
-        self._responses: queue.Queue[dict[str, Any] | BaseException] = queue.Queue()
-        self._reader_thread: threading.Thread | None = None
+        self._process: BoundedInteractiveProcess | None = None
         self._base_env: int | None = None
         self._started_at = 0.0
         self._requests = 0
@@ -159,31 +151,33 @@ class PersistentLeanRepl:
             self._stop_process()
         if self._process is not None:
             return
-        self._responses = queue.Queue()
-        responses = self._responses
-        self._process = subprocess.Popen(
-            self._command,
-            cwd=self._cwd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env=_repl_process_environment(),
-            text=True,
-            bufsize=1,
-            start_new_session=(os.name == "posix"),
+        process = BoundedInteractiveProcess(
+            InteractiveProcessRequest(
+                executable=self._command[0],
+                arguments=self._command[1:],
+                environment=_repl_process_environment(),
+                cwd=str(self._cwd.resolve(strict=True)),
+                startup_timeout_seconds=self._policy.timeout_seconds,
+                read_timeout_seconds=self._policy.timeout_seconds,
+                shutdown_timeout_seconds=2.0,
+                stderr_limit_bytes=128 * 1024,
+                base_command=self._base_command,
+                max_rss_kb=self._policy.max_rss_kb,
+            )
         )
+        try:
+            process.start()
+        except InteractiveProcessError as exc:
+            raise RuntimeError("Lean REPL could not start") from exc
+        self._process = process
         self._started_at = time.monotonic()
         self._requests = 0
         self._base_env = None
-        self._reader_thread = threading.Thread(
-            target=self._read_responses,
-            args=(self._process, responses),
-            name="jacobian-lean-repl-reader",
-            daemon=True,
-        )
-        self._reader_thread.start()
         if self._base_command is not None:
-            response = self._exchange({"cmd": self._base_command})
+            response = process.base_response
+            if response is None:
+                self._stop_process()
+                raise RuntimeError("Lean REPL did not return a base response")
             base_env = response.get("env")
             if not isinstance(base_env, int):
                 self._stop_process()
@@ -192,105 +186,35 @@ class PersistentLeanRepl:
 
     def _expired(self) -> bool:
         assert self._process is not None
-        if self._process.poll() is not None:
+        if not self._process.is_running:
             return True
         if self._requests >= self._policy.max_requests:
             return True
-        if time.monotonic() - self._started_at >= self._policy.max_age_seconds:
-            return True
-        rss_kb = _process_rss_kb(self._process.pid)
-        return self._policy.max_rss_kb > 0 and rss_kb > self._policy.max_rss_kb
+        return time.monotonic() - self._started_at >= self._policy.max_age_seconds
 
     def _exchange(self, request: Mapping[str, Any]) -> dict[str, Any]:
         process = self._process
-        if process is None or process.stdin is None:
+        if process is None:
             raise RuntimeError("Lean REPL is unavailable")
         try:
-            process.stdin.write(canonicalize_json(request).decode("utf-8") + "\n\n")
-            process.stdin.flush()
-        except (BrokenPipeError, OSError) as exc:
+            return process.exchange(request)
+        except InteractiveProcessError as exc:
             self._stop_process()
-            raise RuntimeError("Lean REPL stopped before receiving a request") from exc
-        deadline = time.monotonic() + self._policy.timeout_seconds
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                self._stop_process()
-                raise RuntimeError("Lean REPL timed out")
-            try:
-                response = self._responses.get(
-                    timeout=min(_RESOURCE_POLL_SECONDS, remaining)
-                )
-                break
-            except queue.Empty:
-                rss_kb = _process_rss_kb(process.pid)
-                if self._policy.max_rss_kb > 0 and rss_kb > self._policy.max_rss_kb:
-                    self._stop_process()
-                    raise RuntimeError("Lean REPL exceeded its memory limit") from None
-        if isinstance(response, BaseException):
-            self._stop_process()
-            raise RuntimeError(
-                "Lean REPL stopped before returning a result"
-            ) from response
-        return response
-
-    def _read_responses(
-        self,
-        process: subprocess.Popen[str],
-        responses: queue.Queue[dict[str, Any] | BaseException],
-    ) -> None:
-        stdout = process.stdout
-        if stdout is None:
-            responses.put(RuntimeError("Lean REPL stdout is unavailable"))
-            return
-        block: list[str] = []
-        try:
-            for line in stdout:
-                if line.strip():
-                    block.append(line)
-                    continue
-                if not block:
-                    continue
-                value = loads_strict_json("".join(block))
-                if not isinstance(value, dict):
-                    raise RuntimeError("Lean REPL returned a non-object response")
-                responses.put(value)
-                block = []
-            if block:
-                raise RuntimeError("Lean REPL returned an unterminated response")
-            responses.put(RuntimeError("Lean REPL exited"))
-        except (CanonicalizationError, OSError, RuntimeError) as exc:
-            responses.put(exc)
+            detail = str(exc)
+            if "timed out" in detail:
+                raise RuntimeError("Lean REPL timed out") from exc
+            if "stderr limit" in detail:
+                raise RuntimeError("Lean REPL exceeded its output limit") from exc
+            if "memory limit" in detail:
+                raise RuntimeError("Lean REPL exceeded its memory limit") from exc
+            raise RuntimeError("Lean REPL stopped before returning a result") from exc
 
     def _stop_process(self) -> None:
         process = self._process
         self._process = None
         self._base_env = None
         if process is not None:
-            if process.stdin is not None:
-                with suppress(OSError):
-                    process.stdin.close()
-            if process.poll() is None:
-                if os.name == "posix":
-                    os.killpg(process.pid, signal.SIGTERM)
-                else:
-                    process.terminate()
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    if os.name == "posix":
-                        os.killpg(process.pid, signal.SIGKILL)
-                    else:
-                        process.kill()
-                    process.wait()
-            if process.stdout is not None:
-                process.stdout.close()
-        reader = self._reader_thread
-        if reader is not None and reader is not threading.current_thread():
-            reader.join(timeout=2)
-            if reader.is_alive():
-                raise RuntimeError("Lean REPL reader did not quiesce")
-        self._reader_thread = None
+            process.close()
 
 
 def _single_proof_state(response: Mapping[str, Any]) -> int:
@@ -310,17 +234,6 @@ def _single_proof_state(response: Mapping[str, Any]) -> int:
     proof_state = sorries[0]["proofState"]
     assert isinstance(proof_state, int)
     return proof_state
-
-
-def _process_rss_kb(pid: int) -> int:
-    """Read current Linux RSS; return zero where procfs is unavailable."""
-
-    try:
-        status = Path(f"/proc/{pid}/status").read_text()
-    except OSError:
-        return 0
-    match = re.search(r"^VmRSS:\s+(?P<rss>\d+)\s+kB$", status, re.MULTILINE)
-    return int(match.group("rss")) if match else 0
 
 
 class LeanExplorationReplRuntime:

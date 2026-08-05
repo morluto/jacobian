@@ -5,11 +5,11 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import BoundedProcessResult, run_bounded_process
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
 from jacobian.contracts.capabilities import (
@@ -40,11 +40,18 @@ from jacobian.contracts.polynomials import (
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessResult,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.provider_runtime import SYMPY_POLYNOMIAL_WORKER_PROTOCOL, SYMPY_VERSION
 from jacobian.providers.sympy_runtime import (
     sympy_polynomial_normalization_provider_runtime,
 )
 from jacobian.schema_registry import model_schema
+from jacobian.worker_environment import worker_environment
 
 SYMPY_NORMALIZATION_STDOUT_LIMIT = 2_000_000
 SYMPY_NORMALIZATION_STDERR_LIMIT = 64_000
@@ -98,31 +105,27 @@ class _SympyPolynomialNormalizationBackend:
                     "descriptor; no normalization evidence was retained."
                 ),
             )
-        command = [
-            sys.executable,
-            "-I",
-            "-m",
-            "jacobian.sympy_polynomial_worker",
-        ]
         worker_request = {
             "protocol": SYMPY_POLYNOMIAL_WORKER_PROTOCOL,
             "expression": request.expression.model_dump(mode="json"),
         }
-        try:
-            completed = run_bounded_process(
-                command,
-                input_bytes=canonicalize_json(worker_request),
+        completed = execute_process(
+            ProcessRequest(
+                executable=sys.executable,
+                arguments=(
+                    "-I",
+                    "-m",
+                    "jacobian.sympy_polynomial_worker",
+                ),
+                stdin_bytes=canonicalize_json(worker_request),
                 timeout_seconds=float(request.resource_budget.wall_seconds),
-                environment={
-                    "LANG": "C",
-                    "LC_ALL": "C",
-                    "TZ": "UTC",
-                    "PYTHONHASHSEED": "0",
-                },
-                stdout_limit=SYMPY_NORMALIZATION_STDOUT_LIMIT,
-                stderr_limit=SYMPY_NORMALIZATION_STDERR_LIMIT,
+                environment=worker_environment(locale="C"),
+                cwd=str(Path.cwd()),
+                stdout_limit_bytes=SYMPY_NORMALIZATION_STDOUT_LIMIT,
+                stderr_limit_bytes=SYMPY_NORMALIZATION_STDERR_LIMIT,
             )
-        except OSError:
+        )
+        if completed.termination is ProcessTermination.START_FAILED:
             return _failure(
                 started,
                 ExecutionStatus.ERROR,
@@ -450,9 +453,9 @@ def _parse_worker_output(
 
 def _operational_failure(
     started: float,
-    completed: BoundedProcessResult,
+    completed: ProcessResult,
 ) -> _SympyNormalizationRun | None:
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return _failure(
             started,
             ExecutionStatus.TIMEOUT,

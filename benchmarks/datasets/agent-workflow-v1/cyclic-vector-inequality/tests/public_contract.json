@@ -1,0 +1,374 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "SHARP_CONSTANT_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": "^the cyclic vector inequality at dimension n = ([5-9]|1[012])$",
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "aggregate": {
+        "additionalProperties": false,
+        "properties": {
+          "first_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "first_constant": {
+            "const": 0
+          },
+          "second_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "second_constant": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "first_constant",
+          "first_coefficients",
+          "second_constant",
+          "second_coefficients"
+        ],
+        "type": "object"
+      },
+      "completed_square": {
+        "additionalProperties": false,
+        "properties": {
+          "lhs_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "square_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "lhs_coefficients",
+          "square_coefficients"
+        ],
+        "type": "object"
+      },
+      "constant_squared": {
+        "const": "1/2"
+      },
+      "dimension": {
+        "maximum": 12,
+        "minimum": 5,
+        "type": "integer"
+      },
+      "equality_witness": {
+        "additionalProperties": false,
+        "properties": {
+          "attained_constant_squared": {
+            "const": "1/2"
+          },
+          "term_norm_squared": {
+            "const": "1/2"
+          },
+          "values": {
+            "items": {
+              "const": "1/2"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "values",
+          "term_norm_squared",
+          "attained_constant_squared"
+        ],
+        "type": "object"
+      },
+      "vectors": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "first_variable": {
+              "type": "integer"
+            },
+            "index": {
+              "type": "integer"
+            },
+            "second_constant": {
+              "const": 1
+            },
+            "second_variable": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "index",
+            "first_variable",
+            "second_constant",
+            "second_variable"
+          ],
+          "type": "object"
+        },
+        "maxItems": 12,
+        "minItems": 5,
+        "type": "array"
+      }
+    },
+    "required": [
+      "constant_squared",
+      "dimension",
+      "vectors",
+      "aggregate",
+      "completed_square",
+      "equality_witness"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "SHARP_CONSTANT_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregate": {
+            "additionalProperties": false,
+            "properties": {
+              "first_coefficients": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "first_constant": {
+                "const": 0
+              },
+              "second_coefficients": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "second_constant": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "first_constant",
+              "first_coefficients",
+              "second_constant",
+              "second_coefficients"
+            ],
+            "type": "object"
+          },
+          "completed_square": {
+            "additionalProperties": false,
+            "properties": {
+              "lhs_coefficients": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "square_coefficients": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              }
+            },
+            "required": [
+              "lhs_coefficients",
+              "square_coefficients"
+            ],
+            "type": "object"
+          },
+          "constant_squared": {
+            "const": "1/2"
+          },
+          "dimension": {
+            "maximum": 12,
+            "minimum": 5,
+            "type": "integer"
+          },
+          "equality_witness": {
+            "additionalProperties": false,
+            "properties": {
+              "attained_constant_squared": {
+                "const": "1/2"
+              },
+              "term_norm_squared": {
+                "const": "1/2"
+              },
+              "values": {
+                "items": {
+                  "const": "1/2"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "values",
+              "term_norm_squared",
+              "attained_constant_squared"
+            ],
+            "type": "object"
+          },
+          "vectors": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "first_variable": {
+                  "type": "integer"
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "second_constant": {
+                  "const": 1
+                },
+                "second_variable": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "index",
+                "first_variable",
+                "second_constant",
+                "second_variable"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "minItems": 5,
+            "type": "array"
+          }
+        },
+        "required": [
+          "constant_squared",
+          "dimension",
+          "vectors",
+          "aggregate",
+          "completed_square",
+          "equality_witness"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "pattern": "^the cyclic vector inequality at dimension n = ([5-9]|1[012])$",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/cyclic-vector-inequality"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/cyclic-vector-inequality",
+  "verification_record": null
+}

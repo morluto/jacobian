@@ -7,16 +7,21 @@ import sys
 import time
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, cast
 
-from jacobian.bounded_process import run_bounded_process
 from jacobian.canonical import (
     CanonicalizationError,
     canonicalize_json,
     loads_strict_json,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.implementation import package_source_digest
+from jacobian.implementation import package_import_path, package_source_digest
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.worker_environment import worker_environment
 
 _LOGGER = logging.getLogger(__name__)
@@ -128,26 +133,31 @@ class PluginExecutor:
 
         started = time.monotonic()
         expected_digest = implementation_digest or package_source_digest(entrypoint)
-        environment = worker_environment()
-        completed = run_bounded_process(
-            [
-                sys.executable,
-                "-m",
-                "jacobian.plugin_worker",
-                entrypoint,
-                expected_digest,
-            ],
-            input_bytes=canonicalize_json(request),
-            timeout_seconds=timeout_seconds,
-            environment=environment,
-            stdout_limit=self.max_output_bytes,
-            stderr_limit=self.max_diagnostic_bytes,
+        environment = worker_environment(
+            overrides={"PYTHONPATH": package_import_path(entrypoint)}
+        )
+        completed = execute_process(
+            ProcessRequest(
+                executable=sys.executable,
+                arguments=(
+                    "-m",
+                    "jacobian.plugin_worker",
+                    entrypoint,
+                    expected_digest,
+                ),
+                stdin_bytes=canonicalize_json(request),
+                timeout_seconds=timeout_seconds,
+                environment=environment,
+                cwd=str(Path.cwd()),
+                stdout_limit_bytes=self.max_output_bytes,
+                stderr_limit_bytes=self.max_diagnostic_bytes,
+            )
         )
         diagnostics = _bounded_text(
             completed.stderr,
             limit=self.max_diagnostic_bytes,
         )
-        if completed.timed_out:
+        if completed.termination is ProcessTermination.TIMED_OUT:
             return PluginExecutionResult(
                 status=ExecutionStatus.TIMEOUT,
                 output=None,
@@ -174,6 +184,15 @@ class PluginExecutor:
                 detail=_PLUGIN_DIAGNOSTICS_TOO_LARGE,
                 runtime_ms=_elapsed_ms(started),
                 failure_code=_PluginWorkerFailureCode.RESPONSE_INVALID,
+            )
+        if completed.termination is ProcessTermination.START_FAILED:
+            return PluginExecutionResult(
+                status=ExecutionStatus.ERROR,
+                output=None,
+                diagnostics=diagnostics,
+                detail=_PLUGIN_STOPPED,
+                runtime_ms=_elapsed_ms(started),
+                failure_code=_PluginWorkerFailureCode.EXECUTION_FAILED,
             )
         try:
             output = loads_strict_json(completed.stdout)

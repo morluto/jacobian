@@ -1,0 +1,258 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "IDENTITY_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "polynomial": {
+      "items": {
+        "$ref": "#/$defs/term"
+      },
+      "maxItems": 70,
+      "type": "array"
+    },
+    "term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "pattern": "^-?(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "exponents": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "exponents",
+        "coefficient"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "divisibility_conclusion": {
+        "const": "TARGET_DIVISIBLE_BY_N"
+      },
+      "generator_multipliers": {
+        "items": {
+          "$ref": "#/$defs/polynomial"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "identity_conclusion": {
+        "const": "TARGET_IN_HYPOTHESIS_IDEAL"
+      },
+      "variables": {
+        "const": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ]
+      }
+    },
+    "required": [
+      "variables",
+      "generator_multipliers",
+      "identity_conclusion",
+      "divisibility_conclusion"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "polynomial": {
+        "items": {
+          "$ref": "#/$defs/term"
+        },
+        "maxItems": 70,
+        "type": "array"
+      },
+      "term": {
+        "additionalProperties": false,
+        "properties": {
+          "coefficient": {
+            "pattern": "^-?(0|[1-9][0-9]*)$",
+            "type": "string"
+          },
+          "exponents": {
+            "items": {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          }
+        },
+        "required": [
+          "exponents",
+          "coefficient"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "IDENTITY_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "divisibility_conclusion": {
+            "const": "TARGET_DIVISIBLE_BY_N"
+          },
+          "generator_multipliers": {
+            "items": {
+              "$ref": "#/$defs/polynomial"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "identity_conclusion": {
+            "const": "TARGET_IN_HYPOTHESIS_IDEAL"
+          },
+          "variables": {
+            "const": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          }
+        },
+        "required": [
+          "variables",
+          "generator_multipliers",
+          "identity_conclusion",
+          "divisibility_conclusion"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/symmetric-polynomial-divisibility"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/symmetric-polynomial-divisibility",
+  "verification_record": null
+}

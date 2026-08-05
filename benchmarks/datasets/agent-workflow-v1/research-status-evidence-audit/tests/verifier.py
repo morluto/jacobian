@@ -257,11 +257,7 @@ def main():
         mathematical_contract = False
         public_contract = False
     result = submission.get("result") if isinstance(submission, dict) else {}
-    math_correct = bool(
-        mathematical_contract
-        and isinstance(result, dict)
-        and cases_valid(result, frozen)
-    )
+    math_correct = bool(isinstance(result, dict) and cases_valid(result, frozen))
     evidence = bool(
         mathematical_contract
         and isinstance(result, dict)

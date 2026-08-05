@@ -12,13 +12,17 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import tempfile
-import threading
-import time
 import unicodedata
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
+
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
+from jacobian.worker_environment import worker_environment
 
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -451,29 +455,6 @@ def _authorized_runtime() -> tuple[Path, str]:
     return path, expected_digest
 
 
-def _capture_checker_stream(
-    stream: BinaryIO,
-    *,
-    limit: int,
-    process: subprocess.Popen[bytes],
-    captured: bytearray,
-    exceeded: threading.Event,
-) -> None:
-    total = 0
-    read_chunk = getattr(stream, "read1", stream.read)
-    try:
-        while chunk := read_chunk(64 * 1024):
-            total += len(chunk)
-            remaining = max(0, limit - len(captured))
-            captured.extend(chunk[:remaining])
-            if total > limit:
-                exceeded.set()
-                process.kill()
-                return
-    except (OSError, ValueError):
-        return
-
-
 def _bounded_drat_trim(
     executable: Path,
     *,
@@ -487,95 +468,42 @@ def _bounded_drat_trim(
         proof_path = root / "proof.drat"
         cnf_path.write_bytes(cnf)
         proof_path.write_bytes(_DRAT_ASCII_PREFIX + proof)
-        stdout = bytearray()
-        stderr = bytearray()
-        stdout_exceeded = threading.Event()
-        stderr_exceeded = threading.Event()
-        timed_out = False
-        process = subprocess.Popen(
-            [str(executable), str(cnf_path), str(proof_path), "-f", "-W"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env={
-                **os.environ,
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-            },
-        )
-        assert process.stdout is not None
-        assert process.stderr is not None
-        readers = (
-            threading.Thread(
-                target=_capture_checker_stream,
-                kwargs={
-                    "stream": process.stdout,
-                    "limit": DRAT_TRIM_OUTPUT_LIMIT,
-                    "process": process,
-                    "captured": stdout,
-                    "exceeded": stdout_exceeded,
-                },
-                daemon=True,
-            ),
-            threading.Thread(
-                target=_capture_checker_stream,
-                kwargs={
-                    "stream": process.stderr,
-                    "limit": DRAT_TRIM_OUTPUT_LIMIT,
-                    "process": process,
-                    "captured": stderr,
-                    "exceeded": stderr_exceeded,
-                },
-                daemon=True,
-            ),
-        )
-        for reader in readers:
-            reader.start()
-        deadline = time.monotonic() + DRAT_TRIM_TIMEOUT_SECONDS
-        try:
-            process.wait(timeout=max(0.0, deadline - time.monotonic()))
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            process.kill()
-            process.wait()
-        finally:
-            for reader in readers:
-                reader.join(timeout=max(0.0, deadline - time.monotonic()))
-            if any(reader.is_alive() for reader in readers):
-                timed_out = True
-            if process.poll() is None:
-                process.kill()
-                process.wait()
-            process.stdout.close()
-            process.stderr.close()
-            for reader in readers:
-                reader.join(timeout=0.1)
-        if timed_out:
-            raise subprocess.TimeoutExpired(
-                cmd=[
-                    str(executable),
-                    str(cnf_path),
-                    str(proof_path),
-                    "-f",
-                    "-W",
-                ],
-                timeout=DRAT_TRIM_TIMEOUT_SECONDS,
+        command = [
+            str(executable),
+            str(cnf_path),
+            str(proof_path),
+            "-f",
+            "-W",
+        ]
+        result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=tuple(command[1:]),
+                environment=worker_environment(locale="C"),
+                cwd=str(root),
+                timeout_seconds=DRAT_TRIM_TIMEOUT_SECONDS,
+                stdin_bytes=b"",
+                stdout_limit_bytes=DRAT_TRIM_OUTPUT_LIMIT,
+                stderr_limit_bytes=DRAT_TRIM_OUTPUT_LIMIT,
             )
-        if stdout_exceeded.is_set() or stderr_exceeded.is_set():
+        )
+        if result.termination is ProcessTermination.TIMED_OUT:
+            return False, "DRAT_TIMEOUT"
+        if result.termination is ProcessTermination.OUTPUT_LIMIT_EXCEEDED:
             return False, "DRAT_OUTPUT_LIMIT_EXCEEDED"
+        if result.termination is ProcessTermination.START_FAILED:
+            return False, "DRAT_START_FAILED"
         if _sha256(executable.read_bytes()) != expected_runtime_digest:
             raise ValueError("DRAT-trim runtime changed during replay")
         try:
             lines = [
                 line.strip()
-                for line in bytes(stdout)
-                .decode("ascii")
+                for line in result.stdout.decode("ascii")
                 .replace("\r", "\n")
                 .splitlines()
                 if line.strip()
             ]
-            bytes(stderr).decode("ascii")
+            result.stderr.decode("ascii")
         except UnicodeDecodeError:
             return False, "DRAT_INVALID_CHECKER_OUTPUT"
         statuses = [line for line in lines if line.startswith("s ")]
@@ -583,10 +511,10 @@ def _bounded_drat_trim(
             line == "c" or line.startswith(("c ", "s ")) for line in lines
         )
         accepted = (
-            process.returncode == 0
+            result.returncode == 0
             and statuses == ["s VERIFIED"]
             and protocol_lines
-            and not stderr
+            and not result.stderr
         )
         if accepted:
             return True, None
@@ -681,10 +609,6 @@ def check_unsat_proof(request: dict[str, Any]) -> dict[str, Any]:
                 f"{len(clauses)} canonical clauses"
             ),
         }
-    except subprocess.TimeoutExpired:
-        return _reject_proof(
-            "DRAT_TIMEOUT: DRAT-trim did not finish; no proof conclusion is available"
-        )
     except (KeyError, OSError, TypeError, ValueError, OverflowError):
         return _reject_proof("malformed or unauthorized SAT proof checker request")
 

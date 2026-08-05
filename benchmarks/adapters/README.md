@@ -10,6 +10,9 @@ claims equivalence to the source.
 
 Manually authored or substantially transformed tasks remain authored Harbor
 tasks with provenance metadata; an “inspired by” citation is not an adapter.
+Internal task-model and adapter-infrastructure fixtures belong under
+`benchmarks/validation/fixtures/`, not in this contributor-facing directory,
+and are not examples to copy when adding an external source.
 
 Follow Harbor's maintained adapter layout: a locked Python package and CLI
 generate ordinary task directories containing `task.toml`, `instruction.md`,

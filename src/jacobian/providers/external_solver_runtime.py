@@ -6,13 +6,17 @@ import os
 import shutil
 from pathlib import Path
 
-from jacobian.bounded_process import run_bounded_process
 from jacobian.canonical import loads_strict_json
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
+)
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
 )
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
@@ -21,6 +25,7 @@ from jacobian.provider_runtime import (
     _unavailable_runtime,
     python_distribution_provider_runtime,
 )
+from jacobian.worker_environment import worker_environment
 
 CADICAL_VERSION = "3.0.1"
 CARCARA_SOURCE_COMMIT = "394edbb15ba95c47893f1d821fddde7e016af178"
@@ -49,27 +54,22 @@ def cadical_provider_runtime(
         )
     try:
         resolved = Path(resolved_name).resolve(strict=True)
-        completed = run_bounded_process(
-            [str(resolved), "--version"],
-            input_bytes=b"",
-            timeout_seconds=5,
-            environment={
-                **os.environ,
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-            },
-            stdout_limit=1024,
-            stderr_limit=4096,
+        completed = execute_process(
+            ProcessRequest(
+                executable=str(resolved),
+                arguments=("--version",),
+                environment=worker_environment(locale="C"),
+                cwd=str(Path.cwd()),
+                timeout_seconds=5,
+                stdin_bytes=b"",
+                stdout_limit_bytes=1024,
+                stderr_limit_bytes=4096,
+            )
         )
+        if completed.termination is not ProcessTermination.EXITED:
+            raise ProviderRuntimeError("CaDiCaL version probe did not match the pin")
         version = completed.stdout.decode("ascii").strip()
-        if (
-            completed.timed_out
-            or completed.stdout_exceeded
-            or completed.stderr_exceeded
-            or completed.returncode != 0
-            or version != CADICAL_VERSION
-        ):
+        if completed.returncode != 0 or version != CADICAL_VERSION:
             raise ProviderRuntimeError("CaDiCaL version probe did not match the pin")
         digest = _sha256_file(resolved)
     except (OSError, UnicodeDecodeError, ProviderRuntimeError):
@@ -181,23 +181,20 @@ def drat_trim_provider_runtime(
         digest = _sha256_file(resolved)
         if manifest["executable_sha256"] != digest:
             raise ProviderRuntimeError("DRAT-trim executable digest changed")
-        completed = run_bounded_process(
-            [str(resolved), "-h"],
-            input_bytes=b"",
-            timeout_seconds=5,
-            environment={
-                **os.environ,
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-            },
-            stdout_limit=16_000,
-            stderr_limit=16_000,
+        completed = execute_process(
+            ProcessRequest(
+                executable=str(resolved),
+                arguments=("-h",),
+                environment=worker_environment(locale="C"),
+                cwd=str(Path.cwd()),
+                timeout_seconds=5,
+                stdin_bytes=b"",
+                stdout_limit_bytes=16_000,
+                stderr_limit_bytes=16_000,
+            )
         )
         if (
-            completed.timed_out
-            or completed.stdout_exceeded
-            or completed.stderr_exceeded
+            completed.termination is not ProcessTermination.EXITED
             or completed.returncode != 0
             or b"usage: drat-trim" not in completed.stdout
         ):
@@ -278,26 +275,30 @@ def carcara_provider_runtime(
         digest = _sha256_file(resolved)
         if manifest["executable_sha256"] != digest:
             raise ProviderRuntimeError("Carcara executable digest changed")
-        environment = {
-            "LANG": "C",
-            "LC_ALL": "C",
-            "TZ": "UTC",
-        }
-        version = run_bounded_process(
-            [str(resolved), "--version"],
-            input_bytes=b"",
-            timeout_seconds=5,
-            environment=environment,
-            stdout_limit=16_000,
-            stderr_limit=16_000,
+        environment = worker_environment(locale="C")
+        version = execute_process(
+            ProcessRequest(
+                executable=str(resolved),
+                arguments=("--version",),
+                environment=environment,
+                cwd=str(Path.cwd()),
+                timeout_seconds=5,
+                stdin_bytes=b"",
+                stdout_limit_bytes=16_000,
+                stderr_limit_bytes=16_000,
+            )
         )
-        help_result = run_bounded_process(
-            [str(resolved), "check", "--help"],
-            input_bytes=b"",
-            timeout_seconds=5,
-            environment=environment,
-            stdout_limit=64_000,
-            stderr_limit=16_000,
+        help_result = execute_process(
+            ProcessRequest(
+                executable=str(resolved),
+                arguments=("check", "--help"),
+                environment=environment,
+                cwd=str(Path.cwd()),
+                timeout_seconds=5,
+                stdin_bytes=b"",
+                stdout_limit_bytes=64_000,
+                stderr_limit_bytes=16_000,
+            )
         )
         expected_version = (
             f"carcara {CARCARA_VERSION} [git master {CARCARA_SOURCE_COMMIT[:7]}]\n"
@@ -309,15 +310,11 @@ def carcara_provider_runtime(
             b"--expand-let-bindings",
         )
         if (
-            version.timed_out
-            or version.stdout_exceeded
-            or version.stderr_exceeded
+            version.termination is not ProcessTermination.EXITED
             or version.returncode != 0
             or version.stdout != expected_version
             or version.stderr
-            or help_result.timed_out
-            or help_result.stdout_exceeded
-            or help_result.stderr_exceeded
+            or help_result.termination is not ProcessTermination.EXITED
             or help_result.returncode != 0
             or help_result.stderr
             or any(flag not in help_result.stdout for flag in required_help)

@@ -68,8 +68,8 @@ def test_corrupt_intermediate_layer_is_rejected():
 
 
 def test_contract_has_no_verified_upgrade():
-    schema = json.loads((TASK / "environment/submission_schema.json").read_text())
-    assert schema["properties"]["claimed_assurance"] == {"const": "COMPUTED"}
+    contract = json.loads((TASK / "tests/public_contract.json").read_text())
+    assert contract["allowed_assurance"] == ["COMPUTED"]
 
 
 def test_accepts_computed_submission(tmp_path: Path) -> None:

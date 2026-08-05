@@ -9,7 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.harbor_suite import HarborSuiteError, load_registry
+from benchmarks.tooling.errors import HarborSuiteError
+from benchmarks.tooling.harbor_suite import load_registry
 
 
 def _seconds(started: Any, finished: Any) -> float | None:

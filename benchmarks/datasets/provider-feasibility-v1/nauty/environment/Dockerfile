@@ -8,5 +8,9 @@ RUN mkdir -p /opt/provider && \
     tar -xzf /opt/provider/nauty.tar.gz -C /opt/provider && \
     cd /opt/provider/nauty2_9_3 && ./configure && make -j2
 WORKDIR /app
-COPY input.json nauty_provider_pin.json spike.py submission_schema.json /app/
+COPY __init__.py /opt/benchmarks/__init__.py
+COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
+COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY datasets/provider-feasibility-v1/nauty/environment/input.json datasets/provider-feasibility-v1/nauty/environment/nauty_provider_pin.json datasets/provider-feasibility-v1/nauty/environment/spike.py datasets/provider-feasibility-v1/nauty/environment/submission_schema.json /app/
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/opt

@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
@@ -18,6 +17,7 @@ from jacobian.contracts.results import (
     Method,
     Verification,
 )
+from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification import VerificationService
@@ -134,26 +134,24 @@ def _graph_case(
     ("stopped", "expected_status"),
     [
         (
-            BoundedProcessResult(
+            ProcessResult(
+                termination=ProcessTermination.TIMED_OUT,
                 returncode=-9,
                 stdout=b"",
                 stderr=b"",
                 stdout_exceeded=False,
                 stderr_exceeded=False,
-                timed_out=True,
-                cancelled=False,
             ),
             ExecutionStatus.TIMEOUT,
         ),
         (
-            BoundedProcessResult(
+            ProcessResult(
+                termination=ProcessTermination.CANCELLED,
                 returncode=-9,
                 stdout=b"",
                 stderr=b"",
                 stdout_exceeded=False,
                 stderr_exceeded=False,
-                timed_out=False,
-                cancelled=True,
             ),
             ExecutionStatus.CANCELLED,
         ),
@@ -162,14 +160,14 @@ def _graph_case(
 def test_checker_timeout_and_cancellation_are_non_conclusions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    stopped: BoundedProcessResult,
+    stopped: ProcessResult,
     expected_status: ExecutionStatus,
 ) -> None:
     _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
         tmp_path
     )
     monkeypatch.setattr(
-        "jacobian.verification.service.run_bounded_process",
+        "jacobian.verification.service.execute_process",
         lambda *_args, **_kwargs: stopped,
     )
 

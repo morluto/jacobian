@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.bounded_process import BoundedProcessResult, ProcessResourceLimits
+from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import loads_strict_json
 from jacobian.capability_service import CapabilityService
 from jacobian.contracts.capabilities import (
@@ -25,8 +25,8 @@ from jacobian.contracts.number_theory import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
+from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.runtime import create_runtime
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -36,7 +36,7 @@ def _service(tmp_path: Path) -> CapabilityService:
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    service = CapabilityService(store, ResearchMemory(store, schemas))
+    service = CapabilityService(store)
     installer = OperationInstaller(store, schemas, artifacts)
     for bundle in (build_number_theory_bundle(), build_combinatorics_bundle()):
         for adapter in installer.install(bundle).adapters:
@@ -202,19 +202,21 @@ def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
 ) -> None:
     observed: dict[str, object] = {}
 
-    def timeout_worker(*args, **kwargs):
-        observed.update(kwargs)
-        return BoundedProcessResult(
+    def timeout_worker(request):
+        observed["timeout_seconds"] = request.timeout_seconds
+        observed["resource_limits"] = request.resource_limits
+        observed["input_bytes"] = request.stdin_bytes
+        return ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         )
 
     monkeypatch.setattr(
-        "jacobian.domains.number_theory.discrete_logarithm.run_bounded_process",
+        "jacobian.domains.number_theory.discrete_logarithm.execute_process",
         timeout_worker,
     )
     result = _service(tmp_path).invoke(
@@ -403,19 +405,19 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
 ) -> None:
     observed: dict[str, object] = {}
 
-    def timeout_worker(*args, **kwargs):
-        observed.update(kwargs)
-        return BoundedProcessResult(
+    def timeout_worker(request):
+        observed["resource_limits"] = request.resource_limits
+        return ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         )
 
     monkeypatch.setattr(
-        "jacobian.domains.number_theory.factorization.run_bounded_process",
+        "jacobian.domains.number_theory.factorization.execute_process",
         timeout_worker,
     )
     result = _service(tmp_path).invoke(
@@ -461,14 +463,14 @@ def test_factorization_derived_timeout_is_a_non_conclusion(
     payload: dict[str, object],
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.domains.number_theory.factorization.run_bounded_process",
-        lambda *args, **kwargs: BoundedProcessResult(
+        "jacobian.domains.number_theory.factorization.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 

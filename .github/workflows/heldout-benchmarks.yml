@@ -74,43 +74,33 @@ jobs:
             --stage "$STAGE" --max-tokens "$max_tokens" \
             --max-cost-usd "$max_cost"
           echo "run_plan=$BUNDLE_ROOT/rendered/run-plan.json" >> "$GITHUB_OUTPUT"
-      - name: Preflight the exact treatment image and advertised identity
+      - name: Start treatment infrastructure for probing
+        id: probe
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
         run: |
           manifest="$BUNDLE_ROOT/manifest.json"
           image=$(jq -r '.conditions[] | select(.id == "C2") | .image' "$manifest")
-          version=$(jq -r '.conditions[] | select(.id == "C2") | .server_version' "$manifest")
-          profile=$(jq -r '.conditions[] | select(.id == "C2") | .policy_profile' "$manifest")
-          expected_catalog=$(jq -r '.conditions[] | select(.id == "C2") | .catalog_digest' "$manifest")
-          expected_policy=$(jq -r '.conditions[] | select(.id == "C2") | .policy_digest' "$manifest")
           docker pull "$image"
-          docker run --rm -d --name jacobian-heldout-preflight \
+          docker run --rm -d --name jacobian-heldout-probe \
             -p 127.0.0.1:8000:8000 "$image" \
             --transport streamable-http --host 0.0.0.0 --port 8000 \
             --allow-anonymous --stateless-http --state-dir /tmp/jacobian-state
-          cleanup() { docker rm -f jacobian-heldout-preflight >/dev/null 2>&1 || true; }
-          trap cleanup EXIT
-          for _ in $(seq 1 60); do
-            if uv run --locked python deploy/smoke_remote.py \
-              http://127.0.0.1:8000/mcp --expect-version "$version" \
-              --expect-policy-profile "$profile" --timeout-seconds 5 \
-              > "$BUNDLE_ROOT/preflight.json" 2>/dev/null; then
-              break
-            fi
-            sleep 2
-          done
-          test -s "$BUNDLE_ROOT/preflight.json"
-          test "$(jq -r '.catalog.catalog_digest' "$BUNDLE_ROOT/preflight.json")" = "$expected_catalog"
-          test "$(jq -r '.catalog.policy_digest' "$BUNDLE_ROOT/preflight.json")" = "$expected_policy"
+          echo "url=http://127.0.0.1:8000/mcp" >> "$GITHUB_OUTPUT"
       - name: Execute and resume at complete pair boundaries
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
           RUN_PLAN: ${{ steps.plan.outputs.run_plan }}
+          PROBE_URL: ${{ steps.probe.outputs.url }}
         run: |
           uv run --locked python -m benchmarks.tooling.heldout_runner \
             --run-plan "$RUN_PLAN" \
-            --ledger "$BUNDLE_ROOT/rendered/execution-ledger.json"
+            --ledger "$BUNDLE_ROOT/rendered/execution-ledger.json" \
+            --manifest "$BUNDLE_ROOT/manifest.json" \
+            --probe-url "$PROBE_URL"
+      - name: Stop treatment probe container
+        if: always() && steps.probe.outputs.url != ''
+        run: docker rm -f jacobian-heldout-probe >/dev/null 2>&1 || true
       - name: Normalize and compare held-out evidence
         env:
           BUNDLE_ROOT: ${{ steps.bundle.outputs.root }}
@@ -140,12 +130,14 @@ jobs:
           for file in \
             c1-observation-evidence.json \
             c2-observation-evidence.json \
-            execution-ledger.json; do
+            execution-ledger.json \
+            routing-status-c1.json \
+            routing-status-c2.json; do
             if [ -f "$source/$file" ]; then cp "$source/$file" "$target/$file"; fi
           done
           if [ -d "$source/comparison" ]; then cp -R "$source/comparison" "$target/comparison"; fi
           if [ -f "$source/run-plan.json" ]; then
-            jq '{schema_version, stage, plan_digest, bundle_manifest_digest, harbor_version, agent, model, prompt_digest, reasoning_effort, randomization_seed, budget, pair_count, runs: [.runs[] | {pair_id, pair_index, task, repetition, condition, jacobian_enabled}]}' \
+            jq '{schema_version, manifest_digest, stage, plan_digest, budget, pair_count, runs: [.runs[] | {pair_id, pair_index, task, repetition, condition, jacobian_enabled}]}' \
               "$source/run-plan.json" > "$target/run-plan.json"
           fi
       - name: Publish evaluation summary

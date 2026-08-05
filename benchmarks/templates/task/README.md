@@ -4,6 +4,10 @@ Copy this directory into a registered dataset and replace every placeholder.
 Keep `instruction.md` and `environment/` agent-visible; keep `solution/` and
 `tests/` Oracle/verifier-only. Add task-specific schemas without weakening the
 common submission envelope or assurance ceiling. Add one
+verifier-owned `tests/public_contract.json` and generate the marked submission
+block plus `environment/submission_schema.json` with the internal
+`benchmarks.tooling.public_contract` command; do not hand-maintain duplicate
+protocol declarations. Add one
 `members/<task-id>.toml` record and run the exact leaf gate:
 `make harbor-check-task DATASET=<dataset-id> TASKS="<task-id>"`. Run
 `make harbor-oracle-task DATASET=<dataset-id> TASKS="<task-id>"` after the

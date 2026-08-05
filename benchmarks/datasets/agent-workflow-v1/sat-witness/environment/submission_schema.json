@@ -1,47 +1,61 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": [
-    "task_id",
-    "conclusion",
-    "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
-  ],
+  "if": {
+    "properties": {
+      "claimed_assurance": {
+        "const": "VERIFIED"
+      }
+    }
+  },
   "properties": {
-    "task_id": {
-      "const": "jacobian/sat-witness"
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
     },
     "conclusion": {
       "const": "SATISFIABLE"
     },
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "status",
-        "assignment"
-      ],
-      "properties": {
-        "status": {
-          "enum": [
-            "SATISFIABLE",
-            "UNSATISFIABLE"
-          ]
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
         },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
         "assignment": {
-          "type": "object",
           "additionalProperties": false,
-          "required": [
-            "a",
-            "b",
-            "c",
-            "d"
-          ],
           "properties": {
             "a": {
               "type": "boolean"
@@ -55,74 +69,67 @@
             "d": {
               "type": "boolean"
             }
-          }
+          },
+          "required": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "enum": [
+            "SATISFIABLE",
+            "UNSATISFIABLE"
+          ]
         }
-      }
-    },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED","CHECKED","VERIFIED"]
+      },
+      "required": [
+        "status",
+        "assignment"
+      ],
+      "type": "object"
     },
     "scope": {
-      "const": "jacobian/sat-witness complete finite input"
+      "const": "jacobian/sat-witness complete finite input",
+      "type": "string"
     },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          }
-        }
-      }
+    "task_id": {
+      "const": "jacobian/sat-witness"
     },
     "verification_record_uri": {
-      "type": "object",
       "additionalProperties": false,
-      "required": [
-        "path",
-        "sha256"
-      ],
       "properties": {
         "path": {
           "const": "evidence/verification-record.json"
         },
         "sha256": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
         }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
     }
   },
-  "if": {
-    "properties": {
-      "claimed_assurance": {
-        "const": "VERIFIED"
-      }
-    }
-  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
   "then": {
     "required": [
       "verification_record_uri"
     ]
-  }
+  },
+  "type": "object"
 }

@@ -13,7 +13,6 @@ from tests.support.capabilities import invoke_capability as _invoke
 from tests.support.services import open_domain_services
 
 import jacobian.providers.flint_runtime as flint_runtime
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -27,6 +26,7 @@ from jacobian.matrices.flint_hnf import install_python_flint_hnf_capability
 from jacobian.matrices.normal_form import (
     install_matrix_normal_form_checker,
 )
+from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
@@ -282,14 +282,14 @@ def test_python_flint_hnf_timeout_is_operational(
 ) -> None:
     runtime = hnf_services
     monkeypatch.setattr(
-        "jacobian.matrices.flint_hnf.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.matrices.flint_hnf.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 
@@ -315,8 +315,9 @@ def test_hnf_worker_gets_only_fixed_environment_and_budget(
     monkeypatch.setenv("JACOBIAN_HNF_SECRET", "must-not-propagate")
     observed: dict[str, Any] = {}
 
-    def fake_worker(*_args: Any, **kwargs: Any) -> BoundedProcessResult:
-        observed.update(kwargs)
+    def fake_worker(request: Any) -> ProcessResult:
+        observed["timeout_seconds"] = request.timeout_seconds
+        observed["environment"] = dict(request.environment)
         stdout = (
             canonicalize_json(
                 {
@@ -330,16 +331,16 @@ def test_hnf_worker_gets_only_fixed_environment_and_budget(
             )
             + b"\n"
         )
-        return BoundedProcessResult(
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=stdout,
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         )
 
-    monkeypatch.setattr("jacobian.matrices.flint_hnf.run_bounded_process", fake_worker)
+    monkeypatch.setattr("jacobian.matrices.flint_hnf.execute_process", fake_worker)
     result = _invoke(
         runtime,
         "matrix.normal_form.hermite",
@@ -357,6 +358,7 @@ def test_hnf_worker_gets_only_fixed_environment_and_budget(
         "LC_ALL": "C",
         "TZ": "UTC",
         "PYTHONHASHSEED": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     assert "JACOBIAN_HNF_SECRET" in os.environ
     assert "JACOBIAN_HNF_SECRET" not in observed["environment"]
@@ -375,8 +377,9 @@ def test_hnf_output_is_discarded_if_runtime_identity_changes(
         lambda **_kwargs: next(observations),
     )
     monkeypatch.setattr(
-        "jacobian.matrices.flint_hnf.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.matrices.flint_hnf.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=canonicalize_json(
                 {
@@ -392,7 +395,6 @@ def test_hnf_output_is_discarded_if_runtime_identity_changes(
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         ),
     )
 
@@ -415,14 +417,14 @@ def test_invalid_worker_protocol_retains_no_hnf_evidence(
 ) -> None:
     runtime = hnf_services
     monkeypatch.setattr(
-        "jacobian.matrices.flint_hnf.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.matrices.flint_hnf.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=b'{"status":"NORMAL_FORM_PRODUCED"}\n',
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         ),
     )
 
@@ -451,14 +453,14 @@ def test_hnf_checker_timeout_is_operational(
         mode=CapabilityMode.EXPLORE,
     )
     monkeypatch.setattr(
-        "jacobian.verification.service.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.verification.service.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 

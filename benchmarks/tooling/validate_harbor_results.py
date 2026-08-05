@@ -8,7 +8,6 @@ import hashlib
 import importlib.metadata
 import json
 import math
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,12 +16,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmarks.tooling.command_runner import git_head_sha  # noqa: E402
+from benchmarks.tooling.errors import HarborSuiteError  # noqa: E402
 from benchmarks.tooling.harbor_suite import (  # noqa: E402
     ROOT,
-    HarborSuiteError,
     get_suite,
     task_digest,
 )
+
+
+def _git_sha() -> str:
+    value = git_head_sha(ROOT)
+    if value is None:
+        raise HarborSuiteError("unable to resolve git HEAD")
+    return value
 
 
 def _task_id(name: Any) -> str:
@@ -213,16 +220,6 @@ def _load_trial_results(result_path: Path) -> tuple[list[Any], list[Path]]:
                 f"unable to read Harbor trial result {path}: {exc}"
             ) from exc
     return results, paths
-
-
-def _git_sha() -> str:
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
 
 
 def validate(

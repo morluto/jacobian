@@ -1,1 +1,175 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/cubic-image-classification"},"conclusion":{"enum":["IMAGE_CLASSIFIED","INSUFFICIENT_EVIDENCE"]},"result":{"type":"object","additionalProperties":false,"required":["factorization","image_residues_mod_9","excluded_residues_mod_9","families"],"properties":{"factorization":{"type":"object","additionalProperties":false,"required":["linear","quadratic"],"properties":{"linear":{"const":"A+B+C"},"quadratic":{"const":"A^2+B^2+C^2-AB-AC-BC"}}},"image_residues_mod_9":{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":8}},"excluded_residues_mod_9":{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":8}},"families":{"type":"array","minItems":3,"items":{"type":"object","additionalProperties":false,"required":["parameter_min","A","B","C","value","covered_residues"],"properties":{"parameter_min":{"type":"integer","minimum":0},"A":{"$ref":"#/$defs/affine"},"B":{"$ref":"#/$defs/affine"},"C":{"$ref":"#/$defs/affine"},"value":{"$ref":"#/$defs/affine"},"covered_residues":{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":8}}}}}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","items":{"type":"string"}}},"$defs":{"affine":{"type":"array","prefixItems":[{"type":"integer"},{"type":"integer"}],"items":false}}}
+{
+  "$defs": {
+    "affine": {
+      "items": false,
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "IMAGE_CLASSIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "excluded_residues_mod_9": {
+          "items": {
+            "maximum": 8,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "factorization": {
+          "additionalProperties": false,
+          "properties": {
+            "linear": {
+              "const": "A+B+C"
+            },
+            "quadratic": {
+              "const": "A^2+B^2+C^2-AB-AC-BC"
+            }
+          },
+          "required": [
+            "linear",
+            "quadratic"
+          ],
+          "type": "object"
+        },
+        "families": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "A": {
+                "$ref": "#/$defs/affine"
+              },
+              "B": {
+                "$ref": "#/$defs/affine"
+              },
+              "C": {
+                "$ref": "#/$defs/affine"
+              },
+              "covered_residues": {
+                "items": {
+                  "maximum": 8,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "parameter_min": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "value": {
+                "$ref": "#/$defs/affine"
+              }
+            },
+            "required": [
+              "parameter_min",
+              "A",
+              "B",
+              "C",
+              "value",
+              "covered_residues"
+            ],
+            "type": "object"
+          },
+          "minItems": 3,
+          "type": "array"
+        },
+        "image_residues_mod_9": {
+          "items": {
+            "maximum": 8,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "factorization",
+        "image_residues_mod_9",
+        "excluded_residues_mod_9",
+        "families"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/cubic-image-classification"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

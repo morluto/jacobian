@@ -1,0 +1,331 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "DIVISIBILITY_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "conclusion": {
+        "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
+      },
+      "induction_cases": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "coefficient_adjusted_offsets": {
+              "items": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "residue": {
+              "maximum": 2,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "residue",
+            "coefficient_adjusted_offsets"
+          ],
+          "type": "object"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "initial_power_sums": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "minimal_polynomial_descending": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array"
+      },
+      "recurrence_coefficients": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "terms": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "n": {
+              "maximum": 24,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "required_valuation": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "seven_adic_valuation": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "n",
+            "value",
+            "seven_adic_valuation",
+            "required_valuation"
+          ],
+          "type": "object"
+        },
+        "maxItems": 25,
+        "minItems": 25,
+        "type": "array"
+      }
+    },
+    "required": [
+      "minimal_polynomial_descending",
+      "initial_power_sums",
+      "recurrence_coefficients",
+      "terms",
+      "induction_cases",
+      "conclusion"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "DIVISIBILITY_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "conclusion": {
+            "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
+          },
+          "induction_cases": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "coefficient_adjusted_offsets": {
+                  "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "residue": {
+                  "maximum": 2,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "residue",
+                "coefficient_adjusted_offsets"
+              ],
+              "type": "object"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "initial_power_sums": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "minimal_polynomial_descending": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "recurrence_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "terms": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "n": {
+                  "maximum": 24,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "required_valuation": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "seven_adic_valuation": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "value": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "n",
+                "value",
+                "seven_adic_valuation",
+                "required_valuation"
+              ],
+              "type": "object"
+            },
+            "maxItems": 25,
+            "minItems": 25,
+            "type": "array"
+          }
+        },
+        "required": [
+          "minimal_polynomial_descending",
+          "initial_power_sums",
+          "recurrence_coefficients",
+          "terms",
+          "induction_cases",
+          "conclusion"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/trigonometric-power-sum-valuation"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/trigonometric-power-sum-valuation",
+  "verification_record": null
+}

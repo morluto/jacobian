@@ -5,16 +5,39 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import random
-import subprocess
+import re
 import tarfile
+import time
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.tooling.harbor_suite import BENCHMARKS, HarborSuiteError, task_digest
+from benchmarks.tooling.command_runner import operator_environment, run_operator_command
+from benchmarks.tooling.errors import HarborSuiteError
+from benchmarks.tooling.harbor_suite import (
+    BENCHMARKS,
+    ROOT,
+    task_digest,
+)
+from benchmarks.tooling.strict_boundaries import HeldoutManifest, raise_strict_model
+
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+_AWS_ENVIRONMENT_VARS = frozenset(
+    {
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_SECURITY_TOKEN",
+        "AWS_REGION",
+        "AWS_DEFAULT_REGION",
+    }
+)
 
 
 def _read_json(path: Path) -> Any:
@@ -92,8 +115,27 @@ def _validate_experiment(manifest: dict[str, Any], task_ids: set[str]) -> None:
         )
 
 
+def _validate_snapshot_lock(manifest: dict[str, Any]) -> None:
+    lock = manifest["snapshot_lock"]
+    if not _DIGEST_RE.match(lock["lock_id"]):
+        raise HarborSuiteError("held-out snapshot_lock.lock_id must be a sha256 digest")
+    if not _DIGEST_RE.match(lock["lock_digest"]):
+        raise HarborSuiteError(
+            "held-out snapshot_lock.lock_digest must be a sha256 digest"
+        )
+    if not isinstance(lock["lock_uri"], str) or not lock["lock_uri"]:
+        raise HarborSuiteError("held-out snapshot_lock.lock_uri must be non-empty")
+
+
 def validate_manifest(path: Path) -> dict[str, Any]:
-    manifest = _read_json(path)
+    raw = _read_json(path)
+    # Typed Pydantic boundary first: extra="forbid", strict scalars, no
+    # semantic .get/indexing before typed parse.
+    model = raise_strict_model(HeldoutManifest, raw, label=str(path))
+    manifest = model.model_dump(mode="json", exclude_none=True)
+    # JSON Schema as a secondary contract check for pattern constraints
+    # (digest format, S3 URI shape, path patterns) not expressible in the
+    # strict Pydantic model.
     schema = _read_json(BENCHMARKS / "schemas" / "held-out-manifest.schema.json")
     errors = sorted(
         Draft202012Validator(schema).iter_errors(manifest),
@@ -105,7 +147,7 @@ def validate_manifest(path: Path) -> dict[str, Any]:
             for error in errors
         ]
         raise HarborSuiteError("held-out manifest is invalid:\n" + "\n".join(messages))
-    assert isinstance(manifest, dict)
+    _validate_snapshot_lock(manifest)
     task_ids = _validate_task_contracts(manifest)
     _validate_experiment(manifest, task_ids)
     conditions = {
@@ -166,7 +208,54 @@ def _verify_dataset_manifest(manifest: dict[str, Any], dataset_manifest: Path) -
         raise HarborSuiteError("held-out dataset manifest task set/digest mismatch")
 
 
+def _verify_snapshot_lock(manifest: dict[str, Any], bundle_root: Path) -> None:
+    """Verify the archive's snapshot lock agrees with the manifest.
+
+    The snapshot lock is canonical: its task IDs/digests must match the
+    manifest's tasks, and its lock_digest/snapshot_id must match the
+    manifest's snapshot_lock reference.
+    """
+
+    lock_ref = manifest["snapshot_lock"]
+    lock_path = bundle_root / "snapshot-lock.json"
+    if not lock_path.is_file() or lock_path.is_symlink():
+        raise HarborSuiteError("held-out bundle is missing snapshot-lock.json")
+    actual_digest = _digest(lock_path)
+    if actual_digest != lock_ref["lock_digest"]:
+        raise HarborSuiteError("held-out snapshot lock digest mismatch")
+    lock = _read_json(lock_path)
+    if not isinstance(lock, dict):
+        raise HarborSuiteError("held-out snapshot lock must be a JSON object")
+    lock_snapshot_id = lock.get("snapshot_id")
+    if not isinstance(lock_snapshot_id, str) or lock_snapshot_id != lock_ref["lock_id"]:
+        raise HarborSuiteError("held-out snapshot lock_id mismatch")
+    lock_tasks = lock.get("tasks")
+    if not isinstance(lock_tasks, list) or not lock_tasks:
+        raise HarborSuiteError("held-out snapshot lock has no tasks")
+    lock_task_map: dict[str, str] = {}
+    for entry in lock_tasks:
+        if not isinstance(entry, dict):
+            raise HarborSuiteError(
+                "held-out snapshot lock task entries must be objects"
+            )
+        entry_id = entry.get("id")
+        entry_digest = entry.get("digest")
+        if (
+            not isinstance(entry_id, str)
+            or not isinstance(entry_digest, str)
+            or entry_id in lock_task_map
+        ):
+            raise HarborSuiteError("held-out snapshot lock task set/digest mismatch")
+        lock_task_map[entry_id] = entry_digest
+    manifest_task_map = {
+        str(task["id"]): str(task["digest"]) for task in manifest["tasks"]
+    }
+    if lock_task_map != manifest_task_map:
+        raise HarborSuiteError("held-out archive tasks do not agree with snapshot lock")
+
+
 def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
+    _verify_snapshot_lock(manifest, root)
     dataset_root = _bundle_path(root, manifest["dataset"]["path"])
     dataset_manifest = dataset_root / "dataset.toml"
     _verify_dataset_manifest(manifest, dataset_manifest)
@@ -189,20 +278,60 @@ def verify_bundle(manifest: dict[str, Any], root: Path) -> None:
                 )
 
 
+def _run_command(
+    command: str,
+    arguments: list[str],
+    *,
+    cwd: Path,
+    environment: Mapping[str, str] | None = None,
+) -> None:
+    result = run_operator_command(
+        command,
+        arguments,
+        cwd=cwd,
+        timeout_seconds=600.0,
+        environment=environment,
+    )
+    if result.exit_code is None or result.exit_code != 0:
+        diagnostic = result.diagnostic or result.stderr.decode("utf-8", "replace")
+        raise HarborSuiteError(f"held-out command {command} failed: {diagnostic}")
+
+
 def fetch_bundle(manifest_uri: str, output: Path) -> Path:
     output.mkdir(parents=True, exist_ok=False)
+    aws_env = operator_environment(include=_AWS_ENVIRONMENT_VARS)
     manifest_path = output / "manifest.json"
-    subprocess.run(["aws", "s3", "cp", manifest_uri, str(manifest_path)], check=True)
+    _run_command(
+        "aws",
+        ["s3", "cp", manifest_uri, str(manifest_path)],
+        cwd=output,
+        environment=aws_env,
+    )
     manifest = validate_manifest(manifest_path)
+    lock_uri = manifest["snapshot_lock"]["lock_uri"]
+    lock_path = output / "snapshot-lock.json"
+    _run_command(
+        "aws",
+        ["s3", "cp", lock_uri, str(lock_path)],
+        cwd=output,
+        environment=aws_env,
+    )
+    if _digest(lock_path) != manifest["snapshot_lock"]["lock_digest"]:
+        raise HarborSuiteError("held-out snapshot lock digest mismatch")
     archive = output / "bundle.tar.gz"
-    subprocess.run(
-        ["aws", "s3", "cp", manifest["archive"]["uri"], str(archive)], check=True
+    _run_command(
+        "aws",
+        ["s3", "cp", manifest["archive"]["uri"], str(archive)],
+        cwd=output,
+        environment=aws_env,
     )
     if _digest(archive) != manifest["archive"]["sha256"]:
         raise HarborSuiteError("held-out archive digest mismatch")
     extracted = output / "bundle"
     extracted.mkdir()
     _safe_extract(archive, extracted)
+    shutil_lock = extracted / "snapshot-lock.json"
+    shutil_lock.write_bytes(lock_path.read_bytes())
     verify_bundle(manifest, extracted)
     return extracted
 
@@ -253,6 +382,7 @@ def render_plan(
         raise HarborSuiteError("runtime budget must exactly match the frozen manifest")
     stage_config = experiment["stages"][stage]
     output.mkdir(parents=True, exist_ok=False)
+    manifest_digest = _digest(manifest_path)
     conditions = {item["id"]: item for item in manifest["conditions"]}
     treatment = conditions["C2"]
     compose_path = output / "c2.compose.json"
@@ -328,28 +458,13 @@ def render_plan(
             snapshot_path.write_text(
                 json.dumps(
                     {
-                        "bundle_id": manifest["bundle_id"],
-                        "bundle_version": manifest["bundle_version"],
-                        "bundle_manifest_digest": _digest(manifest_path),
-                        "dataset_manifest_digest": manifest["dataset"][
-                            "manifest_digest"
-                        ],
-                        "snapshot_id": manifest["dataset"]["snapshot_id"],
+                        "manifest_digest": manifest_digest,
                         "condition": condition,
-                        "harbor_version": experiment["harbor_version"],
-                        "agent": experiment["agent"],
-                        "model": experiment["model"],
-                        "prompt_path": experiment["prompt_path"],
-                        "prompt_digest": experiment["prompt_digest"],
-                        "reasoning_effort": experiment["reasoning_effort"],
-                        "randomization_seed": experiment["randomization_seed"],
                         "stage": stage,
                         "pair_id": pair_id,
                         "pair_index": pair_index,
                         "task": task,
                         "repetition": repetition,
-                        "max_tokens": max_tokens,
-                        "max_cost_usd": max_cost_usd,
                     },
                     indent=2,
                     sort_keys=True,
@@ -371,17 +486,9 @@ def render_plan(
                 }
             )
     plan: dict[str, Any] = {
-        "schema_version": "2",
+        "schema_version": "3",
+        "manifest_digest": manifest_digest,
         "stage": stage,
-        "bundle_manifest_digest": _digest(manifest_path),
-        "snapshot_id": manifest["dataset"]["snapshot_id"],
-        "harbor_version": experiment["harbor_version"],
-        "agent": experiment["agent"],
-        "model": experiment["model"],
-        "prompt_path": experiment["prompt_path"],
-        "prompt_digest": experiment["prompt_digest"],
-        "reasoning_effort": experiment["reasoning_effort"],
-        "randomization_seed": experiment["randomization_seed"],
         "budget": {
             "max_tokens": max_tokens,
             "max_cost_usd": max_cost_usd,
@@ -404,6 +511,384 @@ def math_isclose(left: float, right: float) -> bool:
     return abs(float(left) - float(right)) <= 1e-9
 
 
+_REQUIRED_MCP_TOOLS = {"capability.describe", "capability.invoke"}
+_PROBE_SCRIPT = ROOT / "deploy" / "smoke_remote.py"
+_ZERO_DIGEST = "sha256:" + "0" * 64
+
+
+def _probe_digest(report: dict[str, Any]) -> str:
+    return _json_digest(
+        {
+            "server_version": report.get("server", {}).get("version"),
+            "catalog_digest": report.get("catalog", {}).get("catalog_digest"),
+            "policy_digest": report.get("catalog", {}).get("policy_digest"),
+            "policy_profile": report.get("catalog", {}).get("policy_profile"),
+            "tool_names": report.get("tool_names"),
+            "discovery_matches": report.get("discovery", {}).get("matches"),
+        }
+    )
+
+
+def _run_mcp_probe(
+    *,
+    mcp_url: str,
+    expected_version: str,
+    expected_policy_profile: str,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    """Bounded MCP initialize + catalog + describe probe via command_runner.
+
+    Runs ``deploy/smoke_remote.py`` under the locked environment.  Returns a
+    dict with ``reachable`` and either the probe report or a safe diagnostic.
+    """
+
+    args = [
+        "run",
+        "--locked",
+        "python",
+        str(_PROBE_SCRIPT),
+        mcp_url,
+        "--expect-version",
+        expected_version,
+        "--expect-policy-profile",
+        expected_policy_profile,
+        "--timeout-seconds",
+        str(int(timeout_seconds)),
+    ]
+    env = operator_environment(include=["PATH", "HOME"])
+    result = run_operator_command(
+        "uv",
+        args,
+        cwd=ROOT,
+        timeout_seconds=timeout_seconds + 60.0,
+        stdout_limit_bytes=2 * 1024 * 1024,
+        stderr_limit_bytes=512 * 1024,
+        environment=env,
+    )
+    if result.exit_code is None or result.exit_code != 0:
+        diagnostic = (
+            result.diagnostic or result.stderr.decode("utf-8", "replace").strip()[:512]
+        )
+        return {"reachable": False, "diagnostic": diagnostic or "probe failed"}
+    try:
+        report = json.loads(result.stdout.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return {"reachable": False, "diagnostic": f"probe output unparseable: {exc}"}
+    return {"reachable": True, "report": report}
+
+
+def _empty_checks() -> dict[str, Any]:
+    return {
+        "image_digest_pinned": False,
+        "catalog_digest_bound": False,
+        "policy_digest_bound": False,
+        "server_version_bound": False,
+        "policy_profile_bound": False,
+        "server_version_match": None,
+        "catalog_digest_match": None,
+        "policy_digest_match": None,
+        "required_tools_present": None,
+        "describe_responded": None,
+    }
+
+
+def _validate_routing_contract(contract: dict[str, Any]) -> None:
+    schema = _read_json(BENCHMARKS / "schemas" / "held-out-routing-status.schema.json")
+    errors = list(Draft202012Validator(schema).iter_errors(contract))
+    if errors:
+        raise HarborSuiteError(
+            f"routing status contract is invalid: {errors[0].message}"
+        )
+
+
+def control_routing_status(
+    manifest_path: Path,
+    *,
+    compose_filename: str = "",
+    mcp_url: str = "",
+) -> dict[str, Any]:
+    """Emit a NOT_CONFIGURED routing status contract for the control condition.
+
+    Control performs no probe and records NOT_CONFIGURED / NOT_APPLICABLE.
+    """
+
+    validate_manifest(manifest_path)
+    manifest_digest = _digest(manifest_path)
+    contract = {
+        "schema_version": "2",
+        "manifest_digest": manifest_digest,
+        "condition_id": "C1",
+        "infrastructure_status": "NOT_CONFIGURED",
+        "routing_status": "NOT_APPLICABLE",
+        "treatment": None,
+        "routing": None,
+        "probe": None,
+        "checks": _empty_checks(),
+        "failures": [],
+    }
+    _validate_routing_contract(contract)
+    return contract
+
+
+def _static_binding_checks(
+    treatment: dict[str, Any],
+) -> tuple[dict[str, bool], list[str]]:
+    """Check that manifest-level digest/version/profile fields are bound."""
+    image = str(treatment.get("image", ""))
+    expected_server_version = str(treatment.get("server_version", ""))
+    expected_policy_profile = str(treatment.get("policy_profile", ""))
+    expected_catalog_digest = str(treatment.get("catalog_digest", ""))
+    expected_policy_digest = str(treatment.get("policy_digest", ""))
+    checks = _empty_checks()
+    failures: list[str] = []
+    if "@" in image and _DIGEST_RE.match(image.rsplit("@", 1)[1]):
+        checks["image_digest_pinned"] = True
+    else:
+        failures.append("treatment image is not digest-pinned")
+    if _DIGEST_RE.match(expected_catalog_digest):
+        checks["catalog_digest_bound"] = True
+    else:
+        failures.append("treatment catalog_digest is not bound")
+    if _DIGEST_RE.match(expected_policy_digest):
+        checks["policy_digest_bound"] = True
+    else:
+        failures.append("treatment policy_digest is not bound")
+    if expected_server_version:
+        checks["server_version_bound"] = True
+    else:
+        failures.append("treatment server_version is not bound")
+    if expected_policy_profile:
+        checks["policy_profile_bound"] = True
+    else:
+        failures.append("treatment policy_profile is not bound")
+    return checks, failures
+
+
+def _probe_until_ready(
+    *,
+    mcp_url: str,
+    expected_version: str,
+    expected_policy_profile: str,
+    timeout_seconds: float,
+    probe_fn: Any,
+    retries: int,
+    retry_delay_seconds: float,
+) -> dict[str, Any]:
+    probe_result: dict[str, Any] = {"reachable": False}
+    for attempt in range(retries + 1):
+        probe_result = probe_fn(
+            mcp_url=mcp_url,
+            expected_version=expected_version,
+            expected_policy_profile=expected_policy_profile,
+            timeout_seconds=timeout_seconds,
+        )
+        if probe_result.get("reachable") or attempt == retries:
+            return probe_result
+        time.sleep(retry_delay_seconds)
+    return probe_result
+
+
+def _validate_readiness_retry_policy(retries: int, delay_seconds: float) -> None:
+    if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+        raise HarborSuiteError("readiness retries must be a non-negative integer")
+    if (
+        isinstance(delay_seconds, bool)
+        or not isinstance(delay_seconds, (int, float))
+        or not math.isfinite(delay_seconds)
+        or delay_seconds < 0
+    ):
+        raise HarborSuiteError("readiness retry delay must be finite and non-negative")
+
+
+def _probe_match_checks(
+    probe: dict[str, Any],
+    expected_server_version: str,
+    expected_catalog_digest: str,
+    expected_policy_digest: str,
+) -> tuple[dict[str, bool], list[str]]:
+    """Compare probe observations against manifest expectations."""
+    checks: dict[str, bool] = {}
+    failures: list[str] = []
+    checks["server_version_match"] = (
+        probe["server_version_observed"] == expected_server_version
+    )
+    checks["catalog_digest_match"] = (
+        probe["catalog_digest_observed"] == expected_catalog_digest
+    )
+    checks["policy_digest_match"] = (
+        probe["policy_digest_observed"] == expected_policy_digest
+    )
+    observed_tools = set(probe.get("tool_names") or [])
+    checks["required_tools_present"] = _REQUIRED_MCP_TOOLS.issubset(observed_tools)
+    checks["describe_responded"] = bool(probe.get("discovery_matches") is not None)
+    if not checks["server_version_match"]:
+        failures.append("probe server_version does not match manifest")
+    if not checks["catalog_digest_match"]:
+        failures.append("probe catalog_digest does not match manifest")
+    if not checks["policy_digest_match"]:
+        failures.append("probe policy_digest does not match manifest")
+    if not checks["required_tools_present"]:
+        failures.append("probe is missing required MCP tools")
+    if not checks["describe_responded"]:
+        failures.append("probe capability.describe did not respond")
+    return checks, failures
+
+
+def treatment_readiness_preflight(
+    manifest_path: Path,
+    *,
+    compose_filename: str = "c2.compose.json",
+    mcp_url: str = "",
+    probe_timeout_seconds: float = 120.0,
+    probe_fn: Any | None = None,
+    readiness_retries: int = 3,
+    readiness_retry_delay_seconds: float = 5.0,
+) -> dict[str, Any]:
+    """Emit a routing status contract for the treatment condition.
+
+    Performs static digest-binding checks.  When *mcp_url* is non-empty,
+    performs a bounded MCP initialize + catalog + describe probe (via
+    *probe_fn* or the default ``deploy/smoke_remote.py`` runner) and
+    classifies ``infrastructure_status``:
+
+    * ``READY`` — probe reachable and every observed digest/version matches.
+    * ``UNAVAILABLE`` — probe could not reach the endpoint.
+    * ``MISCONFIGURED`` — probe reached the endpoint but digests/version
+      mismatched or required tools are missing.
+
+    ``routing_status`` is ``AVAILABLE_UNUSED`` when READY, otherwise
+    ``CONFIGURED_UNCALLABLE`` (unreachable) or ``MISROUTED`` (mismatched).
+
+    The probe is retried up to *readiness_retries* additional times with a
+    bounded *readiness_retry_delay_seconds* sleep between attempts, so that
+    a treatment container that is still starting up does not cause a
+    premature ``UNAVAILABLE`` classification.  Each attempt uses the
+    existing bounded ``run_operator_command`` abstraction; the total retry
+    budget is bounded by ``(retries + 1) * probe_timeout_seconds + retries *
+    readiness_retry_delay_seconds``.
+    """
+
+    _validate_readiness_retry_policy(readiness_retries, readiness_retry_delay_seconds)
+
+    manifest = validate_manifest(manifest_path)
+    manifest_digest = _digest(manifest_path)
+    conditions = {item["id"]: item for item in manifest["conditions"]}
+    treatment = conditions.get("C2")
+    if not isinstance(treatment, dict):
+        raise HarborSuiteError("treatment condition C2 is missing from manifest")
+    image = str(treatment.get("image", ""))
+    expected_server_version = str(treatment.get("server_version", ""))
+    expected_policy_profile = str(treatment.get("policy_profile", ""))
+    expected_catalog_digest = str(treatment.get("catalog_digest", ""))
+    expected_policy_digest = str(treatment.get("policy_digest", ""))
+    checks, failures = _static_binding_checks(treatment)
+    probe: dict[str, Any] = {
+        "reachable": False,
+        "server_version_observed": None,
+        "catalog_digest_observed": None,
+        "policy_digest_observed": None,
+        "policy_profile_observed": None,
+        "tool_names": None,
+        "discovery_matches": None,
+        "probe_digest": _ZERO_DIGEST,
+        "diagnostic": None,
+    }
+    if mcp_url:
+        probe_result = _probe_until_ready(
+            mcp_url=mcp_url,
+            expected_version=expected_server_version,
+            expected_policy_profile=expected_policy_profile,
+            timeout_seconds=probe_timeout_seconds,
+            probe_fn=_run_mcp_probe if probe_fn is None else probe_fn,
+            retries=readiness_retries,
+            retry_delay_seconds=readiness_retry_delay_seconds,
+        )
+        if probe_result.get("reachable"):
+            report = probe_result["report"]
+            probe = {
+                "reachable": True,
+                "server_version_observed": report.get("server", {}).get("version"),
+                "catalog_digest_observed": report.get("catalog", {}).get(
+                    "catalog_digest"
+                ),
+                "policy_digest_observed": report.get("catalog", {}).get(
+                    "policy_digest"
+                ),
+                "policy_profile_observed": report.get("catalog", {}).get(
+                    "policy_profile"
+                ),
+                "tool_names": report.get("tool_names"),
+                "discovery_matches": report.get("discovery", {}).get("matches"),
+                "probe_digest": _probe_digest(report),
+                "diagnostic": None,
+            }
+        else:
+            probe["diagnostic"] = probe_result.get("diagnostic", "probe failed")
+    if probe["reachable"]:
+        match_checks, match_failures = _probe_match_checks(
+            probe,
+            expected_server_version,
+            expected_catalog_digest,
+            expected_policy_digest,
+        )
+        checks.update(match_checks)
+        failures.extend(match_failures)
+    elif mcp_url:
+        failures.append("treatment MCP endpoint was not reachable")
+    static_ok = all(
+        checks[key]
+        for key in (
+            "image_digest_pinned",
+            "catalog_digest_bound",
+            "policy_digest_bound",
+            "server_version_bound",
+            "policy_profile_bound",
+        )
+    )
+    if not mcp_url:
+        failures.append("treatment MCP probe URL is not configured")
+        infrastructure_status = "MISCONFIGURED"
+        routing_status = "CONFIGURED_UNCALLABLE"
+    elif not probe["reachable"]:
+        infrastructure_status = "UNAVAILABLE"
+        routing_status = "CONFIGURED_UNCALLABLE"
+    elif static_ok and all(
+        checks[key] is True
+        for key in (
+            "server_version_match",
+            "catalog_digest_match",
+            "policy_digest_match",
+            "required_tools_present",
+            "describe_responded",
+        )
+    ):
+        infrastructure_status = "READY"
+        routing_status = "AVAILABLE_UNUSED"
+    else:
+        infrastructure_status = "MISCONFIGURED"
+        routing_status = "MISROUTED"
+    contract = {
+        "schema_version": "2",
+        "manifest_digest": manifest_digest,
+        "condition_id": "C2",
+        "infrastructure_status": infrastructure_status,
+        "routing_status": routing_status,
+        "treatment": {
+            "image": image,
+            "server_version": expected_server_version,
+            "policy_profile": expected_policy_profile,
+            "catalog_digest": expected_catalog_digest,
+            "policy_digest": expected_policy_digest,
+        },
+        "routing": {"compose_file": compose_filename, "mcp_url": mcp_url},
+        "probe": probe,
+        "checks": checks,
+        "failures": failures,
+    }
+    _validate_routing_contract(contract)
+    return contract
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -419,12 +904,34 @@ def main() -> int:
     render_parser.add_argument("--stage", choices=("pilot", "decision"), required=True)
     render_parser.add_argument("--max-tokens", type=int, required=True)
     render_parser.add_argument("--max-cost-usd", type=float, required=True)
+    preflight_parser = subparsers.add_parser("preflight")
+    preflight_parser.add_argument("--manifest", type=Path, required=True)
+    preflight_parser.add_argument("--mcp-url", default="")
+    preflight_parser.add_argument("--probe-timeout-seconds", type=float, default=120.0)
+    preflight_parser.add_argument("--readiness-retries", type=int, default=3)
+    preflight_parser.add_argument(
+        "--readiness-retry-delay-seconds", type=float, default=5.0
+    )
+    control_parser = subparsers.add_parser("control-routing-status")
+    control_parser.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "validate":
         validate_manifest(args.manifest)
         print(args.manifest)
     elif args.command == "fetch":
         print(fetch_bundle(args.manifest_uri, args.output))
+    elif args.command == "preflight":
+        contract = treatment_readiness_preflight(
+            args.manifest,
+            mcp_url=args.mcp_url,
+            probe_timeout_seconds=args.probe_timeout_seconds,
+            readiness_retries=args.readiness_retries,
+            readiness_retry_delay_seconds=args.readiness_retry_delay_seconds,
+        )
+        print(json.dumps(contract, indent=2, sort_keys=True))
+    elif args.command == "control-routing-status":
+        contract = control_routing_status(args.manifest)
+        print(json.dumps(contract, indent=2, sort_keys=True))
     else:
         print(
             render_plan(
@@ -443,4 +950,11 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["fetch_bundle", "render_plan", "validate_manifest", "verify_bundle"]
+__all__ = [
+    "control_routing_status",
+    "fetch_bundle",
+    "render_plan",
+    "treatment_readiness_preflight",
+    "validate_manifest",
+    "verify_bundle",
+]

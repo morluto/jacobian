@@ -15,3 +15,19 @@ Your certificate must establish, by exact rational-function identities rather th
 Also classify the twelve-moment argument as insufficient. Do not claim that finite checking proves an all-exponents statement. Do not claim machine verification, settle the two-dimensional case, or assess unrelated reductions in the source paper. State limitations covering both: (1) the certificate is not proof-assistant or machine verification, and (2) it does not settle the two-dimensional case or unrelated claims in the source paper.
 
 Write `/app/submission.json` matching the supplied schema and bind one concise explanation at `/app/evidence/answer.txt`. Include one `RESULT_JSON:` line containing the exact submitted `result` object as compact JSON, so the explanation is bound to the certificate.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** exactly `ALL_EXPONENTS_IDENTITY_CERTIFIED`
+- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** the exact value declared in `submission_schema.json`
+- **Completeness:** `COMPLETE`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `text/plain`.
+- **Required artifact filenames:** `evidence/answer.txt`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -66,6 +66,8 @@ def test_fresh_store_records_immutable_ordered_migrations(tmp_path: Path) -> Non
             )
         }
         assert not any(name.startswith("workspace") for name in tables)
+        legacy_episode_prefix = "research_" + "episode"
+        assert not any(name.startswith(legacy_episode_prefix) for name in tables)
         assert {"reasoning_runs", "reasoning_events"} <= tables
         assert connection.execute(
             "SELECT format_revision FROM jacobian_state_format WHERE id = 0"
@@ -105,15 +107,6 @@ def test_reasoning_log_tables_reject_update_and_delete(tmp_path: Path) -> None:
             )
     finally:
         connection.close()
-
-
-def test_revisions_one_through_four_keep_their_historical_checksums() -> None:
-    assert tuple(migration.checksum for migration in STATE_MIGRATIONS[:4]) == (
-        "sha256:619080ade76dc63ca03acd3a8801e58f864357a9e164ec10308a1bae7bead0fe",
-        "sha256:a7741db8d914c9d57a3c4bada024c9c9dcfb4469517dc943cf18a51b30cedca9",
-        "sha256:fb7debf6933ec683bbf9b82294559737ee77801fa9a2f03f64bf299cc4b466f9",
-        "sha256:e14ad430c8469cc01dae835385cad8aa053cb4b667a16952ba230e54723c97b7",
-    )
 
 
 def test_revision_five_removes_populated_legacy_workspace_tables(
@@ -347,6 +340,25 @@ def test_revision_five_state_requires_export_to_current_floor(tmp_path: Path) ->
         ArtifactRepository(tmp_path)
     assert exc_info.value.detected_revision == 5
     assert exc_info.value.minimum_revision == SUPPORTED_STATE_FLOOR
+
+
+def test_previous_pre_stable_head_requires_fresh_store(tmp_path: Path) -> None:
+    with ArtifactRepository(tmp_path):
+        pass
+    connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
+    try:
+        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision = 8")
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 7 WHERE id = 0"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(UnsupportedStateVersionError) as exc_info:
+        ArtifactRepository(tmp_path)
+    assert exc_info.value.detected_revision == 7
+    assert exc_info.value.minimum_revision == 8
 
 
 def test_current_head_bootstrap_performs_no_sqlite_writes(

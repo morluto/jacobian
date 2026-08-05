@@ -1,14 +1,17 @@
+import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
-    load_submission,
+    is_regular_bounded_file,
     resolve_evidence,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -18,13 +21,21 @@ LIMITATION = "The certificate refutes the published singleton claim and proves s
 
 def _load() -> dict[str, Any]:
     try:
-        a, b = WORKSPACE / "input.json", TESTS / "input.json"
-        if a.is_symlink() or b.is_symlink() or a.read_bytes() != b.read_bytes():
-            return {}
-        value = json.loads(b.read_text())
+        value = json.loads((TESTS / "input.json").read_text())
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _submission() -> dict[str, Any] | None:
+    path = WORKSPACE / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _fraction(value: object) -> Fraction | None:
@@ -34,7 +45,7 @@ def _fraction(value: object) -> Fraction | None:
         parsed = Fraction(value)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
+    return parsed
 
 
 def _result(value: object, frozen: dict[str, Any]) -> bool:
@@ -61,41 +72,62 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         or len(trace) != length
     ):
         return False
-    expected = []
+    if any(
+        not isinstance(item, dict)
+        or set(item) != {"n", "x", "y", "value", "floor"}
+        or any(type(item[field]) is not int for field in ("n", "x", "y", "floor"))
+        or not isinstance(item["value"], str)
+        for item in trace
+    ):
+        return False
     for n in range(length):
         x, y = (n + 1) // 2, n // 2
         exact = x * alpha + y * beta
-        expected.append(
-            {
-                "n": n,
-                "x": x,
-                "y": y,
-                "value": str(exact),
-                "floor": exact.numerator // exact.denominator,
-            }
-        )
+        item = trace[n]
+        if (
+            item["n"] != n
+            or item["x"] != x
+            or item["y"] != y
+            or _fraction(item["value"]) != exact
+            or item["floor"] != exact.numerator // exact.denominator
+        ):
+            return False
         if abs(x - y) >= band:
             return False
-    return trace == expected and all(item["floor"] == item["n"] for item in expected)
+    return all(item["floor"] == item["n"] for item in trace)
 
 
-def _evidence(value: object) -> bool:
+def _evidence(value: object, result: object) -> bool:
     if (
         not evidence_list_is_bound(value, expected_path="evidence/answer.txt")
         or not isinstance(value, list)
         or len(value) != 1
     ):
         return False
+    if not isinstance(result, dict) or not isinstance(result.get("trace"), list):
+        return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     try:
-        return path is not None and len(path.read_text().strip()) >= 40
+        lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
     except (OSError, UnicodeError):
         return False
+    trace_digest = hashlib.sha256(
+        json.dumps(result["trace"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return lines == [
+        "emerald-path-family-certificate-v1",
+        f"alpha: {result.get('alpha')}",
+        f"beta: {result.get('beta')}",
+        f"even_offset: {result.get('even_offset')}",
+        f"odd_offset: {result.get('odd_offset')}",
+        f"trace_sha256: {trace_digest}",
+    ]
 
 
 def main() -> None:
-    submission = load_submission()
+    submission = _submission()
     data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
@@ -103,8 +135,8 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    math_correct = bool(contract and _result(data.get("result"), _load()))
-    evidence_valid = bool(math_correct and _evidence(data.get("evidence")))
+    math_correct = _result(data.get("result"), _load())
+    evidence_valid = _evidence(data.get("evidence"), data.get("result"))
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
     assurance_correct = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
@@ -113,7 +145,9 @@ def main() -> None:
         submission, verification_record_bound=False
     )
     correct = (
-        math_correct
+        input_bound
+        and contract
+        and math_correct
         and evidence_valid
         and scope_correct
         and assurance_correct
@@ -127,6 +161,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
+                "input_binding": float(input_bound),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
                 "reward": float(correct),

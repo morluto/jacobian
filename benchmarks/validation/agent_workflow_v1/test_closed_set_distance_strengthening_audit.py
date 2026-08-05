@@ -76,6 +76,20 @@ def test_oracle_and_alternative_family_are_accepted(tmp_path: Path) -> None:
     assert _verify(tmp_path / "alternative", alternative)["reward"] == 1.0
 
 
+def test_accepts_consecutive_point_pairs_independent_of_array_order(
+    tmp_path: Path,
+) -> None:
+    reordered = copy.deepcopy(_oracle())
+    pairs = reordered["result"]["point_pairs"]
+    pairs[1], pairs[6] = pairs[6], pairs[1]
+
+    result = _verify(tmp_path / "reordered-pairs", reordered)
+    assert result["protocol_compliance"] == 1.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
 def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
     for name, mutation in [
         (

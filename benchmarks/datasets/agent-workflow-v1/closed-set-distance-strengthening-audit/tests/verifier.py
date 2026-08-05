@@ -207,8 +207,11 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         or len(pairs) != frozen.get("sample_count")
     ):
         return False
-    for offset, row in enumerate(pairs):
-        if not _pair_row(row, start + offset):
+    expected_indices = set(range(start, start + len(pairs)))
+    if {row["index"] for row in pairs} != expected_indices:
+        return False
+    for row in pairs:
+        if not _pair_row(row, row["index"]):
             return False
     witnesses = value["epsilon_witnesses"]
     if not isinstance(witnesses, list) or not 4 <= len(witnesses) <= 8:

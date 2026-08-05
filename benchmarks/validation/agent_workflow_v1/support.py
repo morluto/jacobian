@@ -64,6 +64,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
+    "extremal-subset-sum-semantic-audit",
     "necklace-burnside-certificate",
     "prime-power-divisibility-gap-audit",
     "pythagorean-generator-recurrence",

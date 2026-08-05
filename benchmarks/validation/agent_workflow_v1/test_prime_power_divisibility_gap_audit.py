@@ -139,6 +139,7 @@ def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> Non
     assert reward["evidence_validity"] == 1.0
     assert reward["scope_accuracy"] == 1.0
     assert reward["assurance_calibration"] == 1.0
+    assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0
 
     submission = copy.deepcopy(_oracle())
@@ -168,6 +169,32 @@ def test_evidence_comparison_uses_exact_json_types(tmp_path: Path) -> None:
     assert reward["reward"] == 0.0
 
 
+def test_evidence_is_bound_to_the_expected_task(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["task_id"] = "jacobian/other-task"
+    reward = _verify(tmp_path, submission)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_large_valid_evidence_remains_admissible(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    task, app, logs = _prepare(tmp_path, submission)
+    evidence_path = app / "evidence/divisibility-audit.json"
+    evidence = evidence_path.read_text()
+    evidence_path.write_text(" " * 8192 + evidence + "\n")
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission))
+
+    reward = _run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_rejects_extra_limitation_even_when_evidence_repeats_it(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["limitations"].append("EXTRA")
@@ -175,4 +202,5 @@ def test_rejects_extra_limitation_even_when_evidence_repeats_it(tmp_path: Path) 
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 1.0
     assert reward["limitations_accuracy"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0

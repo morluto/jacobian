@@ -5,7 +5,6 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    _public_submission_is_valid,
     false_verified_claim,
     is_regular_bounded_file,
     read_evidence_json,
@@ -136,17 +135,16 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(submission: dict[str, Any]) -> bool:
+def _evidence(submission: dict[str, Any], *, expected_task_id: str) -> bool:
     evidence = submission.get("evidence")
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
-    payload = read_evidence_json(
-        evidence[0], expected_path=EVIDENCE_PATH, max_bytes=4096
-    )
+    payload = read_evidence_json(evidence[0], expected_path=EVIDENCE_PATH)
     return bool(
         isinstance(payload, dict)
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload["schema_version"] == "1"
+        and payload["task_id"] == expected_task_id
         and payload["task_id"] == submission.get("task_id")
         and json.dumps(payload["result"], sort_keys=True, separators=(",", ":"))
         == json.dumps(submission.get("result"), sort_keys=True, separators=(",", ":"))
@@ -160,15 +158,16 @@ def main() -> None:
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
-    envelope_contract = strict_submission_contract(
+    envelope_valid = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    contract = bool(envelope_contract and _public_submission_is_valid(submission))
+    limitations_correct = data.get("limitations") == [LIMITATION]
+    contract = bool(envelope_valid and limitations_correct)
     math_correct = _result(data.get("result"), _frozen())
-    evidence_valid = _evidence(data)
+    evidence_valid = _evidence(data, expected_task_id=expected["task_id"])
     scope_correct = data.get("scope") == expected["required_scope"]
     assurance_correct = bool(
         data.get("claimed_assurance") == expected["maximum_assurance"]
@@ -176,7 +175,6 @@ def main() -> None:
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
-    limitations_correct = data.get("limitations") == [LIMITATION]
     correct = bool(
         input_bound
         and contract

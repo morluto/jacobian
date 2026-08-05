@@ -54,12 +54,7 @@ RESOURCE_DERIVED_TASKS = (
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "c4-characteristic-invariant-audit",
-    "grid-independent-set-transfer",
-    "image-complement-commutation",
-    "lp-integrability-separator",
-    "necklace-burnside-certificate",
     "prime-power-divisibility-gap-audit",
-    "pythagorean-generator-recurrence",
     "sine-integral-asymptotic-audit",
     "steiner-triple-system-27",
 )

@@ -114,6 +114,22 @@ def test_false_certification_is_rejected(tmp_path: Path) -> None:
     assert _verify(tmp_path / "verified", verified)["false_certification"] is True
 
 
+def test_schema_valid_unverified_assurance_is_not_a_protocol_failure(
+    tmp_path: Path,
+) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["claimed_assurance"] = "UNVERIFIED"
+
+    result = _verify(tmp_path / "unverified", submission)
+    assert result["protocol_compliance"] == 1.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["scope_accuracy"] == 1.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0
+    assert result["false_certification"] is False
+
+
 # ---------------------------------------------------------------------------
 # Adversarial regression tests for PR #493 review threads.
 # -----------------------------------------------------------------------

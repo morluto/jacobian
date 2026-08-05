@@ -15,7 +15,13 @@ value, and the omitted-image witness.
 
 Write `submission.json` according to `submission_schema.json`. Put a concise
 derivation in `evidence/answer.txt` and bind exactly that file with its SHA-256
-digest. Include one line beginning `RESULT_JSON:` followed by a JSON object
+digest. The derivation must explain all four steps: both affine branches are
+strictly increasing because their slopes are positive; the positive jump makes
+cross-branch comparisons strict; the image is the union of the two branch
+ranges with a missing gap; and the gap witness lies strictly between the left
+limit and the right breakpoint value, so it has no preimage and the claimed
+full-interval image or two-sided inverse fails. Equivalent mathematical wording
+is accepted. Include one line beginning `RESULT_JSON:` followed by a JSON object
 whose parsed value exactly matches the complete submitted `result` object; this
 machine-readable line is part of the public evidence contract and binds the
 derivation to the witness. The maximum permitted assurance is `COMPUTED`; this

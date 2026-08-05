@@ -15,7 +15,7 @@
   "evidence": [
     {
       "path": "evidence/answer.txt",
-      "sha256": "sha256:d986fc5c91dbd6298657a1aee7939574f700882a5099312ec87e56d995f72588"
+      "sha256": "sha256:6e7d04071f8179a34e6a14f56a56af6ec48063b77b0fc9cae7442f0b4abbbb26"
     }
   ],
   "scope": "DECLARED_PIECEWISE_RATIONAL_FAMILY_ON_CLOSED_INTERVAL",

@@ -18,7 +18,7 @@ ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def _fraction(value):
-    if not isinstance(value, str) or len(value) > 80:
+    if not isinstance(value, str):
         raise ValueError
     if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value) is None:
         raise ValueError
@@ -102,6 +102,38 @@ def _evidence_matches_result(submission):
     except OSError:
         return False
     if not text.strip():
+        return False
+    prose = " ".join(
+        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
+    ).casefold()
+    # The visible contract requires a concise derivation, not merely a
+    # digest-bound file containing the structured result.  These clauses accept
+    # equivalent wording while requiring the mathematical bridge from the
+    # submitted parameters to the omitted-image counterexample.
+    has_branch_monotonicity = (
+        "strictly increasing" in prose or "strict monotonic" in prose
+    ) and "slope" in prose
+    has_cross_branch_jump = "jump" in prose and (
+        "cross" in prose or ("left" in prose and "right" in prose)
+    )
+    has_image_gap = "image" in prose and any(
+        term in prose for term in ("union", "gap", "omits", "omitted")
+    )
+    has_missing_witness = "between" in prose and any(
+        term in prose for term in ("no preimage", "no inverse", "omitted", "missing")
+    )
+    has_inverse_consequence = "inverse" in prose and any(
+        term in prose for term in ("interval", "endpoint", "preimage")
+    )
+    if not all(
+        (
+            has_branch_monotonicity,
+            has_cross_branch_jump,
+            has_image_gap,
+            has_missing_witness,
+            has_inverse_consequence,
+        )
+    ):
         return False
     markers = [
         line[len("RESULT_JSON:") :].strip()

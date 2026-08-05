@@ -139,6 +139,7 @@ def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> Non
     assert reward["evidence_validity"] == 1.0
     assert reward["scope_accuracy"] == 1.0
     assert reward["assurance_calibration"] == 1.0
+    assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0
 
     submission = copy.deepcopy(_oracle())
@@ -168,6 +169,16 @@ def test_evidence_comparison_uses_exact_json_types(tmp_path: Path) -> None:
     assert reward["reward"] == 0.0
 
 
+def test_evidence_is_bound_to_the_expected_task(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["task_id"] = "jacobian/other-task"
+    reward = _verify(tmp_path, submission)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0
+
+
 def test_rejects_extra_limitation_even_when_evidence_repeats_it(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["limitations"].append("EXTRA")
@@ -175,4 +186,5 @@ def test_rejects_extra_limitation_even_when_evidence_repeats_it(tmp_path: Path) 
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 1.0
     assert reward["limitations_accuracy"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0

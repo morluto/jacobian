@@ -19,7 +19,7 @@ category = "mathematics"
 tags = ["classification-audit", "exact-rational", "parity-certificate", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-dataset-derived"
-fixture_digest = "sha256:9148048eef48f4d44cd53d888ed118f7f95b85350ccfbb6676b29229d1589446"
+fixture_digest = "sha256:478ff69b81c929b2b1f23ff490e2cfc49f871710d5f3e7e742c5a3edb453668c"
 derivation = "Derived from wenjiema02/ProofBench train row 14 at immutable revision 3d934386531b13187bd3f778b13ca53e2a01e89e."
 [agent]
 timeout_sec = 600.0

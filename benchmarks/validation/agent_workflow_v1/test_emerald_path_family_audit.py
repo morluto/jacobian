@@ -115,3 +115,33 @@ def test_input_binding_is_reported_separately(tmp_path: Path) -> None:
     assert reward["input_binding"] == 0.0
     assert reward["correctness"] == 1.0
     assert reward["reward"] == 0.0
+
+
+def test_rejects_explosive_rational_spelling(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["result"]["alpha"] = "1e999999999"
+    _bind_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    assert support._run_verifier(task, app, logs)["correctness"] == 0.0
+
+
+def test_rejects_oversized_evidence(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    path = app / "evidence/answer.txt"
+    path.write_text("x" * 4097)
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    )
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_visible_input_does_not_leak_reference_conclusion() -> None:
+    task = support._task(TASK)
+    visible = json.loads((task / "environment/input.json").read_text())
+    assert "reference_conclusion" not in visible

@@ -62,10 +62,13 @@ def load_submission(
     Rejects symlinks, non-regular files, and oversized submissions before
     reading so a malformed or hostile submission cannot OOM or block the
     bounded verifier; such input yields a deterministic ``None`` (zero reward).
+
+    Does NOT gate on workspace input binding: the submission is parsed
+    independently so diagnostics remain distinguishable when the input is
+    tampered. Mathematical acceptance is gated on ``workspace_input_is_bound``
+    by the verifier.
     """
 
-    if not workspace_input_is_bound():
-        return None
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:

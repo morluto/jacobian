@@ -1,30 +1,30 @@
-import hashlib
 import itertools
 import json
 from pathlib import Path
 
 from verifier_support import (
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
 ROLES = {"C4_FREE_ZERO_COUNT", "MULTIPLE_INDUCED_C4", "CHORDED_C4_ZERO_INDUCED"}
+ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
-def _source():
+def _frozen_source():
+    """Load the trusted frozen input from /tests without reading workspace bytes."""
     try:
-        workspace, frozen = W / "input.json", E / "input.json"
-        if (
-            workspace.is_symlink()
-            or frozen.is_symlink()
-            or workspace.read_bytes() != frozen.read_bytes()
-        ):
+        frozen = E / "input.json"
+        if frozen.is_symlink() or not is_regular_bounded_file(frozen, max_bytes=None):
             return {}
-        value = json.loads(frozen.read_text())
-    except (OSError, ValueError, UnicodeError):
+        value = json.loads(frozen.read_bytes())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
         return {}
     return value if isinstance(value, dict) else {}
 
@@ -95,6 +95,36 @@ def _invariants(n, adjacency):
     return induced, int(not has_c4)
 
 
+def _is_exact_int(value):
+    """Reject JSON booleans that compare equal to 0 or 1."""
+    return type(value) is int
+
+
+def _witness_valid(witness, contracts):
+    """Validate a single graph witness, rejecting booleans and bad roles."""
+    role = witness.get("role")
+    if not _is_exact_int(witness.get("induced_c4_count")):
+        return False
+    if not _is_exact_int(witness.get("c4_free_characteristic")):
+        return False
+    parsed = _graph(witness, contracts.get(role, (-1, -1)))
+    if parsed is None:
+        return False
+    induced, characteristic = _invariants(*parsed)
+    if (
+        witness["induced_c4_count"] != induced
+        or witness["c4_free_characteristic"] != characteristic
+    ):
+        return False
+    if role == "C4_FREE_ZERO_COUNT" and not (induced == 0 and characteristic == 1):
+        return False
+    if role == "MULTIPLE_INDUCED_C4" and not (induced >= 2 and characteristic == 0):
+        return False
+    if role == "CHORDED_C4_ZERO_INDUCED":
+        return induced == 0 and characteristic == 0
+    return True
+
+
 def _valid(result, source):
     if (
         not isinstance(result, dict)
@@ -111,29 +141,15 @@ def _valid(result, source):
     if (
         not isinstance(witnesses, list)
         or len(witnesses) != 3
-        or {x.get("role") for x in witnesses if isinstance(x, dict)} != ROLES
+        or not all(isinstance(x, dict) for x in witnesses)
     ):
         return False
-    for witness in witnesses:
-        role = witness["role"]
-        parsed = _graph(witness, contracts.get(role, (-1, -1)))
-        if parsed is None:
-            return False
-        induced, characteristic = _invariants(*parsed)
-        if (
-            witness["induced_c4_count"] != induced
-            or witness["c4_free_characteristic"] != characteristic
-        ):
-            return False
-        if role == "C4_FREE_ZERO_COUNT" and not (induced == 0 and characteristic == 1):
-            return False
-        if role == "MULTIPLE_INDUCED_C4" and not (induced >= 2 and characteristic == 0):
-            return False
-        if role == "CHORDED_C4_ZERO_INDUCED" and not (
-            induced == 0 and characteristic == 0
-        ):
-            return False
-    return True
+    # Validate roles are hashable strings before constructing the set.
+    if not all(isinstance(x.get("role"), str) for x in witnesses):
+        return False
+    if {x.get("role") for x in witnesses} != ROLES:
+        return False
+    return all(_witness_valid(witness, contracts) for witness in witnesses)
 
 
 def _evidence(evidence, result):
@@ -145,14 +161,11 @@ def _evidence(evidence, result):
         or evidence[0].get("path") != "evidence/answer.txt"
     ):
         return False
-    target = W / "evidence" / "answer.txt"
+    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
     try:
-        if target.is_symlink() or target.stat().st_size > 1_048_576:
-            return False
-        if (
-            evidence[0].get("sha256")
-            != "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
-        ):
+        if target.stat().st_size > 1_048_576:
             return False
         text = target.read_text()
         marker = next(
@@ -167,20 +180,56 @@ def _evidence(evidence, result):
             and "characteristic" in prose
             and "not assessed" in prose
         )
-    except (OSError, ValueError, UnicodeError, StopIteration):
+    except (
+        OSError,
+        ValueError,
+        UnicodeError,
+        StopIteration,
+        RecursionError,
+        MemoryError,
+    ):
         return False
 
 
+def _limitations_valid(limitations):
+    """Reject affirmative Lean/proof overclaims.
+
+    The task prohibits claiming Lean compilation or proof of the corrected
+    conjecture. A valid limitation must explicitly state that Lean is not
+    assessed, and must not assert that either Lean or the corrected conjecture
+    was proved/verified.
+    """
+    if not isinstance(limitations, list):
+        return False
+    has_lean_not_assessed = False
+    for item in limitations:
+        if not isinstance(item, str):
+            return False
+        folded = item.casefold()
+        if "lean" in folded and "not assessed" in folded:
+            has_lean_not_assessed = True
+        if (
+            ("verified" in folded or "proved" in folded or "proven" in folded)
+            and "not" not in folded
+            and ("lean" in folded or "conjecture" in folded)
+        ):
+            return False
+    return has_lean_not_assessed
+
+
 def main():
-    submission, source = load_submission(), _source()
+    submission, source = load_submission(), _frozen_source()
     expected = json.loads((E / "expected.json").read_text())
+    input_bound = workspace_input_is_bound(W / "input.json", tests=E)
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=ALLOWED_ASSURANCES,
         verification_record="forbidden",
     )
-    math_correct = bool(contract and _valid(submission.get("result"), source))
+    result = submission.get("result") if isinstance(submission, dict) else None
+    math_correct = bool(_valid(result, source))
     evidence_valid = bool(
         contract and _evidence(submission.get("evidence"), submission.get("result"))
     )
@@ -191,16 +240,17 @@ def main():
         contract
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
-    limits = submission.get("limitations", []) if contract else []
-    limitations_correct = isinstance(limits, list) and any(
-        isinstance(x, str) and "not assessed" in x.casefold() and "lean" in x.casefold()
-        for x in limits
-    )
+    limitations = submission.get("limitations", []) if contract else []
+    limitations_correct = _limitations_valid(limitations)
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
     correct = bool(
-        contract and math_correct and limitations_correct and not false_certification
+        contract
+        and math_correct
+        and limitations_correct
+        and input_bound
+        and not false_certification
     )
     reward = (
         0
@@ -212,6 +262,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
+                "input_binding": float(input_bound),
                 "evidence_validity": float(evidence_valid),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),

@@ -62,7 +62,10 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
-INPUT_BINDING_DECOUPLED_TASKS = ("necklace-burnside-certificate",)
+INPUT_BINDING_DECOUPLED_TASKS = (
+    "c4-characteristic-invariant-audit",
+    "necklace-burnside-certificate",
+)
 VERIFIER_TASKS = tuple(
     sorted(
         ref.path.name

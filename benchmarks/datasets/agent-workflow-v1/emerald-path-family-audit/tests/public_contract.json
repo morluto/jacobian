@@ -22,13 +22,11 @@
     "payload_shape": null
   },
   "limitations": {
-    "type": "array",
-    "minItems": 1,
-    "items": {
-      "type": "string"
-    }
+    "const": [
+      "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
+    ]
   },
-  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately. Rational certificate fields are bounded to at most 64 base-10 digits per numerator and denominator so parsing remains deterministic and resource-bounded.",
+  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, completeness, limitations, protocol, and assurance dimensions separately. Rational certificate fields are bounded to at most 64 base-10 digits per numerator and denominator so parsing remains deterministic and resource-bounded.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -225,11 +223,9 @@
         }
       },
       "limitations": {
-        "type": "array",
-        "minItems": 1,
-        "items": {
-          "type": "string"
-        }
+        "const": [
+          "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
+        ]
       }
     }
   },

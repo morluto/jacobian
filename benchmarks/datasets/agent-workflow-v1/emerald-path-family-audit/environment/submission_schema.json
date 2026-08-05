@@ -39,11 +39,9 @@
       "type": "array"
     },
     "limitations": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
-      "type": "array"
+      "const": [
+        "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
+      ]
     },
     "result": {
       "additionalProperties": false,

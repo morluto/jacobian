@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from benchmarks.tooling.validate_harbor_results import (
+    _AUGMENTED_DIGEST_MANIFEST,
     _validate_augmented_digest_manifest,
     _validate_payload,
 )
@@ -194,7 +195,9 @@ def test_changed_augmented_task_digest_rejects_old_trial() -> None:
 def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
     result = tmp_path / "result.json"
     result.write_text("{}", encoding="utf-8")
-    (tmp_path / ".jacobian-augmented-task-digests.json").write_text(
+    assert not _AUGMENTED_DIGEST_MANIFEST.startswith(".")
+    manifest = tmp_path / _AUGMENTED_DIGEST_MANIFEST
+    manifest.write_text(
         '{"dataset":"provider-feasibility-v1",'
         f'"prepared_at_ns":0,"tasks":[{{"task":"example-task",'
         f'"digest":"sha256:{"a" * 64}"}}]}}',
@@ -202,7 +205,7 @@ def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
     )
 
     failures = _validate_augmented_digest_manifest(
-        manifest_path=tmp_path / ".jacobian-augmented-task-digests.json",
+        manifest_path=manifest,
         result_path=result,
         dataset="provider-feasibility-v1",
         expected_digests={"example-task": f"sha256:{'b' * 64}"},

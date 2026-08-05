@@ -16,7 +16,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
-_AUGMENTED_DIGEST_MANIFEST = ".jacobian-augmented-task-digests.json"
+_AUGMENTED_DIGEST_MANIFEST = "jacobian-augmented-task-digests.json"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

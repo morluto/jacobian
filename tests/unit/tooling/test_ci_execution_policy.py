@@ -129,6 +129,14 @@ def test_oracle_workers_do_not_repeat_benchmark_contract_suite() -> None:
     assert "make harbor-oracle DATASET" not in oracle
 
 
+def test_oracle_artifact_preserves_augmented_task_digest_manifest() -> None:
+    workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+    oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]
+
+    assert "jacobian-augmented-task-digests.json" in oracle
+    assert ".jacobian-augmented-task-digests.json" not in oracle
+
+
 def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 

@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.implementation import ImplementationError, package_source_digest
+import jacobian.implementation as implementation
+from jacobian.implementation import (
+    ImplementationError,
+    checker_source_digest,
+    package_source_digest,
+)
 
 
 def test_digest_binds_helper_modules(
@@ -50,6 +55,36 @@ def test_digest_binds_package_data(
     before = package_source_digest("data_digest_fixture.plugin:run")
     data.write_text('{"limit": 2}\n', encoding="utf-8")
     after = package_source_digest("data_digest_fixture.plugin:run")
+
+    assert before != after
+
+
+def test_checker_digest_binds_execution_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "checker_fixture"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "def run(_request):\n    return {}\n", encoding="utf-8"
+    )
+    runtime = tmp_path / "checker_runtime_fixture"
+    runtime.mkdir()
+    (runtime / "__init__.py").write_text("", encoding="utf-8")
+    dependency = runtime / "worker.py"
+    dependency.write_text("def main():\n    return 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(
+        implementation,
+        "_CHECKER_RUNTIME_ENTRYPOINT",
+        "checker_runtime_fixture.worker:main",
+    )
+    importlib.invalidate_caches()
+
+    before = checker_source_digest("checker_fixture.checker:run")
+    dependency.write_text("VALUE = 2\n", encoding="utf-8")
+    importlib.invalidate_caches()
+    after = checker_source_digest("checker_fixture.checker:run")
 
     assert before != after
 

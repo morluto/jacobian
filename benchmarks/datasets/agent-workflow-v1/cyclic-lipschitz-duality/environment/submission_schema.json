@@ -1,1 +1,100 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/cyclic-lipschitz-duality"},"conclusion":{"const":"OPTIMUM_CERTIFIED"},"result":{"type":"object","additionalProperties":false,"required":["sequence","flow","primal_value","dual_value"],"properties":{"sequence":{"type":"array","minItems":60,"maxItems":60,"items":{"type":"string"}},"flow":{"type":"array","minItems":60,"maxItems":60,"items":{"type":"string"}},"primal_value":{"const":"15"},"dual_value":{"const":"15"}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "OPTIMUM_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "dual_value": {
+          "const": "15"
+        },
+        "flow": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "minItems": 60,
+          "type": "array"
+        },
+        "primal_value": {
+          "const": "15"
+        },
+        "sequence": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "minItems": 60,
+          "type": "array"
+        }
+      },
+      "required": [
+        "sequence",
+        "flow",
+        "primal_value",
+        "dual_value"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/cyclic-lipschitz-duality"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,440 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "OPTIMUM_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/distinct-parity-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "FINITE_INTEGER_OPTIMIZATION",
+      "NO_PROOF_ASSISTANT_REPLAY"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/distinct-parity-certificate.json"
+  ],
+  "schema_definitions": {
+    "evidence_envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "const": [
+            "FINITE_INTEGER_OPTIMIZATION",
+            "NO_PROOF_ASSISTANT_REPLAY"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/result"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/distinct-parity-primal-dual"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "even_numbers": {
+          "items": {
+            "minimum": 2,
+            "type": "integer"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "frontier": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "max_even_count": {
+                "maximum": 44,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minimum_sum": {
+                "type": "integer"
+              },
+              "objective": {
+                "type": "integer"
+              },
+              "odd_count": {
+                "maximum": 45,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "odd_count",
+              "max_even_count",
+              "minimum_sum",
+              "objective"
+            ],
+            "type": "object"
+          },
+          "maxItems": 23,
+          "minItems": 23,
+          "type": "array"
+        },
+        "objective": {
+          "type": "integer"
+        },
+        "odd_numbers": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 45,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "even_numbers",
+        "odd_numbers",
+        "objective",
+        "frontier"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "even_numbers": {
+        "items": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "maxItems": 50,
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "frontier": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "max_even_count": {
+              "maximum": 44,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minimum_sum": {
+              "type": "integer"
+            },
+            "objective": {
+              "type": "integer"
+            },
+            "odd_count": {
+              "maximum": 45,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "odd_count",
+            "max_even_count",
+            "minimum_sum",
+            "objective"
+          ],
+          "type": "object"
+        },
+        "maxItems": 23,
+        "minItems": 23,
+        "type": "array"
+      },
+      "objective": {
+        "type": "integer"
+      },
+      "odd_numbers": {
+        "items": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxItems": 45,
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "even_numbers",
+      "odd_numbers",
+      "objective",
+      "frontier"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "evidence_envelope": {
+        "additionalProperties": false,
+        "properties": {
+          "limitations": {
+            "const": [
+              "FINITE_INTEGER_OPTIMIZATION",
+              "NO_PROOF_ASSISTANT_REPLAY"
+            ]
+          },
+          "result": {
+            "$ref": "#/$defs/result"
+          },
+          "schema_version": {
+            "const": "1"
+          },
+          "task_id": {
+            "const": "jacobian/distinct-parity-primal-dual"
+          }
+        },
+        "required": [
+          "schema_version",
+          "task_id",
+          "result",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "even_numbers": {
+            "items": {
+              "minimum": 2,
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "frontier": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "max_even_count": {
+                  "maximum": 44,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "minimum_sum": {
+                  "type": "integer"
+                },
+                "objective": {
+                  "type": "integer"
+                },
+                "odd_count": {
+                  "maximum": 45,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "odd_count",
+                "max_even_count",
+                "minimum_sum",
+                "objective"
+              ],
+              "type": "object"
+            },
+            "maxItems": 23,
+            "minItems": 23,
+            "type": "array"
+          },
+          "objective": {
+            "type": "integer"
+          },
+          "odd_numbers": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxItems": 45,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "even_numbers",
+          "odd_numbers",
+          "objective",
+          "frontier"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "OPTIMUM_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/distinct-parity-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "FINITE_INTEGER_OPTIMIZATION",
+          "NO_PROOF_ASSISTANT_REPLAY"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "even_numbers": {
+            "items": {
+              "minimum": 2,
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "frontier": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "max_even_count": {
+                  "maximum": 44,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "minimum_sum": {
+                  "type": "integer"
+                },
+                "objective": {
+                  "type": "integer"
+                },
+                "odd_count": {
+                  "maximum": 45,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "odd_count",
+                "max_even_count",
+                "minimum_sum",
+                "objective"
+              ],
+              "type": "object"
+            },
+            "maxItems": 23,
+            "minItems": 23,
+            "type": "array"
+          },
+          "objective": {
+            "type": "integer"
+          },
+          "odd_numbers": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxItems": 45,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "even_numbers",
+          "odd_numbers",
+          "objective",
+          "frontier"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/distinct-parity-primal-dual"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/distinct-parity-primal-dual",
+  "verification_record": null
+}

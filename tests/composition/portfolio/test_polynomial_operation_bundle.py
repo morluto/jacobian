@@ -3,11 +3,11 @@ from typing import Any, cast
 import pytest
 from tests.support.capabilities import invoke_capability as _invoke
 
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
 def _polynomial(
@@ -230,7 +230,6 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
     assert invalid_result.execution.status is ExecutionStatus.ERROR
     assert invalid_result.diagnostics[0].code == "INVALID_POLYNOMIAL_REQUEST"
     assert invalid_result.artifact_uris == ()
-    assert invalid_result.episode_uri is None
 
     zero_multiplier_result = _invoke(
         runtime,
@@ -248,14 +247,14 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
     )
 
     monkeypatch.setattr(
-        "jacobian.domains.polynomial.groebner.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.domains.polynomial.groebner.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 
@@ -308,7 +307,6 @@ def test_polynomial_output_budget_failure_is_explicit_and_writes_no_artifacts(
     assert result.diagnostics[0].code == "POLYNOMIAL_OUTPUT_LIMIT_EXCEEDED"
     assert result.diagnostics[0].stage == "polynomial_output_validation"
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
     assert artifact_writes == []
 
 
@@ -335,4 +333,3 @@ def test_groebner_result_budget_failure_crosses_worker_protocol(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "POLYNOMIAL_GROEBNER_RESULT_LIMIT_EXCEEDED"
     assert result.artifact_uris == ()
-    assert result.episode_uri is None

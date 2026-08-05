@@ -1,0 +1,259 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "INTEGRAL_H1_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "const": "This does not prove in a proof assistant that the geometric realization is the real projective plane."
+    },
+    "maxItems": 1,
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "edge": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "the frozen six-vertex ten-facet simplicial complex",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "cycle_coordinate_matrix": {
+        "items": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "type": "array"
+        },
+        "maxItems": 10,
+        "minItems": 10,
+        "type": "array"
+      },
+      "determinant": {
+        "type": "integer"
+      },
+      "facet_order": {
+        "items": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "maxItems": 10,
+        "minItems": 10,
+        "type": "array"
+      },
+      "homology": {
+        "const": "Z/2Z"
+      },
+      "non_tree_edges": {
+        "items": {
+          "$ref": "#/$defs/edge"
+        },
+        "maxItems": 10,
+        "minItems": 10,
+        "type": "array"
+      },
+      "spanning_tree": {
+        "items": {
+          "$ref": "#/$defs/edge"
+        },
+        "maxItems": 5,
+        "minItems": 5,
+        "type": "array"
+      }
+    },
+    "required": [
+      "spanning_tree",
+      "non_tree_edges",
+      "facet_order",
+      "cycle_coordinate_matrix",
+      "determinant",
+      "homology"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "edge": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "INTEGRAL_H1_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "const": "This does not prove in a proof assistant that the geometric realization is the real projective plane."
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "cycle_coordinate_matrix": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 10,
+              "minItems": 10,
+              "type": "array"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          },
+          "determinant": {
+            "type": "integer"
+          },
+          "facet_order": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          },
+          "homology": {
+            "const": "Z/2Z"
+          },
+          "non_tree_edges": {
+            "items": {
+              "$ref": "#/$defs/edge"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          },
+          "spanning_tree": {
+            "items": {
+              "$ref": "#/$defs/edge"
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "type": "array"
+          }
+        },
+        "required": [
+          "spanning_tree",
+          "non_tree_edges",
+          "facet_order",
+          "cycle_coordinate_matrix",
+          "determinant",
+          "homology"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "the frozen six-vertex ten-facet simplicial complex",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/rp2-homology-lattice"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/rp2-homology-lattice",
+  "verification_record": null
+}

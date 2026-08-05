@@ -1,0 +1,597 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "SHARP_CONSTANT_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/inequality-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "ELEMENTARY_REAL_ORDER_AND_SQUARE_ROOT_LEMMAS_TRUSTED",
+      "POSITIVE_HOMOGENEITY_NORMALIZATION_TRUSTED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/inequality-certificate.json"
+  ],
+  "schema_definitions": {
+    "amgm": {
+      "additionalProperties": false,
+      "properties": {
+        "constraint_residual": {
+          "$ref": "#/$defs/poly"
+        },
+        "d": {
+          "$ref": "#/$defs/poly"
+        },
+        "residual": {
+          "$ref": "#/$defs/poly"
+        },
+        "sos_twice": {
+          "$ref": "#/$defs/poly"
+        },
+        "u": {
+          "$ref": "#/$defs/poly"
+        },
+        "v": {
+          "$ref": "#/$defs/poly"
+        }
+      },
+      "required": [
+        "d",
+        "u",
+        "v",
+        "residual",
+        "sos_twice",
+        "constraint_residual"
+      ],
+      "type": "object"
+    },
+    "cs": {
+      "additionalProperties": false,
+      "properties": {
+        "a2": {
+          "$ref": "#/$defs/poly"
+        },
+        "across": {
+          "$ref": "#/$defs/poly"
+        },
+        "d": {
+          "$ref": "#/$defs/poly"
+        },
+        "gram_residual": {
+          "$ref": "#/$defs/poly"
+        },
+        "gram_sos": {
+          "$ref": "#/$defs/poly"
+        },
+        "total_a_square": {
+          "$ref": "#/$defs/poly"
+        },
+        "total_x_square": {
+          "$ref": "#/$defs/poly"
+        },
+        "x2": {
+          "$ref": "#/$defs/poly"
+        },
+        "xcross": {
+          "$ref": "#/$defs/poly"
+        }
+      },
+      "required": [
+        "d",
+        "a2",
+        "x2",
+        "across",
+        "xcross",
+        "gram_residual",
+        "gram_sos",
+        "total_a_square",
+        "total_x_square"
+      ],
+      "type": "object"
+    },
+    "direct_sos": {
+      "additionalProperties": false,
+      "properties": {
+        "constraint_residual": {
+          "$ref": "#/$defs/poly"
+        },
+        "d": {
+          "$ref": "#/$defs/poly"
+        },
+        "residual": {
+          "$ref": "#/$defs/poly"
+        },
+        "sos_factors": {
+          "items": {
+            "$ref": "#/$defs/poly"
+          },
+          "maxItems": 80,
+          "minItems": 1,
+          "type": "array"
+        },
+        "u": {
+          "$ref": "#/$defs/poly"
+        },
+        "v": {
+          "$ref": "#/$defs/poly"
+        }
+      },
+      "required": [
+        "d",
+        "u",
+        "v",
+        "residual",
+        "constraint_residual",
+        "sos_factors"
+      ],
+      "type": "object"
+    },
+    "poly": {
+      "items": {
+        "$ref": "#/$defs/term"
+      },
+      "maxItems": 80,
+      "type": "array"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "certificate": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/amgm"
+            },
+            {
+              "$ref": "#/$defs/cs"
+            },
+            {
+              "$ref": "#/$defs/direct_sos"
+            }
+          ]
+        },
+        "constant": {
+          "$ref": "#/$defs/rat"
+        },
+        "equality_witness": {
+          "$ref": "#/$defs/witness"
+        },
+        "proof_mode": {
+          "enum": [
+            "CS_COMPOSITION",
+            "AMGM_SQUARES",
+            "DIRECT_SOS"
+          ]
+        }
+      },
+      "required": [
+        "constant",
+        "proof_mode",
+        "certificate",
+        "equality_witness"
+      ],
+      "type": "object"
+    },
+    "term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "maximum": 20,
+          "minimum": -20,
+          "type": "integer"
+        },
+        "exponents": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "type": "array"
+        }
+      },
+      "required": [
+        "exponents",
+        "coefficient"
+      ],
+      "type": "object"
+    },
+    "witness": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/rat"
+        },
+        "b": {
+          "$ref": "#/$defs/rat"
+        },
+        "c": {
+          "$ref": "#/$defs/rat"
+        },
+        "x": {
+          "$ref": "#/$defs/rat"
+        },
+        "y": {
+          "$ref": "#/$defs/rat"
+        },
+        "z": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "a",
+        "b",
+        "c",
+        "x",
+        "y",
+        "z"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "FROZEN_INEQUALITY_AND_SUBMITTED_SYMBOLIC_CERTIFICATE",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "amgm": {
+        "additionalProperties": false,
+        "properties": {
+          "constraint_residual": {
+            "$ref": "#/$defs/poly"
+          },
+          "d": {
+            "$ref": "#/$defs/poly"
+          },
+          "residual": {
+            "$ref": "#/$defs/poly"
+          },
+          "sos_twice": {
+            "$ref": "#/$defs/poly"
+          },
+          "u": {
+            "$ref": "#/$defs/poly"
+          },
+          "v": {
+            "$ref": "#/$defs/poly"
+          }
+        },
+        "required": [
+          "d",
+          "u",
+          "v",
+          "residual",
+          "sos_twice",
+          "constraint_residual"
+        ],
+        "type": "object"
+      },
+      "cs": {
+        "additionalProperties": false,
+        "properties": {
+          "a2": {
+            "$ref": "#/$defs/poly"
+          },
+          "across": {
+            "$ref": "#/$defs/poly"
+          },
+          "d": {
+            "$ref": "#/$defs/poly"
+          },
+          "gram_residual": {
+            "$ref": "#/$defs/poly"
+          },
+          "gram_sos": {
+            "$ref": "#/$defs/poly"
+          },
+          "total_a_square": {
+            "$ref": "#/$defs/poly"
+          },
+          "total_x_square": {
+            "$ref": "#/$defs/poly"
+          },
+          "x2": {
+            "$ref": "#/$defs/poly"
+          },
+          "xcross": {
+            "$ref": "#/$defs/poly"
+          }
+        },
+        "required": [
+          "d",
+          "a2",
+          "x2",
+          "across",
+          "xcross",
+          "gram_residual",
+          "gram_sos",
+          "total_a_square",
+          "total_x_square"
+        ],
+        "type": "object"
+      },
+      "direct_sos": {
+        "additionalProperties": false,
+        "properties": {
+          "constraint_residual": {
+            "$ref": "#/$defs/poly"
+          },
+          "d": {
+            "$ref": "#/$defs/poly"
+          },
+          "residual": {
+            "$ref": "#/$defs/poly"
+          },
+          "sos_factors": {
+            "items": {
+              "$ref": "#/$defs/poly"
+            },
+            "maxItems": 80,
+            "minItems": 1,
+            "type": "array"
+          },
+          "u": {
+            "$ref": "#/$defs/poly"
+          },
+          "v": {
+            "$ref": "#/$defs/poly"
+          }
+        },
+        "required": [
+          "d",
+          "u",
+          "v",
+          "residual",
+          "constraint_residual",
+          "sos_factors"
+        ],
+        "type": "object"
+      },
+      "poly": {
+        "items": {
+          "$ref": "#/$defs/term"
+        },
+        "maxItems": 80,
+        "type": "array"
+      },
+      "rat": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "certificate": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/amgm"
+              },
+              {
+                "$ref": "#/$defs/cs"
+              },
+              {
+                "$ref": "#/$defs/direct_sos"
+              }
+            ]
+          },
+          "constant": {
+            "$ref": "#/$defs/rat"
+          },
+          "equality_witness": {
+            "$ref": "#/$defs/witness"
+          },
+          "proof_mode": {
+            "enum": [
+              "CS_COMPOSITION",
+              "AMGM_SQUARES",
+              "DIRECT_SOS"
+            ]
+          }
+        },
+        "required": [
+          "constant",
+          "proof_mode",
+          "certificate",
+          "equality_witness"
+        ],
+        "type": "object"
+      },
+      "term": {
+        "additionalProperties": false,
+        "properties": {
+          "coefficient": {
+            "maximum": 20,
+            "minimum": -20,
+            "type": "integer"
+          },
+          "exponents": {
+            "items": {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array"
+          }
+        },
+        "required": [
+          "exponents",
+          "coefficient"
+        ],
+        "type": "object"
+      },
+      "witness": {
+        "additionalProperties": false,
+        "properties": {
+          "a": {
+            "$ref": "#/$defs/rat"
+          },
+          "b": {
+            "$ref": "#/$defs/rat"
+          },
+          "c": {
+            "$ref": "#/$defs/rat"
+          },
+          "x": {
+            "$ref": "#/$defs/rat"
+          },
+          "y": {
+            "$ref": "#/$defs/rat"
+          },
+          "z": {
+            "$ref": "#/$defs/rat"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "c",
+          "x",
+          "y",
+          "z"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "SHARP_CONSTANT_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/inequality-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "ELEMENTARY_REAL_ORDER_AND_SQUARE_ROOT_LEMMAS_TRUSTED",
+          "POSITIVE_HOMOGENEITY_NORMALIZATION_TRUSTED"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "FROZEN_INEQUALITY_AND_SUBMITTED_SYMBOLIC_CERTIFICATE",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/sharp-cauchy-inequality"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/sharp-cauchy-inequality",
+  "verification_record": null
+}

@@ -1,1 +1,161 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/image-complement-commutation"},"conclusion":{"const":"FINITE_CONFORMANCE_CLASSIFIED"},"result":{"type":"object","additionalProperties":false,"required":["cases"],"properties":{"cases":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["id","classification","commutes","checked_subsets","first_failure","left_image","right_complement"],"properties":{"id":{"type":"string"},"classification":{"enum":["BIJECTIVE","INJECTIVE_NOT_SURJECTIVE","SURJECTIVE_NOT_INJECTIVE"]},"commutes":{"type":"boolean"},"checked_subsets":{"type":"integer","minimum":1,"maximum":32},"first_failure":{"oneOf":[{"type":"null"},{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":4}}]},"left_image":{"oneOf":[{"type":"null"},{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":4}}]},"right_complement":{"oneOf":[{"type":"null"},{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":4}}]}}}}}},"claimed_assurance":{"const":"COMPUTED"},"scope":{"const":"ALL_SUBSETS_OF_ALL_THREE_FROZEN_MAPPINGS"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/image-complement-certificate.json","description":"The evidence file must be a JSON object with exactly four keys: schema_version (string \"1\"), task_id (matching the submission task_id), result (an exact copy of the submission result), and limitations (an exact copy of the submission limitations). The file must not exceed 16 MiB."},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["FINITE_FROZEN_MAPPINGS","NO_GENERAL_THEOREM_PROOF"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FINITE_CONFORMANCE_CLASSIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/image-complement-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "FINITE_FROZEN_MAPPINGS",
+        "NO_GENERAL_THEOREM_PROOF"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "checked_subsets": {
+                "maximum": 32,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "classification": {
+                "enum": [
+                  "BIJECTIVE",
+                  "INJECTIVE_NOT_SURJECTIVE",
+                  "SURJECTIVE_NOT_INJECTIVE"
+                ]
+              },
+              "commutes": {
+                "type": "boolean"
+              },
+              "first_failure": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "maximum": 4,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array",
+                    "uniqueItems": true
+                  }
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "left_image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "maximum": 4,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array",
+                    "uniqueItems": true
+                  }
+                ]
+              },
+              "right_complement": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "maximum": 4,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array",
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "classification",
+              "commutes",
+              "checked_subsets",
+              "first_failure",
+              "left_image",
+              "right_complement"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "cases"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "ALL_SUBSETS_OF_ALL_THREE_FROZEN_MAPPINGS",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/image-complement-commutation"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,249 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "SOURCE_BOUND_REPAIRED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "constructions": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "family": {
+              "items": {
+                "items": {
+                  "maximum": 10,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "type": "array"
+            },
+            "n": {
+              "enum": [
+                7,
+                8,
+                11
+              ]
+            }
+          },
+          "required": [
+            "n",
+            "family"
+          ],
+          "type": "object"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "maximum_formula": {
+        "const": "1+n+floor(n/2)"
+      },
+      "upper_bound_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "element_frequency_cap": {
+            "const": 2
+          },
+          "nonsingleton_incidence_floor": {
+            "const": 2
+          },
+          "singleton_cap": {
+            "const": "n"
+          }
+        },
+        "required": [
+          "element_frequency_cap",
+          "singleton_cap",
+          "nonsingleton_incidence_floor"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "maximum_formula",
+      "upper_bound_certificate",
+      "constructions"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "SOURCE_BOUND_REPAIRED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "constructions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "family": {
+                  "items": {
+                    "items": {
+                      "maximum": 10,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "type": "array"
+                },
+                "n": {
+                  "enum": [
+                    7,
+                    8,
+                    11
+                  ]
+                }
+              },
+              "required": [
+                "n",
+                "family"
+              ],
+              "type": "object"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maximum_formula": {
+            "const": "1+n+floor(n/2)"
+          },
+          "upper_bound_certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "element_frequency_cap": {
+                "const": 2
+              },
+              "nonsingleton_incidence_floor": {
+                "const": 2
+              },
+              "singleton_cap": {
+                "const": "n"
+              }
+            },
+            "required": [
+              "element_frequency_cap",
+              "singleton_cap",
+              "nonsingleton_incidence_floor"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "maximum_formula",
+          "upper_bound_certificate",
+          "constructions"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/triplewise-empty-extremal-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/triplewise-empty-extremal-audit",
+  "verification_record": null
+}

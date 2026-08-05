@@ -1,0 +1,512 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "COMPLETE_TARGET_SET_DERIVED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "polynomial": {
+      "items": {
+        "$ref": "#/$defs/rational"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array"
+    },
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "surd": {
+      "additionalProperties": false,
+      "properties": {
+        "rational": {
+          "$ref": "#/$defs/rational"
+        },
+        "sqrt17": {
+          "$ref": "#/$defs/rational"
+        }
+      },
+      "required": [
+        "rational",
+        "sqrt17"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "achievability": {
+        "additionalProperties": false,
+        "properties": {
+          "branch_coverage": {
+            "const": "BOTH_AND_ONLY_BOTH"
+          },
+          "construction": {
+            "const": "TAKE_BOTH_COMPLEX_ROOTS"
+          },
+          "quadratic": {
+            "const": "T^2-s*T+p"
+          }
+        },
+        "required": [
+          "construction",
+          "quadratic",
+          "branch_coverage"
+        ],
+        "type": "object"
+      },
+      "branches": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "denominator_norms": {
+              "additionalProperties": false,
+              "properties": {
+                "five_s_minus_44": {
+                  "type": "integer"
+                },
+                "s": {
+                  "type": "integer"
+                },
+                "s_minus_12": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "s",
+                "s_minus_12",
+                "five_s_minus_44"
+              ],
+              "type": "object"
+            },
+            "product": {
+              "$ref": "#/$defs/surd"
+            },
+            "sqrt17_sign": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "sum": {
+              "$ref": "#/$defs/surd"
+            },
+            "target": {
+              "$ref": "#/$defs/surd"
+            }
+          },
+          "required": [
+            "sqrt17_sign",
+            "sum",
+            "product",
+            "target",
+            "denominator_norms"
+          ],
+          "type": "object"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "elimination": {
+        "additionalProperties": false,
+        "properties": {
+          "hypothesis_factorization": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sum_polynomial": {
+            "$ref": "#/$defs/polynomial"
+          },
+          "target_polynomial": {
+            "$ref": "#/$defs/polynomial"
+          }
+        },
+        "required": [
+          "sum_polynomial",
+          "target_polynomial"
+        ],
+        "type": "object"
+      },
+      "recurrence": {
+        "additionalProperties": false,
+        "properties": {
+          "power_sums": {
+            "additionalProperties": false,
+            "properties": {
+              "2": {
+                "$ref": "#/$defs/polynomial"
+              },
+              "3": {
+                "$ref": "#/$defs/polynomial"
+              },
+              "4": {
+                "$ref": "#/$defs/polynomial"
+              },
+              "5": {
+                "$ref": "#/$defs/polynomial"
+              },
+              "6": {
+                "$ref": "#/$defs/polynomial"
+              }
+            },
+            "required": [
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "type": "object"
+          },
+          "product_polynomial": {
+            "$ref": "#/$defs/polynomial"
+          },
+          "seed": {
+            "const": [
+              "2",
+              "s"
+            ]
+          }
+        },
+        "required": [
+          "seed",
+          "product_polynomial",
+          "power_sums"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "elimination",
+      "branches",
+      "achievability"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "polynomial": {
+        "items": {
+          "$ref": "#/$defs/rational"
+        },
+        "maxItems": 8,
+        "minItems": 1,
+        "type": "array"
+      },
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "surd": {
+        "additionalProperties": false,
+        "properties": {
+          "rational": {
+            "$ref": "#/$defs/rational"
+          },
+          "sqrt17": {
+            "$ref": "#/$defs/rational"
+          }
+        },
+        "required": [
+          "rational",
+          "sqrt17"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "COMPLETE_TARGET_SET_DERIVED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "achievability": {
+            "additionalProperties": false,
+            "properties": {
+              "branch_coverage": {
+                "const": "BOTH_AND_ONLY_BOTH"
+              },
+              "construction": {
+                "const": "TAKE_BOTH_COMPLEX_ROOTS"
+              },
+              "quadratic": {
+                "const": "T^2-s*T+p"
+              }
+            },
+            "required": [
+              "construction",
+              "quadratic",
+              "branch_coverage"
+            ],
+            "type": "object"
+          },
+          "branches": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "denominator_norms": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "five_s_minus_44": {
+                      "type": "integer"
+                    },
+                    "s": {
+                      "type": "integer"
+                    },
+                    "s_minus_12": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "s",
+                    "s_minus_12",
+                    "five_s_minus_44"
+                  ],
+                  "type": "object"
+                },
+                "product": {
+                  "$ref": "#/$defs/surd"
+                },
+                "sqrt17_sign": {
+                  "enum": [
+                    -1,
+                    1
+                  ]
+                },
+                "sum": {
+                  "$ref": "#/$defs/surd"
+                },
+                "target": {
+                  "$ref": "#/$defs/surd"
+                }
+              },
+              "required": [
+                "sqrt17_sign",
+                "sum",
+                "product",
+                "target",
+                "denominator_norms"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "elimination": {
+            "additionalProperties": false,
+            "properties": {
+              "hypothesis_factorization": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "sum_polynomial": {
+                "$ref": "#/$defs/polynomial"
+              },
+              "target_polynomial": {
+                "$ref": "#/$defs/polynomial"
+              }
+            },
+            "required": [
+              "sum_polynomial",
+              "target_polynomial"
+            ],
+            "type": "object"
+          },
+          "recurrence": {
+            "additionalProperties": false,
+            "properties": {
+              "power_sums": {
+                "additionalProperties": false,
+                "properties": {
+                  "2": {
+                    "$ref": "#/$defs/polynomial"
+                  },
+                  "3": {
+                    "$ref": "#/$defs/polynomial"
+                  },
+                  "4": {
+                    "$ref": "#/$defs/polynomial"
+                  },
+                  "5": {
+                    "$ref": "#/$defs/polynomial"
+                  },
+                  "6": {
+                    "$ref": "#/$defs/polynomial"
+                  }
+                },
+                "required": [
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6"
+                ],
+                "type": "object"
+              },
+              "product_polynomial": {
+                "$ref": "#/$defs/polynomial"
+              },
+              "seed": {
+                "const": [
+                  "2",
+                  "s"
+                ]
+              }
+            },
+            "required": [
+              "seed",
+              "product_polynomial",
+              "power_sums"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "elimination",
+          "branches",
+          "achievability"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/complex-power-sum-elimination"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/complex-power-sum-elimination",
+  "verification_record": null
+}

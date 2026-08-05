@@ -271,7 +271,6 @@ def test_graph_capabilities_return_actionable_parameter_and_artifact_errors(
     assert invalid_range.execution.status is ExecutionStatus.ERROR
     assert invalid_range.diagnostics[0].code == "INVALID_CONSTRAINT_RANGE"
     assert invalid_range.diagnostics[0].path == "constraints/minimum_edges"
-    assert invalid_range.episode_uri is None
 
     missing_graph = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
@@ -284,7 +283,6 @@ def test_graph_capabilities_return_actionable_parameter_and_artifact_errors(
     )
     assert missing_graph.execution.status is ExecutionStatus.ERROR
     assert missing_graph.diagnostics[0].code == "GRAPH_ARTIFACT_NOT_FOUND"
-    assert missing_graph.episode_uri is None
 
 
 def test_graph_property_batch_materializes_exact_computed_artifact(

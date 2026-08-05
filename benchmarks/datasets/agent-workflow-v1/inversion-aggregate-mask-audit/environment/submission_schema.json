@@ -1,1 +1,114 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/inversion-aggregate-mask-audit"},"conclusion":{"const":"LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT"},"result":{"type":"object","additionalProperties":false,"required":["witness_permutation","implemented_count","intended_count","implemented_aggregate","intended_aggregate","pair_count","complement_relation"],"properties":{"witness_permutation":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"integer","minimum":0,"maximum":3},"uniqueItems":true},"implemented_count":{"type":"integer","minimum":0,"maximum":6},"intended_count":{"type":"integer","minimum":0,"maximum":6},"implemented_aggregate":{"type":"integer"},"intended_aggregate":{"type":"integer"},"pair_count":{"const":6},"complement_relation":{"const":"IMPLEMENTED_PLUS_INTENDED_EQUALS_PAIR_COUNT_PER_PERMUTATION"}}},"claimed_assurance":{"const":"COMPUTED"},"scope":{"const":"FROZEN_N4_ALL_PERMUTATIONS"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/inversion-audit.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["FINITE_N4_REPLAY","NO_LEAN_ELABORATION"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/inversion-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "FINITE_N4_REPLAY",
+        "NO_LEAN_ELABORATION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "complement_relation": {
+          "const": "IMPLEMENTED_PLUS_INTENDED_EQUALS_PAIR_COUNT_PER_PERMUTATION"
+        },
+        "implemented_aggregate": {
+          "type": "integer"
+        },
+        "implemented_count": {
+          "maximum": 6,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "intended_aggregate": {
+          "type": "integer"
+        },
+        "intended_count": {
+          "maximum": 6,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pair_count": {
+          "const": 6
+        },
+        "witness_permutation": {
+          "items": {
+            "maximum": 3,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "witness_permutation",
+        "implemented_count",
+        "intended_count",
+        "implemented_aggregate",
+        "intended_aggregate",
+        "pair_count",
+        "complement_relation"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "FROZEN_N4_ALL_PERMUTATIONS",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/inversion-aggregate-mask-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

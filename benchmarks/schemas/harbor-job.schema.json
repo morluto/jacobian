@@ -113,12 +113,12 @@
     "snapshot_id": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "description": "Immutable benchmark snapshot ID this job binds to. Observation evidence v2 reads this (or the runtime snapshot's equivalent) and requires agreement."
+      "description": "Immutable benchmark snapshot ID this job binds to. Observation evidence reads this (or the runtime snapshot's equivalent) and requires agreement."
     },
     "harbor_version": {
       "type": "string",
       "minLength": 1,
-      "description": "Pinned Harbor runner version this job was authored against. Observation evidence v2 reads this (or the runtime snapshot's equivalent) and requires agreement."
+      "description": "Pinned Harbor runner version this job was authored against. Observation evidence reads this (or the runtime snapshot's equivalent) and requires agreement."
     }
   }
 }

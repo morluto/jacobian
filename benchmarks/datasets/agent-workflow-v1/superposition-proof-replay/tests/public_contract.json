@@ -1,0 +1,234 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "PROOF_RECONSTRUCTED",
+      "NO_PROOF_FOUND",
+      "UNSUPPORTED"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/resolution-proof.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "const": "FROZEN_RESOLUTION_CALCULUS_ONLY"
+    },
+    "maxItems": 1,
+    "minItems": 1,
+    "type": "array",
+    "uniqueItems": true
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/resolution-proof.json"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "binary first-order resolution replay over the eight frozen clauses",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "axioms": {
+        "items": {
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "root": {
+        "const": 7
+      },
+      "steps": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "child": {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "parents": {
+              "items": {
+                "maximum": 8,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "child",
+            "parents"
+          ],
+          "type": "object"
+        },
+        "maxItems": 7,
+        "minItems": 1,
+        "type": "array"
+      }
+    },
+    "required": [
+      "axioms",
+      "steps",
+      "root"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "enum": [
+          "PROOF_RECONSTRUCTED",
+          "NO_PROOF_FOUND",
+          "UNSUPPORTED"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/resolution-proof.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "const": "FROZEN_RESOLUTION_CALCULUS_ONLY"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "axioms": {
+            "items": {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "root": {
+            "const": 7
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "child": {
+                  "maximum": 8,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "parents": {
+                  "items": {
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "child",
+                "parents"
+              ],
+              "type": "object"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "axioms",
+          "steps",
+          "root"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "binary first-order resolution replay over the eight frozen clauses",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/superposition-proof-replay"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/superposition-proof-replay",
+  "verification_record": null
+}

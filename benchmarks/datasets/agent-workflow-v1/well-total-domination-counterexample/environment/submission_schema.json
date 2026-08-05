@@ -1,7 +1,128 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FALSE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "average_degree": {
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
+        },
+        "connected": {
+          "const": true
+        },
+        "degree_sum": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hypothesis_holds": {
+          "const": true
+        },
+        "minimal_total_dominating_sets": {
+          "items": {
+            "items": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "pendant_vertices": {
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "well_totally_dominated": {
+          "const": false
+        }
+      },
+      "required": [
+        "connected",
+        "degree_sum",
+        "average_degree",
+        "pendant_vertices",
+        "hypothesis_holds",
+        "minimal_total_dominating_sets",
+        "well_totally_dominated"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "jacobian/well-total-domination-counterexample supplied five-vertex graph",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/well-total-domination-counterexample"
+    }
+  },
   "required": [
     "task_id",
     "conclusion",
@@ -12,74 +133,5 @@
     "evidence",
     "limitations"
   ],
-  "properties": {
-    "task_id": {"const": "jacobian/well-total-domination-counterexample"},
-    "conclusion": {"const": "FALSE"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "connected",
-        "degree_sum",
-        "average_degree",
-        "pendant_vertices",
-        "hypothesis_holds",
-        "minimal_total_dominating_sets",
-        "well_totally_dominated"
-      ],
-      "properties": {
-        "connected": {"const": true},
-        "degree_sum": {"type": "integer", "minimum": 0},
-        "average_degree": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["numerator", "denominator"],
-          "properties": {
-            "numerator": {"type": "integer"},
-            "denominator": {"type": "integer", "minimum": 1}
-          }
-        },
-        "pendant_vertices": {
-          "type": "array",
-          "items": {"type": ["string", "integer"]},
-          "uniqueItems": true
-        },
-        "hypothesis_holds": {"const": true},
-        "minimal_total_dominating_sets": {
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 2,
-          "items": {
-            "type": "array",
-            "minItems": 1,
-            "items": {"type": ["string", "integer"]},
-            "uniqueItems": true
-          }
-        },
-        "well_totally_dominated": {"const": false}
-      }
-    },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/well-total-domination-counterexample supplied five-vertex graph"
-    },
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["path", "sha256"],
-        "properties": {
-          "path": {"const": "evidence/answer.txt"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
-    },
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+  "type": "object"
 }

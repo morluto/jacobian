@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
+from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from tools import check_benchmark_static
 
 
@@ -22,13 +21,18 @@ def test_static_commands_scan_benchmarks_without_execution_commands() -> None:
 def test_static_gate_stops_and_fails_closed_on_a_failed_check(monkeypatch) -> None:
     calls: list[tuple[str, ...]] = []
 
-    def fake_run(command, *, cwd, check):
-        calls.append(command)
-        assert cwd == check_benchmark_static.ROOT
-        assert check is False
-        return SimpleNamespace(returncode=9)
+    def fake_run(request):
+        calls.append((request.executable, *request.arguments))
+        assert request.cwd == str(check_benchmark_static.ROOT)
+        assert request.timeout_seconds == 300.0
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=9,
+            stdout=b"",
+            stderr=b"",
+        )
 
-    monkeypatch.setattr(check_benchmark_static.subprocess, "run", fake_run)
+    monkeypatch.setattr(check_benchmark_static, "run_tool_command", fake_run)
 
     assert check_benchmark_static.main() == 9
     assert len(calls) == 1

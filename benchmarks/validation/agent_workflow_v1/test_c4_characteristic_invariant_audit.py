@@ -51,6 +51,7 @@ def test_rejects_above_ceiling_assurance(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["reward"] == 0.0
     assert rejected["assurance_calibration"] == 0.0
+    assert rejected["evidence_validity"] == 1.0
 
 
 def test_rejects_boolean_invariant_counts(tmp_path: Path) -> None:
@@ -140,6 +141,21 @@ def test_rejects_affirmative_lean_verification_claim(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
     assert rejected["reward"] == 0.0
+    assert rejected["limitation_accuracy"] == 0.0
+
+
+def test_rejects_lean_compile_overclaim(tmp_path: Path) -> None:
+    """Compilation claims are forbidden even without verified/proved."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed.",
+        "The upstream Lean theorem compiles correctly.",
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+    assert rejected["limitation_accuracy"] == 0.0
 
 
 def test_rejects_affirmative_conjecture_proof_claim(tmp_path: Path) -> None:
@@ -153,6 +169,19 @@ def test_rejects_affirmative_conjecture_proof_claim(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
     assert rejected["reward"] == 0.0
+
+
+def test_accepts_equivalent_no_claim_limitation(tmp_path: Path) -> None:
+    """Equivalent negative limitation wording is part of the public contract."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "No Lean compilation or proof of the source-corrected conjecture is claimed."
+    ]
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["limitation_accuracy"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
 
 
 def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:
@@ -172,3 +201,22 @@ def test_oversized_workspace_input_fails_closed(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["input_binding"] == 0.0
     assert result["reward"] == 0.0
+
+
+def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
+    """Valid digest-bound evidence has no undocumented byte ceiling."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "induced characteristic not assessed\n"
+        + ("audit " * 200_000)
+        + "\nRESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)

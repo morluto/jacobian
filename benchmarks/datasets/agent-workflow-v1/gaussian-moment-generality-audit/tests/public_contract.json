@@ -1,0 +1,373 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "ALL_EXPONENTS_IDENTITY_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "maxLength": 512,
+      "type": "string"
+    },
+    "maxItems": 8,
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "FROZEN_THREE_REAL_GAUSSIAN_TEMPLATE",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "audit": {
+        "additionalProperties": false,
+        "properties": {
+          "finite_checks_suffice": {
+            "const": false
+          },
+          "repair_kind": {
+            "const": "FORMAL_RATIONAL_IDENTITY"
+          }
+        },
+        "required": [
+          "finite_checks_suffice",
+          "repair_kind"
+        ],
+        "type": "object"
+      },
+      "formal_identities": {
+        "additionalProperties": false,
+        "properties": {
+          "branch_equation": {
+            "const": "EXACT"
+          },
+          "combined_prefactor": {
+            "const": "ONE"
+          },
+          "correction_factor": {
+            "const": "ONE_MINUS_T_TO_NEGATIVE_TWO"
+          },
+          "mixed_mgf": {
+            "const": "T_OVER_ONE_MINUS_T"
+          },
+          "ordinary_mgf": {
+            "const": "ONE"
+          },
+          "square_root_branch": {
+            "const": "CONSTANT_TERM_ONE"
+          }
+        },
+        "required": [
+          "branch_equation",
+          "correction_factor",
+          "square_root_branch",
+          "combined_prefactor",
+          "ordinary_mgf",
+          "mixed_mgf"
+        ],
+        "type": "object"
+      },
+      "h_coefficients": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "moment_conclusion": {
+        "additionalProperties": false,
+        "properties": {
+          "mixed": {
+            "const": "M_FACTORIAL"
+          },
+          "ordinary": {
+            "const": "ZERO"
+          },
+          "quantifier": {
+            "const": "EVERY_INTEGER_M_AT_LEAST_ONE"
+          }
+        },
+        "required": [
+          "ordinary",
+          "mixed",
+          "quantifier"
+        ],
+        "type": "object"
+      },
+      "parameter_a": {
+        "type": "string"
+      },
+      "v_coefficients": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "zeta": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array"
+          },
+          "numerator": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "parameter_a",
+      "h_coefficients",
+      "v_coefficients",
+      "zeta",
+      "audit",
+      "formal_identities",
+      "moment_conclusion"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "ALL_EXPONENTS_IDENTITY_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "maxLength": 512,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "audit": {
+            "additionalProperties": false,
+            "properties": {
+              "finite_checks_suffice": {
+                "const": false
+              },
+              "repair_kind": {
+                "const": "FORMAL_RATIONAL_IDENTITY"
+              }
+            },
+            "required": [
+              "finite_checks_suffice",
+              "repair_kind"
+            ],
+            "type": "object"
+          },
+          "formal_identities": {
+            "additionalProperties": false,
+            "properties": {
+              "branch_equation": {
+                "const": "EXACT"
+              },
+              "combined_prefactor": {
+                "const": "ONE"
+              },
+              "correction_factor": {
+                "const": "ONE_MINUS_T_TO_NEGATIVE_TWO"
+              },
+              "mixed_mgf": {
+                "const": "T_OVER_ONE_MINUS_T"
+              },
+              "ordinary_mgf": {
+                "const": "ONE"
+              },
+              "square_root_branch": {
+                "const": "CONSTANT_TERM_ONE"
+              }
+            },
+            "required": [
+              "branch_equation",
+              "correction_factor",
+              "square_root_branch",
+              "combined_prefactor",
+              "ordinary_mgf",
+              "mixed_mgf"
+            ],
+            "type": "object"
+          },
+          "h_coefficients": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "moment_conclusion": {
+            "additionalProperties": false,
+            "properties": {
+              "mixed": {
+                "const": "M_FACTORIAL"
+              },
+              "ordinary": {
+                "const": "ZERO"
+              },
+              "quantifier": {
+                "const": "EVERY_INTEGER_M_AT_LEAST_ONE"
+              }
+            },
+            "required": [
+              "ordinary",
+              "mixed",
+              "quantifier"
+            ],
+            "type": "object"
+          },
+          "parameter_a": {
+            "type": "string"
+          },
+          "v_coefficients": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "zeta": {
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "minItems": 1,
+                "type": "array"
+              },
+              "numerator": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "minItems": 2,
+                "type": "array"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "parameter_a",
+          "h_coefficients",
+          "v_coefficients",
+          "zeta",
+          "audit",
+          "formal_identities",
+          "moment_conclusion"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "FROZEN_THREE_REAL_GAUSSIAN_TEMPLATE",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/gaussian-moment-generality-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/gaussian-moment-generality-audit",
+  "verification_record": null
+}

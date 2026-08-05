@@ -1,1 +1,159 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/permutation-inversion-involution"},"conclusion":{"const":"INVOLUTION_TOTAL_CERTIFIED"},"result":{"type":"object","additionalProperties":false,"required":["transformation","value_multiplier","value_offset","pair_inversion_sum","fixed_point_count","pair_count","total_inversions","traces"],"properties":{"transformation":{"enum":["REVERSE_POSITIONS","COMPLEMENT_VALUES","INVERSE_PERMUTATION"]},"value_multiplier":{"type":"integer","minimum":-1,"maximum":1},"value_offset":{"type":"integer","minimum":0,"maximum":8},"pair_inversion_sum":{"type":"integer"},"fixed_point_count":{"type":"integer","minimum":0},"pair_count":{"type":"integer","minimum":0},"total_inversions":{"type":"integer","minimum":0},"traces":{"type":"array","minItems":6,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["permutation","transformed","inversions","transformed_inversions"],"properties":{"permutation":{"type":"array","minItems":7,"maxItems":7,"items":{"type":"integer","minimum":1,"maximum":7}},"transformed":{"type":"array","minItems":7,"maxItems":7,"items":{"type":"integer","minimum":1,"maximum":7}},"inversions":{"type":"integer","minimum":0},"transformed_inversions":{"type":"integer","minimum":0}}}}}},"claimed_assurance":{"const":"COMPUTED"},"scope":{"const":"ALL_PERMUTATIONS_OF_1_THROUGH_7"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/permutation-involution-certificate.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["FINITE_N_EQUALS_7","NO_PROOF_ASSISTANT_REPLAY"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "INVOLUTION_TOTAL_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/permutation-involution-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "FINITE_N_EQUALS_7",
+        "NO_PROOF_ASSISTANT_REPLAY"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "fixed_point_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pair_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pair_inversion_sum": {
+          "type": "integer"
+        },
+        "total_inversions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "traces": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "inversions": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "permutation": {
+                "items": {
+                  "maximum": 7,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxItems": 7,
+                "minItems": 7,
+                "type": "array"
+              },
+              "transformed": {
+                "items": {
+                  "maximum": 7,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxItems": 7,
+                "minItems": 7,
+                "type": "array"
+              },
+              "transformed_inversions": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "permutation",
+              "transformed",
+              "inversions",
+              "transformed_inversions"
+            ],
+            "type": "object"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "type": "array"
+        },
+        "transformation": {
+          "enum": [
+            "REVERSE_POSITIONS",
+            "COMPLEMENT_VALUES",
+            "INVERSE_PERMUTATION"
+          ]
+        },
+        "value_multiplier": {
+          "maximum": 1,
+          "minimum": -1,
+          "type": "integer"
+        },
+        "value_offset": {
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "transformation",
+        "value_multiplier",
+        "value_offset",
+        "pair_inversion_sum",
+        "fixed_point_count",
+        "pair_count",
+        "total_inversions",
+        "traces"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "ALL_PERMUTATIONS_OF_1_THROUGH_7",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/permutation-inversion-involution"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -1,30 +1,111 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/polynomial-divisibility-uniqueness"},
-    "conclusion": {"const": "UNIQUE_PARAMETER"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["parameter", "remainder_constant", "remainder_x", "common_gcd", "quotient"],
-      "properties": {
-        "parameter": {"type": "integer"},
-        "remainder_constant": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
-        "remainder_x": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
-        "common_gcd": {"type": "array", "items": {"type": "integer"}, "minItems": 2},
-        "quotient": {"type": "array", "items": {"type": "integer"}, "minItems": 1}
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"const": "COMPUTED"},
-    "scope": {"const": "integer parameters for the frozen polynomial divisibility family"},
-    "completeness": {"const": "COMPLETE"},
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "UNIQUE_PARAMETER"
+    },
     "evidence": {
-      "type": "array", "minItems": 1, "maxItems": 1,
-      "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     },
-    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
-  }
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "common_gcd": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "parameter": {
+          "type": "integer"
+        },
+        "quotient": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "remainder_constant": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "remainder_x": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "parameter",
+        "remainder_constant",
+        "remainder_x",
+        "common_gcd",
+        "quotient"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "integer parameters for the frozen polynomial divisibility family",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/polynomial-divisibility-uniqueness"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

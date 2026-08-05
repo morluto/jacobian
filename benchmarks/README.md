@@ -51,6 +51,13 @@ are not silently rewritten. `make harbor-sync DATASET=<id> TASKS="<ids>"`
 updates only the selected verifier checksum labels. The read-only Harbor gates
 validate local support files and never synchronize unrelated tasks.
 
+`benchmarks/tooling/public_contract.py` is internal repository tooling, not an
+adapter. For `agent-workflow-v1`, each verifier owns one
+`tests/public_contract.json`; the tool projects only the standard agent-visible
+`instruction.md` and `environment/submission_schema.json` files. The checked-in
+task-local declaration is copied into the separate verifier image so protocol
+validation does not depend on files from the agent context.
+
 ## Commands
 
 ```sh
@@ -103,10 +110,19 @@ reproducibility fixtures. An operator may run `make agent-eval` with
 execution is not part of routine task authoring or the pull-request gate.
 
 Private held-out evaluation is dispatched through the protected
-`Held-out Benchmarks` workflow. Its S3 manifest freezes the treatment image,
-catalog and policy digests, task and Oracle identities, model, prompt, budget,
-randomization, and pilot/decision sample sizes. The workflow downloads it with
-OIDC, refuses unpinned or unsafe bundles, and uploads only non-Oracle evidence.
+`Held-out Benchmarks` workflow. New runs use manifest version 3. The immutable
+Harbor snapshot lock is the authority for selected task membership and task
+digests; the manifest binds that lock's ID, URI, and digest together with the
+held-out archive URI and digest. It also freezes the runtime image, Jacobian
+catalog and policy, Harbor and agent/model configuration, prompt, seed,
+budgets, stages, and condition. Archived task digests must agree with the
+referenced snapshot.
+
+The workflow downloads the bundle with OIDC, refuses unpinned or unsafe
+content, and uploads only non-Oracle evidence. Plans, ledgers, normalized
+results, and comparisons bind the manifest digest rather than copying editable
+provenance fields into another authority. Historical snapshots and records are
+immutable; a new evaluation boundary creates a new snapshot and manifest.
 The control condition explicitly disables Jacobian and is forbidden from
 declaring an image, sidecar, or MCP server; only the treatment binds the
 digest-pinned Jacobian image and advertised server, catalog, and policy

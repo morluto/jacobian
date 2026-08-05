@@ -44,9 +44,7 @@ def update(dataset: str, tasks: tuple[str, ...]) -> int:
             )
         digest = hashlib.sha256(verifier.read_bytes()).hexdigest()
         text = dockerfile.read_text(encoding="utf-8")
-        updated, count = _CHECKSUM.subn(
-            f'jacobian.checksum="{digest}"', text, count=1
-        )
+        updated, count = _CHECKSUM.subn(f'jacobian.checksum="{digest}"', text, count=1)
         if not count:
             updated, count = re.subn(
                 r"^(FROM [^\n]+\n)",

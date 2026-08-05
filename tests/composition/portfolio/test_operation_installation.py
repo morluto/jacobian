@@ -167,7 +167,6 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
         if descriptor.capability_id == "synthetic.materialize.double"
     )
     assert descriptor.read_only is False
-    assert descriptor.records_episode is True
     assert set(descriptor.output_schema["properties"]) == {
         "input_uri",
         "result_uri",
@@ -293,7 +292,6 @@ def test_materialized_operation_fails_closed_before_artifact_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "SYNTHETIC_NOT_APPLICABLE"
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_synthetic_bundle_fails_closed_before_artifact_writes(
@@ -311,7 +309,6 @@ def test_synthetic_bundle_fails_closed_before_artifact_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "SYNTHETIC_NOT_APPLICABLE"
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 @pytest.mark.parametrize(
@@ -349,7 +346,6 @@ def test_computed_adapter_preserves_operational_failure_status(
     assert result.diagnostics == (diagnostic,)
     assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_computed_failure_rejects_conclusive_status() -> None:
@@ -401,7 +397,6 @@ def test_bounded_adapter_preserves_timeout_without_partial_artifacts(
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.diagnostics == (diagnostic,)
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_bounded_adapter_materializes_interrupted_partial_result(
@@ -489,7 +484,6 @@ def test_computed_adapter_rejects_invalid_implementation_result(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "ADAPTER_EXECUTION_FAILED"
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_installer_rejects_empty_and_duplicate_domain_bundles(

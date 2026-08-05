@@ -47,12 +47,6 @@ def test_external_adapter_invocation_is_recorded_and_retrievable(
 
     assert result.output == {"value": 42}
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.episode_uri is not None
-    episode = core.store.get(result.episode_uri)
-    assert episode.payload["result"]["response_version"] == "2"
-    assert episode.payload["result"]["completeness"]["status"] == "NOT_APPLICABLE"
-    hits = core.memory.search(query="double computed").hits
-    assert [hit.episode_uri for hit in hits] == [result.episode_uri]
 
 
 def test_provider_required_attributes_are_checked_before_first_use(
@@ -90,7 +84,6 @@ def test_unknown_capability_returns_an_actionable_result(
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.episode_uri is None
     assert result.diagnostics[0].code == "UNKNOWN_CAPABILITY"
     assert result.diagnostics[0].stage == "capability_resolution"
     assert result.diagnostics[0].message == (

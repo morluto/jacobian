@@ -22,6 +22,58 @@ const EXPECTED_TOOLS = [
   "capability.invoke",
 ];
 
+/**
+ * Convert a server-side startup failure into a safe, actionable diagnosis.
+ * The server may have emitted a Python traceback, so only known bounded
+ * failure classes are surfaced instead of forwarding arbitrary stderr.
+ *
+ * @param {string} stderrText
+ * @param {string} fallbackMessage
+ * @returns {{code: string, message: string, recovery: string}}
+ */
+function classifyStartupFailure(stderrText, fallbackMessage) {
+  const migration = stderrText.match(
+    /state migration (\d+) identity or checksum changed/,
+  );
+  if (migration) {
+    return {
+      code: "STATE_MIGRATION_INCOMPATIBLE",
+      message:
+        `Jacobian state migration ${migration[1]} does not match this ` +
+        "Jacobian version.",
+      recovery:
+        "Preserve the existing state directory and export it with a compatible " +
+        "checkout, or start Jacobian with a fresh state directory. Do not edit " +
+        "metadata.sqlite3.",
+    };
+  }
+  if (/state database was created by a newer unsupported revision/.test(stderrText)) {
+    return {
+      code: "STATE_REVISION_UNSUPPORTED",
+      message: "The Jacobian state was created by a newer unsupported revision.",
+      recovery:
+        "Use the newer Jacobian version, or preserve the state and export it " +
+        "before starting a fresh state directory.",
+    };
+  }
+  if (/No module named ['"]?jacobian/.test(stderrText)) {
+    return {
+      code: "JACOBIAN_RUNTIME_UNAVAILABLE",
+      message: "The doctor runtime cannot import the Jacobian package.",
+      recovery:
+        "Run `npx jacobian setup` for the managed installation, or use the " +
+        "source-agent doctor for a source-bound checkout.",
+    };
+  }
+  return {
+    code: "MCP_STARTUP_FAILED",
+    message: fallbackMessage,
+    recovery:
+      "Run `npx jacobian setup`, preserve the state directory, and retry the " +
+      "doctor command.",
+  };
+}
+
 function timeoutMessage(timeoutMs) {
   return (
     `Jacobian did not answer within ${timeoutMs} ms. Retry this command once; ` +
@@ -161,9 +213,13 @@ async function run(options = {}) {
 
   const stateDir = process.env.JACOBIAN_STATE_DIR || join(process.cwd(), ".jacobian");
   const child = spawn(python, ["-m", "jacobian.adapters.mcp.server"], {
-    stdio: ["pipe", "pipe", "inherit"],
+    stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env, JACOBIAN_STATE_DIR: stateDir },
     windowsHide: true,
+  });
+  let stderrText = "";
+  child.stderr.on("data", (chunk) => {
+    stderrText = (stderrText + chunk.toString()).slice(-16_384);
   });
 
   const version = require("../package.json").version;
@@ -260,6 +316,7 @@ async function run(options = {}) {
     return report;
   } catch (error) {
     child.kill("SIGTERM");
+    const diagnostic = classifyStartupFailure(stderrText, error.message);
     const report = {
       status: "error",
       serverName: "",
@@ -270,17 +327,18 @@ async function run(options = {}) {
         launcherStatus: "ok",
         handshakeStatus: "failed",
         catalogStatus: "not_attempted",
-        repairCommand: "npx jacobian setup",
+        repairCommand: diagnostic.recovery,
       },
       firstCall: { status: "not_attempted" },
-      error: error.message,
+      error: diagnostic.message,
+      diagnostic,
     };
     if (json) {
       stdout.write(JSON.stringify(report, null, 2) + "\n");
     } else {
       stderr.write(`\n  ✓ Launcher: ok\n`);
-      stderr.write(`  ✗ Handshake failed: ${error.message}\n`);
-      stderr.write(`  Run \`npx jacobian setup\` to configure or repair MCP clients.\n\n`);
+      stderr.write(`  ✗ Handshake failed: ${diagnostic.message}\n`);
+      stderr.write(`  Recovery: ${diagnostic.recovery}\n\n`);
     }
     process.exitCode = 1;
     return report;
@@ -288,6 +346,7 @@ async function run(options = {}) {
 }
 
 module.exports = {
+  classifyStartupFailure,
   run,
   EXPECTED_TOOLS,
   timeoutMessage,

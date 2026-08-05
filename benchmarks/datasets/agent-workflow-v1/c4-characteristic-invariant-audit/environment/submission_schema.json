@@ -1,35 +1,136 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object", "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "additionalProperties": false,
   "properties": {
-    "task_id": {"const": "jacobian/c4-characteristic-invariant-audit"},
-    "conclusion": {"enum": ["INVARIANTS_EQUIVALENT", "INVARIANTS_NOT_EQUIVALENT", "INSUFFICIENT_EVIDENCE"]},
-    "result": {
-      "type": "object", "additionalProperties": false,
-      "required": ["semantic_status", "witnesses"],
-      "properties": {
-        "semantic_status": {"enum": ["EQUIVALENT", "NOT_EQUIVALENT", "NOT_ASSESSED"]},
-        "witnesses": {
-          "type": "array", "minItems": 3, "maxItems": 3,
-          "items": {
-            "type": "object", "additionalProperties": false,
-            "required": ["role", "vertex_count", "edges", "induced_c4_count", "c4_free_characteristic"],
-            "properties": {
-              "role": {"enum": ["C4_FREE_ZERO_COUNT", "MULTIPLE_INDUCED_C4", "CHORDED_C4_ZERO_INDUCED"]},
-              "vertex_count": {"type": "integer", "minimum": 5, "maximum": 9},
-              "edges": {"type": "array", "maxItems": 36, "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}}},
-              "induced_c4_count": {"type": "integer", "minimum": 0, "maximum": 126},
-              "c4_free_characteristic": {"type": "integer", "minimum": 0, "maximum": 1}
-            }
-          }
-        }
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
-    "scope": {"type": "string"},
-    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
-  }
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "INVARIANTS_NOT_EQUIVALENT"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "semantic_status": {
+          "enum": [
+            "EQUIVALENT",
+            "NOT_EQUIVALENT",
+            "NOT_ASSESSED"
+          ]
+        },
+        "witnesses": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "c4_free_characteristic": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "edges": {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "maxItems": 36,
+                "type": "array"
+              },
+              "induced_c4_count": {
+                "maximum": 126,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "role": {
+                "enum": [
+                  "C4_FREE_ZERO_COUNT",
+                  "MULTIPLE_INDUCED_C4",
+                  "CHORDED_C4_ZERO_INDUCED"
+                ]
+              },
+              "vertex_count": {
+                "maximum": 9,
+                "minimum": 5,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "role",
+              "vertex_count",
+              "edges",
+              "induced_c4_count",
+              "c4_free_characteristic"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "semantic_status",
+        "witnesses"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "exact finite comparison of induced-C4 count and C4-free characteristic",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/c4-characteristic-invariant-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

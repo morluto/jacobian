@@ -1,48 +1,131 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/finite-field-irreducibility-repair"},
-    "conclusion": {"const": "BAD_REDUCTION_DIAGNOSED_AND_IRREDUCIBILITY_REPAIRED"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["bad_prime", "bad_reduction", "bad_factor", "bad_factor_power", "repair_prime", "p2_remainder", "p4_remainder", "rabin_gcd_degree", "rational_conclusion"],
-      "properties": {
-        "bad_prime": {"const": 2},
-        "bad_reduction": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "integer"}},
-        "bad_factor": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
-        "bad_factor_power": {"const": 4},
-        "repair_prime": {"type": "integer", "minimum": 3, "maximum": 97},
-        "p2_remainder": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer"}},
-        "p4_remainder": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer"}},
-        "rabin_gcd_degree": {"const": 0},
-        "rational_conclusion": {"const": "IRREDUCIBLE_OVER_Q"}
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
-    "scope": {"const": "the irreducibility step for x^4-4x+1 only"},
-    "completeness": {"const": "COMPLETE"},
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "BAD_REDUCTION_DIAGNOSED_AND_IRREDUCIBILITY_REPAIRED"
+    },
     "evidence": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 1,
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["path", "sha256"],
         "properties": {
-          "path": {"const": "evidence/answer.txt"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     },
     "limitations": {
       "const": [
         "The verifier does not assess the source proof's later Galois-group or density claims and does not invoke a proof assistant."
       ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "bad_factor": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "bad_factor_power": {
+          "const": 4
+        },
+        "bad_prime": {
+          "const": 2
+        },
+        "bad_reduction": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "p2_remainder": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "p4_remainder": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "rabin_gcd_degree": {
+          "const": 0
+        },
+        "rational_conclusion": {
+          "const": "IRREDUCIBLE_OVER_Q"
+        },
+        "repair_prime": {
+          "maximum": 97,
+          "minimum": 3,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bad_prime",
+        "bad_reduction",
+        "bad_factor",
+        "bad_factor_power",
+        "repair_prime",
+        "p2_remainder",
+        "p4_remainder",
+        "rabin_gcd_degree",
+        "rational_conclusion"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "the irreducibility step for x^4-4x+1 only",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/finite-field-irreducibility-repair"
     }
-  }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

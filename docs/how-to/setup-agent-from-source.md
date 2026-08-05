@@ -27,16 +27,23 @@ An alternate state directory inside the checkout must already be ignored by
 Git; the bootstrap rejects a path that would make its clean source identity
 dirty during initialization. A state directory outside the checkout is also
 supported.
-The generated launcher preserves the provider-bearing base `PATH` used by
-doctor. uv prepends the project virtual environment to that same base path for
-both doctor and MCP, so GUI clients resolve the same Lean and external-proof
-executables that were audited in the terminal. If the bootstrap inherits a
-custom `UV_PROJECT_ENVIRONMENT`, it resolves that path absolutely and records
-it in the launcher; a checkout-local custom environment must already be
-ignored by Git. Relative entries in the inherited `PATH` are likewise resolved
-against the bootstrap working directory before doctor and client configuration
-so later GUI working directories cannot change provider resolution. The `lean`
-profile likewise records a nondefault
+Bootstrap uses the provider-bearing base `PATH` to discover Lean and external
+proof tools. It resolves each accepted tool to an absolute path and records its
+provider identity; product execution does not repeat ambient `PATH` discovery.
+Immediately before an invocation, Jacobian remeasures the recorded provider and
+rejects an identity mismatch. A provider that legitimately launches nested
+tools receives a constructed `PATH` containing only its authorized toolchain
+directories.
+
+The generated launcher preserves the bootstrap environment needed to reproduce
+doctor's discovery. uv prepends the project virtual environment to that base
+path for doctor and MCP startup, but child-process policy still controls the
+environment used for provider execution. If bootstrap inherits a custom
+`UV_PROJECT_ENVIRONMENT`, it resolves that path absolutely and records it in
+the launcher; a checkout-local custom environment must already be ignored by
+Git. Relative entries in the inherited `PATH` are resolved against the
+bootstrap working directory so later GUI working directories cannot change
+bootstrap discovery. The `lean` profile likewise records a nondefault
 `ELAN_HOME` and any `JACOBIAN_LEAN_RUNTIME` override, so a GUI restart uses the
 toolchain home and mathlib checkout that doctor audited.
 

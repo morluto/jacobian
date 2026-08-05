@@ -1,0 +1,431 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "FROZEN_PROOF_REPAIRED",
+      "FROZEN_PROOF_VALID",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "The checker proves the submitted polynomial-family identities over Z; it does not classify every solution of the original divisibility condition."
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "poly": {
+      "items": {
+        "maximum": 1000000,
+        "minimum": -1000000,
+        "type": "integer"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "the submitted integer polynomial family for t>=2",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "conclusion": {
+        "const": "INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED"
+      },
+      "family": {
+        "additionalProperties": false,
+        "properties": {
+          "a": {
+            "$ref": "#/$defs/poly"
+          },
+          "b": {
+            "$ref": "#/$defs/poly"
+          },
+          "d": {
+            "$ref": "#/$defs/poly"
+          },
+          "divisibility_quotient": {
+            "$ref": "#/$defs/poly"
+          },
+          "norm": {
+            "$ref": "#/$defs/poly"
+          },
+          "quotient": {
+            "$ref": "#/$defs/poly"
+          },
+          "ratio": {
+            "$ref": "#/$defs/poly"
+          },
+          "square_congruence_factor": {
+            "$ref": "#/$defs/poly"
+          },
+          "x": {
+            "$ref": "#/$defs/poly"
+          },
+          "y": {
+            "$ref": "#/$defs/poly"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "d",
+          "x",
+          "y",
+          "norm",
+          "square_congruence_factor",
+          "quotient",
+          "divisibility_quotient",
+          "ratio"
+        ],
+        "type": "object"
+      },
+      "probes": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "divisor": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "multiple": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "ratio": {
+              "items": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "t": {
+              "maximum": 50,
+              "minimum": 2,
+              "type": "integer"
+            },
+            "x": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "y": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "t",
+            "x",
+            "y",
+            "divisor",
+            "multiple",
+            "ratio"
+          ],
+          "type": "object"
+        },
+        "maxItems": 6,
+        "minItems": 3,
+        "type": "array"
+      },
+      "source_audit": {
+        "additionalProperties": false,
+        "properties": {
+          "claimed_partner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "downstream_recurrence_status": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "invalid_step": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "k": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status_for_d_ge_2": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "invalid_step",
+          "k",
+          "claimed_partner",
+          "status_for_d_ge_2",
+          "downstream_recurrence_status"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "source_audit",
+      "family",
+      "probes",
+      "conclusion"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "poly": {
+        "items": {
+          "maximum": 1000000,
+          "minimum": -1000000,
+          "type": "integer"
+        },
+        "maxItems": 12,
+        "minItems": 1,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "enum": [
+          "FROZEN_PROOF_REPAIRED",
+          "FROZEN_PROOF_VALID",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "The checker proves the submitted polynomial-family identities over Z; it does not classify every solution of the original divisibility condition."
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "conclusion": {
+            "const": "INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED"
+          },
+          "family": {
+            "additionalProperties": false,
+            "properties": {
+              "a": {
+                "$ref": "#/$defs/poly"
+              },
+              "b": {
+                "$ref": "#/$defs/poly"
+              },
+              "d": {
+                "$ref": "#/$defs/poly"
+              },
+              "divisibility_quotient": {
+                "$ref": "#/$defs/poly"
+              },
+              "norm": {
+                "$ref": "#/$defs/poly"
+              },
+              "quotient": {
+                "$ref": "#/$defs/poly"
+              },
+              "ratio": {
+                "$ref": "#/$defs/poly"
+              },
+              "square_congruence_factor": {
+                "$ref": "#/$defs/poly"
+              },
+              "x": {
+                "$ref": "#/$defs/poly"
+              },
+              "y": {
+                "$ref": "#/$defs/poly"
+              }
+            },
+            "required": [
+              "a",
+              "b",
+              "d",
+              "x",
+              "y",
+              "norm",
+              "square_congruence_factor",
+              "quotient",
+              "divisibility_quotient",
+              "ratio"
+            ],
+            "type": "object"
+          },
+          "probes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "divisor": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "multiple": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "ratio": {
+                  "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "t": {
+                  "maximum": 50,
+                  "minimum": 2,
+                  "type": "integer"
+                },
+                "x": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "y": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "t",
+                "x",
+                "y",
+                "divisor",
+                "multiple",
+                "ratio"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "minItems": 3,
+            "type": "array"
+          },
+          "source_audit": {
+            "additionalProperties": false,
+            "properties": {
+              "claimed_partner": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "downstream_recurrence_status": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "invalid_step": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "k": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status_for_d_ge_2": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "invalid_step",
+              "k",
+              "claimed_partner",
+              "status_for_d_ge_2",
+              "downstream_recurrence_status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "source_audit",
+          "family",
+          "probes",
+          "conclusion"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "the submitted integer polynomial family for t>=2",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/diophantine-ratio-family-repair"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/diophantine-ratio-family-repair",
+  "verification_record": null
+}

@@ -1,0 +1,270 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "CLAIM_FALSE_EVALUATION_RUBRIC_CONSISTENT"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "log-inequality-meta-audit claim proof evaluation and meta-evaluation",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "comparison": {
+            "const": "LESS_THAN"
+          },
+          "comparison_left": {
+            "type": "integer"
+          },
+          "comparison_right": {
+            "type": "integer"
+          },
+          "first_log_term": {
+            "type": "integer"
+          },
+          "lhs_reduction": {
+            "const": "2+4*log_6(18)"
+          },
+          "x_squared": {
+            "type": "integer"
+          },
+          "y_squared": {
+            "type": "integer"
+          },
+          "z_squared": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x_squared",
+          "y_squared",
+          "z_squared",
+          "first_log_term",
+          "lhs_reduction",
+          "comparison_left",
+          "comparison_right",
+          "comparison"
+        ],
+        "type": "object"
+      },
+      "claim_status": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "counterexample_status": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "evaluator_rubric_status": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "evaluator_score": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "instruction_compliance": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "meta_evaluation_status": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "claim_status",
+      "counterexample_status",
+      "instruction_compliance",
+      "evaluator_score",
+      "evaluator_rubric_status",
+      "meta_evaluation_status",
+      "certificate"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "CLAIM_FALSE_EVALUATION_RUBRIC_CONSISTENT"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "comparison": {
+                "const": "LESS_THAN"
+              },
+              "comparison_left": {
+                "type": "integer"
+              },
+              "comparison_right": {
+                "type": "integer"
+              },
+              "first_log_term": {
+                "type": "integer"
+              },
+              "lhs_reduction": {
+                "const": "2+4*log_6(18)"
+              },
+              "x_squared": {
+                "type": "integer"
+              },
+              "y_squared": {
+                "type": "integer"
+              },
+              "z_squared": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x_squared",
+              "y_squared",
+              "z_squared",
+              "first_log_term",
+              "lhs_reduction",
+              "comparison_left",
+              "comparison_right",
+              "comparison"
+            ],
+            "type": "object"
+          },
+          "claim_status": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "counterexample_status": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "evaluator_rubric_status": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "evaluator_score": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "instruction_compliance": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "meta_evaluation_status": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_status",
+          "counterexample_status",
+          "instruction_compliance",
+          "evaluator_score",
+          "evaluator_rubric_status",
+          "meta_evaluation_status",
+          "certificate"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "log-inequality-meta-audit claim proof evaluation and meta-evaluation",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/log-inequality-meta-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/log-inequality-meta-audit",
+  "verification_record": null
+}

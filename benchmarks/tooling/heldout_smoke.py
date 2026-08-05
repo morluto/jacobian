@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import tempfile
 from pathlib import Path
 
+from benchmarks.tooling.command_runner import run_operator_command
 from benchmarks.tooling.harbor_suite import task_digest
 from benchmarks.tooling.heldout_bundle import (
     _digest,
@@ -146,12 +146,77 @@ def create_bundle(root: Path) -> tuple[Path, Path]:
             "task_digests": [task["digest"] for task in tasks],
         }
     )
+    lock = {
+        "schema_version": "1",
+        "snapshot_id": snapshot_id,
+        "lock_digest": "sha256:" + "0" * 64,
+        "suite": {
+            "id": "heldout-smoke-v1",
+            "name": "jacobian/heldout-smoke-v1",
+            "title": "Held-out smoke",
+            "purpose": "Synthetic infrastructure smoke.",
+            "claim_class": "infrastructure-smoke",
+            "answer_visibility": "hidden-at-runtime",
+            "default_execution_profile": "oracle-only",
+            "evaluation_kind": "infrastructure-smoke",
+            "publication_status": "local",
+            "scored": True,
+            "required_provider": "core",
+            "runtime_profile": "core",
+            "suite_header_digest": "sha256:" + "0" * 64,
+        },
+        "harbor_version": "0.20.0",
+        "source": {
+            "tree_sha": "0" * 40,
+            "dirty": False,
+            "registry_digest": "sha256:" + "0" * 64,
+            "environment_profiles_digest": "sha256:" + "0" * 64,
+        },
+        "environment": {
+            "profiles": ["core"],
+            "summary_digest": "sha256:" + "0" * 64,
+        },
+        "tasks": [
+            {
+                "id": task["id"],
+                "name": f"jacobian/{task['id']}",
+                "digest": task["digest"],
+                "assurance_ceiling": "UNVERIFIED",
+                "required_provider": "core",
+                "environment_profile": "core",
+                "environment": {
+                    "profile": "core",
+                    "agent_image": PYTHON_IMAGE,
+                    "verifier_image": PYTHON_IMAGE,
+                    "allow_apt": False,
+                },
+                "member_digest": "sha256:" + "0" * 64,
+            }
+            for task in tasks
+        ],
+        "evaluation": {
+            "task_ids": [task["id"] for task in tasks],
+            "oracle_job_digest": "sha256:" + "0" * 64,
+            "oracle_jobs_dir": "jobs/oracle.json",
+        },
+    }
+    lock_path = root / "bundle" / "snapshot-lock.json"
+    _write(lock_path, json.dumps(lock, indent=2, sort_keys=True) + "\n")
+    lock_digest = _digest(lock_path)
+    lock["lock_digest"] = lock_digest
+    _write(lock_path, json.dumps(lock, indent=2, sort_keys=True) + "\n")
+    lock_digest = _digest(lock_path)
     prompt = root / "bundle" / "prompts" / "heldout.md"
     _write(prompt, "{instruction}\n")
     manifest = {
-        "schema_version": "2",
+        "schema_version": "3",
         "bundle_id": "heldout-smoke-v1",
         "bundle_version": "1.0.0",
+        "snapshot_lock": {
+            "lock_id": snapshot_id,
+            "lock_uri": "s3://invalid/snapshot-lock.json",
+            "lock_digest": lock_digest,
+        },
         "archive": {
             "uri": "s3://invalid/heldout-smoke.tar.gz",
             "sha256": "sha256:" + "0" * 64,
@@ -160,7 +225,6 @@ def create_bundle(root: Path) -> tuple[Path, Path]:
             "id": "heldout-smoke-v1",
             "path": "dataset",
             "manifest_digest": dataset_manifest_digest,
-            "snapshot_id": snapshot_id,
             "minimum_independent_families": 2,
         },
         "tasks": tasks,
@@ -222,8 +286,7 @@ def smoke(*, run_harbor: bool) -> None:
         if run_harbor:
             dataset = bundle / "dataset"
             task = "copy-token-0"
-            common = [
-                "uvx",
+            common_args = [
                 "--from",
                 "harbor==0.20.0",
                 "harbor",
@@ -236,10 +299,20 @@ def smoke(*, run_harbor: bool) -> None:
                 str(root / "harbor-results"),
                 "--yes",
             ]
-            subprocess.run(
-                [*common, "--agent", "nop", "--disable-verification"], check=True
-            )
-            subprocess.run([*common, "--agent", "oracle"], check=True)
+            for extra in (
+                ["--agent", "nop", "--disable-verification"],
+                ["--agent", "oracle"],
+            ):
+                result = run_operator_command(
+                    "uvx",
+                    [*common_args, *extra],
+                    cwd=root,
+                    timeout_seconds=600.0,
+                )
+                if result.exit_code is None or result.exit_code != 0:
+                    raise RuntimeError(
+                        f"harbor smoke command failed: {result.diagnostic or result.stderr}"
+                    )
 
 
 def main() -> int:

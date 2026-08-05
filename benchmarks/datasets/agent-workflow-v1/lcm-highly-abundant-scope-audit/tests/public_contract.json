@@ -1,0 +1,350 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "VALID_COUNTEREXAMPLE_INVALID_MINIMALITY",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "delta": {
+      "additionalProperties": false,
+      "properties": {
+        "delta": {
+          "type": "integer"
+        },
+        "prime": {
+          "minimum": 2,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "delta"
+      ],
+      "type": "object"
+    },
+    "prime_exponent": {
+      "additionalProperties": false,
+      "properties": {
+        "exponent": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "prime": {
+          "minimum": 2,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "exponent"
+      ],
+      "type": "object"
+    },
+    "witness": {
+      "additionalProperties": false,
+      "properties": {
+        "competitor": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "exponent_deltas": {
+          "items": {
+            "$ref": "#/$defs/delta"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "lcm_factorization": {
+          "items": {
+            "$ref": "#/$defs/prime_exponent"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "lcm_value": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "n": {
+          "maximum": 97,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sigma_competitor": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sigma_lcm": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "lcm_factorization",
+        "exponent_deltas",
+        "lcm_value",
+        "competitor",
+        "sigma_lcm",
+        "sigma_competitor"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "counterexample_at_97": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minimality_claim": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "witnesses": {
+        "items": {
+          "$ref": "#/$defs/witness"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      }
+    },
+    "required": [
+      "counterexample_at_97",
+      "minimality_claim",
+      "witnesses"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "delta": {
+        "additionalProperties": false,
+        "properties": {
+          "delta": {
+            "type": "integer"
+          },
+          "prime": {
+            "minimum": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prime",
+          "delta"
+        ],
+        "type": "object"
+      },
+      "prime_exponent": {
+        "additionalProperties": false,
+        "properties": {
+          "exponent": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "prime": {
+            "minimum": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prime",
+          "exponent"
+        ],
+        "type": "object"
+      },
+      "witness": {
+        "additionalProperties": false,
+        "properties": {
+          "competitor": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "exponent_deltas": {
+            "items": {
+              "$ref": "#/$defs/delta"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "lcm_factorization": {
+            "items": {
+              "$ref": "#/$defs/prime_exponent"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "lcm_value": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "n": {
+            "maximum": 97,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sigma_competitor": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sigma_lcm": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n",
+          "lcm_factorization",
+          "exponent_deltas",
+          "lcm_value",
+          "competitor",
+          "sigma_lcm",
+          "sigma_competitor"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "VALID_COUNTEREXAMPLE_INVALID_MINIMALITY",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "counterexample_at_97": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minimality_claim": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "witnesses": {
+            "items": {
+              "$ref": "#/$defs/witness"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "counterexample_at_97",
+          "minimality_claim",
+          "witnesses"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/lcm-highly-abundant-scope-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/lcm-highly-abundant-scope-audit",
+  "verification_record": null
+}

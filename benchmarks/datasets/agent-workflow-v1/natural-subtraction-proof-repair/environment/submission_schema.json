@@ -1,27 +1,127 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/natural-subtraction-proof-repair"},
-    "conclusion": {"enum": ["REPAIR_CERTIFIED", "NO_REPAIR", "UNSUPPORTED"]},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["failed_pattern_occurs", "basis_order", "multipliers", "derived_coefficients", "side_condition_used"],
-      "properties": {
-        "failed_pattern_occurs": {"type": "boolean"},
-        "basis_order": {"type": "array", "minItems": 2, "prefixItems": [{"const": "HD"}, {"const": "SUB_RECOVERY"}], "items": false},
-        "multipliers": {"type": "array", "minItems": 2, "prefixItems": [{"type": "string"}, {"type": "string"}], "items": false},
-        "derived_coefficients": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "string"}},
-        "side_condition_used": {"const": "b<=a"}
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"const": "the frozen natural-subtraction branch and declared equation basis"},
-    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {"type": "array", "minItems": 1,"maxItems":1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "REPAIR_CERTIFIED",
+        "NO_REPAIR",
+        "UNSUPPORTED"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "basis_order": {
+          "items": false,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": "HD"
+            },
+            {
+              "const": "SUB_RECOVERY"
+            }
+          ],
+          "type": "array"
+        },
+        "derived_coefficients": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "failed_pattern_occurs": {
+          "type": "boolean"
+        },
+        "multipliers": {
+          "items": false,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        "side_condition_used": {
+          "const": "b<=a"
+        }
+      },
+      "required": [
+        "failed_pattern_occurs",
+        "basis_order",
+        "multipliers",
+        "derived_coefficients",
+        "side_condition_used"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "the frozen natural-subtraction branch and declared equation basis",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/natural-subtraction-proof-repair"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from benchmarks.tooling import benchmark_contracts, benchmark_inventory
+from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import (
-    HarborSuiteError,
     load_registry,
     validate_global_task_ids,
 )
@@ -58,7 +58,13 @@ def test_visible_submission_contracts_match_evidence_and_assurance_limits() -> N
             assert evidence.get("maxItems") == 1, task.path
 
             assurance = properties["claimed_assurance"]
-            advertised = assurance.get("enum", [assurance.get("const")])
+            contract_path = task.path / "tests" / "public_contract.json"
+            if contract_path.is_file():
+                assert assurance.get("enum") == list(ASSURANCE_ORDER), task.path
+                public_contract = json.loads(contract_path.read_text())
+                advertised = public_contract["allowed_assurance"]
+            else:
+                advertised = assurance.get("enum", [assurance.get("const")])
             ceiling_index = ASSURANCE_ORDER.index(ceiling)
             assert ceiling in advertised, task.path
             assert all(

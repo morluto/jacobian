@@ -56,8 +56,8 @@ def test_rejects_wrong_tail_obstruction():
 
 
 def test_contract_has_computed_ceiling():
-    schema = json.loads((TASK / "environment/submission_schema.json").read_text())
-    assert schema["properties"]["claimed_assurance"] == {"const": "COMPUTED"}
+    contract = json.loads((TASK / "tests/public_contract.json").read_text())
+    assert contract["allowed_assurance"] == ["COMPUTED"]
 
 
 # --- T3: accept mathematically equivalent rationals ---

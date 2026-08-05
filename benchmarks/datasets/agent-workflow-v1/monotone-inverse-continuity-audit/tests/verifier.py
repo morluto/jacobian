@@ -154,7 +154,8 @@ def main():
         and _evidence_matches_result(submission)
     )
     scope_correct = bool(
-        isinstance(submission, dict)
+        contract
+        and isinstance(submission, dict)
         and submission.get("scope") == expected["required_scope"]
         and submission.get("limitations") == expected["limitations"]
     )

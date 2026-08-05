@@ -45,6 +45,15 @@ def _prefixed_digest(value: str) -> str:
     return value if value.startswith("sha256:") else f"sha256:{value}"
 
 
+def _augmented_job_name(*, dataset: str, digests: dict[str, str]) -> str:
+    identity = json.dumps(
+        {"dataset": dataset, "tasks": sorted(digests.items())},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return f"jacobian-oracle-{hashlib.sha256(identity).hexdigest()}"
+
+
 def _is_nonnegative_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
@@ -254,15 +263,22 @@ def _prepare_augmented_digest_manifest(
         raise HarborSuiteError(f"unknown task(s) for {dataset}: {', '.join(unknown)}")
     jobs_dir.mkdir(parents=True, exist_ok=True)
     manifest = jobs_dir / _AUGMENTED_DIGEST_MANIFEST
+    augmented_digests = {
+        task_id: _prefixed_digest(task_digest(known[task_id].path))
+        for task_id in sorted(requested)
+    }
     manifest.write_text(
         json.dumps(
             {
                 "dataset": suite.id,
+                "job_name": _augmented_job_name(
+                    dataset=suite.id, digests=augmented_digests
+                ),
                 "prepared_at_ns": time.time_ns(),
                 "tasks": [
                     {
                         "task": task_id,
-                        "digest": _prefixed_digest(task_digest(known[task_id].path)),
+                        "digest": augmented_digests[task_id],
                     }
                     for task_id in sorted(requested)
                 ],
@@ -293,9 +309,14 @@ def _validate_augmented_manifest_metadata(
     manifest: dict[str, Any],
     result_path: Path,
     dataset: str,
+    expected_job_name: str,
 ) -> list[str]:
     if manifest.get("dataset") != dataset:
         return ["augmented task digest manifest has the wrong dataset"]
+    if manifest.get("job_name") != expected_job_name:
+        return ["augmented task digest manifest has the wrong job identity"]
+    if result_path.parent.name != expected_job_name:
+        return ["Harbor result is not bound to its augmented task identity"]
     prepared_at_ns = manifest.get("prepared_at_ns")
     if not isinstance(prepared_at_ns, int) or isinstance(prepared_at_ns, bool):
         return ["augmented task digest manifest has no preparation timestamp"]
@@ -343,7 +364,12 @@ def _validate_augmented_digest_manifest(
     if manifest is None:
         return failures
     failures = _validate_augmented_manifest_metadata(
-        manifest=manifest, result_path=result_path, dataset=dataset
+        manifest=manifest,
+        result_path=result_path,
+        dataset=dataset,
+        expected_job_name=_augmented_job_name(
+            dataset=dataset, digests=expected_digests
+        ),
     )
     if failures:
         return failures
@@ -453,6 +479,8 @@ def main() -> int:
                 tasks=task_selection,
                 jobs_dir=args.jobs_dir,
             )
+            manifest = json.loads(evidence.read_text(encoding="utf-8"))
+            evidence = manifest["job_name"]
         else:
             evidence = validate(
                 dataset=args.dataset,

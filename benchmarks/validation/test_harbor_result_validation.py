@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from benchmarks.tooling.validate_harbor_results import (
     _AUGMENTED_DIGEST_MANIFEST,
+    _augmented_job_name,
     _validate_augmented_digest_manifest,
     _validate_payload,
 )
@@ -193,22 +196,68 @@ def test_changed_augmented_task_digest_rejects_old_trial() -> None:
 
 
 def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
-    result = tmp_path / "result.json"
+    dataset = "provider-feasibility-v1"
+    current_digest = f"sha256:{'b' * 64}"
+    job_name = _augmented_job_name(
+        dataset=dataset, digests={"example-task": current_digest}
+    )
+    result = tmp_path / job_name / "result.json"
+    result.parent.mkdir()
     result.write_text("{}", encoding="utf-8")
     assert not _AUGMENTED_DIGEST_MANIFEST.startswith(".")
     manifest = tmp_path / _AUGMENTED_DIGEST_MANIFEST
     manifest.write_text(
-        '{"dataset":"provider-feasibility-v1",'
-        f'"prepared_at_ns":0,"tasks":[{{"task":"example-task",'
-        f'"digest":"sha256:{"a" * 64}"}}]}}',
+        json.dumps(
+            {
+                "dataset": dataset,
+                "job_name": job_name,
+                "prepared_at_ns": 0,
+                "tasks": [{"task": "example-task", "digest": f"sha256:{'a' * 64}"}],
+            }
+        ),
         encoding="utf-8",
     )
 
     failures = _validate_augmented_digest_manifest(
         manifest_path=manifest,
         result_path=result,
-        dataset="provider-feasibility-v1",
-        expected_digests={"example-task": f"sha256:{'b' * 64}"},
+        dataset=dataset,
+        expected_digests={"example-task": current_digest},
     )
 
     assert failures == ["augmented task digest mismatch for example-task"]
+
+
+def test_changed_augmented_digest_cannot_resume_stale_job(tmp_path) -> None:
+    dataset = "provider-feasibility-v1"
+    old_digest = f"sha256:{'a' * 64}"
+    current_digest = f"sha256:{'b' * 64}"
+    current_digests = {"example-task": current_digest}
+    current_job_name = _augmented_job_name(dataset=dataset, digests=current_digests)
+    stale_job_name = _augmented_job_name(
+        dataset=dataset, digests={"example-task": old_digest}
+    )
+    result = tmp_path / stale_job_name / "result.json"
+    result.parent.mkdir()
+    result.write_text("{}", encoding="utf-8")
+    manifest = tmp_path / _AUGMENTED_DIGEST_MANIFEST
+    manifest.write_text(
+        json.dumps(
+            {
+                "dataset": dataset,
+                "job_name": current_job_name,
+                "prepared_at_ns": 0,
+                "tasks": [{"task": "example-task", "digest": current_digest}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    failures = _validate_augmented_digest_manifest(
+        manifest_path=manifest,
+        result_path=result,
+        dataset=dataset,
+        expected_digests=current_digests,
+    )
+
+    assert failures == ["Harbor result is not bound to its augmented task identity"]

@@ -356,36 +356,40 @@ harbor-oracle: ## Check contracts, then run an explicitly scoped dataset Oracle.
 
 harbor-oracle-task: harbor-check-task ## Check selected leaf tasks, then run their exact Oracle.
 	@test -f "benchmarks/datasets/$(DATASET)/jobs/oracle.json" || { echo "unknown dataset or missing Oracle job: $(DATASET)" >&2; exit 2; }
-	$(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
+	job_name="$$( $(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--prepare --dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
-		--tasks $(TASKS) && \
+		--tasks $(TASKS) )" && \
 	$(HARBOR_RUNNER) run \
 		-c "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
 		-p "benchmarks/datasets/$(DATASET)" \
 		$(foreach task,$(TASKS),--include-task-name "$(task)") \
-		$(EVAL_ARGS) && \
+		$(EVAL_ARGS) \
+		--job-name "$$job_name" && \
 	$(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
+		--result "benchmarks/results/$(DATASET)-oracle/$$job_name/result.json" \
 		--tasks $(TASKS)
 
 harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract gate.
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
 	@test -n "$(TASKS)" -o "$(FULL)" = "1" || { echo "TASKS is required; use FULL=1 only for an intentional full-dataset Oracle" >&2; exit 2; }
 	@test -f "benchmarks/datasets/$(DATASET)/jobs/oracle.json" || { echo "unknown dataset or missing Oracle job: $(DATASET)" >&2; exit 2; }
-	$(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
+	job_name="$$( $(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--prepare --dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
-		$(if $(TASKS),--tasks $(TASKS),) && \
+		$(if $(TASKS),--tasks $(TASKS),) )" && \
 	$(HARBOR_RUNNER) run \
 		-c "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
 		-p "benchmarks/datasets/$(DATASET)" \
 		$(foreach task,$(TASKS),--include-task-name "$(task)") \
-		$(EVAL_ARGS) && \
+		$(EVAL_ARGS) \
+		--job-name "$$job_name" && \
 	$(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
+		--result "benchmarks/results/$(DATASET)-oracle/$$job_name/result.json" \
 		$(if $(TASKS),--tasks $(TASKS),)
 
 harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with tasks.

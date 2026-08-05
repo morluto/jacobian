@@ -318,6 +318,21 @@ def test_rejects_affirmative_conjecture_proof_claim(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
+def test_rejects_noun_form_conjecture_proof_claim(tmp_path: Path) -> None:
+    """Noun-form proof assertions remain prohibited overclaims."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed.",
+        "No proof of the source-corrected conjecture is claimed; the "
+        "source-corrected conjecture has a proof.",
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_accepts_equivalent_no_claim_limitation(tmp_path: Path) -> None:
     """Equivalent negative limitation wording is part of the public contract."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
@@ -375,6 +390,32 @@ def test_scope_diagnostic_is_independent_of_contract(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["scope_accuracy"] == 1.0
     assert rejected["assurance_calibration"] == 0.0
+
+
+def test_incomplete_scope_gates_reward(tmp_path: Path) -> None:
+    """An independently reported scope failure must still fail closed."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["scope"] = "partial finite comparison"
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["scope_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_completeness_diagnostic_is_independent(tmp_path: Path) -> None:
+    """Completeness failures must be visible without erasing other dimensions."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["completeness"] = "PARTIAL"
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["assurance_calibration"] == 1.0
+    assert rejected["completeness_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
 def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:

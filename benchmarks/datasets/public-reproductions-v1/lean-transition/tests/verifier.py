@@ -14,12 +14,15 @@ ALLOWED = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 def _math(s, x, e):
     r = s.get("result", {})
-    try:
-        gc = int(r.get("goal_count"))
-    except (TypeError, ValueError):
+    if (
+        not isinstance(r, dict)
+        or set(r) != {"goal_count", "completed"}
+        or type(r.get("goal_count")) is not int
+        or type(r.get("completed")) is not bool
+    ):
         return False
     return (
-        gc == int(e["expected_goal_count"])
+        r["goal_count"] == e["expected_goal_count"]
         and r.get("completed") is e["expected_completed"]
     )
 

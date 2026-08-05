@@ -1,0 +1,17 @@
+{
+  "task_id": "jacobian/sine-integral-asymptotic-audit",
+  "source": {
+    "dataset": "JVRoggeveen/HARDMath2",
+    "revision": "5de45cfcb643fb72dafdd72de7c3c853b40d8157",
+    "split": "train",
+    "row": 2,
+    "license": "MIT"
+  },
+  "prompt": "Find the first three terms of the asymptotic expansion of Si(x) as x tends to infinity.",
+  "published_expansion": [
+    {"function": "COS", "power": 1, "coefficient": -1},
+    {"function": "SIN", "power": 2, "coefficient": 1}
+  ],
+  "required_tail_terms": 5,
+  "remainder_integrand": {"function": "COS", "power": 6}
+}

@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/cgal",
+  "provider": "cgal",
+  "contract": "jacobian.cgal-delaunay-spike/v1",
+  "pin_sha256": "sha256:c60409201b0e97ec2814f810da92283f64b4d4342d7eac27a342e70469fc22f5"
+}

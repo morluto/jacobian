@@ -1,0 +1,4 @@
+sine-integral-certificate-v1
+result_sha256: 0aad48eefd2d08b2401380adffc228fcf26cb6f6d37deb70e56b870f4861666d
+published_sine_coefficient: 1
+corrected_sine_coefficient: -1

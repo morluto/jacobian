@@ -210,7 +210,10 @@ def task_digest(task_dir: Path) -> str:
     supplement = compose_context_supplement(task_dir)
     if supplement is None:
         return native
-    return hashlib.sha256((native + "\n" + supplement).encode("utf-8")).hexdigest()
+    return (
+        DIGEST_PREFIX
+        + hashlib.sha256((native + "\n" + supplement).encode("utf-8")).hexdigest()
+    )
 
 
 def durable_task_digest(task_dir: Path) -> str:

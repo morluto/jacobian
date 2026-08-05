@@ -10,11 +10,13 @@ import json
 import math
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+_AUGMENTED_DIGEST_MANIFEST = ".jacobian-augmented-task-digests.json"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -37,6 +39,10 @@ def _git_sha() -> str:
 
 def _task_id(name: Any) -> str:
     return name.rsplit("/", 1)[-1] if isinstance(name, str) else ""
+
+
+def _prefixed_digest(value: str) -> str:
+    return value if value.startswith("sha256:") else f"sha256:{value}"
 
 
 def _is_nonnegative_integer(value: Any) -> bool:
@@ -235,6 +241,88 @@ def _load_trial_results(result_path: Path) -> tuple[list[Any], list[Path], list[
     return results, paths, digests
 
 
+def _prepare_augmented_digest_manifest(
+    *, dataset: str, tasks: tuple[str, ...] | None, jobs_dir: Path
+) -> Path:
+    """Record the augmented task identity before Harbor starts an Oracle run."""
+
+    suite = get_suite(dataset)
+    known = {ref.path.name: ref for ref in suite.tasks}
+    requested = set(tasks) if tasks else set(known)
+    unknown = sorted(requested - set(known))
+    if unknown:
+        raise HarborSuiteError(f"unknown task(s) for {dataset}: {', '.join(unknown)}")
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    manifest = jobs_dir / _AUGMENTED_DIGEST_MANIFEST
+    manifest.write_text(
+        json.dumps(
+            {
+                "dataset": suite.id,
+                "prepared_at_ns": time.time_ns(),
+                "tasks": [
+                    {
+                        "task": task_id,
+                        "digest": _prefixed_digest(task_digest(known[task_id].path)),
+                    }
+                    for task_id in sorted(requested)
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def _validate_augmented_digest_manifest(
+    *,
+    manifest_path: Path,
+    result_path: Path,
+    dataset: str,
+    expected_digests: dict[str, str],
+) -> list[str]:
+    """Require the result to be newer than and bound to its pre-run identity."""
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"augmented task digest manifest is unavailable: {exc}"]
+    if not isinstance(manifest, dict):
+        return ["augmented task digest manifest must contain an object"]
+    if manifest.get("dataset") != dataset:
+        return ["augmented task digest manifest has the wrong dataset"]
+    prepared_at_ns = manifest.get("prepared_at_ns")
+    if not isinstance(prepared_at_ns, int) or isinstance(prepared_at_ns, bool):
+        return ["augmented task digest manifest has no preparation timestamp"]
+    try:
+        result_mtime_ns = result_path.stat().st_mtime_ns
+    except OSError as exc:
+        return [f"unable to stat Harbor result: {exc}"]
+    if result_mtime_ns < prepared_at_ns:
+        return ["Harbor result predates its augmented task digest manifest"]
+
+    entries = manifest.get("tasks")
+    if not isinstance(entries, list):
+        return ["augmented task digest manifest has no task entries"]
+    observed = {
+        entry.get("task"): entry.get("digest")
+        for entry in entries
+        if isinstance(entry, dict)
+    }
+    if set(observed) != set(expected_digests):
+        return ["augmented task digest manifest task coverage does not match"]
+    failures: list[str] = []
+    for task_id, expected in expected_digests.items():
+        digest = observed.get(task_id)
+        if not isinstance(digest, str) or _DIGEST.fullmatch(digest) is None:
+            failures.append(f"augmented task digest is invalid for {task_id}")
+        elif digest != expected:
+            failures.append(f"augmented task digest mismatch for {task_id}")
+    return failures
+
+
 def validate(
     *,
     dataset: str,
@@ -261,18 +349,26 @@ def validate(
         for task_id, ref in known.items()
         if task_id in requested
     }
-    evidence_digests = {
-        task_id: task_digest(ref.path)
+    augmented_digests = {
+        task_id: _prefixed_digest(task_digest(ref.path))
         for task_id, ref in known.items()
         if task_id in requested
     }
     trial_results, trial_paths, trial_digests = _load_trial_results(result_path)
-    failures = _validate_payload(
-        payload,
-        trial_results=trial_results,
-        trial_digests=trial_digests,
-        expected_tasks=requested,
-        expected_digests=expected_digests,
+    failures = _validate_augmented_digest_manifest(
+        manifest_path=jobs_dir / _AUGMENTED_DIGEST_MANIFEST,
+        result_path=result_path,
+        dataset=suite.id,
+        expected_digests=augmented_digests,
+    )
+    failures.extend(
+        _validate_payload(
+            payload,
+            trial_results=trial_results,
+            trial_digests=trial_digests,
+            expected_tasks=requested,
+            expected_digests=expected_digests,
+        )
     )
     if failures:
         raise HarborSuiteError("\n".join(failures))
@@ -286,7 +382,7 @@ def validate(
                 "tasks": [
                     {
                         "task": task_id,
-                        "digest": evidence_digests[task_id],
+                        "digest": augmented_digests[task_id],
                         "verifier": (known[task_id].path / "tests" / "verifier.py")
                         .relative_to(ROOT)
                         .as_posix(),
@@ -320,14 +416,23 @@ def main() -> int:
     parser.add_argument("--tasks", nargs="*")
     parser.add_argument("--jobs-dir", type=Path, required=True)
     parser.add_argument("--result", type=Path)
+    parser.add_argument("--prepare", action="store_true")
     args = parser.parse_args()
     try:
-        evidence = validate(
-            dataset=args.dataset,
-            tasks=tuple(args.tasks) if args.tasks else None,
-            jobs_dir=args.jobs_dir,
-            result_path=args.result,
-        )
+        task_selection = tuple(args.tasks) if args.tasks else None
+        if args.prepare:
+            evidence = _prepare_augmented_digest_manifest(
+                dataset=args.dataset,
+                tasks=task_selection,
+                jobs_dir=args.jobs_dir,
+            )
+        else:
+            evidence = validate(
+                dataset=args.dataset,
+                tasks=task_selection,
+                jobs_dir=args.jobs_dir,
+                result_path=args.result,
+            )
     except HarborSuiteError as exc:
         parser.error(str(exc))
     print(evidence)

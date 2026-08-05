@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from benchmarks.tooling.validate_harbor_results import _validate_payload
+from benchmarks.tooling.validate_harbor_results import (
+    _validate_augmented_digest_manifest,
+    _validate_payload,
+)
 
 _DIGEST = "a" * 64
 _DURABLE_DIGEST = f"sha256:{_DIGEST}"
@@ -171,3 +174,38 @@ def test_missing_durable_lock_digest_fails_closed() -> None:
     )
 
     assert any("missing durable task digest" in failure for failure in failures)
+
+
+def test_changed_augmented_task_digest_rejects_old_trial() -> None:
+    old_augmented = f"sha256:{'a' * 64}"
+    current_augmented = f"sha256:{'b' * 64}"
+
+    failures = _validate_payload(
+        _payload(),
+        trial_results=[_trial()],
+        trial_digests=[old_augmented],
+        expected_tasks={"example-task"},
+        expected_digests={"example-task": current_augmented},
+    )
+
+    assert any("task digest mismatch" in failure for failure in failures)
+
+
+def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
+    result = tmp_path / "result.json"
+    result.write_text("{}", encoding="utf-8")
+    (tmp_path / ".jacobian-augmented-task-digests.json").write_text(
+        '{"dataset":"provider-feasibility-v1",'
+        f'"prepared_at_ns":0,"tasks":[{{"task":"example-task",'
+        f'"digest":"sha256:{"a" * 64}"}}]}}',
+        encoding="utf-8",
+    )
+
+    failures = _validate_augmented_digest_manifest(
+        manifest_path=tmp_path / ".jacobian-augmented-task-digests.json",
+        result_path=result,
+        dataset="provider-feasibility-v1",
+        expected_digests={"example-task": f"sha256:{'b' * 64}"},
+    )
+
+    assert failures == ["augmented task digest mismatch for example-task"]

@@ -138,51 +138,6 @@ _RUNTIME_SCHEMA_STATEMENTS = (
     END
     """,
     """
-    CREATE TABLE IF NOT EXISTS research_episodes (
-        episode_uri TEXT PRIMARY KEY,
-        capability_id TEXT NOT NULL,
-        mode TEXT NOT NULL,
-        assurance_level TEXT NOT NULL,
-        summary TEXT NOT NULL,
-        tags_json TEXT NOT NULL,
-        search_text TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS research_episodes_lookup
-    ON research_episodes(capability_id, assurance_level, created_at)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS research_episode_tags (
-        episode_uri TEXT NOT NULL,
-        tag TEXT NOT NULL,
-        PRIMARY KEY (episode_uri, tag)
-    )
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS research_episode_tags_lookup
-    ON research_episode_tags(tag, episode_uri)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS research_episode_failures (
-        episode_uri TEXT NOT NULL,
-        stage TEXT NOT NULL,
-        classification TEXT NOT NULL,
-        PRIMARY KEY (episode_uri, stage, classification)
-    )
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS research_episode_failures_lookup
-    ON research_episode_failures(stage, classification, episode_uri)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS research_episode_index_versions (
-        episode_uri TEXT PRIMARY KEY,
-        index_version TEXT NOT NULL
-    )
-    """,
-    """
     CREATE TABLE IF NOT EXISTS installed_plugins (
         plugin_id TEXT PRIMARY KEY,
         domain_id TEXT NOT NULL,
@@ -366,11 +321,6 @@ _STATE_FORMAT_SCHEMA_STATEMENTS = (
     VALUES (0, 4)
     ON CONFLICT(id) DO UPDATE SET format_revision = excluded.format_revision
     """,
-    """
-    INSERT OR IGNORE INTO jacobian_data_upgrades(upgrade_id)
-    SELECT 'research-episode-index-v2'
-    WHERE NOT EXISTS (SELECT 1 FROM research_episodes)
-    """,
 )
 _STATE_FORMAT_SCHEMA = "\n-- statement boundary --\n".join(
     _STATE_FORMAT_SCHEMA_STATEMENTS
@@ -506,6 +456,12 @@ def _install_reasoning_log_schema(connection: sqlite3.Connection) -> None:
     )
 
 
+def _install_memoryless_state_boundary(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "UPDATE jacobian_state_format SET format_revision = 8 WHERE id = 0"
+    )
+
+
 STATE_MIGRATIONS = (
     Migration(
         revision=1,
@@ -556,8 +512,16 @@ STATE_MIGRATIONS = (
         definition=_REASONING_LOG_SCHEMA,
         apply=_install_reasoning_log_schema,
     ),
+    Migration(
+        revision=8,
+        name="memoryless-state-boundary-v1",
+        definition=(
+            "Establish the pre-stable state boundary after removing research-memory "
+            "schema and advance the persisted state format to revision 8."
+        ),
+        apply=_install_memoryless_state_boundary,
+    ),
 )
 
-SUPPORTED_STATE_FLOOR = 6
-CURRENT_STATE_FORMAT_REVISION = 7
-RESEARCH_INDEX_UPGRADE_ID = "research-episode-index-v2"
+SUPPORTED_STATE_FLOOR = 8
+CURRENT_STATE_FORMAT_REVISION = 8

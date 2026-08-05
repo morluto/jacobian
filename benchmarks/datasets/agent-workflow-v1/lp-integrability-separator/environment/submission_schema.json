@@ -1,1 +1,119 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","claimed_assurance","scope","completeness","result","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/lp-integrability-separator"},"conclusion":{"const":"VALID_LP_SEPARATOR"},"claimed_assurance":{"const":"COMPUTED"},"scope":{"const":"ALL_POSITIVE_FINITE_P"},"completeness":{"const":"COMPLETE_FOR_DECLARED_FAMILY"},"result":{"type":"object","additionalProperties":false,"required":["beta","origin_power_coefficient","infinity_power_coefficient","p2_log_exponent","p2_integral_each","critical_p","lower_regime","upper_regime"],"properties":{"beta":{"type":"string","pattern":"^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$","maxLength":80},"origin_power_coefficient":{"const":"-1/2"},"infinity_power_coefficient":{"const":"-1/2"},"p2_log_exponent":{"type":"string","pattern":"^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$","maxLength":80},"p2_integral_each":{"type":"string","pattern":"^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$","maxLength":80},"critical_p":{"const":"2"},"lower_regime":{"const":{"p_interval":"0<p<2","obstruction":"INFINITY_POWER_TAIL"}},"upper_regime":{"const":{"p_interval":"p>2","obstruction":"ORIGIN_POWER_SINGULARITY"}}}},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["STANDARD_POWER_LOG_INTEGRAL_CRITERION_TRUSTED","DECLARED_FUNCTION_FAMILY_ONLY","NO_PROOF_ASSISTANT_VERIFICATION"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE_FOR_DECLARED_FAMILY"
+    },
+    "conclusion": {
+      "const": "VALID_LP_SEPARATOR"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "STANDARD_POWER_LOG_INTEGRAL_CRITERION_TRUSTED",
+        "DECLARED_FUNCTION_FAMILY_ONLY",
+        "NO_PROOF_ASSISTANT_VERIFICATION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "beta": {
+          "maxLength": 80,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
+          "type": "string"
+        },
+        "critical_p": {
+          "const": "2"
+        },
+        "infinity_power_coefficient": {
+          "const": "-1/2"
+        },
+        "lower_regime": {
+          "const": {
+            "obstruction": "INFINITY_POWER_TAIL",
+            "p_interval": "0<p<2"
+          }
+        },
+        "origin_power_coefficient": {
+          "const": "-1/2"
+        },
+        "p2_integral_each": {
+          "maxLength": 80,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
+          "type": "string"
+        },
+        "p2_log_exponent": {
+          "maxLength": 80,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
+          "type": "string"
+        },
+        "upper_regime": {
+          "const": {
+            "obstruction": "ORIGIN_POWER_SINGULARITY",
+            "p_interval": "p>2"
+          }
+        }
+      },
+      "required": [
+        "beta",
+        "origin_power_coefficient",
+        "infinity_power_coefficient",
+        "p2_log_exponent",
+        "p2_integral_each",
+        "critical_p",
+        "lower_regime",
+        "upper_regime"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "ALL_POSITIVE_FINITE_P",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/lp-integrability-separator"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

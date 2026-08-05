@@ -13,7 +13,12 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from jacobian.bounded_process import BoundedProcessResult, run_bounded_process
+from benchmarks.tooling.command_runner import (
+    ToolCommandRequest,
+    ToolCommandResult,
+    ToolCommandStatus,
+    run_tool_command,
+)
 
 PIN_PATH = Path(__file__).with_name("cgal_delaunay_pin.json")
 ADAPTER_SOURCE = Path(__file__).with_name("cgal_delaunay_spike.cpp")
@@ -22,7 +27,29 @@ _SOURCE_MEMBERS = (
     "CGAL-6.2/include/CGAL/Delaunay_triangulation_2.h",
 )
 _ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
-ProcessRunner = Callable[..., BoundedProcessResult]
+ProcessRunner = Callable[..., ToolCommandResult]
+
+
+def _default_runner(
+    command: Sequence[str],
+    *,
+    input_bytes: bytes,
+    timeout_seconds: float,
+    environment: Mapping[str, str],
+    stdout_limit: int,
+    stderr_limit: int,
+) -> ToolCommandResult:
+    request = ToolCommandRequest(
+        executable=command[0],
+        arguments=tuple(command[1:]),
+        environment=environment,
+        cwd=str(Path.cwd()),
+        timeout_seconds=timeout_seconds,
+        stdin_bytes=input_bytes,
+        stdout_limit_bytes=stdout_limit,
+        stderr_limit_bytes=stderr_limit,
+    )
+    return run_tool_command(request)
 
 
 class CgalSpikeError(RuntimeError):
@@ -182,30 +209,29 @@ def _run_checked(
     *,
     timeout_seconds: float,
 ) -> bytes:
-    try:
-        completed = runner(
-            command,
-            input_bytes=b"",
-            timeout_seconds=timeout_seconds,
-            environment=_ENVIRONMENT,
-            stdout_limit=32_768,
-            stderr_limit=16_384,
-        )
-    except OSError as exc:
+    completed = runner(
+        command,
+        input_bytes=b"",
+        timeout_seconds=timeout_seconds,
+        environment=_ENVIRONMENT,
+        stdout_limit=32_768,
+        stderr_limit=16_384,
+    )
+    if completed.status is ToolCommandStatus.START_FAILED:
         raise CgalSpikeError(
             "ERROR", "PROVIDER_LAUNCH_ERROR", "The CGAL spike could not be launched."
-        ) from exc
-    if completed.cancelled:
+        )
+    if completed.status is ToolCommandStatus.CANCELLED:
         raise CgalSpikeError(
             "CANCELLED", "PROVIDER_CANCELLED", "The CGAL spike was cancelled."
         )
-    if completed.timed_out:
+    if completed.status is ToolCommandStatus.TIMED_OUT:
         raise CgalSpikeError("TIMEOUT", "PROVIDER_TIMEOUT", "The CGAL spike timed out.")
     if completed.stdout_exceeded or completed.stderr_exceeded:
         raise CgalSpikeError(
             "ERROR", "PROVIDER_OUTPUT_LIMIT", "The CGAL spike exceeded output bounds."
         )
-    if completed.returncode != 0:
+    if completed.exit_code != 0:
         raise CgalSpikeError(
             "ERROR", "PROVIDER_CRASH", "The CGAL spike exited unsuccessfully."
         )
@@ -253,7 +279,7 @@ def run_spike(
     executable: Path,
     source_archive: Path,
     timeout_seconds: float = 5,
-    runner: ProcessRunner = run_bounded_process,
+    runner: ProcessRunner = _default_runner,
     pin_path: Path = PIN_PATH,
     adapter_source: Path = ADAPTER_SOURCE,
 ) -> dict[str, Any]:

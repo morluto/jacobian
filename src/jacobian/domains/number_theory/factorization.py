@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import signal
 import sys
+from pathlib import Path
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import ProcessResourceLimits, run_bounded_process
+from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
@@ -32,6 +33,8 @@ from jacobian.operations import (
     ComputedSuccess,
     OperationExecutionFailure,
 )
+from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
+from jacobian.worker_environment import worker_environment
 
 _PROTOCOL = "jacobian.number-theory.factorization.sympy.v1"
 _STDOUT_LIMIT = 2_000_000
@@ -61,15 +64,15 @@ def _compute[ResultT: ContractModel](
             )
         )
     wall_seconds = int(request.resource_budget.wall_seconds)
-    try:
-        completed = run_bounded_process(
-            [
-                sys.executable,
+    completed = execute_process(
+        ProcessRequest(
+            executable=sys.executable,
+            arguments=(
                 "-I",
                 "-m",
                 "jacobian.domains.number_theory.factorization_worker",
-            ],
-            input_bytes=canonicalize_json(
+            ),
+            stdin_bytes=canonicalize_json(
                 {
                     "operation": operation,
                     "protocol": _PROTOCOL,
@@ -80,20 +83,17 @@ def _compute[ResultT: ContractModel](
                 }
             ),
             timeout_seconds=float(wall_seconds),
-            environment={
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-                "PYTHONHASHSEED": "0",
-            },
-            stdout_limit=_STDOUT_LIMIT,
-            stderr_limit=_STDERR_LIMIT,
+            environment=worker_environment(locale="C"),
+            cwd=str(Path.cwd()),
+            stdout_limit_bytes=_STDOUT_LIMIT,
+            stderr_limit_bytes=_STDERR_LIMIT,
             resource_limits=ProcessResourceLimits(
                 cpu_seconds=wall_seconds + 1,
                 address_space_bytes=_ADDRESS_SPACE_LIMIT,
             ),
         )
-    except OSError:
+    )
+    if completed.termination is ProcessTermination.START_FAILED:
         return OperationExecutionFailure(
             status=ExecutionStatus.ERROR,
             diagnostic=_diagnostic(
@@ -101,7 +101,7 @@ def _compute[ResultT: ContractModel](
                 "The isolated SymPy worker could not be started safely.",
             ),
         )
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return OperationExecutionFailure(
             status=ExecutionStatus.TIMEOUT,
             diagnostic=_diagnostic(

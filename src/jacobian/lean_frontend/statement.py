@@ -21,7 +21,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,6 +60,11 @@ from jacobian.contracts.lean_statement import (
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.providers.lean_runtime import lean_frontend_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -96,7 +100,7 @@ class _LeanUnavailableError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Elaboration probe — thin subprocess wrapper around the `lean` binary.
+# Elaboration probe — bounded Lean execution via the process_policy gateway.
 # ---------------------------------------------------------------------------
 
 
@@ -150,16 +154,25 @@ def _lean_version_info(
         return ("unknown", "unknown")
     try:
         environment = _lean_process_environment(lean_bin)
-        result = subprocess.run(
-            [lean_bin, "--version"],
-            capture_output=True,
-            text=True,
-            env=environment,
-            timeout=10,
+        result = execute_process(
+            ProcessRequest(
+                executable=lean_bin,
+                arguments=("--version",),
+                environment=environment,
+                cwd=str(Path.cwd()),
+                timeout_seconds=10.0,
+                stdin_bytes=b"",
+                stdout_limit_bytes=4096,
+                stderr_limit_bytes=4096,
+            )
         )
-    except (subprocess.TimeoutExpired, OSError):
+    except OSError:
         return ("unknown", "unknown")
-    output = result.stdout + result.stderr
+    if result.termination is not ProcessTermination.EXITED:
+        return ("unknown", "unknown")
+    output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode(
+        "utf-8", errors="replace"
+    )
     version_match = re.search(r"version\s+([^\s,]+)", output)
     commit_match = re.search(r"commit\s+([^\s,)]+)", output)
     return (
@@ -306,22 +319,33 @@ def _execute_lean_source(
             handle.write(source)
         lean_bin = executable or _lean_executable()
         environment = _lean_process_environment(lean_bin)
-        result = subprocess.run(
-            [lean_bin, temp_path],
-            capture_output=True,
-            text=True,
-            env=environment,
-            timeout=timeout_seconds,
+        result = execute_process(
+            ProcessRequest(
+                executable=lean_bin,
+                arguments=(temp_path,),
+                environment=environment,
+                cwd=str(Path(temp_path).parent),
+                timeout_seconds=float(timeout_seconds),
+                stdin_bytes=b"",
+                stdout_limit_bytes=64 * 1024,
+                stderr_limit_bytes=64 * 1024,
+            )
         )
-    except subprocess.TimeoutExpired as exc:
-        raise _LeanUnavailableError(f"lean timed out after {timeout_seconds}s") from exc
     except OSError as exc:
         raise _LeanUnavailableError(
             f"The pinned Lean executable could not run: {exc}"
         ) from exc
     finally:
         Path(temp_path).unlink(missing_ok=True)
-    return (result.stdout or "") + (result.stderr or "")
+    if result.termination is ProcessTermination.TIMED_OUT:
+        raise _LeanUnavailableError(f"lean timed out after {timeout_seconds}s")
+    if result.termination is ProcessTermination.START_FAILED:
+        raise _LeanUnavailableError(
+            "The pinned Lean executable could not run: start failed"
+        )
+    return result.stdout.decode("utf-8", errors="replace") + result.stderr.decode(
+        "utf-8", errors="replace"
+    )
 
 
 def _lean_executable() -> str:

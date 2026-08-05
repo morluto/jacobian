@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityMode,
@@ -27,6 +26,7 @@ from jacobian.domains.polynomial_nullstellensatz.singular import (
 )
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
+from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.providers.singular_runtime import singular_provider_runtime
 
 
@@ -77,50 +77,49 @@ def _invoke(
     ("completed", "expected_status", "expected_code"),
     (
         (
-            BoundedProcessResult(
+            ProcessResult(
+                termination=ProcessTermination.TIMED_OUT,
                 returncode=None,
                 stdout=b"",
                 stderr=b"",
                 stdout_exceeded=False,
                 stderr_exceeded=False,
-                timed_out=True,
             ),
             "TIMEOUT",
             "SINGULAR_TIMEOUT",
         ),
         (
-            BoundedProcessResult(
+            ProcessResult(
+                termination=ProcessTermination.CANCELLED,
                 returncode=None,
                 stdout=b"",
                 stderr=b"",
                 stdout_exceeded=False,
                 stderr_exceeded=False,
-                timed_out=False,
-                cancelled=True,
             ),
             "CANCELLED",
             "SINGULAR_CANCELLED",
         ),
         (
-            BoundedProcessResult(
+            ProcessResult(
+                termination=ProcessTermination.EXITED,
                 returncode=0,
                 stdout=b"not the bounded protocol",
                 stderr=b"",
                 stdout_exceeded=False,
                 stderr_exceeded=False,
-                timed_out=False,
             ),
             "ERROR",
             "SINGULAR_PROTOCOL_INVALID",
         ),
         (
-            BoundedProcessResult(
+            ProcessResult(
+                termination=ProcessTermination.OUTPUT_LIMIT_EXCEEDED,
                 returncode=None,
                 stdout=b"",
                 stderr=b"",
                 stdout_exceeded=True,
                 stderr_exceeded=False,
-                timed_out=False,
             ),
             "ERROR",
             "SINGULAR_OUTPUT_LIMIT_EXCEEDED",
@@ -130,12 +129,12 @@ def _invoke(
 def test_singular_boundary_fails_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    completed: BoundedProcessResult,
+    completed: ProcessResult,
     expected_status: str,
     expected_code: str,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.domains.polynomial_nullstellensatz.singular.run_bounded_process",
+        "jacobian.domains.polynomial_nullstellensatz.singular.execute_process",
         lambda *_args, **_kwargs: completed,
     )
     with open_domain_services(tmp_path) as services:
@@ -188,14 +187,14 @@ def test_singular_version_probe_matches_the_pinned_version_exactly(
         lambda _name: str(executable),
     )
     monkeypatch.setattr(
-        "jacobian.providers.singular_runtime.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.providers.singular_runtime.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=version_text.encode(),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         ),
     )
 

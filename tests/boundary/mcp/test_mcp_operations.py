@@ -12,9 +12,9 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-from tests.support.mcp import create_legacy_server as create_server
 
 from jacobian.adapters.mcp.context import _public_tool_error
+from jacobian.adapters.mcp.server import create_server
 from jacobian.adapters.mcp.tooling import _request_trace_digest, _run_blocking
 
 MCP_TOOL_NAMES = {

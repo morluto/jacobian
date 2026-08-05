@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from copy import deepcopy
 from typing import Any
 
@@ -201,7 +200,7 @@ def test_checker_timeout_cannot_create_a_sat_conclusion(
     )
 
     def timeout(**_kwargs: Any):
-        raise subprocess.TimeoutExpired(cmd=("sat-assignment-checker",), timeout=1)
+        raise TimeoutError("checker execution timed out")
 
     monkeypatch.setattr(
         authorized_complete_runtime.services.verification, "_run_checker", timeout

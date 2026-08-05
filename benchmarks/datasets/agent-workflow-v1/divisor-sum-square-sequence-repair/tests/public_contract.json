@@ -1,0 +1,255 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "INFINITE_SQUARE_SUBSEQUENCE_CONSTRUCTED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/sequence-construction.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "INFINITE_PRIMES_THEOREM_TRUSTED",
+      "QUANTIFIED_SEQUENCE_MEMBERSHIP_NOT_PROOF_ASSISTANT_VERIFIED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/sequence-construction.json"
+  ],
+  "schema_definitions": {
+    "probe": {
+      "additionalProperties": false,
+      "properties": {
+        "a_p": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "b_p": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "prime": {
+          "maximum": 97,
+          "minimum": 3,
+          "type": "integer"
+        },
+        "square_root": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "a_p",
+        "b_p",
+        "square_root"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "a_1": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "default_exponent_offset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prime_formula": {
+          "type": "string"
+        },
+        "probes": {
+          "items": {
+            "$ref": "#/$defs/probe"
+          },
+          "maxItems": 10,
+          "minItems": 4,
+          "type": "array"
+        },
+        "threshold_rule": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "a_1",
+        "default_exponent_offset",
+        "prime_formula",
+        "threshold_rule",
+        "probes"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "DECLARED_SEQUENCE_FORMULA_AND_PRIME_PROBES",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "probe": {
+        "additionalProperties": false,
+        "properties": {
+          "a_p": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "b_p": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "prime": {
+            "maximum": 97,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "square_root": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prime",
+          "a_p",
+          "b_p",
+          "square_root"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "a_1": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "default_exponent_offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "prime_formula": {
+            "type": "string"
+          },
+          "probes": {
+            "items": {
+              "$ref": "#/$defs/probe"
+            },
+            "maxItems": 10,
+            "minItems": 4,
+            "type": "array"
+          },
+          "threshold_rule": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a_1",
+          "default_exponent_offset",
+          "prime_formula",
+          "threshold_rule",
+          "probes"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "enum": [
+          "INFINITE_SQUARE_SUBSEQUENCE_CONSTRUCTED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/sequence-construction.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "INFINITE_PRIMES_THEOREM_TRUSTED",
+          "QUANTIFIED_SEQUENCE_MEMBERSHIP_NOT_PROOF_ASSISTANT_VERIFIED"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "DECLARED_SEQUENCE_FORMULA_AND_PRIME_PROBES",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/divisor-sum-square-sequence-repair"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/divisor-sum-square-sequence-repair",
+  "verification_record": null
+}

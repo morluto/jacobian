@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import re
 import shutil
-import subprocess
 import time
 import uuid
 from collections.abc import Mapping
@@ -37,9 +35,15 @@ from jacobian.lean_frontend.repl import (
     LeanExplorationReplRuntime,
     _response_errors,
 )
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.worker_environment import worker_environment
 
 if TYPE_CHECKING:
     from jacobian.lean_frontend.premise_retrieval import LeanPremiseRetrievalAdapter
@@ -234,6 +238,64 @@ def _run_repl(
     )
 
 
+def _resolve_typed_goal_helper(
+    resources: _Resources,
+    request: LeanProofStateRequest,
+    query_path: Path,
+) -> tuple[str, tuple[str, ...], dict[str, str]]:
+    """Resolve the typed-goal helper command and environment."""
+
+    helper = resources.runtime / ".lake" / "build" / "bin" / "jacobian_lean_proof_state"
+    if not helper.is_file():
+        raise RuntimeError(
+            "the pinned typed proof-state helper is unavailable; "
+            "run `lake build jacobian_lean_proof_state` in lean/"
+        )
+    elan = shutil.which("elan")
+    if elan is None:
+        raise RuntimeError("elan is unavailable")
+    installation = resources.installations[request.environment]
+    environment = worker_environment(
+        extra_variables=("HOME", "PATH", "ELAN_HOME"),
+        overrides={"JACOBIAN_LEAN_PROOF_STATE_QUERY": str(query_path)},
+    )
+    arguments = (
+        "run",
+        f"leanprover/lean4:v{installation.lean_version}",
+        "lake",
+        "env",
+        str(helper),
+    )
+    return elan, arguments, environment
+
+
+def _parse_typed_goal_envelope(
+    stdout: bytes,
+    *,
+    request_id: str,
+) -> dict[str, Any]:
+    """Extract and validate the typed-goal JSON envelope from helper output."""
+
+    marker = "JACOBIAN_PROOF_STATE_RESULT "
+    try:
+        lines = stdout.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError as exc:
+        raise RuntimeError("Lean typed proof-state extraction failed") from exc
+    responses = [line for line in lines if line.startswith(marker)]
+    if len(responses) != 1:
+        raise RuntimeError("Lean typed proof-state extraction failed")
+    try:
+        envelope = loads_strict_json(responses[0].removeprefix(marker))
+    except CanonicalizationError as exc:
+        raise RuntimeError("Lean typed proof-state extraction failed") from exc
+    if not isinstance(envelope, dict) or envelope.get("request_id") != request_id:
+        raise RuntimeError("Lean typed proof-state extraction returned invalid JSON")
+    payload = envelope.get("payload")
+    if not isinstance(payload, dict):
+        raise RuntimeError("Lean typed proof-state extraction returned invalid JSON")
+    return payload
+
+
 def _extract_typed_goals(
     resources: _Resources,
     *,
@@ -253,55 +315,29 @@ def _extract_typed_goals(
             }
         )
     )
-    environment = dict(os.environ)
-    environment["JACOBIAN_LEAN_PROOF_STATE_QUERY"] = str(query_path)
-    helper = resources.runtime / ".lake" / "build" / "bin" / "jacobian_lean_proof_state"
-    if not helper.is_file():
-        raise RuntimeError(
-            "the pinned typed proof-state helper is unavailable; "
-            "run `lake build jacobian_lean_proof_state` in lean/"
-        )
-    elan = shutil.which("elan")
-    if elan is None:
-        raise RuntimeError("elan is unavailable")
-    installation = resources.installations[request.environment]
+    elan, arguments, environment = _resolve_typed_goal_helper(
+        resources, request, query_path
+    )
     try:
-        completed = subprocess.run(
-            [
-                elan,
-                "run",
-                f"leanprover/lean4:v{installation.lean_version}",
-                "lake",
-                "env",
-                helper,
-            ],
-            cwd=resources.runtime,
-            env=environment,
-            check=False,
-            capture_output=True,
-            timeout=30,
+        result = execute_process(
+            ProcessRequest(
+                executable=elan,
+                arguments=arguments,
+                environment=environment,
+                cwd=str(resources.runtime),
+                timeout_seconds=30.0,
+                stdin_bytes=b"",
+                stdout_limit_bytes=2 * 1024 * 1024,
+                stderr_limit_bytes=128 * 1024,
+            )
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except OSError as exc:
         raise RuntimeError("Lean typed proof-state extraction failed") from exc
-    marker = "JACOBIAN_PROOF_STATE_RESULT "
-    try:
-        lines = completed.stdout.decode("utf-8", errors="strict").splitlines()
-    except UnicodeDecodeError as exc:
-        raise RuntimeError("Lean typed proof-state extraction failed") from exc
-    responses = [line for line in lines if line.startswith(marker)]
-    if completed.returncode != 0 or len(responses) != 1:
+    if result.termination is not ProcessTermination.EXITED:
         raise RuntimeError("Lean typed proof-state extraction failed")
-    try:
-        envelope = loads_strict_json(responses[0].removeprefix(marker))
-    except CanonicalizationError as exc:
-        raise RuntimeError("Lean typed proof-state extraction failed") from exc
-    if (
-        not isinstance(envelope, dict)
-        or envelope.get("request_id") != request_id
-        or not isinstance(envelope.get("payload"), dict)
-    ):
-        raise RuntimeError("Lean typed proof-state extraction returned invalid JSON")
-    payload = envelope["payload"]
+    if result.returncode != 0:
+        raise RuntimeError("Lean typed proof-state extraction failed")
+    payload = _parse_typed_goal_envelope(result.stdout, request_id=request_id)
     if payload.get("expression_serialization") != "LEAN_PRETTY_PRINTED_EXPR":
         raise RuntimeError("Lean typed proof-state serialization is unsupported")
     try:

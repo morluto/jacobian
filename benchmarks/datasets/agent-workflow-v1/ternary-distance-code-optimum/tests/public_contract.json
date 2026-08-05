@@ -1,0 +1,334 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "OPTIMUM_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "ternary words of length 6 with distinct-pair agreements in {0,2}",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "codewords": {
+        "items": {
+          "pattern": "^[012]{6}$",
+          "type": "string"
+        },
+        "maxItems": 18,
+        "minItems": 18,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "distance_distribution": {
+        "additionalProperties": false,
+        "properties": {
+          "A0": {
+            "const": "1"
+          },
+          "A4": {
+            "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "A6": {
+            "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "A0",
+          "A4",
+          "A6"
+        ],
+        "type": "object"
+      },
+      "upper_bound_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "bound": {
+            "const": 18
+          },
+          "dual_multipliers": {
+            "additionalProperties": false,
+            "properties": {
+              "order_1": {
+                "type": "string"
+              },
+              "order_2": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "order_1",
+              "order_2"
+            ],
+            "type": "object"
+          },
+          "krawtchouk_rows": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "K0": {
+                  "type": "integer"
+                },
+                "K4": {
+                  "type": "integer"
+                },
+                "K6": {
+                  "type": "integer"
+                },
+                "order": {
+                  "enum": [
+                    1,
+                    2
+                  ]
+                }
+              },
+              "required": [
+                "order",
+                "K0",
+                "K4",
+                "K6"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "krawtchouk_rows",
+          "dual_multipliers",
+          "bound"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "codewords",
+      "distance_distribution",
+      "upper_bound_certificate"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "OPTIMUM_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "codewords": {
+            "items": {
+              "pattern": "^[012]{6}$",
+              "type": "string"
+            },
+            "maxItems": 18,
+            "minItems": 18,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "distance_distribution": {
+            "additionalProperties": false,
+            "properties": {
+              "A0": {
+                "const": "1"
+              },
+              "A4": {
+                "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
+                "type": "string"
+              },
+              "A6": {
+                "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "A0",
+              "A4",
+              "A6"
+            ],
+            "type": "object"
+          },
+          "upper_bound_certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "bound": {
+                "const": 18
+              },
+              "dual_multipliers": {
+                "additionalProperties": false,
+                "properties": {
+                  "order_1": {
+                    "type": "string"
+                  },
+                  "order_2": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "order_1",
+                  "order_2"
+                ],
+                "type": "object"
+              },
+              "krawtchouk_rows": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "K0": {
+                      "type": "integer"
+                    },
+                    "K4": {
+                      "type": "integer"
+                    },
+                    "K6": {
+                      "type": "integer"
+                    },
+                    "order": {
+                      "enum": [
+                        1,
+                        2
+                      ]
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "K0",
+                    "K4",
+                    "K6"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              }
+            },
+            "required": [
+              "krawtchouk_rows",
+              "dual_multipliers",
+              "bound"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "codewords",
+          "distance_distribution",
+          "upper_bound_certificate"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "ternary words of length 6 with distinct-pair agreements in {0,2}",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/ternary-distance-code-optimum"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/ternary-distance-code-optimum",
+  "verification_record": null
+}

@@ -82,7 +82,7 @@ def test_protocol_failures_do_not_hide_mathematical_correctness(tmp_path):
         submission["limitations"] = []
 
     reward = _prepared_submission(tmp_path, mutate)
-    assert reward["correctness"] == 1.0
+    assert reward["correctness"] == 0.0
     assert reward["reward"] == 0.0
 
 

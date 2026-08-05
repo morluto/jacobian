@@ -7,12 +7,20 @@ from jacobian.persistence.decoding import (
     decode_persisted_model,
 )
 from jacobian.persistence.locking import PersistenceLock
+from jacobian.persistence.state_health import (
+    MigrationMismatch,
+    StateHealth,
+    inspect_state_health,
+)
 
 __all__ = [
+    "MigrationMismatch",
     "PersistenceCorruptionCode",
     "PersistenceCorruptionError",
     "PersistenceLock",
     "StateDatabase",
     "StateDatabaseError",
+    "StateHealth",
     "decode_persisted_model",
+    "inspect_state_health",
 ]

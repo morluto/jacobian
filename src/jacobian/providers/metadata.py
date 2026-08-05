@@ -62,8 +62,10 @@ def distribution_summary(distribution_name: str) -> DistributionSummary | None:
         except PackageNotFoundError:
             return None
         recorded_name = dist.metadata["Name"]
+        if not isinstance(recorded_name, str) or not recorded_name:
+            recorded_name = distribution_name
         summary = DistributionSummary(
-            name=recorded_name or distribution_name,
+            name=recorded_name,
             version=dist.version,
         )
         _summary_cache[distribution_name] = summary

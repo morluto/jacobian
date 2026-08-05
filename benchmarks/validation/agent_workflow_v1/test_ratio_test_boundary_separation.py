@@ -163,7 +163,7 @@ def test_dimensions_scored_independently(tmp_path: Path) -> None:
     submission["scope"] = "wrong scope"
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["scope_accuracy"] == 0.0
     assert result["reward"] == 0.0
 

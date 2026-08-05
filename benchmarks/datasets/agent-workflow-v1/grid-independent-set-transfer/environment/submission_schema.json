@@ -1,1 +1,129 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/grid-independent-set-transfer"},"conclusion":{"const":"TRANSFER_COUNTS_REPLAYED"},"result":{"type":"object","additionalProperties":false,"required":["cases","total"],"properties":{"cases":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"object","additionalProperties":false,"required":["n","valid_row_masks","compatible_pair_count","layer_totals","independent_set_count"],"properties":{"n":{"type":"integer","minimum":2,"maximum":5},"valid_row_masks":{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":31}},"compatible_pair_count":{"type":"integer","minimum":1},"layer_totals":{"type":"array","minItems":2,"maxItems":5,"items":{"type":"integer","minimum":1}},"independent_set_count":{"type":"integer","minimum":1}}}},"total":{"type":"integer","minimum":1}}},"claimed_assurance":{"const":"COMPUTED"},"scope":{"const":"ALL_ROW_MASK_STATES_FOR_SQUARE_GRIDS_2_THROUGH_5"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["FINITE_GRIDS_N_2_THROUGH_5","NO_GENERAL_GRID_FORMULA"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "TRANSFER_COUNTS_REPLAYED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "FINITE_GRIDS_N_2_THROUGH_5",
+        "NO_GENERAL_GRID_FORMULA"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "compatible_pair_count": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "independent_set_count": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "layer_totals": {
+                "items": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxItems": 5,
+                "minItems": 2,
+                "type": "array"
+              },
+              "n": {
+                "maximum": 5,
+                "minimum": 2,
+                "type": "integer"
+              },
+              "valid_row_masks": {
+                "items": {
+                  "maximum": 31,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "n",
+              "valid_row_masks",
+              "compatible_pair_count",
+              "layer_totals",
+              "independent_set_count"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "total": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cases",
+        "total"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "ALL_ROW_MASK_STATES_FOR_SQUARE_GRIDS_2_THROUGH_5",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/grid-independent-set-transfer"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -11,7 +11,7 @@ from jacobian.capability_errors import (
     CapabilityInvocationError,
     PayloadValidationError,
 )
-from jacobian.capability_telemetry import episode_summary, log_invocation
+from jacobian.capability_telemetry import log_invocation
 from jacobian.capability_validation import json_value_type, validate_payload
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.contracts.memory import ResearchEpisode
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
@@ -219,25 +218,6 @@ class CapabilityDispatchMixin:
             result = result.model_copy(update={"output": normalized_output})
         self._validate_artifact_references(result)
         self._validate_verified_result(result)
-        if (
-            descriptor.records_episode
-            and result.execution.status is ExecutionStatus.COMPLETED
-        ):
-            episode_uri = self.memory.record(
-                ResearchEpisode(
-                    capability_id=result.capability_id,
-                    capability_version=result.capability_version,
-                    mode=result.mode,
-                    request=normalized_request.input,
-                    result=result.model_dump(mode="json", exclude={"episode_uri"}),
-                    assurance_level=result.assurance.level,
-                    verification_record_uri=result.assurance.verification_record_uri,
-                    artifact_uris=result.artifact_uris,
-                    summary=episode_summary(result),
-                    tags=descriptor.tags,
-                )
-            )
-            result = result.model_copy(update={"episode_uri": episode_uri})
         log_invocation(result, started)
         return result
 

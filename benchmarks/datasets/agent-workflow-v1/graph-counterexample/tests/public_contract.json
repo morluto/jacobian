@@ -1,0 +1,178 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "FALSE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "jacobian/graph-counterexample complete finite input",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "edges": {
+        "items": {
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "type": "array"
+      },
+      "vertices": {
+        "items": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "vertices",
+      "edges"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "FALSE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "edges": {
+            "items": {
+              "items": {
+                "type": [
+                  "string",
+                  "integer"
+                ]
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "vertices": {
+            "items": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "vertices",
+          "edges"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "jacobian/graph-counterexample complete finite input",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/graph-counterexample"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/graph-counterexample",
+  "verification_record": null
+}

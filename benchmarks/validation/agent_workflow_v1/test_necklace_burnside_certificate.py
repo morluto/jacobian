@@ -76,8 +76,8 @@ def test_corrupt_fixed_count_or_orbit_representative_is_rejected():
 
 
 def test_contract_has_no_verified_upgrade():
-    schema = json.loads((TASK / "environment/submission_schema.json").read_text())
-    assert schema["properties"]["claimed_assurance"] == {"const": "COMPUTED"}
+    contract = json.loads((TASK / "tests/public_contract.json").read_text())
+    assert contract["allowed_assurance"] == ["COMPUTED"]
 
 
 def test_canonical_solution_receives_full_reward(tmp_path: Path) -> None:
@@ -168,9 +168,9 @@ def test_protocol_compliance_is_reported(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
     assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
+    assert result["correctness"] == 0.0
+    assert result["evidence_validity"] == 0.0
+    assert result["scope_accuracy"] == 0.0
     assert result["reward"] == 0.0
 
 

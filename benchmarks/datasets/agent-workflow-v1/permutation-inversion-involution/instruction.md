@@ -3,3 +3,19 @@
 For permutations of `1..7`, select one of the three declared transformations and use it to certify the total inversion count over all `7!` permutations. Submit the selected transformation, its exact value-map parameters, six distinct freely chosen permutation traces with transformed permutations and both inversion counts, the constant pair sum, fixed-point count, pair count, and total inversion sum.
 
 The verifier exhaustively applies the submitted transformation semantics to all 5,040 permutations. A trace-only or formula-only answer is insufficient. Bind an evidence object with exactly `schema_version`, `task_id`, `result`, and `limitations`; `schema_version` must be `"1"`, `task_id` must match the submission, and `result` and `limitations` must be exact copies of the corresponding submission fields. Keep it at or below 16 MiB. Claim only `COMPUTED`; this task does not run a proof assistant.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** exactly `INVOLUTION_TOTAL_CERTIFIED`
+- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** the exact value declared in `submission_schema.json`
+- **Completeness:** `COMPLETE`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/permutation-involution-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `application/json`.
+- **Required artifact filenames:** `evidence/permutation-involution-certificate.json`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

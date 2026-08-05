@@ -140,7 +140,7 @@ def frozen():
 
 def main():
     expected = json.loads((T / "expected.json").read_text())
-    submission = load_submission(W / "submission.json")
+    submission = load_submission(W / "submission.json", require_input_binding=False)
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],

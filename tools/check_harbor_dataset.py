@@ -44,8 +44,7 @@ def check_selected(dataset: str, tasks: tuple[str, ...]) -> int:
     ):
         return 1
     report_ok(
-        f"Harbor selected-task contracts match for {suite.id}: "
-        + ", ".join(tasks)
+        f"Harbor selected-task contracts match for {suite.id}: " + ", ".join(tasks)
     )
     return 0
 

@@ -1,44 +1,141 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/squarefree-class-independence-audit"},
-    "conclusion": {"const": "FOUR_ELEMENT_INDEPENDENT_SUBSET_FORCED"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["ordered_pair_count", "classification", "modular_obstruction", "consequence"],
-      "properties": {
-        "ordered_pair_count": {"const": 2023},
-        "classification": {
-          "type": "object", "additionalProperties": false,
-          "required": ["class_key", "product_square_iff", "pair_count_formula", "independent_selection"],
-          "properties": {
-            "class_key": {"const": "SQUAREFREE_KERNEL"},
-            "product_square_iff": {"const": "KERNELS_EQUAL"},
-            "pair_count_formula": {"const": "SUM_OF_SQUARED_CLASS_SIZES"},
-            "independent_selection": {"const": "ONE_ELEMENT_PER_DISTINCT_CLASS"}
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FOUR_ELEMENT_INDEPENDENT_SUBSET_FORCED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "additionalProperties": false,
+          "properties": {
+            "class_key": {
+              "const": "SQUAREFREE_KERNEL"
+            },
+            "independent_selection": {
+              "const": "ONE_ELEMENT_PER_DISTINCT_CLASS"
+            },
+            "pair_count_formula": {
+              "const": "SUM_OF_SQUARED_CLASS_SIZES"
+            },
+            "product_square_iff": {
+              "const": "KERNELS_EQUAL"
+            }
+          },
+          "required": [
+            "class_key",
+            "product_square_iff",
+            "pair_count_formula",
+            "independent_selection"
+          ],
+          "type": "object"
+        },
+        "consequence": {
+          "const": "AT_LEAST_FOUR_SQUAREFREE_CLASSES"
         },
         "modular_obstruction": {
-          "type": "object", "additionalProperties": false,
-          "required": ["modulus", "target_residue", "quadratic_residues", "maximum_squares_ruled_out"],
+          "additionalProperties": false,
           "properties": {
-            "modulus": {"type": "integer", "minimum": 2, "maximum": 64},
-            "target_residue": {"type": "integer", "minimum": 0},
-            "quadratic_residues": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
-            "maximum_squares_ruled_out": {"const": 3}
-          }
+            "maximum_squares_ruled_out": {
+              "const": 3
+            },
+            "modulus": {
+              "maximum": 64,
+              "minimum": 2,
+              "type": "integer"
+            },
+            "quadratic_residues": {
+              "items": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minItems": 2,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "target_residue": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "modulus",
+            "target_residue",
+            "quadratic_residues",
+            "maximum_squares_ruled_out"
+          ],
+          "type": "object"
         },
-        "consequence": {"const": "AT_LEAST_FOUR_SQUAREFREE_CLASSES"}
-      }
+        "ordered_pair_count": {
+          "const": 2023
+        }
+      },
+      "required": [
+        "ordered_pair_count",
+        "classification",
+        "modular_obstruction",
+        "consequence"
+      ],
+      "type": "object"
     },
-    "claimed_assurance": {"const": "COMPUTED"},
-    "scope": {"const": "ALL_FINITE_SETS_OF_POSITIVE_INTEGERS_WITH_2023_SQUARE_PRODUCT_ORDERED_PAIRS"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+    "scope": {
+      "const": "ALL_FINITE_SETS_OF_POSITIVE_INTEGERS_WITH_2023_SQUARE_PRODUCT_ORDERED_PAIRS",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/squarefree-class-independence-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

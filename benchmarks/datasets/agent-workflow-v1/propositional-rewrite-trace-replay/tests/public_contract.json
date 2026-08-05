@@ -1,0 +1,431 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "TARGET_REACHED",
+      "NO_VALID_TRACE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/rewrite-trace.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/rewrite-trace.json"
+  ],
+  "schema_definitions": {
+    "node": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            "op": {
+              "const": "atom"
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "false"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "args": {
+              "items": {
+                "$ref": "#/$defs/node"
+              },
+              "maxItems": 1,
+              "minItems": 1,
+              "type": "array"
+            },
+            "op": {
+              "const": "not"
+            }
+          },
+          "required": [
+            "op",
+            "args"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "args": {
+              "items": {
+                "$ref": "#/$defs/node"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "op": {
+              "const": "imp"
+            }
+          },
+          "required": [
+            "op",
+            "args"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "args": {
+              "items": {
+                "$ref": "#/$defs/node"
+              },
+              "maxItems": 16,
+              "minItems": 2,
+              "type": "array"
+            },
+            "op": {
+              "enum": [
+                "and",
+                "or"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "args"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "step": {
+      "additionalProperties": false,
+      "properties": {
+        "after_ast": {
+          "$ref": "#/$defs/node"
+        },
+        "path": {
+          "items": {
+            "maximum": 15,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 12,
+          "type": "array"
+        },
+        "rule": {
+          "enum": [
+            "DE_MORGAN_OR",
+            "NOT_IMPLICATION",
+            "DOUBLE_NEGATION",
+            "FLATTEN_ASSOCIATIVE",
+            "CONTRADICTION"
+          ]
+        }
+      },
+      "required": [
+        "rule",
+        "path",
+        "after_ast"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "final_ast": {
+        "$ref": "#/$defs/node"
+      },
+      "steps": {
+        "items": {
+          "$ref": "#/$defs/step"
+        },
+        "maxItems": 16,
+        "minItems": 6,
+        "type": "array"
+      }
+    },
+    "required": [
+      "steps",
+      "final_ast"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "node": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              "op": {
+                "const": "atom"
+              }
+            },
+            "required": [
+              "op",
+              "name"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "const": "false"
+              }
+            },
+            "required": [
+              "op"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "$ref": "#/$defs/node"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "type": "array"
+              },
+              "op": {
+                "const": "not"
+              }
+            },
+            "required": [
+              "op",
+              "args"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "$ref": "#/$defs/node"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              "op": {
+                "const": "imp"
+              }
+            },
+            "required": [
+              "op",
+              "args"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "$ref": "#/$defs/node"
+                },
+                "maxItems": 16,
+                "minItems": 2,
+                "type": "array"
+              },
+              "op": {
+                "enum": [
+                  "and",
+                  "or"
+                ]
+              }
+            },
+            "required": [
+              "op",
+              "args"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "step": {
+        "additionalProperties": false,
+        "properties": {
+          "after_ast": {
+            "$ref": "#/$defs/node"
+          },
+          "path": {
+            "items": {
+              "maximum": 15,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "rule": {
+            "enum": [
+              "DE_MORGAN_OR",
+              "NOT_IMPLICATION",
+              "DOUBLE_NEGATION",
+              "FLATTEN_ASSOCIATIVE",
+              "CONTRADICTION"
+            ]
+          }
+        },
+        "required": [
+          "rule",
+          "path",
+          "after_ast"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "TARGET_REACHED",
+          "NO_VALID_TRACE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/rewrite-trace.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "final_ast": {
+            "$ref": "#/$defs/node"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/$defs/step"
+            },
+            "maxItems": 16,
+            "minItems": 6,
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps",
+          "final_ast"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/propositional-rewrite-trace-replay"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/propositional-rewrite-trace-replay",
+  "verification_record": null
+}

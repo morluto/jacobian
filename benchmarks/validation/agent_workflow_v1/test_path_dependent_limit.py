@@ -105,7 +105,7 @@ def test_protocol_validity_is_reported_separately(tmp_path: Path) -> None:
     submission["task_id"] = "wrong/task"
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["protocol_compliance"] == 0.0
     assert result["reward"] == 0.0
 

@@ -5,13 +5,12 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError, CapabilityService
+from jacobian.capability_service import CapabilityInvocationError
 from jacobian.conjecture_ingestion import install_conjecture_ingestion_capability
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityRequest,
 )
-from jacobian.memory import ResearchMemory
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -292,48 +291,6 @@ def test_allowlisted_source_without_statement_uses_no_text_status(
     assert result.output["ingestion_status"] == "METADATA_INDEXED_NO_TEXT"
     assert result.output["indexed_statement"] is None
     assert result.output["withheld_fields"] == []
-
-
-def test_descriptor_disables_episode_recording(tmp_path: Path) -> None:
-    adapter = _adapter(tmp_path)
-
-    assert adapter.descriptor.records_episode is False
-
-
-def test_restricted_request_records_only_policy_safe_memory(tmp_path: Path) -> None:
-    store = ArtifactRepository(tmp_path)
-    schemas = SchemaRegistry(store)
-    artifacts = ArtifactService(store, schemas)
-    memory = ResearchMemory(store, schemas)
-    adapter, _ = install_conjecture_ingestion_capability(
-        store,
-        schemas,
-        artifacts,
-        memory,
-    )
-    service = CapabilityService(store, memory)
-    service.register(adapter)
-
-    result = service.invoke(
-        CapabilityRequest(
-            capability_id="dataset.conjecture.ingest",
-            input=_request(license_id="PROPRIETARY"),
-        )
-    )
-
-    assert result.episode_uri is not None
-    episode = store.get(result.episode_uri)
-    assert "statement" not in episode.payload["request"]
-    assert "license_evidence_text" not in episode.payload["request"]
-    assert episode.payload["request"]["metadata"]["title"] == "Fixture conjecture"
-    assert episode.payload["result"]["provider"] == adapter.descriptor.provider
-    assert (
-        episode.payload["result"]["provider_digest"]
-        == adapter.descriptor.provider_runtime.digest
-    )
-    assert len(episode.manifest.summary) <= 512
-    search = memory.search(query="Fixture conjecture", limit=10)
-    assert any(hit.episode_uri == result.episode_uri for hit in search.hits)
 
 
 def test_generic_artifact_write_rejects_policy_bypass(tmp_path: Path) -> None:

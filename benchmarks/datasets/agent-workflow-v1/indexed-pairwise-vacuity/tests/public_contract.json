@@ -1,0 +1,313 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "RANGE_PAIRWISE_IS_VACUOUS",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "cosets": {
+        "items": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "type": "array"
+      },
+      "covering_part_references": {
+        "items": {
+          "const": 0
+        },
+        "type": "array"
+      },
+      "duplicate_indices": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "indexed_pairwise_truth": {
+        "type": "boolean"
+      },
+      "modulus": {
+        "maximum": 24,
+        "minimum": 8,
+        "type": "integer"
+      },
+      "part_artifact": {
+        "additionalProperties": false,
+        "properties": {
+          "elements": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "id": {
+            "const": 0
+          },
+          "kind": {
+            "const": "SUBGROUP"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "elements"
+        ],
+        "type": "object"
+      },
+      "range_pairwise_truth": {
+        "type": "boolean"
+      },
+      "representatives": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "subgroup": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "subgroup_step": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "modulus",
+      "subgroup_step",
+      "subgroup",
+      "representatives",
+      "cosets",
+      "part_artifact",
+      "covering_part_references",
+      "range_pairwise_truth",
+      "indexed_pairwise_truth",
+      "duplicate_indices"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "RANGE_PAIRWISE_IS_VACUOUS",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "cosets": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "type": "array"
+          },
+          "covering_part_references": {
+            "items": {
+              "const": 0
+            },
+            "type": "array"
+          },
+          "duplicate_indices": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "indexed_pairwise_truth": {
+            "type": "boolean"
+          },
+          "modulus": {
+            "maximum": 24,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "part_artifact": {
+            "additionalProperties": false,
+            "properties": {
+              "elements": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "id": {
+                "const": 0
+              },
+              "kind": {
+                "const": "SUBGROUP"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "elements"
+            ],
+            "type": "object"
+          },
+          "range_pairwise_truth": {
+            "type": "boolean"
+          },
+          "representatives": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "subgroup": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "subgroup_step": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "modulus",
+          "subgroup_step",
+          "subgroup",
+          "representatives",
+          "cosets",
+          "part_artifact",
+          "covering_part_references",
+          "range_pairwise_truth",
+          "indexed_pairwise_truth",
+          "duplicate_indices"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/indexed-pairwise-vacuity"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/indexed-pairwise-vacuity",
+  "verification_record": null
+}

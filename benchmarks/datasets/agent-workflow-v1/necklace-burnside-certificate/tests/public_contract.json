@@ -1,0 +1,288 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "DIHEDRAL_ORBITS_ENUMERATED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "FINITE_LENGTH_16_INSTANCE",
+      "NO_GENERAL_ENUMERATION_THEOREM"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "evidenceContent": {
+      "additionalProperties": false,
+      "description": "Required shape of the JSON object stored in evidence/answer.txt; the verifier enforces this exact four-key contract.",
+      "properties": {
+        "limitations": {
+          "const": [
+            "FINITE_LENGTH_16_INSTANCE",
+            "NO_GENERAL_ENUMERATION_THEOREM"
+          ]
+        },
+        "result": {
+          "description": "The same result object placed in submission.json."
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/necklace-burnside-certificate"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "ALL_LENGTH_16_BINARY_WORDS_AND_ALL_32_DIHEDRAL_ACTIONS",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "burnside_numerator": {
+        "description": "Sum of all 32 rotation and reflection fixed-point counts.",
+        "minimum": 1,
+        "type": "integer"
+      },
+      "canonical_representatives": {
+        "description": "Sorted list of the lexicographically least representative of every orbit.",
+        "items": {
+          "pattern": "^[01]{16}$",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "orbit_count": {
+        "description": "Number of dihedral orbits on valid words.",
+        "minimum": 1,
+        "type": "integer"
+      },
+      "reflection_fixed_counts": {
+        "description": "Index k is the count of valid words fixed by the reflection through index k (word[i] == word[(k-i) mod 16]).",
+        "items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 16,
+        "minItems": 16,
+        "type": "array"
+      },
+      "rotation_fixed_counts": {
+        "description": "Index k is the count of valid words fixed by rotation by k positions (word[i] == word[(i+k) mod 16]).",
+        "items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 16,
+        "minItems": 16,
+        "type": "array"
+      },
+      "valid_labelled_words": {
+        "description": "Total number of valid labelled binary words of length 16 with no cyclic run of three equal bits.",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "valid_labelled_words",
+      "rotation_fixed_counts",
+      "reflection_fixed_counts",
+      "burnside_numerator",
+      "orbit_count",
+      "canonical_representatives"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "evidenceContent": {
+        "additionalProperties": false,
+        "description": "Required shape of the JSON object stored in evidence/answer.txt; the verifier enforces this exact four-key contract.",
+        "properties": {
+          "limitations": {
+            "const": [
+              "FINITE_LENGTH_16_INSTANCE",
+              "NO_GENERAL_ENUMERATION_THEOREM"
+            ]
+          },
+          "result": {
+            "description": "The same result object placed in submission.json."
+          },
+          "schema_version": {
+            "const": "1"
+          },
+          "task_id": {
+            "const": "jacobian/necklace-burnside-certificate"
+          }
+        },
+        "required": [
+          "schema_version",
+          "task_id",
+          "result",
+          "limitations"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "DIHEDRAL_ORBITS_ENUMERATED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "FINITE_LENGTH_16_INSTANCE",
+          "NO_GENERAL_ENUMERATION_THEOREM"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "burnside_numerator": {
+            "description": "Sum of all 32 rotation and reflection fixed-point counts.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "canonical_representatives": {
+            "description": "Sorted list of the lexicographically least representative of every orbit.",
+            "items": {
+              "pattern": "^[01]{16}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "orbit_count": {
+            "description": "Number of dihedral orbits on valid words.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reflection_fixed_counts": {
+            "description": "Index k is the count of valid words fixed by the reflection through index k (word[i] == word[(k-i) mod 16]).",
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 16,
+            "minItems": 16,
+            "type": "array"
+          },
+          "rotation_fixed_counts": {
+            "description": "Index k is the count of valid words fixed by rotation by k positions (word[i] == word[(i+k) mod 16]).",
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 16,
+            "minItems": 16,
+            "type": "array"
+          },
+          "valid_labelled_words": {
+            "description": "Total number of valid labelled binary words of length 16 with no cyclic run of three equal bits.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "valid_labelled_words",
+          "rotation_fixed_counts",
+          "reflection_fixed_counts",
+          "burnside_numerator",
+          "orbit_count",
+          "canonical_representatives"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "ALL_LENGTH_16_BINARY_WORDS_AND_ALL_32_DIHEDRAL_ACTIONS",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/necklace-burnside-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/necklace-burnside-certificate",
+  "verification_record": null
+}

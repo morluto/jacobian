@@ -105,13 +105,17 @@ def test_evidence_result_requires_exact_json_types(tmp_path):
 
 
 def test_math_diagnostic_survives_envelope_failures(tmp_path):
-    for name, mutate in [
-        ("extra-field", lambda s: s.update(extra=True)),
-        ("conclusion", lambda s: s.update(conclusion="INSUFFICIENT_EVIDENCE")),
-        ("completeness", lambda s: s.update(completeness="UNKNOWN")),
+    for name, mutate, expected_correctness in [
+        ("extra-field", lambda s: s.update(extra=True), 0.0),
+        (
+            "conclusion",
+            lambda s: s.update(conclusion="INSUFFICIENT_EVIDENCE"),
+            1.0,
+        ),
+        ("completeness", lambda s: s.update(completeness="UNKNOWN"), 1.0),
     ]:
         submission = copy.deepcopy(_oracle())
         mutate(submission)
         reward = _verify(tmp_path / name, submission)
-        assert reward["correctness"] == 1.0
+        assert reward["correctness"] == expected_correctness, name
         assert reward["reward"] == 0

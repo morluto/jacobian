@@ -114,23 +114,13 @@
     },
     {
       "path": "benchmarks/tooling/harbor_suite.py",
-      "symbol": "_dataset_task_directories",
-      "complexity": 11
-    },
-    {
-      "path": "benchmarks/tooling/harbor_suite.py",
       "symbol": "validate_task_topology",
-      "complexity": 19
+      "complexity": 13
     },
     {
       "path": "src/jacobian/adapters/mcp/remote.py",
       "symbol": "load_static_token_file",
       "complexity": 11
-    },
-    {
-      "path": "src/jacobian/bounded_process.py",
-      "symbol": "run_bounded_process",
-      "complexity": 13
     },
     {
       "path": "src/jacobian/canonical.py",
@@ -140,7 +130,7 @@
     {
       "path": "src/jacobian/capability_dispatch.py",
       "symbol": "invoke",
-      "complexity": 12
+      "complexity": 11
     },
     {
       "path": "src/jacobian/capability_verification.py",
@@ -283,11 +273,6 @@
       "complexity": 13
     },
     {
-      "path": "src/jacobian/memory.py",
-      "symbol": "search",
-      "complexity": 12
-    },
-    {
       "path": "src/jacobian/plugins/matrices.py",
       "symbol": "_kernel_vector",
       "complexity": 11
@@ -310,7 +295,7 @@
     {
       "path": "src/jacobian/sat_smt/cadical.py",
       "symbol": "_run",
-      "complexity": 15
+      "complexity": 14
     },
     {
       "path": "src/jacobian/sat_smt/cvc5_worker.py",
@@ -574,11 +559,6 @@
     },
     {
       "path": "src/jacobian_checkers/sat.py",
-      "symbol": "_bounded_drat_trim",
-      "complexity": 13
-    },
-    {
-      "path": "src/jacobian_checkers/sat.py",
       "symbol": "_validate_cnf",
       "complexity": 16
     },
@@ -586,11 +566,6 @@
       "path": "src/jacobian_checkers/sat.py",
       "symbol": "check_assignment",
       "complexity": 16
-    },
-    {
-      "path": "src/jacobian_checkers/sat.py",
-      "symbol": "check_unsat_proof",
-      "complexity": 11
     },
     {
       "path": "src/jacobian_checkers/sat_lrat.py",
@@ -621,11 +596,6 @@
       "path": "src/jacobian_checkers/smt.py",
       "symbol": "_top_level_commands",
       "complexity": 12
-    },
-    {
-      "path": "src/jacobian_checkers/smt.py",
-      "symbol": "check_unsat_proof",
-      "complexity": 11
     },
     {
       "path": "tests/component/checkers/exact_domain_checker_support.py",

@@ -1,0 +1,317 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "UNIQUE_STABLE_INITIAL_VALUE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/stability-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "EXPONENTIAL_DOMINANCE_USES_ARCHIMEDEAN_ORDER",
+      "NO_PROOF_ASSISTANT_REPLAY"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/stability-certificate.json"
+  ],
+  "schema_definitions": {
+    "checkpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "a_n": {
+          "$ref": "#/$defs/rat"
+        },
+        "difference": {
+          "$ref": "#/$defs/rat"
+        },
+        "n": {
+          "maximum": 30,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "a_n",
+        "difference"
+      ],
+      "type": "object"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "a0": {
+          "$ref": "#/$defs/rat"
+        },
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          },
+          "maxItems": 10,
+          "minItems": 4,
+          "type": "array"
+        },
+        "difference_delta_coefficient": {
+          "maximum": -1,
+          "minimum": -12,
+          "type": "integer"
+        },
+        "dominance_base": {
+          "$ref": "#/$defs/rat"
+        },
+        "homogeneous_base": {
+          "maximum": -2,
+          "minimum": -10,
+          "type": "integer"
+        },
+        "negative_delta_bad_parity": {
+          "enum": [
+            "EVEN",
+            "ODD"
+          ]
+        },
+        "particular_coefficient": {
+          "$ref": "#/$defs/rat"
+        },
+        "positive_delta_bad_parity": {
+          "enum": [
+            "EVEN",
+            "ODD"
+          ]
+        },
+        "reciprocal": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "particular_coefficient",
+        "homogeneous_base",
+        "difference_delta_coefficient",
+        "positive_delta_bad_parity",
+        "negative_delta_bad_parity",
+        "dominance_base",
+        "checkpoints",
+        "a0",
+        "reciprocal"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "DECLARED_RECURRENCE_ALL_N_AT_LEAST_ONE",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "checkpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "a_n": {
+            "$ref": "#/$defs/rat"
+          },
+          "difference": {
+            "$ref": "#/$defs/rat"
+          },
+          "n": {
+            "maximum": 30,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n",
+          "a_n",
+          "difference"
+        ],
+        "type": "object"
+      },
+      "rat": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "a0": {
+            "$ref": "#/$defs/rat"
+          },
+          "checkpoints": {
+            "items": {
+              "$ref": "#/$defs/checkpoint"
+            },
+            "maxItems": 10,
+            "minItems": 4,
+            "type": "array"
+          },
+          "difference_delta_coefficient": {
+            "maximum": -1,
+            "minimum": -12,
+            "type": "integer"
+          },
+          "dominance_base": {
+            "$ref": "#/$defs/rat"
+          },
+          "homogeneous_base": {
+            "maximum": -2,
+            "minimum": -10,
+            "type": "integer"
+          },
+          "negative_delta_bad_parity": {
+            "enum": [
+              "EVEN",
+              "ODD"
+            ]
+          },
+          "particular_coefficient": {
+            "$ref": "#/$defs/rat"
+          },
+          "positive_delta_bad_parity": {
+            "enum": [
+              "EVEN",
+              "ODD"
+            ]
+          },
+          "reciprocal": {
+            "$ref": "#/$defs/rat"
+          }
+        },
+        "required": [
+          "particular_coefficient",
+          "homogeneous_base",
+          "difference_delta_coefficient",
+          "positive_delta_bad_parity",
+          "negative_delta_bad_parity",
+          "dominance_base",
+          "checkpoints",
+          "a0",
+          "reciprocal"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "UNIQUE_STABLE_INITIAL_VALUE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/stability-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "EXPONENTIAL_DOMINANCE_USES_ARCHIMEDEAN_ORDER",
+          "NO_PROOF_ASSISTANT_REPLAY"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "DECLARED_RECURRENCE_ALL_N_AT_LEAST_ONE",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/alternating-recurrence-stability-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/alternating-recurrence-stability-certificate",
+  "verification_record": null
+}

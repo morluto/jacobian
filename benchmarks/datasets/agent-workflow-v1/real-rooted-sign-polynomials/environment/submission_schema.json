@@ -1,1 +1,190 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/real-rooted-sign-polynomials"},"conclusion":{"enum":["CLASSIFICATION_CERTIFIED","INSUFFICIENT_EVIDENCE"]},"result":{"$ref":"#/$defs/result"},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"const":"ALL_NONCONSTANT_SIGN_COEFFICIENT_POLYNOMIALS"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/classification-certificate.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}},"description":"Digest-bound descriptor for evidence/classification-certificate.json, which must be a JSON object matching #/$defs/evidence_envelope"}},"limitations":{"const":["NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"]}},"$defs":{"case":{"type":"object","additionalProperties":false,"required":["coefficients","degree","discriminant","all_roots_real"],"properties":{"coefficients":{"type":"array","minItems":2,"maxItems":4,"items":{"enum":[-1,1]}},"degree":{"type":"integer","minimum":1,"maximum":3},"discriminant":{"type":["integer","null"]},"all_roots_real":{"type":"boolean"}}},"result":{"type":"object","additionalProperties":false,"required":["normalized_second_coefficient","second_power_sum","root_product_square","maximum_degree","candidate_audit","classified_polynomials"],"properties":{"normalized_second_coefficient":{"const":-1},"second_power_sum":{"const":3},"root_product_square":{"const":1},"maximum_degree":{"const":3},"candidate_audit":{"type":"array","minItems":28,"maxItems":28,"items":{"$ref":"#/$defs/case"}},"classified_polynomials":{"type":"array","minItems":12,"maxItems":12,"items":{"type":"array","minItems":2,"maxItems":4,"items":{"enum":[-1,1]}}}}},"evidence_envelope":{"type":"object","additionalProperties":false,"required":["schema_version","task_id","result","limitations"],"properties":{"schema_version":{"const":"1"},"task_id":{"const":"jacobian/real-rooted-sign-polynomials"},"result":{"$ref":"#/$defs/result"},"limitations":{"const":["NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"]}}}}}
+{
+  "$defs": {
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "all_roots_real": {
+          "type": "boolean"
+        },
+        "coefficients": {
+          "items": {
+            "enum": [
+              -1,
+              1
+            ]
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "type": "array"
+        },
+        "degree": {
+          "maximum": 3,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "discriminant": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "coefficients",
+        "degree",
+        "discriminant",
+        "all_roots_real"
+      ],
+      "type": "object"
+    },
+    "evidence_envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "const": [
+            "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/result"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/real-rooted-sign-polynomials"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_audit": {
+          "items": {
+            "$ref": "#/$defs/case"
+          },
+          "maxItems": 28,
+          "minItems": 28,
+          "type": "array"
+        },
+        "classified_polynomials": {
+          "items": {
+            "items": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "maxItems": 4,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 12,
+          "minItems": 12,
+          "type": "array"
+        },
+        "maximum_degree": {
+          "const": 3
+        },
+        "normalized_second_coefficient": {
+          "const": -1
+        },
+        "root_product_square": {
+          "const": 1
+        },
+        "second_power_sum": {
+          "const": 3
+        }
+      },
+      "required": [
+        "normalized_second_coefficient",
+        "second_power_sum",
+        "root_product_square",
+        "maximum_degree",
+        "candidate_audit",
+        "classified_polynomials"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "CLASSIFICATION_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/classification-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "ALL_NONCONSTANT_SIGN_COEFFICIENT_POLYNOMIALS",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/real-rooted-sign-polynomials"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

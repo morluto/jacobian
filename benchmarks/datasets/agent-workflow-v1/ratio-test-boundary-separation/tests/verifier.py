@@ -247,7 +247,7 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     has_affirmative_claim = isinstance(limitations, list) and any(
         _affirmative_proof_assistant_claim(item) for item in limitations
     )
-    math_correct = bool(protocol and _source_is_bound() and _result(data.get("result")))
+    math_correct = bool(_source_is_bound() and _result(data.get("result")))
     evidence_valid = bool(
         math_correct and _evidence(data.get("evidence"), data.get("result"))
     )

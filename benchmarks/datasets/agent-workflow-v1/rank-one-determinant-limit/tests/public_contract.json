@@ -1,0 +1,335 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "LIMSUP_EQUALS_FOUR"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/determinant-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "NO_FLOATING_POINT_SPECTRAL_EVIDENCE",
+      "NO_GENERAL_MATRIX_FAMILY_BEYOND_THE_FROZEN_RANK_ONE_FORM"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/determinant-certificate.json"
+  ],
+  "schema_definitions": {
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "$ref": "#/$defs/rat"
+        },
+        "partial_fraction_coefficients": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/sample"
+          },
+          "maxItems": 12,
+          "minItems": 6,
+          "type": "array"
+        },
+        "tail_gap": {
+          "additionalProperties": false,
+          "properties": {
+            "affine_shifts": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "numerator": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "affine_shifts"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "partial_fraction_coefficients",
+        "samples",
+        "tail_gap",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "sample": {
+      "additionalProperties": false,
+      "properties": {
+        "determinant_constant": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "determinant_linear": {
+          "maximum": -1,
+          "type": "integer"
+        },
+        "diagonal_product": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "lambda": {
+          "$ref": "#/$defs/rat"
+        },
+        "n": {
+          "maximum": 30,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "reciprocal_sum": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "n",
+        "diagonal_product",
+        "reciprocal_sum",
+        "determinant_constant",
+        "determinant_linear",
+        "lambda"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "RANK_ONE_FAMILY_AND_LIMIT_ONLY",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "rat": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "$ref": "#/$defs/rat"
+          },
+          "partial_fraction_coefficients": {
+            "items": {
+              "$ref": "#/$defs/rat"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/$defs/sample"
+            },
+            "maxItems": 12,
+            "minItems": 6,
+            "type": "array"
+          },
+          "tail_gap": {
+            "additionalProperties": false,
+            "properties": {
+              "affine_shifts": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              "numerator": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "affine_shifts"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "partial_fraction_coefficients",
+          "samples",
+          "tail_gap",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "sample": {
+        "additionalProperties": false,
+        "properties": {
+          "determinant_constant": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "determinant_linear": {
+            "maximum": -1,
+            "type": "integer"
+          },
+          "diagonal_product": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "lambda": {
+            "$ref": "#/$defs/rat"
+          },
+          "n": {
+            "maximum": 30,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "reciprocal_sum": {
+            "$ref": "#/$defs/rat"
+          }
+        },
+        "required": [
+          "n",
+          "diagonal_product",
+          "reciprocal_sum",
+          "determinant_constant",
+          "determinant_linear",
+          "lambda"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "LIMSUP_EQUALS_FOUR"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/determinant-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "NO_FLOATING_POINT_SPECTRAL_EVIDENCE",
+          "NO_GENERAL_MATRIX_FAMILY_BEYOND_THE_FROZEN_RANK_ONE_FORM"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "RANK_ONE_FAMILY_AND_LIMIT_ONLY",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/rank-one-determinant-limit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/rank-one-determinant-limit",
+  "verification_record": null
+}

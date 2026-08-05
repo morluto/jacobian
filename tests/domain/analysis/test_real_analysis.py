@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -93,7 +92,7 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
         *,
         wall_seconds: int,
     ) -> dict[str, object]:
-        raise subprocess.TimeoutExpired("validated-analysis-worker", wall_seconds)
+        raise TimeoutError
 
     monkeypatch.setattr(operations, "_run_worker", timeout)
     timed_out = runtime.core.capabilities.invoke(

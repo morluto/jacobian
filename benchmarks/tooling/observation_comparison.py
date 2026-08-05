@@ -11,7 +11,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.tooling.harbor_suite import HarborSuiteError
+from benchmarks.tooling.errors import HarborSuiteError
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parents[1] / "schemas" / "observation-evidence.schema.json"

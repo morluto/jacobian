@@ -16,4 +16,4 @@ own subdirectory.
 - [Linear algebra](linear-algebra/index.md)
 - [Topology](topology/index.md)
 - [Geometry](geometry/index.md)
-- [Research memory](research-memory/index.md)
+- [Datasets](datasets/index.md)

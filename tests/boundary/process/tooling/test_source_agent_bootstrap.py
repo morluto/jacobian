@@ -26,11 +26,24 @@ def test_version_identity_uses_uv_normalization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     doctor = _load_tool("source_agent_doctor")
+    from benchmarks.tooling.command_runner import (
+        ToolCommandResult,
+        ToolCommandStatus,
+    )
 
-    def fake_run(command: list[str], **_kwargs: object) -> object:
-        return type("Completed", (), {"stdout": "0.7.0a0\n"})()
+    def fake_run_operator_command(
+        command: str,
+        arguments: tuple[str, ...] = (),
+        **_kwargs: object,
+    ) -> object:
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"0.7.0a0\n",
+            stderr=b"",
+        )
 
-    monkeypatch.setattr(doctor.subprocess, "run", fake_run)
+    monkeypatch.setattr(doctor, "run_operator_command", fake_run_operator_command)
     assert doctor._repository_version(ROOT) == "0.7.0a0"
 
 

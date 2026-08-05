@@ -200,8 +200,7 @@ The always-available bundled catalog contains:
 - `graph.search.atlas` for bounded exact-order construction from NetworkX's
   maintained Graph Atlas;
 - `graph.compute.properties` for exact batched properties over Jacobian graph
-  artifacts;
-- `knowledge.search` for trust-labeled local episode retrieval.
+  artifacts.
 
 When the operator enables bundled references, the catalog also contains
 `lean.check` for checker-backed Lean proof replay. These capabilities are not a
@@ -239,24 +238,6 @@ An adapter cannot create verified authority. `CapabilityService` accepts
 artifact and exposes its checked evidence. Failure falls closed to a
 non-verified result or operational error.
 
-## Database-first memory
-
-Every operationally completed, reusable capability invocation is stored as an
-immutable research episode and indexed locally. Invalid requests,
-infrastructure errors, timeouts, and cancellations are returned with their
-operational status but do not enter research memory. An episode binds:
-
-- capability and adapter version;
-- exact request and result;
-- exploration or verification mode;
-- assurance label and verification record, when present;
-- artifact lineage;
-- timestamp, summary, and tags.
-
-`knowledge.search` queries the local index. Retrieved records retain their
-original assurance; retrieval never upgrades them. The local store is useful
-without an external corpus provider.
-
 ## Local and remote hosts
 
 The local Codex host uses STDIO. It exposes `capability://catalog`,
@@ -273,9 +254,8 @@ concrete requirements.
 
 The immediate product work is to stabilize the primitive contract, make stage
 composition visible, and exercise external adapters without runtime or MCP
-edits. Authenticated hosting, local research memory, and compact tool
-projection support that work; they are not substitutes for useful mathematical
-operations.
+edits. Authenticated hosting and compact tool projection support that work;
+they are not substitutes for useful mathematical operations.
 
 Agent evaluations measure held-out mathematical tasks, including counterexample
 search, claim transformation, proof decomposition, premise retrieval, and

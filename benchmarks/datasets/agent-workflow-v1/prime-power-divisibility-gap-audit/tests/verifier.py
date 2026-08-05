@@ -37,7 +37,11 @@ def _submission() -> dict[str, Any] | None:
 
 
 def _integer(value: object) -> int | None:
-    return value if type(value) is int else None
+    if type(value) is int:
+        return value
+    if type(value) is float and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return None
 
 
 def _prime(value: int) -> bool:

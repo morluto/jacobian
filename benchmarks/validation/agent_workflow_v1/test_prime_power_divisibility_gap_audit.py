@@ -44,6 +44,16 @@ def _verify(tmp_path: Path, submission: dict[str, object]):
     return _run_verifier(*_prepare(tmp_path, submission))
 
 
+def _integral_json_numbers(value: object) -> object:
+    if type(value) is int:
+        return float(value)
+    if isinstance(value, list):
+        return [_integral_json_numbers(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _integral_json_numbers(item) for key, item in value.items()}
+    return value
+
+
 def test_oracle_and_alternative_countermodel(tmp_path: Path) -> None:
     assert _verify(tmp_path / "oracle", _oracle())["reward"] == 1.0
     alternative = copy.deepcopy(_oracle())
@@ -131,6 +141,17 @@ def test_schema_bypass_values_fail_closed(tmp_path: Path) -> None:
         assert reward["reward"] == 0.0
 
 
+def test_accepts_schema_valid_integral_json_numbers(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["result"] = _integral_json_numbers(submission["result"])
+
+    reward = _verify(tmp_path, submission)
+
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> None:
     bad_conclusion = copy.deepcopy(_oracle())
     bad_conclusion["conclusion"] = "WRONG"
@@ -140,6 +161,16 @@ def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> Non
     assert reward["scope_accuracy"] == 1.0
     assert reward["assurance_calibration"] == 1.0
     assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0
+
+    bad_assurance = copy.deepcopy(_oracle())
+    bad_assurance["claimed_assurance"] = "UNVERIFIED"
+    reward = _verify(tmp_path / "assurance", bad_assurance)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["assurance_calibration"] == 0.0
+    assert reward["protocol_compliance"] == 1.0
     assert reward["reward"] == 0.0
 
     submission = copy.deepcopy(_oracle())
@@ -191,6 +222,36 @@ def test_evidence_is_bound_to_the_expected_task(tmp_path: Path) -> None:
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 0.0
     assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_evidence_schema_version_is_public_and_required(tmp_path: Path) -> None:
+    contract = json.loads(
+        (
+            Path("benchmarks/datasets/agent-workflow-v1")
+            / TASK
+            / "tests/public_contract.json"
+        ).read_text()
+    )
+    envelope = contract["schema_definitions"]["evidence_envelope"]
+    assert envelope["properties"]["schema_version"] == {"const": "1"}
+    assert "schema_version" in envelope["required"]
+
+    submission = copy.deepcopy(_oracle())
+    task, app, logs = _prepare(tmp_path, submission)
+    evidence_path = app / "evidence/divisibility-audit.json"
+    evidence = json.loads(evidence_path.read_text())
+    evidence.pop("schema_version")
+    evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission))
+
+    reward = _run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 0.0
+    assert reward["protocol_compliance"] == 1.0
     assert reward["reward"] == 0.0
 
 

@@ -26,11 +26,41 @@
       "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
     ]
   },
-  "public_notes": "The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string 1), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved.",
+  "public_notes": "The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string \"1\"), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved. JSON numbers with integral values are valid wherever the submission schema declares type integer; booleans and non-integral numbers are not.",
   "required_artifact_filenames": [
     "evidence/divisibility-audit.json"
   ],
-  "schema_definitions": {},
+  "schema_definitions": {
+    "evidence_envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "const": [
+            "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/result"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/prime-power-divisibility-gap-audit"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "$ref": "#/properties/result"
+    }
+  },
   "schema_version": "1",
   "scope": {
     "const": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE",
@@ -125,6 +155,37 @@
     }
   },
   "submission_schema": {
+    "$defs": {
+      "evidence_envelope": {
+        "additionalProperties": false,
+        "properties": {
+          "limitations": {
+            "const": [
+              "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+            ]
+          },
+          "result": {
+            "$ref": "#/$defs/result"
+          },
+          "schema_version": {
+            "const": "1"
+          },
+          "task_id": {
+            "const": "jacobian/prime-power-divisibility-gap-audit"
+          }
+        },
+        "required": [
+          "schema_version",
+          "task_id",
+          "result",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "$ref": "#/properties/result"
+      }
+    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "additionalProperties": false,

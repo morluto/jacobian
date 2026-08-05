@@ -1,0 +1,23 @@
+{
+  "task_id": "jacobian/prime-power-divisibility-gap-audit",
+  "conclusion": "PRIMEWISE_TO_MODULUS_INFERENCE_INVALID",
+  "result": {
+    "prime": 2,
+    "exponent": 3,
+    "coprime_factor": 3,
+    "modulus": 24,
+    "cycle_count": 12,
+    "cycle_groups": [{"multiplicity": 11, "cycle_sum": 2}, {"multiplicity": 1, "cycle_sum": 4}],
+    "total_sum": 26,
+    "p_valuation_modulus": 3,
+    "p_valuation_total": 1,
+    "local_statement": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P",
+    "global_statement": "TOTAL_NOT_DIVISIBLE_BY_M",
+    "missing_condition": "PRIME_POWER_MULTIPLICITIES"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/divisibility-audit.json", "sha256": "sha256:92e10c7c67cdfeee077db81d939ccce4f6cc217c1a68d84ac553a158859808d1"}],
+  "limitations": ["The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."]
+}

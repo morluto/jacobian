@@ -175,7 +175,9 @@ def _evidence(value: object, result: object) -> bool:
         for items in (circle, distance)
     ) or not isinstance(multiplier, str):
         return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
+    path = resolve_evidence(
+        value[0], expected_path="evidence/answer.txt", max_bytes=4096
+    )
     if path is None:
         return False
     return _stream_matches_certificate(

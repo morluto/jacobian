@@ -11,7 +11,7 @@ Include this published limitation exactly: `The certificate refutes the publishe
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.
+The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately. Rational certificate fields are bounded to at most 64 base-10 digits per numerator and denominator so parsing remains deterministic and resource-bounded.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

@@ -49,15 +49,19 @@
       "additionalProperties": false,
       "properties": {
         "alpha": {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
           "type": "string"
         },
         "beta": {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
           "type": "string"
         },
         "even_offset": {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
           "type": "string"
         },
         "odd_offset": {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
           "type": "string"
         },
         "trace": {
@@ -71,6 +75,7 @@
                 "type": "integer"
               },
               "value": {
+                "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
                 "type": "string"
               },
               "x": {

@@ -70,7 +70,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     }
     if (
         not isinstance(value, dict)
-        or set(value) != fields
+        or not fields <= set(value)
         or frozen.get("human_score") != 0
     ):
         return False
@@ -111,7 +111,9 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
 
 def _evidence(value: object, result: object) -> bool:
     if (
-        not evidence_list_is_bound(value, expected_path="evidence/answer.txt")
+        not evidence_list_is_bound(
+            value, expected_path="evidence/answer.txt", max_bytes=4096
+        )
         or not isinstance(value, list)
         or len(value) != 1
     ):

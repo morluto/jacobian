@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from verifier_support import (
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
 EVIDENCE_PATH = "evidence/divisibility-audit.json"
 LIMITATION = "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+# Keep exponent-form integers within Python's default raw-integer parsing ceiling.
+MAX_INTEGER_DIGITS = sys.int_info.default_max_str_digits
 
 
 class _JsonFloat(float):
@@ -48,17 +51,32 @@ def _submission() -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-def _integer(value: object) -> int | None:
+def _integer(
+    value: object, *, minimum: int | None = None, maximum: int | None = None
+) -> int | None:
     if type(value) is int:
-        return value
+        integer = value
     if isinstance(value, _JsonFloat):
         try:
             exact = Decimal(value.lexeme)
         except InvalidOperation:
             return None
-        if exact.is_finite() and exact == exact.to_integral_value():
-            return int(exact)
-    return None
+        if (
+            not exact.is_finite()
+            or exact != exact.to_integral_value()
+            or (exact != 0 and exact.adjusted() >= MAX_INTEGER_DIGITS)
+            or (minimum is not None and exact < minimum)
+            or (maximum is not None and exact > maximum)
+        ):
+            return None
+        integer = int(exact)
+    elif type(value) is not int:
+        return None
+    if minimum is not None and integer < minimum:
+        return None
+    if maximum is not None and integer > maximum:
+        return None
+    return integer
 
 
 def _prime(value: int) -> bool:
@@ -96,22 +114,22 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         or frozen.get("human_score") != 0
     ):
         return False
-    prime = _integer(value["prime"])
-    exponent = _integer(value["exponent"])
-    factor = _integer(value["coprime_factor"])
-    modulus = _integer(value["modulus"])
-    cycle_count = _integer(value["cycle_count"])
-    total = _integer(value["total_sum"])
+    maximum_modulus = frozen.get("maximum_modulus")
+    if type(maximum_modulus) is not int or maximum_modulus < 4:
+        return False
+    prime = _integer(value["prime"], minimum=2, maximum=29)
+    exponent = _integer(value["exponent"], minimum=2, maximum=6)
+    factor = _integer(value["coprime_factor"], minimum=1, maximum=1)
+    modulus = _integer(value["modulus"], minimum=4, maximum=maximum_modulus)
+    cycle_count = _integer(
+        value["cycle_count"], minimum=4, maximum=maximum_modulus // 2
+    )
+    total = _integer(value["total_sum"], minimum=1)
     if None in {prime, exponent, factor, modulus, cycle_count, total}:
         return False
-    if not (2 <= prime <= 29 and _prime(prime) and 2 <= exponent <= 6 and factor == 1):
+    if not (_prime(prime) and factor == 1):
         return False
-    if (
-        modulus != prime**exponent * factor
-        or modulus > frozen.get("maximum_modulus")
-        or cycle_count != modulus // prime
-        or cycle_count < 4
-    ):
+    if modulus != prime**exponent * factor or cycle_count != modulus // prime:
         return False
     groups = value["cycle_groups"]
     if not isinstance(groups, list) or not 2 <= len(groups) <= 6:
@@ -122,13 +140,11 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     for group in groups:
         if not isinstance(group, dict) or set(group) != {"multiplicity", "cycle_sum"}:
             return False
-        multiplicity = _integer(group["multiplicity"])
-        cycle_sum = _integer(group["cycle_sum"])
+        multiplicity = _integer(group["multiplicity"], minimum=1, maximum=cycle_count)
+        cycle_sum = _integer(group["cycle_sum"], minimum=1)
         if (
             multiplicity is None
             or cycle_sum is None
-            or multiplicity < 1
-            or cycle_sum < 1
             or cycle_sum in seen_sums
             or cycle_sum % prime
         ):
@@ -136,9 +152,13 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         seen_sums.add(cycle_sum)
         multiplicity_sum += multiplicity
         recomputed_total += multiplicity * cycle_sum
-    reported_modulus_valuation = _integer(value["p_valuation_modulus"])
-    reported_total_valuation = _integer(value["p_valuation_total"])
-    if total <= 0 or None in {reported_modulus_valuation, reported_total_valuation}:
+    reported_modulus_valuation = _integer(
+        value["p_valuation_modulus"], minimum=2, maximum=exponent
+    )
+    reported_total_valuation = _integer(
+        value["p_valuation_total"], minimum=1, maximum=exponent - 1
+    )
+    if None in {reported_modulus_valuation, reported_total_valuation}:
         return False
     valuation_modulus = _valuation(modulus, prime)
     valuation_total = _valuation(total, prime)

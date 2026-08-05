@@ -197,9 +197,18 @@ def _timing_seconds(value: Any) -> float | None:
 
 def _trial_status(trial: dict[str, Any], exception: Any) -> str:
     raw = trial.get("status")
-    if isinstance(raw, str) and raw in {"TIMEOUT", "CANCELLED"}:
+    if isinstance(raw, str) and raw in {
+        "RUNNING",
+        "PENDING",
+        "FAILED",
+        "ERROR",
+        "TIMEOUT",
+        "CANCELLED",
+    }:
         return raw
     if exception is not None:
+        return "ERROR"
+    if isinstance(raw, str) and raw != "COMPLETED":
         return "ERROR"
     return "COMPLETED"
 
@@ -651,8 +660,19 @@ def _heldout_plan_failures(
         failures.append("held-out ledger does not bind the canonical manifest")
     if ledger.get("status") != "COMPLETE":
         failures.append("held-out execution ledger is not COMPLETE")
+    runs = plan.get("runs")
+    if not isinstance(runs, list):
+        failures.append("held-out plan runs must be a list")
+        return [], failures
+    malformed = [index for index, run in enumerate(runs) if not isinstance(run, dict)]
+    if malformed:
+        failures.extend(
+            f"held-out plan runs[{index}] must be an object" for index in malformed
+        )
     selected = [
-        run for run in plan.get("runs", []) if run.get("condition") == condition
+        run
+        for run in runs
+        if isinstance(run, dict) and run.get("condition") == condition
     ]
     if len(selected) != plan.get("pair_count"):
         failures.append(f"held-out {condition} run coverage is incomplete")

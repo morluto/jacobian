@@ -52,15 +52,22 @@ RESOURCE_DERIVED_TASKS = (
     "well-total-domination-counterexample",
 )
 # Tasks whose verifier reports scope independently of assurance typing.
-SCOPE_INDEPENDENT_ASSURANCE_TASKS = ("prime-power-divisibility-gap-audit",)
+SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
+    "prime-power-divisibility-gap-audit",
+    "sine-integral-asymptotic-audit",
+    "steiner-triple-system-27",
+)
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
     "extremal-subset-sum-semantic-audit",
+    "integer-perturbation-domain-audit",
     "necklace-burnside-certificate",
     "prime-power-divisibility-gap-audit",
     "pythagorean-generator-recurrence",
+    "sine-integral-asymptotic-audit",
+    "steiner-triple-system-27",
 )
 VERIFIER_TASKS = tuple(
     sorted(

@@ -19,6 +19,8 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 LIMITATION = "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
 RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$")
+RESULT_FIELDS = frozenset({"alpha", "beta", "even_offset", "odd_offset", "trace"})
+TRACE_FIELDS = frozenset({"n", "x", "y", "value", "floor"})
 
 
 def _load() -> dict[str, Any]:
@@ -51,13 +53,7 @@ def _fraction(value: object) -> Fraction | None:
 
 
 def _result(value: object, frozen: dict[str, Any]) -> bool:
-    if not isinstance(value, dict) or set(value) != {
-        "alpha",
-        "beta",
-        "even_offset",
-        "odd_offset",
-        "trace",
-    }:
+    if not isinstance(value, dict) or not RESULT_FIELDS.issubset(value):
         return False
     alpha, beta = _fraction(value["alpha"]), _fraction(value["beta"])
     even, odd = _fraction(value["even_offset"]), _fraction(value["odd_offset"])
@@ -76,7 +72,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         return False
     if any(
         not isinstance(item, dict)
-        or set(item) != {"n", "x", "y", "value", "floor"}
+        or not TRACE_FIELDS.issubset(item)
         or any(type(item[field]) is not int for field in ("n", "x", "y", "floor"))
         or not isinstance(item["value"], str)
         for item in trace
@@ -99,67 +95,97 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     return all(item["floor"] == item["n"] for item in trace)
 
 
-def _certificate_matches(path: Path, expected_lines: list[str]) -> bool:
-    """Compare the six-line certificate incrementally without materializing it."""
+def _result_protocol_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != RESULT_FIELDS:
+        return False
+    if not all(
+        isinstance(value[name], str) and _fraction(value[name]) is not None
+        for name in ("alpha", "beta", "even_offset", "odd_offset")
+    ):
+        return False
+    trace = value["trace"]
+    return bool(
+        isinstance(trace, list)
+        and len(trace) == 16
+        and all(
+            isinstance(item, dict)
+            and set(item) == TRACE_FIELDS
+            and all(type(item[field]) is int for field in ("n", "x", "y", "floor"))
+            and isinstance(item["value"], str)
+            and _fraction(item["value"]) is not None
+            for item in trace
+        )
+    )
 
-    expected = tuple(line.encode("utf-8") for line in expected_lines)
+
+def _stream_matches_certificate(path: Path, expected: list[str]) -> bool:
+    """Compare nonempty stripped lines without materializing the artifact."""
+
+    expected_bytes = tuple(line.encode() for line in expected)
+    max_line_bytes = max(map(len, expected_bytes), default=0) + 2
     line_index = 0
-    byte_index = 0
-    has_content = False
     try:
         with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(65_536), b""):
-                for byte in chunk:
-                    if byte == ord("\n"):
-                        if has_content:
-                            if line_index >= len(expected) or byte_index != len(
-                                expected[line_index]
-                            ):
-                                return False
-                            line_index += 1
-                            byte_index = 0
-                            has_content = False
-                        continue
-                    has_content = True
-                    if (
-                        line_index >= len(expected)
-                        or byte_index >= len(expected[line_index])
-                        or byte != expected[line_index][byte_index]
-                    ):
-                        return False
-                    byte_index += 1
-    except OSError:
+            while raw := stream.readline(max_line_bytes):
+                if len(raw) == max_line_bytes and not raw.endswith(b"\n"):
+                    return False
+                line = raw.strip()
+                if not line:
+                    continue
+                if (
+                    line_index >= len(expected_bytes)
+                    or line != expected_bytes[line_index]
+                ):
+                    return False
+                line_index += 1
+    except (OSError, UnicodeError):
         return False
-
-    if has_content:
-        if line_index >= len(expected) or byte_index != len(expected[line_index]):
-            return False
-        line_index += 1
-    return line_index == len(expected)
+    return line_index == len(expected_bytes)
 
 
 def _evidence(value: object, result: object) -> bool:
     if not isinstance(value, list) or len(value) != 1:
         return False
-    if not isinstance(result, dict) or not isinstance(result.get("trace"), list):
+    if not isinstance(result, dict):
         return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
+    trace = result.get("trace")
+    if (
+        not isinstance(trace, list)
+        or len(trace) != 16
+        or any(
+            not isinstance(item, dict)
+            or set(item) != TRACE_FIELDS
+            or any(type(item[field]) is not int for field in ("n", "x", "y", "floor"))
+            or not isinstance(item["value"], str)
+            or _fraction(item["value"]) is None
+            for item in trace
+        )
+    ):
         return False
-    trace_digest = hashlib.sha256(
-        json.dumps(result["trace"], sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    return _certificate_matches(
-        path,
-        [
-            "emerald-path-family-certificate-v1",
-            f"alpha: {result.get('alpha')}",
-            f"beta: {result.get('beta')}",
-            f"even_offset: {result.get('even_offset')}",
-            f"odd_offset: {result.get('odd_offset')}",
-            f"trace_sha256: {trace_digest}",
-        ],
+    if not all(
+        isinstance(result.get(name), str) and _fraction(result[name]) is not None
+        for name in ("alpha", "beta", "even_offset", "odd_offset")
+    ) or not isinstance(result.get("trace"), list):
+        return False
+    try:
+        trace_digest = hashlib.sha256(
+            json.dumps(result["trace"], sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+    except (TypeError, ValueError, RecursionError, MemoryError):
+        return False
+    certificate = [
+        "emerald-path-family-certificate-v1",
+        f"alpha: {result.get('alpha')}",
+        f"beta: {result.get('beta')}",
+        f"even_offset: {result.get('even_offset')}",
+        f"odd_offset: {result.get('odd_offset')}",
+        f"trace_sha256: {trace_digest}",
+    ]
+    max_bytes = sum(len(line.encode()) + 1 for line in certificate)
+    path = resolve_evidence(
+        value[0], expected_path="evidence/answer.txt", max_bytes=max_bytes
     )
+    return path is not None and _stream_matches_certificate(path, certificate)
 
 
 def main() -> None:
@@ -171,11 +197,15 @@ def main() -> None:
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"COMPUTED"}),
         min_limitations=1,
-        evidence_count=1,
         verification_record="forbidden",
     )
-    contract = bool(envelope_contract and _public_submission_is_valid(submission))
+    contract = bool(
+        envelope_contract
+        and _public_submission_is_valid(submission)
+        and _result_protocol_valid(data.get("result"))
+    )
     math_correct = _result(data.get("result"), _load())
     evidence_valid = _evidence(data.get("evidence"), data.get("result"))
     scope_correct = data.get("scope") == expected["required_scope"]

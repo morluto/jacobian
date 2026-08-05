@@ -16,6 +16,8 @@ W = Path("/app")
 E = Path("/tests")
 ROLES = {"C4_FREE_ZERO_COUNT", "MULTIPLE_INDUCED_C4", "CHORDED_C4_ZERO_INDUCED"}
 ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
+_EVIDENCE_READ_BYTES = 64 * 1024
+_MAX_EVIDENCE_LINE_BYTES = 1024 * 1024
 
 
 def _frozen_source():
@@ -172,20 +174,19 @@ def _evidence(evidence, result):
         has_characteristic = False
         has_lean_limitation = False
         has_conjecture_limitation = False
-        with target.open(encoding="utf-8") as stream:
-            for line in stream:
-                if line.startswith("RESULT_JSON:"):
-                    if marker is not None:
-                        return False
-                    marker = line[12:].strip()
-                    continue
-                folded = line.casefold()
-                has_induced |= "induced" in folded
-                has_characteristic |= "characteristic" in folded
-                if _has_affirmative_prohibited_claim(folded):
+        for line in _bounded_evidence_lines(target):
+            if line.startswith("RESULT_JSON:"):
+                if marker is not None:
                     return False
-                has_lean_limitation |= _has_limitation(folded, "lean")
-                has_conjecture_limitation |= _has_limitation(folded, "conjecture")
+                marker = line[12:].strip()
+                continue
+            folded = line.casefold()
+            has_induced |= "induced" in folded
+            has_characteristic |= "characteristic" in folded
+            if _has_affirmative_prohibited_claim(folded):
+                return False
+            has_lean_limitation |= _has_limitation(folded, "lean")
+            has_conjecture_limitation |= _has_limitation(folded, "conjecture")
         if marker is None:
             return False
         canonical_marker = json.dumps(
@@ -208,6 +209,29 @@ def _evidence(evidence, result):
         MemoryError,
     ):
         return False
+
+
+def _bounded_evidence_lines(target):
+    """Yield UTF-8 evidence lines without buffering an unbounded line."""
+    pending = bytearray()
+    with target.open("rb") as stream:
+        while chunk := stream.read(_EVIDENCE_READ_BYTES):
+            start = 0
+            while True:
+                newline = chunk.find(b"\n", start)
+                fragment = chunk[start:] if newline == -1 else chunk[start:newline]
+                if len(pending) + len(fragment) > _MAX_EVIDENCE_LINE_BYTES:
+                    raise ValueError("evidence line exceeds parser bound")
+                pending.extend(fragment)
+                if newline == -1:
+                    break
+                yield pending.decode("utf-8")
+                pending.clear()
+                start = newline + 1
+                if start == len(chunk):
+                    break
+        if pending:
+            yield pending.decode("utf-8")
 
 
 def _limitations_valid(limitations):
@@ -234,12 +258,15 @@ def _limitations_valid(limitations):
 
 
 def _has_limitation(text, topic):
-    return bool(
-        topic in text
+    return any(
+        topic in clause
         and (
-            "not assessed" in text
-            or re.search(r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", text)
+            "not assessed" in clause
+            or re.search(
+                r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", clause
+            )
         )
+        for clause in re.split(r"[.;]", text)
     )
 
 
@@ -293,6 +320,7 @@ def main():
     correct = bool(
         contract
         and math_correct
+        and evidence_valid
         and limitations_correct
         and input_bound
         and not false_certification

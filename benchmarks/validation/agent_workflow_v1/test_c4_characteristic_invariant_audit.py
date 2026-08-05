@@ -224,6 +224,20 @@ def test_accepts_finite_verification_wording_with_limitations(
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_requires_topic_specific_limitation_negation(tmp_path: Path) -> None:
+    """Lean negation must not satisfy the conjecture limitation."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed for this finite audit; the "
+        "source-corrected conjecture remains the target."
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_rejects_lean_compile_overclaim_in_evidence(tmp_path: Path) -> None:
     """Evidence prose must obey the same prohibition as limitations."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
@@ -390,8 +404,8 @@ def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
     evidence_path.write_text(
         "The induced count and characteristic are not assessed; no Lean "
         "compilation or proof of the corrected conjecture is claimed.\n"
-        + ("audit " * 200_000)
-        + "\nRESULT_JSON: "
+        + ("audit\n" * 200_000)
+        + "RESULT_JSON: "
         + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
         + "\n"
     )
@@ -400,3 +414,24 @@ def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
     accepted = support._run_verifier(task, app, logs)
     assert accepted["evidence_validity"] == 1.0
     assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_rejects_oversized_evidence_line_after_valid_content(tmp_path: Path) -> None:
+    """A hostile trailing line must not bypass the bounded evidence scan."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The induced count and characteristic are not assessed; no Lean "
+        "compilation or proof of the corrected conjecture is claimed.\n"
+        + "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+        + ("x" * (1024 * 1024 + 1))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

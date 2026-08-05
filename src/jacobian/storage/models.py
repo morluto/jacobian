@@ -17,6 +17,10 @@ class StorageLimits:
     max_summary_chars: int = 512
     max_total_blob_bytes: int = 1024 * 1024 * 1024
 
+    def __post_init__(self) -> None:
+        if self.max_parents < 3:
+            raise ValueError("max_parents must be at least 3")
+
 
 @dataclass(frozen=True, slots=True)
 class StoredArtifact:

@@ -62,10 +62,15 @@ def test_agent_workflow_v1_has_flat_tasks_and_authoritative_members() -> None:
         submission_schema = json.loads(
             (task / "environment" / "submission_schema.json").read_text()
         )
-        assurance_schema = submission_schema["properties"]["claimed_assurance"]
-        advertised_assurances = assurance_schema.get(
-            "enum", [assurance_schema.get("const")]
+        # The submission schema accepts the full assurance vocabulary; the
+        # scoreable subset is declared in the task-owned public_contract.json.
+        assert submission_schema["properties"]["claimed_assurance"]["enum"] == list(
+            ASSURANCE_ORDER
         )
+        public_contract = json.loads(
+            (task / "tests" / "public_contract.json").read_text()
+        )
+        advertised_assurances = public_contract["allowed_assurance"]
         ceiling_index = ASSURANCE_ORDER.index(metadata["assurance_ceiling"])
         assert metadata["assurance_ceiling"] in advertised_assurances
         assert all(

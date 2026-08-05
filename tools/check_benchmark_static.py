@@ -10,11 +10,20 @@ or executing a task, verifier, Oracle, or model is not part of this gate.
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from benchmarks.tooling.command_runner import (  # noqa: E402
+    ToolCommandRequest,
+    ToolCommandStatus,
+    operator_environment,
+    run_tool_command,
+)
+
 RUFF_TARGETS = ("benchmarks", "tools/check_benchmark_static.py")
 MYPY_TARGETS = (
     "tools/check_benchmark_adapters.py",
@@ -24,20 +33,18 @@ MYPY_TARGETS = (
 
 
 def _commands() -> tuple[tuple[str, tuple[str, ...]], ...]:
-    python = sys.executable
     return (
         (
             "Ruff lint",
-            (python, "-m", "ruff", "check", *RUFF_TARGETS),
+            ("-m", "ruff", "check", *RUFF_TARGETS),
         ),
         (
             "Ruff format",
-            (python, "-m", "ruff", "format", "--check", *RUFF_TARGETS),
+            ("-m", "ruff", "format", "--check", *RUFF_TARGETS),
         ),
         (
             "mypy",
             (
-                python,
                 "-m",
                 "mypy",
                 "--follow-imports=skip",
@@ -49,15 +56,28 @@ def _commands() -> tuple[tuple[str, tuple[str, ...]], ...]:
 
 def main() -> int:
     """Run every static check and stop at the first failed gate."""
-    for label, command in _commands():
-        try:
-            result = subprocess.run(command, cwd=ROOT, check=False)
-        except OSError as exc:
-            print(f"{label} could not start: {exc}", file=sys.stderr)
+    for label, arguments in _commands():
+        result = run_tool_command(
+            ToolCommandRequest(
+                executable=sys.executable,
+                arguments=arguments,
+                environment=operator_environment(),
+                cwd=str(ROOT),
+                timeout_seconds=300.0,
+                stdout_limit_bytes=4 * 1024 * 1024,
+                stderr_limit_bytes=4 * 1024 * 1024,
+            )
+        )
+        if result.status is not ToolCommandStatus.EXITED:
+            detail = result.diagnostic or result.stderr.decode(errors="replace")[:1024]
+            print(f"{label} could not start: {detail}", file=sys.stderr)
             return 1
-        if result.returncode:
-            print(f"{label} failed with exit code {result.returncode}", file=sys.stderr)
-            return result.returncode
+        if result.exit_code:
+            output = (result.stdout + result.stderr).decode(errors="replace").strip()
+            if output:
+                print(output, file=sys.stderr)
+            print(f"{label} failed with exit code {result.exit_code}", file=sys.stderr)
+            return int(result.exit_code)
     return 0
 
 

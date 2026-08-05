@@ -1,0 +1,310 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "NONCONSTANT_POLYNOMIAL_IMPOSSIBLE",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/periodic-orbit-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "STANDARD_ORBIT_DIVISIBILITY_AND_INFINITE_PRIME_LEMMAS_TRUSTED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/periodic-orbit-certificate.json"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "ALL_FUNCTIONS_Z_TO_Z_WITH_FINITE_ITERATE_FIXED_POINT_COUNTS_AND_ALL_P_IN_Z[x]",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "exact_period_coefficients": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array"
+      },
+      "infinite_prime_step": {
+        "enum": [
+          "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
+          "FOR_EACH_PRIME_p_ALL_OTHER_PRIMES_q_DIVIDE_P(p)-P(1)_SO_P(p)=P(1)",
+          "ALL_PRIMES_DIVIDE_P(1)_SO_P_IS_CONSTANT",
+          "INFINITE_PRIMES_GIVE_DISTINCT_VALUES_OF_P"
+        ]
+      },
+      "modular_reductions": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "conclusion": {
+              "enum": [
+                "p_DIVIDES_P(q)-P(1)",
+                "q_DIVIDES_P(p)-P(1)"
+              ]
+            },
+            "modulus": {
+              "enum": [
+                "p",
+                "q"
+              ]
+            },
+            "residue_basis": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "residue_coefficients": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "modulus",
+            "residue_basis",
+            "residue_coefficients",
+            "conclusion"
+          ],
+          "type": "object"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "orbit_basis": {
+        "const": [
+          "F(pq)",
+          "F(p)",
+          "F(q)",
+          "F(1)"
+        ]
+      },
+      "orbit_divisibility": {
+        "const": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
+      },
+      "polynomial_identity_step": {
+        "enum": [
+          "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES",
+          "P_EQUALS_CONSTANT_P(0)_ON_INFINITELY_MANY_PRIMES",
+          "P_IS_NONCONSTANT_ON_INFINITELY_MANY_PRIMES",
+          "P_EQUALS_IDENTITY_ON_ALL_PRIMES"
+        ]
+      }
+    },
+    "required": [
+      "orbit_basis",
+      "exact_period_coefficients",
+      "orbit_divisibility",
+      "modular_reductions",
+      "infinite_prime_step",
+      "polynomial_identity_step"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "NONCONSTANT_POLYNOMIAL_IMPOSSIBLE",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/periodic-orbit-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "STANDARD_ORBIT_DIVISIBILITY_AND_INFINITE_PRIME_LEMMAS_TRUSTED"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "exact_period_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "infinite_prime_step": {
+            "enum": [
+              "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
+              "FOR_EACH_PRIME_p_ALL_OTHER_PRIMES_q_DIVIDE_P(p)-P(1)_SO_P(p)=P(1)",
+              "ALL_PRIMES_DIVIDE_P(1)_SO_P_IS_CONSTANT",
+              "INFINITE_PRIMES_GIVE_DISTINCT_VALUES_OF_P"
+            ]
+          },
+          "modular_reductions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "conclusion": {
+                  "enum": [
+                    "p_DIVIDES_P(q)-P(1)",
+                    "q_DIVIDES_P(p)-P(1)"
+                  ]
+                },
+                "modulus": {
+                  "enum": [
+                    "p",
+                    "q"
+                  ]
+                },
+                "residue_basis": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "residue_coefficients": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "modulus",
+                "residue_basis",
+                "residue_coefficients",
+                "conclusion"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "orbit_basis": {
+            "const": [
+              "F(pq)",
+              "F(p)",
+              "F(q)",
+              "F(1)"
+            ]
+          },
+          "orbit_divisibility": {
+            "const": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
+          },
+          "polynomial_identity_step": {
+            "enum": [
+              "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES",
+              "P_EQUALS_CONSTANT_P(0)_ON_INFINITELY_MANY_PRIMES",
+              "P_IS_NONCONSTANT_ON_INFINITELY_MANY_PRIMES",
+              "P_EQUALS_IDENTITY_ON_ALL_PRIMES"
+            ]
+          }
+        },
+        "required": [
+          "orbit_basis",
+          "exact_period_coefficients",
+          "orbit_divisibility",
+          "modular_reductions",
+          "infinite_prime_step",
+          "polynomial_identity_step"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "ALL_FUNCTIONS_Z_TO_Z_WITH_FINITE_ITERATE_FIXED_POINT_COUNTS_AND_ALL_P_IN_Z[x]",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/periodic-orbit-polynomial-obstruction"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/periodic-orbit-polynomial-obstruction",
+  "verification_record": null
+}

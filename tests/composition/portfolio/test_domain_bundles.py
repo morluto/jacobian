@@ -71,7 +71,6 @@ from jacobian.domains.combinatorics import build_combinatorics_bundle
 from jacobian.domains.finite_sets import build_finite_set_bundle
 from jacobian.domains.number_theory import build_number_theory_bundle
 from jacobian.domains.sequences import build_sequence_bundle
-from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
 from jacobian.operations import (
     BoundedSearchOperation,
@@ -232,7 +231,7 @@ def service(tmp_path_factory: pytest.TempPathFactory) -> CapabilityService:
     store = ArtifactRepository(tmp_path_factory.mktemp("domain-bundles"))
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    service = CapabilityService(store, ResearchMemory(store, schemas))
+    service = CapabilityService(store)
     installer = OperationInstaller(store, schemas, artifacts)
     for bundle in ALL_BUNDLES:
         for adapter in installer.install(bundle).adapters:

@@ -18,7 +18,7 @@ from benchmarks.tooling.benchmark_snapshots import (
     snapshot_id,
     validate_lock,
 )
-from benchmarks.tooling.harbor_suite import HarborSuiteError
+from benchmarks.tooling.errors import HarborSuiteError
 
 ROOT = Path(__file__).parents[2]
 

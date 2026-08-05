@@ -13,5 +13,9 @@ RUN tar -xzf /opt/provider/cddlib.tar.gz -C /opt/provider && \
     make -j2 && make install && ldconfig && \
     CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib uv pip install --system /opt/provider/pycddlib.tar.gz
 WORKDIR /app
-COPY input.json pin.json spike.py submission_schema.json /app/
+COPY __init__.py /opt/benchmarks/__init__.py
+COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
+COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY datasets/provider-feasibility-v1/cddlib/environment/input.json datasets/provider-feasibility-v1/cddlib/environment/pin.json datasets/provider-feasibility-v1/cddlib/environment/spike.py datasets/provider-feasibility-v1/cddlib/environment/submission_schema.json /app/
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/opt

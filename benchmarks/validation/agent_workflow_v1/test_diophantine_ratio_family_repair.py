@@ -104,8 +104,8 @@ def test_preserves_math_diagnostic_for_envelope_error(tmp_path: Path) -> None:
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
     assert rejected["protocol_compliance"] == 0.0
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 1.0
+    assert rejected["correctness"] == 0.0
+    assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] == 0.0
 
 

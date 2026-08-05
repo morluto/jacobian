@@ -1,30 +1,118 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "additionalProperties": false,
   "properties": {
-    "task_id": {"const": "jacobian/euler-fourth-power-scope-audit"},
-    "conclusion": {"const": "FALSE"},
-    "result": {
-      "type": "object",
-      "required": ["left_bases", "target_base", "left_fourth_powers", "left_sum", "right_fourth_power", "joint_gcd", "residue_checks", "claim_status"],
-      "properties": {
-        "left_bases": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer"}},
-        "target_base": {"type": "integer"},
-        "left_fourth_powers": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer"}},
-        "left_sum": {"type": "integer"},
-        "right_fourth_power": {"type": "integer"},
-        "joint_gcd": {"const": 1},
-        "residue_checks": {"type": "array", "items": {"type": "object"}},
-        "claim_status": {"const": "REFUTED_BY_COUNTEREXAMPLE"}
-      },
-      "additionalProperties": false
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"const": "COMPUTED"},
-    "scope": {"type": "string"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1},
-    "limitations": {"type": "array", "items": {"type": "string"}}
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FALSE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_status": {
+          "const": "REFUTED_BY_COUNTEREXAMPLE"
+        },
+        "joint_gcd": {
+          "const": 1
+        },
+        "left_bases": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "left_fourth_powers": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "left_sum": {
+          "type": "integer"
+        },
+        "residue_checks": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "right_fourth_power": {
+          "type": "integer"
+        },
+        "target_base": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "left_bases",
+        "target_base",
+        "left_fourth_powers",
+        "left_sum",
+        "right_fourth_power",
+        "joint_gcd",
+        "residue_checks",
+        "claim_status"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/euler-fourth-power-scope-audit"
+    }
   },
-  "additionalProperties": false
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

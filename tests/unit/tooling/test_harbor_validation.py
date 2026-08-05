@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
+from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from benchmarks.tooling.harbor_suite import (
     validate_task_topology,
     validate_task_visibility,
@@ -115,9 +115,14 @@ def test_validate_task_topology_ignores_gitignored_interpreter_caches(
     import benchmarks.tooling.harbor_suite as harbor_suite
 
     monkeypatch.setattr(
-        harbor_suite.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0),
+        harbor_suite,
+        "run_operator_command",
+        lambda *args, **kwargs: ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"",
+            stderr=b"",
+        ),
     )
     suite, task = _make_suite_with_task(tmp_path)
     cache = task / "tests" / "__pycache__"
@@ -134,11 +139,18 @@ def test_validate_task_topology_rejects_tracked_interpreter_caches(
 
     commands: list[list[str]] = []
 
-    def check_ignore(command: list[str], **_kwargs: object) -> SimpleNamespace:
-        commands.append(command)
-        return SimpleNamespace(returncode=1)
+    def check_ignore(
+        command: str, arguments: tuple[str, ...], **_kwargs: object
+    ) -> ToolCommandResult:
+        commands.append([command, *arguments])
+        return ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=1,
+            stdout=b"",
+            stderr=b"",
+        )
 
-    monkeypatch.setattr(harbor_suite.subprocess, "run", check_ignore)
+    monkeypatch.setattr(harbor_suite, "run_operator_command", check_ignore)
     suite, task = _make_suite_with_task(tmp_path)
     cache = task / "tests" / "__pycache__"
     cache.mkdir()

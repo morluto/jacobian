@@ -13,12 +13,7 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import (
-    BoundedProcessResult,
-    ProcessResourceLimits,
-    bounded_process_cancelled,
-    run_bounded_process,
-)
+from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -43,9 +38,17 @@ from jacobian.contracts.sat import (
     SatModelFindOutput,
     SatUnsatProofFindOutput,
 )
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessResourceLimits,
+    ProcessResult,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.providers.external_solver_runtime import CADICAL_VERSION
 from jacobian.sat_smt.sat import ResolvedSatCnf, SatArtifactError, SatArtifactService
 from jacobian.schema_registry import model_schema
+from jacobian.worker_environment import worker_environment
 
 CADICAL_STDOUT_LIMIT = 16_000_000
 CADICAL_STDERR_LIMIT = 64_000
@@ -163,30 +166,21 @@ class _CadicalBackend:
             command.append(str(cnf_path))
             if produce_proof:
                 command.append(str(proof_path))
-            try:
-                completed = run_bounded_process(
-                    command,
-                    input_bytes=b"",
+            completed = execute_process(
+                ProcessRequest(
+                    executable=command[0],
+                    arguments=tuple(command[1:]),
+                    environment=worker_environment(locale="C"),
+                    cwd=str(root),
                     timeout_seconds=float(budget.wall_seconds),
-                    environment={
-                        **os.environ,
-                        "LANG": "C",
-                        "LC_ALL": "C",
-                        "TZ": "UTC",
-                    },
-                    stdout_limit=CADICAL_STDOUT_LIMIT,
-                    stderr_limit=CADICAL_STDERR_LIMIT,
+                    stdin_bytes=b"",
+                    stdout_limit_bytes=CADICAL_STDOUT_LIMIT,
+                    stderr_limit_bytes=CADICAL_STDERR_LIMIT,
                     resource_limits=ProcessResourceLimits(
                         file_size_bytes=CADICAL_RAW_PROOF_LIMIT,
                     ),
                 )
-            except OSError:
-                return _run_failure(
-                    started,
-                    code="CADICAL_EXECUTION_FAILED",
-                    stage="solver_execution",
-                    message="The pinned CaDiCaL process could not be started.",
-                )
+            )
             if (
                 produce_proof
                 and completed.returncode not in {0, 10, 20}
@@ -647,9 +641,16 @@ def _scope(resolved: ResolvedSatCnf) -> CapabilityScope:
 
 def _operational_failure(
     started: float,
-    completed: BoundedProcessResult,
+    completed: ProcessResult,
 ) -> _CadicalRun | None:
-    if completed.cancelled:
+    if completed.termination is ProcessTermination.START_FAILED:
+        return _run_failure(
+            started,
+            code="CADICAL_EXECUTION_FAILED",
+            stage="solver_execution",
+            message="The pinned CaDiCaL process could not be started.",
+        )
+    if completed.termination is ProcessTermination.CANCELLED:
         return _run_failure(
             started,
             status=ExecutionStatus.CANCELLED,
@@ -661,7 +662,7 @@ def _operational_failure(
                 "was retained."
             ),
         )
-    if completed.stdout_exceeded or completed.stderr_exceeded:
+    if completed.termination is ProcessTermination.OUTPUT_LIMIT_EXCEEDED:
         return _run_failure(
             started,
             code="CADICAL_OUTPUT_LIMIT_EXCEEDED",
@@ -671,7 +672,7 @@ def _operational_failure(
                 "evidence was retained."
             ),
         )
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return _run_failure(
             started,
             status=ExecutionStatus.TIMEOUT,

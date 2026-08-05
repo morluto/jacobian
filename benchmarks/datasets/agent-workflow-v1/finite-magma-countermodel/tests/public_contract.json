@@ -1,0 +1,236 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "FALSE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "jacobian/finite-magma-countermodel orders 1 and 2",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "minimality_checked_orders": {
+        "items": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "order": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "premise_holds_universally": {
+        "const": true
+      },
+      "refuting_assignment": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "table": {
+        "items": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "target_holds_universally": {
+        "const": false
+      }
+    },
+    "required": [
+      "order",
+      "table",
+      "refuting_assignment",
+      "premise_holds_universally",
+      "target_holds_universally",
+      "minimality_checked_orders"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "FALSE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "minimality_checked_orders": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "order": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "premise_holds_universally": {
+            "const": true
+          },
+          "refuting_assignment": {
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "y": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "type": "object"
+          },
+          "table": {
+            "items": {
+              "items": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "target_holds_universally": {
+            "const": false
+          }
+        },
+        "required": [
+          "order",
+          "table",
+          "refuting_assignment",
+          "premise_holds_universally",
+          "target_holds_universally",
+          "minimality_checked_orders"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "jacobian/finite-magma-countermodel orders 1 and 2",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/finite-magma-countermodel"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/finite-magma-countermodel",
+  "verification_record": null
+}

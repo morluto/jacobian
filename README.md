@@ -146,7 +146,6 @@ availability can depend on local backends.
 | Universal algebra | Evaluate finite magma laws and search for countermodels |
 | Polytopes | Compute convex combinations and linear separations |
 | Lean | Discover declarations, retrieve premises, inspect proof states, and check proofs in pinned environments |
-| Research memory | Store revisioned scratch work, findings, attempts, focus, and dependency-linked context |
 
 See the [tool reference](docs/reference/tools.md) for the public surface and
 the [atomic capability portfolio](docs/contributing/atomic-capability-portfolio.md)

@@ -1,22 +1,201 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
   "properties": {
-    "task_id": {"const": "jacobian/inseparable-minimal-polynomial-audit"},
-    "conclusion": {"enum": ["MINIMAL_POLYNOMIAL_GAP_REPAIRED", "INSUFFICIENT_EVIDENCE"]},
-    "result": {"type": "object", "additionalProperties": false, "required": ["diagnosis", "candidate_polynomial", "irreducibility", "minimal_polynomial", "inseparability", "sanity_prime"], "anyOf": [{"required": ["valuation_obstruction"]}, {"required": ["irreducibility_certificate"]}], "properties": {
-      "diagnosis": {"const": "ANNIHILATING_POLYNOMIAL_NOT_YET_MINIMAL"},
-      "candidate_polynomial": {"const": "X^p-u"},
-      "valuation_obstruction": {"type": "object", "additionalProperties": false, "required": ["v_u_u", "pth_power_multiple", "residue_contradiction"], "properties": {"v_u_u": {"const": 1}, "pth_power_multiple": {"const": "p*integer"}, "residue_contradiction": {"type": "array", "prefixItems": [{"const": 1}, {"const": 0}], "items": false}}},
-      "irreducibility_certificate": {"type": "object", "additionalProperties": false, "required": ["method", "prime_element", "constant_term_valuation", "leading_coefficient_valuation"], "properties": {"method": {"const": "eisenstein"}, "prime_element": {"const": "u"}, "constant_term_valuation": {"const": 1}, "leading_coefficient_valuation": {"const": 0}}},
-      "irreducibility": {"const": "X^p-u_IRREDUCIBLE_OVER_K(u)"},
-      "minimal_polynomial": {"type": "object", "additionalProperties": false, "required": ["polynomial", "degree"], "properties": {"polynomial": {"const": "X^p-u"}, "degree": {"const": "p"}}},
-      "inseparability": {"type": "object", "additionalProperties": false, "required": ["formal_derivative", "root_multiplicity", "conclusion"], "properties": {"formal_derivative": {"const": "0"}, "root_multiplicity": {"const": "p"}, "conclusion": {"const": "t_INSEPARABLE_OVER_K(u)"}}},
-      "sanity_prime": {"type": "integer", "minimum": 2, "maximum": 97}
-    }},
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"type": "string"}, "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "MINIMAL_POLYNOMIAL_GAP_REPAIRED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "valuation_obstruction"
+          ]
+        },
+        {
+          "required": [
+            "irreducibility_certificate"
+          ]
+        }
+      ],
+      "properties": {
+        "candidate_polynomial": {
+          "const": "X^p-u"
+        },
+        "diagnosis": {
+          "const": "ANNIHILATING_POLYNOMIAL_NOT_YET_MINIMAL"
+        },
+        "inseparability": {
+          "additionalProperties": false,
+          "properties": {
+            "conclusion": {
+              "const": "t_INSEPARABLE_OVER_K(u)"
+            },
+            "formal_derivative": {
+              "const": "0"
+            },
+            "root_multiplicity": {
+              "const": "p"
+            }
+          },
+          "required": [
+            "formal_derivative",
+            "root_multiplicity",
+            "conclusion"
+          ],
+          "type": "object"
+        },
+        "irreducibility": {
+          "const": "X^p-u_IRREDUCIBLE_OVER_K(u)"
+        },
+        "irreducibility_certificate": {
+          "additionalProperties": false,
+          "properties": {
+            "constant_term_valuation": {
+              "const": 1
+            },
+            "leading_coefficient_valuation": {
+              "const": 0
+            },
+            "method": {
+              "const": "eisenstein"
+            },
+            "prime_element": {
+              "const": "u"
+            }
+          },
+          "required": [
+            "method",
+            "prime_element",
+            "constant_term_valuation",
+            "leading_coefficient_valuation"
+          ],
+          "type": "object"
+        },
+        "minimal_polynomial": {
+          "additionalProperties": false,
+          "properties": {
+            "degree": {
+              "const": "p"
+            },
+            "polynomial": {
+              "const": "X^p-u"
+            }
+          },
+          "required": [
+            "polynomial",
+            "degree"
+          ],
+          "type": "object"
+        },
+        "sanity_prime": {
+          "maximum": 97,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "valuation_obstruction": {
+          "additionalProperties": false,
+          "properties": {
+            "pth_power_multiple": {
+              "const": "p*integer"
+            },
+            "residue_contradiction": {
+              "items": false,
+              "prefixItems": [
+                {
+                  "const": 1
+                },
+                {
+                  "const": 0
+                }
+              ],
+              "type": "array"
+            },
+            "v_u_u": {
+              "const": 1
+            }
+          },
+          "required": [
+            "v_u_u",
+            "pth_power_multiple",
+            "residue_contradiction"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "diagnosis",
+        "candidate_polynomial",
+        "irreducibility",
+        "minimal_polynomial",
+        "inseparability",
+        "sanity_prime"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/inseparable-minimal-polynomial-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

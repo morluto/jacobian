@@ -37,7 +37,6 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.memory import ResearchMemory
 from jacobian.storage.repository import ArtifactRepository
 
 if TYPE_CHECKING:
@@ -69,11 +68,6 @@ class CapabilityPolicy:
         ):
             raise ValueError("capability policy modes must be CapabilityMode values")
         if self.profile == "COMPUTE_VERIFY_NO_RETRIEVAL":
-            object.__setattr__(
-                self,
-                "denied_capability_ids",
-                self.denied_capability_ids | {"knowledge.search"},
-            )
             object.__setattr__(self, "denied_tags", self.denied_tags | {"retrieval"})
         for allowed, denied, label in (
             (self.allowed_capability_ids, self.denied_capability_ids, "capability IDs"),
@@ -195,12 +189,10 @@ class CapabilityService(
     def __init__(
         self,
         store: ArtifactRepository,
-        memory: ResearchMemory,
         *,
         policy: CapabilityPolicy | None = None,
     ) -> None:
         self.store = store
-        self.memory = memory
         self.policy = policy or CapabilityPolicy()
         self._adapters: dict[str, CapabilityAdapter] = {}
 

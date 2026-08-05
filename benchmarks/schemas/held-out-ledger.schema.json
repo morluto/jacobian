@@ -2,11 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jacobian.invalid/benchmarks/schemas/held-out-ledger.schema.json",
   "title": "Resumable held-out evaluation execution ledger",
+  "description": "Refers to the canonical manifest digest instead of duplicating mutable provenance. Binds the plan digest for resumption and the manifest digest for canonical provenance.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "plan_digest", "status", "budget", "usage", "runs", "completed_pairs", "validation_failures"],
+  "required": ["schema_version", "manifest_digest", "plan_digest", "status", "budget", "usage", "runs", "completed_pairs", "validation_failures"],
   "properties": {
-    "schema_version": {"const": "1"},
+    "schema_version": {"const": "2"},
+    "manifest_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "plan_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "status": {"enum": ["RUNNING", "COMPLETE", "INCOMPLETE"]},
     "budget": {"type": "object"},
@@ -21,6 +23,10 @@
     },
     "runs": {"type": "object", "additionalProperties": {"type": "object"}},
     "completed_pairs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
-    "validation_failures": {"type": "array", "items": {"type": "string"}}
+    "validation_failures": {"type": "array", "items": {"type": "string"}},
+    "routing_status": {
+      "type": ["object", "null"],
+      "additionalProperties": {"type": "object"}
+    }
   }
 }

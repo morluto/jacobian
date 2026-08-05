@@ -16,9 +16,3 @@ def capability_core_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_domain_services(tmp_path / "state") as services:
         yield services
-
-
-pytest_plugins = (
-    "tests.support.runtime_templates",
-    "tests.support.runtime_instances",
-)

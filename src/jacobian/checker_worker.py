@@ -22,8 +22,8 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.implementation import (
+    checker_source_digest,
     install_source_only_importer,
-    package_source_digest,
 )
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
@@ -101,7 +101,7 @@ def main() -> int:
         if not isinstance(request, dict):
             error_code = "INVALID_REQUEST"
             raise _CheckerWorkerFailureError(error_code)
-        measured_before = package_source_digest(sys.argv[1])
+        measured_before = checker_source_digest(sys.argv[1])
         if measured_before != sys.argv[2]:
             error_code = "SOURCE_CHANGED"
             raise ValueError("checker source differs from its authorized digest")
@@ -112,7 +112,7 @@ def main() -> int:
         with contextlib.redirect_stdout(sys.stderr):
             checker = _resolve(sys.argv[1])
             response = checker(request)
-        measured_after = package_source_digest(sys.argv[1])
+        measured_after = checker_source_digest(sys.argv[1])
         if measured_after != measured_before:
             error_code = "SOURCE_CHANGED"
             raise ValueError("checker source changed during execution")

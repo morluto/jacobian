@@ -9,7 +9,6 @@ from tests.support.capabilities import invoke_capability as _invoke
 from tests.support.rationals import rational_payload as _q
 
 import jacobian.providers.sympy_runtime as sympy_runtime
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -22,6 +21,7 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomial_expression_capabilities import (
     install_polynomial_expression_checker,
 )
+from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.providers.sympy_runtime import (
     sympy_polynomial_normalization_provider_runtime,
 )
@@ -359,14 +359,14 @@ def test_sympy_normalization_timeout_is_operational(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.sympy_polynomial_normalization.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.sympy_polynomial_normalization.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 
@@ -391,8 +391,9 @@ def test_sympy_worker_gets_only_fixed_environment_and_budget(
     monkeypatch.setenv("JACOBIAN_SYMPY_SECRET", "must-not-propagate")
     observed: dict[str, Any] = {}
 
-    def fake_worker(*_args: Any, **kwargs: Any) -> BoundedProcessResult:
-        observed.update(kwargs)
+    def fake_worker(request: Any) -> ProcessResult:
+        observed["timeout_seconds"] = request.timeout_seconds
+        observed["environment"] = dict(request.environment)
         stdout = (
             canonicalize_json(
                 {
@@ -411,17 +412,17 @@ def test_sympy_worker_gets_only_fixed_environment_and_budget(
             )
             + b"\n"
         )
-        return BoundedProcessResult(
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=stdout,
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         )
 
     monkeypatch.setattr(
-        "jacobian.sympy_polynomial_normalization.run_bounded_process",
+        "jacobian.sympy_polynomial_normalization.execute_process",
         fake_worker,
     )
     result = _invoke(
@@ -441,6 +442,7 @@ def test_sympy_worker_gets_only_fixed_environment_and_budget(
         "LC_ALL": "C",
         "TZ": "UTC",
         "PYTHONHASHSEED": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     assert "JACOBIAN_SYMPY_SECRET" in os.environ
     assert "JACOBIAN_SYMPY_SECRET" not in observed["environment"]
@@ -463,8 +465,9 @@ def test_normalization_output_is_discarded_if_runtime_identity_changes(
         lambda **_kwargs: next(observations),
     )
     monkeypatch.setattr(
-        "jacobian.sympy_polynomial_normalization.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.sympy_polynomial_normalization.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=canonicalize_json(
                 {
@@ -485,7 +488,6 @@ def test_normalization_output_is_discarded_if_runtime_identity_changes(
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         ),
     )
 
@@ -507,14 +509,14 @@ def test_invalid_worker_protocol_retains_no_normalization_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.sympy_polynomial_normalization.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.sympy_polynomial_normalization.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=b'{"status":"NORMALIZATION_PRODUCED"}\n',
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         ),
     )
 
@@ -543,14 +545,14 @@ def test_normalization_checker_timeout_is_operational(
         mode=CapabilityMode.EXPLORE,
     )
     monkeypatch.setattr(
-        "jacobian.verification.service.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.verification.service.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 

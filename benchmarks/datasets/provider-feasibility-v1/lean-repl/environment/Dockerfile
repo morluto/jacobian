@@ -11,6 +11,10 @@ RUN mkdir -p /opt/provider && \
     git -C /opt/provider/repl checkout --detach FETCH_HEAD && \
     PATH=/opt/provider/lean-4.31.0-linux/bin:$PATH lake -d /opt/provider/repl build
 WORKDIR /app
-COPY input.json lean_repl_pin.json spike.py submission_schema.json /app/
+COPY __init__.py /opt/benchmarks/__init__.py
+COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
+COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY datasets/provider-feasibility-v1/lean-repl/environment/input.json datasets/provider-feasibility-v1/lean-repl/environment/lean_repl_pin.json datasets/provider-feasibility-v1/lean-repl/environment/spike.py datasets/provider-feasibility-v1/lean-repl/environment/submission_schema.json /app/
 ENV PATH=/opt/provider/lean-4.31.0-linux/bin:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/opt

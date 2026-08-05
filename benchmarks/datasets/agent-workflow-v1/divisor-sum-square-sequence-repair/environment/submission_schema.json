@@ -1,1 +1,138 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/divisor-sum-square-sequence-repair"},"conclusion":{"enum":["INFINITE_SQUARE_SUBSEQUENCE_CONSTRUCTED","INSUFFICIENT_EVIDENCE"]},"result":{"$ref":"#/$defs/result"},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"const":"DECLARED_SEQUENCE_FORMULA_AND_PRIME_PROBES"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/sequence-construction.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["INFINITE_PRIMES_THEOREM_TRUSTED","QUANTIFIED_SEQUENCE_MEMBERSHIP_NOT_PROOF_ASSISTANT_VERIFIED"]}},"$defs":{"probe":{"type":"object","additionalProperties":false,"required":["prime","a_p","b_p","square_root"],"properties":{"prime":{"type":"integer","minimum":3,"maximum":97},"a_p":{"type":"integer","minimum":1},"b_p":{"type":"integer","minimum":1},"square_root":{"type":"integer","minimum":1}}},"result":{"type":"object","additionalProperties":false,"required":["a_1","default_exponent_offset","prime_formula","threshold_rule","probes"],"properties":{"a_1":{"type":"integer","minimum":1},"default_exponent_offset":{"type":"integer","minimum":0},"prime_formula":{"type":"string"},"threshold_rule":{"type":"string"},"probes":{"type":"array","minItems":4,"maxItems":10,"items":{"$ref":"#/$defs/probe"}}}}}}
+{
+  "$defs": {
+    "probe": {
+      "additionalProperties": false,
+      "properties": {
+        "a_p": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "b_p": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "prime": {
+          "maximum": 97,
+          "minimum": 3,
+          "type": "integer"
+        },
+        "square_root": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "a_p",
+        "b_p",
+        "square_root"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "a_1": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "default_exponent_offset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prime_formula": {
+          "type": "string"
+        },
+        "probes": {
+          "items": {
+            "$ref": "#/$defs/probe"
+          },
+          "maxItems": 10,
+          "minItems": 4,
+          "type": "array"
+        },
+        "threshold_rule": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "a_1",
+        "default_exponent_offset",
+        "prime_formula",
+        "threshold_rule",
+        "probes"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "enum": [
+        "INFINITE_SQUARE_SUBSEQUENCE_CONSTRUCTED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/sequence-construction.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "INFINITE_PRIMES_THEOREM_TRUSTED",
+        "QUANTIFIED_SEQUENCE_MEMBERSHIP_NOT_PROOF_ASSISTANT_VERIFIED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "DECLARED_SEQUENCE_FORMULA_AND_PRIME_PROBES",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/divisor-sum-square-sequence-repair"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

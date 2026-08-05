@@ -8,3 +8,19 @@ Use exactly these classifications: `RESOLVED_BY_CITED_WORK`, `PARTIAL_PROGRESS_N
 
 Claim at most `COMPUTED`. The result audits frozen citation-to-claim support; it does not establish current theorem status.
 Set `scope` to: `the four frozen citation packets only; present mathematical truth and current literature status are not assessed`.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** exactly `MIXED_STATUS_EVIDENCE_QUALITY`
+- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** a string value
+- **Completeness:** `COMPLETE`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `text/plain`.
+- **Required artifact filenames:** `evidence/answer.txt`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

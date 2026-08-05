@@ -214,7 +214,6 @@ class ComputedOperationAdapter:
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             read_only=True,
-            records_episode=False,
             tags=operation.tags,
             invocation_examples=operation.invocation_examples,
         )

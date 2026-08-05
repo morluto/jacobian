@@ -26,7 +26,7 @@ endif
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help help-all uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-command-check docs-linkcheck deploy-check
+.PHONY: help help-all uv-version-check setup setup-agent container-image hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-command-check docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian common developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / && ($$1 in wanted) {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -88,6 +88,9 @@ typecheck: ## Run strict static type checking.
 
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
 	$(UV_RUN) python tools/check_test_architecture.py .
+
+architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
+	$(UV_RUN) python tools/check_architecture.py
 
 test-plan: ## Print local validation selected for BASE..HEAD or explicit PATHS.
 	@if [ -n "$(PATHS)" ]; then \
@@ -239,7 +242,7 @@ precommit: ## Fix and run every routine local handoff check.
 	$(MAKE) fix
 	$(MAKE) check
 
-check-static: lint-full typecheck test-architecture todo-check build ## Run CI-owned static checks plus a local package build.
+check-static: lint-full typecheck test-architecture architecture todo-check build ## Run CI-owned static checks plus a local package build.
 
 harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	@set -eu; \
@@ -295,6 +298,8 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 harbor-sync: ## Update verifier checksum labels for selected tasks (DATASET=... TASKS="...").
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
 	@test -n "$(TASKS)" || { echo "TASKS is required; refusing an unscoped checksum update" >&2; exit 2; }
+	$(HARBOR_PYTHON) -m benchmarks.tooling.public_contract sync-dataset \
+		--dataset-root "benchmarks/datasets/$(DATASET)" --tasks $(TASKS)
 	$(HARBOR_PYTHON) tools/sync_harbor_verifier_support.py \
 		--dataset "$(DATASET)" --tasks $(TASKS)
 

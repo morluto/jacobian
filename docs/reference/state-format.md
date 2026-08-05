@@ -1,26 +1,24 @@
 # Persistent state format
 
-The current state format is revision 7. The supported floor is revision
-6, so an older revision-5 store is rejected before any migration code runs.
-This is intentional: revision 6 retires the one-shot research-index upgrade
-ledger and the compatibility decoder that existed only to bring revision-3
-and revision-4 data forward.
+The current and minimum supported state format is revision 8. Older stores are
+rejected before any migration code runs. This clean pre-stable boundary removes
+the research-memory schema without retaining a runtime compatibility path.
 
-To move data from a revision-5 store, export the records through a compatible
+To move data from an older store, export the records through a compatible
 older checkout, create a fresh state directory with the current Jacobian
 version, and import the exported records through the public persistence
 workflow. Do not edit `metadata.sqlite3` to change its revision; the migration
 ledger and state-format record are integrity boundaries.
 
-Migration definitions through revision 5 remain in the source because the
+Earlier migration definitions remain in the source because the
 SQLite ledger is immutable historical evidence. They are not an indication
 that the retired workspace schema or data-upgrade bridge is still supported.
-New stores apply revision 6, which removes the completed
-`jacobian_data_upgrades` table and records the current format.
+New stores apply the complete ordered schema and record revision 8.
 
 Revision 7 adds the reasoning-log tables `reasoning_runs` and
 `reasoning_events` for the bounded external reasoning-log protocol. This
 migration is additive: it creates the new tables, their indices, and
-no-update/no-delete triggers without modifying existing records. Stores at
-revision 6 are upgraded automatically on first open with the current
-version; no manual intervention is required.
+no-update/no-delete triggers without modifying existing records.
+
+Revision 8 establishes the memoryless state boundary. Stores from earlier
+pre-stable releases are not upgraded in place.

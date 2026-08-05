@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jacobian.invalid/benchmarks/schemas/observation-evidence.schema.json",
   "title": "Jacobian Harbor workflow observation evidence",
-  "description": "Strict normalized observation evidence. Binds the immutable benchmark snapshot ID and Harbor version (read from explicit job/runtime/held-out manifest bindings, never invented), normalized evaluation arguments, runtime/model/agent/repetition/budgets/results/rewards/verifier states/failures, and manifest-driven per-artifact identity. Fails closed: VALID only when execution is complete and every binding matches. Version 3 adds the reasoning_protocol trial member; version 2 evidence without it remains valid.",
+  "description": "Strict normalized observation evidence v3. Binds the immutable benchmark snapshot ID and Harbor version (read from explicit job/runtime/held-out manifest bindings, never invented), normalized evaluation arguments, runtime/model/agent/repetition/budgets/results/rewards/verifier states/failures, and manifest-driven per-artifact identity. Fails closed: VALID only when execution is complete and every binding matches. The reasoning_protocol trial member is required. No v2 compatibility.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,7 +24,7 @@
     "validation_failures"
   ],
   "properties": {
-    "schema_version": {"enum": ["2", "3"]},
+    "schema_version": {"const": "3"},
     "evidence_class": {"type": "string", "minLength": 1},
     "causal_claim_authorized": {"const": false},
     "status": {"enum": ["VALID", "INCOMPLETE"]},
@@ -150,7 +150,8 @@
           }
         },
         "pair_count": {"type": "integer", "minimum": 1},
-        "plan_digest": {"$ref": "#/$defs/digest"}
+        "plan_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"}
       }
     },
     "fixed_invariants": {
@@ -206,6 +207,7 @@
         "artifacts",
         "tool_calls",
         "tool_errors",
+        "reasoning_protocol",
         "raw_result_digest"
       ],
       "properties": {
@@ -386,24 +388,10 @@
         "budget": {"type": ["string", "object", "null"]},
         "pair_count": {"type": "integer", "minimum": 0},
         "plan_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
         "max_tokens": {"type": "integer", "minimum": 1},
         "max_cost_usd": {"type": "number", "exclusiveMinimum": 0}
       }
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {"schema_version": {"const": "3"}},
-        "required": ["schema_version"]
-      },
-      "then": {
-        "properties": {
-          "trials": {
-            "items": {"required": ["reasoning_protocol"]}
-          }
-        }
-      }
-    }
-  ]
+  }
 }

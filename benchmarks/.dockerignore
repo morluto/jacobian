@@ -1,0 +1,14 @@
+# Harbor compose build contexts under benchmarks/ use this .dockerignore to
+# expose only the canonical tooling command runner and the provider-feasibility
+# environment trees.  Hidden material (solutions, tests, Oracle fixtures) is
+# excluded so a widened compose build context cannot leak it into task images.
+**
+!__init__.py
+!tooling/
+!tooling/__init__.py
+!tooling/command_runner.py
+!datasets/
+!datasets/provider-feasibility-v1/
+!datasets/provider-feasibility-v1/*/
+!datasets/provider-feasibility-v1/*/environment/
+!datasets/provider-feasibility-v1/*/environment/**

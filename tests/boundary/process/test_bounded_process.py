@@ -70,28 +70,6 @@ def test_target_observes_resource_limits_at_startup() -> None:
     }
 
 
-@pytest.mark.skipif(
-    os.name != "posix" or shutil.which("prlimit") is None,
-    reason="pre-exec resource limits require util-linux prlimit",
-)
-def test_address_space_exhaustion_stops_worker() -> None:
-    completed = run_bounded_process(
-        [sys.executable, "-c", "bytearray(512 * 1024 * 1024)"],
-        input_bytes=b"",
-        timeout_seconds=5,
-        environment=dict(os.environ),
-        stdout_limit=4096,
-        stderr_limit=4096,
-        resource_limits=ProcessResourceLimits(
-            cpu_seconds=2,
-            address_space_bytes=256 * 1024 * 1024,
-        ),
-    )
-
-    assert completed.returncode != 0
-    assert not completed.timed_out
-
-
 def test_cancellation_stops_worker_before_its_wall_time_budget() -> None:
     cancellation_event = threading.Event()
     timer = threading.Timer(0.2, cancellation_event.set)

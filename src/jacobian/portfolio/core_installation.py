@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.atomic_capabilities import install_atomic_capabilities
-from jacobian.builtin_capabilities import KnowledgeSearchAdapter
 from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
@@ -54,7 +53,6 @@ class CoreApplicationInstaller:
             self.context.register_capability(atomic_adapter)
         for claim_adapter in application.claim_decomposition_adapters:
             self.context.register_capability(claim_adapter)
-        self.context.register_capability(KnowledgeSearchAdapter(core.memory))
 
         finite_partition_adapter, result.finite_partition = install_finite_partition(
             ctx.store,

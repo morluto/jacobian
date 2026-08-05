@@ -1,0 +1,272 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "CYCLOTOMIC_RECIPROCITY_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "coefficients": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 17,
+      "minItems": 17,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "expanded_coefficients": {
+        "$ref": "#/$defs/coefficients"
+      },
+      "factors": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "multiplicity": {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "order": {
+              "maximum": 30,
+              "minimum": 2,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "order",
+            "multiplicity"
+          ],
+          "type": "object"
+        },
+        "maxItems": 8,
+        "minItems": 1,
+        "type": "array"
+      },
+      "leading_coefficient": {
+        "not": {
+          "const": 0
+        },
+        "type": "integer"
+      },
+      "p_at_one": {
+        "not": {
+          "const": 0
+        },
+        "type": "integer"
+      },
+      "reciprocal_coefficients": {
+        "$ref": "#/$defs/coefficients"
+      },
+      "reciprocal_scalar": {
+        "const": 1
+      },
+      "root_orbit_conclusion": {
+        "const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
+      }
+    },
+    "required": [
+      "leading_coefficient",
+      "factors",
+      "expanded_coefficients",
+      "reciprocal_coefficients",
+      "p_at_one",
+      "reciprocal_scalar",
+      "root_orbit_conclusion"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "coefficients": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 17,
+        "minItems": 17,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "CYCLOTOMIC_RECIPROCITY_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "expanded_coefficients": {
+            "$ref": "#/$defs/coefficients"
+          },
+          "factors": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "multiplicity": {
+                  "maximum": 8,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "order": {
+                  "maximum": 30,
+                  "minimum": 2,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "order",
+                "multiplicity"
+              ],
+              "type": "object"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array"
+          },
+          "leading_coefficient": {
+            "not": {
+              "const": 0
+            },
+            "type": "integer"
+          },
+          "p_at_one": {
+            "not": {
+              "const": 0
+            },
+            "type": "integer"
+          },
+          "reciprocal_coefficients": {
+            "$ref": "#/$defs/coefficients"
+          },
+          "reciprocal_scalar": {
+            "const": 1
+          },
+          "root_orbit_conclusion": {
+            "const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
+          }
+        },
+        "required": [
+          "leading_coefficient",
+          "factors",
+          "expanded_coefficients",
+          "reciprocal_coefficients",
+          "p_at_one",
+          "reciprocal_scalar",
+          "root_orbit_conclusion"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/cyclotomic-reciprocity-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/cyclotomic-reciprocity-certificate",
+  "verification_record": null
+}

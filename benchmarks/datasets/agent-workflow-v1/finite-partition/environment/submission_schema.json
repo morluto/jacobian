@@ -1,7 +1,118 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
+  "if": {
+    "properties": {
+      "claimed_assurance": {
+        "const": "VERIFIED"
+      }
+    }
+  },
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "TRUE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "members": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "enum": [
+                  "residue-0",
+                  "residue-1",
+                  "residue-2"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "members"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "cases"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "jacobian/finite-partition complete finite input",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/finite-partition"
+    },
+    "verification_record_uri": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "const": "evidence/verification-record.json"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
   "required": [
     "task_id",
     "conclusion",
@@ -12,114 +123,10 @@
     "evidence",
     "limitations"
   ],
-  "properties": {
-    "task_id": {
-      "const": "jacobian/finite-partition"
-    },
-    "conclusion": {
-      "const": "TRUE"
-    },
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "cases"
-      ],
-      "properties": {
-        "cases": {
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "name",
-              "members"
-            ],
-            "properties": {
-              "name": {
-                "enum": [
-                  "residue-0",
-                  "residue-1",
-                  "residue-2"
-                ]
-              },
-              "members": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED","CHECKED","VERIFIED"]
-    },
-    "scope": {
-      "const": "jacobian/finite-partition complete finite input"
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          }
-        }
-      }
-    },
-    "verification_record_uri": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "path",
-        "sha256"
-      ],
-      "properties": {
-        "path": {
-          "const": "evidence/verification-record.json"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    }
-  },
-  "if": {
-    "properties": {
-      "claimed_assurance": {
-        "const": "VERIFIED"
-      }
-    }
-  },
   "then": {
     "required": [
       "verification_record_uri"
     ]
-  }
+  },
+  "type": "object"
 }

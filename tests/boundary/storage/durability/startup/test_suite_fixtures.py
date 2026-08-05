@@ -34,15 +34,15 @@ def _copy_and_check_store(
             descriptor_uri,
             expected_kind="schema",
         )
-    assert descriptor["name"] == "jacobian.research-episode"
+    assert descriptor["name"] == "jacobian.typed-rational-polynomial-expression"
 
 
-def _research_episode_schema_uri(root: Path) -> str:
+def _polynomial_expression_schema_uri(root: Path) -> str:
     connection = sqlite3.connect(root / "metadata.sqlite3")
     try:
         row = connection.execute(
             "SELECT artifact_uri FROM artifacts WHERE summary = ?",
-            ("schema: jacobian.research-episode@1",),
+            ("schema: jacobian.typed-rational-polynomial-expression@1",),
         ).fetchone()
     finally:
         connection.close()
@@ -82,7 +82,7 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
     finally:
         connection.close()
 
-    descriptor_uri = _research_episode_schema_uri(complete_portfolio_template)
+    descriptor_uri = _polynomial_expression_schema_uri(complete_portfolio_template)
     destinations = [tmp_path / f"clone-{index}" for index in range(8)]
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [
@@ -113,7 +113,7 @@ def test_authorized_portfolio_template_is_quiescent_and_copyable(
     finally:
         connection.close()
 
-    descriptor_uri = _research_episode_schema_uri(authorized_portfolio_template)
+    descriptor_uri = _polynomial_expression_schema_uri(authorized_portfolio_template)
     destination = tmp_path / "clone-with-references"
     _copy_and_check_store(
         authorized_portfolio_template,

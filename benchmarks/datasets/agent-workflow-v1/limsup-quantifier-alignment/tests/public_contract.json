@@ -1,0 +1,232 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "FORMULAS_NOT_EQUIVALENT",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "model": {
+      "additionalProperties": false,
+      "properties": {
+        "distinguishing_index": {
+          "maximum": 7,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "intended_truth": {
+          "type": "boolean"
+        },
+        "limsup_values": {
+          "items": {
+            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "type": "array"
+        },
+        "proposed_truth": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "limsup_values",
+        "intended_truth",
+        "proposed_truth",
+        "distinguishing_index"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "intended_only_model": {
+        "$ref": "#/$defs/model"
+      },
+      "proposed_only_model": {
+        "$ref": "#/$defs/model"
+      },
+      "relationship": {
+        "const": "INCOMPARABLE"
+      }
+    },
+    "required": [
+      "relationship",
+      "intended_only_model",
+      "proposed_only_model"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "model": {
+        "additionalProperties": false,
+        "properties": {
+          "distinguishing_index": {
+            "maximum": 7,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "intended_truth": {
+            "type": "boolean"
+          },
+          "limsup_values": {
+            "items": {
+              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 2,
+            "type": "array"
+          },
+          "proposed_truth": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "limsup_values",
+          "intended_truth",
+          "proposed_truth",
+          "distinguishing_index"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "FORMULAS_NOT_EQUIVALENT",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "intended_only_model": {
+            "$ref": "#/$defs/model"
+          },
+          "proposed_only_model": {
+            "$ref": "#/$defs/model"
+          },
+          "relationship": {
+            "const": "INCOMPARABLE"
+          }
+        },
+        "required": [
+          "relationship",
+          "intended_only_model",
+          "proposed_only_model"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/limsup-quantifier-alignment"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/limsup-quantifier-alignment",
+  "verification_record": null
+}

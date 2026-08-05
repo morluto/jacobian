@@ -185,7 +185,6 @@ def test_zero_mass_conditioning_is_a_non_conclusion_without_artifacts(
     assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.completeness.status is CapabilityCompletenessStatus.NOT_APPLICABLE
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_finite_pushforward_collapses_equal_target_atoms(

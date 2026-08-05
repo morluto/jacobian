@@ -1,1 +1,154 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/convergence-mode-separation"},"conclusion":{"enum":["CONVERGENCE_MODES_SEPARATED","INSUFFICIENT_EVIDENCE"]},"result":{"type":"object","additionalProperties":false,"required":["relationship","levels","probes","probability_argument","pointwise_argument"],"properties":{"relationship":{"const":"IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"},"levels":{"type":"array","minItems":8,"maxItems":8,"items":{"type":"object","additionalProperties":false,"required":["level","interval_count","event_mass","index_start","index_end"],"properties":{"level":{"type":"integer"},"interval_count":{"type":"integer"},"event_mass":{"type":"string"},"index_start":{"type":"integer"},"index_end":{"type":"integer"}}}},"probes":{"type":"array","minItems":3,"maxItems":8,"items":{"type":"object","additionalProperties":false,"required":["point","hit_indices"],"properties":{"point":{"type":"string"},"hit_indices":{"type":"array","minItems":8,"maxItems":8,"items":{"type":"integer"}}}}},"probability_argument":{"const":"event_mass_tends_to_zero"},"pointwise_argument":{"const":"one_hit_and_at_least_one_miss_per_level"}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "CONVERGENCE_MODES_SEPARATED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "event_mass": {
+                "type": "string"
+              },
+              "index_end": {
+                "type": "integer"
+              },
+              "index_start": {
+                "type": "integer"
+              },
+              "interval_count": {
+                "type": "integer"
+              },
+              "level": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "level",
+              "interval_count",
+              "event_mass",
+              "index_start",
+              "index_end"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "pointwise_argument": {
+          "const": "one_hit_and_at_least_one_miss_per_level"
+        },
+        "probability_argument": {
+          "const": "event_mass_tends_to_zero"
+        },
+        "probes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "hit_indices": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+              },
+              "point": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "point",
+              "hit_indices"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 3,
+          "type": "array"
+        },
+        "relationship": {
+          "const": "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
+        }
+      },
+      "required": [
+        "relationship",
+        "levels",
+        "probes",
+        "probability_argument",
+        "pointwise_argument"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/convergence-mode-separation"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -82,6 +82,22 @@ make agent-eval DATASET=agent-workflow-v1 \
 Use `TASKS=graph-counterexample` for a small smoke run. The treatment run uses
 `benchmarks/config/jacobian.mcp.json`; task TOMLs remain agent-agnostic.
 
+### Held-out treatment readiness
+
+The protected held-out runner performs a bounded MCP initialization, catalog,
+and capability-description preflight before model execution. A held-out model
+run starts only when that record reports infrastructure status `READY`. An
+unreachable endpoint, timeout, malformed response, or catalog/policy mismatch
+records a classified diagnostic and aborts the treatment before the agent
+runs. The local `make agent-eval` observation path above does not produce this
+held-out readiness contract.
+
+A successful preflight initially records routing status `AVAILABLE_UNUSED`.
+Normalization changes that status to `AVAILABLE_INVOKED` only when the trace
+contains a successful Jacobian capability invocation. Infrastructure and
+routing are independent: an available service that the agent did not use is
+not an unavailable service.
+
 ## Run without Jacobian
 
 Use the same shared run conditions:
@@ -93,7 +109,10 @@ make agent-eval DATASET=agent-workflow-v1 \
 ```
 
 `JACOBIAN_ENABLED=0` selects the control job without the Jacobian sidecar or
-MCP configuration. `JACOBIAN_ENABLED=1` selects the treatment job and passes
+MCP configuration. In the held-out runner, that condition records
+infrastructure status `NOT_CONFIGURED` and routing status `NOT_APPLICABLE`, and
+performs no Jacobian probe.
+`JACOBIAN_ENABLED=1` selects the treatment job and passes
 Harbor's `--mcp-config` option. `JACOBIAN_EVAL_PROXY=1` selects matching
 proxy-enabled control/treatment job configs and requires at least one proxy
 URL variable. The Makefile also passes Harbor's
@@ -145,7 +164,9 @@ make agent-eval-compare \
 ```
 
 The comparator rejects unmatched task repetitions or configuration drift and
-reports correctness and assurance separately. See
+reports correctness, evidence, scope, assurance, infrastructure, and routing
+separately. Missing, unknown, and nonterminal Harbor statuses remain
+`UNKNOWN`; they are never normalized into completed runs. See
 [Capability workflow evaluations](../reference/evaluations/benchmark-contracts.md)
 for the full evidence roles and interpretation boundaries.
 
@@ -168,5 +189,8 @@ verify proxy reachability from the container before cancelling the trial.
 
 If the treatment agent reports no Jacobian tools, confirm that
 `JACOBIAN_ENABLED=1` is set and that the treatment job includes the external
-MCP configuration. If the agent cannot reach the sidecar, inspect the Compose
-network and ensure the sidecar is listening on `0.0.0.0:8000`.
+MCP configuration. Inspect the persisted preflight diagnostic first: it
+distinguishes endpoint unavailability, malformed protocol responses, and
+catalog or policy mismatch from a ready service that the agent did not invoke.
+If the preflight cannot reach the sidecar, inspect the Compose network and
+ensure the sidecar is listening on `0.0.0.0:8000`.

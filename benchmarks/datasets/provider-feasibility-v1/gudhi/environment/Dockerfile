@@ -7,5 +7,9 @@ RUN mkdir -p /opt/provider && \
     printf '%s  %s\n' 7640d716d6a118b7787602826e4144bfa1ad5903a31f4a760a7f3a1e68cfdc02 /opt/provider/gudhi-source.tar.gz | sha256sum -c - && \
     uv pip install --system /opt/provider/gudhi.whl numpy==2.5.1
 WORKDIR /app
-COPY input.json pin.json spike.py submission_schema.json /app/
+COPY __init__.py /opt/benchmarks/__init__.py
+COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
+COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY datasets/provider-feasibility-v1/gudhi/environment/input.json datasets/provider-feasibility-v1/gudhi/environment/pin.json datasets/provider-feasibility-v1/gudhi/environment/spike.py datasets/provider-feasibility-v1/gudhi/environment/submission_schema.json /app/
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/opt

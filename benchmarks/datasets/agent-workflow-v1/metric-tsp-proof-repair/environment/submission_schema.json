@@ -1,65 +1,185 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/metric-tsp-proof-repair"},
-    "conclusion": {"const": "REPAIRED"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["flaw_location", "invalid_inference", "corrected_claim", "mst_edges", "euler_walk", "shortcut_tour", "optimal_tour", "weights"],
-      "properties": {
-        "flaw_location": {"const": "STEP_4"},
-        "invalid_inference": {"const": "SHORTCUTTING_PRESERVES_EXACT_COST"},
-        "corrected_claim": {"type": "string", "minLength": 1},
-        "mst_edges": {
-          "type": "array",
-          "minItems": 5,
-          "maxItems": 5,
-          "items": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "items": {"enum": ["A", "B", "C", "D", "E", "F"]}
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "corrected_claim": {
+          "minLength": 1,
+          "type": "string"
         },
         "euler_walk": {
-          "type": "array",
-          "minItems": 11,
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
           "maxItems": 11,
-          "items": {"enum": ["A", "B", "C", "D", "E", "F"]}
+          "minItems": 11,
+          "type": "array"
         },
-        "shortcut_tour": {
-          "type": "array",
-          "minItems": 7,
-          "maxItems": 7,
-          "items": {"enum": ["A", "B", "C", "D", "E", "F"]}
+        "flaw_location": {
+          "const": "STEP_4"
+        },
+        "invalid_inference": {
+          "const": "SHORTCUTTING_PRESERVES_EXACT_COST"
+        },
+        "mst_edges": {
+          "items": {
+            "items": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F"
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
         },
         "optimal_tour": {
-          "type": "array",
-          "minItems": 7,
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
           "maxItems": 7,
-          "items": {"enum": ["A", "B", "C", "D", "E", "F"]}
+          "minItems": 7,
+          "type": "array"
+        },
+        "shortcut_tour": {
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "type": "array"
         },
         "weights": {
-          "type": "object",
           "additionalProperties": false,
-          "required": ["mst", "euler", "shortcut", "optimal"],
           "properties": {
-            "mst": {"type": "integer", "minimum": 0},
-            "euler": {"type": "integer", "minimum": 0},
-            "shortcut": {"type": "integer", "minimum": 0},
-            "optimal": {"type": "integer", "minimum": 0}
-          }
+            "euler": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mst": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "optimal": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "shortcut": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mst",
+            "euler",
+            "shortcut",
+            "optimal"
+          ],
+          "type": "object"
         }
-      }
+      },
+      "required": [
+        "flaw_location",
+        "invalid_inference",
+        "corrected_claim",
+        "mst_edges",
+        "euler_walk",
+        "shortcut_tour",
+        "optimal_tour",
+        "weights"
+      ],
+      "type": "object"
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"const": "metric-tsp-proof-repair exact finite optimization certificate"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1,"maxItems":1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+    "scope": {
+      "const": "metric-tsp-proof-repair exact finite optimization certificate",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/metric-tsp-proof-repair"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

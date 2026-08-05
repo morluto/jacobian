@@ -1,0 +1,282 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "HIDDEN_LAGRANGIAN_ASSUMPTION_REFUTED_AND_PROJECTIONS_REPAIRED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "m22": {
+      "items": {
+        "$ref": "#/$defs/r2"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "m42": {
+      "items": {
+        "$ref": "#/$defs/r2"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "q": {
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+      "type": "string"
+    },
+    "r2": {
+      "items": {
+        "$ref": "#/$defs/q"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "D": {
+        "$ref": "#/$defs/m42"
+      },
+      "P": {
+        "$ref": "#/$defs/m22"
+      },
+      "Q": {
+        "$ref": "#/$defs/m22"
+      },
+      "W": {
+        "$ref": "#/$defs/m42"
+      },
+      "corrected_first_projection": {
+        "$ref": "#/$defs/m22"
+      },
+      "corrected_second_projection": {
+        "$ref": "#/$defs/m22"
+      },
+      "error_location": {
+        "const": "ARBITRARY_D_ASSUMED_LAGRANGIAN"
+      },
+      "gram": {
+        "$ref": "#/$defs/m22"
+      },
+      "inverse_gram": {
+        "$ref": "#/$defs/m22"
+      },
+      "lagrangian_defect": {
+        "$ref": "#/$defs/m22"
+      },
+      "naive_P": {
+        "$ref": "#/$defs/m22"
+      },
+      "naive_Q": {
+        "$ref": "#/$defs/m22"
+      }
+    },
+    "required": [
+      "error_location",
+      "D",
+      "P",
+      "Q",
+      "W",
+      "gram",
+      "inverse_gram",
+      "lagrangian_defect",
+      "naive_P",
+      "naive_Q",
+      "corrected_first_projection",
+      "corrected_second_projection"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "m22": {
+        "items": {
+          "$ref": "#/$defs/r2"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "m42": {
+        "items": {
+          "$ref": "#/$defs/r2"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array"
+      },
+      "q": {
+        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+        "type": "string"
+      },
+      "r2": {
+        "items": {
+          "$ref": "#/$defs/q"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "HIDDEN_LAGRANGIAN_ASSUMPTION_REFUTED_AND_PROJECTIONS_REPAIRED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "D": {
+            "$ref": "#/$defs/m42"
+          },
+          "P": {
+            "$ref": "#/$defs/m22"
+          },
+          "Q": {
+            "$ref": "#/$defs/m22"
+          },
+          "W": {
+            "$ref": "#/$defs/m42"
+          },
+          "corrected_first_projection": {
+            "$ref": "#/$defs/m22"
+          },
+          "corrected_second_projection": {
+            "$ref": "#/$defs/m22"
+          },
+          "error_location": {
+            "const": "ARBITRARY_D_ASSUMED_LAGRANGIAN"
+          },
+          "gram": {
+            "$ref": "#/$defs/m22"
+          },
+          "inverse_gram": {
+            "$ref": "#/$defs/m22"
+          },
+          "lagrangian_defect": {
+            "$ref": "#/$defs/m22"
+          },
+          "naive_P": {
+            "$ref": "#/$defs/m22"
+          },
+          "naive_Q": {
+            "$ref": "#/$defs/m22"
+          }
+        },
+        "required": [
+          "error_location",
+          "D",
+          "P",
+          "Q",
+          "W",
+          "gram",
+          "inverse_gram",
+          "lagrangian_defect",
+          "naive_P",
+          "naive_Q",
+          "corrected_first_projection",
+          "corrected_second_projection"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/lagrangian-projection-proof-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/lagrangian-projection-proof-audit",
+  "verification_record": null
+}

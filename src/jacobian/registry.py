@@ -19,7 +19,7 @@ from jacobian.contracts.checkers import (
     CheckerRegistration,
     EvidenceKind,
 )
-from jacobian.implementation import ImplementationError, package_source_digest
+from jacobian.implementation import ImplementationError, checker_source_digest
 from jacobian.persistence import (
     PersistenceCorruptionError,
     PersistenceLock,
@@ -64,7 +64,7 @@ class _PolicyLockState(threading.local):
 
 def compute_entrypoint_digest(entrypoint: str) -> str:
     try:
-        return package_source_digest(entrypoint)
+        return checker_source_digest(entrypoint)
     except ImplementationError as exc:
         _LOGGER.warning(
             "could not read checker implementation %s",

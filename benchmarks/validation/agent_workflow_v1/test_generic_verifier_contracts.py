@@ -7,6 +7,15 @@ import pytest
 from benchmarks.validation.agent_workflow_v1 import support
 
 
+def test_decoupled_input_binding_registrations_are_preserved() -> None:
+    expected = {
+        "closed-set-distance-strengthening-audit",
+        "extremal-subset-sum-semantic-audit",
+    }
+    assert expected <= set(support.VERIFIER_TASKS)
+    assert expected <= set(support.INPUT_BINDING_DECOUPLED_TASKS)
+
+
 def test_verifier_execution_does_not_mutate_task_bundles(tmp_path: Path) -> None:
     before = support._task_tree_snapshot()
 

@@ -192,12 +192,20 @@ def _prepare_case(
     root = tmp_path / task_name / scenario
     app = root / "app"
     logs = root / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment" / "input.json", app / "input.json")
-    shutil.copy2(task / "solution" / "answer.txt", app / "evidence" / "answer.txt")
     submission = json.loads((task / "solution" / "submission.json").read_text())
     submission.pop("verification_record_uri", None)
+    for descriptor in submission["evidence"]:
+        evidence_path = Path(descriptor["path"])
+        assert not evidence_path.is_absolute() and ".." not in evidence_path.parts
+        destination = app / evidence_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        fixture = task / "solution" / evidence_path.name
+        if not fixture.is_file():
+            fixture = task / "solution" / "answer.txt"
+        shutil.copy2(fixture, destination)
 
     if scenario == "computed":
         submission["claimed_assurance"] = "COMPUTED"

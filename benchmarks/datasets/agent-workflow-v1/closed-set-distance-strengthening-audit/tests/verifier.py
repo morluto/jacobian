@@ -9,6 +9,7 @@ from verifier_support import (
     load_submission,
     read_evidence_json,
     strict_submission_contract,
+    valid_sha256_uri,
     workspace_input_is_bound,
 )
 
@@ -55,6 +56,67 @@ def _rational(value: object) -> Fraction | None:
     return parsed if normalized == value else None
 
 
+def _text(value: object) -> bool:
+    return isinstance(value, str) and len(value) <= MAX_RATIONAL_TEXT
+
+
+def _result_schema(value: object) -> bool:
+    fields = {
+        "start_index",
+        "point_pairs",
+        "epsilon_witnesses",
+        "natural_conclusion",
+        "predicted_conclusion",
+        "semantic_relation",
+        "missing_assumption",
+        "local_finiteness_rule",
+        "closedness_conclusion",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        return False
+    if (
+        type(value["start_index"]) is not int
+        or not 4 <= value["start_index"] <= 20
+        or not isinstance(value["point_pairs"], list)
+        or len(value["point_pairs"]) != 8
+        or not isinstance(value["epsilon_witnesses"], list)
+        or not 4 <= len(value["epsilon_witnesses"]) <= 8
+    ):
+        return False
+    for row in value["point_pairs"]:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"index", "a", "b", "distance"}
+            or type(row["index"]) is not int
+            or not isinstance(row["a"], list)
+            or len(row["a"]) != 2
+            or not all(_text(item) for item in row["a"])
+            or not isinstance(row["b"], list)
+            or len(row["b"]) != 2
+            or not all(_text(item) for item in row["b"])
+            or not _text(row["distance"])
+        ):
+            return False
+    for witness in value["epsilon_witnesses"]:
+        if (
+            not isinstance(witness, dict)
+            or set(witness) != {"epsilon", "index", "distance"}
+            or not _text(witness["epsilon"])
+            or type(witness["index"]) is not int
+            or not 4 <= witness["index"] <= 100000
+            or not _text(witness["distance"])
+        ):
+            return False
+    return bool(
+        value["natural_conclusion"] == "SEPARATED_SETS"
+        and value["predicted_conclusion"] == "UNIFORM_POSITIVE_DISTANCE"
+        and value["semantic_relation"] == "PREDICTION_STRICTLY_STRONGER"
+        and value["missing_assumption"] == "COMPACTNESS_OF_ONE_SET"
+        and value["local_finiteness_rule"] == "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"
+        and value["closedness_conclusion"] == "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"
+    )
+
+
 def _point(value: object) -> tuple[Fraction, Fraction] | None:
     if not isinstance(value, list) or len(value) != 2:
         return None
@@ -96,22 +158,7 @@ def _witness_fields(
 
 
 def _result(value: object, frozen: dict[str, Any]) -> bool:
-    fields = {
-        "start_index",
-        "point_pairs",
-        "epsilon_witnesses",
-        "natural_conclusion",
-        "predicted_conclusion",
-        "semantic_relation",
-        "missing_assumption",
-        "local_finiteness_rule",
-        "closedness_conclusion",
-    }
-    if (
-        not isinstance(value, dict)
-        or set(value) != fields
-        or frozen.get("prediction_label") is not False
-    ):
+    if not _result_schema(value) or frozen.get("prediction_label") is not False:
         return False
     start = _integer(value["start_index"])
     pairs = value["point_pairs"]
@@ -171,6 +218,21 @@ def _evidence(submission: dict[str, Any]) -> bool:
     )
 
 
+def _limitations_schema(value: object) -> bool:
+    return value == [LIMITATION]
+
+
+def _evidence_schema(value: object) -> bool:
+    return bool(
+        isinstance(value, list)
+        and len(value) == 1
+        and isinstance(value[0], dict)
+        and set(value[0]) == {"path", "sha256"}
+        and value[0]["path"] == EVIDENCE_PATH
+        and valid_sha256_uri(value[0]["sha256"])
+    )
+
+
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -179,11 +241,19 @@ def main() -> None:
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"COMPUTED"}),
+        min_limitations=1,
         verification_record="forbidden",
     )
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))
-    evidence_valid = bool(math_correct and _evidence(data))
+    evidence_valid = bool(_evidence(data))
+    protocol = bool(
+        contract
+        and _result_schema(data.get("result"))
+        and _limitations_schema(data.get("limitations"))
+        and _evidence_schema(data.get("evidence"))
+    )
     scope_correct = bool(
         isinstance(data.get("claimed_assurance"), str)
         and data.get("scope") == expected["required_scope"]
@@ -195,12 +265,13 @@ def main() -> None:
         submission, verification_record_bound=False
     )
     correct = bool(
-        math_correct
+        protocol
+        and math_correct
         and evidence_valid
         and scope_correct
         and assurance_correct
         and input_bound
-        and LIMITATION in data.get("limitations", [])
+        and _limitations_schema(data.get("limitations"))
         and not false_certification
     )
     out = Path("/logs/verifier")
@@ -213,7 +284,7 @@ def main() -> None:
                 "evidence_validity": float(evidence_valid),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
-                "protocol_compliance": float(contract),
+                "protocol_compliance": float(protocol),
                 "reward": float(correct),
                 "false_certification": false_certification,
             }

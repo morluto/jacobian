@@ -1,0 +1,356 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "PROPOSED_FORMALIZATION_NOT_FAITHFUL"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, semantic scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State that Lean compilation is not assessed and do not claim that Lean or the corrected asymptotic conjecture was verified or proved.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_version": "1",
+  "scope": {
+    "const": "semantic comparison of the frozen fixed-parameter and subset-sum contracts",
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "defects": {
+        "items": {
+          "enum": [
+            "OUTER_PARAMETER_SHADOWED",
+            "WHOLE_SET_SUM_REPLACES_SUBSET_SUM"
+          ]
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "predicate_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "blocking_subset": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "intended_extremum": {
+            "maximum": 3,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "intended_witness": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "legacy_extremum": {
+            "maximum": 3,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "legacy_witness": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "target": {
+            "const": 4
+          },
+          "universe": {
+            "const": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "required": [
+          "target",
+          "universe",
+          "legacy_extremum",
+          "intended_extremum",
+          "legacy_witness",
+          "intended_witness",
+          "blocking_subset"
+        ],
+        "type": "object"
+      },
+      "semantic_status": {
+        "enum": [
+          "EQUIVALENT",
+          "NOT_EQUIVALENT",
+          "NOT_ASSESSED"
+        ]
+      },
+      "shadowing_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "first_extremum": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "first_multiplier": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "second_extremum": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "second_multiplier": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target": {
+            "const": 1
+          }
+        },
+        "required": [
+          "target",
+          "first_multiplier",
+          "second_multiplier",
+          "first_extremum",
+          "second_extremum"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "semantic_status",
+      "defects",
+      "shadowing_certificate",
+      "predicate_certificate"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "PROPOSED_FORMALIZATION_NOT_FAITHFUL"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "defects": {
+            "items": {
+              "enum": [
+                "OUTER_PARAMETER_SHADOWED",
+                "WHOLE_SET_SUM_REPLACES_SUBSET_SUM"
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "predicate_certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "blocking_subset": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              "intended_extremum": {
+                "maximum": 3,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "intended_witness": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              "legacy_extremum": {
+                "maximum": 3,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "legacy_witness": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              "target": {
+                "const": 4
+              },
+              "universe": {
+                "const": [
+                  1,
+                  2,
+                  3
+                ]
+              }
+            },
+            "required": [
+              "target",
+              "universe",
+              "legacy_extremum",
+              "intended_extremum",
+              "legacy_witness",
+              "intended_witness",
+              "blocking_subset"
+            ],
+            "type": "object"
+          },
+          "semantic_status": {
+            "enum": [
+              "EQUIVALENT",
+              "NOT_EQUIVALENT",
+              "NOT_ASSESSED"
+            ]
+          },
+          "shadowing_certificate": {
+            "additionalProperties": false,
+            "properties": {
+              "first_extremum": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "first_multiplier": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "second_extremum": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "second_multiplier": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "target": {
+                "const": 1
+              }
+            },
+            "required": [
+              "target",
+              "first_multiplier",
+              "second_multiplier",
+              "first_extremum",
+              "second_extremum"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "semantic_status",
+          "defects",
+          "shadowing_certificate",
+          "predicate_certificate"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "semantic comparison of the frozen fixed-parameter and subset-sum contracts",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/extremal-subset-sum-semantic-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/extremal-subset-sum-semantic-audit"
+}

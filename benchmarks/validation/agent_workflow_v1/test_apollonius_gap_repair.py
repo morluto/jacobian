@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
 from benchmarks.validation.agent_workflow_v1 import support
 
 TASK = "apollonius-gap-repair"
@@ -188,10 +189,19 @@ def test_unsupported_assurance_is_a_protocol_failure(tmp_path: Path) -> None:
     assert reward["reward"] == 0.0
 
 
-def test_unencodable_rational_fails_closed(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("field", "index"),
+    (("multiplier", None), ("circle_coefficients", 0), ("distance_coefficients", 0)),
+)
+def test_unencodable_rational_fails_closed(
+    tmp_path: Path, field: str, index: int | None
+) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
-    submission["result"]["multiplier"] = "\ud800"
+    if index is None:
+        submission["result"][field] = "\ud800"
+    else:
+        submission["result"][field][index] = "\ud800"
     support._write_json(app / "submission.json", submission)
 
     reward = support._run_verifier(task, app, logs)

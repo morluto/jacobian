@@ -154,10 +154,19 @@ def _result_protocol_valid(value: object) -> bool:
     )
 
 
+def _encode_certificate_lines(expected: list[str]) -> tuple[bytes, ...] | None:
+    try:
+        return tuple(line.encode() for line in expected)
+    except UnicodeError:
+        return None
+
+
 def _stream_matches_certificate(path: Path, expected: list[str]) -> bool:
     """Compare exact certificate lines without materializing the artifact."""
 
-    expected_bytes = tuple(line.encode() for line in expected)
+    expected_bytes = _encode_certificate_lines(expected)
+    if expected_bytes is None:
+        return False
     max_line_bytes = max(map(len, expected_bytes), default=0) + 2
     line_index = 0
     try:
@@ -202,7 +211,10 @@ def _evidence(value: object, result: object) -> bool:
         "circle_coefficients: " + ",".join(circle),
         "distance_coefficients: " + ",".join(distance),
     ]
-    max_bytes = sum(len(line.encode()) + 1 for line in certificate)
+    encoded_certificate = _encode_certificate_lines(certificate)
+    if encoded_certificate is None:
+        return False
+    max_bytes = sum(len(line) + 1 for line in encoded_certificate)
     path = resolve_evidence(
         value[0], expected_path="evidence/answer.txt", max_bytes=max_bytes
     )

@@ -26,7 +26,7 @@ result as JSON, and bind that file with its SHA-256 digest.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, semantic scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State that Lean compilation is not assessed and do not claim that Lean or the corrected asymptotic conjecture was verified or proved.
+The verifier checks the declared result, semantic scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. The digest-bound evidence must contain a RESULT_JSON line equal to result and prose explaining both defects: an inner binder changes or hides the fixed parameter, and checking only a whole candidate misses a part or subset summing to the target. Equivalent wording is accepted. State that Lean compilation is not assessed and do not claim that Lean or the corrected asymptotic conjecture was verified or proved.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

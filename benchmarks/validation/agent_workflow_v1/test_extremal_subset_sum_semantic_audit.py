@@ -68,6 +68,22 @@ def test_rejects_above_ceiling_assurance(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
     assert rejected["assurance_calibration"] == 0.0
     assert rejected["evidence_validity"] == 1.0
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["limitation_accuracy"] == 1.0
+
+
+def test_reports_independent_diagnostics_for_envelope_failure(tmp_path: Path) -> None:
+    """An unrelated envelope failure must not erase valid field diagnostics."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"].append(dict(submission["evidence"][0]))
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+    assert rejected["assurance_calibration"] == 1.0
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["limitation_accuracy"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
 
 
 def test_rejects_boolean_in_shadowing_certificate(tmp_path: Path) -> None:
@@ -158,6 +174,60 @@ def test_rejects_affirmative_asymptotic_proof_claim(tmp_path: Path) -> None:
     assert rejected["limitation_accuracy"] == 0.0
 
 
+def test_accepts_negated_asymptotic_proof_disclaimer(tmp_path: Path) -> None:
+    """Negated proof language must not be mistaken for an overclaim."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed.",
+        "The corrected asymptotic conjecture has not been proved.",
+    ]
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["limitation_accuracy"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_accepts_equivalent_evidence_wording(tmp_path: Path) -> None:
+    """Evidence credit must not depend on the words shadow or subset."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The inner binder hides the fixed parameter. Only the whole candidate "
+        "is checked, although a part sums to the target. Lean compilation is "
+        "not assessed.\n"
+        "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_rejects_forbidden_claim_in_evidence(tmp_path: Path) -> None:
+    """Digest binding must not authorize an affirmative out-of-scope claim."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The inner binder hides the fixed parameter. Only the whole candidate "
+        "is checked, although a part sums to the target. Lean compilation is "
+        "not assessed. The corrected asymptotic conjecture has been verified.\n"
+        "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == pytest.approx(0.9)
+
+
 def test_deeply_nested_evidence_json_does_not_crash(tmp_path: Path) -> None:
     """A deeply nested RESULT_JSON line must not crash the verifier."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
@@ -198,7 +268,8 @@ def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
     evidence_path = app / "evidence" / "answer.txt"
     submission = json.loads((app / "submission.json").read_text())
     evidence_path.write_text(
-        "shadow subset not assessed\n"
+        "The inner binder hides the fixed parameter; the whole candidate is "
+        "checked while a part sums to the target. Lean compilation is not assessed.\n"
         + ("audit " * 200_000)
         + "\nRESULT_JSON: "
         + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))

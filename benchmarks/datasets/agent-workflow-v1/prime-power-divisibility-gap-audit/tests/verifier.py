@@ -168,10 +168,7 @@ def main() -> None:
     contract = bool(envelope_valid and limitations_correct)
     math_correct = _result(data.get("result"), _frozen())
     evidence_valid = _evidence(data, expected_task_id=expected["task_id"])
-    scope_correct = bool(
-        type(data.get("claimed_assurance")) is str
-        and data.get("scope") == expected["required_scope"]
-    )
+    scope_correct = data.get("scope") == expected["required_scope"]
     assurance_correct = bool(
         data.get("claimed_assurance") == expected["maximum_assurance"]
     )

@@ -39,11 +39,9 @@
       "type": "array"
     },
     "limitations": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
-      "type": "array"
+      "const": [
+        "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+      ]
     },
     "result": {
       "additionalProperties": false,

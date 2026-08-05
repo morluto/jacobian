@@ -22,13 +22,11 @@
     "payload_shape": null
   },
   "limitations": {
-    "type": "array",
-    "minItems": 1,
-    "items": {
-      "type": "string"
-    }
+    "const": [
+      "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+    ]
   },
-  "public_notes": "The verifier reports protocol dimensions separately.",
+  "public_notes": "The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string 1), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved.",
   "required_artifact_filenames": [
     "evidence/divisibility-audit.json"
   ],
@@ -271,11 +269,9 @@
         }
       },
       "limitations": {
-        "type": "array",
-        "minItems": 1,
-        "items": {
-          "type": "string"
-        }
+        "const": [
+          "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
+        ]
       }
     }
   },

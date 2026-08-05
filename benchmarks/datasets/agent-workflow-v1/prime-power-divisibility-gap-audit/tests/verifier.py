@@ -195,6 +195,7 @@ def main() -> None:
                 "input_binding": float(input_bound),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
+                "protocol_compliance": float(contract),
                 "reward": float(correct),
                 "false_certification": false_certification,
             }

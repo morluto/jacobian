@@ -18,7 +18,7 @@ disprove the source theorem.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports protocol dimensions separately.
+The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string 1), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

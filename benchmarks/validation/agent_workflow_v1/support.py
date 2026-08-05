@@ -53,7 +53,9 @@ RESOURCE_DERIVED_TASKS = (
 )
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
+    "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
+    "emerald-path-family-audit",
     "prime-power-divisibility-gap-audit",
     "sine-integral-asymptotic-audit",
     "steiner-triple-system-27",
@@ -62,9 +64,12 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
+    "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
+    "emerald-path-family-audit",
     "extremal-subset-sum-semantic-audit",
     "integer-perturbation-domain-audit",
+    "monotone-inverse-continuity-audit",
     "necklace-burnside-certificate",
     "prime-power-divisibility-gap-audit",
     "pythagorean-generator-recurrence",

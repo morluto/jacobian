@@ -3,10 +3,11 @@
 [Documentation home](../../index.md) · [Capability surface](../tools.md)
 
 All executable benchmark cases are Harbor tasks under their dataset roots
-([`benchmarks/datasets/`](../../../benchmarks/README.md)). The five datasets
+([`benchmarks/datasets/`](../../../benchmarks/README.md)). The datasets
 retain separate claims:
 
 - `agent-workflow-v1` checks fixed workflows and evidence handling;
+- `symbolic-coordination-v1` owns the exact polynomial-map coordination pilot;
 - `public-reproductions-v1` replays known public mathematical outcomes;
 - `research-diagnostics-v1` supports answer-visible case diagnostics;
 - `provider-feasibility-v1` reproduces optional-provider pins and outcomes;

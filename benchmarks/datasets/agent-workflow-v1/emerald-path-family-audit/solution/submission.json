@@ -1,0 +1,136 @@
+{
+  "task_id": "jacobian/emerald-path-family-audit",
+  "conclusion": "PUBLISHED_SINGLETON_CLASSIFICATION_IS_FALSE",
+  "result": {
+    "alpha": "3/2",
+    "beta": "1/2",
+    "even_offset": "0",
+    "odd_offset": "1/2",
+    "trace": [
+      {
+        "n": 0,
+        "x": 0,
+        "y": 0,
+        "value": "0",
+        "floor": 0
+      },
+      {
+        "n": 1,
+        "x": 1,
+        "y": 0,
+        "value": "3/2",
+        "floor": 1
+      },
+      {
+        "n": 2,
+        "x": 1,
+        "y": 1,
+        "value": "2",
+        "floor": 2
+      },
+      {
+        "n": 3,
+        "x": 2,
+        "y": 1,
+        "value": "7/2",
+        "floor": 3
+      },
+      {
+        "n": 4,
+        "x": 2,
+        "y": 2,
+        "value": "4",
+        "floor": 4
+      },
+      {
+        "n": 5,
+        "x": 3,
+        "y": 2,
+        "value": "11/2",
+        "floor": 5
+      },
+      {
+        "n": 6,
+        "x": 3,
+        "y": 3,
+        "value": "6",
+        "floor": 6
+      },
+      {
+        "n": 7,
+        "x": 4,
+        "y": 3,
+        "value": "15/2",
+        "floor": 7
+      },
+      {
+        "n": 8,
+        "x": 4,
+        "y": 4,
+        "value": "8",
+        "floor": 8
+      },
+      {
+        "n": 9,
+        "x": 5,
+        "y": 4,
+        "value": "19/2",
+        "floor": 9
+      },
+      {
+        "n": 10,
+        "x": 5,
+        "y": 5,
+        "value": "10",
+        "floor": 10
+      },
+      {
+        "n": 11,
+        "x": 6,
+        "y": 5,
+        "value": "23/2",
+        "floor": 11
+      },
+      {
+        "n": 12,
+        "x": 6,
+        "y": 6,
+        "value": "12",
+        "floor": 12
+      },
+      {
+        "n": 13,
+        "x": 7,
+        "y": 6,
+        "value": "27/2",
+        "floor": 13
+      },
+      {
+        "n": 14,
+        "x": 7,
+        "y": 7,
+        "value": "14",
+        "floor": 14
+      },
+      {
+        "n": 15,
+        "x": 8,
+        "y": 7,
+        "value": "31/2",
+        "floor": 15
+      }
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "PROOFBENCH_APMO_2025_2_CONSTRUCTIVE_SUFFICIENCY_AUDIT",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:612a634384f168f250529f949b9564e3be7e477f77fa622af7f4767e441d63b7"
+    }
+  ],
+  "limitations": [
+    "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
+  ]
+}

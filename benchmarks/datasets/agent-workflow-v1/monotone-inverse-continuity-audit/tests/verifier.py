@@ -91,8 +91,8 @@ class _ProseScanner:
     def __init__(self):
         self._tail = ""
         self._position = 0
+        self._processed_through = 0
         self._previous_was_space = False
-        self._branch_positions = deque()
         self._pending_contradictions = deque()
         self._sentence_has_inverse = False
         self._sentence_has_contradiction = False
@@ -119,49 +119,70 @@ class _ProseScanner:
         self._previous_was_space = normalized.endswith(" ")
 
         previous_position = self._position
+        next_position = previous_position + len(normalized)
         combined = self._tail + normalized
         combined_start = previous_position - len(self._tail)
-        self._scan_obligations(combined)
+        self._scan(combined, combined_start, next_position - 1)
+
+        self._position = next_position
+        self._expire_local_state(self._position)
+        self._tail = combined[-PROSE_WINDOW_CHARS:]
+
+    def finish(self):
+        self._scan(
+            self._tail,
+            self._position - len(self._tail),
+            self._position,
+        )
+        self._expire_local_state(float("inf"))
+        self._finish_sentence()
+
+    def _scan(self, text, text_start, stable_through):
+        stable_end = stable_through - text_start
+        if stable_end <= 0:
+            return
+        self._scan_obligations(text, stable_end)
 
         events = []
         for kind, pattern in (
             ("inverse", re.compile(r"\binverse\b")),
-            ("branch", re.compile(r"\b(?:branch(?:es)?|pieces?)\b")),
+            (
+                "branch_scope",
+                re.compile(
+                    r"\b(?:on|within)\s+(?:(?:either|each|both|the|a|every|left|right)\s+)?"
+                    r"(?:branch(?:es)?|pieces?)\b"
+                ),
+            ),
             (
                 "contradiction",
                 re.compile(
                     r"\b(?:(?:(?:do(?:es)?|did|will|would|can|could|should|must)"
                     r"\s+not|cannot)\s+fail(?:s|ed|ing)?|"
                     r"(?:doesn|don|didn|won|wouldn|can|couldn|shouldn|mustn)"
-                    r"['\u2019]?t\s+fail(?:s|ed|ing)?|succeeds?|works?)\b"
+                    r"['\u2019]?t\s+fail(?:s|ed|ing)?)\b"
+                    r"|\b(?:the\s+)?(?:full[- ]interval\s+)?inverse\s+"
+                    r"(?:succeeds?|works?)\b"
                     r"|\b(?:(?:is|are)\s+not|(?:isn|aren)['\u2019]?t)\s+"
                     r"(?:a\s+)?fail(?:ure|ing)?\b|\bnever\s+fails?\b"
                 ),
             ),
             ("sentence", re.compile(r"[.!?;]")),
         ):
-            for match in pattern.finditer(combined):
-                start = combined_start + match.start()
-                end = combined_start + match.end()
-                if end > previous_position:
+            for match in pattern.finditer(text):
+                start = text_start + match.start()
+                end = text_start + match.end()
+                if self._processed_through < end <= stable_through:
                     events.append((start, end, kind))
         for start, end, kind in sorted(events):
             if kind == "sentence":
                 self._finish_sentence()
             elif kind == "inverse":
                 self._sentence_has_inverse = True
-            elif kind == "branch":
-                self._record_branch(start, end)
+            elif kind == "branch_scope":
+                self._record_branch_scope(start, end)
             else:
                 self._record_contradiction(start, end)
-
-        self._position += len(normalized)
-        self._expire_local_state(self._position)
-        self._tail = combined[-PROSE_WINDOW_CHARS:]
-
-    def finish(self):
-        self._expire_local_state(float("inf"))
-        self._finish_sentence()
+        self._processed_through = max(self._processed_through, stable_through)
 
     def matches_obligations(self):
         return bool(
@@ -180,46 +201,74 @@ class _ProseScanner:
             and not self.contradicts_positive_slopes
         )
 
-    def _scan_obligations(self, text):
+    @staticmethod
+    def _has_stable_match(pattern, text, stable_end):
+        return any(match.end() <= stable_end for match in re.finditer(pattern, text))
+
+    def _scan_obligations(self, text, stable_end):
         self.branch_subject |= bool(
-            re.search(
+            self._has_stable_match(
                 r"\b(?:(?:both|each)\s+(?:affine\s+)?(?:branch(?:es)?|pieces?)|"
                 r"(?:the\s+)?left\s+and\s+right\s+(?:affine\s+)?"
                 r"(?:branch(?:es)?|pieces?))\b",
                 text,
+                stable_end,
             )
         )
         self.strictly_increasing |= bool(
-            re.search(r"\bstrictly\s+(?:increas(?:e|es|ing|ed)|monotone)\b", text)
+            self._has_stable_match(
+                r"\bstrictly\s+(?:increas(?:e|es|ing|ed)|monotone)\b",
+                text,
+                stable_end,
+            )
         )
         self.positive_slopes |= bool(
-            re.search(
+            self._has_stable_match(
                 r"\b(?:slopes?\b[^.!?;\n]{0,32}\b"
                 r"(?:are|is|remain|remains|stay|stays)\s+(?:strictly\s+)?positive|"
+                r"slopes?\b(?:(?!\bnot\b)[^.!?;\n]){0,32}>\s*(?:0|zero)\b|"
                 r"(?:their|the|both)\s+(?:strictly\s+)?positive\s+slopes?)\b",
                 text,
+                stable_end,
             )
         )
         self.positive_jump_term |= bool(
-            re.search(r"\b(?:positive|upward|strictly positive|nonzero)\b", text)
+            self._has_stable_match(
+                r"\b(?:positive|upward|strictly positive|nonzero)\b",
+                text,
+                stable_end,
+            )
         )
-        self.jump_term |= bool(re.search(r"\b(?:jump|discontinu(?:ity|ous))\b", text))
-        self.image_term |= "image" in text
+        self.jump_term |= self._has_stable_match(
+            r"\b(?:jump|discontinu(?:ity|ous))\b", text, stable_end
+        )
+        self.image_term |= self._has_stable_match(r"\bimage\b", text, stable_end)
         self.omitted_term |= bool(
-            re.search(
+            self._has_stable_match(
                 r"\b(?:omit(?:s|ted)?|gap|missing|exclude(?:s|d)?|no preimage)\b",
                 text,
+                stable_end,
             )
         )
         self.interval_term |= bool(
-            re.search(r"\b(?:between|endpoint|full interval|no preimage)\b", text)
+            self._has_stable_match(
+                r"\b(?:between|endpoint|full interval|no preimage)\b",
+                text,
+                stable_end,
+            )
         )
-        self.inverse_term |= bool(re.search(r"\b(?:inverse|preimage)\b", text))
+        self.inverse_term |= self._has_stable_match(
+            r"\b(?:inverse|preimage)\b", text, stable_end
+        )
         self.failure_term |= bool(
-            re.search(r"\b(?:no|not|fail(?:s|ure)?|without|omits?)\b", text)
+            self._has_stable_match(
+                r"\b(?:no|not|fail(?:s|ure)?|without|omits?)\b",
+                text,
+                stable_end,
+            )
         )
         self.contradicts_increasing |= bool(
-            re.search(
+            self._has_stable_match(
                 r"\b(?:branch(?:es)?|pieces?)\b[^.!?;]{0,32}\b"
                 r"(?:(?:are|is)\s+not|(?:aren|isn)['\u2019]?t)\s+strictly\s+"
                 r"(?:increas(?:e|es|ing|ed)|monotone)\b|"
@@ -227,49 +276,34 @@ class _ProseScanner:
                 r"[^.!?;]{0,32}\bstrictly\s+"
                 r"(?:increas(?:e|es|ing|ed)|monotone)\b",
                 text,
+                stable_end,
             )
         )
         self.contradicts_positive_slopes |= bool(
-            re.search(
+            self._has_stable_match(
                 r"\bslopes?\b[^.!?;]{0,16}\b"
                 r"(?:(?:are|is)\s+not|(?:aren|isn)['\u2019]?t)\s+"
                 r"(?:strictly\s+)?positive\b|"
                 r"\bnot\s+(?:both|all|the|their)\b[^.!?;]{0,24}\bslopes?\b"
                 r"[^.!?;]{0,16}\b(?:are|is)\s+(?:strictly\s+)?positive\b",
                 text,
+                stable_end,
             )
         )
 
-    def _record_branch(self, start, end):
-        self._branch_positions.append((start, end))
+    def _record_branch_scope(self, start, end):
         for pending in self._pending_contradictions:
-            contradiction_start, contradiction_end, qualified = pending
-            if (
-                not qualified
-                and start >= contradiction_start - 48
-                and end <= contradiction_end + 48
-            ):
+            _, contradiction_end, qualified = pending
+            if not qualified and contradiction_end <= start <= contradiction_end + 24:
                 pending[2] = True
 
     def _record_contradiction(self, start, end):
-        qualified = any(
-            branch_start >= start - 48 and branch_end <= end + 48
-            for branch_start, branch_end in self._branch_positions
-        )
-        self._pending_contradictions.append([start, end, qualified])
+        self._pending_contradictions.append([start, end, False])
 
     def _expire_local_state(self, position):
-        # Keep the overlap's branch events until any token spanning the next
-        # chunk boundary has been recognized; exact 48-character qualification
-        # is applied when the contradiction is recorded.
-        while (
-            self._branch_positions
-            and self._branch_positions[0][1] < position - PROSE_WINDOW_CHARS
-        ):
-            self._branch_positions.popleft()
         while (
             self._pending_contradictions
-            and self._pending_contradictions[0][1] + 48 < position
+            and self._pending_contradictions[0][1] + 24 < position
         ):
             _, _, qualified = self._pending_contradictions.popleft()
             self._sentence_has_contradiction |= not qualified
@@ -282,7 +316,6 @@ class _ProseScanner:
             self.contradicts_inverse_failure = True
         self._sentence_has_inverse = False
         self._sentence_has_contradiction = False
-        self._branch_positions.clear()
 
 
 class _MarkerScanner:
@@ -290,13 +323,18 @@ class _MarkerScanner:
 
     def __init__(self, expected):
         try:
-            expected_json = json.dumps(expected, sort_keys=True, separators=(",", ":"))
+            expected_json = json.dumps(
+                expected,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
         except (TypeError, ValueError, RecursionError, MemoryError):
             expected_json = ""
         # A matching object can spell every expected ASCII character as a six-byte
         # JSON escape. Whitespace outside strings is discarded as it streams.
         self._compact_limit = 6 * len(expected_json) + 2
-        self._expected = expected
+        self._expected_json = expected_json
         self._characters = []
         self._in_string = False
         self._escaped = False
@@ -328,9 +366,15 @@ class _MarkerScanner:
             return False
         try:
             parsed = json.loads("".join(self._characters))
+            actual_json = json.dumps(
+                parsed,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
         except (ValueError, RecursionError, MemoryError):
             return False
-        return isinstance(parsed, dict) and parsed == self._expected
+        return isinstance(parsed, dict) and actual_json == self._expected_json
 
 
 class _EvidenceStreamScanner:

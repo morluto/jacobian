@@ -38,16 +38,21 @@ def _target_used_unsafely(contents: str, target: str, verify_text: str) -> bool:
     """
 
     commands = _logical_commands(contents)
+    downloaded = False
+    verified = False
     for cmd in commands:
         if target not in cmd:
             continue
-        if "sha256sum -c -" in cmd:
-            if verify_text in cmd:
-                return False  # reached the verification: no unsafe use found
-            continue  # a different target's verification; skip
         if re.search(r"\bcurl\s+-fsSL\s+\S+\s+-o\s+" + re.escape(target), cmd):
-            continue  # the download itself
-        return True  # extraction/execution before verification
+            downloaded = True
+            verified = False
+            continue  # the download itself; it invalidates prior verification
+        if "sha256sum -c -" in cmd:
+            if verify_text in cmd and downloaded:
+                verified = True
+            continue  # a different target's verification, or a stale file
+        if not verified:
+            return True  # extraction/execution before the latest verification
     return False
 
 
@@ -79,3 +84,27 @@ def test_lean_separate_verifier_receives_both_bound_inputs() -> None:
     assert "COPY expected.json input.json " in (
         task / "tests" / "Dockerfile"
     ).read_text(encoding="utf-8")
+
+
+def test_checksum_must_follow_the_latest_download() -> None:
+    target = "/opt/provider/pkg.tgz"
+    verification = f"{target} | sha256sum -c -"
+    stale_verification = (
+        f"printf '%s  %s\\n' deadbeef {target} | sha256sum -c - && "
+        f"curl -fsSL https://example.test/pkg.tgz -o {target} && "
+        f"tar -xzf {target}"
+    )
+
+    assert _target_used_unsafely(stale_verification, target, verification)
+
+
+def test_download_verify_use_sequence_is_accepted() -> None:
+    target = "/opt/provider/pkg.tgz"
+    verification = f"{target} | sha256sum -c -"
+    safe_sequence = (
+        f"curl -fsSL https://example.test/pkg.tgz -o {target} && "
+        f"printf '%s  %s\\n' deadbeef {target} | sha256sum -c - && "
+        f"tar -xzf {target}"
+    )
+
+    assert not _target_used_unsafely(safe_sequence, target, verification)

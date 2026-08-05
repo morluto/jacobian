@@ -1,48 +1,125 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "scope", "completeness", "claimed_assurance", "limitations", "evidence"],
-  "properties": {
-    "task_id": {"const": "jacobian/symbolic-block-determinant-decomposition"},
-    "conclusion": {"const": "SYMBOLIC_DECOMPOSITION_CERTIFIED"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["basis_change", "basis_change_inverse", "channels", "determinant_identity", "invertibility_assumption"],
-      "properties": {
-        "basis_change": {"$ref": "#/$defs/matrix3"},
-        "basis_change_inverse": {"$ref": "#/$defs/matrix3"},
-        "channels": {
-          "type": "array", "minItems": 3, "maxItems": 3,
-          "items": {"enum": ["A+2B", "A-B"]}
-        },
-        "determinant_identity": {"const": "det(C)=det(A-B)^2*det(A+2B)"},
-        "invertibility_assumption": {"const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"}
-      }
-    },
-    "scope": {"const": "SYMBOLIC_N2_K3_BLOCK_FAMILY"},
-    "completeness": {"const": "COMPLETE"},
-    "claimed_assurance": {"const": "COMPUTED"},
-    "limitations": {
-      "type": "array", "minItems": 1,
-      "contains": {"const": "The unrestricted n,k theorem and the source proof are not machine-checked."}
-    },
-    "evidence": {
-      "type": "array", "minItems": 1, "maxItems": 1,
+  "$defs": {
+    "matrix3": {
       "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["path", "sha256"],
-        "properties": {
-          "path": {"const": "evidence/answer.txt"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
+        "$ref": "#/$defs/row3"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "rational": {
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+      "type": "string"
+    },
+    "row3": {
+      "items": {
+        "$ref": "#/$defs/rational"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
     }
   },
-  "$defs": {
-    "rational": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"},
-    "row3": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/rational"}},
-    "matrix3": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/row3"}}
-  }
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "SYMBOLIC_DECOMPOSITION_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "contains": {
+        "const": "The unrestricted n,k theorem and the source proof are not machine-checked."
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "basis_change": {
+          "$ref": "#/$defs/matrix3"
+        },
+        "basis_change_inverse": {
+          "$ref": "#/$defs/matrix3"
+        },
+        "channels": {
+          "items": {
+            "enum": [
+              "A+2B",
+              "A-B"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "determinant_identity": {
+          "const": "det(C)=det(A-B)^2*det(A+2B)"
+        },
+        "invertibility_assumption": {
+          "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
+        }
+      },
+      "required": [
+        "basis_change",
+        "basis_change_inverse",
+        "channels",
+        "determinant_identity",
+        "invertibility_assumption"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "SYMBOLIC_N2_K3_BLOCK_FAMILY",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/symbolic-block-determinant-decomposition"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

@@ -1,1 +1,169 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/primitive-eisenstein-norm-audit"},"conclusion":{"const":"SOURCE_PRIMITIVE_NORM_CRITERION_FALSE"},"result":{"$ref":"#/$defs/result"},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"const":"PRIMITIVE_EISENSTEIN_NORM_LOCAL_CRITERION_ONLY"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/local-audit.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["CUBIC_FORM_INTERSECTION_COUNT_NOT_ASSESSED","GENERAL_CRITERION_NOT_PROOF_ASSISTANT_VERIFIED","GENERAL_CRITERION_ONLY_LOCALLY_DEMONSTRATED"]}},"$defs":{"pair":{"type":"object","additionalProperties":false,"required":["x","y"],"properties":{"x":{"type":"integer","minimum":0},"y":{"type":"integer","minimum":0}}},"result":{"type":"object","additionalProperties":false,"required":["ramified_witness","inert_obstruction","repaired_criterion"],"properties":{"ramified_witness":{"type":"object","additionalProperties":false,"required":["x","y","norm","gcd","v3"],"properties":{"x":{"type":"integer","minimum":-30,"maximum":30},"y":{"type":"integer","minimum":-30,"maximum":30},"norm":{"type":"integer","minimum":1},"gcd":{"const":1},"v3":{"const":1}}},"inert_obstruction":{"type":"object","additionalProperties":false,"required":["prime","zero_pairs","square_primitive_status"],"properties":{"prime":{"enum":[2,5,11,17,23]},"zero_pairs":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/pair"}},"square_primitive_status":{"const":"IMPOSSIBLE"}}},"repaired_criterion":{"type":"string","minLength":1}}}}}
+{
+  "$defs": {
+    "pair": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "inert_obstruction": {
+          "additionalProperties": false,
+          "properties": {
+            "prime": {
+              "enum": [
+                2,
+                5,
+                11,
+                17,
+                23
+              ]
+            },
+            "square_primitive_status": {
+              "const": "IMPOSSIBLE"
+            },
+            "zero_pairs": {
+              "items": {
+                "$ref": "#/$defs/pair"
+              },
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "prime",
+            "zero_pairs",
+            "square_primitive_status"
+          ],
+          "type": "object"
+        },
+        "ramified_witness": {
+          "additionalProperties": false,
+          "properties": {
+            "gcd": {
+              "const": 1
+            },
+            "norm": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "v3": {
+              "const": 1
+            },
+            "x": {
+              "maximum": 30,
+              "minimum": -30,
+              "type": "integer"
+            },
+            "y": {
+              "maximum": 30,
+              "minimum": -30,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "norm",
+            "gcd",
+            "v3"
+          ],
+          "type": "object"
+        },
+        "repaired_criterion": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "ramified_witness",
+        "inert_obstruction",
+        "repaired_criterion"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "SOURCE_PRIMITIVE_NORM_CRITERION_FALSE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/local-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "CUBIC_FORM_INTERSECTION_COUNT_NOT_ASSESSED",
+        "GENERAL_CRITERION_NOT_PROOF_ASSISTANT_VERIFIED",
+        "GENERAL_CRITERION_ONLY_LOCALLY_DEMONSTRATED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "PRIMITIVE_EISENSTEIN_NORM_LOCAL_CRITERION_ONLY",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/primitive-eisenstein-norm-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

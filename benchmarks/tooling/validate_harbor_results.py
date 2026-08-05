@@ -9,7 +9,6 @@ import importlib.metadata
 import json
 import math
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,12 +18,21 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmarks.tooling.command_runner import git_head_sha  # noqa: E402
+from benchmarks.tooling.errors import HarborSuiteError  # noqa: E402
+from benchmarks.tooling.harbor_digest import durable_task_digest  # noqa: E402
 from benchmarks.tooling.harbor_suite import (  # noqa: E402
     ROOT,
-    HarborSuiteError,
     get_suite,
     task_digest,
 )
+
+
+def _git_sha() -> str:
+    value = git_head_sha(ROOT)
+    if value is None:
+        raise HarborSuiteError("unable to resolve git HEAD")
+    return value
 
 
 def _task_id(name: Any) -> str:
@@ -227,16 +235,6 @@ def _load_trial_results(result_path: Path) -> tuple[list[Any], list[Path], list[
     return results, paths, digests
 
 
-def _git_sha() -> str:
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-
 def validate(
     *,
     dataset: str,
@@ -259,6 +257,11 @@ def validate(
             f"unable to read Harbor result {result_path}: {exc}"
         ) from exc
     expected_digests = {
+        task_id: durable_task_digest(ref.path)
+        for task_id, ref in known.items()
+        if task_id in requested
+    }
+    evidence_digests = {
         task_id: task_digest(ref.path)
         for task_id, ref in known.items()
         if task_id in requested
@@ -283,7 +286,7 @@ def validate(
                 "tasks": [
                     {
                         "task": task_id,
-                        "digest": expected_digests[task_id],
+                        "digest": evidence_digests[task_id],
                         "verifier": (known[task_id].path / "tests" / "verifier.py")
                         .relative_to(ROOT)
                         .as_posix(),

@@ -1,48 +1,168 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
-  "properties": {
-    "task_id": {"const": "jacobian/polynomial-root-localization-certificate"},
-    "conclusion": {"enum": ["ROOT_BOUND_CERTIFIED", "INSUFFICIENT_EVIDENCE"]},
-    "result": {"$ref": "#/$defs/result"},
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"const": "ALL_REAL_PARAMETERS_WITH_1_GE_A_GE_B_GE_C_GE_0"},
-    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {
-      "type": "array", "minItems": 1, "maxItems": 1,
-      "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["path", "sha256"],
-        "properties": {
-          "path": {"const": "evidence/root-bound-certificate.json"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
-    },
-    "limitations": {"const": ["ELEMENTARY_COMPLEX_MODULUS_LEMMAS_TRUSTED"]}
-  },
   "$defs": {
-    "vector": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer"}},
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "controlled_powers": {
+          "const": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "modulus_conclusion": {
+          "const": "ABS_LAMBDA_LE_1"
+        },
+        "nonnegative_weights": {
+          "items": {
+            "$ref": "#/$defs/weight"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "one_minus_z_times_q": {
+          "items": {
+            "$ref": "#/$defs/vector"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "parameter_basis": {
+          "const": [
+            "1",
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        "reciprocal_reduction": {
+          "const": "NONZERO_ROOT_LAMBDA_MAPS_TO_Q_ROOT_Z_EQUALS_1_OVER_LAMBDA"
+        },
+        "root_identity_rhs": {
+          "items": {
+            "$ref": "#/$defs/weight"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "weight_sum": {
+          "$ref": "#/$defs/vector"
+        }
+      },
+      "required": [
+        "parameter_basis",
+        "nonnegative_weights",
+        "weight_sum",
+        "one_minus_z_times_q",
+        "root_identity_rhs",
+        "controlled_powers",
+        "reciprocal_reduction",
+        "modulus_conclusion"
+      ],
+      "type": "object"
+    },
+    "vector": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
     "weight": {
-      "type": "object", "additionalProperties": false,
-      "required": ["power", "affine_coefficients"],
-      "properties": {"power": {"type": "integer", "minimum": 1, "maximum": 4}, "affine_coefficients": {"$ref": "#/$defs/vector"}}
+      "additionalProperties": false,
+      "properties": {
+        "affine_coefficients": {
+          "$ref": "#/$defs/vector"
+        },
+        "power": {
+          "maximum": 4,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "power",
+        "affine_coefficients"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "ROOT_BOUND_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/root-bound-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ELEMENTARY_COMPLEX_MODULUS_LEMMAS_TRUSTED"
+      ]
     },
     "result": {
-      "type": "object", "additionalProperties": false,
-      "required": ["parameter_basis", "nonnegative_weights", "weight_sum", "one_minus_z_times_q", "root_identity_rhs", "controlled_powers", "reciprocal_reduction", "modulus_conclusion"],
-      "properties": {
-        "parameter_basis": {"const": ["1", "a", "b", "c"]},
-        "nonnegative_weights": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/weight"}},
-        "weight_sum": {"$ref": "#/$defs/vector"},
-        "one_minus_z_times_q": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/vector"}},
-        "root_identity_rhs": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/weight"}},
-        "controlled_powers": {"const": [1, 2, 3, 4]},
-        "reciprocal_reduction": {"const": "NONZERO_ROOT_LAMBDA_MAPS_TO_Q_ROOT_Z_EQUALS_1_OVER_LAMBDA"},
-        "modulus_conclusion": {"const": "ABS_LAMBDA_LE_1"}
-      }
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "ALL_REAL_PARAMETERS_WITH_1_GE_A_GE_B_GE_C_GE_0",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/polynomial-root-localization-certificate"
     }
-  }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

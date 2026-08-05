@@ -1,0 +1,520 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "UNIVERSAL_VALUATION_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "affine": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "integer_triple": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "pair": {
+      "items": {
+        "$ref": "#/$defs/affine"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "triple": {
+      "items": {
+        "$ref": "#/$defs/affine"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "base": {
+        "additionalProperties": false,
+        "properties": {
+          "P": {
+            "$ref": "#/$defs/integer_triple"
+          },
+          "b": {
+            "$ref": "#/$defs/integer_triple"
+          },
+          "u": {
+            "$ref": "#/$defs/integer_triple"
+          },
+          "valuations": {
+            "additionalProperties": false,
+            "properties": {
+              "P2_minus_1": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "P2_plus_1": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "u2": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "u2",
+              "P2_minus_1",
+              "P2_plus_1"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "b",
+          "u",
+          "P",
+          "valuations"
+        ],
+        "type": "object"
+      },
+      "difference_identity": {
+        "additionalProperties": false,
+        "properties": {
+          "left": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "right_factors": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "left",
+          "right_factors"
+        ],
+        "type": "object"
+      },
+      "doubling_identities": {
+        "additionalProperties": false,
+        "properties": {
+          "product": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "taylor": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "taylor",
+          "product"
+        ],
+        "type": "object"
+      },
+      "finite_testing_role": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "target_transfer": {
+        "additionalProperties": false,
+        "properties": {
+          "b_difference": {
+            "$ref": "#/$defs/affine"
+          },
+          "divides_exponent": {
+            "$ref": "#/$defs/affine"
+          },
+          "not_divides_exponent": {
+            "$ref": "#/$defs/affine"
+          },
+          "scale_v2": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "u_difference": {
+            "$ref": "#/$defs/affine"
+          },
+          "u_difference_term_lower_bounds": {
+            "$ref": "#/$defs/pair"
+          }
+        },
+        "required": [
+          "u_difference_term_lower_bounds",
+          "u_difference",
+          "scale_v2",
+          "b_difference",
+          "divides_exponent",
+          "not_divides_exponent"
+        ],
+        "type": "object"
+      },
+      "valuation_induction": {
+        "additionalProperties": false,
+        "properties": {
+          "add_one_reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "hypotheses": {
+            "$ref": "#/$defs/triple"
+          },
+          "sub_one_term_lower_bounds": {
+            "$ref": "#/$defs/pair"
+          },
+          "successor": {
+            "$ref": "#/$defs/triple"
+          },
+          "u_term_lower_bounds": {
+            "$ref": "#/$defs/pair"
+          }
+        },
+        "required": [
+          "hypotheses",
+          "sub_one_term_lower_bounds",
+          "add_one_reason",
+          "u_term_lower_bounds",
+          "successor"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "base",
+      "difference_identity",
+      "doubling_identities",
+      "valuation_induction",
+      "target_transfer",
+      "finite_testing_role"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "affine": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "integer_triple": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "pair": {
+        "items": {
+          "$ref": "#/$defs/affine"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "triple": {
+        "items": {
+          "$ref": "#/$defs/affine"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "UNIVERSAL_VALUATION_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "additionalProperties": false,
+            "properties": {
+              "P": {
+                "$ref": "#/$defs/integer_triple"
+              },
+              "b": {
+                "$ref": "#/$defs/integer_triple"
+              },
+              "u": {
+                "$ref": "#/$defs/integer_triple"
+              },
+              "valuations": {
+                "additionalProperties": false,
+                "properties": {
+                  "P2_minus_1": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "P2_plus_1": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "u2": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "u2",
+                  "P2_minus_1",
+                  "P2_plus_1"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "b",
+              "u",
+              "P",
+              "valuations"
+            ],
+            "type": "object"
+          },
+          "difference_identity": {
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "right_factors": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              }
+            },
+            "required": [
+              "left",
+              "right_factors"
+            ],
+            "type": "object"
+          },
+          "doubling_identities": {
+            "additionalProperties": false,
+            "properties": {
+              "product": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "taylor": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "taylor",
+              "product"
+            ],
+            "type": "object"
+          },
+          "finite_testing_role": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "target_transfer": {
+            "additionalProperties": false,
+            "properties": {
+              "b_difference": {
+                "$ref": "#/$defs/affine"
+              },
+              "divides_exponent": {
+                "$ref": "#/$defs/affine"
+              },
+              "not_divides_exponent": {
+                "$ref": "#/$defs/affine"
+              },
+              "scale_v2": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "u_difference": {
+                "$ref": "#/$defs/affine"
+              },
+              "u_difference_term_lower_bounds": {
+                "$ref": "#/$defs/pair"
+              }
+            },
+            "required": [
+              "u_difference_term_lower_bounds",
+              "u_difference",
+              "scale_v2",
+              "b_difference",
+              "divides_exponent",
+              "not_divides_exponent"
+            ],
+            "type": "object"
+          },
+          "valuation_induction": {
+            "additionalProperties": false,
+            "properties": {
+              "add_one_reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "hypotheses": {
+                "$ref": "#/$defs/triple"
+              },
+              "sub_one_term_lower_bounds": {
+                "$ref": "#/$defs/pair"
+              },
+              "successor": {
+                "$ref": "#/$defs/triple"
+              },
+              "u_term_lower_bounds": {
+                "$ref": "#/$defs/pair"
+              }
+            },
+            "required": [
+              "hypotheses",
+              "sub_one_term_lower_bounds",
+              "add_one_reason",
+              "u_term_lower_bounds",
+              "successor"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "base",
+          "difference_identity",
+          "doubling_identities",
+          "valuation_induction",
+          "target_transfer",
+          "finite_testing_role"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/putnam-2adic-induction-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/putnam-2adic-induction-audit",
+  "verification_record": null
+}

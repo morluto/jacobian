@@ -1,1 +1,169 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/alternating-recurrence-stability-certificate"},"conclusion":{"const":"UNIQUE_STABLE_INITIAL_VALUE"},"result":{"$ref":"#/$defs/result"},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"const":"DECLARED_RECURRENCE_ALL_N_AT_LEAST_ONE"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/stability-certificate.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["EXPONENTIAL_DOMINANCE_USES_ARCHIMEDEAN_ORDER","NO_PROOF_ASSISTANT_REPLAY"]}},"$defs":{"rat":{"type":"object","additionalProperties":false,"required":["numerator","denominator"],"properties":{"numerator":{"type":"integer"},"denominator":{"type":"integer","minimum":1}}},"checkpoint":{"type":"object","additionalProperties":false,"required":["n","a_n","difference"],"properties":{"n":{"type":"integer","minimum":1,"maximum":30},"a_n":{"$ref":"#/$defs/rat"},"difference":{"$ref":"#/$defs/rat"}}},"result":{"type":"object","additionalProperties":false,"required":["particular_coefficient","homogeneous_base","difference_delta_coefficient","positive_delta_bad_parity","negative_delta_bad_parity","dominance_base","checkpoints","a0","reciprocal"],"properties":{"particular_coefficient":{"$ref":"#/$defs/rat"},"homogeneous_base":{"type":"integer","minimum":-10,"maximum":-2},"difference_delta_coefficient":{"type":"integer","minimum":-12,"maximum":-1},"positive_delta_bad_parity":{"enum":["EVEN","ODD"]},"negative_delta_bad_parity":{"enum":["EVEN","ODD"]},"dominance_base":{"$ref":"#/$defs/rat"},"checkpoints":{"type":"array","minItems":4,"maxItems":10,"items":{"$ref":"#/$defs/checkpoint"}},"a0":{"$ref":"#/$defs/rat"},"reciprocal":{"$ref":"#/$defs/rat"}}}}}
+{
+  "$defs": {
+    "checkpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "a_n": {
+          "$ref": "#/$defs/rat"
+        },
+        "difference": {
+          "$ref": "#/$defs/rat"
+        },
+        "n": {
+          "maximum": 30,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "a_n",
+        "difference"
+      ],
+      "type": "object"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "a0": {
+          "$ref": "#/$defs/rat"
+        },
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          },
+          "maxItems": 10,
+          "minItems": 4,
+          "type": "array"
+        },
+        "difference_delta_coefficient": {
+          "maximum": -1,
+          "minimum": -12,
+          "type": "integer"
+        },
+        "dominance_base": {
+          "$ref": "#/$defs/rat"
+        },
+        "homogeneous_base": {
+          "maximum": -2,
+          "minimum": -10,
+          "type": "integer"
+        },
+        "negative_delta_bad_parity": {
+          "enum": [
+            "EVEN",
+            "ODD"
+          ]
+        },
+        "particular_coefficient": {
+          "$ref": "#/$defs/rat"
+        },
+        "positive_delta_bad_parity": {
+          "enum": [
+            "EVEN",
+            "ODD"
+          ]
+        },
+        "reciprocal": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "particular_coefficient",
+        "homogeneous_base",
+        "difference_delta_coefficient",
+        "positive_delta_bad_parity",
+        "negative_delta_bad_parity",
+        "dominance_base",
+        "checkpoints",
+        "a0",
+        "reciprocal"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "UNIQUE_STABLE_INITIAL_VALUE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/stability-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "EXPONENTIAL_DOMINANCE_USES_ARCHIMEDEAN_ORDER",
+        "NO_PROOF_ASSISTANT_REPLAY"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "DECLARED_RECURRENCE_ALL_N_AT_LEAST_ONE",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/alternating-recurrence-stability-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

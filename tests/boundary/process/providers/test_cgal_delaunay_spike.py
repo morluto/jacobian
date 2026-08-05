@@ -10,7 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 
-from jacobian.bounded_process import BoundedProcessResult
+from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
@@ -44,23 +44,22 @@ def _result(
     stdout: bytes = b"",
     returncode: int | None = 0,
     timed_out: bool = False,
-) -> BoundedProcessResult:
-    return BoundedProcessResult(
-        returncode=returncode,
+) -> ToolCommandResult:
+    status = ToolCommandStatus.TIMED_OUT if timed_out else ToolCommandStatus.EXITED
+    return ToolCommandResult(
+        status=status,
+        exit_code=returncode,
         stdout=stdout,
         stderr=b"",
-        stdout_exceeded=False,
-        stderr_exceeded=False,
-        timed_out=timed_out,
     )
 
 
 def _runner(
-    outcomes: Sequence[BoundedProcessResult],
-) -> Callable[..., BoundedProcessResult]:
+    outcomes: Sequence[ToolCommandResult],
+) -> Callable[..., ToolCommandResult]:
     remaining = iter(outcomes)
 
-    def run(*_args: object, **_kwargs: object) -> BoundedProcessResult:
+    def run(*_args: object, **_kwargs: object) -> ToolCommandResult:
         return next(remaining)
 
     return run
@@ -103,7 +102,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     return executable, archive, adapter, pin_path
 
 
-def _successes() -> list[BoundedProcessResult]:
+def _successes() -> list[ToolCommandResult]:
     return [
         _result(
             stdout=(

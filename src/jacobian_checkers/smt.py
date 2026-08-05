@@ -12,12 +12,16 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import tempfile
-import threading
-import time
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
+
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
+from jacobian.worker_environment import worker_environment
 
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -426,29 +430,6 @@ def _authorized_runtime() -> tuple[Path, str]:
     return path, expected_digest
 
 
-def _capture_checker_stream(
-    stream: BinaryIO,
-    *,
-    limit: int,
-    process: subprocess.Popen[bytes],
-    captured: bytearray,
-    exceeded: threading.Event,
-) -> None:
-    total = 0
-    read_chunk = getattr(stream, "read1", stream.read)
-    try:
-        while chunk := read_chunk(64 * 1024):
-            total += len(chunk)
-            remaining = max(0, limit - len(captured))
-            captured.extend(chunk[:remaining])
-            if total > limit:
-                exceeded.set()
-                process.kill()
-                return
-    except (OSError, ValueError):
-        return
-
-
 def _bounded_carcara(
     executable: Path,
     *,
@@ -472,79 +453,25 @@ def _bounded_carcara(
             str(proof_path),
             str(problem_path),
         ]
-        stdout = bytearray()
-        stderr = bytearray()
-        stdout_exceeded = threading.Event()
-        stderr_exceeded = threading.Event()
-        timed_out = False
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env={
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-            },
-        )
-        assert process.stdout is not None
-        assert process.stderr is not None
-        readers = (
-            threading.Thread(
-                target=_capture_checker_stream,
-                kwargs={
-                    "stream": process.stdout,
-                    "limit": CARCARA_OUTPUT_LIMIT,
-                    "process": process,
-                    "captured": stdout,
-                    "exceeded": stdout_exceeded,
-                },
-                daemon=True,
-            ),
-            threading.Thread(
-                target=_capture_checker_stream,
-                kwargs={
-                    "stream": process.stderr,
-                    "limit": CARCARA_OUTPUT_LIMIT,
-                    "process": process,
-                    "captured": stderr,
-                    "exceeded": stderr_exceeded,
-                },
-                daemon=True,
-            ),
-        )
-        for reader in readers:
-            reader.start()
-        deadline = time.monotonic() + CARCARA_TIMEOUT_SECONDS
-        try:
-            process.wait(timeout=max(0.0, deadline - time.monotonic()))
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            process.kill()
-            process.wait()
-        finally:
-            for reader in readers:
-                reader.join(timeout=max(0.0, deadline - time.monotonic()))
-            if any(reader.is_alive() for reader in readers):
-                timed_out = True
-            if process.poll() is None:
-                process.kill()
-                process.wait()
-            process.stdout.close()
-            process.stderr.close()
-            for reader in readers:
-                reader.join(timeout=0.1)
-        if timed_out:
-            raise subprocess.TimeoutExpired(
-                cmd=command,
-                timeout=CARCARA_TIMEOUT_SECONDS,
+        result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=tuple(command[1:]),
+                environment=worker_environment(locale="C"),
+                cwd=str(root),
+                timeout_seconds=CARCARA_TIMEOUT_SECONDS,
+                stdin_bytes=b"",
+                stdout_limit_bytes=CARCARA_OUTPUT_LIMIT,
+                stderr_limit_bytes=CARCARA_OUTPUT_LIMIT,
             )
-        if stdout_exceeded.is_set() or stderr_exceeded.is_set():
+        )
+        if result.termination is not ProcessTermination.EXITED:
             return False
         if _sha256(executable.read_bytes()) != expected_runtime_digest:
             raise ValueError("Carcara runtime changed during replay")
-        return process.returncode == 0 and bytes(stdout) == b"valid\n" and not stderr
+        return (
+            result.returncode == 0 and result.stdout == b"valid\n" and not result.stderr
+        )
 
 
 def check_unsat_proof(request: dict[str, Any]) -> dict[str, Any]:
@@ -621,9 +548,5 @@ def check_unsat_proof(request: dict[str, Any]) -> dict[str, Any]:
                 "against the full bound QF_UF query"
             ),
         }
-    except subprocess.TimeoutExpired:
-        return _reject(
-            "CARCARA_TIMEOUT: Carcara did not finish; no proof conclusion is available"
-        )
     except (KeyError, OSError, TypeError, ValueError, OverflowError):
         return _reject("malformed or unauthorized SMT proof checker request")

@@ -123,7 +123,7 @@ def test_verifier_separates_math_from_envelope_and_limitation(tmp_path: Path) ->
     submission["conclusion"] = "UNSUPPORTED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["reward"] == 0.0
 
     task, app, logs = support._prepare_case(

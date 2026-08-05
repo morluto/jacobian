@@ -1,0 +1,360 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "RATIO_BOUNDARY_INCONCLUSIVE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "positive rational series indexed by n >= 1",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "convergent_witness": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoints": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "N": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "partial_sum": {
+                  "type": "string"
+                },
+                "tail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "N",
+                "partial_sum",
+                "tail"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "minItems": 4,
+            "type": "array"
+          },
+          "ratio": {
+            "type": "string"
+          },
+          "ratio_error": {
+            "type": "string"
+          },
+          "telescoping_identity": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "term",
+          "telescoping_identity",
+          "ratio",
+          "ratio_error",
+          "checkpoints"
+        ],
+        "type": "object"
+      },
+      "divergent_witness": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "block_lower_bound": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                },
+                "end": {
+                  "type": "integer"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "start": {
+                  "type": "integer"
+                },
+                "term_lower_bound": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "level",
+                "start",
+                "end",
+                "count",
+                "term_lower_bound",
+                "block_lower_bound"
+              ],
+              "type": "object"
+            },
+            "maxItems": 9,
+            "minItems": 9,
+            "type": "array"
+          },
+          "ratio": {
+            "type": "string"
+          },
+          "ratio_error": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "term",
+          "ratio",
+          "ratio_error",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "ratio_limit": {
+        "const": "1"
+      }
+    },
+    "required": [
+      "ratio_limit",
+      "divergent_witness",
+      "convergent_witness"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "RATIO_BOUNDARY_INCONCLUSIVE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "convergent_witness": {
+            "additionalProperties": false,
+            "properties": {
+              "checkpoints": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "N": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "partial_sum": {
+                      "type": "string"
+                    },
+                    "tail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "N",
+                    "partial_sum",
+                    "tail"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 12,
+                "minItems": 4,
+                "type": "array"
+              },
+              "ratio": {
+                "type": "string"
+              },
+              "ratio_error": {
+                "type": "string"
+              },
+              "telescoping_identity": {
+                "type": "string"
+              },
+              "term": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "term",
+              "telescoping_identity",
+              "ratio",
+              "ratio_error",
+              "checkpoints"
+            ],
+            "type": "object"
+          },
+          "divergent_witness": {
+            "additionalProperties": false,
+            "properties": {
+              "blocks": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "block_lower_bound": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "end": {
+                      "type": "integer"
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "start": {
+                      "type": "integer"
+                    },
+                    "term_lower_bound": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "level",
+                    "start",
+                    "end",
+                    "count",
+                    "term_lower_bound",
+                    "block_lower_bound"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 9,
+                "minItems": 9,
+                "type": "array"
+              },
+              "ratio": {
+                "type": "string"
+              },
+              "ratio_error": {
+                "type": "string"
+              },
+              "term": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "term",
+              "ratio",
+              "ratio_error",
+              "blocks"
+            ],
+            "type": "object"
+          },
+          "ratio_limit": {
+            "const": "1"
+          }
+        },
+        "required": [
+          "ratio_limit",
+          "divergent_witness",
+          "convergent_witness"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "positive rational series indexed by n >= 1",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/ratio-test-boundary-separation"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/ratio-test-boundary-separation",
+  "verification_record": null
+}

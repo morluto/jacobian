@@ -1,0 +1,321 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "TRUE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "point": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/rational_function"
+        },
+        "y": {
+          "$ref": "#/$defs/rational_function"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "rational_function": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "items": {
+            "$ref": "#/$defs/term"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "numerator": {
+          "items": {
+            "$ref": "#/$defs/term"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "type": "string"
+        },
+        "exponents": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "coefficient",
+        "exponents"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "euler-line-symbolic-certificate exact normalized rational-function identities",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "coordinates": {
+        "additionalProperties": false,
+        "properties": {
+          "G": {
+            "$ref": "#/$defs/point"
+          },
+          "H": {
+            "$ref": "#/$defs/point"
+          },
+          "O": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "required": [
+          "O",
+          "G",
+          "H"
+        ],
+        "type": "object"
+      },
+      "relation_coefficients": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      }
+    },
+    "required": [
+      "coordinates",
+      "relation_coefficients"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "point": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "$ref": "#/$defs/rational_function"
+          },
+          "y": {
+            "$ref": "#/$defs/rational_function"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "rational_function": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "items": {
+              "$ref": "#/$defs/term"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array"
+          },
+          "numerator": {
+            "items": {
+              "$ref": "#/$defs/term"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "term": {
+        "additionalProperties": false,
+        "properties": {
+          "coefficient": {
+            "type": "string"
+          },
+          "exponents": {
+            "items": {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "coefficient",
+          "exponents"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "TRUE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "additionalProperties": false,
+            "properties": {
+              "G": {
+                "$ref": "#/$defs/point"
+              },
+              "H": {
+                "$ref": "#/$defs/point"
+              },
+              "O": {
+                "$ref": "#/$defs/point"
+              }
+            },
+            "required": [
+              "O",
+              "G",
+              "H"
+            ],
+            "type": "object"
+          },
+          "relation_coefficients": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "coordinates",
+          "relation_coefficients"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "euler-line-symbolic-certificate exact normalized rational-function identities",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/euler-line-symbolic-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/euler-line-symbolic-certificate",
+  "verification_record": null
+}

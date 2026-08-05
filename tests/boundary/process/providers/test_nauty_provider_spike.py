@@ -12,8 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-
-from jacobian.bounded_process import BoundedProcessResult
+from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
@@ -64,24 +63,30 @@ def _result(
     timed_out: bool = False,
     cancelled: bool = False,
     stdout_exceeded: bool = False,
-) -> BoundedProcessResult:
-    return BoundedProcessResult(
-        returncode=returncode,
+) -> ToolCommandResult:
+    if cancelled:
+        status = ToolCommandStatus.CANCELLED
+    elif timed_out:
+        status = ToolCommandStatus.TIMED_OUT
+    elif stdout_exceeded:
+        status = ToolCommandStatus.OUTPUT_LIMIT_EXCEEDED
+    else:
+        status = ToolCommandStatus.EXITED
+    return ToolCommandResult(
+        status=status,
+        exit_code=returncode,
         stdout=stdout,
         stderr=b"",
         stdout_exceeded=stdout_exceeded,
-        stderr_exceeded=False,
-        timed_out=timed_out,
-        cancelled=cancelled,
     )
 
 
 def _runner(
-    outcomes: Sequence[BoundedProcessResult],
-) -> Callable[..., BoundedProcessResult]:
+    outcomes: Sequence[ToolCommandResult],
+) -> Callable[..., ToolCommandResult]:
     remaining = iter(outcomes)
 
-    def run(*_args: object, **_kwargs: object) -> BoundedProcessResult:
+    def run(*_args: object, **_kwargs: object) -> ToolCommandResult:
         return next(remaining)
 
     return run
@@ -120,7 +125,7 @@ def _pin_file(tmp_path: Path, pin: dict[str, Any] | None = None) -> Path:
     return path
 
 
-def _successful_outcomes() -> list[BoundedProcessResult]:
+def _successful_outcomes() -> list[ToolCommandResult]:
     return [
         _result(stdout=GENG_HELP),
         _result(stdout=LABELG_HELP),
@@ -253,7 +258,7 @@ def test_spike_executes_the_command_profile_recorded_by_the_pin(tmp_path: Path) 
     commands: list[list[str]] = []
     outcomes = iter(_successful_outcomes())
 
-    def runner(command: Sequence[str], **_kwargs: object) -> BoundedProcessResult:
+    def runner(command: Sequence[str], **_kwargs: object) -> ToolCommandResult:
         commands.append(list(command))
         return next(outcomes)
 
@@ -275,7 +280,7 @@ def test_changed_executable_digest_rejects_the_success_report(tmp_path: Path) ->
     outcomes = iter(_successful_outcomes())
     call_count = 0
 
-    def runner(_command: Sequence[str], **_kwargs: object) -> BoundedProcessResult:
+    def runner(_command: Sequence[str], **_kwargs: object) -> ToolCommandResult:
         nonlocal call_count
         result = next(outcomes)
         call_count += 1

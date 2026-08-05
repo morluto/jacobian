@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/public-contract.schema.json",
+  "title": "Jacobian public task contract",
+  "description": "Canonical, agent-visible public contract for one Harbor benchmark task. The contract is the single source of truth for the generated environment/submission_schema.json and the Submission block in instruction.md. It must not contain hidden or answer-bearing fields. No compatibility or legacy versions are accepted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "submission_path",
+    "assurance_ceiling",
+    "allowed_assurance",
+    "allowed_completeness",
+    "conclusion",
+    "scope",
+    "evidence",
+    "required_artifact_filenames",
+    "public_notes",
+    "submission_result",
+    "submission_schema"
+  ],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "task_id": {
+      "type": "string",
+      "pattern": "^jacobian/[a-z0-9-]+$",
+      "minLength": 1
+    },
+    "submission_path": {
+      "type": "string",
+      "pattern": "^/app/[a-z0-9._/-]+$"
+    },
+    "assurance_ceiling": {
+      "enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]
+    },
+    "allowed_assurance": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]}
+    },
+    "allowed_completeness": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": ["COMPLETE", "PARTIAL", "UNKNOWN", "COMPLETE_FOR_DECLARED_FAMILY"]
+      }
+    },
+    "conclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "const": {"type": ["string", "integer", "boolean"]},
+        "enum": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": ["string", "integer", "boolean"]}
+        }
+      }
+    },
+    "scope": {"$ref": "#/$defs/scope"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "verification_record": {"$ref": "#/$defs/verification_record"},
+    "required_artifact_filenames": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "public_notes": {"type": "string", "minLength": 1},
+    "submission_result": {"$ref": "#/$defs/json_schema_fragment"},
+    "limitations": {"$ref": "#/$defs/json_schema_fragment"},
+    "schema_definitions": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/json_schema_fragment"}
+    },
+    "submission_schema": {"$ref": "#/$defs/json_schema_fragment"}
+  },
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["string", "object"]},
+        "const": {"type": "string"},
+        "enum": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "pattern": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_items", "max_items", "allowed_paths", "media_types"],
+      "properties": {
+        "min_items": {"type": "integer", "minimum": 1},
+        "max_items": {"type": "integer", "minimum": 1},
+        "allowed_paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "digest_pattern": {
+          "type": "string",
+          "pattern": "^\\^sha256:\\[0-9a-f\\]\\{64\\}\\$$"
+        },
+        "media_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "payload_shape": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        }
+      }
+    },
+    "verification_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "required_for_assurance": {"const": "VERIFIED"},
+        "schema_ref": {"type": ["string", "null"]}
+      }
+    },
+    "json_schema_fragment": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

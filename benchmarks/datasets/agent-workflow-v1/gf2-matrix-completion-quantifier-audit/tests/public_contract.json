@@ -1,0 +1,235 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "MIN_RANK_ARGUMENT_REFUTED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/matrix-completion.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "SOURCE_2025_DIMENSION_OPTIMUM_NOT_ASSESSED",
+      "ONLY_SUBMITTED_FINITE_COMPLETIONS_CHECKED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/matrix-completion.json"
+  ],
+  "schema_definitions": {
+    "matrix": {
+      "items": {
+        "$ref": "#/$defs/row"
+      },
+      "maxItems": 14,
+      "minItems": 8,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "defects": {
+          "const": [
+            "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
+            "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM"
+          ]
+        },
+        "dimension": {
+          "maximum": 14,
+          "minimum": 8,
+          "type": "integer"
+        },
+        "full_rank_completion": {
+          "$ref": "#/$defs/matrix"
+        },
+        "low_rank_completion": {
+          "$ref": "#/$defs/matrix"
+        },
+        "pattern": {
+          "$ref": "#/$defs/matrix"
+        }
+      },
+      "required": [
+        "dimension",
+        "defects",
+        "pattern",
+        "low_rank_completion",
+        "full_rank_completion"
+      ],
+      "type": "object"
+    },
+    "row": {
+      "items": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 14,
+      "minItems": 8,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "SUBMITTED_FINITE_GF2_PATTERN_AND_COMPLETIONS",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "matrix": {
+        "items": {
+          "$ref": "#/$defs/row"
+        },
+        "maxItems": 14,
+        "minItems": 8,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "defects": {
+            "const": [
+              "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
+              "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM"
+            ]
+          },
+          "dimension": {
+            "maximum": 14,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "full_rank_completion": {
+            "$ref": "#/$defs/matrix"
+          },
+          "low_rank_completion": {
+            "$ref": "#/$defs/matrix"
+          },
+          "pattern": {
+            "$ref": "#/$defs/matrix"
+          }
+        },
+        "required": [
+          "dimension",
+          "defects",
+          "pattern",
+          "low_rank_completion",
+          "full_rank_completion"
+        ],
+        "type": "object"
+      },
+      "row": {
+        "items": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 14,
+        "minItems": 8,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "MIN_RANK_ARGUMENT_REFUTED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/matrix-completion.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "SOURCE_2025_DIMENSION_OPTIMUM_NOT_ASSESSED",
+          "ONLY_SUBMITTED_FINITE_COMPLETIONS_CHECKED"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "SUBMITTED_FINITE_GF2_PATTERN_AND_COMPLETIONS",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/gf2-matrix-completion-quantifier-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/gf2-matrix-completion-quantifier-audit",
+  "verification_record": null
+}

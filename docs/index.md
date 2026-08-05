@@ -69,7 +69,7 @@ expectations.
 
 **Domain-owned references:** [Capability references](reference/capabilities/index.md)
 grouped by owning domain (graphs, matrix, polynomial, Lean, SAT/SMT, finite
-math, number theory, linear algebra, topology, geometry, research memory).
+math, number theory, linear algebra, topology, geometry).
 Adding an operation or provider does not require editing a central list; each
 domain owns its own subdirectory.
 

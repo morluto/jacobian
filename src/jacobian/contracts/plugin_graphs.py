@@ -134,7 +134,7 @@ class GraphCursor(ContractModel):
 
 class GraphEnumerationRequest(PluginRequestContext):
     bounds: dict[str, StrictInt]
-    page_size: StrictInt = Field(ge=1)
+    page_size: StrictInt = Field(ge=1, le=256)
     cursor: GraphCursor | None = None
 
     @model_validator(mode="after")

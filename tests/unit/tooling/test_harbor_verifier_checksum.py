@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling import harbor_suite
+from benchmarks.tooling.errors import HarborSuiteError
 from tests.unit.tooling.harbor_suite_support import (
     _make_canonical_task,
     _make_suite_with_task,
@@ -52,5 +52,5 @@ def test_checksum_update_requires_a_nonempty_selection(
     suite, _task = _make_suite_with_task(tmp_path)
     monkeypatch.setattr(checksum_tool, "get_suite", lambda _dataset: suite)
 
-    with pytest.raises(harbor_suite.HarborSuiteError, match="at least one task"):
+    with pytest.raises(HarborSuiteError, match="at least one task"):
         checksum_tool.update("test-v1", ())

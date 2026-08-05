@@ -1,28 +1,189 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/multiplicative-grid-extremum"},
-    "conclusion": {"const": "EXACT_MAXIMUM_CERTIFIED"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["numbers", "good_pairs", "factorizations", "projection_summary", "claimed_maximum", "conclusion"],
-      "properties": {
-        "numbers": {"type": "array", "minItems": 100, "maxItems": 100, "items": {"type": "integer", "minimum": 1, "maximum": 100000000}, "uniqueItems": true},
-        "good_pairs": {"type": "array", "minItems": 180, "maxItems": 180, "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0, "maximum": 99}}, "uniqueItems": true},
-        "factorizations": {"type": "array", "minItems": 100, "maxItems": 100, "items": {"type": "object", "additionalProperties": false, "required": ["index", "core", "two_exponent", "three_exponent"], "properties": {"index": {"type": "integer", "minimum": 0, "maximum": 99}, "core": {"type": "integer", "minimum": 1, "maximum": 100000000}, "two_exponent": {"type": "integer", "minimum": 0, "maximum": 26}, "three_exponent": {"type": "integer", "minimum": 0, "maximum": 17}}}},
-        "projection_summary": {"type": "object", "additionalProperties": false, "required": ["component_count", "nonempty_rows", "nonempty_columns", "witness_projection_cost", "universal_projection_cost", "universal_edge_bound"], "properties": {"component_count": {"type": "integer", "minimum": 1, "maximum": 100}, "nonempty_rows": {"type": "integer", "minimum": 1, "maximum": 100}, "nonempty_columns": {"type": "integer", "minimum": 1, "maximum": 100}, "witness_projection_cost": {"type": "integer", "minimum": 2, "maximum": 200}, "universal_projection_cost": {"const": 20}, "universal_edge_bound": {"const": 180}}},
-        "claimed_maximum": {"const": 180},
-        "conclusion": {"const": "EXACT_MAXIMUM_CERTIFIED"}
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
-    "scope": {"const": "sets of 100 distinct positive integers; a pair is good exactly when its larger element is 2 or 3 times its smaller element"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "description": "The bound evidence/answer.txt file must be no larger than 16777216 bytes.", "x-maxBytes": 16777216, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"const": ["The verifier certifies the frozen 100-element extremal claim with an elementary projection bound; it does not issue proof-assistant VERIFIED assurance."]}
-  }
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "EXACT_MAXIMUM_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "The verifier certifies the frozen 100-element extremal claim with an elementary projection bound; it does not issue proof-assistant VERIFIED assurance."
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "claimed_maximum": {
+          "const": 180
+        },
+        "conclusion": {
+          "const": "EXACT_MAXIMUM_CERTIFIED"
+        },
+        "factorizations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "core": {
+                "maximum": 100000000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "index": {
+                "maximum": 99,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "three_exponent": {
+                "maximum": 17,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "two_exponent": {
+                "maximum": 26,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "index",
+              "core",
+              "two_exponent",
+              "three_exponent"
+            ],
+            "type": "object"
+          },
+          "maxItems": 100,
+          "minItems": 100,
+          "type": "array"
+        },
+        "good_pairs": {
+          "items": {
+            "items": {
+              "maximum": 99,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 180,
+          "minItems": 180,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "numbers": {
+          "items": {
+            "maximum": 100000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 100,
+          "minItems": 100,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "projection_summary": {
+          "additionalProperties": false,
+          "properties": {
+            "component_count": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "nonempty_columns": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "nonempty_rows": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "universal_edge_bound": {
+              "const": 180
+            },
+            "universal_projection_cost": {
+              "const": 20
+            },
+            "witness_projection_cost": {
+              "maximum": 200,
+              "minimum": 2,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "component_count",
+            "nonempty_rows",
+            "nonempty_columns",
+            "witness_projection_cost",
+            "universal_projection_cost",
+            "universal_edge_bound"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "numbers",
+        "good_pairs",
+        "factorizations",
+        "projection_summary",
+        "claimed_maximum",
+        "conclusion"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "sets of 100 distinct positive integers; a pair is good exactly when its larger element is 2 or 3 times its smaller element",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/multiplicative-grid-extremum"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

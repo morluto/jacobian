@@ -1,7 +1,119 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FALSE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "minimality_checked_orders": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "order": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "premise_holds_universally": {
+          "const": true
+        },
+        "refuting_assignment": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "y": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        "table": {
+          "items": {
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "target_holds_universally": {
+          "const": false
+        }
+      },
+      "required": [
+        "order",
+        "table",
+        "refuting_assignment",
+        "premise_holds_universally",
+        "target_holds_universally",
+        "minimality_checked_orders"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "jacobian/finite-magma-countermodel orders 1 and 2",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/finite-magma-countermodel"
+    }
+  },
   "required": [
     "task_id",
     "conclusion",
@@ -12,70 +124,5 @@
     "evidence",
     "limitations"
   ],
-  "properties": {
-    "task_id": {"const": "jacobian/finite-magma-countermodel"},
-    "conclusion": {"const": "FALSE"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "order",
-        "table",
-        "refuting_assignment",
-        "premise_holds_universally",
-        "target_holds_universally",
-        "minimality_checked_orders"
-      ],
-      "properties": {
-        "order": {"type": "integer", "minimum": 1},
-        "table": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "array",
-            "minItems": 1,
-            "items": {"type": "integer", "minimum": 0}
-          }
-        },
-        "refuting_assignment": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["x", "y"],
-          "properties": {
-            "x": {"type": "integer", "minimum": 0},
-            "y": {"type": "integer", "minimum": 0}
-          }
-        },
-        "premise_holds_universally": {"const": true},
-        "target_holds_universally": {"const": false},
-        "minimality_checked_orders": {
-          "type": "array",
-          "items": {"type": "integer", "minimum": 1},
-          "uniqueItems": true
-        }
-      }
-    },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/finite-magma-countermodel orders 1 and 2"
-    },
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["path", "sha256"],
-        "properties": {
-          "path": {"const": "evidence/answer.txt"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
-    },
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+  "type": "object"
 }

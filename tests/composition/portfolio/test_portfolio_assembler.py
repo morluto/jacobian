@@ -26,7 +26,6 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ContractModel
 from jacobian.installation.context import InstallationContext
-from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import InstalledDomainBundle, OperationInstaller
 from jacobian.operations import (
     ComputedOperation,
@@ -143,8 +142,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
         schemas = SchemaRegistry(store)
         artifacts = ArtifactService(store, schemas)
         operations = OperationInstaller(store, schemas, artifacts)
-        memory = ResearchMemory(store, schemas)
-        capabilities = CapabilityService(store, memory)
+        capabilities = CapabilityService(store)
         checkers = CheckerRegistry(store)
         verification = VerificationService(store, checkers)
         registered: list[str] = []

@@ -97,7 +97,7 @@ def test_affirmative_general_theorem_claim_is_rejected(tmp_path: Path) -> None:
     submission["limitations"] = ["A proof assistant verifies the general theorem."]
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["scope_accuracy"] == 0.0
     assert result["reward"] == 0.0
 

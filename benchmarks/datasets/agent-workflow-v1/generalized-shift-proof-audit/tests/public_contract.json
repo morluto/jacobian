@@ -1,0 +1,381 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "FROZEN_PROOF_INVALID"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/audit-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "TRUE_SHIFT_COMPLEXITY_SUPREMUM_NOT_DETERMINED",
+      "NO_INFINITE_DIMENSIONAL_OPERATOR_THEOREM_VERIFIED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/audit-certificate.json"
+  ],
+  "schema_definitions": {
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "collision": {
+          "additionalProperties": false,
+          "properties": {
+            "alpha_first": {
+              "maximum": 20,
+              "minimum": -20,
+              "type": "integer"
+            },
+            "alpha_second": {
+              "maximum": 20,
+              "minimum": -20,
+              "type": "integer"
+            },
+            "first_index": {
+              "maximum": 20,
+              "minimum": -20,
+              "type": "integer"
+            },
+            "second_index": {
+              "maximum": 20,
+              "minimum": -20,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "first_index",
+            "second_index",
+            "alpha_first",
+            "alpha_second"
+          ],
+          "type": "object"
+        },
+        "fourier_block": {
+          "additionalProperties": false,
+          "properties": {
+            "operator_norm_squared": {
+              "$ref": "#/$defs/rat"
+            },
+            "size": {
+              "maximum": 15,
+              "minimum": 3,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "size",
+            "operator_norm_squared"
+          ],
+          "type": "object"
+        },
+        "norm_direction": {
+          "additionalProperties": false,
+          "properties": {
+            "diagonal_entries": {
+              "items": {
+                "$ref": "#/$defs/rat"
+              },
+              "maxItems": 8,
+              "minItems": 2,
+              "type": "array"
+            },
+            "hilbert_schmidt_norm_squared": {
+              "$ref": "#/$defs/rat"
+            },
+            "operator_norm_squared": {
+              "$ref": "#/$defs/rat"
+            },
+            "valid_relation": {
+              "const": "OPERATOR_NORM_LE_HILBERT_SCHMIDT_NORM"
+            }
+          },
+          "required": [
+            "valid_relation",
+            "diagonal_entries",
+            "operator_norm_squared",
+            "hilbert_schmidt_norm_squared"
+          ],
+          "type": "object"
+        },
+        "radical_domain": {
+          "additionalProperties": false,
+          "properties": {
+            "m": {
+              "maximum": 100,
+              "minimum": 2,
+              "type": "integer"
+            },
+            "radicand": {
+              "type": "integer"
+            },
+            "real_status": {
+              "const": "NOT_REAL"
+            }
+          },
+          "required": [
+            "m",
+            "radicand",
+            "real_status"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "collision",
+        "fourier_block",
+        "norm_direction",
+        "radical_domain"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "AUDIT_THE_FOUR_FROZEN_STEPS_ONLY",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "rat": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "collision": {
+            "additionalProperties": false,
+            "properties": {
+              "alpha_first": {
+                "maximum": 20,
+                "minimum": -20,
+                "type": "integer"
+              },
+              "alpha_second": {
+                "maximum": 20,
+                "minimum": -20,
+                "type": "integer"
+              },
+              "first_index": {
+                "maximum": 20,
+                "minimum": -20,
+                "type": "integer"
+              },
+              "second_index": {
+                "maximum": 20,
+                "minimum": -20,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "first_index",
+              "second_index",
+              "alpha_first",
+              "alpha_second"
+            ],
+            "type": "object"
+          },
+          "fourier_block": {
+            "additionalProperties": false,
+            "properties": {
+              "operator_norm_squared": {
+                "$ref": "#/$defs/rat"
+              },
+              "size": {
+                "maximum": 15,
+                "minimum": 3,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "size",
+              "operator_norm_squared"
+            ],
+            "type": "object"
+          },
+          "norm_direction": {
+            "additionalProperties": false,
+            "properties": {
+              "diagonal_entries": {
+                "items": {
+                  "$ref": "#/$defs/rat"
+                },
+                "maxItems": 8,
+                "minItems": 2,
+                "type": "array"
+              },
+              "hilbert_schmidt_norm_squared": {
+                "$ref": "#/$defs/rat"
+              },
+              "operator_norm_squared": {
+                "$ref": "#/$defs/rat"
+              },
+              "valid_relation": {
+                "const": "OPERATOR_NORM_LE_HILBERT_SCHMIDT_NORM"
+              }
+            },
+            "required": [
+              "valid_relation",
+              "diagonal_entries",
+              "operator_norm_squared",
+              "hilbert_schmidt_norm_squared"
+            ],
+            "type": "object"
+          },
+          "radical_domain": {
+            "additionalProperties": false,
+            "properties": {
+              "m": {
+                "maximum": 100,
+                "minimum": 2,
+                "type": "integer"
+              },
+              "radicand": {
+                "type": "integer"
+              },
+              "real_status": {
+                "const": "NOT_REAL"
+              }
+            },
+            "required": [
+              "m",
+              "radicand",
+              "real_status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "collision",
+          "fourier_block",
+          "norm_direction",
+          "radical_domain"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "FROZEN_PROOF_INVALID"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/audit-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "TRUE_SHIFT_COMPLEXITY_SUPREMUM_NOT_DETERMINED",
+          "NO_INFINITE_DIMENSIONAL_OPERATOR_THEOREM_VERIFIED"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "AUDIT_THE_FOUR_FROZEN_STEPS_ONLY",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/generalized-shift-proof-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/generalized-shift-proof-audit",
+  "verification_record": null
+}

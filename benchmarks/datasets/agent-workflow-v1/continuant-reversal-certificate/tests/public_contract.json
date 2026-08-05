@@ -1,0 +1,378 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "REVERSAL_SYMMETRY_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "support": {
+      "items": {
+        "maximum": 9,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "supports": {
+      "items": {
+        "$ref": "#/$defs/support"
+      },
+      "maxItems": 89,
+      "minItems": 89,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "board_length": {
+        "const": 10
+      },
+      "conclusion": {
+        "const": "FINAL_POLYNOMIALS_EQUAL"
+      },
+      "forward_monomials": {
+        "$ref": "#/$defs/supports"
+      },
+      "proof_obligations": {
+        "additionalProperties": false,
+        "properties": {
+          "base_cases": {
+            "const": [
+              {
+                "length": 0,
+                "value": "1"
+              },
+              {
+                "length": 1,
+                "value": "1"
+              }
+            ]
+          },
+          "partition": {
+            "const": "each_tiling_ends_in_a_square_or_domino"
+          },
+          "recurrence": {
+            "const": "F_(k+1)=F_k+a_k*F_(k-1)"
+          },
+          "reflection": {
+            "const": "i_maps_to_n_minus_i_and_is_an_involution"
+          }
+        },
+        "required": [
+          "base_cases",
+          "partition",
+          "recurrence",
+          "reflection"
+        ],
+        "type": "object"
+      },
+      "recurrence_contract": {
+        "additionalProperties": false,
+        "properties": {
+          "forward_coefficient": {
+            "const": "a_k"
+          },
+          "initial_values": {
+            "const": [
+              1,
+              1
+            ]
+          },
+          "reflection_rule": {
+            "const": "i_maps_to_n_minus_i"
+          },
+          "reverse_coefficient": {
+            "const": "a_(n-k)"
+          }
+        },
+        "required": [
+          "initial_values",
+          "forward_coefficient",
+          "reverse_coefficient",
+          "reflection_rule"
+        ],
+        "type": "object"
+      },
+      "reflection_pairs": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "forward": {
+              "$ref": "#/$defs/support"
+            },
+            "reflected": {
+              "$ref": "#/$defs/support"
+            }
+          },
+          "required": [
+            "forward",
+            "reflected"
+          ],
+          "type": "object"
+        },
+        "maxItems": 89,
+        "minItems": 89,
+        "type": "array"
+      },
+      "reverse_monomials": {
+        "$ref": "#/$defs/supports"
+      }
+    },
+    "required": [
+      "board_length",
+      "forward_monomials",
+      "reverse_monomials",
+      "reflection_pairs",
+      "recurrence_contract",
+      "proof_obligations",
+      "conclusion"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "support": {
+        "items": {
+          "maximum": 9,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "supports": {
+        "items": {
+          "$ref": "#/$defs/support"
+        },
+        "maxItems": 89,
+        "minItems": 89,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "REVERSAL_SYMMETRY_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "board_length": {
+            "const": 10
+          },
+          "conclusion": {
+            "const": "FINAL_POLYNOMIALS_EQUAL"
+          },
+          "forward_monomials": {
+            "$ref": "#/$defs/supports"
+          },
+          "proof_obligations": {
+            "additionalProperties": false,
+            "properties": {
+              "base_cases": {
+                "const": [
+                  {
+                    "length": 0,
+                    "value": "1"
+                  },
+                  {
+                    "length": 1,
+                    "value": "1"
+                  }
+                ]
+              },
+              "partition": {
+                "const": "each_tiling_ends_in_a_square_or_domino"
+              },
+              "recurrence": {
+                "const": "F_(k+1)=F_k+a_k*F_(k-1)"
+              },
+              "reflection": {
+                "const": "i_maps_to_n_minus_i_and_is_an_involution"
+              }
+            },
+            "required": [
+              "base_cases",
+              "partition",
+              "recurrence",
+              "reflection"
+            ],
+            "type": "object"
+          },
+          "recurrence_contract": {
+            "additionalProperties": false,
+            "properties": {
+              "forward_coefficient": {
+                "const": "a_k"
+              },
+              "initial_values": {
+                "const": [
+                  1,
+                  1
+                ]
+              },
+              "reflection_rule": {
+                "const": "i_maps_to_n_minus_i"
+              },
+              "reverse_coefficient": {
+                "const": "a_(n-k)"
+              }
+            },
+            "required": [
+              "initial_values",
+              "forward_coefficient",
+              "reverse_coefficient",
+              "reflection_rule"
+            ],
+            "type": "object"
+          },
+          "reflection_pairs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "forward": {
+                  "$ref": "#/$defs/support"
+                },
+                "reflected": {
+                  "$ref": "#/$defs/support"
+                }
+              },
+              "required": [
+                "forward",
+                "reflected"
+              ],
+              "type": "object"
+            },
+            "maxItems": 89,
+            "minItems": 89,
+            "type": "array"
+          },
+          "reverse_monomials": {
+            "$ref": "#/$defs/supports"
+          }
+        },
+        "required": [
+          "board_length",
+          "forward_monomials",
+          "reverse_monomials",
+          "reflection_pairs",
+          "recurrence_contract",
+          "proof_obligations",
+          "conclusion"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/continuant-reversal-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/continuant-reversal-certificate",
+  "verification_record": null
+}

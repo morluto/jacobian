@@ -1,0 +1,370 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "CUBIC_REMAINDER_DISPROVED_AND_EXPANSION_REPAIRED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 1000000,
+          "minimum": -1000000,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "claim_status": {
+        "const": "FALSE"
+      },
+      "directional_witnesses": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "direction": {
+              "items": {
+                "$ref": "#/$defs/rational"
+              },
+              "maxItems": 4,
+              "minItems": 2,
+              "type": "array"
+            },
+            "normalized_residual_limit": {
+              "const": "quadratic_coefficient"
+            },
+            "quadratic_coefficient": {
+              "$ref": "#/$defs/rational"
+            },
+            "sign": {
+              "enum": [
+                "POSITIVE",
+                "NEGATIVE"
+              ]
+            }
+          },
+          "required": [
+            "direction",
+            "quadratic_coefficient",
+            "sign",
+            "normalized_residual_limit"
+          ],
+          "type": "object"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "response_audit": {
+        "additionalProperties": false,
+        "properties": {
+          "conclusion": {
+            "const": "RIGHT_CONCLUSION_WITH_INVALID_ORDER_STEP"
+          },
+          "defects": {
+            "items": {
+              "enum": [
+                "EPSILON_SQUARED_ORDER_MISCLASSIFIED",
+                "EXPLICIT_QUADRATIC_TERM_DROPPED",
+                "CUBIC_REMAINDER_FALSE"
+              ]
+            },
+            "maxItems": 3,
+            "minItems": 2,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "conclusion",
+          "defects"
+        ],
+        "type": "object"
+      },
+      "second_order_term": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator_power": {
+            "const": 5
+          },
+          "dot_square_coefficient": {
+            "$ref": "#/$defs/rational"
+          },
+          "norm_square_coefficient": {
+            "$ref": "#/$defs/rational"
+          },
+          "remainder": {
+            "const": "O(|y|^3/|x|^4)"
+          }
+        },
+        "required": [
+          "dot_square_coefficient",
+          "norm_square_coefficient",
+          "denominator_power",
+          "remainder"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "claim_status",
+      "second_order_term",
+      "directional_witnesses",
+      "response_audit"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "maximum": 1000000,
+            "minimum": -1000000,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "CUBIC_REMAINDER_DISPROVED_AND_EXPANSION_REPAIRED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_status": {
+            "const": "FALSE"
+          },
+          "directional_witnesses": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "direction": {
+                  "items": {
+                    "$ref": "#/$defs/rational"
+                  },
+                  "maxItems": 4,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "normalized_residual_limit": {
+                  "const": "quadratic_coefficient"
+                },
+                "quadratic_coefficient": {
+                  "$ref": "#/$defs/rational"
+                },
+                "sign": {
+                  "enum": [
+                    "POSITIVE",
+                    "NEGATIVE"
+                  ]
+                }
+              },
+              "required": [
+                "direction",
+                "quadratic_coefficient",
+                "sign",
+                "normalized_residual_limit"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "response_audit": {
+            "additionalProperties": false,
+            "properties": {
+              "conclusion": {
+                "const": "RIGHT_CONCLUSION_WITH_INVALID_ORDER_STEP"
+              },
+              "defects": {
+                "items": {
+                  "enum": [
+                    "EPSILON_SQUARED_ORDER_MISCLASSIFIED",
+                    "EXPLICIT_QUADRATIC_TERM_DROPPED",
+                    "CUBIC_REMAINDER_FALSE"
+                  ]
+                },
+                "maxItems": 3,
+                "minItems": 2,
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "conclusion",
+              "defects"
+            ],
+            "type": "object"
+          },
+          "second_order_term": {
+            "additionalProperties": false,
+            "properties": {
+              "denominator_power": {
+                "const": 5
+              },
+              "dot_square_coefficient": {
+                "$ref": "#/$defs/rational"
+              },
+              "norm_square_coefficient": {
+                "$ref": "#/$defs/rational"
+              },
+              "remainder": {
+                "const": "O(|y|^3/|x|^4)"
+              }
+            },
+            "required": [
+              "dot_square_coefficient",
+              "norm_square_coefficient",
+              "denominator_power",
+              "remainder"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "claim_status",
+          "second_order_term",
+          "directional_witnesses",
+          "response_audit"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/inverse-distance-remainder-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/inverse-distance-remainder-audit",
+  "verification_record": null
+}

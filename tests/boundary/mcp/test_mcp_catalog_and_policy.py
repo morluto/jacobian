@@ -6,8 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from tests.support.mcp import create_legacy_server as create_server
-
+from jacobian.adapters.mcp.server import create_server
 from jacobian.capability_service import CapabilityPolicy
 
 
@@ -26,32 +25,10 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
             catalog = json.loads(resource.contents[0].text)
             assert catalog["policy_profile"] == "COMPUTE_VERIFY_NO_RETRIEVAL"
             assert catalog["policy_digest"] == policy.digest
-            assert "knowledge.search" not in {
-                descriptor["capability_id"] for descriptor in catalog["capabilities"]
-            }
             assert all(
                 "retrieval" not in descriptor["tags"]
                 for descriptor in catalog["capabilities"]
             )
-
-            denied = await client.call_tool(
-                "capability.invoke",
-                {
-                    "capability_id": "knowledge.search",
-                    "mode": "EXPLORE",
-                    "payload": {"query": "counterexample", "limit": 5},
-                },
-            )
-            result = json.loads(denied.content[0].text)
-            assert result["execution"]["status"] == "ERROR"
-            assert result["output"]["error"]["code"] == "CAPABILITY_POLICY_DENIED"
-            assert result["assurance"]["level"] != "VERIFIED"
-            assert result["diagnostics"][0]["details"] == {
-                "policy_profile": "COMPUTE_VERIFY_NO_RETRIEVAL",
-                "policy_digest": policy.digest,
-                "reasons": ["capability_id_denied", "tag_denied"],
-                "checker_authorization_affected": False,
-            }
 
     asyncio.run(scenario())
 

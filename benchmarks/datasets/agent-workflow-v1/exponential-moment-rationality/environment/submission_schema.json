@@ -1,1 +1,159 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/exponential-moment-rationality"},"conclusion":{"enum":["BRANCH_COMPLETE_FORMULAS_CERTIFIED","INSUFFICIENT_EVIDENCE"]},"result":{"type":"object","additionalProperties":false,"required":["variables","generic_formula","singular_formula","branch_partition","rationality_conclusion"],"properties":{"variables":{"const":["A","B","C","D"]},"generic_formula":{"$ref":"#/$defs/rational_formula"},"singular_formula":{"$ref":"#/$defs/rational_formula"},"branch_partition":{"const":["GENERIC_DENOMINATOR_NONZERO","RANK_ONE_X_EQUALS_Y"]},"rationality_conclusion":{"const":"E_RATIONAL_IN_BOTH_BRANCHES"}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}},"$defs":{"term":{"type":"object","additionalProperties":false,"required":["exponents","coefficient"],"properties":{"exponents":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"integer","minimum":0,"maximum":4}},"coefficient":{"type":"string","pattern":"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"}}},"polynomial":{"type":"array","minItems":1,"maxItems":70,"items":{"$ref":"#/$defs/term"}},"rational_formula":{"type":"object","additionalProperties":false,"required":["numerator","denominator"],"properties":{"numerator":{"$ref":"#/$defs/polynomial"},"denominator":{"$ref":"#/$defs/polynomial"}}}}}
+{
+  "$defs": {
+    "polynomial": {
+      "items": {
+        "$ref": "#/$defs/term"
+      },
+      "maxItems": 70,
+      "minItems": 1,
+      "type": "array"
+    },
+    "rational_formula": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "$ref": "#/$defs/polynomial"
+        },
+        "numerator": {
+          "$ref": "#/$defs/polynomial"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+          "type": "string"
+        },
+        "exponents": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "exponents",
+        "coefficient"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "BRANCH_COMPLETE_FORMULAS_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_partition": {
+          "const": [
+            "GENERIC_DENOMINATOR_NONZERO",
+            "RANK_ONE_X_EQUALS_Y"
+          ]
+        },
+        "generic_formula": {
+          "$ref": "#/$defs/rational_formula"
+        },
+        "rationality_conclusion": {
+          "const": "E_RATIONAL_IN_BOTH_BRANCHES"
+        },
+        "singular_formula": {
+          "$ref": "#/$defs/rational_formula"
+        },
+        "variables": {
+          "const": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        }
+      },
+      "required": [
+        "variables",
+        "generic_formula",
+        "singular_formula",
+        "branch_partition",
+        "rationality_conclusion"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/exponential-moment-rationality"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import ProcessResourceLimits, run_bounded_process
+from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
@@ -26,7 +27,9 @@ from jacobian.operations import (
     MaterializedOperation,
     OperationExecutionFailure,
 )
+from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_lll_provider_runtime
+from jacobian.worker_environment import worker_environment
 
 from .lll_worker import PROTOCOL
 
@@ -66,41 +69,38 @@ def reduce_lattice_basis(
             "FLINT_LLL_PROVIDER_UNAVAILABLE",
             "The pinned Python-FLINT exact-gram LLL provider is unavailable.",
         )
-    try:
-        completed = run_bounded_process(
-            [
-                sys.executable,
+    completed = execute_process(
+        ProcessRequest(
+            executable=sys.executable,
+            arguments=(
                 "-I",
                 "-m",
                 "jacobian.domains.matrix_lattice.lll_worker",
-            ],
-            input_bytes=canonicalize_json(
+            ),
+            stdin_bytes=canonicalize_json(
                 {
                     "protocol": PROTOCOL,
                     "basis": request.basis.model_dump(mode="json"),
                 }
             ),
             timeout_seconds=float(request.resource_budget.wall_seconds),
-            environment={
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-                "PYTHONHASHSEED": "0",
-            },
-            stdout_limit=STDOUT_LIMIT,
-            stderr_limit=STDERR_LIMIT,
+            environment=worker_environment(locale="C"),
+            cwd=str(Path.cwd()),
+            stdout_limit_bytes=STDOUT_LIMIT,
+            stderr_limit_bytes=STDERR_LIMIT,
             resource_limits=ProcessResourceLimits(
                 cpu_seconds=request.resource_budget.wall_seconds + 1,
                 address_space_bytes=1024 * 1024 * 1024,
             ),
         )
-    except OSError:
+    )
+    if completed.termination is ProcessTermination.START_FAILED:
         return _failure(
             ExecutionStatus.ERROR,
             "FLINT_LLL_WORKER_START_FAILED",
             "The isolated Python-FLINT LLL worker could not be started.",
         )
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return _failure(
             ExecutionStatus.TIMEOUT,
             "FLINT_LLL_TIMEOUT",

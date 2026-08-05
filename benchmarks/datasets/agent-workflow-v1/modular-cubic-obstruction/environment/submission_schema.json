@@ -1,39 +1,111 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/modular-cubic-obstruction"},
-    "conclusion": {"const": "NO_INTEGER_SOLUTIONS"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["modulus", "target_residue", "residue_cases"],
-      "properties": {
-        "modulus": {"const": 7},
-        "target_residue": {"const": 1},
-        "residue_cases": {
-          "type": "array",
-          "minItems": 7,
-          "maxItems": 7,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["x_residue", "x_cube_residue", "lhs_residue"],
-            "properties": {
-              "x_residue": {"type": "integer", "minimum": 0},
-              "x_cube_residue": {"type": "integer", "minimum": 0},
-              "lhs_residue": {"type": "integer", "minimum": 0}
-            }
-          }
-        }
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"const": "modular-cubic-obstruction all integer x and y"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1,"maxItems":1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "NO_INTEGER_SOLUTIONS"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "modulus": {
+          "const": 7
+        },
+        "residue_cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "lhs_residue": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "x_cube_residue": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "x_residue": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x_residue",
+              "x_cube_residue",
+              "lhs_residue"
+            ],
+            "type": "object"
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "type": "array"
+        },
+        "target_residue": {
+          "const": 1
+        }
+      },
+      "required": [
+        "modulus",
+        "target_residue",
+        "residue_cases"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "modular-cubic-obstruction all integer x and y",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/modular-cubic-obstruction"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

@@ -11,7 +11,6 @@ from tests.support.capabilities import invoke_capability as _invoke
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import open_domain_services
 
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
@@ -24,6 +23,7 @@ from jacobian.matrices.flint_linear import install_python_flint_inconsistency_ca
 from jacobian.matrices.linear_capabilities import (
     install_linear_rational_inconsistency_checker,
 )
+from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.providers.flint_runtime import python_flint_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
@@ -172,14 +172,14 @@ def test_inconsistency_timeout_retains_no_certificate(
 ) -> None:
     runtime = linear_services
     monkeypatch.setattr(
-        "jacobian.matrices.flint_linear.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.matrices.flint_linear.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
     result = _invoke(

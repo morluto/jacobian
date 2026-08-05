@@ -11,7 +11,12 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from jacobian.bounded_process import BoundedProcessResult, run_bounded_process
+from benchmarks.tooling.command_runner import (
+    ToolCommandRequest,
+    ToolCommandResult,
+    ToolCommandStatus,
+    run_tool_command,
+)
 
 PIN_PATH = Path(__file__).with_name("nauty_provider_pin.json")
 _HELP_MARKERS = {
@@ -36,7 +41,29 @@ _SOURCE_MEMBERS = (
     "nauty2_9_3/gtools.h",
 )
 
-ProcessRunner = Callable[..., BoundedProcessResult]
+ProcessRunner = Callable[..., ToolCommandResult]
+
+
+def _default_runner(
+    command: Sequence[str],
+    *,
+    input_bytes: bytes,
+    timeout_seconds: float,
+    environment: Mapping[str, str],
+    stdout_limit: int,
+    stderr_limit: int,
+) -> ToolCommandResult:
+    request = ToolCommandRequest(
+        executable=command[0],
+        arguments=tuple(command[1:]),
+        environment=environment,
+        cwd=str(Path.cwd()),
+        timeout_seconds=timeout_seconds,
+        stdin_bytes=input_bytes,
+        stdout_limit_bytes=stdout_limit,
+        stderr_limit_bytes=stderr_limit,
+    )
+    return run_tool_command(request)
 
 
 class NautySpikeError(RuntimeError):
@@ -260,28 +287,27 @@ def _run_checked(
     timeout_seconds: float,
     stdout_limit: int,
 ) -> bytes:
-    try:
-        completed = runner(
-            command,
-            input_bytes=input_bytes,
-            timeout_seconds=timeout_seconds,
-            environment=_ENVIRONMENT,
-            stdout_limit=stdout_limit,
-            stderr_limit=16_384,
-        )
-    except OSError as exc:
+    completed = runner(
+        command,
+        input_bytes=input_bytes,
+        timeout_seconds=timeout_seconds,
+        environment=_ENVIRONMENT,
+        stdout_limit=stdout_limit,
+        stderr_limit=16_384,
+    )
+    if completed.status is ToolCommandStatus.START_FAILED:
         raise NautySpikeError(
             "ERROR",
             "PROVIDER_LAUNCH_ERROR",
             "The nauty probe process could not be launched.",
-        ) from exc
-    if completed.cancelled:
+        )
+    if completed.status is ToolCommandStatus.CANCELLED:
         raise NautySpikeError(
             "CANCELLED",
             "PROVIDER_CANCELLED",
             "The nauty probe was cancelled before a conclusion.",
         )
-    if completed.timed_out:
+    if completed.status is ToolCommandStatus.TIMED_OUT:
         raise NautySpikeError(
             "TIMEOUT",
             "PROVIDER_TIMEOUT",
@@ -293,7 +319,7 @@ def _run_checked(
             "PROVIDER_OUTPUT_LIMIT",
             "The nauty probe exceeded its bounded output allowance.",
         )
-    if completed.returncode != 0:
+    if completed.exit_code != 0:
         raise NautySpikeError(
             "ERROR",
             "PROVIDER_CRASH",
@@ -462,7 +488,7 @@ def run_spike(
     labelg: Path,
     source_archive: Path,
     timeout_seconds: float = 5,
-    runner: ProcessRunner = run_bounded_process,
+    runner: ProcessRunner = _default_runner,
     pin_path: Path = PIN_PATH,
 ) -> dict[str, Any]:
     """Run the frozen probe and return a JSON-safe success or non-conclusion."""

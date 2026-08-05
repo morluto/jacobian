@@ -18,6 +18,10 @@ from benchmarks.tooling.harbor_suite import (
     Suite,
     load_registry,
 )
+from benchmarks.tooling.strict_boundaries import (
+    HarborJobSelection,
+    strict_model_failures,
+)
 
 SCHEMAS = BENCHMARKS / "schemas"
 SNAPSHOTS = BENCHMARKS / "snapshots"
@@ -140,6 +144,21 @@ def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
         failures.append(
             f"{path.relative_to(ROOT)}: select exactly one of datasets or tasks"
         )
+    # Strict typed validation of the dataset/task selection entries runs before
+    # the semantic path-resolution checks so a malformed selection fails closed
+    # with a field-path diagnostic instead of reaching artifact side effects.
+    selection_payload: dict[str, Any] = {}
+    if "datasets" in raw:
+        selection_payload["datasets"] = raw["datasets"]
+    if "tasks" in raw:
+        selection_payload["tasks"] = raw["tasks"]
+    structural_failures = strict_model_failures(
+        HarborJobSelection,
+        selection_payload,
+        label=str(path.relative_to(ROOT)),
+    )
+    if structural_failures:
+        return [*failures, *structural_failures]
     failures.extend(
         _dataset_selection_failures(raw.get("datasets", []), path=path, suite=suite)
     )

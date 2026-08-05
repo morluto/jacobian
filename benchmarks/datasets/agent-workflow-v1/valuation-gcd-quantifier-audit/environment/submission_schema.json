@@ -1,1 +1,131 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/valuation-gcd-quantifier-audit"},"conclusion":{"enum":["QUANTIFIER_DEFECT_REPAIRED","INSUFFICIENT_EVIDENCE"]},"result":{"$ref":"#/$defs/result"},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"const":"FROZEN_VALUATION_TRANSLATION_AND_SUBMITTED_TABLES"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/valuation-audit.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["SOURCE_FINAL_SUMMATION_NOT_ASSESSED","INTEGER_RECONSTRUCTION_CHECKED_ONLY_FOR_SUBMITTED_PRIMES"]}},"$defs":{"row":{"type":"object","additionalProperties":false,"required":["prime","exponents"],"properties":{"prime":{"type":"integer","minimum":2,"maximum":97},"exponents":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"integer","minimum":0,"maximum":6}}}},"system":{"type":"array","minItems":3,"maxItems":8,"items":{"$ref":"#/$defs/row"}},"result":{"type":"object","additionalProperties":false,"required":["defect","countermodel","repair"],"properties":{"defect":{"const":"EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK"},"countermodel":{"$ref":"#/$defs/system"},"repair":{"$ref":"#/$defs/system"}}}}}
+{
+  "$defs": {
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "countermodel": {
+          "$ref": "#/$defs/system"
+        },
+        "defect": {
+          "const": "EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK"
+        },
+        "repair": {
+          "$ref": "#/$defs/system"
+        }
+      },
+      "required": [
+        "defect",
+        "countermodel",
+        "repair"
+      ],
+      "type": "object"
+    },
+    "row": {
+      "additionalProperties": false,
+      "properties": {
+        "exponents": {
+          "items": {
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "prime": {
+          "maximum": 97,
+          "minimum": 2,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "exponents"
+      ],
+      "type": "object"
+    },
+    "system": {
+      "items": {
+        "$ref": "#/$defs/row"
+      },
+      "maxItems": 8,
+      "minItems": 3,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "QUANTIFIER_DEFECT_REPAIRED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/valuation-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "SOURCE_FINAL_SUMMATION_NOT_ASSESSED",
+        "INTEGER_RECONSTRUCTION_CHECKED_ONLY_FOR_SUBMITTED_PRIMES"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "FROZEN_VALUATION_TRANSLATION_AND_SUBMITTED_TABLES",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/valuation-gcd-quantifier-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

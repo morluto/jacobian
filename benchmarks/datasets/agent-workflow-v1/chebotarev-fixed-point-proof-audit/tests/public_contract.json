@@ -1,0 +1,391 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "PUBLISHED_SOLUTION_CONTAINS_MULTIPLE_FATAL_ERRORS",
+      "PUBLISHED_SOLUTION_CORRECT",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/chebotarev-audit.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "S4_CLASSIFICATION_NOT_REPROVED",
+      "CHEBOTAREV_THEOREM_TRUSTED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/chebotarev-audit.json"
+  ],
+  "schema_definitions": {
+    "cycle_row": {
+      "additionalProperties": false,
+      "properties": {
+        "class_size": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "contributes": {
+          "type": "boolean"
+        },
+        "fixed_points": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "partition": {
+          "enum": [
+            "1+1+1+1",
+            "2+1+1",
+            "2+2",
+            "3+1",
+            "4"
+          ]
+        }
+      },
+      "required": [
+        "partition",
+        "class_size",
+        "fixed_points",
+        "contributes"
+      ],
+      "type": "object"
+    },
+    "evidence_envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "const": [
+            "S4_CLASSIFICATION_NOT_REPROVED",
+            "CHEBOTAREV_THEOREM_TRUSTED"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/result"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/chebotarev-fixed-point-proof-audit"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_discriminant": {
+          "type": "integer"
+        },
+        "cycle_types": {
+          "items": {
+            "$ref": "#/$defs/cycle_row"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "defects": {
+          "items": {
+            "enum": [
+              "MOD2_IRREDUCIBILITY_FALSE",
+              "DISCRIMINANT_WRONG",
+              "DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS",
+              "PUBLISHED_DENSITY_WRONG"
+            ]
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "density": {
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
+        },
+        "encoded_answer": {
+          "type": "integer"
+        },
+        "fixed_point_total": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mod2_factor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mod2_factor",
+        "actual_discriminant",
+        "cycle_types",
+        "fixed_point_total",
+        "density",
+        "encoded_answer",
+        "defects"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "CONDITIONAL_ON_FROZEN_S4_PREMISE",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "cycle_row": {
+        "additionalProperties": false,
+        "properties": {
+          "class_size": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "contributes": {
+            "type": "boolean"
+          },
+          "fixed_points": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "partition": {
+            "enum": [
+              "1+1+1+1",
+              "2+1+1",
+              "2+2",
+              "3+1",
+              "4"
+            ]
+          }
+        },
+        "required": [
+          "partition",
+          "class_size",
+          "fixed_points",
+          "contributes"
+        ],
+        "type": "object"
+      },
+      "evidence_envelope": {
+        "additionalProperties": false,
+        "properties": {
+          "limitations": {
+            "const": [
+              "S4_CLASSIFICATION_NOT_REPROVED",
+              "CHEBOTAREV_THEOREM_TRUSTED"
+            ]
+          },
+          "result": {
+            "$ref": "#/$defs/result"
+          },
+          "schema_version": {
+            "const": "1"
+          },
+          "task_id": {
+            "const": "jacobian/chebotarev-fixed-point-proof-audit"
+          }
+        },
+        "required": [
+          "schema_version",
+          "task_id",
+          "result",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_discriminant": {
+            "type": "integer"
+          },
+          "cycle_types": {
+            "items": {
+              "$ref": "#/$defs/cycle_row"
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "type": "array"
+          },
+          "defects": {
+            "items": {
+              "enum": [
+                "MOD2_IRREDUCIBILITY_FALSE",
+                "DISCRIMINANT_WRONG",
+                "DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS",
+                "PUBLISHED_DENSITY_WRONG"
+              ]
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "density": {
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
+          },
+          "encoded_answer": {
+            "type": "integer"
+          },
+          "fixed_point_total": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mod2_factor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mod2_factor",
+          "actual_discriminant",
+          "cycle_types",
+          "fixed_point_total",
+          "density",
+          "encoded_answer",
+          "defects"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "PUBLISHED_SOLUTION_CONTAINS_MULTIPLE_FATAL_ERRORS",
+          "PUBLISHED_SOLUTION_CORRECT",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/chebotarev-audit.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "S4_CLASSIFICATION_NOT_REPROVED",
+          "CHEBOTAREV_THEOREM_TRUSTED"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "CONDITIONAL_ON_FROZEN_S4_PREMISE",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/chebotarev-fixed-point-proof-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/chebotarev-fixed-point-proof-audit",
+  "verification_record": null
+}

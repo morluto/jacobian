@@ -1,0 +1,22 @@
+{
+  "task_id": "jacobian/extremal-subset-sum-semantic-audit",
+  "source": {
+    "repository": "google-deepmind/formal-conjectures",
+    "revision": "b2e608fc52d765510915a244bb69b1a2741acc3c",
+    "issue": 4440,
+    "file": "FormalConjectures/ErdosProblems/361.lean"
+  },
+  "informal_requirement": "For one fixed positive real c and each n, maximize the cardinality of a subset of {1,...,floor(c*n)} for which no subset sums to n.",
+  "proposed_fragments": {
+    "parameter_contract": "(c : ℝ) (hc : 0 < c) ... (hA : ∀ c n, A n = legacyExtremum c n)",
+    "legacy_candidate_predicate": "n != sum(candidate)",
+    "intended_candidate_predicate": "for every subset C of candidate, n != sum(C)"
+  },
+  "shadow_instance": {"target": 1, "allowed_cutoff_multipliers": [0, 1, 2, 3, 4]},
+  "predicate_instance": {"target": 4, "universe": [1, 2, 3]},
+  "audit_scope": {
+    "semantic_faithfulness": true,
+    "lean_compilation": false,
+    "corrected_asymptotic_claim": "NOT_ASSESSED"
+  }
+}

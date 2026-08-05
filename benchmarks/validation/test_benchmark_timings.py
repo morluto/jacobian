@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 from benchmarks.tooling.benchmark_timings import collect
-from benchmarks.tooling.harbor_suite import HarborSuiteError, get_suite
+from benchmarks.tooling.errors import HarborSuiteError
+from benchmarks.tooling.harbor_suite import get_suite
 
 
 def test_timing_collector_uses_median_completed_trial_duration(tmp_path: Path) -> None:

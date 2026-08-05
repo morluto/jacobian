@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/sine-integral-asymptotic-audit",
+  "conclusion": "PUBLISHED_SINE_TERM_SIGN_IS_WRONG",
+  "required_scope": "HARDMATH2_ROW_2_FIVE_TERM_TAIL_CERTIFICATE",
+  "maximum_assurance": "COMPUTED"
+}

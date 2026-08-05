@@ -1,0 +1,1 @@
+Expanding both equations shows that the distance-difference polynomial is exactly (1-k^2) times the diameter-circle polynomial, filling the computation omitted by the scored proof.

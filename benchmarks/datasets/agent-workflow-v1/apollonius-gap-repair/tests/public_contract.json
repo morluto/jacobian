@@ -28,7 +28,7 @@
       "type": "string"
     }
   },
-  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.",
+  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, completeness, limitations, protocol, and assurance dimensions separately. Every rational field must use canonical reduced integer or numerator/denominator syntax with at most six digits per integer component; exponent notation, leading zeros, and denominator 1 are rejected.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],

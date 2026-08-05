@@ -17,6 +17,7 @@ WORKSPACE, TESTS = Path("/app"), Path("/tests")
 EVIDENCE_PATH = "evidence/distance-audit.json"
 LIMITATION = "The verifier replays exact rational instances and trusts the standard theorem that locally finite Euclidean subsets are closed; it does not machine-prove the universal topological argument."
 _CANONICAL_RATIONAL = re.compile(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?\Z")
+_RATIONAL = re.compile(r"[+-]?[0-9]+(?:/[+-]?[1-9][0-9]*)?\Z")
 MAX_RATIONAL_TEXT = 128
 
 
@@ -45,22 +46,30 @@ def _rational(value: object) -> Fraction | None:
     if (
         not isinstance(value, str)
         or len(value) > MAX_RATIONAL_TEXT
-        or _CANONICAL_RATIONAL.fullmatch(value) is None
+        or _RATIONAL.fullmatch(value) is None
     ):
         return None
     try:
-        parsed = Fraction(value)
-        normalized = str(parsed)
+        return Fraction(value)
     except (ValueError, ZeroDivisionError, OverflowError):
         return None
-    return parsed if normalized == value else None
+
+
+def _canonical_rational(value: object) -> bool:
+    parsed = _rational(value)
+    return bool(
+        parsed is not None
+        and isinstance(value, str)
+        and _CANONICAL_RATIONAL.fullmatch(value) is not None
+        and str(parsed) == value
+    )
 
 
 def _text(value: object) -> bool:
     return isinstance(value, str) and len(value) <= MAX_RATIONAL_TEXT
 
 
-def _result_schema(value: object) -> bool:
+def _result_shape(value: object) -> bool:
     fields = {
         "start_index",
         "point_pairs",
@@ -157,8 +166,37 @@ def _witness_fields(
     return epsilon, index, distance
 
 
+def _result_schema(value: object) -> bool:
+    if not _result_shape(value):
+        return False
+    for row in value["point_pairs"]:
+        if not all(
+            _canonical_rational(item)
+            for item in (*row["a"], *row["b"], row["distance"])
+        ):
+            return False
+    prior_epsilon: Fraction | None = None
+    prior_index = -1
+    for witness in value["epsilon_witnesses"]:
+        if not (
+            _canonical_rational(witness["epsilon"])
+            and _canonical_rational(witness["distance"])
+        ):
+            return False
+        parsed = _witness_fields(witness)
+        if parsed is None:
+            return False
+        epsilon, index, _ = parsed
+        if prior_epsilon is not None and (
+            epsilon >= prior_epsilon or index <= prior_index
+        ):
+            return False
+        prior_epsilon, prior_index = epsilon, index
+    return True
+
+
 def _result(value: object, frozen: dict[str, Any]) -> bool:
-    if not _result_schema(value) or frozen.get("prediction_label") is not False:
+    if not _result_shape(value) or frozen.get("prediction_label") is not False:
         return False
     start = _integer(value["start_index"])
     pairs = value["point_pairs"]
@@ -175,8 +213,6 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     witnesses = value["epsilon_witnesses"]
     if not isinstance(witnesses, list) or not 4 <= len(witnesses) <= 8:
         return False
-    prior_epsilon: Fraction | None = None
-    prior_index = start - 1
     for witness in witnesses:
         parsed = _witness_fields(witness)
         if parsed is None:
@@ -185,14 +221,10 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         if (
             index < start
             or index > 100000
-            or index <= prior_index
             or distance != Fraction(1, index)
             or not distance < epsilon
         ):
             return False
-        if prior_epsilon is not None and epsilon >= prior_epsilon:
-            return False
-        prior_epsilon, prior_index = epsilon, index
     return bool(
         value["natural_conclusion"] == "SEPARATED_SETS"
         and value["predicted_conclusion"] == "UNIFORM_POSITIVE_DISTANCE"
@@ -258,10 +290,7 @@ def main() -> None:
         and _limitations_schema(data.get("limitations"))
         and _evidence_schema(data.get("evidence"))
     )
-    scope_correct = bool(
-        isinstance(data.get("claimed_assurance"), str)
-        and data.get("scope") == expected["required_scope"]
-    )
+    scope_correct = bool(data.get("scope") == expected["required_scope"])
     assurance_correct = bool(
         data.get("claimed_assurance") == expected["maximum_assurance"]
     )

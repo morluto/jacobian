@@ -96,10 +96,19 @@ def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
         assert _verify(tmp_path / name, submission)["reward"] == 0.0
 
 
-def test_rejects_noncanonical_rational_and_false_certification(tmp_path: Path) -> None:
+def test_noncanonical_rational_is_protocol_not_mathematical_failure(
+    tmp_path: Path,
+) -> None:
     noncanonical = copy.deepcopy(_oracle())
     noncanonical["result"]["point_pairs"][0]["distance"] = "2/8"
-    assert _verify(tmp_path / "noncanonical", noncanonical)["reward"] == 0.0
+    result = _verify(tmp_path / "noncanonical", noncanonical)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_false_certification_is_rejected(tmp_path: Path) -> None:
     verified = copy.deepcopy(_oracle())
     verified["claimed_assurance"] = "VERIFIED"
     assert _verify(tmp_path / "verified", verified)["false_certification"] is True
@@ -150,7 +159,7 @@ def test_rejects_exponent_form_rational_without_crash(tmp_path: Path) -> None:
         result = _verify(tmp_path / f"exponent-{field}", submission)
         assert result["reward"] == 0.0
         assert result["correctness"] == 0.0
-        assert result["protocol_compliance"] == 1.0
+        assert result["protocol_compliance"] == 0.0
 
     huge_exponent = copy.deepcopy(_oracle())
     huge_exponent["result"]["point_pairs"][0]["distance"] = "1e" + "9" * 100_000
@@ -190,10 +199,24 @@ def test_rejects_unhashable_assurance_without_crash(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["claimed_assurance"] = []
     result = _verify(tmp_path / "unhashable-assurance", submission)
-    assert result["scope_accuracy"] == 0.0
+    assert result["scope_accuracy"] == 1.0
     assert result["assurance_calibration"] == 0.0
     assert result["reward"] == 0.0
     assert result["false_certification"] is False
+
+
+def test_witness_ordering_is_protocol_not_mathematical_failure(
+    tmp_path: Path,
+) -> None:
+    submission = copy.deepcopy(_oracle())
+    witnesses = submission["result"]["epsilon_witnesses"]
+    witnesses[0], witnesses[1] = witnesses[1], witnesses[0]
+
+    result = _verify(tmp_path / "witness-order", submission)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
 
 
 def test_tampered_input_preserves_correctness_and_gates_reward(

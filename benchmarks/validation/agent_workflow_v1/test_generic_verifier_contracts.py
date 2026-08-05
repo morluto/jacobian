@@ -201,6 +201,23 @@ def test_verifiers_reject_unhashable_assurance(
     assert rejected["false_certification"] is False
 
 
+@pytest.mark.parametrize("task_name", support.SCOPE_INDEPENDENT_ASSURANCE_TASKS)
+def test_scope_independent_verifiers_preserve_scope_for_unsupported_assurance(
+    tmp_path: Path,
+    task_name: str,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
+    submission_path = app / "submission.json"
+    submission = json.loads(submission_path.read_text())
+    submission["claimed_assurance"] = "CHECKED"
+    support._write_json(submission_path, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["assurance_calibration"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 @pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
 @pytest.mark.parametrize(
     "attack",

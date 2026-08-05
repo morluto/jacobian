@@ -7,3 +7,19 @@ Submit a nontrivial positive rational pair with `alpha >= beta`, `alpha+beta=2`,
 The digest-bound `evidence/answer.txt` must contain exactly six nonempty lines: `emerald-path-family-certificate-v1`, the four fields `alpha:`, `beta:`, `even_offset:`, and `odd_offset:` using the submitted strings, then `trace_sha256:` followed by the SHA-256 of the submitted trace serialized as sorted-key compact JSON.
 
 Include this published limitation exactly: `The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip.` Do not claim `VERIFIED`.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** exactly `PUBLISHED_SINGLETON_CLASSIFICATION_IS_FALSE`
+- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** the exact value declared in `submission_schema.json`
+- **Completeness:** `COMPLETE`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `text/plain`.
+- **Required artifact filenames:** `evidence/answer.txt`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

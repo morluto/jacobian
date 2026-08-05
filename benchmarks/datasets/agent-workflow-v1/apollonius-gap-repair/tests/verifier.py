@@ -175,18 +175,19 @@ def _evidence(value: object, result: object) -> bool:
         for items in (circle, distance)
     ) or not isinstance(multiplier, str):
         return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
+    certificate = [
+        "apollonius-coefficient-certificate-v1",
+        f"multiplier: {multiplier}",
+        "circle_coefficients: " + ",".join(circle),
+        "distance_coefficients: " + ",".join(distance),
+    ]
+    max_bytes = sum(len(line.encode()) + 1 for line in certificate)
+    path = resolve_evidence(
+        value[0], expected_path="evidence/answer.txt", max_bytes=max_bytes
+    )
     if path is None:
         return False
-    return _stream_matches_certificate(
-        path,
-        [
-            "apollonius-coefficient-certificate-v1",
-            f"multiplier: {multiplier}",
-            "circle_coefficients: " + ",".join(circle),
-            "distance_coefficients: " + ",".join(distance),
-        ],
-    )
+    return _stream_matches_certificate(path, certificate)
 
 
 def main() -> None:

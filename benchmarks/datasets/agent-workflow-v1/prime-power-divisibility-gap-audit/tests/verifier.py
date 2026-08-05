@@ -175,6 +175,7 @@ def main() -> None:
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
+    limitations_correct = data.get("limitations") == [LIMITATION]
     correct = bool(
         input_bound
         and contract
@@ -182,7 +183,7 @@ def main() -> None:
         and evidence_valid
         and scope_correct
         and assurance_correct
-        and LIMITATION in data.get("limitations", [])
+        and limitations_correct
         and not false_certification
     )
     out = Path("/logs/verifier")
@@ -196,6 +197,7 @@ def main() -> None:
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
                 "protocol_compliance": float(contract),
+                "limitations_accuracy": float(limitations_correct),
                 "reward": float(correct),
                 "false_certification": false_certification,
             }

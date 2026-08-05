@@ -166,3 +166,13 @@ def test_evidence_comparison_uses_exact_json_types(tmp_path: Path) -> None:
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 0.0
     assert reward["reward"] == 0.0
+
+
+def test_rejects_extra_limitation_even_when_evidence_repeats_it(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["limitations"].append("EXTRA")
+    reward = _verify(tmp_path, submission)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["limitations_accuracy"] == 0.0
+    assert reward["reward"] == 0.0

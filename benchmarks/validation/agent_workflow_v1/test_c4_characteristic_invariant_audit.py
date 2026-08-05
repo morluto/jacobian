@@ -173,6 +173,48 @@ def test_rejects_lean_compile_overclaim_in_evidence(tmp_path: Path) -> None:
     assert rejected["evidence_validity"] == 0.0
 
 
+def test_rejects_split_lean_compile_overclaim(tmp_path: Path) -> None:
+    """A topic in one clause must not hide a claim in the next clause."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed and the theorem compiles correctly.",
+        "The source-corrected conjecture is not claimed.",
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+
+
+def test_accepts_equivalent_evidence_limitation_wording(tmp_path: Path) -> None:
+    """Evidence may use an equivalent no-claim limitation without a keyword."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The induced count and characteristic are audited. No Lean compilation "
+        "or proof of the source-corrected conjecture is claimed.\n"
+        + "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+
+
+def test_assurance_diagnostic_is_independent_of_envelope(tmp_path: Path) -> None:
+    """An envelope error must not erase a separately correct assurance."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["conclusion"] = "UNSUPPORTED"
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["assurance_calibration"] == 1.0
+    assert rejected["reward"] == 0.0
+
+
 def test_rejects_missing_conjecture_limitation(tmp_path: Path) -> None:
     """Both the Lean and corrected-conjecture limitations are required."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
@@ -217,7 +259,8 @@ def test_accepts_result_marker_after_prose(tmp_path: Path) -> None:
     evidence_path.write_text(
         "RESULT_JSON: "
         + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
-        + "\ninduced characteristic not assessed\n"
+        + "\nThe induced count and characteristic are not assessed; no Lean "
+        "compilation or proof of the corrected conjecture is claimed.\n"
     )
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
@@ -279,7 +322,8 @@ def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
     evidence_path = app / "evidence" / "answer.txt"
     submission = json.loads((app / "submission.json").read_text())
     evidence_path.write_text(
-        "induced characteristic not assessed\n"
+        "The induced count and characteristic are not assessed; no Lean "
+        "compilation or proof of the corrected conjecture is claimed.\n"
         + ("audit " * 200_000)
         + "\nRESULT_JSON: "
         + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))

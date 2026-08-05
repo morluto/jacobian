@@ -184,7 +184,10 @@ def main() -> None:
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))
     evidence_valid = bool(math_correct and _evidence(data))
-    scope_correct = bool(data.get("scope") == expected["required_scope"])
+    scope_correct = bool(
+        isinstance(data.get("claimed_assurance"), str)
+        and data.get("scope") == expected["required_scope"]
+    )
     assurance_correct = bool(
         data.get("claimed_assurance") == expected["maximum_assurance"]
     )

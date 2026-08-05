@@ -186,6 +186,16 @@ def test_rejects_evidence_without_schema_version(tmp_path: Path) -> None:
     assert result["correctness"] == 1.0
 
 
+def test_rejects_unhashable_assurance_without_crash(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["claimed_assurance"] = []
+    result = _verify(tmp_path / "unhashable-assurance", submission)
+    assert result["scope_accuracy"] == 0.0
+    assert result["assurance_calibration"] == 0.0
+    assert result["reward"] == 0.0
+    assert result["false_certification"] is False
+
+
 def test_tampered_input_preserves_correctness_and_gates_reward(
     tmp_path: Path,
 ) -> None:

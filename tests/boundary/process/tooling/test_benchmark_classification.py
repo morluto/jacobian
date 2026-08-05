@@ -119,3 +119,22 @@ def test_shared_environment_profile_escalates_only_on_integration_event(
     assert pull_request["run-benchmark-oracle"] == "false"
     assert merge_group["run-benchmark-oracle"] == "true"
     assert merge_group["benchmark-oracle-scope"] == "all"
+
+
+def test_main_push_is_an_integration_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load()
+    _patch_plan(module, monkeypatch)
+
+    push = module.plan(
+        ["benchmarks/environment-profiles.toml"],
+        event="push",
+        base="a" * 40,
+        head="b" * 40,
+    )
+
+    assert push["run-benchmark-oracle"] == "true"
+    assert push["benchmark-oracle-scope"] == "all"
+    assert push["run-benchmark-inventory"] == "true"
+    assert push["benchmark-plan-mode"] == "integration"

@@ -1,0 +1,26 @@
+{
+  "task_id": "jacobian/local-ring-diagonal-similarity-certificate",
+  "conclusion": "DIAGONAL_ENTRIES_MATCH_BY_UNIT_PERMUTATION",
+  "result": {
+    "modulus": 125,
+    "PA": [[0,0,19,95,0,0],[0,0,0,0,84,85],[7,35,0,0,0,0],[0,0,0,0,85,1],[0,0,65,19,0,0],[35,14,0,0,0,0]],
+    "BP": [[0,0,19,95,0,0],[0,0,0,0,84,85],[7,35,0,0,0,0],[0,0,0,0,85,1],[0,0,65,19,0,0],[35,14,0,0,0,0]],
+    "determinant_modulus": 87,
+    "unit_permutation": [2,4,0,5,3,1],
+    "permutation_sign": 1,
+    "signed_term_modulus": 12,
+    "matched_pairs": [
+      {"row":0,"column":2,"b_value":19,"a_value":19,"unit_entry":1},
+      {"row":1,"column":4,"b_value":42,"a_value":42,"unit_entry":2},
+      {"row":2,"column":0,"b_value":7,"a_value":7,"unit_entry":1},
+      {"row":3,"column":5,"b_value":42,"a_value":42,"unit_entry":3},
+      {"row":4,"column":3,"b_value":19,"a_value":19,"unit_entry":1},
+      {"row":5,"column":1,"b_value":7,"a_value":7,"unit_entry":2}
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "frozen-six-dimensional-Z-mod-125-certificate",
+  "completeness": "COMPLETE",
+  "evidence": [{"path":"evidence/answer.txt","sha256":"sha256:38bdd7de7e2032e6c6f2810aef7bad0d86e5ebe8f9f4663ada70862286c51721"}],
+  "limitations": ["The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."]
+}

@@ -8,12 +8,14 @@ import hashlib
 import importlib.metadata
 import json
 import math
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -102,6 +104,7 @@ def _validate_trial(
     index: int,
     expected_tasks: set[str],
     expected_digests: dict[str, str],
+    trial_digest: Any,
 ) -> tuple[str | None, list[str]]:
     if not isinstance(trial, dict):
         return None, [f"trial result {index} must be an object"]
@@ -112,10 +115,11 @@ def _validate_trial(
     failures: list[str] = []
     if task_id not in expected_tasks:
         failures.append(f"trial result {index}: unexpected task {task_id}")
-    checksum = str(trial.get("task_checksum", ""))
     expected = expected_digests.get(task_id)
-    if expected and checksum.removeprefix("sha256:") != expected.removeprefix(
-        "sha256:"
+    if not isinstance(trial_digest, str) or _DIGEST.fullmatch(trial_digest) is None:
+        failures.append(f"trial result {index}: missing durable task digest")
+    elif expected and trial_digest != (
+        expected if expected.startswith("sha256:") else f"sha256:{expected}"
     ):
         failures.append(f"trial result {index}: task digest mismatch for {task_id}")
     if trial.get("exception_info") is not None:
@@ -148,6 +152,7 @@ def _validate_payload(
     payload: Any,
     *,
     trial_results: list[Any],
+    trial_digests: list[Any],
     expected_tasks: set[str],
     expected_digests: dict[str, str],
 ) -> list[str]:
@@ -156,6 +161,8 @@ def _validate_payload(
         return ["result.json must contain an object"]
     if not trial_results:
         failures.append("result.json: no per-trial result files were found")
+    if len(trial_digests) != len(trial_results):
+        failures.append("result.json: per-trial lock count disagrees with results")
     failures.extend(
         _validate_execution_summary(payload, trial_count=len(trial_results))
     )
@@ -167,6 +174,7 @@ def _validate_payload(
             index=index,
             expected_tasks=expected_tasks,
             expected_digests=expected_digests,
+            trial_digest=trial_digests[index] if index < len(trial_digests) else None,
         )
         failures.extend(trial_failures)
         if task_id is None:
@@ -200,19 +208,23 @@ def _find_result(jobs_dir: Path) -> Path:
     return candidates[0]
 
 
-def _load_trial_results(result_path: Path) -> tuple[list[Any], list[Path]]:
+def _load_trial_results(result_path: Path) -> tuple[list[Any], list[Path], list[Any]]:
     paths = sorted(
         path for path in result_path.parent.glob("*/result.json") if path.is_file()
     )
     results: list[Any] = []
+    digests: list[Any] = []
     for path in paths:
         try:
             results.append(json.loads(path.read_text(encoding="utf-8")))
+            lock = json.loads((path.parent / "lock.json").read_text(encoding="utf-8"))
+            task = lock.get("task") if isinstance(lock, dict) else None
+            digests.append(task.get("digest") if isinstance(task, dict) else None)
         except (OSError, json.JSONDecodeError) as exc:
             raise HarborSuiteError(
                 f"unable to read Harbor trial result {path}: {exc}"
             ) from exc
-    return results, paths
+    return results, paths, digests
 
 
 def _git_sha() -> str:
@@ -251,10 +263,11 @@ def validate(
         for task_id, ref in known.items()
         if task_id in requested
     }
-    trial_results, trial_paths = _load_trial_results(result_path)
+    trial_results, trial_paths, trial_digests = _load_trial_results(result_path)
     failures = _validate_payload(
         payload,
         trial_results=trial_results,
+        trial_digests=trial_digests,
         expected_tasks=requested,
         expected_digests=expected_digests,
     )

@@ -10,20 +10,21 @@ class HarborDigestError(ValueError):
 
 
 def task_digest(task_dir: Path) -> str:
-    """Return Harbor's native checksum for one task directory.
+    """Return Harbor's durable content hash for one task directory.
 
     The import is intentionally lazy: registry and topology checks remain
-    usable without Harbor, while every digest caller gets the same Task model
-    and therefore the same checksum semantics.
+    usable without Harbor, while every digest caller uses Harbor's packager and
+    therefore the same content-hash semantics as ``TrialLock.task.digest``.
     """
 
     try:
-        from harbor.models.task.task import Task
+        from harbor.publisher.packager import Packager
     except (ImportError, ModuleNotFoundError) as exc:
         raise HarborDigestError(
             "Harbor is required to compute task digests; use the pinned Harbor runner"
         ) from exc
-    return str(Task(task_dir, disable_verification=True).checksum)
+    digest, _ = Packager.compute_content_hash(task_dir)
+    return digest
 
 
 __all__ = ["HarborDigestError", "task_digest"]

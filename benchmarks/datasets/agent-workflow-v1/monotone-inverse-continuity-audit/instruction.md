@@ -25,7 +25,7 @@ the declared family.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. Evidence prose must explain that both branches are strictly increasing, the positive jump creates an omitted image gap, and the gap witness has no preimage, so the full-interval inverse conclusion fails; RESULT_JSON binds the submitted values but does not replace this derivation.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

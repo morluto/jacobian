@@ -18,7 +18,7 @@ ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def _fraction(value):
-    if not isinstance(value, str) or len(value) > 80:
+    if not isinstance(value, str):
         raise ValueError
     if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value) is None:
         raise ValueError
@@ -82,11 +82,11 @@ def _valid_countermodel(result, source):
 def _evidence_matches_result(submission):
     """Bind evidence content to the submitted countermodel.
 
-    The public instruction requires a concise derivation in answer.txt.
-    A digest-bound file of unrelated bytes, or the original solution's
-    derivation after an alternate countermodel is submitted, must not
-    score as valid evidence.  The evidence must carry a RESULT_JSON marker
-    whose canonical JSON exactly equals the submitted result.
+    The public instruction requires a concise derivation in answer.txt. A
+    digest-bound file of unrelated bytes, or a marker-only file, must not score
+    as valid evidence. The marker binds the structured values, while the prose
+    must state the published monotonicity, jump, omitted-image, and inverse
+    obligations.
     """
 
     if not isinstance(submission, dict):
@@ -102,6 +102,41 @@ def _evidence_matches_result(submission):
     except OSError:
         return False
     if not text.strip():
+        return False
+    prose = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.startswith("RESULT_JSON:")
+    ]
+    normalized = " ".join(prose).casefold()
+    branches_are_increasing = bool(
+        re.search(r"\b(?:both|each)\s+branches?\b", normalized)
+        and re.search(r"\bstrictly\s+(?:increas(?:e|es|ing|ed)|monotone)\b", normalized)
+    )
+    positive_jump_is_explained = bool(
+        re.search(r"\b(?:positive|upward|strictly positive|nonzero)\b", normalized)
+        and re.search(r"\b(?:jump|discontinu(?:ity|ous))\b", normalized)
+    )
+    omitted_image_is_explained = bool(
+        "image" in normalized
+        and re.search(
+            r"\b(?:omit(?:s|ted)?|gap|missing|exclude(?:s|d)?|no preimage)\b",
+            normalized,
+        )
+        and re.search(r"\b(?:between|endpoint|full interval|no preimage)\b", normalized)
+    )
+    inverse_failure_is_explained = bool(
+        re.search(r"\b(?:inverse|preimage)\b", normalized)
+        and re.search(r"\b(?:no|not|fail(?:s|ure)?|without|omits?)\b", normalized)
+    )
+    if not all(
+        (
+            branches_are_increasing,
+            positive_jump_is_explained,
+            omitted_image_is_explained,
+            inverse_failure_is_explained,
+        )
+    ):
         return False
     markers = [
         line[len("RESULT_JSON:") :].strip()
@@ -154,7 +189,8 @@ def main():
         and _evidence_matches_result(submission)
     )
     scope_correct = bool(
-        isinstance(submission, dict)
+        contract
+        and isinstance(submission, dict)
         and submission.get("scope") == expected["required_scope"]
         and submission.get("limitations") == expected["limitations"]
     )

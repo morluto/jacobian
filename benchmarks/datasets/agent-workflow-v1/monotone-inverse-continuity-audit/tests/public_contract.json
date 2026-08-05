@@ -20,7 +20,7 @@
   },
   "verification_record": null,
   "required_artifact_filenames": ["evidence/answer.txt"],
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. Evidence prose must explain that both branches are strictly increasing, the positive jump creates an omitted image gap, and the gap witness has no preimage, so the full-interval inverse conclusion fails; RESULT_JSON binds the submitted values but does not replace this derivation.",
   "submission_result": {
     "type": "object",
     "additionalProperties": false,

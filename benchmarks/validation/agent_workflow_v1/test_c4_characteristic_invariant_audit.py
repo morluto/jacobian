@@ -42,6 +42,17 @@ def test_rejects_unsorted_edges(tmp_path: Path) -> None:
     assert rejected["correctness"] == 0.0 and rejected["reward"] == 0.0
 
 
+def test_rejects_oversized_edge_list_before_graph_checks(tmp_path: Path) -> None:
+    """The public edge bound must be enforced before pair materialization."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["witnesses"][0]["edges"] = [[0, 1]] * 37
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_rejects_above_ceiling_assurance(tmp_path: Path) -> None:
     """CHECKED is above the COMPUTED ceiling and must fail closed."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
@@ -156,6 +167,61 @@ def test_rejects_lean_compile_overclaim(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["reward"] == 0.0
     assert rejected["limitation_accuracy"] == 0.0
+
+
+def test_rejects_lean_compile_overclaim_across_limitation_items(
+    tmp_path: Path,
+) -> None:
+    """A compile claim in a later limitation item must remain prohibited."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed.",
+        "The upstream theorem compiles correctly.",
+        "The source-corrected conjecture is not claimed.",
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+
+
+def test_rejects_lean_compile_overclaim_across_evidence_lines(
+    tmp_path: Path,
+) -> None:
+    """Evidence lines must not hide a compile claim behind a disclaimer."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "Lean compilation is not assessed.\n"
+        "The upstream theorem compiles correctly.\n"
+        "The induced count and characteristic are audited; no proof of the "
+        "source-corrected conjecture is claimed.\n"
+        "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_accepts_finite_verification_wording_with_limitations(
+    tmp_path: Path,
+) -> None:
+    """Finite certificate verification is not an upstream Lean overclaim."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "The finite graph certificates were verified by exhaustive enumeration; "
+        "Lean compilation is not assessed and no proof of the source-corrected "
+        "conjecture is claimed."
+    ]
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["limitation_accuracy"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
 
 
 def test_rejects_lean_compile_overclaim_in_evidence(tmp_path: Path) -> None:

@@ -44,6 +44,7 @@ def _graph(value, limits):
         type(n) is not int
         or not limits[0] <= n <= limits[1]
         or not isinstance(edges, list)
+        or len(edges) > 36
     ):
         return None
     if any(
@@ -244,9 +245,9 @@ def _has_limitation(text, topic):
 
 def _has_affirmative_prohibited_claim(text):
     clauses = re.split(r"[.;]|\s*,\s*(?:and|but)\s+|\s+(?:and|but)\s+", text)
-    if not any(topic in text for topic in ("lean", "conjecture")):
-        return False
     for clause in clauses:
+        if not any(topic in clause for topic in ("lean", "conjecture", "theorem")):
+            continue
         for match in re.finditer(
             r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled)\b",
             clause,

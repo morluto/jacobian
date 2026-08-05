@@ -1,0 +1,287 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "POSITIVE_LOWER_DENSITY_DOES_NOT_IMPLY_DENSITY_EXISTS"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "level": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "included_endpoint": {
+          "type": "integer"
+        },
+        "excluded_endpoint": {
+          "type": "integer"
+        },
+        "cumulative_count": {
+          "type": "integer"
+        },
+        "included_density": {
+          "type": "string"
+        },
+        "excluded_density": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "included_endpoint",
+        "excluded_endpoint",
+        "cumulative_count",
+        "included_density",
+        "excluded_density"
+      ]
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "parameterized-geometric-block-family-with-eight-replayed-levels",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "base": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 9
+      },
+      "family": {
+        "const": "ALTERNATING_GEOMETRIC_BLOCKS"
+      },
+      "count_formula": {
+        "const": "(b^(2m+2)-1)/(b+1)"
+      },
+      "levels": {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 8,
+        "items": {
+          "$ref": "#/$defs/level"
+        }
+      },
+      "lower_density": {
+        "type": "string"
+      },
+      "upper_density": {
+        "type": "string"
+      },
+      "lower_density_positive": {
+        "const": true
+      },
+      "natural_density_exists": {
+        "const": false
+      },
+      "semantic_relation": {
+        "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
+      }
+    },
+    "required": [
+      "base",
+      "family",
+      "count_formula",
+      "levels",
+      "lower_density",
+      "upper_density",
+      "lower_density_positive",
+      "natural_density_exists",
+      "semantic_relation"
+    ]
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "$defs": {
+      "level": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7
+          },
+          "included_endpoint": {
+            "type": "integer"
+          },
+          "excluded_endpoint": {
+            "type": "integer"
+          },
+          "cumulative_count": {
+            "type": "integer"
+          },
+          "included_density": {
+            "type": "string"
+          },
+          "excluded_density": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "included_endpoint",
+          "excluded_endpoint",
+          "cumulative_count",
+          "included_density",
+          "excluded_density"
+        ]
+      }
+    },
+    "properties": {
+      "task_id": {
+        "const": "jacobian/positive-lower-density-separation"
+      },
+      "conclusion": {
+        "const": "POSITIVE_LOWER_DENSITY_DOES_NOT_IMPLY_DENSITY_EXISTS"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 9
+          },
+          "family": {
+            "const": "ALTERNATING_GEOMETRIC_BLOCKS"
+          },
+          "count_formula": {
+            "const": "(b^(2m+2)-1)/(b+1)"
+          },
+          "levels": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/$defs/level"
+            }
+          },
+          "lower_density": {
+            "type": "string"
+          },
+          "upper_density": {
+            "type": "string"
+          },
+          "lower_density_positive": {
+            "const": true
+          },
+          "natural_density_exists": {
+            "const": false
+          },
+          "semantic_relation": {
+            "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
+          }
+        },
+        "required": [
+          "base",
+          "family",
+          "count_formula",
+          "levels",
+          "lower_density",
+          "upper_density",
+          "lower_density_positive",
+          "natural_density_exists",
+          "semantic_relation"
+        ]
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "const": "parameterized-geometric-block-family-with-eight-replayed-levels",
+        "type": "string"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        }
+      },
+      "limitations": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ]
+  },
+  "task_id": "jacobian/positive-lower-density-separation",
+  "verification_record": null
+}

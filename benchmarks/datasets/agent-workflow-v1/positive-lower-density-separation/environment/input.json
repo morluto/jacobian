@@ -1,0 +1,8 @@
+{
+  "task_id": "jacobian/positive-lower-density-separation",
+  "source": {"repository": "google-deepmind/formal-conjectures", "issue": 4553, "source_revision": "4dd29ad036546eeb02ba9659287da5415b52b6a3", "source_file": "FormalConjectures/ErdosProblems/424.lean", "license": "Apache-2.0"},
+  "reported_mismatch": {"intended": "positive lower density", "formalized": "natural density exists and is positive"},
+  "allowed_bases": [2,3,4,5,6,7,8,9],
+  "levels": [0,1,2,3,4,5,6,7],
+  "set_family": "union over m>=0 of integer intervals [b^(2m),b^(2m+1))"
+}

@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "level": {
+      "additionalProperties": false,
+      "properties": {
+        "cumulative_count": {
+          "type": "integer"
+        },
+        "excluded_density": {
+          "type": "string"
+        },
+        "excluded_endpoint": {
+          "type": "integer"
+        },
+        "included_density": {
+          "type": "string"
+        },
+        "included_endpoint": {
+          "type": "integer"
+        },
+        "level": {
+          "maximum": 7,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "level",
+        "included_endpoint",
+        "excluded_endpoint",
+        "cumulative_count",
+        "included_density",
+        "excluded_density"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "POSITIVE_LOWER_DENSITY_DOES_NOT_IMPLY_DENSITY_EXISTS"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "maximum": 9,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "count_formula": {
+          "const": "(b^(2m+2)-1)/(b+1)"
+        },
+        "family": {
+          "const": "ALTERNATING_GEOMETRIC_BLOCKS"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/level"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "lower_density": {
+          "type": "string"
+        },
+        "lower_density_positive": {
+          "const": true
+        },
+        "natural_density_exists": {
+          "const": false
+        },
+        "semantic_relation": {
+          "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
+        },
+        "upper_density": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "family",
+        "count_formula",
+        "levels",
+        "lower_density",
+        "upper_density",
+        "lower_density_positive",
+        "natural_density_exists",
+        "semantic_relation"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "parameterized-geometric-block-family-with-eight-replayed-levels",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/positive-lower-density-separation"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

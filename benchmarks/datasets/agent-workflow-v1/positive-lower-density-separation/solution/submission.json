@@ -1,0 +1,92 @@
+{
+  "task_id": "jacobian/positive-lower-density-separation",
+  "conclusion": "POSITIVE_LOWER_DENSITY_DOES_NOT_IMPLY_DENSITY_EXISTS",
+  "result": {
+    "base": 3,
+    "family": "ALTERNATING_GEOMETRIC_BLOCKS",
+    "count_formula": "(b^(2m+2)-1)/(b+1)",
+    "levels": [
+      {
+        "level": 0,
+        "included_endpoint": 3,
+        "excluded_endpoint": 9,
+        "cumulative_count": 2,
+        "included_density": "2/3",
+        "excluded_density": "2/9"
+      },
+      {
+        "level": 1,
+        "included_endpoint": 27,
+        "excluded_endpoint": 81,
+        "cumulative_count": 20,
+        "included_density": "20/27",
+        "excluded_density": "20/81"
+      },
+      {
+        "level": 2,
+        "included_endpoint": 243,
+        "excluded_endpoint": 729,
+        "cumulative_count": 182,
+        "included_density": "182/243",
+        "excluded_density": "182/729"
+      },
+      {
+        "level": 3,
+        "included_endpoint": 2187,
+        "excluded_endpoint": 6561,
+        "cumulative_count": 1640,
+        "included_density": "1640/2187",
+        "excluded_density": "1640/6561"
+      },
+      {
+        "level": 4,
+        "included_endpoint": 19683,
+        "excluded_endpoint": 59049,
+        "cumulative_count": 14762,
+        "included_density": "14762/19683",
+        "excluded_density": "14762/59049"
+      },
+      {
+        "level": 5,
+        "included_endpoint": 177147,
+        "excluded_endpoint": 531441,
+        "cumulative_count": 132860,
+        "included_density": "132860/177147",
+        "excluded_density": "132860/531441"
+      },
+      {
+        "level": 6,
+        "included_endpoint": 1594323,
+        "excluded_endpoint": 4782969,
+        "cumulative_count": 1195742,
+        "included_density": "1195742/1594323",
+        "excluded_density": "1195742/4782969"
+      },
+      {
+        "level": 7,
+        "included_endpoint": 14348907,
+        "excluded_endpoint": 43046721,
+        "cumulative_count": 10761680,
+        "included_density": "10761680/14348907",
+        "excluded_density": "10761680/43046721"
+      }
+    ],
+    "lower_density": "1/4",
+    "upper_density": "3/4",
+    "lower_density_positive": true,
+    "natural_density_exists": false,
+    "semantic_relation": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "parameterized-geometric-block-family-with-eight-replayed-levels",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:88938736d8533357ce3e3bd7ec8304f418a0c9f11e126106144adf81797879c4"
+    }
+  ],
+  "limitations": [
+    "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erd\u0151s problem."
+  ]
+}

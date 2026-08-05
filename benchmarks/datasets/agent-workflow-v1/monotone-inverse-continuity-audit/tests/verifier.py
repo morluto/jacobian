@@ -94,6 +94,7 @@ class _ProseScanner:
         self._processed_through = 0
         self._previous_was_space = False
         self._pending_contradictions = deque()
+        self._latest_branch_scope_end = None
         self._sentence_has_inverse = False
         self._sentence_has_contradiction = False
         self.contradicts_inverse_failure = False
@@ -156,14 +157,21 @@ class _ProseScanner:
             (
                 "contradiction",
                 re.compile(
-                    r"\b(?:(?:(?:do(?:es)?|did|will|would|can|could|should|must)"
+                    r"\b(?:(?:(?:the|this|that|an?|its|their)\s+)?"
+                    r"(?:full[- ]interval\s+)?inverse\s+"
+                    r"(?:(?:(?:do(?:es)?|did|will|would|can|could|should|must)"
                     r"\s+not|cannot)\s+fail(?:s|ed|ing)?|"
                     r"(?:doesn|don|didn|won|wouldn|can|couldn|shouldn|mustn)"
-                    r"['\u2019]?t\s+fail(?:s|ed|ing)?)\b"
-                    r"|\b(?:the\s+)?(?:full[- ]interval\s+)?inverse\s+"
-                    r"(?:succeeds?|works?)\b"
-                    r"|\b(?:(?:is|are)\s+not|(?:isn|aren)['\u2019]?t)\s+"
-                    r"(?:a\s+)?fail(?:ure|ing)?\b|\bnever\s+fails?\b"
+                    r"['\u2019]?t\s+fail(?:s|ed|ing)?|"
+                    r"(?:(?:is|are)\s+not|(?:isn|aren)['\u2019]?t)\s+"
+                    r"(?:a\s+)?fail(?:ure|ing)?|never\s+fails?|"
+                    r"succeeds?|works?)|it\s+"
+                    r"(?:(?:(?:do(?:es)?|did|will|would|can|could|should|must)"
+                    r"\s+not|cannot)\s+fail(?:s|ed|ing)?|"
+                    r"(?:doesn|don|didn|won|wouldn|can|couldn|shouldn|mustn)"
+                    r"['\u2019]?t\s+fail(?:s|ed|ing)?|"
+                    r"(?:(?:is|are)\s+not|(?:isn|aren)['\u2019]?t)\s+"
+                    r"(?:a\s+)?fail(?:ure|ing)?|never\s+fails?))\b"
                 ),
             ),
             ("sentence", re.compile(r"[.!?;]")),
@@ -303,9 +311,15 @@ class _ProseScanner:
             _, contradiction_end, qualified = pending
             if not qualified and contradiction_end <= start <= contradiction_end + 24:
                 pending[2] = True
+        self._latest_branch_scope_end = end
 
     def _record_contradiction(self, start, end):
-        self._pending_contradictions.append([start, end, False])
+        qualified = bool(
+            self._latest_branch_scope_end is not None
+            and self._latest_branch_scope_end <= start
+            and start <= self._latest_branch_scope_end + 24
+        )
+        self._pending_contradictions.append([start, end, qualified])
 
     def _expire_local_state(self, position):
         while (
@@ -321,6 +335,7 @@ class _ProseScanner:
             self._sentence_has_contradiction |= not qualified
         if self._sentence_has_inverse and self._sentence_has_contradiction:
             self.contradicts_inverse_failure = True
+        self._latest_branch_scope_end = None
         self._sentence_has_inverse = False
         self._sentence_has_contradiction = False
 

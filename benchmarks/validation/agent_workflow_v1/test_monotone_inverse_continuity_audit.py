@@ -305,6 +305,54 @@ def test_accepts_branch_inverse_distinction(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_accepts_preceding_branch_inverse_scope(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(
+        "Both branches are strictly increasing because their slopes are positive. "
+        "The positive jump makes all cross-branch comparisons strict. Their image "
+        "ranges leave a missing gap between the limiting values, and the gap "
+        "witness has no preimage. On either branch the inverse does not fail, but "
+        "the full-interval inverse fails.\n" + marker + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_ignores_generic_branch_check_non_failure(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(
+        "Both branches are strictly increasing because their slopes are positive. "
+        "The positive jump makes all cross-branch comparisons strict. Their image "
+        "ranges leave a missing gap between the limiting values, and the gap "
+        "witness has no preimage, so the full-interval inverse fails, and this does "
+        "not fail the branch monotonicity check.\n" + marker + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
 def test_rejects_cross_branch_inverse_success_claim(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     evidence_path = app / "evidence" / "answer.txt"
@@ -465,7 +513,12 @@ def test_rejects_broader_negated_monotonicity_claims(
 
 
 @pytest.mark.parametrize(
-    "inverse_claim", ["The inverse is not a failure.", "The inverse isn't failing."]
+    "inverse_claim",
+    [
+        "The inverse is not a failure.",
+        "The inverse isn't failing.",
+        "This inverse never fails.",
+    ],
 )
 def test_rejects_broader_negated_inverse_failure(
     tmp_path: Path, inverse_claim: str

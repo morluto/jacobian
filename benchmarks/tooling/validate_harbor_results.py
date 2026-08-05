@@ -276,21 +276,24 @@ def _prepare_augmented_digest_manifest(
     return manifest
 
 
-def _validate_augmented_digest_manifest(
-    *,
+def _load_augmented_digest_manifest(
     manifest_path: Path,
-    result_path: Path,
-    dataset: str,
-    expected_digests: dict[str, str],
-) -> list[str]:
-    """Require the result to be newer than and bound to its pre-run identity."""
-
+) -> tuple[dict[str, Any] | None, list[str]]:
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return [f"augmented task digest manifest is unavailable: {exc}"]
+        return None, [f"augmented task digest manifest is unavailable: {exc}"]
     if not isinstance(manifest, dict):
-        return ["augmented task digest manifest must contain an object"]
+        return None, ["augmented task digest manifest must contain an object"]
+    return manifest, []
+
+
+def _validate_augmented_manifest_metadata(
+    *,
+    manifest: dict[str, Any],
+    result_path: Path,
+    dataset: str,
+) -> list[str]:
     if manifest.get("dataset") != dataset:
         return ["augmented task digest manifest has the wrong dataset"]
     prepared_at_ns = manifest.get("prepared_at_ns")
@@ -302,8 +305,12 @@ def _validate_augmented_digest_manifest(
         return [f"unable to stat Harbor result: {exc}"]
     if result_mtime_ns < prepared_at_ns:
         return ["Harbor result predates its augmented task digest manifest"]
+    return []
 
-    entries = manifest.get("tasks")
+
+def _validate_augmented_task_entries(
+    entries: Any, expected_digests: dict[str, str]
+) -> list[str]:
     if not isinstance(entries, list):
         return ["augmented task digest manifest has no task entries"]
     observed = {
@@ -321,6 +328,26 @@ def _validate_augmented_digest_manifest(
         elif digest != expected:
             failures.append(f"augmented task digest mismatch for {task_id}")
     return failures
+
+
+def _validate_augmented_digest_manifest(
+    *,
+    manifest_path: Path,
+    result_path: Path,
+    dataset: str,
+    expected_digests: dict[str, str],
+) -> list[str]:
+    """Require the result to be newer than and bound to its pre-run identity."""
+
+    manifest, failures = _load_augmented_digest_manifest(manifest_path)
+    if manifest is None:
+        return failures
+    failures = _validate_augmented_manifest_metadata(
+        manifest=manifest, result_path=result_path, dataset=dataset
+    )
+    if failures:
+        return failures
+    return _validate_augmented_task_entries(manifest.get("tasks"), expected_digests)
 
 
 def validate(

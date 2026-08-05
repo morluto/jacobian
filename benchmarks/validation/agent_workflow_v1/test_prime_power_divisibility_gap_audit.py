@@ -198,15 +198,23 @@ def test_rejects_exponential_integer_before_materializing_it(tmp_path: Path) -> 
 
 def test_accepts_bounded_exponential_integer_tokens(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
+    result = submission["result"]
+    result["cycle_groups"] = [
+        {"multiplicity": 1, "cycle_sum": 2},
+        {"multiplicity": 3, "cycle_sum": 2},
+    ]
+    result["total_sum"] = int("2" + "0" * 308 + "6")
     task, app, logs = _prepare(tmp_path, submission)
     evidence_path = app / "evidence/divisibility-audit.json"
     evidence_path.write_text(
-        evidence_path.read_text().replace('"prime":2', '"prime":2e0', 1)
+        evidence_path.read_text().replace('"cycle_sum":2', '"cycle_sum":2e309', 1)
     )
     submission["evidence"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     )
-    submission_text = json.dumps(submission).replace('"prime": 2', '"prime": 2e0', 1)
+    submission_text = json.dumps(submission).replace(
+        '"cycle_sum": 2', '"cycle_sum": 2e309', 1
+    )
     (app / "submission.json").write_text(submission_text)
 
     reward = _run_verifier(task, app, logs)

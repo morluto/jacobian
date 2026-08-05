@@ -32,17 +32,17 @@ class _JsonFloat(float):
         return instance
 
 
-def _bounded_json_float(value: str) -> _JsonFloat:
+def _bounded_json_float(value: str) -> int | _JsonFloat:
     try:
         exact = Decimal(value)
     except InvalidOperation as error:
         raise ValueError(f"invalid JSON number: {value}") from error
+    if not exact.is_finite() or (exact != 0 and exact.adjusted() >= MAX_INTEGER_DIGITS):
+        raise ValueError(f"out-of-range JSON number: {value}")
+    if exact == exact.to_integral_value():
+        return int(exact)
     parsed = _JsonFloat(value)
-    if (
-        not exact.is_finite()
-        or not math.isfinite(parsed)
-        or (exact != 0 and exact.adjusted() >= MAX_INTEGER_DIGITS)
-    ):
+    if not math.isfinite(parsed):
         raise ValueError(f"out-of-range JSON number: {value}")
     return parsed
 

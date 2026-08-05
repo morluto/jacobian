@@ -27,6 +27,16 @@ def test_verifier_execution_does_not_mutate_task_bundles(tmp_path: Path) -> None
     assert support._task_tree_snapshot() == before
 
 
+def test_json_evidence_task_fixture_starts_valid(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "closed-set-distance-strengthening-audit", "computed"
+    )
+
+    assert (app / "evidence" / "distance-audit.json").is_file()
+    assert not (app / "evidence" / "answer.txt").exists()
+    assert support._run_verifier(task, app, logs)["reward"] == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize("task_name", support.VERIFICATION_RECORD_TASKS)
 def test_verifier_scoring_separates_math_from_verification_record(
     tmp_path: Path,

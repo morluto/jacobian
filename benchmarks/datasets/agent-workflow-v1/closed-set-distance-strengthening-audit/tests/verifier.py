@@ -237,13 +237,17 @@ def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        min_limitations=1,
-        verification_record="forbidden",
+    contract = bool(
+        isinstance(submission, dict)
+        and isinstance(submission.get("claimed_assurance"), str)
+        and strict_submission_contract(
+            submission,
+            task_id=expected["task_id"],
+            conclusion=expected["conclusion"],
+            allowed_assurances=frozenset({"COMPUTED"}),
+            min_limitations=1,
+            verification_record="forbidden",
+        )
     )
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))

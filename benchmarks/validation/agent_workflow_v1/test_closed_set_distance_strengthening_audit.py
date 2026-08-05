@@ -237,7 +237,18 @@ def test_evidence_validity_is_independent_of_math(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["result"]["point_pairs"][0]["distance"] = "1/999"
     result = _verify(tmp_path / "wrong-math", submission)
+    assert result["protocol_compliance"] == 1.0
     assert result["correctness"] == 0.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_envelope_error_gates_aggregate_reward(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["conclusion"] = "UNSUPPORTED"
+    result = _verify(tmp_path / "invalid-conclusion", submission)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
     assert result["evidence_validity"] == 1.0
     assert result["reward"] == 0.0
 
@@ -247,6 +258,7 @@ def test_schema_failures_report_protocol_without_crashing(tmp_path: Path) -> Non
     float_index["result"]["point_pairs"][0]["index"] = 4.0
     result = _verify(tmp_path / "float-index", float_index)
     assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 0.0
     assert result["reward"] == 0.0
 
     for name, limitations in (
@@ -258,4 +270,5 @@ def test_schema_failures_report_protocol_without_crashing(tmp_path: Path) -> Non
         submission["limitations"] = limitations
         result = _verify(tmp_path / name, submission)
         assert result["protocol_compliance"] == 0.0
+        assert result["correctness"] == 1.0
         assert result["reward"] == 0.0

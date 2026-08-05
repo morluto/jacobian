@@ -58,6 +58,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "lp-integrability-separator",
     "necklace-burnside-certificate",
     "pythagorean-generator-recurrence",
+    "prime-power-divisibility-gap-audit",
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic

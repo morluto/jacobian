@@ -5,6 +5,7 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
+    _public_submission_is_valid,
     false_verified_claim,
     is_regular_bounded_file,
     read_evidence_json,
@@ -139,7 +140,9 @@ def _evidence(submission: dict[str, Any]) -> bool:
     evidence = submission.get("evidence")
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
-    payload = read_evidence_json(evidence[0], expected_path=EVIDENCE_PATH)
+    payload = read_evidence_json(
+        evidence[0], expected_path=EVIDENCE_PATH, max_bytes=4096
+    )
     return bool(
         isinstance(payload, dict)
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
@@ -157,18 +160,16 @@ def main() -> None:
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
+    envelope_contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
+    contract = bool(envelope_contract and _public_submission_is_valid(submission))
     math_correct = _result(data.get("result"), _frozen())
     evidence_valid = _evidence(data)
-    scope_correct = bool(
-        type(data.get("claimed_assurance")) is str
-        and data.get("scope") == expected["required_scope"]
-    )
+    scope_correct = data.get("scope") == expected["required_scope"]
     assurance_correct = bool(
         data.get("claimed_assurance") == expected["maximum_assurance"]
     )

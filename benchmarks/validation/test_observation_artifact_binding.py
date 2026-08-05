@@ -1,4 +1,4 @@
-"""Tests for observation evidence v2 field binding, snapshot/harbor-version resolution, and fail-closed behavior."""
+"""Tests for observation evidence field binding and fail-closed behavior."""
 
 from __future__ import annotations
 
@@ -19,11 +19,11 @@ from benchmarks.validation.observation_results_support import (
 )
 
 # ---------------------------------------------------------------------------
-# Normalization integration (v2 bindings)
+# Normalization integration
 # ---------------------------------------------------------------------------
 
 
-def test_observation_normalization_binds_v2_fields(
+def test_observation_normalization_binds_fields(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(observation_results, "task_digest", lambda _path: "a" * 64)

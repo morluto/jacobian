@@ -39,7 +39,6 @@ from __future__ import annotations
 import hashlib
 import json
 import string
-import subprocess
 import tomllib
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -49,9 +48,13 @@ import tomli_w
 from jsonschema import Draft202012Validator
 
 from benchmarks.tooling import harbor_suite
+from benchmarks.tooling.command_runner import (
+    ToolCommandStatus,
+    run_operator_command,
+)
+from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import (
     EnvironmentProfile,
-    HarborSuiteError,
     Suite,
     TaskRef,
     get_suite,
@@ -122,16 +125,13 @@ def _normalize_digest(value: str) -> str:
 
 
 def _default_git(args: list[str]) -> str:
-    try:
-        return subprocess.run(
-            ["git", *args],
-            cwd=harbor_suite.ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise HarborSuiteError(f"git {' '.join(args)} failed: {exc}") from exc
+    result = run_operator_command(
+        "git", args, cwd=harbor_suite.ROOT, timeout_seconds=30.0
+    )
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        diagnostic = result.diagnostic or result.stderr.decode(errors="replace")[:1024]
+        raise HarborSuiteError(f"git {' '.join(args)} failed: {diagnostic}")
+    return result.stdout.decode("utf-8", errors="strict").strip()
 
 
 # ---------------------------------------------------------------------------

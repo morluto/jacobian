@@ -1,8 +1,0 @@
-{
-  "adapter_id": "harbor-task-model-smoke",
-  "dataset": "agent-workflow-v1",
-  "generator_version": "1",
-  "source_row": "task-model-smoke/graph-counterexample",
-  "task_digest": "sha256:5c14ffb7867124125425828309809fd50af99753225e1bb99e3f29b0ed62ef3d",
-  "task_id": "graph-counterexample"
-}

@@ -15,6 +15,13 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from benchmarks.tooling.command_runner import (
+    ToolCommandRequest,
+    ToolCommandResult,
+    ToolCommandStatus,
+    run_tool_command,
+)
+
 PIN_PATH = Path(__file__).with_name("pin.json")
 ADAPTER_SOURCE = Path(__file__)
 _SOURCE_ROOT = "gudhi-devel-tags-gudhi-release-3.13.0"
@@ -26,14 +33,30 @@ _SOURCE_MEMBERS = {
     ),
 }
 _ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
-ProcessRunner = Callable[..., Any]
+ProcessRunner = Callable[..., ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
-def _default_runner(*args: object, **kwargs: object) -> Any:
-    from jacobian.bounded_process import run_bounded_process
-
-    return run_bounded_process(*args, **kwargs)
+def _default_runner(
+    command: Sequence[str],
+    *,
+    input_bytes: bytes,
+    timeout_seconds: float,
+    environment: Mapping[str, str],
+    stdout_limit: int,
+    stderr_limit: int,
+) -> ToolCommandResult:
+    request = ToolCommandRequest(
+        executable=command[0],
+        arguments=tuple(command[1:]),
+        environment=environment,
+        cwd=str(Path.cwd()),
+        timeout_seconds=timeout_seconds,
+        stdin_bytes=input_bytes,
+        stdout_limit_bytes=stdout_limit,
+        stderr_limit_bytes=stderr_limit,
+    )
+    return run_tool_command(request)
 
 
 class GudhiSpikeError(RuntimeError):
@@ -341,24 +364,23 @@ def _run_checked(
     *,
     timeout_seconds: float,
 ) -> bytes:
-    try:
-        completed = runner(
-            command,
-            input_bytes=b"",
-            timeout_seconds=timeout_seconds,
-            environment=_ENVIRONMENT,
-            stdout_limit=64 * 1024,
-            stderr_limit=16 * 1024,
-        )
-    except OSError as exc:
+    completed = runner(
+        command,
+        input_bytes=b"",
+        timeout_seconds=timeout_seconds,
+        environment=_ENVIRONMENT,
+        stdout_limit=64 * 1024,
+        stderr_limit=16 * 1024,
+    )
+    if completed.status is ToolCommandStatus.START_FAILED:
         raise GudhiSpikeError(
             "ERROR", "PROVIDER_LAUNCH_ERROR", "The GUDHI spike could not be launched."
-        ) from exc
-    if completed.cancelled:
+        )
+    if completed.status is ToolCommandStatus.CANCELLED:
         raise GudhiSpikeError(
             "CANCELLED", "PROVIDER_CANCELLED", "The GUDHI spike was cancelled."
         )
-    if completed.timed_out:
+    if completed.status is ToolCommandStatus.TIMED_OUT:
         raise GudhiSpikeError(
             "TIMEOUT", "PROVIDER_TIMEOUT", "The GUDHI spike timed out."
         )
@@ -366,7 +388,7 @@ def _run_checked(
         raise GudhiSpikeError(
             "ERROR", "PROVIDER_OUTPUT_LIMIT", "The GUDHI spike exceeded output bounds."
         )
-    if completed.returncode != 0:
+    if completed.exit_code != 0:
         if completed.stderr.startswith(_WORKER_ERROR_PREFIX):
             try:
                 worker_error = json.loads(

@@ -1,0 +1,252 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "REGION_COUNT_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "the ten frozen cube and tetrahedron face planes",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "duplicate_groups": {
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "ordered_planes": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "coefficients": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "increment": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "label": {
+              "enum": [
+                "cube_x0",
+                "cube_x1",
+                "cube_y0",
+                "cube_y1",
+                "cube_z0",
+                "cube_z1",
+                "tetra_A1C1D1",
+                "tetra_BC1D1",
+                "tetra_BA1D1",
+                "tetra_BA1C1"
+              ]
+            }
+          },
+          "required": [
+            "label",
+            "coefficients",
+            "increment"
+          ],
+          "type": "object"
+        },
+        "maxItems": 10,
+        "minItems": 10,
+        "type": "array"
+      },
+      "regions": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "regions",
+      "ordered_planes",
+      "duplicate_groups"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "REGION_COUNT_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "duplicate_groups": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array"
+          },
+          "ordered_planes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "coefficients": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 4,
+                  "minItems": 4,
+                  "type": "array"
+                },
+                "increment": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "label": {
+                  "enum": [
+                    "cube_x0",
+                    "cube_x1",
+                    "cube_y0",
+                    "cube_y1",
+                    "cube_z0",
+                    "cube_z1",
+                    "tetra_A1C1D1",
+                    "tetra_BC1D1",
+                    "tetra_BA1D1",
+                    "tetra_BA1C1"
+                  ]
+                }
+              },
+              "required": [
+                "label",
+                "coefficients",
+                "increment"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          },
+          "regions": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "regions",
+          "ordered_planes",
+          "duplicate_groups"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "the ten frozen cube and tetrahedron face planes",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/hyperplane-arrangement-regions"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/hyperplane-arrangement-regions",
+  "verification_record": null
+}

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import pathlib
-import runpy
 import shutil
-import sys
 from pathlib import Path
+
+from benchmarks.validation._verifier_child import (
+    VerifierExecutionError,
+    run_verifier_in_child,
+)
 
 ROOT = Path(__file__).parents[3]
 DATASET = ROOT / "benchmarks" / "datasets" / "research-diagnostics-v1"
@@ -59,32 +60,16 @@ def prepare_case(
 
 
 def run_verifier(task: Path, app: Path, logs: Path) -> dict:
-    concrete_path = type(pathlib.Path())
-    original_path = pathlib.Path
-    original_dont_write_bytecode = sys.dont_write_bytecode
-    mounts = {
-        "/app": app,
-        "/tests": task / "tests",
-        "/logs/verifier": logs,
-    }
-
-    def mapped_path(value: os.PathLike[str] | str = ".") -> Path:
-        raw = os.fspath(value)
-        for prefix, target in mounts.items():
-            if raw == prefix:
-                return concrete_path(target)
-            if raw.startswith(prefix + "/"):
-                return concrete_path(target) / raw.removeprefix(prefix + "/")
-        return concrete_path(raw)
-
     try:
-        pathlib.Path = mapped_path  # type: ignore[assignment]
-        sys.dont_write_bytecode = True
-        sys.path.insert(0, str(task / "tests"))
-        runpy.run_path(str(task / "tests" / "verifier.py"), run_name="__main__")
-    finally:
-        sys.path.remove(str(task / "tests"))
-        sys.modules.pop("verifier_support", None)
-        sys.dont_write_bytecode = original_dont_write_bytecode
-        pathlib.Path = original_path
-    return json.loads((logs / "reward.json").read_text())
+        return run_verifier_in_child(task=task, app=app, logs=logs)
+    except (ValueError, VerifierExecutionError):
+        return {
+            "correctness": 0.0,
+            "evidence_validity": 0.0,
+            "scope_accuracy": 0.0,
+            "assurance_calibration": 0.0,
+            "limitation_accuracy": 0.0,
+            "protocol_compliance": 0.0,
+            "reward": 0.0,
+            "false_certification": False,
+        }

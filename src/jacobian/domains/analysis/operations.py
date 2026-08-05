@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import ProcessResourceLimits, run_bounded_process
+from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import (
     CanonicalizationError,
     canonicalize_json,
@@ -29,35 +29,38 @@ from jacobian.operations import (
     BoundedSearchOutcome,
     BoundedSearchWitness,
 )
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
+from jacobian.worker_environment import worker_environment
 
 _WORKER_MODULE = "jacobian.domains.analysis.worker"
 
 
 def _run_worker(payload: dict[str, Any], *, wall_seconds: int) -> dict[str, Any]:
-    command = [sys.executable, "-I", "-m", _WORKER_MODULE]
-    completed = run_bounded_process(
-        command,
-        input_bytes=canonicalize_json(payload),
-        timeout_seconds=float(wall_seconds),
-        environment={
-            "LANG": "C",
-            "LC_ALL": "C",
-            "TZ": "UTC",
-            "PYTHONHASHSEED": "0",
-        },
-        stdout_limit=2_000_000,
-        stderr_limit=64_000,
-        resource_limits=ProcessResourceLimits(
-            cpu_seconds=wall_seconds + 1,
-            address_space_bytes=1024 * 1024 * 1024,
-        ),
+    completed = execute_process(
+        ProcessRequest(
+            executable=sys.executable,
+            arguments=("-I", "-m", _WORKER_MODULE),
+            stdin_bytes=canonicalize_json(payload),
+            timeout_seconds=float(wall_seconds),
+            environment=worker_environment(locale="C"),
+            cwd=str(Path.cwd()),
+            stdout_limit_bytes=2_000_000,
+            stderr_limit_bytes=64_000,
+            resource_limits=ProcessResourceLimits(
+                cpu_seconds=wall_seconds + 1,
+                address_space_bytes=1024 * 1024 * 1024,
+            ),
+        )
     )
-    if completed.timed_out:
-        raise subprocess.TimeoutExpired(command, wall_seconds)
+    if completed.termination is ProcessTermination.TIMED_OUT:
+        raise TimeoutError
     if (
         completed.returncode != 0
-        or completed.stdout_exceeded
-        or completed.stderr_exceeded
+        or completed.termination is not ProcessTermination.EXITED
     ):
         raise RuntimeError("Arb point-enclosure worker failed")
     value = loads_strict_json(completed.stdout)
@@ -114,7 +117,7 @@ def _point_enclosure(
                 )
             )
         raise RuntimeError("Arb worker returned an unknown status")
-    except subprocess.TimeoutExpired:
+    except TimeoutError:
         detail = (
             "The Arb worker exceeded the declared wall-clock budget; "
             "no enclosure conclusion is available."

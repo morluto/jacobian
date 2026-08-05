@@ -4,34 +4,34 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
-import os
+import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
-from jacobian.canonical import CanonicalizationError, loads_strict_json
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.provider_measurements import (
     ProviderMeasurement,
     ProviderMeasurementSample,
     ProviderMeasurementStatus,
 )
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
+from jacobian.worker_environment import worker_environment
 
 _PROBE_TIMEOUT_SECONDS = 120
 _COLD_INSTALL_TIMEOUT_SECONDS = 600
 _MAX_DIAGNOSTIC_BYTES = 64 * 1024
 _PYTHON_PROBE = r"""
-import json
-import resource
 import sys
-import time
 
 provider = sys.argv[1]
 operation = sys.argv[2]
-started = time.perf_counter()
 
 if provider == "jacobian.networkx":
     import networkx as backend
@@ -91,91 +91,84 @@ else:
     if operation == "reproduction":
         assert backend.canonicalize_json({"value": 1})
 
-elapsed = time.perf_counter() - started
-rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-if sys.platform != "darwin":
-    rss *= 1024
-print(json.dumps({"seconds": format(elapsed, ".17g"), "peak_rss_bytes": rss}))
-"""
-_EXTERNAL_PROBE = r"""
-import json
-import resource
-import subprocess
-import sys
-import time
-
-started = time.perf_counter()
-process = subprocess.run(
-    sys.argv[1:],
-    check=True,
-    capture_output=True,
-    timeout=105,
-)
-elapsed = time.perf_counter() - started
-rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-if sys.platform != "darwin":
-    rss *= 1024
-print(json.dumps({
-    "seconds": format(elapsed, ".17g"),
-    "peak_rss_bytes": rss,
-    "output_bytes": len(process.stdout) + len(process.stderr),
-}))
-"""
-
-
-def _process_environment() -> dict[str, str]:
-    names = (
-        "HOME",
-        "PATH",
-        "ELAN_HOME",
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "NO_PROXY",
-        "http_proxy",
-        "https_proxy",
-        "no_proxy",
-        "SSL_CERT_FILE",
+# Report this child's own peak resident set so a short probe that exits
+# before the engine's procfs sampler can poll it still yields a trustworthy
+# positive RSS.  RUSAGE_SELF is the child's own high-water mark, not the
+# parent's cumulative prior-child rusage, so it never blends siblings.
+try:
+    import resource as _resource
+    _rss = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
+    print(
+        "JACOBIAN_MEASUREMENT_RSS_BYTES="
+        + str(_rss * 1024 if sys.platform.startswith("linux") else _rss)
     )
-    return {
-        **{name: os.environ[name] for name in names if name in os.environ},
-        "LC_ALL": "C.UTF-8",
-        "PYTHONHASHSEED": "0",
-    }
+except (ImportError, OSError, ValueError):
+    pass
+"""
+
+# Marker emitted by the Python probe child carrying its own peak RSS, so a
+# short probe that exits before the engine's procfs sampler polls it still
+# reports a trustworthy positive value.  The child reads RUSAGE_SELF, which is
+# its own high-water mark and never the parent's cumulative prior-child rusage.
+_RSS_MARKER = re.compile(rb"JACOBIAN_MEASUREMENT_RSS_BYTES=(\d+)")
 
 
-def _measure_command(command: list[str]) -> ProviderMeasurementSample:
+def _process_environment(*, toolchain_path: str | None = None) -> dict[str, str]:
+    return worker_environment(path_prefix=toolchain_path)
+
+
+def _child_peak_rss_bytes(stdout: bytes, sampled: int | None) -> int | None:
+    """Return a trustworthy peak RSS for one completed probe.
+
+    The Python probe child prints its own ``RUSAGE_SELF`` high-water mark as a
+    final marker.  That value is the child's own peak, captured at exit, so it
+    is trustworthy for short probes that complete before the engine's procfs
+    sampler can poll them and it never blends prior siblings.  When the marker
+    is absent (e.g. a Lean executable probe, or a platform without
+    ``resource``) we fall back to the engine's sampled ``peak_rss_bytes``.
+    """
+    matches = _RSS_MARKER.findall(stdout)
+    if matches:
+        return int(matches[-1])
+    return sampled
+
+
+def _measure_command(
+    command: list[str],
+    *,
+    environment: dict[str, str] | None = None,
+) -> ProviderMeasurementSample:
+    started = time.perf_counter()
     try:
-        process = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=_PROBE_TIMEOUT_SECONDS,
-            env=_process_environment(),
+        result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=tuple(command[1:]),
+                environment=environment or _process_environment(),
+                cwd=str(Path.cwd()),
+                timeout_seconds=_PROBE_TIMEOUT_SECONDS,
+                stdin_bytes=b"",
+                stdout_limit_bytes=_MAX_DIAGNOSTIC_BYTES,
+                stderr_limit_bytes=_MAX_DIAGNOSTIC_BYTES,
+            )
         )
-        if len(process.stdout.encode()) > _MAX_DIAGNOSTIC_BYTES:
-            raise RuntimeError("provider probe output exceeded 64 KiB")
-        payload = loads_strict_json(process.stdout)
-        if not isinstance(payload, dict):
-            raise ValueError("provider measurement returned a non-object")
+        if result.termination is not ProcessTermination.EXITED:
+            return ProviderMeasurementSample(
+                status=ProviderMeasurementStatus.ERROR,
+                detail="The provider measurement failed.",
+            )
+        if result.returncode != 0:
+            return ProviderMeasurementSample(
+                status=ProviderMeasurementStatus.ERROR,
+                detail="The provider measurement failed.",
+            )
         return ProviderMeasurementSample(
             status=ProviderMeasurementStatus.COMPLETED,
-            seconds=float(payload["seconds"]),
-            peak_rss_bytes=int(payload["peak_rss_bytes"]),
-            output_bytes=(
-                int(payload["output_bytes"])
-                if "output_bytes" in payload
-                else len(process.stdout.encode())
-            ),
+            seconds=time.perf_counter() - started,
+            peak_rss_bytes=_child_peak_rss_bytes(result.stdout, result.peak_rss_bytes),
+            output_bytes=len(result.stdout) + len(result.stderr),
         )
-    except (
-        KeyError,
-        OSError,
-        RuntimeError,
-        ValueError,
-        CanonicalizationError,
-        subprocess.SubprocessError,
-    ):
+    except (OSError, RuntimeError, ValueError):
         return ProviderMeasurementSample(
             status=ProviderMeasurementStatus.ERROR,
             detail="The provider measurement failed.",
@@ -203,7 +196,10 @@ def _lean_probe(*, reproduction: bool) -> ProviderMeasurementSample:
         )
     if not reproduction:
         command = [str(executable), "-V"]
-        return _measure_command([sys.executable, "-c", _EXTERNAL_PROBE, *command])
+        return _measure_command(
+            command,
+            environment=_process_environment(toolchain_path=str(executable.parent)),
+        )
     with tempfile.TemporaryDirectory(prefix="jacobian-lean-measure-") as directory:
         source = Path(directory) / "Main.lean"
         source.write_text(
@@ -211,7 +207,10 @@ def _lean_probe(*, reproduction: bool) -> ProviderMeasurementSample:
             encoding="utf-8",
         )
         command = [str(executable), str(source)]
-        return _measure_command([sys.executable, "-c", _EXTERNAL_PROBE, *command])
+        return _measure_command(
+            command,
+            environment=_process_environment(toolchain_path=str(executable.parent)),
+        )
 
 
 def _file_size(path: Path) -> int:
@@ -275,33 +274,41 @@ def _measure_cold_install(
     with tempfile.TemporaryDirectory(prefix="jacobian-provider-install-") as directory:
         root = Path(directory)
         target = root / "target"
-        environment = {
-            **_process_environment(),
-            "UV_CACHE_DIR": str(root / "cache"),
-        }
+        environment = worker_environment(
+            overrides={"UV_CACHE_DIR": str(root / "cache")},
+        )
         started = time.perf_counter()
         try:
-            subprocess.run(
-                [
-                    uv,
-                    "pip",
-                    "install",
-                    "--python",
-                    sys.executable,
-                    "--target",
-                    str(target),
-                    "--no-deps",
-                    spec,
-                ],
-                cwd=Path.cwd(),
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=_COLD_INSTALL_TIMEOUT_SECONDS,
-                env=environment,
+            result = execute_process(
+                ProcessRequest(
+                    executable=str(Path(uv).resolve(strict=True)),
+                    arguments=(
+                        "pip",
+                        "install",
+                        "--python",
+                        sys.executable,
+                        "--target",
+                        str(target),
+                        "--no-deps",
+                        spec,
+                    ),
+                    environment=environment,
+                    cwd=str(Path.cwd()),
+                    timeout_seconds=_COLD_INSTALL_TIMEOUT_SECONDS,
+                    stdin_bytes=b"",
+                    stdout_limit_bytes=1024,
+                    stderr_limit_bytes=_MAX_DIAGNOSTIC_BYTES,
+                )
             )
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, ValueError):
+            return ProviderMeasurementSample(
+                status=ProviderMeasurementStatus.ERROR,
+                detail="The cold install measurement failed.",
+            )
+        if (
+            result.termination is not ProcessTermination.EXITED
+            or result.returncode != 0
+        ):
             return ProviderMeasurementSample(
                 status=ProviderMeasurementStatus.ERROR,
                 detail="The cold install measurement failed.",

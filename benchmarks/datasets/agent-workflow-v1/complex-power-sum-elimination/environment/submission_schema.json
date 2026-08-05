@@ -1,85 +1,267 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
-  "properties": {
-    "task_id": {"const": "jacobian/complex-power-sum-elimination"},
-    "conclusion": {"enum": ["COMPLETE_TARGET_SET_DERIVED", "INSUFFICIENT_EVIDENCE"]},
-    "result": {
-      "type": "object", "additionalProperties": false,
-      "required": ["elimination", "branches", "achievability"],
+  "$defs": {
+    "polynomial": {
+      "items": {
+        "$ref": "#/$defs/rational"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array"
+    },
+    "rational": {
+      "additionalProperties": false,
       "properties": {
-        "recurrence": {
-          "type": "object", "additionalProperties": false,
-          "required": ["seed", "product_polynomial", "power_sums"],
-          "properties": {
-            "seed": {"const": ["2", "s"]},
-            "product_polynomial": {"$ref": "#/$defs/polynomial"},
-            "power_sums": {
-              "type": "object", "additionalProperties": false,
-              "required": ["2", "3", "4", "5", "6"],
-              "properties": {
-                "2": {"$ref": "#/$defs/polynomial"},
-                "3": {"$ref": "#/$defs/polynomial"},
-                "4": {"$ref": "#/$defs/polynomial"},
-                "5": {"$ref": "#/$defs/polynomial"},
-                "6": {"$ref": "#/$defs/polynomial"}
-              }
-            }
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "surd": {
+      "additionalProperties": false,
+      "properties": {
+        "rational": {
+          "$ref": "#/$defs/rational"
+        },
+        "sqrt17": {
+          "$ref": "#/$defs/rational"
+        }
+      },
+      "required": [
+        "rational",
+        "sqrt17"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "COMPLETE_TARGET_SET_DERIVED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
         },
-        "elimination": {
-          "type": "object", "additionalProperties": false,
-          "required": ["sum_polynomial", "target_polynomial"],
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "achievability": {
+          "additionalProperties": false,
           "properties": {
-            "sum_polynomial": {"$ref": "#/$defs/polynomial"},
-            "hypothesis_factorization": {"type": "string", "minLength": 1},
-            "target_polynomial": {"$ref": "#/$defs/polynomial"}
-          }
+            "branch_coverage": {
+              "const": "BOTH_AND_ONLY_BOTH"
+            },
+            "construction": {
+              "const": "TAKE_BOTH_COMPLEX_ROOTS"
+            },
+            "quadratic": {
+              "const": "T^2-s*T+p"
+            }
+          },
+          "required": [
+            "construction",
+            "quadratic",
+            "branch_coverage"
+          ],
+          "type": "object"
         },
         "branches": {
-          "type": "array", "minItems": 2, "maxItems": 2,
           "items": {
-            "type": "object", "additionalProperties": false,
-            "required": ["sqrt17_sign", "sum", "product", "target", "denominator_norms"],
+            "additionalProperties": false,
             "properties": {
-              "sqrt17_sign": {"enum": [-1, 1]},
-              "sum": {"$ref": "#/$defs/surd"},
-              "product": {"$ref": "#/$defs/surd"},
-              "target": {"$ref": "#/$defs/surd"},
               "denominator_norms": {
-                "type": "object", "additionalProperties": false,
-                "required": ["s", "s_minus_12", "five_s_minus_44"],
+                "additionalProperties": false,
                 "properties": {
-                  "s": {"type": "integer"},
-                  "s_minus_12": {"type": "integer"},
-                  "five_s_minus_44": {"type": "integer"}
-                }
+                  "five_s_minus_44": {
+                    "type": "integer"
+                  },
+                  "s": {
+                    "type": "integer"
+                  },
+                  "s_minus_12": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "s",
+                  "s_minus_12",
+                  "five_s_minus_44"
+                ],
+                "type": "object"
+              },
+              "product": {
+                "$ref": "#/$defs/surd"
+              },
+              "sqrt17_sign": {
+                "enum": [
+                  -1,
+                  1
+                ]
+              },
+              "sum": {
+                "$ref": "#/$defs/surd"
+              },
+              "target": {
+                "$ref": "#/$defs/surd"
               }
-            }
-          }
+            },
+            "required": [
+              "sqrt17_sign",
+              "sum",
+              "product",
+              "target",
+              "denominator_norms"
+            ],
+            "type": "object"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
         },
-        "achievability": {
-          "type": "object", "additionalProperties": false,
-          "required": ["construction", "quadratic", "branch_coverage"],
+        "elimination": {
+          "additionalProperties": false,
           "properties": {
-            "construction": {"const": "TAKE_BOTH_COMPLEX_ROOTS"},
-            "quadratic": {"const": "T^2-s*T+p"},
-            "branch_coverage": {"const": "BOTH_AND_ONLY_BOTH"}
-          }
+            "hypothesis_factorization": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sum_polynomial": {
+              "$ref": "#/$defs/polynomial"
+            },
+            "target_polynomial": {
+              "$ref": "#/$defs/polynomial"
+            }
+          },
+          "required": [
+            "sum_polynomial",
+            "target_polynomial"
+          ],
+          "type": "object"
+        },
+        "recurrence": {
+          "additionalProperties": false,
+          "properties": {
+            "power_sums": {
+              "additionalProperties": false,
+              "properties": {
+                "2": {
+                  "$ref": "#/$defs/polynomial"
+                },
+                "3": {
+                  "$ref": "#/$defs/polynomial"
+                },
+                "4": {
+                  "$ref": "#/$defs/polynomial"
+                },
+                "5": {
+                  "$ref": "#/$defs/polynomial"
+                },
+                "6": {
+                  "$ref": "#/$defs/polynomial"
+                }
+              },
+              "required": [
+                "2",
+                "3",
+                "4",
+                "5",
+                "6"
+              ],
+              "type": "object"
+            },
+            "product_polynomial": {
+              "$ref": "#/$defs/polynomial"
+            },
+            "seed": {
+              "const": [
+                "2",
+                "s"
+              ]
+            }
+          },
+          "required": [
+            "seed",
+            "product_polynomial",
+            "power_sums"
+          ],
+          "type": "object"
         }
-      }
+      },
+      "required": [
+        "elimination",
+        "branches",
+        "achievability"
+      ],
+      "type": "object"
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"type": "string"},
-    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/complex-power-sum-elimination"
+    }
   },
-  "$defs": {
-    "rational": {"type": "object", "additionalProperties": false, "required": ["numerator", "denominator"], "properties": {"numerator": {"type": "integer"}, "denominator": {"type": "integer", "minimum": 1}}},
-    "polynomial": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/rational"}},
-    "surd": {"type": "object", "additionalProperties": false, "required": ["rational", "sqrt17"], "properties": {"rational": {"$ref": "#/$defs/rational"}, "sqrt17": {"$ref": "#/$defs/rational"}}}
-  }
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

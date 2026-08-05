@@ -11,7 +11,6 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
@@ -35,6 +34,7 @@ from jacobian.domains.matrix_lattice.lattice import reduce_lattice_basis
 from jacobian.domains.matrix_lattice.lattice_bundle import build_lattice_bundle
 from jacobian.domains.matrix_lattice.operations import compute_smith_normal_form
 from jacobian.operations import ComputedSuccess, OperationExecutionFailure
+from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
 @fixture
@@ -180,7 +180,6 @@ def test_exact_matrix_domain_results_and_lineage(
         assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert result.output["result"] == expected
         assert result.artifact_uris == ()
-        assert result.episode_uri is None
 
 
 def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
@@ -500,14 +499,14 @@ def test_lattice_lll_timeout_retains_no_operation_artifacts(
 
     monkeypatch.setattr(
         lattice,
-        "run_bounded_process",
-        lambda *args, **kwargs: BoundedProcessResult(
+        "execute_process",
+        lambda *args, **kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
     result = runtime.core.capabilities.invoke(

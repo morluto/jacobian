@@ -1,0 +1,259 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "PUBLISHED_CLASSIFICATION_AND_COUNT_FALSE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/unit-fraction-repair.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "BOUNDED_TO_N_AT_MOST_2025",
+      "NO_GENERAL_CLOSED_FORM_CLASSIFICATION"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/unit-fraction-repair.json"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "EXHAUSTIVE_N_1_THROUGH_2025",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "corrected_count": {
+        "maximum": 2025,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "defects": {
+        "items": {
+          "enum": [
+            "PRIME_POWER_CLASSIFICATION_FALSE",
+            "COPRIMALITY_DOES_NOT_IMPLY_DIVISIBILITY",
+            "N_MINUS_ONE_NOT_DIVISOR_OF_N_SQUARED",
+            "CLAIMED_N8_WITNESSES_NOT_DIVISORS",
+            "PUBLISHED_COUNT_WRONG"
+          ]
+        },
+        "maxItems": 5,
+        "minItems": 5,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "membership_bitmap_hex": {
+        "pattern": "^[0-9a-f]{508}$",
+        "type": "string"
+      },
+      "nonmember_counterexamples": {
+        "items": {
+          "enum": [
+            3,
+            5,
+            8
+          ]
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "witnesses": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "d": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "n": {
+              "maximum": 2025,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "n",
+            "d"
+          ],
+          "type": "object"
+        },
+        "maxItems": 30,
+        "minItems": 10,
+        "type": "array"
+      }
+    },
+    "required": [
+      "corrected_count",
+      "membership_bitmap_hex",
+      "witnesses",
+      "nonmember_counterexamples",
+      "defects"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "PUBLISHED_CLASSIFICATION_AND_COUNT_FALSE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/unit-fraction-repair.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "BOUNDED_TO_N_AT_MOST_2025",
+          "NO_GENERAL_CLOSED_FORM_CLASSIFICATION"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "corrected_count": {
+            "maximum": 2025,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "defects": {
+            "items": {
+              "enum": [
+                "PRIME_POWER_CLASSIFICATION_FALSE",
+                "COPRIMALITY_DOES_NOT_IMPLY_DIVISIBILITY",
+                "N_MINUS_ONE_NOT_DIVISOR_OF_N_SQUARED",
+                "CLAIMED_N8_WITNESSES_NOT_DIVISORS",
+                "PUBLISHED_COUNT_WRONG"
+              ]
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "membership_bitmap_hex": {
+            "pattern": "^[0-9a-f]{508}$",
+            "type": "string"
+          },
+          "nonmember_counterexamples": {
+            "items": {
+              "enum": [
+                3,
+                5,
+                8
+              ]
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "witnesses": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "d": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "n": {
+                  "maximum": 2025,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "n",
+                "d"
+              ],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "minItems": 10,
+            "type": "array"
+          }
+        },
+        "required": [
+          "corrected_count",
+          "membership_bitmap_hex",
+          "witnesses",
+          "nonmember_counterexamples",
+          "defects"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "EXHAUSTIVE_N_1_THROUGH_2025",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/unit-fraction-classification-repair"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/unit-fraction-classification-repair",
+  "verification_record": null
+}

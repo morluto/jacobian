@@ -1,15 +1,134 @@
 {
-  "$schema":"https://json-schema.org/draft/2020-12/schema",
-  "type":"object","additionalProperties":false,
-  "required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],
-  "properties":{
-    "task_id":{"const":"jacobian/dead-end-local-density-audit"},
-    "conclusion":{"enum":["ALL_LOCAL_FACTORS_AUDITED","INCOMPLETE"]},
-    "result":{"type":"object","additionalProperties":false,"required":["cases"],"properties":{"cases":{"type":"array","minItems":4,"maxItems":4,"items":{"$ref":"#/$defs/case"}}}},
-    "claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},
-    "scope":{"type":"string"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},
-    "evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},
-    "limitations":{"type":"array","items":{"type":"string"}}
+  "$defs": {
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "enum": [
+            "INVERTIBLE",
+            "SINGLY_DIVISIBLE",
+            "SQUARE_DIVISIBLE"
+          ]
+        },
+        "case_id": {
+          "type": "string"
+        },
+        "density_denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "density_numerator": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "forbidden_residues": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "valid_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "branch",
+        "forbidden_residues",
+        "valid_count",
+        "density_numerator",
+        "density_denominator"
+      ],
+      "type": "object"
+    }
   },
-  "$defs":{"case":{"type":"object","additionalProperties":false,"required":["case_id","branch","forbidden_residues","valid_count","density_numerator","density_denominator"],"properties":{"case_id":{"type":"string"},"branch":{"enum":["INVERTIBLE","SINGLY_DIVISIBLE","SQUARE_DIVISIBLE"]},"forbidden_residues":{"type":"array","items":{"type":"integer","minimum":0}},"valid_count":{"type":"integer","minimum":0},"density_numerator":{"type":"integer","minimum":0},"density_denominator":{"type":"integer","minimum":1}}}}
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "ALL_LOCAL_FACTORS_AUDITED",
+        "INCOMPLETE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/case"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "cases"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/dead-end-local-density-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

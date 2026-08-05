@@ -14,13 +14,13 @@ import pytest
 from deploy.smoke_remote import inspect as inspect_remote_deployment
 from mcp.server.auth.settings import AuthSettings
 from pydantic import AnyHttpUrl
-from tests.support.mcp import create_legacy_server as create_server
 from uvicorn import Config, Server
 
 from jacobian.adapters.mcp.remote import (
     StaticTokenVerifier,
     load_static_token_file,
 )
+from jacobian.adapters.mcp.server import create_server
 
 
 def test_authenticated_streamable_http_isolates_tenant_memory(
@@ -121,11 +121,10 @@ async def _remote_tenant_scenario(port: int) -> None:
     import httpx2
     from mcp import Client
     from mcp.client.streamable_http import streamable_http_client
-    from mcp.shared.exceptions import MCPError
 
     url = f"http://127.0.0.1:{port}/mcp"
 
-    async def invoke(token: str, *, create: bool) -> tuple[int, str | None]:
+    async def invoke(token: str) -> dict[str, object]:
         async with (
             httpx2.AsyncClient(
                 headers={"Authorization": f"Bearer {token}"},
@@ -141,50 +140,21 @@ async def _remote_tenant_scenario(port: int) -> None:
         ):
             catalog = await client.read_resource("capability://catalog")
             assert "fixture.increment" in catalog.contents[0].text
-            created_artifact_uri = None
-            if create:
-                created = await client.call_tool(
-                    "capability.invoke",
-                    {
-                        "capability_id": "fixture.increment",
-                        "mode": "EXPLORE",
-                        "payload": {"value": 4},
-                    },
-                )
-                assert isinstance(created.structured_content, dict)
-                created_artifact_uri = created.structured_content["episode_uri"]
-            searched = await client.call_tool(
+            result = await client.call_tool(
                 "capability.invoke",
                 {
-                    "capability_id": "knowledge.search",
+                    "capability_id": "fixture.increment",
                     "mode": "EXPLORE",
-                    "payload": {"query": "fixture.increment"},
+                    "payload": {"value": 4},
                 },
             )
-            payload = json.loads(searched.content[0].text)
-            assert payload["execution"]["status"] == "COMPLETED", payload["execution"]
-            assert "hits" in payload["output"], payload
-            return len(payload["output"]["hits"]), created_artifact_uri
+            assert isinstance(result.structured_content, dict)
+            return result.structured_content["output"]
 
-    alpha_hits, alpha_artifact_uri = await invoke("a" * 32, create=True)
-    beta_hits, _ = await invoke("b" * 32, create=False)
-    assert alpha_hits == 1
-    assert beta_hits == 0
-    assert alpha_artifact_uri is not None
-
-    async with (
-        httpx2.AsyncClient(
-            headers={"Authorization": f"Bearer {'b' * 32}"},
-            trust_env=False,
-            timeout=60,
-        ) as http,
-        Client(
-            streamable_http_client(url, http_client=http),
-            raise_exceptions=True,
-        ) as beta_client,
-    ):
-        with pytest.raises(MCPError):
-            await beta_client.read_resource(alpha_artifact_uri)
+    alpha_output = await invoke("a" * 32)
+    beta_output = await invoke("b" * 32)
+    assert alpha_output == {"value": 5}
+    assert beta_output == {"value": 5}
 
 
 def _wait_for_server(

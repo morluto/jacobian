@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
 
+from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermination
 from jacobian_checkers.lean4 import (
     LEAN_TOOLCHAIN,
     _elan_home,
@@ -106,12 +106,14 @@ def test_mathlib_validates_the_exact_lake_compiler_command(
         lambda command, *, cwd=None: validated.append((command, cwd)),
     )
     monkeypatch.setattr(
-        "jacobian_checkers.lean4.subprocess.run",
-        lambda *args, **kwargs: subprocess.CompletedProcess(
-            args=args[0],
+        "jacobian_checkers.lean4.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
-            stdout="",
-            stderr="",
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
         ),
     )
 
@@ -134,10 +136,17 @@ def test_source_accepts_let_expressions_and_inline_by_terms() -> None:
 def test_missing_pinned_toolchain_names_the_install_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def unavailable(*args: object, **kwargs: object) -> object:
-        raise subprocess.CalledProcessError(1, ("elan", "run"))
-
-    monkeypatch.setattr("jacobian_checkers.lean4.subprocess.run", unavailable)
+    monkeypatch.setattr(
+        "jacobian_checkers.lean4.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.START_FAILED,
+            returncode=None,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+        ),
+    )
 
     with pytest.raises(_LeanSetupError) as raised:
         _validate_lean(("/opt/elan/bin/elan", "run", LEAN_TOOLCHAIN, "lean"))
@@ -152,20 +161,22 @@ def test_missing_pinned_toolchain_names_the_install_command(
 def test_toolchain_probe_allows_cold_start_latency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    timeouts: list[int] = []
-    outputs = iter(("4.31.0", "68218e876d2a38b1985b8590fff244a83c321783"))
+    timeouts: list[float] = []
+    outputs = iter((b"4.31.0", b"68218e876d2a38b1985b8590fff244a83c321783"))
 
-    def completed(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        timeouts.append(int(kwargs["timeout"]))
-        return subprocess.CompletedProcess(
-            args=args[0],
+    def completed(request: ProcessRequest, **_kwargs: object) -> ProcessResult:
+        timeouts.append(request.timeout_seconds)
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=next(outputs),
-            stderr="",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
         )
 
-    monkeypatch.setattr("jacobian_checkers.lean4.subprocess.run", completed)
+    monkeypatch.setattr("jacobian_checkers.lean4.execute_process", completed)
 
     _validate_lean(("/opt/elan/bin/elan", "run", LEAN_TOOLCHAIN, "lean"))
 
-    assert timeouts == [15, 15]
+    assert timeouts == [15.0, 15.0]

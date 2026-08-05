@@ -258,4 +258,3 @@ def test_elementary_polynomial_requests_fail_closed_before_artifact_writes(
     assert outcome.execution.status is ExecutionStatus.ERROR
     assert outcome.diagnostics[0].code == "INVALID_POLYNOMIAL_REQUEST"
     assert outcome.artifact_uris == ()
-    assert outcome.episode_uri is None

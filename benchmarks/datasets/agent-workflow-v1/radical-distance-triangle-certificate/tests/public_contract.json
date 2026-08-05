@@ -1,0 +1,277 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "SHARP_LOWER_BOUND_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/radical-distance-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "TRIANGLE_INEQUALITY_TRUSTED",
+      "NO_PROOF_ASSISTANT_REPLAY"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/radical-distance-certificate.json"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "ALL_REAL_A_B",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "center_distance_squared": {
+        "type": "integer"
+      },
+      "equality_witness": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "expanded_radicands": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "a2": {
+              "type": "integer"
+            },
+            "a_sqrt2": {
+              "type": "integer"
+            },
+            "b2": {
+              "type": "integer"
+            },
+            "b_sqrt2": {
+              "type": "integer"
+            },
+            "constant": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "a2",
+            "b2",
+            "a_sqrt2",
+            "b_sqrt2",
+            "constant"
+          ],
+          "type": "object"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "lower_bound": {
+        "type": "integer"
+      },
+      "method": {
+        "enum": [
+          "DISTANCE_TRIANGLE_INEQUALITY",
+          "SQUARING_AND_CALCULUS",
+          "NUMERICAL_SAMPLING"
+        ]
+      },
+      "scaled_centers": {
+        "items": {
+          "items": {
+            "maximum": 4,
+            "minimum": -4,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      }
+    },
+    "required": [
+      "method",
+      "scaled_centers",
+      "expanded_radicands",
+      "center_distance_squared",
+      "lower_bound",
+      "equality_witness"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "SHARP_LOWER_BOUND_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/radical-distance-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "TRIANGLE_INEQUALITY_TRUSTED",
+          "NO_PROOF_ASSISTANT_REPLAY"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "center_distance_squared": {
+            "type": "integer"
+          },
+          "equality_witness": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "expanded_radicands": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "a2": {
+                  "type": "integer"
+                },
+                "a_sqrt2": {
+                  "type": "integer"
+                },
+                "b2": {
+                  "type": "integer"
+                },
+                "b_sqrt2": {
+                  "type": "integer"
+                },
+                "constant": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "a2",
+                "b2",
+                "a_sqrt2",
+                "b_sqrt2",
+                "constant"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "lower_bound": {
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "DISTANCE_TRIANGLE_INEQUALITY",
+              "SQUARING_AND_CALCULUS",
+              "NUMERICAL_SAMPLING"
+            ]
+          },
+          "scaled_centers": {
+            "items": {
+              "items": {
+                "maximum": 4,
+                "minimum": -4,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "method",
+          "scaled_centers",
+          "expanded_radicands",
+          "center_distance_squared",
+          "lower_bound",
+          "equality_witness"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "ALL_REAL_A_B",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/radical-distance-triangle-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/radical-distance-triangle-certificate",
+  "verification_record": null
+}

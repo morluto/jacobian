@@ -1,0 +1,287 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "VALID_RECURRENCE_CERTIFICATE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "EIGHT_STAGE_TRACE_ONLY",
+      "STANDARD_PYTHAGOREAN_PARAMETERIZATION_TRUSTED",
+      "NO_PROOF_ASSISTANT_VERIFICATION"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "EIGHT_EXACT_GENERATOR_STAGES",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "invariant_multiplier": {
+        "type": "integer"
+      },
+      "stages": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "b": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "c": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "gcd": {
+              "type": "integer"
+            },
+            "m": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "n": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "parity_opposite": {
+              "type": "boolean"
+            },
+            "q": {
+              "type": "integer"
+            },
+            "stage": {
+              "maximum": 7,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "stage",
+            "m",
+            "n",
+            "a",
+            "b",
+            "c",
+            "q",
+            "gcd",
+            "parity_opposite"
+          ],
+          "type": "object"
+        },
+        "maxItems": 8,
+        "minItems": 8,
+        "type": "array"
+      },
+      "transform_determinant": {
+        "type": "integer"
+      },
+      "transform_matrix": {
+        "items": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      }
+    },
+    "required": [
+      "transform_matrix",
+      "transform_determinant",
+      "invariant_multiplier",
+      "stages"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "VALID_RECURRENCE_CERTIFICATE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "EIGHT_STAGE_TRACE_ONLY",
+          "STANDARD_PYTHAGOREAN_PARAMETERIZATION_TRUSTED",
+          "NO_PROOF_ASSISTANT_VERIFICATION"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "invariant_multiplier": {
+            "type": "integer"
+          },
+          "stages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "a": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "b": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "c": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "gcd": {
+                  "type": "integer"
+                },
+                "m": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "n": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "parity_opposite": {
+                  "type": "boolean"
+                },
+                "q": {
+                  "type": "integer"
+                },
+                "stage": {
+                  "maximum": 7,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "stage",
+                "m",
+                "n",
+                "a",
+                "b",
+                "c",
+                "q",
+                "gcd",
+                "parity_opposite"
+              ],
+              "type": "object"
+            },
+            "maxItems": 8,
+            "minItems": 8,
+            "type": "array"
+          },
+          "transform_determinant": {
+            "type": "integer"
+          },
+          "transform_matrix": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "transform_matrix",
+          "transform_determinant",
+          "invariant_multiplier",
+          "stages"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "EIGHT_EXACT_GENERATOR_STAGES",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/pythagorean-generator-recurrence"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/pythagorean-generator-recurrence",
+  "verification_record": null
+}

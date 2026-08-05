@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
-import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import ProcessResourceLimits, run_bounded_process
+from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import (
     CanonicalizationError,
     canonicalize_json,
@@ -44,6 +44,11 @@ from jacobian.contracts.transformations import (
     TransformationVerificationRecord,
 )
 from jacobian.contracts.verification import VerificationRecord
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.registry import (
     CheckerExecutableChangedError,
     CheckerRegistry,
@@ -153,40 +158,40 @@ class VerificationService:
             30 if timeout_seconds is None else timeout_seconds,
             self.checker_timeout_seconds,
         )
-        command = [
-            sys.executable,
+        arguments: list[str] = [
             "-m",
             "jacobian.checker_worker",
             entrypoint,
             expected_digest,
         ]
         if provider_runtime is not None:
-            command.append(
+            arguments.append(
                 canonicalize_json(provider_runtime.model_dump(mode="json")).decode(
                     "utf-8"
                 )
             )
-        completed = run_bounded_process(
-            command,
-            input_bytes=canonicalize_json(request),
-            timeout_seconds=effective_timeout,
-            environment=environment,
-            stdout_limit=self.max_checker_output_bytes,
-            stderr_limit=self.max_checker_diagnostic_bytes,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=max(1, int(effective_timeout) + 1),
-                # Lean/Mathlib reserves a large virtual heap even for small
-                # proofs; keep it bounded without applying the much smaller
-                # arithmetic-worker profile.
-                address_space_bytes=16 * 1024 * 1024 * 1024,
-            ),
-        )
-        if completed.timed_out:
-            raise subprocess.TimeoutExpired(
-                cmd=[sys.executable, "-m", "jacobian.checker_worker", entrypoint],
-                timeout=effective_timeout,
+        completed = execute_process(
+            ProcessRequest(
+                executable=sys.executable,
+                arguments=tuple(arguments),
+                stdin_bytes=canonicalize_json(request),
+                timeout_seconds=effective_timeout,
+                environment=environment,
+                cwd=str(Path.cwd()),
+                stdout_limit_bytes=self.max_checker_output_bytes,
+                stderr_limit_bytes=self.max_checker_diagnostic_bytes,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, int(effective_timeout) + 1),
+                    # Lean/Mathlib reserves a large virtual heap even for small
+                    # proofs; keep it bounded without applying the much smaller
+                    # arithmetic-worker profile.
+                    address_space_bytes=16 * 1024 * 1024 * 1024,
+                ),
             )
-        if completed.cancelled:
+        )
+        if completed.termination is ProcessTermination.TIMED_OUT:
+            raise TimeoutError("checker execution timed out")
+        if completed.termination is ProcessTermination.CANCELLED:
             raise CheckerExecutionCancelledError(_CHECKER_CANCELLED)
         if completed.stdout_exceeded:
             raise CheckerExecutionError(_CHECKER_OUTPUT_TOO_LARGE)
@@ -451,7 +456,7 @@ class VerificationService:
                 evidence_uris=(witness_uri,),
                 verification_record_uri=record_artifact.artifact_uri,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             return self._operational_failure(
                 status=ExecutionStatus.TIMEOUT,
                 detail=_CHECKER_TIMEOUT,
@@ -742,7 +747,7 @@ class VerificationService:
                 evidence_uris=(certificate_uri,),
                 verification_record_uri=record_artifact.artifact_uri,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             return self._operational_failure(
                 status=ExecutionStatus.TIMEOUT,
                 detail=_CHECKER_TIMEOUT,
@@ -949,7 +954,7 @@ class VerificationService:
                 evidence_uris=(transformation_uri,),
                 verification_record_uri=record_artifact.artifact_uri,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             return self._operational_failure(
                 status=ExecutionStatus.TIMEOUT,
                 detail=_CHECKER_TIMEOUT,
@@ -1148,7 +1153,7 @@ class VerificationService:
                 evidence_uris=(evidence_artifact.artifact_uri,),
                 verification_record_uri=record_artifact.artifact_uri,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             return self._operational_failure(
                 status=ExecutionStatus.TIMEOUT,
                 detail=_CHECKER_TIMEOUT,

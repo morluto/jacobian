@@ -1,7 +1,90 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FALSE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "items": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "vertices": {
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "vertices",
+        "edges"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "jacobian/graph-counterexample complete finite input",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/graph-counterexample"
+    }
+  },
   "required": [
     "task_id",
     "conclusion",
@@ -12,81 +95,5 @@
     "evidence",
     "limitations"
   ],
-  "properties": {
-    "task_id": {
-      "const": "jacobian/graph-counterexample"
-    },
-    "conclusion": {
-      "const": "FALSE"
-    },
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "vertices",
-        "edges"
-      ],
-      "properties": {
-        "vertices": {
-          "type": "array",
-          "items": {
-            "type": [
-              "string",
-              "integer"
-            ]
-          }
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "items": {
-              "type": [
-                "string",
-                "integer"
-              ]
-            }
-          }
-        }
-      }
-    },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/graph-counterexample complete finite input"
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          }
-        }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    }
-  }
+  "type": "object"
 }

@@ -1,7 +1,84 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "UNIQUE_SOLUTION"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "solution": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            "y": {
+              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "solution"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "jacobian/rational-linear-solution complete finite input",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/rational-linear-solution"
+    }
+  },
   "required": [
     "task_id",
     "conclusion",
@@ -12,75 +89,5 @@
     "evidence",
     "limitations"
   ],
-  "properties": {
-    "task_id": {
-      "const": "jacobian/rational-linear-solution"
-    },
-    "conclusion": {
-      "const": "UNIQUE_SOLUTION"
-    },
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "solution"
-      ],
-      "properties": {
-        "solution": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "x",
-            "y"
-          ],
-          "properties": {
-            "x": {
-              "type": "string",
-              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
-            },
-            "y": {
-              "type": "string",
-              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
-            }
-          }
-        }
-      }
-    },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/rational-linear-solution complete finite input"
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          }
-        }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    }
-  }
+  "type": "object"
 }

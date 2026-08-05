@@ -1,26 +1,228 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
-  "properties": {
-    "task_id": {"const": "jacobian/rsa-exponent-domain-audit"},
-    "conclusion": {"enum": ["DOMAIN_COMPLETE_REPAIR", "INSUFFICIENT_EVIDENCE"]},
-    "result": {"type": "object", "additionalProperties": false, "required": ["diagnosis", "remainder_bounds", "unit_branch", "nonunit_branch", "domain_split", "unit_witness", "nonunit_witness", "finite_testing_role"], "properties": {
-      "diagnosis": {"type": "object", "additionalProperties": false, "required": ["unsafe_step", "missing_domain"], "properties": {"unsafe_step": {"const": "NEGATIVE_POWER_REQUIRES_UNIT"}, "missing_domain": {"const": "C_CONGRUENT_ZERO_MOD_P"}}},
-      "remainder_bounds": {"type": "object", "additionalProperties": false, "required": ["lower", "upper", "reason"], "properties": {"lower": {"const": 1}, "upper": {"const": "p-2"}, "reason": {"const": "COPRIMALITY_EXCLUDES_ZERO_REMAINDER"}}},
-      "unit_branch": {"type": "object", "additionalProperties": false, "required": ["condition", "quotient_relation", "quotient_bound", "identity"], "properties": {"condition": {"const": "gcd(C,p)=1"}, "quotient_relation": {"const": "d=d_p+k*(p-1)"}, "quotient_bound": {"const": "k>=0"}, "identity": {"const": "C^d=C^d_p*(C^(p-1))^k"}}},
-      "nonunit_branch": {"type": "object", "additionalProperties": false, "required": ["condition", "d_positive", "d_p_positive", "residues"], "properties": {"condition": {"const": "p|C"}, "d_positive": {"const": true}, "d_p_positive": {"const": true}, "residues": {"const": [0, 0]}}},
-      "domain_split": {"const": ["gcd(C,p)=1", "p|C"]},
-      "unit_witness": {"$ref": "#/$defs/witness"},
-      "nonunit_witness": {"$ref": "#/$defs/witness"},
-      "finite_testing_role": {"const": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"}
-    }},
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"type": "string"},
-    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  "$defs": {
+    "witness": {
+      "additionalProperties": false,
+      "properties": {
+        "C": {
+          "type": "integer"
+        },
+        "d": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "d_p": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "left_residue": {
+          "type": "integer"
+        },
+        "p": {
+          "minimum": 3,
+          "type": "integer"
+        },
+        "right_residue": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "p",
+        "d",
+        "d_p",
+        "C",
+        "left_residue",
+        "right_residue"
+      ],
+      "type": "object"
+    }
   },
-  "$defs": {"witness": {"type": "object", "additionalProperties": false, "required": ["p", "d", "d_p", "C", "left_residue", "right_residue"], "properties": {"p": {"type": "integer", "minimum": 3}, "d": {"type": "integer", "minimum": 1}, "d_p": {"type": "integer", "minimum": 1}, "C": {"type": "integer"}, "left_residue": {"type": "integer"}, "right_residue": {"type": "integer"}}}}
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "DOMAIN_COMPLETE_REPAIR",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnosis": {
+          "additionalProperties": false,
+          "properties": {
+            "missing_domain": {
+              "const": "C_CONGRUENT_ZERO_MOD_P"
+            },
+            "unsafe_step": {
+              "const": "NEGATIVE_POWER_REQUIRES_UNIT"
+            }
+          },
+          "required": [
+            "unsafe_step",
+            "missing_domain"
+          ],
+          "type": "object"
+        },
+        "domain_split": {
+          "const": [
+            "gcd(C,p)=1",
+            "p|C"
+          ]
+        },
+        "finite_testing_role": {
+          "const": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"
+        },
+        "nonunit_branch": {
+          "additionalProperties": false,
+          "properties": {
+            "condition": {
+              "const": "p|C"
+            },
+            "d_p_positive": {
+              "const": true
+            },
+            "d_positive": {
+              "const": true
+            },
+            "residues": {
+              "const": [
+                0,
+                0
+              ]
+            }
+          },
+          "required": [
+            "condition",
+            "d_positive",
+            "d_p_positive",
+            "residues"
+          ],
+          "type": "object"
+        },
+        "nonunit_witness": {
+          "$ref": "#/$defs/witness"
+        },
+        "remainder_bounds": {
+          "additionalProperties": false,
+          "properties": {
+            "lower": {
+              "const": 1
+            },
+            "reason": {
+              "const": "COPRIMALITY_EXCLUDES_ZERO_REMAINDER"
+            },
+            "upper": {
+              "const": "p-2"
+            }
+          },
+          "required": [
+            "lower",
+            "upper",
+            "reason"
+          ],
+          "type": "object"
+        },
+        "unit_branch": {
+          "additionalProperties": false,
+          "properties": {
+            "condition": {
+              "const": "gcd(C,p)=1"
+            },
+            "identity": {
+              "const": "C^d=C^d_p*(C^(p-1))^k"
+            },
+            "quotient_bound": {
+              "const": "k>=0"
+            },
+            "quotient_relation": {
+              "const": "d=d_p+k*(p-1)"
+            }
+          },
+          "required": [
+            "condition",
+            "quotient_relation",
+            "quotient_bound",
+            "identity"
+          ],
+          "type": "object"
+        },
+        "unit_witness": {
+          "$ref": "#/$defs/witness"
+        }
+      },
+      "required": [
+        "diagnosis",
+        "remainder_bounds",
+        "unit_branch",
+        "nonunit_branch",
+        "domain_split",
+        "unit_witness",
+        "nonunit_witness",
+        "finite_testing_role"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/rsa-exponent-domain-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

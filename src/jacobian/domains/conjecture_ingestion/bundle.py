@@ -22,7 +22,6 @@ def _install(
         context.store,
         context.schemas,
         context.artifacts,
-        context.capabilities.memory,
     )
     return InstalledDomainBundle(
         adapters=(adapter,),

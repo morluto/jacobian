@@ -15,7 +15,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.harbor_suite import HarborSuiteError
+from benchmarks.tooling.errors import HarborSuiteError
 from jacobian.eval.telemetry import parse_reasoning_protocol_trace
 
 

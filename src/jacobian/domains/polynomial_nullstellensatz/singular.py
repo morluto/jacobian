@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import re
 import time
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import (
-    BoundedProcessResult,
-    ProcessResourceLimits,
-    run_bounded_process,
-)
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
@@ -52,9 +47,17 @@ from jacobian.domains.polynomial_nullstellensatz.system import (
 )
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessResourceLimits,
+    ProcessResult,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.schema_registry import model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 from jacobian.storage.models import StoredArtifact
+from jacobian.worker_environment import worker_environment
 
 PRODUCE_CAPABILITY_ID = "polynomial.nullstellensatz.infeasibility_certificate.compute"
 _INTEGER_OR_RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$")
@@ -264,22 +267,27 @@ def _within_declared_budget(
 
 
 def _process_failure(
-    completed: BoundedProcessResult,
+    completed: ProcessResult,
 ) -> tuple[ExecutionStatus, CapabilityDiagnostic] | None:
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return ExecutionStatus.TIMEOUT, _diagnostic(
             "SINGULAR_TIMEOUT",
             "Singular did not complete within the declared wall budget.",
         )
-    if completed.cancelled:
+    if completed.termination is ProcessTermination.CANCELLED:
         return ExecutionStatus.CANCELLED, _diagnostic(
             "SINGULAR_CANCELLED",
             "Singular was cancelled before a complete certificate was available.",
         )
-    if completed.stdout_exceeded or completed.stderr_exceeded:
+    if completed.termination is ProcessTermination.OUTPUT_LIMIT_EXCEEDED:
         return ExecutionStatus.ERROR, _diagnostic(
             "SINGULAR_OUTPUT_LIMIT_EXCEEDED",
             "Singular exceeded the bounded output protocol.",
+        )
+    if completed.termination is ProcessTermination.START_FAILED:
+        return ExecutionStatus.ERROR, _diagnostic(
+            "SINGULAR_START_FAILED",
+            "The bounded Singular process could not start.",
         )
     if completed.returncode != 0:
         return ExecutionStatus.ERROR, _diagnostic(
@@ -427,20 +435,24 @@ class SingularNullstellensatzCertificateAdapter:
     def _run_singular(
         executable: str,
         request: NullstellensatzCertificateRequest,
-    ) -> BoundedProcessResult:
+    ) -> ProcessResult:
         budget = request.resource_budget
-        return run_bounded_process(
-            [executable, "-q"],
-            input_bytes=_singular_script(),
-            timeout_seconds=float(budget.wall_seconds),
-            environment={**os.environ, "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
-            stdout_limit=budget.maximum_output_bytes,
-            stderr_limit=_STDERR_LIMIT,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=budget.wall_seconds + 1,
-                address_space_bytes=2 * 1024 * 1024 * 1024,
-                file_size_bytes=budget.maximum_output_bytes,
-            ),
+        return execute_process(
+            ProcessRequest(
+                executable=executable,
+                arguments=("-q",),
+                environment=worker_environment(locale="C"),
+                cwd=str(Path.cwd()),
+                timeout_seconds=float(budget.wall_seconds),
+                stdin_bytes=_singular_script(),
+                stdout_limit_bytes=budget.maximum_output_bytes,
+                stderr_limit_bytes=_STDERR_LIMIT,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=budget.wall_seconds + 1,
+                    address_space_bytes=2 * 1024 * 1024 * 1024,
+                    file_size_bytes=budget.maximum_output_bytes,
+                ),
+            )
         )
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
@@ -457,18 +469,7 @@ class SingularNullstellensatzCertificateAdapter:
                 ),
                 started,
             )
-        try:
-            completed = self._run_singular(executable, validated)
-        except OSError:
-            return self._failure(
-                request,
-                ExecutionStatus.ERROR,
-                _diagnostic(
-                    "SINGULAR_START_FAILED",
-                    "The bounded Singular process could not start.",
-                ),
-                started,
-            )
+        completed = self._run_singular(executable, validated)
         failure = _process_failure(completed)
         if failure is not None:
             status, diagnostic = failure

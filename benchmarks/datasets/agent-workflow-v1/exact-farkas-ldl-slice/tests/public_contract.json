@@ -1,0 +1,431 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "LOCAL_SLICE_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/farkas-slice-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "REMAINING_31X31_BLOCK_ENTRIES_AND_FIVE_BLOCKS_NOT_CHECKED",
+      "FULL_FARKAS_AND_LEAN_THEOREM_NOT_ESTABLISHED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/farkas-slice-certificate.json"
+  ],
+  "schema_definitions": {
+    "certificate": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "d": {
+              "items": {
+                "$ref": "#/$defs/rat"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "l": {
+              "$ref": "#/$defs/matrix4"
+            }
+          },
+          "required": [
+            "l",
+            "d"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "leading_principal_determinants": {
+              "items": {
+                "$ref": "#/$defs/rat"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            }
+          },
+          "required": [
+            "leading_principal_determinants"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "evidence_envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "const": [
+            "REMAINING_31X31_BLOCK_ENTRIES_AND_FIVE_BLOCKS_NOT_CHECKED",
+            "FULL_FARKAS_AND_LEAN_THEOREM_NOT_ESTABLISHED"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/result"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/exact-farkas-ldl-slice"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "matrix4": {
+      "items": {
+        "$ref": "#/$defs/row4"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "positive_definite_certificate": {
+          "$ref": "#/$defs/certificate"
+        },
+        "proof_mode": {
+          "enum": [
+            "LDL",
+            "SYLVESTER"
+          ]
+        },
+        "scalar_replay": {
+          "$ref": "#/$defs/scalar"
+        }
+      },
+      "required": [
+        "proof_mode",
+        "scalar_replay",
+        "positive_definite_certificate"
+      ],
+      "type": "object"
+    },
+    "row4": {
+      "items": {
+        "$ref": "#/$defs/rat"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "scalar": {
+      "additionalProperties": false,
+      "properties": {
+        "c00_y": {
+          "$ref": "#/$defs/rat"
+        },
+        "m00": {
+          "$ref": "#/$defs/rat"
+        },
+        "objective": {
+          "$ref": "#/$defs/rat"
+        },
+        "y0": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "y0",
+        "c00_y",
+        "m00",
+        "objective"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "SCALAR_SIGNS_AND_ONE_4X4_PRINCIPAL_SUBMATRIX_ONLY",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "certificate": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "d": {
+                "items": {
+                  "$ref": "#/$defs/rat"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+              },
+              "l": {
+                "$ref": "#/$defs/matrix4"
+              }
+            },
+            "required": [
+              "l",
+              "d"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "leading_principal_determinants": {
+                "items": {
+                  "$ref": "#/$defs/rat"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+              }
+            },
+            "required": [
+              "leading_principal_determinants"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "evidence_envelope": {
+        "additionalProperties": false,
+        "properties": {
+          "limitations": {
+            "const": [
+              "REMAINING_31X31_BLOCK_ENTRIES_AND_FIVE_BLOCKS_NOT_CHECKED",
+              "FULL_FARKAS_AND_LEAN_THEOREM_NOT_ESTABLISHED"
+            ]
+          },
+          "result": {
+            "$ref": "#/$defs/result"
+          },
+          "schema_version": {
+            "const": "1"
+          },
+          "task_id": {
+            "const": "jacobian/exact-farkas-ldl-slice"
+          }
+        },
+        "required": [
+          "schema_version",
+          "task_id",
+          "result",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "matrix4": {
+        "items": {
+          "$ref": "#/$defs/row4"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array"
+      },
+      "rat": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "positive_definite_certificate": {
+            "$ref": "#/$defs/certificate"
+          },
+          "proof_mode": {
+            "enum": [
+              "LDL",
+              "SYLVESTER"
+            ]
+          },
+          "scalar_replay": {
+            "$ref": "#/$defs/scalar"
+          }
+        },
+        "required": [
+          "proof_mode",
+          "scalar_replay",
+          "positive_definite_certificate"
+        ],
+        "type": "object"
+      },
+      "row4": {
+        "items": {
+          "$ref": "#/$defs/rat"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array"
+      },
+      "scalar": {
+        "additionalProperties": false,
+        "properties": {
+          "c00_y": {
+            "$ref": "#/$defs/rat"
+          },
+          "m00": {
+            "$ref": "#/$defs/rat"
+          },
+          "objective": {
+            "$ref": "#/$defs/rat"
+          },
+          "y0": {
+            "$ref": "#/$defs/rat"
+          }
+        },
+        "required": [
+          "y0",
+          "c00_y",
+          "m00",
+          "objective"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "LOCAL_SLICE_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/farkas-slice-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "REMAINING_31X31_BLOCK_ENTRIES_AND_FIVE_BLOCKS_NOT_CHECKED",
+          "FULL_FARKAS_AND_LEAN_THEOREM_NOT_ESTABLISHED"
+        ]
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "scope": {
+        "const": "SCALAR_SIGNS_AND_ONE_4X4_PRINCIPAL_SUBMATRIX_ONLY",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/exact-farkas-ldl-slice"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/exact-farkas-ldl-slice",
+  "verification_record": null
+}

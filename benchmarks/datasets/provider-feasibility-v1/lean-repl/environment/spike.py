@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import IO, Any
+from typing import Any
+
+from benchmarks.tooling.command_runner import (
+    ToolCommandRequest,
+    ToolCommandStatus,
+    ToolInteractiveCommand,
+    ToolInteractiveRequest,
+    run_tool_command,
+)
 
 TASKS: tuple[dict[str, Any], ...] = (
     {
@@ -24,39 +31,39 @@ TASKS: tuple[dict[str, Any], ...] = (
         "expected_first_goal_count": 0,
     },
 )
+_LEAN_BIN = "/opt/provider/lean-4.31.0-linux/bin"
+_GIT_EXECUTABLE = "/usr/bin/git"
+_REPL_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "PATH": _LEAN_BIN,
+}
+_GIT_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "PATH": "/usr/bin:/bin",
+}
 
 
 class ReplSpikeError(RuntimeError):
     """The pinned checkout or REPL protocol did not match the spike contract."""
 
 
-def _read_response(stdout: IO[str]) -> dict[str, Any]:
-    lines: list[str] = []
-    while True:
-        line = stdout.readline()
-        if line == "":
-            raise ReplSpikeError("Lean REPL closed before returning a response")
-        if not line.strip():
-            if lines:
-                break
-            continue
-        lines.append(line)
-    payload = json.loads("".join(lines))
-    if not isinstance(payload, dict):
-        raise ReplSpikeError("Lean REPL response must be a JSON object")
-    return payload
-
-
 def _exchange(
-    process: subprocess.Popen[str],
+    process: ToolInteractiveCommand,
     request: Mapping[str, object],
 ) -> tuple[dict[str, Any], float]:
-    if process.stdin is None or process.stdout is None:
-        raise ReplSpikeError("Lean REPL pipes are unavailable")
     started = time.monotonic()
-    process.stdin.write(json.dumps(request, sort_keys=True) + "\n\n")
-    process.stdin.flush()
-    response = _read_response(process.stdout)
+    process.send(json.dumps(request, sort_keys=True))
+    response_text = process.read_response()
+    try:
+        response = json.loads(response_text)
+    except json.JSONDecodeError as exc:
+        raise ReplSpikeError("Lean REPL response is not valid JSON") from exc
+    if not isinstance(response, dict):
+        raise ReplSpikeError("Lean REPL response must be a JSON object")
     return response, time.monotonic() - started
 
 
@@ -77,19 +84,24 @@ def _response_errors(response: Mapping[str, Any]) -> list[str]:
 
 def run_tasks(repl: Path) -> dict[str, Any]:
     started = time.monotonic()
-    process = subprocess.Popen(
-        [str(repl)],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
+    request = ToolInteractiveRequest(
+        executable=str(repl),
+        environment=_REPL_ENVIRONMENT,
+        cwd=str(Path.cwd()),
+        startup_timeout_seconds=30.0,
+        read_timeout_seconds=30.0,
+        shutdown_timeout_seconds=5.0,
     )
+    command = ToolInteractiveCommand(request)
+    try:
+        command.start()
+    except OSError as exc:
+        raise ReplSpikeError("The Lean REPL could not be launched") from exc
     task_results: list[dict[str, Any]] = []
     try:
         for task in TASKS:
             command_response, command_seconds = _exchange(
-                process,
+                command,
                 {"cmd": task["command"]},
             )
             command_errors = _response_errors(command_response)
@@ -110,7 +122,7 @@ def run_tasks(repl: Path) -> dict[str, Any]:
             traces: list[dict[str, Any]] = []
             for tactic in task["tactics"]:
                 response, elapsed = _exchange(
-                    process,
+                    command,
                     {"tactic": tactic, "proofState": proof_state},
                 )
                 response_errors = _response_errors(response)
@@ -146,14 +158,8 @@ def run_tasks(repl: Path) -> dict[str, Any]:
                 }
             )
     finally:
-        if process.stdin is not None:
-            process.stdin.close()
-        try:
-            return_code = process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.terminate()
-            return_code = process.wait(timeout=5)
-    stderr = process.stderr.read() if process.stderr is not None else ""
+        return_code = command.close()
+    stderr = command.stderr.decode("utf-8", "replace")
     return {
         "protocol": "leanprover-community/repl",
         "task_count": len(task_results),
@@ -176,13 +182,20 @@ def run_tasks(repl: Path) -> dict[str, Any]:
 
 
 def _verify_pin(checkout: Path, pin: Mapping[str, object]) -> None:
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=checkout,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    request = ToolCommandRequest(
+        executable=_GIT_EXECUTABLE,
+        arguments=("rev-parse", "HEAD"),
+        environment=_GIT_ENVIRONMENT,
+        cwd=str(checkout.resolve(strict=True)),
+        timeout_seconds=10.0,
+        stdin_bytes=b"",
+        stdout_limit_bytes=256,
+        stderr_limit_bytes=256,
+    )
+    result = run_tool_command(request)
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        raise ReplSpikeError("git rev-parse failed inside the pinned checkout")
+    commit = result.stdout.decode("utf-8", "replace").strip()
     if commit != pin.get("commit"):
         raise ReplSpikeError(f"checkout commit {commit} differs from frozen pin")
 

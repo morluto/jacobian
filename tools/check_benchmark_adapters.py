@@ -73,8 +73,7 @@ def _evidence_failures(
             continue
         if output.get(field) != _sha256(evidence_path):
             failures.append(
-                f"{_display(lock_path)}: {field} mismatch for "
-                f"{_display(evidence_path)}"
+                f"{_display(lock_path)}: {field} mismatch for {_display(evidence_path)}"
             )
     return failures
 
@@ -108,22 +107,14 @@ def _semantic_failures(
                     f"{_display(lock_path)}: duplicate output {pair[0]}/{pair[1]}"
                 )
             pairs.add(pair)
-            task_path = (
-                ROOT
-                / "benchmarks"
-                / "datasets"
-                / pair[0]
-                / pair[1]
-            )
+            task_path = ROOT / "benchmarks" / "datasets" / pair[0] / pair[1]
             if not task_path.is_dir() or not (task_path / "task.toml").is_file():
                 failures.append(
                     f"{_display(lock_path)}: adapter output task is missing: "
                     f"{pair[0]}/{pair[1]}"
                 )
                 continue
-            actual_digest = "sha256:" + task_digest(task_path).removeprefix(
-                "sha256:"
-            )
+            actual_digest = "sha256:" + task_digest(task_path).removeprefix("sha256:")
             if output.get("task_digest") != actual_digest:
                 failures.append(
                     f"{_display(lock_path)}: task digest mismatch for "

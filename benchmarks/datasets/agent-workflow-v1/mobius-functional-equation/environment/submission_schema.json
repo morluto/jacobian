@@ -1,17 +1,165 @@
 {
-  "$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,
-  "required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],
-  "properties":{
-    "task_id":{"const":"jacobian/mobius-functional-equation"},"conclusion":{"enum":["UNIQUE_SOLUTION_CERTIFIED","INSUFFICIENT_EVIDENCE"]},
-    "result":{"$ref":"#/$defs/result"},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},
-    "scope":{"const":"FROZEN_DOMAIN_AND_MOBIUS_ORBIT_CERTIFICATE"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},
-    "evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/functional-equation-certificate.json"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},
-    "limitations":{"const":["REAL_FUNCTION_EXTENT_FROM_THREE_CYCLE_COVERAGE_TRUSTED"]}
+  "$defs": {
+    "matrix": {
+      "items": {
+        "items": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "poly": {
+      "items": {
+        "maximum": 100,
+        "minimum": -100,
+        "type": "integer"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array"
+    },
+    "ratfun": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "$ref": "#/$defs/poly"
+        },
+        "numerator": {
+          "$ref": "#/$defs/poly"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient_matrix": {
+          "$ref": "#/$defs/matrix"
+        },
+        "matrix_determinant": {
+          "const": 2
+        },
+        "orbit": {
+          "items": {
+            "$ref": "#/$defs/ratfun"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "right_hand_sides": {
+          "items": {
+            "$ref": "#/$defs/ratfun"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "solution_at_x": {
+          "$ref": "#/$defs/ratfun"
+        },
+        "solution_values": {
+          "items": {
+            "$ref": "#/$defs/ratfun"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "orbit",
+        "right_hand_sides",
+        "solution_values",
+        "coefficient_matrix",
+        "matrix_determinant",
+        "solution_at_x"
+      ],
+      "type": "object"
+    }
   },
-  "$defs":{
-    "poly":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"integer","minimum":-100,"maximum":100}},
-    "ratfun":{"type":"object","additionalProperties":false,"required":["numerator","denominator"],"properties":{"numerator":{"$ref":"#/$defs/poly"},"denominator":{"$ref":"#/$defs/poly"}}},
-    "matrix":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer","minimum":0,"maximum":1}}},
-    "result":{"type":"object","additionalProperties":false,"required":["orbit","right_hand_sides","solution_values","coefficient_matrix","matrix_determinant","solution_at_x"],"properties":{"orbit":{"type":"array","minItems":3,"maxItems":3,"items":{"$ref":"#/$defs/ratfun"}},"right_hand_sides":{"type":"array","minItems":3,"maxItems":3,"items":{"$ref":"#/$defs/ratfun"}},"solution_values":{"type":"array","minItems":3,"maxItems":3,"items":{"$ref":"#/$defs/ratfun"}},"coefficient_matrix":{"$ref":"#/$defs/matrix"},"matrix_determinant":{"const":2},"solution_at_x":{"$ref":"#/$defs/ratfun"}}}
-  }
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "UNIQUE_SOLUTION_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/functional-equation-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "REAL_FUNCTION_EXTENT_FROM_THREE_CYCLE_COVERAGE_TRUSTED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "FROZEN_DOMAIN_AND_MOBIUS_ORBIT_CERTIFICATE",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/mobius-functional-equation"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

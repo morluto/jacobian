@@ -9,10 +9,9 @@ from pathlib import Path
 
 import pytest
 from mcp.server.extension import Extension, ResourceBinding, ToolBinding
-from tests.support.mcp import create_legacy_server as create_server
 
 from jacobian.adapters.mcp.constants import ReasoningLogMode
-from jacobian.adapters.mcp.server import JacobianCoreExtension
+from jacobian.adapters.mcp.server import JacobianCoreExtension, create_server
 from jacobian.contracts.capabilities import CapabilityResult
 
 
@@ -83,10 +82,6 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert result.structured_content == CapabilityResult.model_validate(
                 result.structured_content
             ).model_dump(mode="json")
-            episode_uri = result.structured_content["episode_uri"]
-            assert isinstance(episode_uri, str)
-            resource = await client.read_resource(episode_uri)
-            assert json.loads(resource.contents[0].text)["artifact_uri"] == episode_uri
 
             with pytest.raises(MCPError):
                 await client.read_resource("artifact://sha256/" + "f" * 64)

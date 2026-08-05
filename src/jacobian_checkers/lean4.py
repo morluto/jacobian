@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.worker_environment import worker_environment
+
+_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 LEAN_VERSION = "4.31.0"
 LEAN_COMMIT = "68218e876d2a38b1985b8590fff244a83c321783"
@@ -46,6 +54,15 @@ _INTERNAL_LABEL = re.compile(
         \s*(?:=|:)\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)""",
     re.IGNORECASE | re.VERBOSE,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _LeanRunResult:
+    """Decoded output from one bounded Lean compiler invocation."""
+
+    stdout: str
+    stderr: str
+    returncode: int
 
 
 class _LeanSetupError(RuntimeError):
@@ -126,7 +143,27 @@ def _source(statement: str, proof: str, import_name: str | None) -> str:
     return "\n".join(lines)
 
 
+def _authorized_lean_runtime() -> Path:
+    executable = os.environ.get("JACOBIAN_CHECKER_EXECUTABLE")
+    expected_digest = os.environ.get("JACOBIAN_CHECKER_RUNTIME_DIGEST")
+    if (
+        executable is None
+        or expected_digest is None
+        or _DIGEST.fullmatch(expected_digest) is None
+    ):
+        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean runtime is not authorized")
+    path = Path(executable).resolve(strict=True)
+    if str(path) != executable or not path.is_file() or path.is_symlink():
+        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean runtime path is not exact")
+    actual_digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual_digest != expected_digest:
+        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean runtime digest changed")
+    return path
+
+
 def _lean_command(name: str) -> tuple[str, ...]:
+    if name == "lean" and os.environ.get("JACOBIAN_CHECKER_EXECUTABLE") is not None:
+        return (str(_authorized_lean_runtime()),)
     elan = shutil.which("elan")
     if elan is not None:
         return (elan, "run", LEAN_TOOLCHAIN, name)
@@ -150,31 +187,51 @@ def _validate_lean(
     if elan_home is not None:
         overrides["ELAN_HOME"] = elan_home
     probe_environment = worker_environment(overrides=overrides)
+    probe_cwd = str(cwd) if cwd is not None else str(Path.cwd())
     try:
-        version = subprocess.run(
-            [*command, "-V"],
-            cwd=cwd,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=probe_environment,
-            timeout=_TOOLCHAIN_PROBE_TIMEOUT_SECONDS,
-        ).stdout.strip()
-        commit = subprocess.run(
-            [*command, "-g"],
-            cwd=cwd,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=probe_environment,
-            timeout=_TOOLCHAIN_PROBE_TIMEOUT_SECONDS,
-        ).stdout.strip()
-    except subprocess.SubprocessError as exc:
+        version_result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=(*command[1:], "-V"),
+                environment=probe_environment,
+                cwd=probe_cwd,
+                timeout_seconds=float(_TOOLCHAIN_PROBE_TIMEOUT_SECONDS),
+                stdin_bytes=b"",
+                stdout_limit_bytes=4096,
+                stderr_limit_bytes=4096,
+            )
+        )
+        commit_result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=(*command[1:], "-g"),
+                environment=probe_environment,
+                cwd=probe_cwd,
+                timeout_seconds=float(_TOOLCHAIN_PROBE_TIMEOUT_SECONDS),
+                stdin_bytes=b"",
+                stdout_limit_bytes=4096,
+                stderr_limit_bytes=4096,
+            )
+        )
+    except OSError as exc:
         raise _LeanSetupError(
             f"TOOLCHAIN_PROBE: The pinned Lean {LEAN_VERSION} toolchain is "
             "unavailable. Install "
             f"it with `elan toolchain install {LEAN_TOOLCHAIN}`, then retry."
         ) from exc
+    if (
+        version_result.termination is not ProcessTermination.EXITED
+        or commit_result.termination is not ProcessTermination.EXITED
+        or version_result.returncode != 0
+        or commit_result.returncode != 0
+    ):
+        raise _LeanSetupError(
+            f"TOOLCHAIN_PROBE: The pinned Lean {LEAN_VERSION} toolchain is "
+            "unavailable. Install "
+            f"it with `elan toolchain install {LEAN_TOOLCHAIN}`, then retry."
+        )
+    version = version_result.stdout.decode("utf-8", errors="replace").strip()
+    commit = commit_result.stdout.decode("utf-8", errors="replace").strip()
     if version != LEAN_VERSION or commit != LEAN_COMMIT:
         raise _LeanSetupError(
             f"TOOLCHAIN_PROBE: The installed Lean toolchain does not match "
@@ -209,31 +266,53 @@ def _validate_package_checkout(
         raise RuntimeError("the mathlib manifest contains an invalid package")
     checkout = packages_directory / name
     git_environment = worker_environment(locale="C")
-    actual_revision = subprocess.run(
-        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_environment,
-        timeout=5,
-    ).stdout.strip()
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        raise RuntimeError("git is unavailable for package checkout validation")
+    rev_result = execute_process(
+        ProcessRequest(
+            executable=git_executable,
+            arguments=("-C", str(checkout), "rev-parse", "HEAD"),
+            environment=git_environment,
+            cwd=str(checkout),
+            timeout_seconds=5.0,
+            stdin_bytes=b"",
+            stdout_limit_bytes=4096,
+            stderr_limit_bytes=4096,
+        )
+    )
+    if (
+        rev_result.termination is not ProcessTermination.EXITED
+        or rev_result.returncode != 0
+    ):
+        raise RuntimeError(f"the installed {name} commit could not be verified")
+    actual_revision = rev_result.stdout.decode("utf-8", errors="replace").strip()
     if actual_revision != revision:
         raise RuntimeError(f"the installed {name} commit is not authorized")
-    tracked_changes = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(checkout),
-            "status",
-            "--porcelain",
-            "--untracked-files=no",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_environment,
-        timeout=5,
-    ).stdout.strip()
+    status_result = execute_process(
+        ProcessRequest(
+            executable=git_executable,
+            arguments=(
+                "-C",
+                str(checkout),
+                "status",
+                "--porcelain",
+                "--untracked-files=no",
+            ),
+            environment=git_environment,
+            cwd=str(checkout),
+            timeout_seconds=5.0,
+            stdin_bytes=b"",
+            stdout_limit_bytes=4096,
+            stderr_limit_bytes=4096,
+        )
+    )
+    if (
+        status_result.termination is not ProcessTermination.EXITED
+        or status_result.returncode != 0
+    ):
+        raise RuntimeError(f"the installed {name} source could not be checked")
+    tracked_changes = status_result.stdout.decode("utf-8", errors="replace").strip()
     if tracked_changes:
         raise RuntimeError(f"the installed {name} source has tracked modifications")
 
@@ -279,7 +358,7 @@ def _mathlib_runtime() -> Path:
             )
         try:
             _validate_package_checkout(packages_directory, package)
-        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        except (OSError, RuntimeError) as exc:
             raise _LeanSetupError(
                 "MATHLIB_MANIFEST: a pinned mathlib package checkout failed "
                 "integrity validation"
@@ -302,29 +381,35 @@ def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
     if len(command) == 1:
         executable = Path(command[0])
     else:
-        environment = {
-            "ELAN_TOOLCHAIN": LEAN_TOOLCHAIN,
-            **({"PATH": os.environ["PATH"]} if "PATH" in os.environ else {}),
-            **({"HOME": os.environ["HOME"]} if "HOME" in os.environ else {}),
-            **(
-                {"ELAN_HOME": os.environ["ELAN_HOME"]}
-                if "ELAN_HOME" in os.environ
-                else {}
-            ),
-        }
+        environment = worker_environment(
+            extra_variables=("PATH", "HOME", "ELAN_HOME"),
+            overrides={"ELAN_TOOLCHAIN": LEAN_TOOLCHAIN},
+        )
         try:
-            resolved = subprocess.run(
-                [command[0], "which", "lean"],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=5,
-                env=environment,
-            ).stdout.strip()
-        except subprocess.SubprocessError as exc:
+            which_result = execute_process(
+                ProcessRequest(
+                    executable=command[0],
+                    arguments=(*command[1:], "which", "lean"),
+                    environment=environment,
+                    cwd=str(Path.cwd()),
+                    timeout_seconds=5.0,
+                    stdin_bytes=b"",
+                    stdout_limit_bytes=4096,
+                    stderr_limit_bytes=4096,
+                )
+            )
+        except OSError as exc:
             raise _LeanSetupError(
                 f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
             ) from exc
+        if (
+            which_result.termination is not ProcessTermination.EXITED
+            or which_result.returncode != 0
+        ):
+            raise _LeanSetupError(
+                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+            )
+        resolved = which_result.stdout.decode("utf-8", errors="replace").strip()
         executable = Path(resolved)
     if not executable.is_file():
         raise _LeanSetupError(
@@ -338,7 +423,7 @@ def _run_lean(
     source: str,
     *,
     environment_name: str,
-) -> subprocess.CompletedProcess[str]:
+) -> _LeanRunResult:
     if environment_name == "CORE":
         command = list(_lean_command("lean"))
         _validate_lean(tuple(command))
@@ -360,22 +445,23 @@ def _run_lean(
     else:
         raise ValueError("unknown Lean environment")
     elan_home = _elan_home(tuple(command))
-    process_environment = {
-        "HOME": runtime_home,
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "PATH": (
-            os.environ.get("PATH", str(Path(command[0]).parent))
-            if environment_name == "MATHLIB"
-            else str(Path(command[0]).parent)
-        ),
-        **({"ELAN_HOME": elan_home} if elan_home is not None else {}),
-    }
+    process_environment = worker_environment(
+        overrides={
+            "HOME": runtime_home,
+            "PATH": (
+                os.environ.get("PATH", str(Path(command[0]).parent))
+                if environment_name == "MATHLIB"
+                else str(Path(command[0]).parent)
+            ),
+            **({"ELAN_HOME": elan_home} if elan_home is not None else {}),
+        },
+    )
     with cwd_context:
-        try:
-            return subprocess.run(
-                [
-                    *command,
+        result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=(
+                    *command[1:],
                     "--stdin",
                     "-t",
                     "0",
@@ -386,25 +472,30 @@ def _run_lean(
                     "-j",
                     "1",
                     "--trust=0",
-                ],
-                cwd=cwd,
-                env=process_environment,
-                input=source,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
+                ),
+                environment=process_environment,
+                cwd=str(cwd),
+                timeout_seconds=float(timeout_seconds),
+                stdin_bytes=source.encode("utf-8"),
+                stdout_limit_bytes=64 * 1024,
+                stderr_limit_bytes=64 * 1024,
             )
-        except subprocess.TimeoutExpired as exc:
-            stage = (
-                "LEAN_COMPILE_TIMEOUT"
-                if environment_name == "MATHLIB"
-                else "LEAN_CORE_TIMEOUT"
-            )
-            raise _LeanSetupError(
-                f"{stage}: Lean exceeded its {timeout_seconds}-second compile "
-                "budget; no proof conclusion follows"
-            ) from exc
+        )
+    if result.termination is ProcessTermination.TIMED_OUT:
+        stage = (
+            "LEAN_COMPILE_TIMEOUT"
+            if environment_name == "MATHLIB"
+            else "LEAN_CORE_TIMEOUT"
+        )
+        raise _LeanSetupError(
+            f"{stage}: Lean exceeded its {timeout_seconds}-second compile "
+            "budget; no proof conclusion follows"
+        )
+    return _LeanRunResult(
+        stdout=result.stdout.decode("utf-8", errors="replace"),
+        stderr=result.stderr.decode("utf-8", errors="replace"),
+        returncode=result.returncode if result.returncode is not None else -1,
+    )
 
 
 def _reported_axioms(diagnostics: str) -> frozenset[str]:
@@ -505,7 +596,7 @@ def check_kernel_certificate(request: dict[str, Any]) -> dict[str, Any]:
         )
     except _LeanSetupError as exc:
         return _reject(str(exc))
-    except (OSError, subprocess.SubprocessError):
+    except OSError:
         return _reject(
             f"Lean {LEAN_VERSION} could not run locally. Confirm the pinned "
             f"toolchain with `elan run {LEAN_TOOLCHAIN} lean -V`, then retry."

@@ -309,7 +309,6 @@ class ReasoningLogService:
                     "completeness": None,
                     "scope_digest": None,
                     "artifact_uris": [],
-                    "episode_uri": None,
                     "diagnostic_codes": list(diagnostic_codes),
                 }
             else:
@@ -328,7 +327,6 @@ class ReasoningLogService:
                     if result.scope is not None
                     else None,
                     "artifact_uris": list(result.artifact_uris),
-                    "episode_uri": result.episode_uri,
                     "diagnostic_codes": [item.code for item in result.diagnostics],
                 }
             self._append_event(connection, run_id, "CAPABILITY_FINISHED", payload)
@@ -370,7 +368,6 @@ class ReasoningLogService:
                 "completeness": None,
                 "scope_digest": None,
                 "artifact_uris": [],
-                "episode_uri": None,
                 "diagnostic_codes": ["PROCESS_INTERRUPTED"],
             },
         )

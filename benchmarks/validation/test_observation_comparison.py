@@ -1,4 +1,4 @@
-"""Tests for observation comparison behavior (preserved v2 public contract)."""
+"""Tests for observation comparison behavior."""
 
 from __future__ import annotations
 

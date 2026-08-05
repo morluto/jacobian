@@ -391,7 +391,9 @@ def main() -> None:
     )
     source = _source()
     result = data.get("result")
-    correct = bool(contract and _witness(result, source))
+    # Protocol and evidence defects must not erase an independently valid
+    # mathematical witness from the correctness diagnostic.
+    correct = bool(_witness(result, source))
     evidence = bool(correct and _evidence(data.get("evidence"), result))
     declared_scope = data.get("scope")
     folded_scope = declared_scope.casefold() if isinstance(declared_scope, str) else ""

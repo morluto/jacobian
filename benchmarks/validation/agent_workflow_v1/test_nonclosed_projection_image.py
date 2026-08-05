@@ -195,7 +195,7 @@ def test_nonclosed_projection_rejects_token_only_evidence(tmp_path: Path) -> Non
             label="token_only",
         )
     )
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0
 
@@ -213,7 +213,7 @@ def test_nonclosed_projection_rejects_missing_proof_obligation(
             label="missing_obligation",
         )
     )
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0
 
@@ -231,7 +231,7 @@ def test_nonclosed_projection_rejects_keyword_only_proof_argument(
             label="keyword_only",
         )
     )
-    assert result["correctness"] == 1.0
+    assert result["correctness"] == 0.0
     assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0
 

@@ -190,16 +190,23 @@ DIGEST_PREFIX = "sha256:"
 
 
 def task_digest(task_dir: Path) -> str:
-    """Return the repository task identity, including compose-context files.
+    """Return Harbor's native checksum augmented with compose-context files.
 
     The import is intentionally lazy: registry and topology checks remain
-    usable without Harbor. When a task widens its
-    compose build context beyond the task directory, the external files
-    (central runner, ``.dockerignore``) are folded into the digest so stale
-    snapshots fail.
+    usable without Harbor, while every digest caller gets the same Task model
+    and therefore the same checksum semantics. When a task widens its compose
+    build context beyond the task directory, the external files (central
+    runner, ``.dockerignore``) are folded into the digest so stale snapshots
+    fail.
     """
 
-    native = durable_task_digest(task_dir)
+    try:
+        from harbor.models.task.task import Task
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise HarborDigestError(
+            "Harbor is required to compute task digests; use the pinned Harbor runner"
+        ) from exc
+    native = str(Task(task_dir, disable_verification=True).checksum)
     supplement = compose_context_supplement(task_dir)
     if supplement is None:
         return native

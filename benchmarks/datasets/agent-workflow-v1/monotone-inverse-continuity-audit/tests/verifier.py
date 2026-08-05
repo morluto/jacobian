@@ -79,6 +79,22 @@ def _valid_countermodel(result, source):
     )
 
 
+def _contradicts_inverse_failure(text):
+    contradiction = re.compile(
+        r"\b(?:(?:(?:do(?:es)?|did|will|would|can|could|should|must)\s+not|cannot)\s+"
+        r"fail(?:s|ed|ing)?|(?:doesn|don|didn|won|wouldn|can|couldn|shouldn|mustn)"
+        r"['’]?t\s+fail(?:s|ed|ing)?|succeeds?|works?)\b"
+    )
+    for sentence in re.split(r"[.!?;]+", text):
+        if re.search(r"\binverse\b", sentence) is None:
+            continue
+        for match in contradiction.finditer(sentence):
+            context = sentence[max(0, match.start() - 48) : match.end() + 48]
+            if re.search(r"\b(?:branch(?:es)?|pieces?)\b", context) is None:
+                return True
+    return False
+
+
 def _evidence_matches_result(submission):
     """Bind evidence content to the submitted countermodel.
 
@@ -109,9 +125,21 @@ def _evidence_matches_result(submission):
         if line.strip() and not line.startswith("RESULT_JSON:")
     ]
     normalized = " ".join(prose).casefold()
+    branch_subject = re.search(
+        r"\b(?:(?:both|each)\s+(?:affine\s+)?(?:branch(?:es)?|pieces?)|"
+        r"(?:the\s+)?left\s+and\s+right\s+(?:affine\s+)?(?:branch(?:es)?|pieces?))\b",
+        normalized,
+    )
+    positive_slopes = re.search(
+        r"\b(?:slopes?\b[^.!?;\n]{0,32}\b(?:are|is|remain|remains|stay|stays)\s+"
+        r"(?:strictly\s+)?positive|(?:their|the|both)\s+(?:strictly\s+)?positive\s+"
+        r"slopes?)\b",
+        normalized,
+    )
     branches_are_increasing = bool(
-        re.search(r"\b(?:both|each)\s+branches?\b", normalized)
+        branch_subject
         and re.search(r"\bstrictly\s+(?:increas(?:e|es|ing|ed)|monotone)\b", normalized)
+        and positive_slopes
     )
     positive_jump_is_explained = bool(
         re.search(r"\b(?:positive|upward|strictly positive|nonzero)\b", normalized)
@@ -126,7 +154,8 @@ def _evidence_matches_result(submission):
         and re.search(r"\b(?:between|endpoint|full interval|no preimage)\b", normalized)
     )
     inverse_failure_is_explained = bool(
-        re.search(r"\b(?:inverse|preimage)\b", normalized)
+        not _contradicts_inverse_failure(normalized)
+        and re.search(r"\b(?:inverse|preimage)\b", normalized)
         and re.search(r"\b(?:no|not|fail(?:s|ure)?|without|omits?)\b", normalized)
     )
     if not all(

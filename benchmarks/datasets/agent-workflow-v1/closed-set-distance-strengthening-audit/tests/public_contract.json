@@ -19,7 +19,7 @@
     "payload_shape": null
   },
   "required_artifact_filenames": ["evidence/distance-audit.json"],
-  "public_notes": "This public answer-visible reproduction checks the semantic result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence JSON object has exactly schema_version, task_id, result, and limitations; limitations must include the published limitation below.",
+  "public_notes": "This public answer-visible reproduction checks the semantic result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence JSON object has exactly schema_version (the string \"1\"), task_id, result, and limitations; limitations must include the published limitation below.",
   "limitations": {
     "const": [
       "The verifier replays exact rational instances and trusts the standard theorem that locally finite Euclidean subsets are closed; it does not machine-prove the universal topological argument."

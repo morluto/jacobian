@@ -7,7 +7,6 @@ from typing import Any
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     _public_submission_is_valid,
-    evidence_list_is_bound,
     false_verified_claim,
     is_regular_bounded_file,
     resolve_evidence,
@@ -70,7 +69,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     }
     if (
         not isinstance(value, dict)
-        or set(value) != fields
+        or not fields.issubset(value)
         or frozen.get("human_score") != 0
     ):
         return False
@@ -109,12 +108,60 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object, result: object) -> bool:
-    if (
-        not evidence_list_is_bound(value, expected_path="evidence/answer.txt")
-        or not isinstance(value, list)
-        or len(value) != 1
+def _result_protocol_valid(value: object) -> bool:
+    fields = {
+        "k",
+        "c",
+        "p",
+        "q",
+        "center",
+        "radius",
+        "circle_coefficients",
+        "distance_coefficients",
+        "multiplier",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        return False
+    if not all(
+        _q(value[name]) is not None
+        for name in fields - {"circle_coefficients", "distance_coefficients"}
     ):
+        return False
+    return all(
+        isinstance(value[name], list)
+        and len(value[name]) == 4
+        and all(_q(item) is not None for item in value[name])
+        for name in ("circle_coefficients", "distance_coefficients")
+    )
+
+
+def _stream_matches_certificate(path: Path, expected: list[str]) -> bool:
+    """Compare nonempty stripped lines without materializing the artifact."""
+
+    expected_bytes = tuple(line.encode() for line in expected)
+    max_line_bytes = max(map(len, expected_bytes), default=0) + 2
+    line_index = 0
+    try:
+        with path.open("rb") as stream:
+            while raw := stream.readline(max_line_bytes):
+                if len(raw) == max_line_bytes and not raw.endswith(b"\n"):
+                    return False
+                line = raw.strip()
+                if not line:
+                    continue
+                if (
+                    line_index >= len(expected_bytes)
+                    or line != expected_bytes[line_index]
+                ):
+                    return False
+                line_index += 1
+    except (OSError, UnicodeError):
+        return False
+    return line_index == len(expected_bytes)
+
+
+def _evidence(value: object, result: object) -> bool:
+    if not isinstance(value, list) or len(value) != 1:
         return False
     if not isinstance(result, dict):
         return False
@@ -128,21 +175,18 @@ def _evidence(value: object, result: object) -> bool:
         for items in (circle, distance)
     ) or not isinstance(multiplier, str):
         return False
-    path = resolve_evidence(
-        value[0], expected_path="evidence/answer.txt", max_bytes=4096
-    )
+    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
-    try:
-        lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
-    except (OSError, UnicodeError):
-        return False
-    return lines == [
-        "apollonius-coefficient-certificate-v1",
-        f"multiplier: {multiplier}",
-        "circle_coefficients: " + ",".join(circle),
-        "distance_coefficients: " + ",".join(distance),
-    ]
+    return _stream_matches_certificate(
+        path,
+        [
+            "apollonius-coefficient-certificate-v1",
+            f"multiplier: {multiplier}",
+            "circle_coefficients: " + ",".join(circle),
+            "distance_coefficients: " + ",".join(distance),
+        ],
+    )
 
 
 def main() -> None:
@@ -154,9 +198,14 @@ def main() -> None:
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        min_limitations=1,
         verification_record="forbidden",
     )
-    contract = bool(envelope_contract and _public_submission_is_valid(submission))
+    contract = bool(
+        envelope_contract
+        and _public_submission_is_valid(submission)
+        and _result_protocol_valid(data.get("result"))
+    )
     math_correct = _result(data.get("result"), _load())
     evidence_valid = _evidence(data.get("evidence"), data.get("result"))
     scope_correct = data.get("scope") == expected["required_scope"]

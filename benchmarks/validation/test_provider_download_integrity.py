@@ -3,28 +3,44 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 PROVIDERS = ROOT / "benchmarks" / "datasets" / "provider-feasibility-v1"
 _CURL_OUTPUT = re.compile(r"\bcurl\s+-fsSL\s+\S+\s+-o\s+(\S+)")
 # Split Dockerfile RUN chains into individual commands so that ordering can be
 # checked across logical commands, not just physical lines.
-_COMMAND_SPLIT = re.compile(r"\s*(?:&&|;|\|\|)\s*")
+_COMMAND_SPLIT = re.compile(r"\s*(?P<operator>&&|;|\|\|)\s*")
 
 
 def _logical_commands(contents: str) -> list[str]:
     """Flatten continuation lines and split RUN chains into logical commands."""
 
+    return [command for _, command in _logical_command_sequence(contents)]
+
+
+def _logical_command_sequence(contents: str) -> list[tuple[str | None, str]]:
+    """Return logical commands with the shell operator that precedes each one."""
+
     # Join backslash-continuation lines first.
     joined = re.sub(r"\\\s*\n\s*", " ", contents)
-    commands: list[str] = []
+    commands: list[tuple[str | None, str]] = []
     for line in joined.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        for cmd in _COMMAND_SPLIT.split(stripped):
+        start = 0
+        operator: str | None = None
+        for match in _COMMAND_SPLIT.finditer(stripped):
+            cmd = stripped[start : match.start()].strip()
             cmd = cmd.strip()
             if cmd:
-                commands.append(cmd)
+                commands.append((operator, cmd))
+            operator = match.group("operator")
+            start = match.end()
+        cmd = stripped[start:].strip()
+        if cmd:
+            commands.append((operator, cmd))
     return commands
 
 
@@ -37,10 +53,15 @@ def _target_used_unsafely(contents: str, target: str, verify_text: str) -> bool:
     extraction or execution happens between them.
     """
 
-    commands = _logical_commands(contents)
+    commands = _logical_command_sequence(contents)
     downloaded = False
     verified = False
-    for cmd in commands:
+    for operator, cmd in commands:
+        # A Dockerfile RUN boundary is fail-closed like a successful `&&`
+        # continuation: a failed preceding RUN prevents the next one from
+        # executing. Semicolons and `||` do not establish that guarantee.
+        if operator not in (None, "&&"):
+            verified = False
         if target not in cmd:
             continue
         if re.search(r"\bcurl\s+-fsSL\s+\S+\s+-o\s+" + re.escape(target), cmd):
@@ -48,7 +69,7 @@ def _target_used_unsafely(contents: str, target: str, verify_text: str) -> bool:
             verified = False
             continue  # the download itself; it invalidates prior verification
         if "sha256sum -c -" in cmd:
-            if verify_text in cmd and downloaded:
+            if verify_text in cmd and downloaded and operator in (None, "&&"):
                 verified = True
             continue  # a different target's verification, or a stale file
         if not verified:
@@ -108,3 +129,25 @@ def test_download_verify_use_sequence_is_accepted() -> None:
     )
 
     assert not _target_used_unsafely(safe_sequence, target, verification)
+
+
+@pytest.mark.parametrize(
+    "unsafe_sequence",
+    [
+        (
+            "curl -fsSL https://example.test/pkg.tgz -o /opt/provider/pkg.tgz; "
+            "printf '%s  %s\\n' deadbeef /opt/provider/pkg.tgz | sha256sum -c -; "
+            "tar -xzf /opt/provider/pkg.tgz"
+        ),
+        (
+            "curl -fsSL https://example.test/pkg.tgz -o /opt/provider/pkg.tgz && "
+            "printf '%s  %s\\n' deadbeef /opt/provider/pkg.tgz | sha256sum -c - || "
+            "true && tar -xzf /opt/provider/pkg.tgz"
+        ),
+    ],
+)
+def test_checksum_failure_paths_cannot_reach_use(unsafe_sequence: str) -> None:
+    target = "/opt/provider/pkg.tgz"
+    verification = f"{target} | sha256sum -c -"
+
+    assert _target_used_unsafely(unsafe_sequence, target, verification)

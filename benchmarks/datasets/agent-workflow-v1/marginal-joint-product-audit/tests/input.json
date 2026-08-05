@@ -1,0 +1,22 @@
+{
+  "task_id": "jacobian/marginal-joint-product-audit",
+  "source": {
+    "dataset": "Jiahao004/DeepTheorem",
+    "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8",
+    "split": "train",
+    "row_index": 10044,
+    "source_id": 87356,
+    "license": "MIT",
+    "canonical_row_sha256": "c6b4189cd2c1b08e53a734700f9dd3777743891f8ed64d4df8ed446922438833"
+  },
+  "source_claim": "Marginal convergence in distribution of X_n to X and Y_n to Y, plus independence of each prelimit pair, implies convergence in distribution of X_n Y_n to XY.",
+  "frozen_interpretation": {
+    "prelimit_pairs_independent": true,
+    "limit_pair_independence_assumed": false,
+    "joint_convergence_assumed": false
+  },
+  "support": [-3, -1, 2, 5],
+  "marginal_masses": ["1/10", "1/5", "3/10", "2/5"],
+  "required_joint_entry_order": "lexicographic_x_then_y",
+  "required_product_entry_order": "ascending_value"
+}

@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "joint_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "mass": {
+          "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "mass"
+      ],
+      "type": "object"
+    },
+    "product_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "mass": {
+          "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "mass"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "MARGINAL_CONVERGENCE_INSUFFICIENT"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnosis": {
+          "const": "MISSING_JOINT_LAW_CONTROL"
+        },
+        "limit_joint": {
+          "items": {
+            "$ref": "#/$defs/joint_entry"
+          },
+          "maxItems": 16,
+          "minItems": 16,
+          "type": "array"
+        },
+        "limit_product_distribution": {
+          "items": {
+            "$ref": "#/$defs/product_entry"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "missing_assumption": {
+          "enum": [
+            "JOINT_CONVERGENCE",
+            "LIMIT_PAIR_INDEPENDENCE"
+          ]
+        },
+        "prelimit_joint": {
+          "items": {
+            "$ref": "#/$defs/joint_entry"
+          },
+          "maxItems": 16,
+          "minItems": 16,
+          "type": "array"
+        },
+        "prelimit_product_distribution": {
+          "items": {
+            "$ref": "#/$defs/product_entry"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "sequence_model": {
+          "const": "CONSTANT_IN_N"
+        },
+        "support": {
+          "const": [
+            -3,
+            -1,
+            2,
+            5
+          ]
+        },
+        "witness_product_value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "diagnosis",
+        "sequence_model",
+        "support",
+        "prelimit_joint",
+        "limit_joint",
+        "prelimit_product_distribution",
+        "limit_product_distribution",
+        "witness_product_value",
+        "missing_assumption"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "frozen-four-point-marginal-and-submitted-couplings",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/marginal-joint-product-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

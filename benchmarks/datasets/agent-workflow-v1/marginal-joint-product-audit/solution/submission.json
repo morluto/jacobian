@@ -1,0 +1,252 @@
+{
+  "task_id": "jacobian/marginal-joint-product-audit",
+  "conclusion": "MARGINAL_CONVERGENCE_INSUFFICIENT",
+  "result": {
+    "diagnosis": "MISSING_JOINT_LAW_CONTROL",
+    "sequence_model": "CONSTANT_IN_N",
+    "support": [
+      -3,
+      -1,
+      2,
+      5
+    ],
+    "prelimit_joint": [
+      {
+        "x": -3,
+        "y": -3,
+        "mass": "1/100"
+      },
+      {
+        "x": -3,
+        "y": -1,
+        "mass": "1/50"
+      },
+      {
+        "x": -3,
+        "y": 2,
+        "mass": "3/100"
+      },
+      {
+        "x": -3,
+        "y": 5,
+        "mass": "1/25"
+      },
+      {
+        "x": -1,
+        "y": -3,
+        "mass": "1/50"
+      },
+      {
+        "x": -1,
+        "y": -1,
+        "mass": "1/25"
+      },
+      {
+        "x": -1,
+        "y": 2,
+        "mass": "3/50"
+      },
+      {
+        "x": -1,
+        "y": 5,
+        "mass": "2/25"
+      },
+      {
+        "x": 2,
+        "y": -3,
+        "mass": "3/100"
+      },
+      {
+        "x": 2,
+        "y": -1,
+        "mass": "3/50"
+      },
+      {
+        "x": 2,
+        "y": 2,
+        "mass": "9/100"
+      },
+      {
+        "x": 2,
+        "y": 5,
+        "mass": "3/25"
+      },
+      {
+        "x": 5,
+        "y": -3,
+        "mass": "1/25"
+      },
+      {
+        "x": 5,
+        "y": -1,
+        "mass": "2/25"
+      },
+      {
+        "x": 5,
+        "y": 2,
+        "mass": "3/25"
+      },
+      {
+        "x": 5,
+        "y": 5,
+        "mass": "4/25"
+      }
+    ],
+    "limit_joint": [
+      {
+        "x": -3,
+        "y": -3,
+        "mass": "1/10"
+      },
+      {
+        "x": -3,
+        "y": -1,
+        "mass": "0"
+      },
+      {
+        "x": -3,
+        "y": 2,
+        "mass": "0"
+      },
+      {
+        "x": -3,
+        "y": 5,
+        "mass": "0"
+      },
+      {
+        "x": -1,
+        "y": -3,
+        "mass": "0"
+      },
+      {
+        "x": -1,
+        "y": -1,
+        "mass": "1/5"
+      },
+      {
+        "x": -1,
+        "y": 2,
+        "mass": "0"
+      },
+      {
+        "x": -1,
+        "y": 5,
+        "mass": "0"
+      },
+      {
+        "x": 2,
+        "y": -3,
+        "mass": "0"
+      },
+      {
+        "x": 2,
+        "y": -1,
+        "mass": "0"
+      },
+      {
+        "x": 2,
+        "y": 2,
+        "mass": "3/10"
+      },
+      {
+        "x": 2,
+        "y": 5,
+        "mass": "0"
+      },
+      {
+        "x": 5,
+        "y": -3,
+        "mass": "0"
+      },
+      {
+        "x": 5,
+        "y": -1,
+        "mass": "0"
+      },
+      {
+        "x": 5,
+        "y": 2,
+        "mass": "0"
+      },
+      {
+        "x": 5,
+        "y": 5,
+        "mass": "2/5"
+      }
+    ],
+    "prelimit_product_distribution": [
+      {
+        "value": -15,
+        "mass": "2/25"
+      },
+      {
+        "value": -6,
+        "mass": "3/50"
+      },
+      {
+        "value": -5,
+        "mass": "4/25"
+      },
+      {
+        "value": -2,
+        "mass": "3/25"
+      },
+      {
+        "value": 1,
+        "mass": "1/25"
+      },
+      {
+        "value": 3,
+        "mass": "1/25"
+      },
+      {
+        "value": 4,
+        "mass": "9/100"
+      },
+      {
+        "value": 9,
+        "mass": "1/100"
+      },
+      {
+        "value": 10,
+        "mass": "6/25"
+      },
+      {
+        "value": 25,
+        "mass": "4/25"
+      }
+    ],
+    "limit_product_distribution": [
+      {
+        "value": 1,
+        "mass": "1/5"
+      },
+      {
+        "value": 4,
+        "mass": "3/10"
+      },
+      {
+        "value": 9,
+        "mass": "1/10"
+      },
+      {
+        "value": 25,
+        "mass": "2/5"
+      }
+    ],
+    "witness_product_value": 1,
+    "missing_assumption": "JOINT_CONVERGENCE"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "frozen-four-point-marginal-and-submitted-couplings",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:0b3a353637c4a73f0ab3c1583ed11d6e3e3e48119fb93384e22ea0a5b80feb38"
+    }
+  ],
+  "limitations": [
+    "This exact finite-law countermodel does not machine-verify a general weak-convergence theorem or disambiguate the original prose."
+  ]
+}

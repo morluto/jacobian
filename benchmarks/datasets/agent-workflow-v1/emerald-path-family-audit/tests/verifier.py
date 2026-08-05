@@ -102,7 +102,9 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
 
 def _evidence(value: object, result: object) -> bool:
     if (
-        not evidence_list_is_bound(value, expected_path="evidence/answer.txt")
+        not evidence_list_is_bound(
+            value, expected_path="evidence/answer.txt", max_bytes=4096
+        )
         or not isinstance(value, list)
         or len(value) != 1
     ):

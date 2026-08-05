@@ -1,4 +1,5 @@
 {
+  "task_id": "jacobian/elementwise-fixed-no-global-invariant",
   "source": {
     "dataset": "Jiahao004/DeepTheorem",
     "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8",

@@ -21,7 +21,7 @@ category = "mathematics"
 tags = ["group-theory", "finite-fields", "construction", "assurance", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-answer-visible"
-fixture_digest = "sha256:2e876cd469d3b30b872ce3c1285da14266ca31d61263b5e4b3469cad7830b59f"
+fixture_digest = "sha256:87395eca32a608a311c89bb8e85cbcf2e7e03d82ecaa2122de649fdd4981a0c4"
 derivation = "Derived from Jiahao004/DeepTheorem train row 10001 (source id 86892) at revision f5935720f176cedff4ecd8ebf83d1696e31cfac8."
 
 [agent]

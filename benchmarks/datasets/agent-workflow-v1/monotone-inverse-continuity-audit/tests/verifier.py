@@ -270,9 +270,16 @@ class _ProseScanner:
         self.contradicts_increasing |= bool(
             self._has_stable_match(
                 r"\b(?:branch(?:es)?|pieces?)\b[^.!?;]{0,32}\b"
-                r"(?:(?:are|is)\s+not|(?:aren|isn)['\u2019]?t)\s+strictly\s+"
+                r"(?:(?:are|is)\s+not(?!\s+only\b)|"
+                r"(?:aren|isn)['\u2019]?t|not(?!\s+only\b))\s+strictly\s+"
                 r"(?:increas(?:e|es|ing|ed)|monotone)\b|"
-                r"\bnot\b[^.!?;]{0,24}\b(?:branch(?:es)?|pieces?)\b"
+                r"\bnot\b(?!\s+only\s+(?:are|is)\s+"
+                r"(?:(?:both|each)\s+(?:affine\s+)?(?:branch(?:es)?|pieces?)|"
+                r"(?:the\s+)?left\s+and\s+right\s+(?:affine\s+)?"
+                r"(?:branch(?:es)?|pieces?))\s+strictly\s+"
+                r"(?:increas(?:e|es|ing|ed)|monotone)\b)"
+                r"[^.!?;]{0,32}\b"
+                r"(?:branch(?:es)?|pieces?)\b"
                 r"[^.!?;]{0,32}\bstrictly\s+"
                 r"(?:increas(?:e|es|ing|ed)|monotone)\b",
                 text,

@@ -378,6 +378,31 @@ def test_accepts_affirmative_slope_contrast(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_accepts_not_only_affirmative_monotonicity(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(
+        "Not only are both branches strictly increasing because their slopes are "
+        "positive, but the positive jump also makes all cross-branch comparisons "
+        "strict. Their image ranges leave a missing gap between the limiting values, "
+        "and the gap witness has no preimage, so the full-interval inverse fails.\n"
+        + marker
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
 def test_rejects_pronoun_negated_inverse_failure(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     evidence_path = app / "evidence" / "answer.txt"
@@ -409,6 +434,10 @@ def test_rejects_pronoun_negated_inverse_failure(tmp_path: Path) -> None:
         "Both affine pieces are not strictly increasing even though their slopes "
         "are positive.",
         "Both branches are strictly increasing, but not both slopes are positive.",
+        "Not only are both branches not strictly increasing even though their slopes "
+        "are positive.",
+        "Not only is it false that both branches are strictly increasing even though "
+        "their slopes are positive.",
     ],
 )
 def test_rejects_broader_negated_monotonicity_claims(

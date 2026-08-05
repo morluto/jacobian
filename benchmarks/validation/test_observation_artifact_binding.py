@@ -9,6 +9,7 @@ import pytest
 from benchmarks.tooling import observation_results
 from benchmarks.tooling.observation_results import (
     _resolve_binding,
+    _trial_status,
     build_observation_evidence,
 )
 from benchmarks.validation.observation_results_support import (
@@ -21,6 +22,18 @@ from benchmarks.validation.observation_results_support import (
 # ---------------------------------------------------------------------------
 # Normalization integration
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw_status",
+    ("RUNNING", "PENDING", "FAILED", "ERROR", "TIMEOUT", "CANCELLED"),
+)
+def test_trial_status_preserves_noncompleted_states(raw_status: str) -> None:
+    assert _trial_status({"status": raw_status}, None) == raw_status
+
+
+def test_trial_status_fails_closed_on_unknown_state() -> None:
+    assert _trial_status({"status": "UNKNOWN"}, None) == "ERROR"
 
 
 def test_observation_normalization_binds_fields(
@@ -391,3 +404,20 @@ def test_incomplete_execution_fails_closed(
     assert evidence["status"] == "INCOMPLETE"
     assert evidence["trials"][0]["status"] == "ERROR"
     assert any("incomplete" in f for f in failures)
+
+
+def test_schema_rejects_valid_evidence_with_noncompleted_trial() -> None:
+    from benchmarks.validation.observation_results_support import _evidence
+    from jsonschema import Draft202012Validator
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "schemas"
+            / "observation-evidence.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    evidence = _evidence("control", [1.0])
+    evidence["trials"][0]["status"] = "RUNNING"
+    errors = list(Draft202012Validator(schema).iter_errors(evidence))
+    assert errors, "schema must reject VALID evidence with a non-COMPLETED trial"

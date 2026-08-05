@@ -579,7 +579,7 @@ def _ready_probe(
         "reachable": True,
         "report": {
             "server": {"name": "jacobian", "version": "1.2.3"},
-            "tool_names": ["capability.describe", "capability.invoke"],
+            "tool_names": ["math.find", "math.run"],
             "catalog": {
                 "catalog_version": "1",
                 "capabilities": 1,
@@ -738,7 +738,7 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
             "reachable": True,
             "report": {
                 "server": {"name": "jacobian", "version": "1.2.3"},
-                "tool_names": ["capability.describe", "capability.invoke"],
+                "tool_names": ["math.find", "math.run"],
                 "catalog": {
                     "catalog_version": "1",
                     "capabilities": 1,
@@ -839,7 +839,7 @@ def _c2_routing_contract(routing_status: str = "AVAILABLE_UNUSED") -> dict:
             "catalog_digest_observed": "sha256:" + "2" * 64,
             "policy_digest_observed": "sha256:" + "3" * 64,
             "policy_profile_observed": "DEFAULT",
-            "tool_names": ["capability.describe", "capability.invoke"],
+            "tool_names": ["math.find", "math.run"],
             "discovery_matches": ["cap-1"],
             "probe_digest": "sha256:" + "0" * 64,
             "diagnostic": None,
@@ -867,7 +867,7 @@ def test_mark_invoked_transitions_on_successful_capability_invoke(
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"capability.invoke": 1},
+            "tool_calls": {"math.run": 1},
             "tool_errors": 0,
         }
     ]
@@ -878,13 +878,13 @@ def test_mark_invoked_transitions_on_successful_capability_invoke(
 
 
 def test_mark_invoked_fail_closed_on_errored_invocation(tmp_path: Path) -> None:
-    """A failed/errored capability.invoke must not transition to AVAILABLE_INVOKED."""
+    """A failed/errored math.run must not transition to AVAILABLE_INVOKED."""
 
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"capability.invoke": 1},
+            "tool_calls": {"math.run": 1},
             "tool_errors": 2,
         }
     ]
@@ -895,13 +895,13 @@ def test_mark_invoked_fail_closed_on_errored_invocation(tmp_path: Path) -> None:
 
 
 def test_mark_invoked_fail_closed_on_non_completed_trial(tmp_path: Path) -> None:
-    """A non-COMPLETED trial with capability.invoke must not transition."""
+    """A non-COMPLETED trial with math.run must not transition."""
 
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
     trials = [
         {
             "status": "ERROR",
-            "tool_calls": {"capability.invoke": 1},
+            "tool_calls": {"math.run": 1},
             "tool_errors": 0,
         }
     ]
@@ -911,13 +911,13 @@ def test_mark_invoked_fail_closed_on_non_completed_trial(tmp_path: Path) -> None
 
 
 def test_mark_invoked_fail_closed_on_timeout_trial(tmp_path: Path) -> None:
-    """A timed-out trial with capability.invoke must not transition."""
+    """A timed-out trial with math.run must not transition."""
 
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
     trials = [
         {
             "status": "TIMEOUT",
-            "tool_calls": {"capability.invoke": 3},
+            "tool_calls": {"math.run": 3},
             "tool_errors": 0,
         }
     ]
@@ -933,7 +933,7 @@ def test_mark_invoked_no_transition_when_already_invoked(tmp_path: Path) -> None
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"capability.invoke": 1},
+            "tool_calls": {"math.run": 1},
             "tool_errors": 0,
         }
     ]
@@ -950,12 +950,12 @@ def test_mark_invoked_mixed_trials_one_success_transitions(tmp_path: Path) -> No
     trials = [
         {
             "status": "COMPLETED",
-            "tool_calls": {"capability.invoke": 1},
+            "tool_calls": {"math.run": 1},
             "tool_errors": 2,
         },
         {
             "status": "COMPLETED",
-            "tool_calls": {"capability.invoke": 1},
+            "tool_calls": {"math.run": 1},
             "tool_errors": 0,
         },
     ]

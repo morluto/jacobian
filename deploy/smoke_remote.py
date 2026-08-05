@@ -18,8 +18,8 @@ from jacobian import __version__
 from jacobian.canonical import canonicalize_json
 
 REQUIRED_TOOLS = {
-    "capability.describe",
-    "capability.invoke",
+    "math.find",
+    "math.run",
 }
 OPTIONAL_TOOLS = {"reasoning.write"}
 DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
@@ -145,7 +145,7 @@ async def inspect(
             )
 
         discovery_result = await client.call_tool(
-            "capability.describe",
+            "math.find",
             {"query": query, "limit": 5},
         )
         if discovery_result.is_error:

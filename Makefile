@@ -50,17 +50,17 @@ setup-agent: ## Configure an agent against this source checkout (ARGS="--client 
 JACOBIAN_REGISTRY_IMAGE ?= ghcr.io/morluto/jacobian
 
 container-image: ## Build jacobian:local from the current tree, including dirty changes.
-	$(UV_RUN) python tools/manage_jacobian_image.py build --image "$(or $(IMAGE),jacobian:local)"
+	$(UV_RUN) python -m tools.manage_jacobian_image build --image "$(or $(IMAGE),jacobian:local)"
 
 eval-image: ## Select a published digest for a clean tree or build jacobian:local when dirty.
-	$(UV_RUN) python tools/manage_jacobian_image.py select --registry-image "$(JACOBIAN_REGISTRY_IMAGE)"
+	$(UV_RUN) python -m tools.manage_jacobian_image select --registry-image "$(JACOBIAN_REGISTRY_IMAGE)"
 
 eval-image-pull: ## Pull the current clean revision and print its digest-pinned image reference.
-	$(UV_RUN) python tools/manage_jacobian_image.py pull --registry-image "$(JACOBIAN_REGISTRY_IMAGE)"
+	$(UV_RUN) python -m tools.manage_jacobian_image pull --registry-image "$(JACOBIAN_REGISTRY_IMAGE)"
 
 eval-image-bind: ## Bind image identity into RUNTIME_SNAPSHOT (JACOBIAN_IMAGE=..., RUNTIME_SNAPSHOT=...).
 	@test -n "$(JACOBIAN_IMAGE)" -a -n "$(RUNTIME_SNAPSHOT)" || { echo "JACOBIAN_IMAGE and RUNTIME_SNAPSHOT are required" >&2; exit 2; }
-	$(UV_RUN) python tools/manage_jacobian_image.py bind-runtime \
+	$(UV_RUN) python -m tools.manage_jacobian_image bind-runtime \
 		--image "$(JACOBIAN_IMAGE)" --runtime-snapshot "$(RUNTIME_SNAPSHOT)"
 
 deploy-check: ## Validate the clone-to-systemd deployment entrypoint.
@@ -430,6 +430,7 @@ endif
 
 CODEX_WEB_SEARCH ?= disabled
 JACOBIAN_EVAL_PROXY ?= 0
+JACOBIAN_EVAL_CODEX_BINARY ?= $(shell command -v codex 2>/dev/null | xargs -r readlink -f)
 define _jacobian_eval_container_proxy
 $(subst localhost,host.docker.internal,$(subst 127.0.0.1,host.docker.internal,$1))
 endef
@@ -437,6 +438,8 @@ JACOBIAN_EVAL_HTTP_PROXY ?= $(call _jacobian_eval_container_proxy,$(HTTP_PROXY))
 JACOBIAN_EVAL_HTTPS_PROXY ?= $(call _jacobian_eval_container_proxy,$(HTTPS_PROXY))
 JACOBIAN_EVAL_ALL_PROXY ?= $(call _jacobian_eval_container_proxy,$(ALL_PROXY))
 JACOBIAN_EVAL_NO_PROXY ?= localhost,127.0.0.1,jacobian
+JACOBIAN_EVAL_UPSTREAM_PROXY ?= $(or $(JACOBIAN_EVAL_HTTPS_PROXY),$(JACOBIAN_EVAL_ALL_PROXY),$(JACOBIAN_EVAL_HTTP_PROXY))
+JACOBIAN_EVAL_GOST_CONFIG ?= $(abspath benchmarks/results/.runtime/agent-eval-gost.yaml)
 ifneq ($(filter 0 1,$(JACOBIAN_EVAL_PROXY)),$(JACOBIAN_EVAL_PROXY))
 $(error JACOBIAN_EVAL_PROXY must be exactly 0 or 1 (got '$(JACOBIAN_EVAL_PROXY)'))
 endif
@@ -458,14 +461,16 @@ override MCP_CONFIG :=
 else
 ifeq ($(JACOBIAN_EVAL_PROXY),1)
 EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation-proxy.json
+MCP_CONFIG ?= benchmarks/config/jacobian-loopback.mcp.json
 else
 EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation.json
-endif
 MCP_CONFIG ?= benchmarks/config/jacobian.mcp.json
+endif
 endif
 
 agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROXY=0|1, DATASET=agent-workflow-v1, EVAL_EXECUTE=1).
-	@if [ "$(EVAL_EXECUTE)" != "1" ]; then \
+	@set -e; \
+	if [ "$(EVAL_EXECUTE)" != "1" ]; then \
 		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1"; \
 		exit 0; \
 	fi; \
@@ -473,16 +478,27 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 		echo "JACOBIAN_MODEL must be exported" >&2; \
 		exit 2; \
 	fi; \
+	if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then \
+		test -x "$(JACOBIAN_EVAL_CODEX_BINARY)" || { \
+			echo "JACOBIAN_EVAL_CODEX_BINARY must resolve to a Linux standalone Codex binary when JACOBIAN_EVAL_PROXY=1" >&2; \
+			exit 2; \
+		}; \
+		JACOBIAN_EVAL_UPSTREAM_PROXY="$(JACOBIAN_EVAL_UPSTREAM_PROXY)" \
+			$(UV_RUN) python -m benchmarks.tooling.harbor_proxy \
+			--output "$(JACOBIAN_EVAL_GOST_CONFIG)"; \
+	fi; \
 	if [ "$(JACOBIAN_ENABLED)" = "1" ]; then \
 		test -n "$${JACOBIAN_IMAGE:-}" || { echo "JACOBIAN_IMAGE must be exported" >&2; exit 2; }; \
 		test -n "$(RUNTIME_SNAPSHOT)" || { echo "RUNTIME_SNAPSHOT is required for a Jacobian-enabled run" >&2; exit 2; }; \
-		$(UV_RUN) python tools/manage_jacobian_image.py bind-runtime \
+		$(UV_RUN) python -m tools.manage_jacobian_image bind-runtime \
 			--image "$${JACOBIAN_IMAGE}" --runtime-snapshot "$(RUNTIME_SNAPSHOT)"; \
 	fi; \
 	JACOBIAN_EVAL_HTTP_PROXY="$(JACOBIAN_EVAL_HTTP_PROXY)" \
 	JACOBIAN_EVAL_HTTPS_PROXY="$(JACOBIAN_EVAL_HTTPS_PROXY)" \
 	JACOBIAN_EVAL_ALL_PROXY="$(JACOBIAN_EVAL_ALL_PROXY)" \
 	JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)" \
+	JACOBIAN_EVAL_CODEX_BINARY="$(JACOBIAN_EVAL_CODEX_BINARY)" \
+	JACOBIAN_EVAL_GOST_CONFIG="$(JACOBIAN_EVAL_GOST_CONFIG)" \
 	$(HARBOR_RUNNER) run \
 		-c "$(EVAL_CONFIG)" \
 		-a codex \

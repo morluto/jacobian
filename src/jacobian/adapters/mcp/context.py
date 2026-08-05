@@ -174,7 +174,7 @@ def _classify_public_tool_error(
         return (
             "INVALID_INPUT",
             "The tool input is not valid for this operation.",
-            "Check the tool input schema or call capability.describe, then retry.",
+            "Check the tool input schema or call math.find, then retry.",
         )
     return (
         "OPERATION_FAILED",

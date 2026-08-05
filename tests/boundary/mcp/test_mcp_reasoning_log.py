@@ -17,11 +17,11 @@ def test_required_reasoning_log_binds_actual_capability_result(tmp_path: Path) -
         ) as client:
             tools = {tool.name: tool for tool in (await client.list_tools()).tools}
             assert set(tools) == {
-                "capability.describe",
-                "capability.invoke",
+                "math.find",
+                "math.run",
                 "reasoning.write",
             }
-            assert set(tools["capability.invoke"].input_schema["required"]) >= {
+            assert set(tools["math.run"].input_schema["required"]) >= {
                 "reasoning_run_id",
                 "reasoning_call_id",
             }
@@ -45,7 +45,7 @@ def test_required_reasoning_log_binds_actual_capability_result(tmp_path: Path) -
             assert isinstance(before.structured_content, dict)
             call_id = before.structured_content["call_id"]
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.compute.gcd",
                     "mode": "EXPLORE",
@@ -109,8 +109,8 @@ def test_off_mode_preserves_the_legacy_two_tool_surface(tmp_path: Path) -> None:
             raise_exceptions=True,
         ) as client:
             tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-            assert set(tools) == {"capability.describe", "capability.invoke"}
-            assert set(tools["capability.invoke"].input_schema["properties"]) == {
+            assert set(tools) == {"math.find", "math.run"}
+            assert set(tools["math.run"].input_schema["properties"]) == {
                 "capability_id",
                 "payload",
                 "mode",
@@ -128,7 +128,7 @@ def test_audit_mode_allows_unbound_legacy_invocation(tmp_path: Path) -> None:
             raise_exceptions=True,
         ) as client:
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.compute.gcd",
                     "mode": "EXPLORE",
@@ -171,7 +171,7 @@ def test_required_mode_rejects_mismatched_call_binding_without_consuming_it(
             call_id = before.structured_content["call_id"]
 
             mismatch = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.factorization.factor",
                     "mode": "EXPLORE",
@@ -184,7 +184,7 @@ def test_required_mode_rejects_mismatched_call_binding_without_consuming_it(
             assert "REASONING_CALL_MISMATCH" in mismatch.content[0].text
 
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.compute.gcd",
                     "mode": "EXPLORE",

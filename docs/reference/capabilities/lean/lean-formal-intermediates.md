@@ -12,7 +12,7 @@ proof edits remain inspectable evidence. Only successful `lean.check` replay,
 or a proof-edit capability bound to that checker, returns `VERIFIED`.
 
 Availability depends on the pinned Lean profile and bundled-reference
-installation. Inspect `capability://catalog` and call `capability.describe`
+installation. Inspect `capability://catalog` and call `math.find`
 before using any payload below.
 
 ## Capability roles

@@ -52,7 +52,7 @@ class CapabilityDispatchMixin:
                     stage="capability_resolution",
                     message=(f"Capability {request.capability_id!r} is not installed."),
                     hint=(
-                        "Call capability.describe without capability_id to list "
+                        "Call math.find without capability_id to list "
                         "installed capabilities, then retry with one of those IDs."
                     ),
                 ),
@@ -82,7 +82,7 @@ class CapabilityDispatchMixin:
                         "operator-controlled capability policy."
                     ),
                     hint=(
-                        "Choose a capability visible in capability.describe, or ask "
+                        "Choose a capability visible in math.find, or ask "
                         "the operator to change the evaluation/runtime policy."
                     ),
                     details={
@@ -109,7 +109,7 @@ class CapabilityDispatchMixin:
                         f"{request.mode.value} mode."
                     ),
                     hint=(
-                        "Call capability.describe for this capability, then retry "
+                        "Call math.find for this capability, then retry "
                         "with one of its advertised modes."
                     ),
                 ),

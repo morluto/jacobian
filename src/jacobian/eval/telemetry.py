@@ -54,7 +54,7 @@ class _ReasoningProtocolTelemetry:
     reported_actual_mismatch_count: int = 0
 
     def record_attempt(self, tool: str, arguments: object) -> None:
-        if tool != "capability.invoke" or not isinstance(arguments, Mapping):
+        if tool != "math.run" or not isinstance(arguments, Mapping):
             return
         if isinstance(arguments.get("reasoning_run_id"), str) and isinstance(
             arguments.get("reasoning_call_id"), str
@@ -365,8 +365,8 @@ def _reasoning_tool_name(value: object) -> str | None:
     normalized = value.replace("__", ".").replace("_", ".").lower()
     if normalized.endswith("reasoning.write"):
         return "reasoning.write"
-    if normalized.endswith("capability.invoke"):
-        return "capability.invoke"
+    if normalized.endswith("math.run"):
+        return "math.run"
     return None
 
 
@@ -524,7 +524,7 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
                 mcp_logical_payload_bytes += logical_bytes
                 mcp_logical_payload_bytes_by_tool[tool] += logical_bytes
             mcp_call_signatures[_mcp_call_signature(tool, arguments)] += 1
-            if tool == "capability.describe":
+            if tool == "math.find":
                 if isinstance(arguments, Mapping) and isinstance(
                     arguments.get("capability_id"), str
                 ):
@@ -532,7 +532,7 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
                 else:
                     capability_describe_index_calls += 1
             if (
-                tool == "capability.invoke"
+                tool == "math.run"
                 and isinstance(arguments, Mapping)
                 and isinstance(arguments.get("capability_id"), str)
             ):
@@ -563,7 +563,7 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
             else:
                 successful_calls.append(tool)
                 reasoning_telemetry.record_write(tool, arguments, response)
-                if tool == "capability.describe" and isinstance(arguments, Mapping):
+                if tool == "math.find" and isinstance(arguments, Mapping):
                     matches = (
                         response.get("matches")
                         if isinstance(response, Mapping)
@@ -608,7 +608,7 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
                         }
                     )
                 if (
-                    tool == "capability.invoke"
+                    tool == "math.run"
                     and isinstance(response, Mapping)
                     and _contains_value(
                         response.get("output"),
@@ -621,7 +621,7 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
                     response.get("execution") if isinstance(response, Mapping) else None
                 )
                 if (
-                    tool == "capability.invoke"
+                    tool == "math.run"
                     and isinstance(arguments, Mapping)
                     and isinstance(arguments.get("capability_id"), str)
                     and isinstance(response, Mapping)

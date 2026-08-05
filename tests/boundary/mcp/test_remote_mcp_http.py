@@ -141,7 +141,7 @@ async def _remote_tenant_scenario(port: int) -> None:
             catalog = await client.read_resource("capability://catalog")
             assert "fixture.increment" in catalog.contents[0].text
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "fixture.increment",
                     "mode": "EXPLORE",

@@ -60,7 +60,7 @@ def _search_failure_detail(exc: Exception, experiment_uri: str) -> str:
     if isinstance(exc, PluginRegistryError):
         return (
             "The search stopped because a required plugin is unavailable. Call "
-            "capability.describe, reload the current plugin version, and start a "
+            "math.find, reload the current plugin version, and start a "
             "new search."
         )
     return (

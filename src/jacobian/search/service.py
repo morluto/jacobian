@@ -404,7 +404,7 @@ class SearchService:
             _LOGGER.warning("search capability resolution failed", exc_info=exc)
             raise SearchError(
                 "The search plugin is unavailable or incomplete. Call "
-                "capability.describe, choose a reference domain with proposer, "
+                "math.find, choose a reference domain with proposer, "
                 "refiner, and evaluator capabilities, then retry."
             ) from exc
 

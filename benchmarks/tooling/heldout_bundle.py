@@ -526,7 +526,7 @@ def math_isclose(left: float, right: float) -> bool:
     return abs(float(left) - float(right)) <= 1e-9
 
 
-_REQUIRED_MCP_TOOLS = {"capability.describe", "capability.invoke"}
+_REQUIRED_MCP_TOOLS = {"math.find", "math.run"}
 _PROBE_SCRIPT = ROOT / "deploy" / "smoke_remote.py"
 _ZERO_DIGEST = "sha256:" + "0" * 64
 
@@ -745,7 +745,7 @@ def _probe_match_checks(
     if not checks["required_tools_present"]:
         failures.append("probe is missing required MCP tools")
     if not checks["describe_responded"]:
-        failures.append("probe capability.describe did not respond")
+        failures.append("probe math.find did not respond")
     return checks, failures
 
 

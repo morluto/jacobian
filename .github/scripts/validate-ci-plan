@@ -127,6 +127,31 @@ def _validate_catalog() -> None:
             argv = shlex.split(command)
             if len(argv) != 2 or argv[0] != "make" or argv[1] not in targets:
                 fail(f"CI catalog command for {name} is not a Make target: {command}")
+            subsumes = entry.get("local_subsumes", [])
+            if (
+                not isinstance(subsumes, list)
+                or not all(isinstance(item, str) and item for item in subsumes)
+                or name in subsumes
+                or any(item not in catalog_suites for item in subsumes)
+            ):
+                fail(f"CI catalog entry {name} has invalid local_subsumes")
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit_subsumptions(name: str) -> None:
+            if name in visiting:
+                fail("CI catalog local_subsumes must be acyclic")
+            if name in visited:
+                return
+            visiting.add(name)
+            for child in catalog[name].get("local_subsumes", []):
+                visit_subsumptions(str(child))
+            visiting.remove(name)
+            visited.add(name)
+
+        for name in catalog:
+            visit_subsumptions(name)
 
         provider = catalog.get("provider", {})
         if not isinstance(provider, dict) or not provider.get("providers"):

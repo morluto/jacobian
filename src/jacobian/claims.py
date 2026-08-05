@@ -98,7 +98,7 @@ class ClaimValidationService:
                 )
             elif isinstance(exc, PluginRegistryError):
                 errors.append(
-                    "The selected plugin is unavailable. Call capability.describe, "
+                    "The selected plugin is unavailable. Call math.find, "
                     "choose an installed reference domain, and retry."
                 )
             else:
@@ -117,7 +117,7 @@ class ClaimValidationService:
             errors.append(
                 "The selected plugin is missing required capabilities: "
                 + ", ".join(item.value for item in missing)
-                + ". Call capability.describe and choose a plugin that advertises "
+                + ". Call math.find and choose a plugin that advertises "
                 "all required capabilities."
             )
         valid = not errors

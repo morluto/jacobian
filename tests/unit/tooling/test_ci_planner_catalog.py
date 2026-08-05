@@ -260,6 +260,36 @@ def test_plan_local_tests_omits_deploy_gate_without_deployment_paths(
     assert "make docs-linkcheck" in output
 
 
+def test_plan_local_tests_labels_documentation_as_non_pytest_work(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    planner = _load_script("plan-local-tests")
+    monkeypatch.setenv("PATHS", '["README.md"]')
+    monkeypatch.setattr(sys, "argv", ["plan-local-tests"])
+
+    planner.main()
+    output = capsys.readouterr().out
+
+    assert "not applicable (no pytest lane selected)" in output
+    assert "suite fallback" not in output
+
+
+def test_plan_local_tests_omits_commands_subsumed_by_another_local_gate(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    planner = _load_script("plan-local-tests")
+    monkeypatch.setenv("PATHS", '["Makefile"]')
+    monkeypatch.setattr(sys, "argv", ["plan-local-tests"])
+
+    planner.main()
+    output = capsys.readouterr().out
+
+    assert "make check-static" in output
+    assert "    make build\n" not in output
+
+
 def _write_validator_tree(tmp_path: Path) -> None:
     """Materialize the minimal tree validate-ci-plan reads from ROOT."""
 
@@ -291,4 +321,21 @@ def test_ci_validator_enforces_local_only_deploy_catalog_contract(
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))
 
     with pytest.raises(SystemExit):
+        validator.main()
+
+
+def test_ci_validator_rejects_cyclic_local_command_subsumption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_validator_tree(tmp_path)
+    manifest_path = tmp_path / ".github" / "ci-impact.json"
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    manifest["catalog"]["build"]["local_subsumes"] = ["static"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    validator = _load_script("validate-ci-plan")
+    monkeypatch.setattr(validator, "ROOT", tmp_path)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+
+    with pytest.raises(SystemExit, match="local_subsumes must be acyclic"):
         validator.main()

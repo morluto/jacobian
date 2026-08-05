@@ -52,7 +52,7 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
         ("smt.unsat_proof.verify", "independently verify compatible proof evidence"),
         (
             "sat.cnf.materialize",
-            "prefer named Boolean CNF for finite colorings and forbidden patterns",
+            "materialize named Boolean CNF for finite colorings and forbidden patterns",
         ),
     ),
     "graph.invariant.maximum_matching.compute": (
@@ -135,11 +135,11 @@ def _capability_inspection_extensions(
         extensions["synchronous_execution"] = {
             "remote_safe_wall_seconds_max": 150,
             "timeout_is_a_non_conclusion": True,
-            "partition_larger_searches": True,
+            "larger_search_requires_multiple_bounded_invocations": True,
             "backend_suitability": (
-                "Named Boolean CNF is preferred for finite colorings and forbidden "
-                "finite configurations; use SMT when arithmetic or "
-                "uninterpreted-function structure is essential."
+                "Named Boolean CNF represents finite colorings and forbidden finite "
+                "configurations; SMT represents arithmetic and uninterpreted-function "
+                "structure."
             ),
         }
     return extensions
@@ -193,6 +193,93 @@ def _input_schema_summary(schema: dict[str, Any]) -> dict[str, Any]:
         "required": schema.get("required", []),
         "property_names": sorted(properties) if isinstance(properties, dict) else [],
     }
+
+
+def _discovery_operation_card(
+    match: dict[str, Any],
+    descriptor: CapabilityDescriptor,
+    descriptors: dict[str, CapabilityDescriptor],
+) -> dict[str, Any]:
+    """Add compact decision facts without recommending a research action."""
+
+    runtime = descriptor.provider_runtime
+    related = [
+        {
+            "capability_id": related_id,
+            "relationship": relationship,
+        }
+        for related_id, relationship in _RELATED_CAPABILITIES.get(
+            descriptor.capability_id, ()
+        )
+        if related_id in descriptors
+    ]
+    return {
+        **match,
+        "accepted_input_kinds": [
+            kind.value for kind in descriptor.accepted_input_kinds
+        ],
+        "accepted_artifact_types": list(descriptor.accepted_artifact_types),
+        "output_schema_summary": _output_schema_summary(descriptor.output_schema),
+        "scope": "EXACT_SUPPLIED_INPUT_OR_CLAIM",
+        "assurance_ceiling": (
+            "VERIFIED" if CapabilityMode.VERIFY in descriptor.modes else "COMPUTED"
+        ),
+        "provider_availability": (
+            runtime.availability.value if runtime is not None else "UNKNOWN"
+        ),
+        "related_capabilities": related,
+    }
+
+
+def _discovery_recovery_paths(
+    request: CapabilityDiscoveryRequest,
+    *,
+    portfolio_fit: str,
+    routing_status: str,
+) -> list[dict[str, Any]]:
+    """Return unranked access choices for weak, empty, or incompatible discovery."""
+
+    if portfolio_fit not in {"ONLY_WEAK_LEXICAL_MATCHES", "NO_LEXICAL_MATCHES"} and (
+        routing_status != "NO_ROUTE"
+    ):
+        return []
+    paths: list[dict[str, Any]] = [
+        {
+            "action": "reformulate_query",
+            "tool": "math.find",
+            "change": "Use different or broader mathematical language for query.",
+        }
+    ]
+    if any(
+        value is not None
+        for value in (
+            request.domain,
+            request.mode,
+            request.input_kind,
+            request.artifact_type,
+        )
+    ):
+        paths.append(
+            {
+                "action": "remove_filters",
+                "tool": "math.find",
+                "change": "Remove domain, mode, input_kind, or artifact_type filters.",
+            }
+        )
+    paths.extend(
+        (
+            {
+                "action": "browse",
+                "tool": "math.find",
+                "arguments": {},
+            },
+            {
+                "action": "inspect_catalog",
+                "resource_uri": "capability://catalog",
+            },
+        )
+    )
+    return paths
 
 
 def _capability_descriptor_view(
@@ -291,18 +378,17 @@ def _capability_discovery_response(
     cursor: str | None,
 ) -> dict[str, Any]:
     catalog = runtime.core.capabilities.catalog()
+    discovery_request = CapabilityDiscoveryRequest(
+        query=query,
+        domain=domain,
+        mode=mode,
+        input_kind=input_kind,
+        artifact_type=artifact_type,
+        limit=limit if limit is not None else 5,
+        cursor=cursor,
+    )
     try:
-        discovered = runtime.core.capabilities.discover(
-            CapabilityDiscoveryRequest(
-                query=query,
-                domain=domain,
-                mode=mode,
-                input_kind=input_kind,
-                artifact_type=artifact_type,
-                limit=limit if limit is not None else 5,
-                cursor=cursor,
-            )
-        )
+        discovered = runtime.core.capabilities.discover(discovery_request)
     except CapabilityDiscoveryCursorError:
         return {
             "error": {
@@ -316,6 +402,21 @@ def _capability_discovery_response(
                 ),
             }
         }
+    descriptors = {
+        descriptor.capability_id: descriptor for descriptor in catalog.capabilities
+    }
+    discovered_payload = discovered.model_dump(mode="json")
+    discovered_payload["matches"] = [
+        _discovery_operation_card(
+            match, descriptors[match["capability_id"]], descriptors
+        )
+        for match in cast(list[dict[str, Any]], discovered_payload["matches"])
+    ]
+    recovery_paths = _discovery_recovery_paths(
+        discovery_request,
+        portfolio_fit=discovered.portfolio_fit,
+        routing_status=discovered.routing_status,
+    )
     response = {
         "kind": "discovery",
         "catalog_version": catalog.catalog_version,
@@ -325,23 +426,9 @@ def _capability_discovery_response(
             catalog.catalog_version,
             catalog.capabilities,
         ),
-        **discovered.model_dump(mode="json"),
-        "next_step": {
-            "tool": "capability.describe",
-            "argument": "capability_id",
-            "choose_from": "matches[].capability_id",
-        },
-        "routing_guidance": {
-            "inspect_candidates": (
-                "Inspect only the strongest one or two domain-relevant matches; "
-                "search again only when none fits the required outcome."
-            ),
-            "verification_handoff": (
-                "Invoke the selected producer before searching for a checker; "
-                "follow checker, certificate, and verification fields returned by "
-                "the producer result instead of guessing a generic verifier."
-            ),
-        },
+        **discovered_payload,
+        "available_recovery_paths": recovery_paths,
+        "recovery_paths_are_unranked": True,
         "response_byte_limit": CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
         "truncation_reason": None,
     }

@@ -8,87 +8,78 @@ SERVER_DESCRIPTION = (
 )
 
 SERVER_INSTRUCTIONS = (
-    "When a task involves exact computation, structure discovery, transformation, "
-    "bounded search, counterexample generation, formal-environment inspection, or "
-    "independent checking, begin with capability.describe. You do not need to know a "
-    "capability ID. Start discovery with limit 5, inspect only the strongest one or "
-    "two relevant summaries, then request one CONTRACT view before invoking. Compose "
-    "capability.invoke calls as you judge useful. "
-    "Jacobian does not choose the task decomposition or research strategy. "
-    "EXPLORE returns proposed, heuristic, or computed evidence; use VERIFY "
-    "only with an installed independent checker. Execution status, completeness, "
-    "mathematical conclusion, and assurance are separate. Failure to find a witness "
-    "and bounded or exhausted search are not mathematical conclusions. Synchronous "
-    "SAT/SMT calls are capped at 150 seconds; partition larger searches. Only assurance "
-    "level VERIFIED with a local verification record is verified. Repeating finite or "
-    "bounded instances does not establish an all-orders or all-parameters theorem. Read "
-    "jacobian://instructions for the complete operating guide."
+    "Jacobian provides searchable and executable mathematical operations for exact "
+    "computation, transformation, structure discovery, examples and counterexamples, "
+    "bounded search, formal-environment inspection, and independent checking. "
+    "math.find searches, browses, or inspects installed operations using a "
+    "plain-language description of the desired local mathematical outcome. "
+    "math.run executes a selected operation using its typed input contract. "
+    "Search or browse again whenever the objective or available evidence changes. "
+    "The model owns representation, decomposition, composition, iteration, verification "
+    "timing, and stopping. Results keep execution status, scope, completeness, "
+    "mathematical conclusion, and assurance separate. No descriptor match, timeout, "
+    "bounded or exhausted search, or failure to find a witness is a mathematical "
+    "conclusion. Only assurance level VERIFIED with a local verification record is "
+    "verified. Read jacobian://instructions for the complete operating guide."
 )
 
-CAPABILITY_DESCRIBE_DESCRIPTION = """\
-Discover installed mathematical outcomes or inspect one exact capability contract.
+MATH_FIND_DESCRIPTION = """\
+Find or inspect an installed mathematical operation that can produce a desired outcome.
 
-Use this first when a task may benefit from exact computation, structural analysis,
-transformation, bounded search, counterexample generation, formal-environment
-inspection, or independent checking. You do not need to know a capability ID.
+Choose this when mathematical work may benefit from exact computation, structural
+analysis, transformation, examples or counterexamples, bounded search,
+formal-environment inspection, or independent checking and the useful installed
+operation is not yet known. A capability ID is not required for search or browse.
 
-Discovery:
-- Pass `query` to rank compact installed outcomes by mathematical intent.
+Available forms:
+- Pass `query` as a plain-language description of the desired local mathematical
+  outcome. The response contains compact operation cards with accepted inputs, output
+  summary, availability, scope, assurance ceiling, and factual relationships.
 - Optionally filter with `domain` and `mode`; `limit` is between 1 and 20 and
   defaults to 5.
 - Omit all arguments to browse a compact installed catalog.
 - When `next_cursor` is present, pass it back with the same filters and limit to
   continue without loading the complete catalog.
 - Ranking is deterministic retrieval over published IDs, titles, descriptions, and
-  tags. Match fields and terms are returned; results are candidates, not
-  recommendations.
-- Once a domain-owned match fits the required outcome, inspect only the strongest one
-  or two candidates. Search again when none fits. Invoke a producer before looking
-  for its checker, then follow the checker, certificate, and verification fields in
-  the producer result instead of guessing a generic verifier.
-- Compose capabilities as the investigation requires; Jacobian does not prescribe a
-  mathematical workflow.
+  tags. Match fields and terms are returned; candidates are not recommendations.
+- Pass `capability_id` to inspect the exact operation. SUMMARY is compact, CONTRACT
+  adds the validation-equivalent input schema and validated invocation examples, and
+  FULL adds complete provider and audit metadata.
 
-Exact inspection:
-- Pass `capability_id` for the small default SUMMARY projection when judging fit.
-- Request `view="CONTRACT"` once a capability fits and before invoking it. CONTRACT
-  adds the validation-equivalent input schema, runtime identity, related operations,
-  and validated invocation examples.
-- Add `view="FULL"` only when complete output schema, provider configuration, licensing,
-  or audit metadata is needed.
-- Every exact response states the scope rule: repeated bounded invocations remain
-  finite evidence and do not establish an all-orders or all-parameters conclusion.
+Weak and empty search results do not imply that an operation or mathematical outcome
+is impossible or absent in principle. They include unranked recovery paths for query
+reformulation, filter removal, browsing, and complete catalog inspection. Every exact
+response states the operation's scope rule.
 
 Examples:
 - `{"query":"find a counterexample to associativity","domain":"universal_algebra","mode":"EXPLORE","limit":5}`
-- `{"query":"verify a polynomial identity","mode":"VERIFY","limit":5}`
+- `{"query":"eliminate this denominator using the defining relations"}`
+- `{}`
 - `{"capability_id":"polynomial.compute.gcd"}`
 - `{"capability_id":"polynomial.compute.gcd","view":"CONTRACT"}`
-- `{"capability_id":"polynomial.compute.gcd","view":"FULL"}`
 """
 
-CAPABILITY_INVOKE_DESCRIPTION = """\
-Execute one installed mathematical capability after inspecting its exact descriptor.
+MATH_RUN_DESCRIPTION = """\
+Run one installed mathematical operation and return its typed result, scope,
+completeness, assurance, diagnostics, intermediates, relationships, and artifacts.
 
-Call capability.describe first; do not guess payload fields or aliases. Use EXPLORE
-for proposed, heuristic, or computed evidence and VERIFY only for an installed
-checker-backed contract. After invocation, inspect execution, scope, completeness,
-relationships, open obligations, assurance, diagnostics, and artifact URIs
-independently. COMPLETED does not by itself establish a mathematical conclusion.
-One invocation covers only its exact supplied input or claim. Repeating finite or
-bounded instances does not widen that scope to an all-orders or all-parameters claim.
-The canonical complete `CapabilityResult` is returned directly as MCP structured
-content; follow returned `artifact://` references instead of
-requesting large payloads inline. Synchronous SAT and SMT requests are capped at 150
-seconds so structured TIMEOUT or CANCELLED diagnostics can arrive before remote
-transport deadlines. Partition larger searches; retrying a cancelled call starts a
-new computation.
+Use the selected operation's exact input contract; math.find can inspect an
+unfamiliar contract without making inspection a required research step. EXPLORE
+returns proposed, heuristic, or computed evidence. VERIFY is valid only for an
+installed checker-backed contract. The canonical `CapabilityResult` keeps execution,
+scope, completeness, mathematical conclusion, assurance, open obligations,
+diagnostics, intermediates, relationships, and artifact URIs distinct.
+
+COMPLETED does not by itself establish a mathematical conclusion. One invocation
+covers only its exact supplied input or claim, and repeated finite or bounded calls do
+not widen that scope. Follow returned `artifact://` references when durable evidence
+or a size-separated result is provided.
 
 Examples:
 - `{"capability_id":"integer.compute.gcd","mode":"EXPLORE","payload":{"left":"84","right":"30"}}`
 - `{"capability_id":"polynomial.identity.verify","mode":"VERIFY","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
 
-These demonstrate valid envelopes, not a required sequence or research strategy.
+These are valid envelopes, not a required sequence or research strategy.
 """
 
 OPERATING_GUIDE = """\
@@ -102,39 +93,37 @@ The agent owns decomposition, mathematical strategy, capability composition,
 iteration, stopping criteria, and the decision to pursue independent checking.
 Jacobian exposes operations and feedback; it does not prescribe a research workflow.
 
-## When to use Jacobian
+## Mathematical affordances
 
-Begin with `capability.describe` when a task involves exact computation, structure
-discovery, transformation, bounded search, counterexample generation,
-formal-environment inspection, or independent checking. You do not need to know an
-installed capability ID.
+Jacobian may be useful for exact computation, structure discovery, transformation,
+examples and counterexamples, bounded search, formal-environment inspection, or
+independent checking. An installed capability ID is not required for search or browse.
 
-## Discover, inspect, and invoke
+## Search, browse, inspect, and run
 
-Search with `capability.describe(query=...)`, optionally filtered by `domain` and
+Search with `math.find(query=...)`, optionally filtered by `domain` and
 `mode`. Results are compact candidates ranked by deterministic matches against
 published descriptor metadata; `matched_on` and `matched_terms` make that retrieval
-visible. Ranking is not a recommendation. Follow `next_cursor` with unchanged
-filters and limit when a discovery result is truncated. Start with `limit=5`; inspect
-only the strongest one or two relevant candidates before broadening or paging.
+visible. Ranking is not a recommendation. Follow `next_cursor` with unchanged filters
+and limit when a discovery result is truncated. Omit all arguments to browse.
 
-Search as many outcomes, concepts, or domains as useful. For any candidate, call
-`capability.describe(capability_id=...)` for the small exact SUMMARY. Once the
-outcome fits, request `view="CONTRACT"` and follow its validation-equivalent input
-schema or validated invocation example. Request `view="FULL"` only when complete output
-schema or provider audit metadata is needed. Once one domain-owned outcome fits,
-invoke it before searching for a checker; follow the checker, certificate, and
-verification fields returned by the producer instead of guessing a generic verifier.
-Compose `capability.invoke` calls in whatever sequence the mathematical investigation
-requires. Inspect execution, scope, completeness, relationships, obligations,
-assurance, diagnostics, and artifacts as separate result dimensions.
+The same tool accepts `capability_id` for exact inspection. SUMMARY is the compact
+projection, CONTRACT adds the validation-equivalent input schema and examples, and
+FULL adds complete provider and audit metadata. An agent that already has an exact
+contract may invoke the operation directly. Related operations describe compatibility
+and evidence flow; they do not prescribe what to do next.
 
-`capability.invoke` returns the canonical complete `CapabilityResult` directly as MCP
-structured content. Follow returned `artifact://` references to
-read durable results instead of requesting large payloads inline.
+`math.run` returns the canonical complete `CapabilityResult` directly as MCP
+structured content. Calls may be composed in any sequence the mathematical
+investigation requires. Inspect execution, scope, completeness, relationships,
+obligations, assurance, diagnostics, intermediates, and artifacts as separate result
+dimensions. Follow returned `artifact://` references to read durable results.
 
 `capability://catalog` is the complete machine-readable installed inventory.
-`capability.describe` is the agent-oriented discovery and exact-inspection surface.
+`math.find` is the agent-oriented discovery and exact-inspection surface.
+Weak or empty discovery results expose query reformulation, filter removal, browse,
+and catalog-inspection paths. They do not establish operation absence or mathematical
+impossibility.
 
 ## Exploration and verification
 
@@ -184,9 +173,9 @@ raw tool output into summary.
 
 _REASONING_PREFIX = (
     "Before using Jacobian, call reasoning.write with phase PLAN and a concise "
-    "external work summary. Before each capability.invoke call, write BEFORE_TOOL "
+    "external work summary. Before each math.run call, write BEFORE_TOOL "
     "with the selected capability ID and mode, then pass the returned run_id and "
-    "call_id to capability.invoke. Write AFTER_TOOL after every result with the "
+    "call_id to math.run. Write AFTER_TOOL after every result with the "
     "reported status, assurance, and completeness; use RESULT_UNAVAILABLE only when "
     "result content was lost. Write FINAL before completing the task. These are summaries, "
     "not hidden chain-of-thought. Do not copy raw tool output. "
@@ -204,15 +193,15 @@ def operating_guide(*, reasoning_enabled: bool) -> str:
         "through two MCP tools.",
         "through two capability tools plus the operational `reasoning.write` log tool.",
     ).replace(
-        "## When to use Jacobian",
+        "## Mathematical affordances",
         "## External reasoning log\n\n"
-        "Start with one concise `PLAN`. Surround every `capability.invoke` with "
+        "Start with one concise `PLAN`. Surround every `math.run` with "
         "`BEFORE_TOOL` and `AFTER_TOOL`, then write one `FINAL` audit. The server "
         "binds actual status, assurance, completeness, and artifact URIs and records "
         "whether the model's structured interpretation matches them, without "
         "storing raw payload or output. This log is operational and unverified; it "
         "is not hidden chain-of-thought or mathematical evidence.\n\n"
-        "## When to use Jacobian",
+        "## Mathematical affordances",
     )
 
 
@@ -226,19 +215,20 @@ Use Jacobian's capability protocol for this mathematical task:
 {task}
 </task>
 
-1. Keep task decomposition, research strategy, iteration, and stopping criteria
-   under your control.
-2. Search any outcomes or concepts that may help with `capability.describe(query=...)`.
-   Add `domain` or `mode` only when those filters are useful.
-3. Treat compact matches as retrieval candidates, not recommendations. Search again
-   across other concepts or domains whenever useful.
-4. Inspect any candidate with `capability.describe(capability_id=...)`.
-5. Once it fits, request `view="CONTRACT"` and construct `capability.invoke` from the
-   exact input schema or a returned validated invocation example. Do not guess fields.
-6. Compose operations as the investigation demands. Interpret execution,
-   completeness, assurance, obligations, and artifacts separately. If independent
-   checking is useful, discover an installed VERIFY capability rather than treating
-   computed evidence as verified.
+Keep task decomposition, representation, research strategy, iteration, verification
+timing, and stopping criteria under your control.
+
+Available affordances:
+- `math.find(query=...)` searches by a desired local mathematical outcome.
+- `math.find()` browses when the installed vocabulary is unknown.
+- `math.find(capability_id=...)` inspects an exact operation and its typed
+  contract.
+- `math.run(...)` runs one selected operation.
+
+Compact matches are retrieval candidates, not recommendations. Compose operations as
+the investigation demands, and interpret execution, scope, completeness, assurance,
+obligations, intermediates, relationships, and artifacts separately. Computed evidence
+is not independently verified evidence.
 """
 
 
@@ -255,7 +245,7 @@ Use Jacobian to look for an independent checking path for this claim:
 {claim}
 </claim>
 {artifact_context}
-1. Search with `capability.describe(query=..., mode="VERIFY")`.
+1. Search with `math.find(query=..., mode="VERIFY")`.
 2. Treat an empty result as checker unavailability, not evidence for or against the
    claim.
 3. Describe the selected exact capability. Confirm that its semantics, scope,

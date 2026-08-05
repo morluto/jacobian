@@ -34,7 +34,11 @@
     "e2e": {"command": "make test-e2e", "topology_lane": "e2e"},
     "lean": {"command": "make test-lean", "topology_lane": "lean"},
     "npm": {"command": "make npm-test", "topology_lane": null},
-    "static": {"command": "make check-static", "topology_lane": null},
+    "static": {
+      "command": "make check-static",
+      "topology_lane": null,
+      "local_subsumes": ["build"]
+    },
     "build": {"command": "make build", "topology_lane": null},
     "security": {"command": "make security-audit", "topology_lane": null},
     "duplicate": {"command": "make duplicate-code", "topology_lane": null},

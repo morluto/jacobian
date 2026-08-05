@@ -636,7 +636,7 @@ class ConjectureService:
             if not validation.valid:
                 raise ConjectureError(
                     "The plugin generated an invalid claim. Check its output against "
-                    "capability.describe, then retry. Validation: "
+                    "math.find, then retry. Validation: "
                     + "; ".join(validation.input.errors)
                 )
             seen_digests.add(claim.object_digest)
@@ -825,7 +825,7 @@ def _workflow_failure_detail(exc: Exception) -> str:
     if isinstance(exc, (PluginRegistryError, SchemaRegistryError)):
         return (
             "The selected plugin or reference contract is unavailable. Call "
-            "capability.describe, choose an installed option, and retry."
+            "math.find, choose an installed option, and retry."
         )
     if isinstance(exc, SearchError):
         return (
@@ -846,7 +846,7 @@ def _workflow_failure_detail(exc: Exception) -> str:
             )
     return (
         "The conjecture workflow received invalid data. Check the request and plugin "
-        "output against capability.describe, then retry."
+        "output against math.find, then retry."
     )
 
 
@@ -859,7 +859,7 @@ def _model_validation_detail(exc: ValidationError, subject: str) -> str:
     path = ".".join(str(part) for part in first["loc"]) or "request"
     return (
         f"The {subject} is invalid at {path}: {first['msg']}. Check "
-        "capability.describe, correct that field, and retry."
+        "math.find, correct that field, and retry."
     )
 
 

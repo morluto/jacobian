@@ -13,8 +13,8 @@ composes search, evaluation, transformation, or verification capabilities, and
 search output never self-certifies.
 
 This runtime is not a separate public MCP workflow. Agents discover the
-namespaced capability with `capability.describe`, invoke it with
-`capability.invoke`, and inspect returned experiment and artifact resources.
+namespaced capability with `math.find`, invoke it with
+`math.run`, and inspect returned experiment and artifact resources.
 
 ## Ownership model
 

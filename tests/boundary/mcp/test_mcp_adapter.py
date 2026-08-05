@@ -13,11 +13,66 @@ from jacobian.adapters.mcp.guidance import OPERATING_GUIDE
 from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import CapabilityDescriptor
 
-CAPABILITY_TOOL_NAMES = {"capability.describe", "capability.invoke"}
-MCP_TOOL_NAMES = CAPABILITY_TOOL_NAMES
+MATH_TOOL_NAMES = {"math.find", "math.run"}
+MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
-def test_mcp_exposes_only_capability_tools_with_read_only_resources(
+def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> None:
+    server = create_server(tmp_path)
+    assert server.instructions is not None
+    assert "math.find" in server.instructions
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(server, raise_exceptions=True) as client:
+            listed = await client.list_tools()
+            tools = {tool.name: tool for tool in listed.tools}
+            assert set(tools) == {"math.find", "math.run"}
+            assert tools["math.find"].title == "Find or inspect mathematical operations"
+            assert tools["math.run"].title == "Run a mathematical operation"
+            assert "math.find" in (tools["math.run"].description or "")
+
+            discovery = await client.get_prompt(
+                "jacobian-discover",
+                {"task": "Find a finite counterexample."},
+            )
+            discovery_text = discovery.messages[0].content.text
+            assert "math.find" in discovery_text
+            assert "math.run" in discovery_text
+
+            evidence = await client.get_prompt(
+                "jacobian-check-evidence",
+                {"claim": "The candidate satisfies the defining identity."},
+            )
+            evidence_text = evidence.messages[0].content.text
+            assert "math.find" in evidence_text
+
+            described = await client.call_tool(
+                "math.find",
+                {"capability_id": "integer.compute.gcd", "view": "CONTRACT"},
+            )
+            assert described.structured_content is not None
+            invocations = described.structured_content["invocations"]
+            assert invocations
+            assert {item["tool"] for item in invocations} == {"math.run"}
+
+            absent = await client.call_tool(
+                "math.find",
+                {"query": "quuxonium frobnicator"},
+            )
+            assert absent.structured_content is not None
+            recovery_tools = {
+                item["tool"]
+                for item in absent.structured_content["available_recovery_paths"]
+                if "tool" in item
+            }
+            assert recovery_tools == {"math.find"}
+
+    asyncio.run(scenario())
+
+
+def test_mcp_exposes_only_math_tools_with_read_only_resources(
     tmp_path: Path,
 ) -> None:
     server = create_server(tmp_path)
@@ -31,7 +86,10 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
             assert client.instructions == server.instructions
             assert client.server_info.version == version("jacobian")
             assert client.server_capabilities.extensions == {
-                "io.jacobian/core": {"version": "2", "reasoning_log_mode": "OFF"}
+                "io.jacobian/core": {
+                    "version": "2",
+                    "reasoning_log_mode": "OFF",
+                }
             }
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
@@ -50,13 +108,13 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
                 and tool.annotations.open_world_hint is False
                 for tool in tools.values()
             )
-            assert tools["capability.describe"].annotations is not None
-            assert tools["capability.describe"].annotations.read_only_hint is True
+            assert tools["math.find"].annotations is not None
+            assert tools["math.find"].annotations.read_only_hint is True
             assert (
                 "ranking is deterministic retrieval"
-                in (tools["capability.describe"].description or "").lower()
+                in (tools["math.find"].description or "").lower()
             )
-            describe_schema = tools["capability.describe"].input_schema
+            describe_schema = tools["math.find"].input_schema
             assert all(
                 tool.input_schema.get("additionalProperties") is False
                 for tool in tools.values()
@@ -72,14 +130,14 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
                 "cursor",
                 "view",
             }
-            assert set(tools["capability.invoke"].input_schema["properties"]) == {
+            assert set(tools["math.run"].input_schema["properties"]) == {
                 "capability_id",
                 "payload",
                 "mode",
             }
             with pytest.raises(MCPError) as unknown_argument:
                 await client.call_tool(
-                    "capability.describe",
+                    "math.find",
                     {"capabilty_id": "polynomial.compute.gcd"},
                 )
             assert '"code": "INVALID_INPUT"' in str(unknown_argument.value)
@@ -153,29 +211,53 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
             )
             rendered_prompt = discovery_prompt.messages[0].content.text
             assert "research strategy" in rendered_prompt
-            assert "Search any outcomes or concepts" in rendered_prompt
+            assert "desired local mathematical outcome" in rendered_prompt
+            assert "Available affordances" in rendered_prompt
 
             discovery_result = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"query": "search mathematical knowledge", "limit": 3},
             )
             discovery = json.loads(discovery_result.content[0].text)
             assert discovery["kind"] == "discovery"
             assert 0 < len(discovery["matches"]) <= 3
             assert "input_schema" not in discovery["matches"][0]
-            assert discovery["next_step"] == {
-                "tool": "capability.describe",
-                "argument": "capability_id",
-                "choose_from": "matches[].capability_id",
+            assert "next_step" not in discovery
+            assert "routing_guidance" not in discovery
+            operation_card = discovery["matches"][0]
+            assert operation_card["accepted_input_kinds"]
+            assert "output_schema_summary" in operation_card
+            assert operation_card["scope"] == "EXACT_SUPPLIED_INPUT_OR_CLAIM"
+            assert operation_card["assurance_ceiling"] in {"COMPUTED", "VERIFIED"}
+            assert operation_card["provider_availability"] == "AVAILABLE"
+            assert isinstance(operation_card["related_capabilities"], list)
+
+            absent_result = await client.call_tool(
+                "math.find",
+                {"query": "quuxonium frobnicator", "domain": "polynomial"},
+            )
+            absent = json.loads(absent_result.content[0].text)
+            assert absent["portfolio_fit"] == "NO_LEXICAL_MATCHES"
+            assert absent["matches"] == []
+            recovery_actions = {
+                option["action"] for option in absent["available_recovery_paths"]
             }
-            assert discovery["routing_guidance"]["inspect_candidates"] == (
-                "Inspect only the strongest one or two domain-relevant matches; "
-                "search again only when none fits the required outcome."
+            assert recovery_actions == {
+                "reformulate_query",
+                "remove_filters",
+                "browse",
+                "inspect_catalog",
+            }
+            browse = next(
+                option
+                for option in absent["available_recovery_paths"]
+                if option["action"] == "browse"
             )
-            assert (
-                "producer result"
-                in discovery["routing_guidance"]["verification_handoff"]
-            )
+            assert browse == {
+                "action": "browse",
+                "tool": "math.find",
+                "arguments": {},
+            }
 
             catalog_result = await client.read_resource("capability://catalog")
             catalog = json.loads(catalog_result.contents[0].text)
@@ -188,7 +270,7 @@ def test_mcp_exposes_only_capability_tools_with_read_only_resources(
             )
             if "lean.check" in capability_ids:
                 lean_result = await client.call_tool(
-                    "capability.describe",
+                    "math.find",
                     {"capability_id": "lean.check", "view": "FULL"},
                 )
                 lean_contract = json.loads(lean_result.content[0].text)
@@ -216,7 +298,7 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             described = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"capability_id": "integer.compute.gcd", "view": "CONTRACT"},
             )
             contract = json.loads(described.content[0].text)
@@ -230,7 +312,7 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert "output_schema_summary" in contract["capability"]
 
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.compute.gcd",
                     "mode": "EXPLORE",
@@ -250,7 +332,7 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert response["provider_digest"] == runtime["digest"]
 
             matching_description = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "capability_id": ("graph.invariant.maximum_matching.compute"),
                     "view": "CONTRACT",
@@ -269,7 +351,7 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             ]
 
             unknown = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "missing.capability",
                     "mode": "EXPLORE",
@@ -293,7 +375,7 @@ def test_mcp_inline_results_do_not_emit_resource_links(
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.compute.gcd",
                     "mode": "EXPLORE",
@@ -317,18 +399,18 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             summary_result = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"capability_id": "polynomial.expression.normalize"},
             )
             contract_result = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "capability_id": "polynomial.expression.normalize",
                     "view": "CONTRACT",
                 },
             )
             full_result = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "capability_id": "polynomial.expression.normalize",
                     "view": "FULL",

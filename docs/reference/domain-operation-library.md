@@ -14,7 +14,7 @@ completeness, provider provenance, and visible proof obligations.
 
 This document describes the shared installation contract. It is not a static
 capability inventory. Read `capability://catalog`, then use
-`capability.describe` for the IDs, schemas, modes, provider identities, and
+`math.find` for the IDs, schemas, modes, provider identities, and
 checker requirements installed in a particular runtime.
 
 ## Bundle contract
@@ -96,7 +96,7 @@ The supported native-value interface is the deliberately small
 [`jacobian.math`](python-api.md) namespace. Its functions accept Python,
 SymPy, or NetworkX values as documented and call typed mathematical kernels
 directly. They do not construct the capability runtime or route through
-`capability.invoke`.
+`math.run`.
 
 When a native function corresponds to a capability, both paths share the same
 domain-owned mathematical kernel. Explicit adapters translate between native
@@ -181,7 +181,7 @@ format. Unsupported formats, rejected evidence, timeout, cancellation,
 runtime-identity drift, malformed output, and worker failure return
 non-verifying outcomes and cannot create that record.
 
-Use `capability.describe` on the producer and candidate verification capability
+Use `math.find` on the producer and candidate verification capability
 before invocation. Do not infer a verifier ID or payload from naming
 conventions: checker availability depends on operator authorization and the
 installed runtime.

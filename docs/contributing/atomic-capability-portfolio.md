@@ -12,8 +12,8 @@
 ## Decision
 
 Keep the five-tool MCP surface small. External systems should appear as
-versioned capability adapters behind `capability.describe` and
-`capability.invoke`, not as one new MCP tool per backend.
+versioned capability adapters behind `math.find` and
+`math.run`, not as one new MCP tool per backend.
 
 Build in this order:
 

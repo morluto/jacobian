@@ -402,7 +402,7 @@ def _declaration_invocation_error(
             stage="lean_declaration_query",
             message=error.message,
             hint=(
-                "Call capability.describe for the exact query contract and verify "
+                "Call math.find for the exact query contract and verify "
                 "that the requested pinned environment is installed."
             ),
         )

@@ -36,7 +36,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
 ) -> None:
     events = [
         _tool_event(
-            "capability.describe",
+            "math.find",
             {
                 "query": "find a graph counterexample",
                 "domain": "graph",
@@ -51,7 +51,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             },
         ),
         _tool_event(
-            "capability.describe",
+            "math.find",
             {"capability_id": "graph.search.atlas"},
             {
                 "kind": "capability",
@@ -59,7 +59,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             },
         ),
         _tool_event(
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "graph.search.atlas",
                 "mode": "EXPLORE",
@@ -113,17 +113,17 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
 ) -> None:
     events = [
         _tool_event(
-            "capability.describe",
+            "math.find",
             {},
             {"matches": [{"capability_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
-            "capability.describe",
+            "math.find",
             {},
             {"matches": [{"capability_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
-            "capability.describe",
+            "math.find",
             {"capability_id": "sat.cnf.materialize"},
             {"capability": {"capability_id": "sat.cnf.materialize"}},
         ),
@@ -138,11 +138,10 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
 
     assert telemetry["mcp_wire_bytes"] > 0
     assert (
-        telemetry["mcp_wire_bytes_by_tool"]["capability.describe"]
-        == telemetry["mcp_wire_bytes"]
+        telemetry["mcp_wire_bytes_by_tool"]["math.find"] == telemetry["mcp_wire_bytes"]
     )
     assert telemetry["repeated_mcp_call_count"] == 1
-    assert telemetry["repeated_mcp_calls"][0]["tool"] == "capability.describe"
+    assert telemetry["repeated_mcp_calls"][0]["tool"] == "math.find"
     assert telemetry["repeated_mcp_calls"][0]["count"] == 2
     assert telemetry["capability_describe_index_calls"] == 2
     assert telemetry["capability_describe_exact_calls"] == 1
@@ -171,7 +170,7 @@ def test_agent_telemetry_reports_reasoning_protocol_without_summary_text(
             {"run_id": run_id, "call_id": call_id},
         ),
         _tool_event(
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "integer.compute.gcd",
                 "payload": {},
@@ -279,7 +278,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
         "type": "item.completed",
         "item": {
             "type": "mcp_tool_call",
-            "tool": "capability.invoke",
+            "tool": "math.run",
             "arguments": {
                 "capability_id": "graph.search.atlas",
                 "mode": "EXPLORE",
@@ -346,7 +345,7 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
             "type": "item.completed",
             "item": {
                 "type": "mcp_tool_call",
-                "tool": "capability.invoke",
+                "tool": "math.run",
                 "arguments": {"capability_id": "graph.search.atlas"},
                 "status": "completed",
                 "result": {

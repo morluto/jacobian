@@ -118,8 +118,8 @@ Codex CLI              ChatGPT / remote agent
                        │
                        ▼
           capability://catalog
-          capability.describe
-          capability.invoke
+          math.find
+          math.run
                        │
                        ▼
                CapabilityService
@@ -241,7 +241,7 @@ non-verified result or operational error.
 ## Local and remote hosts
 
 The local Codex host uses STDIO. It exposes `capability://catalog`,
-`capability.describe`, and `capability.invoke` rather than projecting backend
+`math.find`, and `math.run` rather than projecting backend
 mathematical operations or workflows as additional top-level MCP tools.
 
 Remote hosts use Streamable HTTP and subject-bound tenant state. Authentication,

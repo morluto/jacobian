@@ -18,8 +18,8 @@ const HANDSHAKE_TIMEOUT_MS = 60_000;
 const RESPONSE_TIMEOUT_MS = 10_000;
 
 const EXPECTED_TOOLS = [
-  "capability.describe",
-  "capability.invoke",
+  "math.find",
+  "math.run",
 ];
 
 /**

@@ -157,7 +157,7 @@ def _ready_probe(
         "reachable": True,
         "report": {
             "server": {"name": "jacobian", "version": "1.0.0"},
-            "tool_names": ["capability.describe", "capability.invoke"],
+            "tool_names": ["math.find", "math.run"],
             "catalog": {
                 "catalog_version": "1",
                 "capabilities": 1,

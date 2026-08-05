@@ -34,7 +34,7 @@ def test_reasoning_run_survives_runtime_restart_and_finalizes(tmp_path: Path) ->
             assert isinstance(before.structured_content, dict)
             call_id = before.structured_content["call_id"]
             result = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "integer.compute.gcd",
                     "payload": {"left": "84", "right": "30"},

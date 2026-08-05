@@ -68,12 +68,12 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
 
             producer = await _tool(
                 client,
-                "capability.describe",
+                "math.find",
                 {"capability_id": "polynomial.compute.gcd"},
             )
             verifier = await _tool(
                 client,
-                "capability.describe",
+                "math.find",
                 {"capability_id": "polynomial.gcd.verify"},
             )
             assert producer["capability"]["modes"] == ["EXPLORE"]
@@ -85,7 +85,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             }
             computed = await _tool(
                 client,
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "polynomial.compute.gcd",
                     "mode": "EXPLORE",
@@ -98,7 +98,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
 
             verified = await _tool(
                 client,
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
                     "mode": "VERIFY",
@@ -119,7 +119,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await _tool(
                 client,
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
                     "mode": "VERIFY",
@@ -149,7 +149,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
             }
             computed = await _tool(
                 client,
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "polynomial.compute.gcd",
                     "mode": "EXPLORE",
@@ -162,7 +162,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
 
             unavailable = await _tool(
                 client,
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
                     "mode": "VERIFY",
@@ -192,13 +192,13 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
         assert "lean.proof_edit.validate" in capability_ids
         descriptor = await _tool(
             client,
-            "capability.describe",
+            "math.find",
             {"capability_id": "lean.proof_edit.validate"},
         )
         assert descriptor["capability"]["modes"] == ["VERIFY"]
         return await _tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "lean.proof_edit.validate",
                 "mode": "VERIFY",

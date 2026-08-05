@@ -304,7 +304,7 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
             raise_exceptions=True,
         ) as client:
             described = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"capability_id": "lean.check", "view": "CONTRACT"},
             )
             descriptor = json.loads(described.content[0].text)
@@ -312,7 +312,7 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
             assert descriptor["cache"]["mathlib_warmup"]["status"] == "NOT_STARTED"
 
             response = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "lean.check",
                     "mode": "VERIFY",

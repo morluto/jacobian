@@ -764,7 +764,7 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_CAPABILITY_INVOKE_TOOL = "capability.invoke"
+_MATH_RUN_TOOL = "math.run"
 
 
 def _mark_invoked_if_capability_used(
@@ -779,14 +779,14 @@ def _mark_invoked_if_capability_used(
     preflight proves AVAILABLE_UNUSED and the runner must not override it.
     Persists the updated contract to ``routing-status-c2.json``.
 
-    Fail closed: a trial with ``capability.invoke`` calls but non-COMPLETED
+    Fail closed: a trial with ``math.run`` calls but non-COMPLETED
     status or nonzero ``tool_errors`` does not evidence a successful
     invocation and must not transition the routing status.
     """
 
     invoked = any(
         isinstance(trial.get("tool_calls"), dict)
-        and trial["tool_calls"].get(_CAPABILITY_INVOKE_TOOL, 0) > 0
+        and trial["tool_calls"].get(_MATH_RUN_TOOL, 0) > 0
         and trial.get("status") == "COMPLETED"
         and trial.get("tool_errors") == 0
         for trial in trials

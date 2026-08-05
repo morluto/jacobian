@@ -18,8 +18,8 @@ from jacobian.adapters.mcp.server import create_server
 from jacobian.adapters.mcp.tooling import _request_trace_digest, _run_blocking
 
 MCP_TOOL_NAMES = {
-    "capability.describe",
-    "capability.invoke",
+    "math.find",
+    "math.run",
     "reasoning.write",
 }
 
@@ -52,11 +52,11 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"query": "private-query-marker"},
             )
             failed = await client.call_tool(
-                "capability.invoke",
+                "math.run",
                 {
                     "capability_id": "missing.capability",
                     "mode": "EXPLORE",
@@ -72,7 +72,7 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     metric = next(
         message
         for message in messages
-        if "MCP tool call tool=capability.describe status=success" in message
+        if "MCP tool call tool=math.find status=success" in message
     )
     assert "duration_ms=" in metric
     assert "response_bytes=" in metric
@@ -97,7 +97,7 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
 
         async with Client(create_server(tmp_path), raise_exceptions=False) as client:
             unknown_capability = await client.call_tool(
-                "capability.describe", {"capability_id": "missing.capability"}
+                "math.find", {"capability_id": "missing.capability"}
             )
             response = json.loads(unknown_capability.content[0].text)
             assert response["error"]["code"] == "UNKNOWN_CAPABILITY"
@@ -133,7 +133,7 @@ def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) 
             raise_exceptions=False,
         ) as client:
             with pytest.raises(MCPError) as authentication_error:
-                await client.call_tool("capability.describe", {})
+                await client.call_tool("math.find", {})
             assert str(authentication_error.value) == "Internal server error"
 
     asyncio.run(scenario())
@@ -152,7 +152,7 @@ def test_direct_tool_calls_reject_removed_and_malformed_arguments(
 
         with pytest.raises(ToolError):
             await server.call_tool(
-                "capability.describe",
+                "math.find",
                 {"limit": "not-an-integer"},
             )
 
@@ -200,6 +200,7 @@ def test_mcp_entrypoint_has_nonstarting_help() -> None:
     assert completed.returncode == 0
     assert "Run the Jacobian MCP server" in completed.stdout
     assert "--tool-profile" not in completed.stdout
+    assert "--tool-name-profile" not in completed.stdout
 
 
 def test_mcp_entrypoint_reports_distribution_version() -> None:

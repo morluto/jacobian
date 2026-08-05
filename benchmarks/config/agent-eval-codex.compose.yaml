@@ -1,0 +1,7 @@
+services:
+  main:
+    volumes:
+      - type: bind
+        source: ${JACOBIAN_EVAL_CODEX_BINARY:?set JACOBIAN_EVAL_CODEX_BINARY to the standalone Codex executable}
+        target: /usr/local/bin/codex
+        read_only: true

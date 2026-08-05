@@ -11,7 +11,7 @@ operational and unverified and never change mathematical assurance.
 1. Call `reasoning.write` with `phase: "PLAN"`; retain its `run_id`.
 2. Before each capability execution, write `BEFORE_TOOL` with that run ID,
    exact capability ID, mode, and a short purpose. Retain the returned `call_id`.
-3. Add both IDs to the matching `capability.invoke` request.
+3. Add both IDs to the matching `math.run` request.
 4. After every result, write `AFTER_TOOL` with `interpretation_status:
    "INTERPRETED"`, the same IDs, a concise interpretation, and the reported
    execution status, assurance level, and completeness status. If the result

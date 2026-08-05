@@ -176,6 +176,13 @@ def test_rejects_decimal_token_rounded_by_binary_float(tmp_path: Path) -> None:
 def test_rejects_exponential_integer_before_materializing_it(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     task, app, logs = _prepare(tmp_path, submission)
+    evidence_path = app / "evidence/divisibility-audit.json"
+    evidence_path.write_text(
+        evidence_path.read_text().replace('"prime":2', '"prime":1e10000000', 1)
+    )
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
     submission_text = json.dumps(submission).replace(
         '"prime": 2', '"prime": 1e10000000', 1
     )

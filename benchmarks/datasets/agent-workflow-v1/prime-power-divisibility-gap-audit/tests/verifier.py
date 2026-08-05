@@ -11,7 +11,7 @@ from verifier_support import (
     MAX_SUBMISSION_BYTES,
     false_verified_claim,
     is_regular_bounded_file,
-    read_evidence_json,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -32,6 +32,36 @@ class _JsonFloat(float):
         return instance
 
 
+def _bounded_json_float(value: str) -> _JsonFloat:
+    try:
+        exact = Decimal(value)
+    except InvalidOperation as error:
+        raise ValueError(f"invalid JSON number: {value}") from error
+    parsed = _JsonFloat(value)
+    if (
+        not exact.is_finite()
+        or not math.isfinite(parsed)
+        or (exact != 0 and exact.adjusted() >= MAX_INTEGER_DIGITS)
+    ):
+        raise ValueError(f"out-of-range JSON number: {value}")
+    return parsed
+
+
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValueError(f"non-finite JSON number: {value}")
+
+
+def _read_untrusted_json(path: Path) -> object | None:
+    try:
+        return json.loads(
+            path.read_text(),
+            parse_float=_bounded_json_float,
+            parse_constant=_reject_nonfinite_json,
+        )
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+
+
 def _frozen() -> dict[str, Any]:
     try:
         value = json.loads((TESTS / "input.json").read_text())
@@ -44,10 +74,7 @@ def _submission() -> dict[str, Any] | None:
     path = WORKSPACE / "submission.json"
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
-    try:
-        value = json.loads(path.read_text(), parse_float=_JsonFloat)
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
+    value = _read_untrusted_json(path)
     return value if isinstance(value, dict) else None
 
 
@@ -180,7 +207,10 @@ def _evidence(submission: dict[str, Any], *, expected_task_id: str) -> bool:
     evidence = submission.get("evidence")
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
-    payload = read_evidence_json(evidence[0], expected_path=EVIDENCE_PATH)
+    evidence_path = resolve_evidence(evidence[0], expected_path=EVIDENCE_PATH)
+    if evidence_path is None:
+        return False
+    payload = _read_untrusted_json(evidence_path)
     return bool(
         isinstance(payload, dict)
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}

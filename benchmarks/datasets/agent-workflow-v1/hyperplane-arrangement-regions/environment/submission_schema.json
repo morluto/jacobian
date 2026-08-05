@@ -1,1 +1,136 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/hyperplane-arrangement-regions"},"conclusion":{"const":"REGION_COUNT_CERTIFIED"},"result":{"type":"object","additionalProperties":false,"required":["regions","ordered_planes","duplicate_groups"],"properties":{"regions":{"type":"integer"},"ordered_planes":{"type":"array","minItems":10,"maxItems":10,"items":{"type":"object","additionalProperties":false,"required":["label","coefficients","increment"],"properties":{"label":{"enum":["cube_x0","cube_x1","cube_y0","cube_y1","cube_z0","cube_z1","tetra_A1C1D1","tetra_BC1D1","tetra_BA1D1","tetra_BA1C1"]},"coefficients":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"integer"}},"increment":{"type":"integer","minimum":0}}}},"duplicate_groups":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"string"}}}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"const":"the ten frozen cube and tetrahedron face planes"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "REGION_COUNT_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "duplicate_groups": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        },
+        "ordered_planes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "coefficients": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+              },
+              "increment": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "label": {
+                "enum": [
+                  "cube_x0",
+                  "cube_x1",
+                  "cube_y0",
+                  "cube_y1",
+                  "cube_z0",
+                  "cube_z1",
+                  "tetra_A1C1D1",
+                  "tetra_BC1D1",
+                  "tetra_BA1D1",
+                  "tetra_BA1C1"
+                ]
+              }
+            },
+            "required": [
+              "label",
+              "coefficients",
+              "increment"
+            ],
+            "type": "object"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "type": "array"
+        },
+        "regions": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "regions",
+        "ordered_planes",
+        "duplicate_groups"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "the ten frozen cube and tetrahedron face planes",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/hyperplane-arrangement-regions"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

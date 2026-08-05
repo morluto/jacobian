@@ -41,7 +41,7 @@ def test_rejects_wrong_scope_without_base_reward(tmp_path: Path) -> None:
     assert rejected["reward"] == pytest.approx(0.2)
 
 
-def test_rejects_escaped_evidence_without_base_reward(tmp_path: Path) -> None:
+def test_rejects_escaped_evidence_with_zero_aggregate_reward(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["evidence"] = [
@@ -53,9 +53,9 @@ def test_rejects_escaped_evidence_without_base_reward(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
+    assert rejected["correctness"] == 0.0
     assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.2)
+    assert rejected["reward"] == 0.0
 
 
 def test_rejects_wrong_assurance_without_base_reward(tmp_path: Path) -> None:

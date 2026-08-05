@@ -6,16 +6,32 @@ import argparse
 import hashlib
 import json
 import math
-import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.tooling.harbor_suite import BENCHMARKS, HarborSuiteError
+from benchmarks.tooling.command_runner import operator_environment, run_operator_command
+from benchmarks.tooling.errors import HarborSuiteError
+from benchmarks.tooling.harbor_suite import BENCHMARKS
+from benchmarks.tooling.strict_boundaries import HeldoutRunPlan, raise_strict_model
 
 CommandRunner = Callable[[list[str]], int]
+
+_HARBOR_RUNNER_VARIABLES = (
+    "ALL_PROXY",
+    "CODEX_FORCE_AUTH_JSON",
+    "HOME",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "NO_PROXY",
+    "OPENAI_API_KEY",
+    "all_proxy",
+    "https_proxy",
+    "http_proxy",
+    "no_proxy",
+)
 
 
 def _read_json(path: Path) -> Any:
@@ -31,7 +47,11 @@ def _json_digest(value: Any) -> str:
 
 
 def _file_digest(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    try:
+        contents = path.read_bytes()
+    except OSError as exc:
+        raise HarborSuiteError("held-out manifest cannot be read for binding") from exc
+    return "sha256:" + hashlib.sha256(contents).hexdigest()
 
 
 def _plan_digest(plan: dict[str, Any]) -> str:
@@ -131,26 +151,33 @@ def _write_ledger(path: Path, ledger: dict[str, Any]) -> None:
 
 
 def _default_command(command: list[str]) -> int:
-    return subprocess.run(command, check=False).returncode
+    if not command:
+        return 1
+    result = run_operator_command(
+        command[0],
+        command[1:],
+        cwd=Path.cwd(),
+        timeout_seconds=3600.0,
+        environment=operator_environment(include=_HARBOR_RUNNER_VARIABLES),
+    )
+    if result.exit_code is not None:
+        return result.exit_code
+    return 1
 
 
 def _validated_plan(plan_path: Path) -> tuple[dict[str, Any], str, list[str]]:
     plan = _read_json(plan_path)
-    if not isinstance(plan, dict) or plan.get("schema_version") != "2":
-        raise HarborSuiteError("held-out run plan must be a schema v2 object")
+    raise_strict_model(HeldoutRunPlan, plan, label=str(plan_path))
     expected_digest = _plan_digest(plan)
     if plan.get("plan_digest") != expected_digest:
         raise HarborSuiteError("held-out run plan digest mismatch")
-    runs = plan.get("runs")
-    if not isinstance(runs, list):
-        raise HarborSuiteError("held-out run plan has no runs")
-    pair_ids = list(dict.fromkeys(str(run.get("pair_id")) for run in runs))
-    if len(pair_ids) != plan.get("pair_count"):
+    runs = plan["runs"]
+    pair_ids = list(dict.fromkeys(str(run["pair_id"]) for run in runs))
+    if len(pair_ids) != plan["pair_count"]:
         raise HarborSuiteError("held-out run plan pair count mismatch")
-    run_keys = [(run.get("pair_id"), run.get("condition")) for run in runs]
+    run_keys = [(run["pair_id"], run["condition"]) for run in runs]
     bad_pairs = any(
-        {run.get("condition") for run in runs if run.get("pair_id") == pair_id}
-        != {"C1", "C2"}
+        {run["condition"] for run in runs if run["pair_id"] == pair_id} != {"C1", "C2"}
         for pair_id in pair_ids
     )
     if len(set(run_keys)) != len(run_keys) or bad_pairs:
@@ -161,11 +188,15 @@ def _validated_plan(plan_path: Path) -> tuple[dict[str, Any], str, list[str]]:
 
 
 def _initial_ledger(
-    ledger_path: Path, plan: dict[str, Any], plan_digest: str
+    ledger_path: Path,
+    plan: dict[str, Any],
+    plan_digest: str,
+    manifest_digest: str,
 ) -> dict[str, Any]:
     if not ledger_path.exists():
         return {
-            "schema_version": "1",
+            "schema_version": "2",
+            "manifest_digest": manifest_digest,
             "plan_digest": plan_digest,
             "status": "RUNNING",
             "budget": plan["budget"],
@@ -175,8 +206,12 @@ def _initial_ledger(
             "validation_failures": [],
         }
     ledger = _read_json(ledger_path)
-    if not isinstance(ledger, dict) or ledger.get("plan_digest") != plan_digest:
+    if not isinstance(ledger, dict):
+        raise HarborSuiteError("existing ledger must be a JSON object")
+    if ledger.get("plan_digest") != plan_digest:
         raise HarborSuiteError("existing ledger belongs to a different run plan")
+    if ledger.get("manifest_digest") != manifest_digest:
+        raise HarborSuiteError("existing ledger belongs to a different manifest")
     if ledger.get("status") != "COMPLETE":
         ledger["status"] = "RUNNING"
         ledger["validation_failures"] = []
@@ -249,32 +284,93 @@ def _budget_exceeded(ledger: dict[str, Any]) -> bool:
     )
 
 
-def execute_plan(
-    plan_path: Path,
+def _write_routing_contract(
+    directory: Path, condition: str, contract: dict[str, Any]
+) -> None:
+    """Persist a digest-bound routing status contract next to the ledger."""
+
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"routing-status-{condition.lower()}.json"
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
+
+
+def _resolve_harbor_version(manifest_path: Path) -> str:
+    """Resolve harbor_version from the canonical manifest."""
+
+    from benchmarks.tooling.heldout_bundle import validate_manifest
+
+    manifest = validate_manifest(manifest_path)
+    return str(manifest["experiment"]["harbor_version"])
+
+
+def _setup_routing_contracts(
+    plan: dict[str, Any],
+    manifest_path: Path,
+    contract_dir: Path,
+    probe_url: str,
+    probe_fn: Any | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
+    """Run preflight and write routing contracts; return (treatment, control, failures)."""
+
+    from benchmarks.tooling.heldout_bundle import (
+        control_routing_status,
+        treatment_readiness_preflight,
+    )
+
+    has_treatment = any(run["condition"] == "C2" for run in plan["runs"])
+    has_control = any(run["condition"] == "C1" for run in plan["runs"])
+    treatment_contract: dict[str, Any] | None = None
+    control_contract: dict[str, Any] | None = None
+    failures: list[str] = []
+    if has_treatment:
+        treatment_contract = treatment_readiness_preflight(
+            manifest_path,
+            mcp_url=probe_url,
+            probe_fn=probe_fn,
+        )
+        _write_routing_contract(contract_dir, "C2", treatment_contract)
+        if treatment_contract["infrastructure_status"] != "READY":
+            failures.append(
+                "treatment infrastructure is not READY: "
+                + treatment_contract["infrastructure_status"]
+            )
+            if has_control:
+                control_contract = control_routing_status(manifest_path)
+                _write_routing_contract(contract_dir, "C1", control_contract)
+            return treatment_contract, control_contract, failures
+    if has_control:
+        control_contract = control_routing_status(manifest_path)
+        _write_routing_contract(contract_dir, "C1", control_contract)
+    return treatment_contract, control_contract, []
+
+
+def _execute_pairs(
+    pair_ids: list[str],
+    plan: dict[str, Any],
+    root: Path,
+    harbor_version: str,
     ledger_path: Path,
-    *,
-    command_runner: CommandRunner = _default_command,
-) -> dict[str, Any]:
-    plan, plan_digest, pair_ids = _validated_plan(plan_path)
-    runs = plan["runs"]
-    ledger = _initial_ledger(ledger_path, plan, plan_digest)
-    if ledger["status"] == "COMPLETE":
-        return ledger
-    ledger_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_ledger(ledger_path, ledger)
-    root = plan_path.parent
+    ledger: dict[str, Any],
+    command_runner: CommandRunner,
+) -> bool:
+    """Execute all pairs; return ``False`` if the ledger should be returned early."""
+
     for pair_id in pair_ids:
-        pair_runs = [run for run in runs if run["pair_id"] == pair_id]
+        pair_runs = [run for run in plan["runs"] if run["pair_id"] == pair_id]
         for run in pair_runs:
             if not _execute_run(
                 run=run,
                 root=root,
-                harbor_version=plan["harbor_version"],
+                harbor_version=harbor_version,
                 ledger_path=ledger_path,
                 ledger=ledger,
                 command_runner=command_runner,
             ):
-                return ledger
+                return False
         if pair_id not in ledger["completed_pairs"]:
             ledger["completed_pairs"].append(pair_id)
         if _budget_exceeded(ledger):
@@ -283,8 +379,53 @@ def execute_plan(
                 "frozen budget exceeded at a complete pair boundary"
             )
             _write_ledger(ledger_path, ledger)
-            return ledger
+            return False
         _write_ledger(ledger_path, ledger)
+    return True
+
+
+def execute_plan(
+    plan_path: Path,
+    ledger_path: Path,
+    *,
+    manifest_path: Path,
+    probe_url: str = "",
+    command_runner: CommandRunner = _default_command,
+    probe_fn: Any | None = None,
+) -> dict[str, Any]:
+    plan, plan_digest, pair_ids = _validated_plan(plan_path)
+    manifest_digest = str(plan["manifest_digest"])
+    if _file_digest(manifest_path) != manifest_digest:
+        raise HarborSuiteError("held-out manifest digest does not match the run plan")
+    harbor_version = _resolve_harbor_version(manifest_path)
+    ledger = _initial_ledger(ledger_path, plan, plan_digest, manifest_digest)
+    if ledger["status"] == "COMPLETE":
+        return ledger
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_dir = ledger_path.parent
+    treatment_contract, control_contract, routing_failures = _setup_routing_contracts(
+        plan, manifest_path, contract_dir, probe_url, probe_fn
+    )
+    if routing_failures:
+        ledger["status"] = "INCOMPLETE"
+        ledger["validation_failures"].extend(routing_failures)
+        ledger["routing_status"] = {}
+        if treatment_contract is not None:
+            ledger["routing_status"]["C2"] = treatment_contract
+        if control_contract is not None:
+            ledger["routing_status"]["C1"] = control_contract
+        _write_ledger(ledger_path, ledger)
+        return ledger
+    if treatment_contract is not None:
+        ledger["routing_status"] = {"C2": treatment_contract}
+    if control_contract is not None:
+        ledger.setdefault("routing_status", {})["C1"] = control_contract
+    _write_ledger(ledger_path, ledger)
+    root = plan_path.parent
+    if not _execute_pairs(
+        pair_ids, plan, root, harbor_version, ledger_path, ledger, command_runner
+    ):
+        return ledger
     ledger["status"] = "COMPLETE"
     _write_ledger(ledger_path, ledger)
     return ledger
@@ -294,8 +435,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-plan", type=Path, required=True)
     parser.add_argument("--ledger", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--probe-url", default="")
     args = parser.parse_args()
-    ledger = execute_plan(args.run_plan, args.ledger)
+    ledger = execute_plan(
+        args.run_plan,
+        args.ledger,
+        manifest_path=args.manifest,
+        probe_url=args.probe_url,
+    )
     print(args.ledger)
     return 0 if ledger["status"] == "COMPLETE" else 1
 

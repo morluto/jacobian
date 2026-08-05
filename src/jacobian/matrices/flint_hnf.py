@@ -5,11 +5,11 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import BoundedProcessResult, run_bounded_process
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
 from jacobian.contracts.capabilities import (
@@ -37,9 +37,16 @@ from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.matrices.flint_hnf_worker import FLINT_HNF_WORKER_PROTOCOL
 from jacobian.matrices.normal_forms import MatrixNormalFormArtifactService
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessResult,
+    ProcessTermination,
+    execute_process,
+)
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION
 from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
 from jacobian.schema_registry import model_schema
+from jacobian.worker_environment import worker_environment
 
 FLINT_HNF_STDOUT_LIMIT = 1_000_000
 FLINT_HNF_STDERR_LIMIT = 64_000
@@ -88,26 +95,27 @@ class _PythonFlintHnfBackend:
                     "capability descriptor; no normal-form evidence was retained."
                 ),
             )
-        command = [sys.executable, "-I", "-m", "jacobian.matrices.flint_hnf_worker"]
         worker_request = {
             "protocol": FLINT_HNF_WORKER_PROTOCOL,
             "matrix": request.matrix.model_dump(mode="json"),
         }
-        try:
-            completed = run_bounded_process(
-                command,
-                input_bytes=canonicalize_json(worker_request),
+        completed = execute_process(
+            ProcessRequest(
+                executable=sys.executable,
+                arguments=(
+                    "-I",
+                    "-m",
+                    "jacobian.matrices.flint_hnf_worker",
+                ),
+                stdin_bytes=canonicalize_json(worker_request),
                 timeout_seconds=float(request.resource_budget.wall_seconds),
-                environment={
-                    "LANG": "C",
-                    "LC_ALL": "C",
-                    "TZ": "UTC",
-                    "PYTHONHASHSEED": "0",
-                },
-                stdout_limit=FLINT_HNF_STDOUT_LIMIT,
-                stderr_limit=FLINT_HNF_STDERR_LIMIT,
+                environment=worker_environment(locale="C"),
+                cwd=str(Path.cwd()),
+                stdout_limit_bytes=FLINT_HNF_STDOUT_LIMIT,
+                stderr_limit_bytes=FLINT_HNF_STDERR_LIMIT,
             )
-        except OSError:
+        )
+        if completed.termination is ProcessTermination.START_FAILED:
             return _failure(
                 started,
                 ExecutionStatus.ERROR,
@@ -374,9 +382,9 @@ def _parse_worker_output(
 
 def _operational_failure(
     started: float,
-    completed: BoundedProcessResult,
+    completed: ProcessResult,
 ) -> _FlintHnfRun | None:
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return _failure(
             started,
             ExecutionStatus.TIMEOUT,

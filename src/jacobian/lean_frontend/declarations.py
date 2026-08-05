@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import subprocess
 import tempfile
 import threading
 import uuid
@@ -32,6 +31,12 @@ from jacobian.contracts.lean import (
     LeanDependencyGraphRequest,
     LeanEnvironment,
 )
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
+)
+from jacobian.worker_environment import worker_environment
 
 _LOGGER = logging.getLogger(__name__)
 _RESULT_PREFIX = "JACOBIAN_DECLARATION_RESULT "
@@ -132,50 +137,56 @@ class _ReusableLeanQuerySession:
         }
         try:
             self._request_path.write_bytes(canonicalize_json(wire_payload))
-            completed = subprocess.run(
-                [
-                    *self._command,
-                    str(self._source_path),
-                    "-t",
-                    "0",
-                    "-T",
-                    "1000000000",
-                    "-M",
-                    self._memory_mb,
-                    "-j",
-                    "1",
-                    "--trust=0",
-                ],
-                cwd=self._cwd,
-                env=self._process_environment,
-                check=False,
-                capture_output=True,
-                timeout=timeout_seconds,
+            result = execute_process(
+                ProcessRequest(
+                    executable=self._command[0],
+                    arguments=(
+                        *self._command[1:],
+                        str(self._source_path),
+                        "-t",
+                        "0",
+                        "-T",
+                        "1000000000",
+                        "-M",
+                        self._memory_mb,
+                        "-j",
+                        "1",
+                        "--trust=0",
+                    ),
+                    environment=self._process_environment,
+                    cwd=str(self._cwd),
+                    timeout_seconds=float(timeout_seconds),
+                    stdin_bytes=b"",
+                    stdout_limit_bytes=_MAX_STDOUT_BYTES,
+                    stderr_limit_bytes=_MAX_STDERR_BYTES,
+                )
             )
-        except subprocess.TimeoutExpired as exc:
+        except OSError as exc:
+            raise _query_failed() from exc
+        if result.termination is ProcessTermination.TIMED_OUT:
             raise LeanDeclarationBackendError(
                 "LEAN_QUERY_TIMEOUT",
                 (
                     "Lean declaration discovery exceeded the "
                     f"{timeout_seconds}-second per-query budget."
                 ),
-            ) from exc
-        except OSError as exc:
-            raise _query_failed() from exc
-        if len(completed.stdout) > _MAX_STDOUT_BYTES:
+            )
+        if result.termination is not ProcessTermination.EXITED:
+            raise _query_failed()
+        if len(result.stdout) > _MAX_STDOUT_BYTES:
             raise _structured_output_limit()
-        if len(completed.stderr) > _MAX_STDERR_BYTES:
+        if len(result.stderr) > _MAX_STDERR_BYTES:
             raise _diagnostic_output_limit()
-        if completed.returncode != 0:
+        if result.returncode != 0:
             _LOGGER.warning(
                 "Lean declaration query failed: %s",
-                (completed.stdout + completed.stderr)
+                (result.stdout + result.stderr)
                 .decode("utf-8", errors="replace")
                 .strip(),
             )
             raise _query_failed()
         output = _parse_process_response(
-            completed.stdout,
+            result.stdout,
             expected_request_id=request_id,
         )
         self._record_or_check_index(payload)
@@ -469,23 +480,25 @@ class LeanSubprocessDeclarationBackend:
         temporary_root: Path,
     ) -> dict[str, str]:
         lean_bin = str(self.lean_executable.parent)
-        existing_path = os.environ.get("PATH")
-        path = (
-            f"{lean_bin}{os.pathsep}{existing_path}"
-            if existing_path is not None
-            else lean_bin
+        if environment is LeanEnvironment.MATHLIB:
+            # MATHLIB needs the host PATH (for elan/lake toolchain discovery)
+            # and host HOME (for elan toolchain installs), with the pinned
+            # Lean bin directory prepended to PATH.
+            existing_path = os.environ.get("PATH", "")
+            mathlib_path = (
+                f"{lean_bin}{os.pathsep}{existing_path}" if existing_path else lean_bin
+            )
+            return worker_environment(
+                extra_variables=("HOME", "ELAN_HOME"),
+                overrides={"PATH": mathlib_path},
+            )
+        # CORE uses an isolated HOME and a toolchain-only PATH.
+        return worker_environment(
+            overrides={
+                "PATH": lean_bin,
+                "HOME": str(temporary_root),
+            },
         )
-        runtime_home = (
-            os.environ.get("HOME", str(temporary_root))
-            if environment is LeanEnvironment.MATHLIB
-            else str(temporary_root)
-        )
-        return {
-            "HOME": runtime_home,
-            "LANG": "C.UTF-8",
-            "LC_ALL": "C.UTF-8",
-            "PATH": path,
-        }
 
     def _compute_environment_digest(self, environment: LeanEnvironment) -> str:
         identity: dict[str, Any] = {

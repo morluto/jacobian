@@ -7,5 +7,9 @@ RUN mkdir -p /opt/provider && \
     printf '%s  %s\n' 74131014099b77083dd1d09004fd6bc972421c792d188cdf43f0fd11ca6cb2ed /opt/provider/regina-source.tar.gz | sha256sum -c - && \
     uv pip install --system /opt/provider/regina.whl
 WORKDIR /app
-COPY input.json pin.json spike.py submission_schema.json /app/
+COPY __init__.py /opt/benchmarks/__init__.py
+COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
+COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY datasets/provider-feasibility-v1/regina/environment/input.json datasets/provider-feasibility-v1/regina/environment/pin.json datasets/provider-feasibility-v1/regina/environment/spike.py datasets/provider-feasibility-v1/regina/environment/submission_schema.json /app/
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/opt

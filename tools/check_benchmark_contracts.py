@@ -10,7 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from benchmarks.tooling.benchmark_contracts import validate_all  # noqa: E402
-from benchmarks.tooling.harbor_suite import HarborSuiteError  # noqa: E402
+from benchmarks.tooling.errors import HarborSuiteError  # noqa: E402
 
 
 def main() -> int:

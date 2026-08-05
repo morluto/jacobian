@@ -15,6 +15,7 @@ from types import ModuleType
 from typing import Any
 
 _PACKAGE_DIGEST_CACHE: dict[str, str] | None = None
+_CHECKER_RUNTIME_ENTRYPOINT = "jacobian.checker_worker:main"
 
 
 class ImplementationError(RuntimeError):
@@ -184,6 +185,49 @@ def package_source_digest(entrypoint: str) -> str:
     if cache is not None:
         cache[top_level] = digest
     return digest
+
+
+def package_import_path(entrypoint: str) -> str:
+    """Return the measured package's exact import roots for a worker process."""
+
+    module_name, _ = split_entrypoint(entrypoint)
+    top_level, *remaining = module_name.split(".")
+    specification = importlib.machinery.PathFinder.find_spec(top_level)
+    if specification is None:
+        raise ImplementationError(f"cannot resolve package {top_level!r}")
+    locations = specification.submodule_search_locations
+    if locations:
+        roots = [Path(location) for location in locations]
+        if not _module_exists_in_roots(roots, remaining):
+            raise ImplementationError(f"cannot resolve module {module_name!r}")
+        if any(root.is_symlink() or not root.is_dir() for root in roots):
+            raise ImplementationError(
+                f"package root is not a regular directory: {roots[0]}"
+            )
+        parents = tuple(str(root.resolve(strict=True).parent) for root in roots)
+        return os.pathsep.join(dict.fromkeys(parents))
+    if remaining or specification.origin is None:
+        raise ImplementationError(f"cannot resolve module {module_name!r}")
+    unresolved_source = Path(specification.origin)
+    if unresolved_source.is_symlink() or not unresolved_source.is_file():
+        raise ImplementationError(
+            f"module source is not a regular file: {unresolved_source}"
+        )
+    source = unresolved_source.resolve(strict=True)
+    if not source.is_file():
+        raise ImplementationError(f"module source is not a regular file: {source}")
+    return str(source.parent)
+
+
+def checker_source_digest(entrypoint: str) -> str:
+    """Bind checker source together with the complete Jacobian worker runtime."""
+
+    digest = hashlib.sha256()
+    digest.update(b"jacobian.checker-source.v1\x00")
+    digest.update(package_source_digest(entrypoint).encode("ascii"))
+    digest.update(b"\x00")
+    digest.update(package_source_digest(_CHECKER_RUNTIME_ENTRYPOINT).encode("ascii"))
+    return "sha256:" + digest.hexdigest()
 
 
 @contextmanager

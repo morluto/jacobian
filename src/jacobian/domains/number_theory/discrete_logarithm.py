@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from pydantic import ValidationError
 
-from jacobian.bounded_process import ProcessResourceLimits, run_bounded_process
+from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.number_theory import (
@@ -22,6 +23,8 @@ from jacobian.operations import (
     BoundedSearchWitness,
     OperationExecutionFailure,
 )
+from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
+from jacobian.worker_environment import worker_environment
 
 _PROTOCOL = "jacobian.number-theory.discrete-logarithm.sympy.v1"
 _STDOUT_LIMIT = 64_000
@@ -47,42 +50,38 @@ def _failure(
 def _compute(
     request: DiscreteLogarithmRequest,
 ) -> BoundedSearchOutcome[DiscreteLogarithmResult]:
-    command = [
-        sys.executable,
-        "-I",
-        "-m",
-        "jacobian.domains.number_theory.discrete_logarithm_worker",
-    ]
-    try:
-        completed = run_bounded_process(
-            command,
-            input_bytes=canonicalize_json(
+    completed = execute_process(
+        ProcessRequest(
+            executable=sys.executable,
+            arguments=(
+                "-I",
+                "-m",
+                "jacobian.domains.number_theory.discrete_logarithm_worker",
+            ),
+            stdin_bytes=canonicalize_json(
                 {
                     "protocol": _PROTOCOL,
                     "request": request.model_dump(mode="json"),
                 }
             ),
             timeout_seconds=float(request.resource_budget.wall_seconds),
-            environment={
-                "LANG": "C",
-                "LC_ALL": "C",
-                "TZ": "UTC",
-                "PYTHONHASHSEED": "0",
-            },
-            stdout_limit=_STDOUT_LIMIT,
-            stderr_limit=_STDERR_LIMIT,
+            environment=worker_environment(locale="C"),
+            cwd=str(Path.cwd()),
+            stdout_limit_bytes=_STDOUT_LIMIT,
+            stderr_limit_bytes=_STDERR_LIMIT,
             resource_limits=ProcessResourceLimits(
                 cpu_seconds=request.resource_budget.wall_seconds + 1,
                 address_space_bytes=1024 * 1024 * 1024,
             ),
         )
-    except OSError:
+    )
+    if completed.termination is ProcessTermination.START_FAILED:
         return _failure(
             ExecutionStatus.ERROR,
             "DISCRETE_LOGARITHM_WORKER_START_FAILED",
             "The isolated SymPy discrete-logarithm worker could not be started.",
         )
-    if completed.timed_out:
+    if completed.termination is ProcessTermination.TIMED_OUT:
         return _failure(
             ExecutionStatus.TIMEOUT,
             "DISCRETE_LOGARITHM_TIMEOUT",

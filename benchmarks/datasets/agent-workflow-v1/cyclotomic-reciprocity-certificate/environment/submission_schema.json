@@ -1,58 +1,147 @@
 {
+  "$defs": {
+    "coefficients": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 17,
+      "minItems": 17,
+      "type": "array"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/cyclotomic-reciprocity-certificate"},
-    "conclusion": {"enum": ["CYCLOTOMIC_RECIPROCITY_CERTIFIED", "INSUFFICIENT_EVIDENCE"]},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["leading_coefficient", "factors", "expanded_coefficients", "reciprocal_coefficients", "p_at_one", "reciprocal_scalar", "root_orbit_conclusion"],
-      "properties": {
-        "leading_coefficient": {"type": "integer", "not": {"const": 0}},
-        "factors": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 8,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["order", "multiplicity"],
-            "properties": {
-              "order": {"type": "integer", "minimum": 2, "maximum": 30},
-              "multiplicity": {"type": "integer", "minimum": 1, "maximum": 8}
-            }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "CYCLOTOMIC_RECIPROCITY_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
         },
-        "expanded_coefficients": {"$ref": "#/$defs/coefficients"},
-        "reciprocal_coefficients": {"$ref": "#/$defs/coefficients"},
-        "p_at_one": {"type": "integer", "not": {"const": 0}},
-        "reciprocal_scalar": {"const": 1},
-        "root_orbit_conclusion": {"const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"}
-      }
-    },
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"type": "string"},
-    "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN"]},
-    "evidence": {
-      "type": "array",
-      "minItems": 1,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
       "maxItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["path", "sha256"],
-        "properties": {
-          "path": {"const": "evidence/answer.txt"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
+      "minItems": 1,
+      "type": "array"
     },
-    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "expanded_coefficients": {
+          "$ref": "#/$defs/coefficients"
+        },
+        "factors": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "multiplicity": {
+                "maximum": 8,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "order": {
+                "maximum": 30,
+                "minimum": 2,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "order",
+              "multiplicity"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        },
+        "leading_coefficient": {
+          "not": {
+            "const": 0
+          },
+          "type": "integer"
+        },
+        "p_at_one": {
+          "not": {
+            "const": 0
+          },
+          "type": "integer"
+        },
+        "reciprocal_coefficients": {
+          "$ref": "#/$defs/coefficients"
+        },
+        "reciprocal_scalar": {
+          "const": 1
+        },
+        "root_orbit_conclusion": {
+          "const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
+        }
+      },
+      "required": [
+        "leading_coefficient",
+        "factors",
+        "expanded_coefficients",
+        "reciprocal_coefficients",
+        "p_at_one",
+        "reciprocal_scalar",
+        "root_orbit_conclusion"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/cyclotomic-reciprocity-certificate"
+    }
   },
-  "$defs": {
-    "coefficients": {"type": "array", "minItems": 17, "maxItems": 17, "items": {"type": "integer"}}
-  }
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

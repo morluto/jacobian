@@ -1,43 +1,145 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/log-inequality-meta-audit"},
-    "conclusion": {"const": "CLAIM_FALSE_EVALUATION_RUBRIC_CONSISTENT"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["claim_status", "counterexample_status", "instruction_compliance", "evaluator_score", "evaluator_rubric_status", "meta_evaluation_status", "certificate"],
-      "properties": {
-        "claim_status": {"type": "string", "minLength": 1},
-        "counterexample_status": {"type": "string", "minLength": 1},
-        "instruction_compliance": {"type": "string", "minLength": 1},
-        "evaluator_score": {"type": "integer", "minimum": 0},
-        "evaluator_rubric_status": {"type": "string", "minLength": 1},
-        "meta_evaluation_status": {"type": "string", "minLength": 1},
-        "certificate": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["x_squared", "y_squared", "z_squared", "first_log_term", "lhs_reduction", "comparison_left", "comparison_right", "comparison"],
-          "properties": {
-            "x_squared": {"type": "integer"},
-            "y_squared": {"type": "integer"},
-            "z_squared": {"type": "integer"},
-            "first_log_term": {"type": "integer"},
-            "lhs_reduction": {"const": "2+4*log_6(18)"},
-            "comparison_left": {"type": "integer"},
-            "comparison_right": {"type": "integer"},
-            "comparison": {"const": "LESS_THAN"}
-          }
-        }
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED","COMPUTED"]},
-    "scope": {"const": "log-inequality-meta-audit claim proof evaluation and meta-evaluation"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1,"maxItems":1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
-  }
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "CLAIM_FALSE_EVALUATION_RUBRIC_CONSISTENT"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "certificate": {
+          "additionalProperties": false,
+          "properties": {
+            "comparison": {
+              "const": "LESS_THAN"
+            },
+            "comparison_left": {
+              "type": "integer"
+            },
+            "comparison_right": {
+              "type": "integer"
+            },
+            "first_log_term": {
+              "type": "integer"
+            },
+            "lhs_reduction": {
+              "const": "2+4*log_6(18)"
+            },
+            "x_squared": {
+              "type": "integer"
+            },
+            "y_squared": {
+              "type": "integer"
+            },
+            "z_squared": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x_squared",
+            "y_squared",
+            "z_squared",
+            "first_log_term",
+            "lhs_reduction",
+            "comparison_left",
+            "comparison_right",
+            "comparison"
+          ],
+          "type": "object"
+        },
+        "claim_status": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "counterexample_status": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evaluator_rubric_status": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evaluator_score": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_compliance": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "meta_evaluation_status": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_status",
+        "counterexample_status",
+        "instruction_compliance",
+        "evaluator_score",
+        "evaluator_rubric_status",
+        "meta_evaluation_status",
+        "certificate"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "log-inequality-meta-audit claim proof evaluation and meta-evaluation",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/log-inequality-meta-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

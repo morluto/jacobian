@@ -7,12 +7,16 @@ import re
 import shutil
 from pathlib import Path
 
-from jacobian.bounded_process import run_bounded_process
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
+)
+from jacobian.process_policy import (
+    ProcessRequest,
+    ProcessTermination,
+    execute_process,
 )
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
@@ -20,6 +24,7 @@ from jacobian.provider_runtime import (
     _sha256_file,
     _unavailable_runtime,
 )
+from jacobian.worker_environment import worker_environment
 
 SINGULAR_VERSION = "4.4.1p5"
 _VERSION_PATTERN = re.compile(
@@ -42,20 +47,22 @@ def singular_provider_runtime(
         )
     try:
         resolved = Path(resolved_name).resolve(strict=True)
-        completed = run_bounded_process(
-            [str(resolved), "--version"],
-            input_bytes=b"",
-            timeout_seconds=5,
-            environment={**os.environ, "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
-            stdout_limit=16_384,
-            stderr_limit=16_384,
+        completed = execute_process(
+            ProcessRequest(
+                executable=str(resolved),
+                arguments=("--version",),
+                environment=worker_environment(locale="C"),
+                cwd=str(Path.cwd()),
+                timeout_seconds=5,
+                stdin_bytes=b"",
+                stdout_limit_bytes=16_384,
+                stderr_limit_bytes=16_384,
+            )
         )
         version_text = (completed.stdout + completed.stderr).decode("utf-8")
         version_match = _VERSION_PATTERN.search(version_text)
         if (
-            completed.timed_out
-            or completed.stdout_exceeded
-            or completed.stderr_exceeded
+            completed.termination is not ProcessTermination.EXITED
             or completed.returncode != 0
             or version_match is None
             or version_match.group("version") != SINGULAR_VERSION

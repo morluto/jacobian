@@ -1,0 +1,437 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "NONCLOSED_IMAGE_CERTIFIED",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": null,
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "limit_coordinates": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 100,
+        "type": "array"
+      },
+      "limit_preimage": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "operator": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "operator_bound": {
+        "type": "string"
+      },
+      "prefixes": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "limit_norm_sq_partial": {
+              "type": "string"
+            },
+            "n": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "preimage_coordinate": {
+              "type": "string"
+            },
+            "preimage_norm_sq_partial": {
+              "type": "string"
+            },
+            "weight": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "n",
+            "weight",
+            "preimage_coordinate",
+            "limit_norm_sq_partial",
+            "preimage_norm_sq_partial"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "preimage_growth": {
+        "additionalProperties": false,
+        "properties": {
+          "bound_coefficient": {
+            "type": "string"
+          },
+          "bound_exponent": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bound_coefficient",
+          "bound_exponent"
+        ],
+        "type": "object"
+      },
+      "projection": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "proof_obligations": {
+        "additionalProperties": false,
+        "properties": {
+          "absent_preimage": {
+            "maxLength": 4096,
+            "minLength": 40,
+            "type": "string"
+          },
+          "boundedness": {
+            "maxLength": 4096,
+            "minLength": 40,
+            "type": "string"
+          },
+          "closedness": {
+            "maxLength": 4096,
+            "minLength": 40,
+            "type": "string"
+          },
+          "convergence": {
+            "maxLength": 4096,
+            "minLength": 40,
+            "type": "string"
+          },
+          "range_identification": {
+            "maxLength": 4096,
+            "minLength": 40,
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundedness",
+          "closedness",
+          "range_identification",
+          "convergence",
+          "absent_preimage"
+        ],
+        "type": "object"
+      },
+      "space": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "subspace": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "tail_bound": {
+        "additionalProperties": false,
+        "properties": {
+          "bound_coefficient": {
+            "type": "string"
+          },
+          "bound_exponent": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "verification_terms": {
+            "minimum": 100,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bound_coefficient",
+          "bound_exponent",
+          "verification_terms"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "space",
+      "operator",
+      "subspace",
+      "projection",
+      "operator_bound",
+      "prefixes",
+      "limit_coordinates",
+      "tail_bound",
+      "limit_preimage",
+      "proof_obligations"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "NONCLOSED_IMAGE_CERTIFIED",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "limit_coordinates": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 100,
+            "type": "array"
+          },
+          "limit_preimage": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "operator": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "operator_bound": {
+            "type": "string"
+          },
+          "prefixes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "limit_norm_sq_partial": {
+                  "type": "string"
+                },
+                "n": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "preimage_coordinate": {
+                  "type": "string"
+                },
+                "preimage_norm_sq_partial": {
+                  "type": "string"
+                },
+                "weight": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "n",
+                "weight",
+                "preimage_coordinate",
+                "limit_norm_sq_partial",
+                "preimage_norm_sq_partial"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "preimage_growth": {
+            "additionalProperties": false,
+            "properties": {
+              "bound_coefficient": {
+                "type": "string"
+              },
+              "bound_exponent": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bound_coefficient",
+              "bound_exponent"
+            ],
+            "type": "object"
+          },
+          "projection": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "proof_obligations": {
+            "additionalProperties": false,
+            "properties": {
+              "absent_preimage": {
+                "maxLength": 4096,
+                "minLength": 40,
+                "type": "string"
+              },
+              "boundedness": {
+                "maxLength": 4096,
+                "minLength": 40,
+                "type": "string"
+              },
+              "closedness": {
+                "maxLength": 4096,
+                "minLength": 40,
+                "type": "string"
+              },
+              "convergence": {
+                "maxLength": 4096,
+                "minLength": 40,
+                "type": "string"
+              },
+              "range_identification": {
+                "maxLength": 4096,
+                "minLength": 40,
+                "type": "string"
+              }
+            },
+            "required": [
+              "boundedness",
+              "closedness",
+              "range_identification",
+              "convergence",
+              "absent_preimage"
+            ],
+            "type": "object"
+          },
+          "space": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "subspace": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "tail_bound": {
+            "additionalProperties": false,
+            "properties": {
+              "bound_coefficient": {
+                "type": "string"
+              },
+              "bound_exponent": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "verification_terms": {
+                "minimum": 100,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bound_coefficient",
+              "bound_exponent",
+              "verification_terms"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "space",
+          "operator",
+          "subspace",
+          "projection",
+          "operator_bound",
+          "prefixes",
+          "limit_coordinates",
+          "tail_bound",
+          "limit_preimage",
+          "proof_obligations"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/nonclosed-projection-image"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/nonclosed-projection-image",
+  "verification_record": null
+}

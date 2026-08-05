@@ -1,0 +1,228 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "SYMBOLIC_DECOMPOSITION_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "contains": {
+      "const": "The unrestricted n,k theorem and the source proof are not machine-checked."
+    },
+    "minItems": 1,
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "matrix3": {
+      "items": {
+        "$ref": "#/$defs/row3"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "rational": {
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+      "type": "string"
+    },
+    "row3": {
+      "items": {
+        "$ref": "#/$defs/rational"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "SYMBOLIC_N2_K3_BLOCK_FAMILY",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "basis_change": {
+        "$ref": "#/$defs/matrix3"
+      },
+      "basis_change_inverse": {
+        "$ref": "#/$defs/matrix3"
+      },
+      "channels": {
+        "items": {
+          "enum": [
+            "A+2B",
+            "A-B"
+          ]
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "determinant_identity": {
+        "const": "det(C)=det(A-B)^2*det(A+2B)"
+      },
+      "invertibility_assumption": {
+        "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
+      }
+    },
+    "required": [
+      "basis_change",
+      "basis_change_inverse",
+      "channels",
+      "determinant_identity",
+      "invertibility_assumption"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "matrix3": {
+        "items": {
+          "$ref": "#/$defs/row3"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "rational": {
+        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+        "type": "string"
+      },
+      "row3": {
+        "items": {
+          "$ref": "#/$defs/rational"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "SYMBOLIC_DECOMPOSITION_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "contains": {
+          "const": "The unrestricted n,k theorem and the source proof are not machine-checked."
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "basis_change": {
+            "$ref": "#/$defs/matrix3"
+          },
+          "basis_change_inverse": {
+            "$ref": "#/$defs/matrix3"
+          },
+          "channels": {
+            "items": {
+              "enum": [
+                "A+2B",
+                "A-B"
+              ]
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "determinant_identity": {
+            "const": "det(C)=det(A-B)^2*det(A+2B)"
+          },
+          "invertibility_assumption": {
+            "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
+          }
+        },
+        "required": [
+          "basis_change",
+          "basis_change_inverse",
+          "channels",
+          "determinant_identity",
+          "invertibility_assumption"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "SYMBOLIC_N2_K3_BLOCK_FAMILY",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/symbolic-block-determinant-decomposition"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/symbolic-block-determinant-decomposition",
+  "verification_record": null
+}

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,6 +25,7 @@ from jacobian.lean_frontend.statement import (
     LeanStatementProposalAdapter,
     install_lean_statement_capabilities,
 )
+from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermination
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -405,11 +405,18 @@ def test_execution_uses_the_exact_pinned_executable(
     )
     calls: list[list[str]] = []
 
-    def run(args, **_kwargs):
-        calls.append([str(value) for value in args])
-        return subprocess.CompletedProcess(args, 0, stdout="True : Prop\n", stderr="")
+    def fake_execute(request: ProcessRequest, **_kwargs: object) -> ProcessResult:
+        calls.append([request.executable, *request.arguments])
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
+            returncode=0,
+            stdout=b"True : Prop\n",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+        )
 
-    monkeypatch.setattr(lean_statements.subprocess, "run", run)
+    monkeypatch.setattr(lean_statements, "execute_process", fake_execute)
     result = lean_statements._elaborate_proposition("True")
     version, commit = lean_statements._lean_version_info()
 
@@ -426,10 +433,10 @@ def test_stale_pinned_executable_becomes_backend_unavailable(
 ) -> None:
     stale_executable = tmp_path / "removed-lean"
 
-    def run(_args, **_kwargs):
+    def fake_execute(_request: ProcessRequest, **_kwargs: object) -> ProcessResult:
         raise FileNotFoundError(stale_executable)
 
-    monkeypatch.setattr(lean_statements.subprocess, "run", run)
+    monkeypatch.setattr(lean_statements, "execute_process", fake_execute)
 
     with pytest.raises(lean_statements._LeanUnavailableError, match="could not run"):
         lean_statements._execute_lean_source(
@@ -456,10 +463,10 @@ def test_replaced_pinned_executable_is_rejected_before_execution(
     runtime = lean_frontend_provider_runtime()
     executable.write_bytes(b"replacement")
 
-    def unexpected_run(*_args, **_kwargs):
+    def unexpected_execute(*_args: object, **_kwargs: object) -> ProcessResult:
         pytest.fail("replaced Lean executable was launched")
 
-    monkeypatch.setattr(lean_statements.subprocess, "run", unexpected_run)
+    monkeypatch.setattr(lean_statements, "execute_process", unexpected_execute)
 
     with pytest.raises(
         lean_statements._LeanUnavailableError,

@@ -312,7 +312,6 @@ class CapabilityDescriptor(ContractModel):
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
     read_only: bool = False
-    records_episode: bool = True
     tags: tuple[str, ...] = ()
     accepted_input_kinds: tuple[CapabilityInputKind, ...] = (
         CapabilityInputKind.STRUCTURED_REQUEST,
@@ -513,7 +512,6 @@ class CapabilityResult(ContractModel):
     diagnostics: tuple[CapabilityDiagnostic, ...] = ()
     assurance: CapabilityAssurance
     artifact_uris: tuple[ArtifactUri, ...] = ()
-    episode_uri: ArtifactUri | None = None
     provider: str | None = Field(default=None, min_length=1, max_length=128)
     provider_digest: Sha256Digest | None = None
 

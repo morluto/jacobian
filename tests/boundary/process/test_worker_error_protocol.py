@@ -6,7 +6,7 @@ import sys
 import pytest
 
 from jacobian.canonical import loads_strict_json
-from jacobian.implementation import package_source_digest
+from jacobian.implementation import checker_source_digest, package_source_digest
 from jacobian.plugin_execution import _plugin_failure_detail
 from jacobian.verification._helpers import _checker_failure_detail
 
@@ -73,13 +73,18 @@ def test_worker_code_cannot_self_report_a_source_change(
     module: str,
     entrypoint: str,
 ) -> None:
+    source_digest = (
+        checker_source_digest(entrypoint)
+        if module == "jacobian.checker_worker"
+        else package_source_digest(entrypoint)
+    )
     completed = subprocess.run(
         [
             sys.executable,
             "-m",
             module,
             entrypoint,
-            package_source_digest(entrypoint),
+            source_digest,
         ],
         input=b"{}",
         capture_output=True,
@@ -100,7 +105,7 @@ def test_checker_worker_classifies_malformed_provider_runtime() -> None:
             "-m",
             "jacobian.checker_worker",
             entrypoint,
-            package_source_digest(entrypoint),
+            checker_source_digest(entrypoint),
             "{malformed",
         ],
         input=b"{}",

@@ -173,8 +173,8 @@ def test_decouples_scope_from_assurance(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
+    assert result["correctness"] == 0.0
+    assert result["evidence_validity"] == 0.0
+    assert result["scope_accuracy"] == 0.0
     assert result["assurance_calibration"] == 0.0
     assert result["reward"] == 0.0

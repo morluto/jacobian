@@ -125,8 +125,8 @@ def test_persistent_repl_kills_a_process_that_exceeds_rss_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.lean_frontend.repl._process_rss_kb",
-        lambda _pid: 2,
+        "jacobian.bounded_process._linux_process_tree_rss_bytes",
+        lambda _pid: 2 * 1024,
     )
     repl = PersistentLeanRepl(
         command=(sys.executable, "-u", "-c", "import time; time.sleep(10)"),
@@ -145,6 +145,53 @@ def test_persistent_repl_kills_a_process_that_exceeds_rss_limit(
         repl.execute(command="example : True := by sorry", tactic="trivial")
 
     assert time.monotonic() - started < 2
+
+
+def test_persistent_repl_enforces_rss_during_exchange_not_only_before(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RSS is checked inside the exchange poll loop, not only before it.
+
+    A process that is under the limit at startup but whose tree RSS later
+    exceeds the bound must be killed during the exchange wait, not after the
+    full read timeout elapses.
+    """
+
+    call_count = 0
+
+    def fake_rss(_pid: int) -> int | None:
+        nonlocal call_count
+        call_count += 1
+        # Under the limit on the first few polls (startup / pre-exchange),
+        # then over the limit once the exchange loop is actively waiting.
+        return 1024 if call_count <= 2 else 4 * 1024
+
+    monkeypatch.setattr(
+        "jacobian.bounded_process._linux_process_tree_rss_bytes",
+        fake_rss,
+    )
+    repl = PersistentLeanRepl(
+        command=(sys.executable, "-u", "-c", "import time; time.sleep(10)"),
+        cwd=tmp_path,
+        base_command=None,
+        policy=LeanReplPolicy(
+            max_requests=2,
+            max_age_seconds=60,
+            max_rss_kb=2,
+            timeout_seconds=5,
+        ),
+    )
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="exceeded its memory limit"):
+        repl.execute(command="example : True := by sorry", tactic="trivial")
+
+    # Must be caught during the exchange poll, well before the 5s timeout.
+    assert time.monotonic() - started < 2
+    # The RSS probe was called more than twice (exchange-loop polling).
+    assert call_count > 2
+    repl.close()
 
 
 def test_clean_execution_discards_every_repl_instance(

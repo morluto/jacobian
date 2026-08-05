@@ -13,18 +13,27 @@ import dataclasses
 import hashlib
 import re
 import stat
-import subprocess
 import sys
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
+from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_digest import (
     HarborDigestError,
+    compose_context_supplement,
+    extract_build_context,
+    load_compose_doc,
 )
 from benchmarks.tooling.harbor_digest import (
     task_digest as _native_task_digest,
+)
+from benchmarks.tooling.public_contract import check as _check_public_contract
+from benchmarks.tooling.strict_boundaries import (
+    TaskManifestSections,
+    strict_model_failures,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -69,10 +78,6 @@ _SECRET = re.compile(
     r"\s*[:=]\s*[\"'][A-Za-z0-9_\-./+=]{12,}[\"']"
 )
 _FLOATING = re.compile(r"\bpip(?:3)?\s+install\s+([^\s#|&;]+)")
-
-
-class HarborSuiteError(ValueError):
-    """A registry, suite, task, or generated-artifact contract failure."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -138,6 +143,33 @@ class EnvironmentProfile:
     allow_apt: bool
 
 
+def _validate_task_entry(entry: Path) -> Path | None:
+    """Validate one dataset child; return the resolved task dir or ``None`` for support dirs."""
+
+    manifest = entry / "task.toml"
+    if not manifest.exists():
+        nested = sorted(entry.rglob("task.toml"))
+        if nested:
+            raise HarborSuiteError(
+                "Harbor task bundles must be direct children of the dataset: "
+                + ", ".join(str(path) for path in nested)
+            )
+        if entry.name not in DATASET_SUPPORT_DIRS:
+            raise HarborSuiteError(f"dataset contains a non-task directory: {entry}")
+        return None
+    if manifest.is_symlink() or not manifest.is_file():
+        raise HarborSuiteError(f"task manifest is invalid: {manifest}")
+    nested = sorted(
+        candidate for candidate in entry.rglob("task.toml") if candidate != manifest
+    )
+    if nested:
+        raise HarborSuiteError(
+            "Harbor task bundles must be one directory deep: "
+            + ", ".join(str(path) for path in nested)
+        )
+    return entry.resolve()
+
+
 def _dataset_task_directories(root: Path) -> set[Path]:
     """Return Harbor task bundles directly contained by one dataset."""
 
@@ -152,30 +184,9 @@ def _dataset_task_directories(root: Path) -> set[Path]:
             raise HarborSuiteError(f"dataset contains a symlink: {entry}")
         if not entry.is_dir():
             continue
-        manifest = entry / "task.toml"
-        if not manifest.exists():
-            nested = sorted(entry.rglob("task.toml"))
-            if nested:
-                raise HarborSuiteError(
-                    "Harbor task bundles must be direct children of the dataset: "
-                    + ", ".join(str(path) for path in nested)
-                )
-            if entry.name not in DATASET_SUPPORT_DIRS:
-                raise HarborSuiteError(
-                    f"dataset contains a non-task directory: {entry}"
-                )
-            continue
-        if manifest.is_symlink() or not manifest.is_file():
-            raise HarborSuiteError(f"task manifest is invalid: {manifest}")
-        nested = sorted(
-            candidate for candidate in entry.rglob("task.toml") if candidate != manifest
-        )
-        if nested:
-            raise HarborSuiteError(
-                "Harbor task bundles must be one directory deep: "
-                + ", ".join(str(path) for path in nested)
-            )
-        tasks.add(entry.resolve())
+        resolved = _validate_task_entry(entry)
+        if resolved is not None:
+            tasks.add(resolved)
     return tasks
 
 
@@ -202,6 +213,13 @@ def _require_string(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value:
         raise HarborSuiteError(f"{label} must be a non-empty string")
     return value
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.name
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
@@ -243,11 +261,16 @@ def load_environment_profiles(
                     f"{path.relative_to(ROOT)}: profile {name} {label} image "
                     "must be digest-pinned"
                 )
+        allow_apt_raw = value.get("allow_apt")
+        if not isinstance(allow_apt_raw, bool):
+            raise HarborSuiteError(
+                f"{_display_path(path)}: profile {name} allow_apt must be a bool"
+            )
         profiles[name] = EnvironmentProfile(
             name=name,
             agent_image=agent_image,
             verifier_image=verifier_image,
-            allow_apt=value.get("allow_apt") is True,
+            allow_apt=allow_apt_raw,
         )
     return profiles
 
@@ -623,6 +646,22 @@ def _task_manifest_failures(suite: Suite, task_dir: Path, rel: str) -> list[str]
         return []
     failures: list[str] = []
     cfg = _read_toml(cfg_path)
+    # Strict structural validation of the task/environment/verifier/agent
+    # sections runs before any semantic ``.get``/iteration so a malformed
+    # config fails closed with a field-path diagnostic instead of reaching
+    # backend or artifact side effects.  ``metadata`` stays on its existing
+    # validation path because its schema keeps ``additionalProperties: true``.
+    structural_failures = strict_model_failures(
+        TaskManifestSections, cfg, label=f"{rel}/task.toml"
+    )
+    if structural_failures:
+        return structural_failures
+    if suite.id == "agent-workflow-v1":
+        contract_path = task_dir / "tests" / "public_contract.json"
+        if not contract_path.is_file():
+            failures.append(f"{rel}/tests/public_contract.json: required file missing")
+        else:
+            failures.extend(_check_public_contract(contract_path, task_dir))
     if cfg.get("schema_version") != TASK_SCHEMA_VERSION:
         failures.append(
             f"{rel}/task.toml: schema_version must be {TASK_SCHEMA_VERSION}"
@@ -674,7 +713,73 @@ def _agent_environment_failures(suite: Suite, task_dir: Path, rel: str) -> list[
             )
     if re.search(r"(?i)COPY\s+(?:solution|tests)(?:[/\s])", docker_text):
         failures.append(f"{rel}/environment/Dockerfile: copies hidden material")
+    failures.extend(_compose_context_failures(task_dir, rel))
     return failures
+
+
+def _resolve_compose_context(compose_path: Path) -> Path | None:
+    """Resolve the build context from a compose file, returning ``None`` if absent."""
+
+    try:
+        doc = load_compose_doc(compose_path)
+    except HarborDigestError:
+        return None
+    if doc is None:
+        return None
+    context = extract_build_context(doc)
+    if context is None:
+        return None
+    return (compose_path.parent / context).resolve()
+
+
+def _dockerignore_failures(context_root: Path, rel: str) -> list[str]:
+    """Validate the ``.dockerignore`` at a widened compose build context root."""
+
+    dockerignore = context_root / ".dockerignore"
+    if not dockerignore.is_file():
+        return [
+            f"{rel}/environment/docker-compose.yaml: widened build context "
+            f"has no .dockerignore at {context_root.relative_to(ROOT)}"
+        ]
+    ignore_text = dockerignore.read_text(encoding="utf-8")
+    if not re.search(r"^\*\*$", ignore_text, re.MULTILINE):
+        return [
+            f"{rel}/environment/docker-compose.yaml: .dockerignore at "
+            f"{context_root.relative_to(ROOT)} must start with ** to deny all"
+        ]
+    for forbidden in ("solution", "tests", "oracle"):
+        pattern = rf"(?m)^!.*\b{forbidden}\b"
+        if re.search(pattern, ignore_text):
+            return [
+                f"{rel}/environment/docker-compose.yaml: .dockerignore at "
+                f"{context_root.relative_to(ROOT)} un-ignores {forbidden}"
+            ]
+    return []
+
+
+def _compose_context_failures(task_dir: Path, rel: str) -> list[str]:
+    """Validate that a widened compose build context cannot leak hidden material.
+
+    When ``environment/docker-compose.yaml`` overrides the build context to a
+    parent directory, the ``.dockerignore`` at that context root is the only
+    barrier preventing solution/tests/Oracle files from entering the image.
+    Fail closed when the ignore file is missing or does not exclude hidden
+    material.
+    """
+
+    compose_path = task_dir / "environment" / "docker-compose.yaml"
+    if not compose_path.is_file():
+        return []
+    try:
+        supplement = compose_context_supplement(task_dir)
+    except HarborDigestError as exc:
+        return [f"{rel}/environment/docker-compose.yaml: {exc}"]
+    if supplement is None:
+        return []
+    context_root = _resolve_compose_context(compose_path)
+    if context_root is None:
+        return []
+    return _dockerignore_failures(context_root, rel)
 
 
 def _is_ignored_python_cache(path: Path) -> bool:
@@ -684,15 +789,15 @@ def _is_ignored_python_cache(path: Path) -> bool:
         relative = path.relative_to(ROOT)
     except ValueError:
         relative = path
-    return (
-        subprocess.run(
-            ["git", "check-ignore", "--quiet", "--", str(relative)],
-            cwd=ROOT,
-            capture_output=True,
-            check=False,
-        ).returncode
-        == 0
+    result = run_operator_command(
+        "git",
+        ("check-ignore", "--quiet", "--", str(relative)),
+        cwd=ROOT,
+        timeout_seconds=10.0,
+        stdout_limit_bytes=4096,
+        stderr_limit_bytes=4096,
     )
+    return result.status is ToolCommandStatus.EXITED and result.exit_code == 0
 
 
 def _python_cache_failure(path: Path) -> str | None:
@@ -703,6 +808,50 @@ def _python_cache_failure(path: Path) -> str | None:
     if _is_ignored_python_cache(path):
         return None
     return f"{path.relative_to(ROOT)}: raw interpreter cache is forbidden"
+
+
+def _tests_dockerfile_failures(
+    suite: Suite, task_dir: Path, tests: Path, rel: str
+) -> list[str]:
+    """Validate the verifier tests/Dockerfile against manifest and checksum."""
+
+    failures: list[str] = []
+    docker = tests / "Dockerfile"
+    if docker.is_file() and re.search(
+        r"(?i)COPY\s+solution(?:[/\s])", docker.read_text()
+    ):
+        failures.append(f"{rel}/tests/Dockerfile: copies Oracle solution")
+    if not docker.is_file():
+        return failures
+    docker_text = docker.read_text()
+    ref = next((item for item in suite.tasks if item.path == task_dir), None)
+    profile = load_environment_profiles().get(ref.environment_profile) if ref else None
+    first_from = next(
+        (
+            line.strip()[5:].strip()
+            for line in docker_text.splitlines()
+            if line.strip().upper().startswith("FROM ")
+        ),
+        None,
+    )
+    if profile is not None and first_from != profile.verifier_image:
+        failures.append(
+            f"{rel}/tests/Dockerfile: FROM does not match verifier image "
+            f"for environment profile {profile.name}"
+        )
+    if not _dockerfile_copies(docker_text, "verifier_support.py"):
+        failures.append(f"{rel}/tests/Dockerfile: does not copy verifier_support.py")
+    if suite.id == "agent-workflow-v1" and not _dockerfile_copies(
+        docker_text, "public_contract.json"
+    ):
+        failures.append(f"{rel}/tests/Dockerfile: does not copy public_contract.json")
+    checksum = re.search(r'jacobian\.checksum="([0-9a-f]{64})"', docker_text)
+    expected_checksum = hashlib.sha256((tests / "verifier.py").read_bytes()).hexdigest()
+    if checksum is None:
+        failures.append(f"{rel}/tests/Dockerfile: missing verifier checksum label")
+    elif checksum.group(1) != expected_checksum:
+        failures.append(f"{rel}/tests/Dockerfile: verifier checksum label is stale")
+    return failures
 
 
 def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
@@ -731,48 +880,7 @@ def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
         for name in REQUIRED_TESTS:
             if not _is_regular_file(tests / name):
                 failures.append(f"{rel}/tests/{name}: required file missing")
-        docker = tests / "Dockerfile"
-        if docker.is_file() and re.search(
-            r"(?i)COPY\s+solution(?:[/\s])", docker.read_text()
-        ):
-            failures.append(f"{rel}/tests/Dockerfile: copies Oracle solution")
-        if docker.is_file():
-            docker_text = docker.read_text()
-            ref = next((item for item in suite.tasks if item.path == task_dir), None)
-            profile = (
-                load_environment_profiles().get(ref.environment_profile)
-                if ref
-                else None
-            )
-            first_from = next(
-                (
-                    line.strip()[5:].strip()
-                    for line in docker_text.splitlines()
-                    if line.strip().upper().startswith("FROM ")
-                ),
-                None,
-            )
-            if profile is not None and first_from != profile.verifier_image:
-                failures.append(
-                    f"{rel}/tests/Dockerfile: FROM does not match verifier image "
-                    f"for environment profile {profile.name}"
-                )
-            if not _dockerfile_copies(docker_text, "verifier_support.py"):
-                failures.append(
-                    f"{rel}/tests/Dockerfile: does not copy verifier_support.py"
-                )
-            checksum = re.search(r'jacobian\.checksum="([0-9a-f]{64})"', docker_text)
-            expected_checksum = hashlib.sha256(
-                (tests / "verifier.py").read_bytes()
-            ).hexdigest()
-            if checksum is None:
-                failures.append(
-                    f"{rel}/tests/Dockerfile: missing verifier checksum label"
-                )
-            elif checksum.group(1) != expected_checksum:
-                failures.append(
-                    f"{rel}/tests/Dockerfile: verifier checksum label is stale"
-                )
+        failures.extend(_tests_dockerfile_failures(suite, task_dir, tests, rel))
     if not (task_dir / "solution").is_dir():
         failures.append(f"{rel}/solution: directory missing")
     for forbidden in (
@@ -936,7 +1044,6 @@ def report_ok(message: str) -> None:
 
 
 __all__ = [
-    "HarborSuiteError",
     "Suite",
     "TaskRef",
     "check_selected_tasks",

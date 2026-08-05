@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 from mcp import Client
-from tests.support.mcp import create_legacy_server as create_server
 from tests.support.provider_lean import (
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
     pinned_mathlib_runtime_available,
 )
 from tests.support.rationals import rational_payload as _q
 
+from jacobian.adapters.mcp.server import create_server
 from jacobian.runtime import CheckerAuthorityMode
 
 

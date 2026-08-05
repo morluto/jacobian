@@ -68,8 +68,8 @@ def test_nonprimitive_or_same_parity_seed_is_rejected():
 
 
 def test_contract_has_computed_ceiling():
-    schema = json.loads((TASK / "environment/submission_schema.json").read_text())
-    assert schema["properties"]["claimed_assurance"] == {"const": "COMPUTED"}
+    contract = json.loads((TASK / "tests/public_contract.json").read_text())
+    assert contract["allowed_assurance"] == ["COMPUTED"]
 
 
 def test_booleans_rejected_in_integer_fields():
@@ -148,7 +148,7 @@ def test_assurance_calibration_independent_of_envelope(tmp_path: Path) -> None:
     submission["extra_field"] = True
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["assurance_calibration"] == 1.0
+    assert result["assurance_calibration"] == 0.0
     assert result["reward"] == 0.0
 
 
@@ -163,6 +163,22 @@ def test_large_evidence_without_result_binding_is_rejected(tmp_path: Path) -> No
     )
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_oversized_result_marker_is_rejected_without_buffering_it(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text("RESULT_JSON:" + "x" * 65_537, encoding="utf-8")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+
+    result = support._run_verifier(task, app, logs)
+
     assert result["evidence_validity"] == 0.0
     assert result["reward"] == 0.0
 
@@ -249,14 +265,15 @@ def test_symlinked_workspace_input_is_rejected(tmp_path: Path) -> None:
 
 
 def test_input_tamper_preserves_assurance_diagnostics(tmp_path: Path) -> None:
-    """When the workspace input is altered, mathematical acceptance and
-    aggregate reward are gated to zero, but evidence validity, scope, and
-    assurance diagnostics remain independently evaluated rather than
-    collapsing to zero.  Input binding is reported as a separate metric."""
+    """When the workspace input is altered, mathematical correctness is still
+    reported (the recurrence is unchanged) while aggregate reward is gated to
+    zero via ``input_binding``. Evidence validity, scope, and assurance
+    diagnostics remain independently evaluated rather than collapsing to zero.
+    Input binding is reported as a separate metric."""
     task, app, logs = _case(tmp_path)
     (app / "input.json").write_text("{}")
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
+    assert result["correctness"] == 1.0
     assert result["evidence_validity"] == 1.0
     assert result["input_binding"] == 0.0
     assert result["scope_accuracy"] == 1.0
@@ -322,6 +339,68 @@ def test_reference_reports_input_binding(tmp_path: Path) -> None:
     result = support._run_verifier(task, app, logs)
     assert result["input_binding"] == 1.0
     assert result["reward"] == 1.0
+
+
+def test_null_evidence_descriptor_reports_protocol_failure(
+    tmp_path: Path,
+) -> None:
+    """A schema-invalid evidence descriptor such as ``[null]`` must report
+    protocol_compliance = 0, not only evidence_validity = 0."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"] = [None]
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["protocol_compliance"] == 0.0
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_evidence_descriptor_extra_field_reports_protocol_failure(
+    tmp_path: Path,
+) -> None:
+    """An evidence descriptor carrying an extra field violates the exact
+    ``{path, sha256}`` schema and must report protocol_compliance = 0."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["extra"] = True
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["protocol_compliance"] == 0.0
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_evidence_descriptor_bad_digest_syntax_reports_protocol_failure(
+    tmp_path: Path,
+) -> None:
+    """A descriptor whose digest does not match the ``sha256:<hex>`` syntax
+    must report protocol_compliance = 0 even before file content is bound."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = "not-a-digest"
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["protocol_compliance"] == 0.0
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_multiple_result_json_markers_are_rejected(tmp_path: Path) -> None:
+    """More than one RESULT_JSON marker must fail evidence binding rather than
+    silently picking the first, exercising the streaming scanner's count."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    marker = "RESULT_JSON:" + json.dumps(
+        submission["result"], sort_keys=True, separators=(",", ":")
+    )
+    evidence.write_text(f"recurrence coprime pythagorean\n{marker}\n{marker}\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
 
 
 def test_instruction_documents_evidence_binding():

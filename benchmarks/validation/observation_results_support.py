@@ -61,7 +61,7 @@ def _trial(repetition: int, reward: float) -> dict:
 
 def _evidence(condition: str, correctness: list[float]) -> dict:
     return {
-        "schema_version": "2",
+        "schema_version": "3",
         "evidence_class": "workflow-observation",
         "causal_claim_authorized": False,
         "status": "VALID",

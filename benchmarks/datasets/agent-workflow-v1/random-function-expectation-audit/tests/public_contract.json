@@ -1,0 +1,174 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "TRUE",
+      "FALSE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "items": {
+      "type": "string"
+    },
+    "type": "array"
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "random-function-expectation-audit exact finite expectation",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "expected_value": {
+        "description": "The expectation of (f(f(x))-x)^2 over ordered x and f",
+        "type": "string"
+      },
+      "ordered_squared_difference_sum": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "other_hit_probability": {
+        "description": "P(f(f(x))=y) for one fixed y != x",
+        "type": "string"
+      },
+      "self_hit_probability": {
+        "description": "P(f(f(x))=x) for a fixed x",
+        "type": "string"
+      }
+    },
+    "required": [
+      "self_hit_probability",
+      "other_hit_probability",
+      "ordered_squared_difference_sum",
+      "expected_value"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "enum": [
+          "TRUE",
+          "FALSE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_value": {
+            "description": "The expectation of (f(f(x))-x)^2 over ordered x and f",
+            "type": "string"
+          },
+          "ordered_squared_difference_sum": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "other_hit_probability": {
+            "description": "P(f(f(x))=y) for one fixed y != x",
+            "type": "string"
+          },
+          "self_hit_probability": {
+            "description": "P(f(f(x))=x) for a fixed x",
+            "type": "string"
+          }
+        },
+        "required": [
+          "self_hit_probability",
+          "other_hit_probability",
+          "ordered_squared_difference_sum",
+          "expected_value"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "random-function-expectation-audit exact finite expectation",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/random-function-expectation-audit"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/random-function-expectation-audit",
+  "verification_record": null
+}

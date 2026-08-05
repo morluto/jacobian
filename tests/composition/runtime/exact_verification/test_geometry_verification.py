@@ -15,7 +15,6 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import build_geometry_bundle
 from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.memory import ResearchMemory
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry
@@ -38,9 +37,7 @@ class _GeometryRuntime:
         self.artifacts = ArtifactService(self.store, self.schemas)
         self.checkers = CheckerRegistry(self.store)
         self.verification = VerificationService(self.store, self.checkers)
-        self.capabilities = CapabilityService(
-            self.store, ResearchMemory(self.store, self.schemas)
-        )
+        self.capabilities = CapabilityService(self.store)
         self.geometry = OperationInstaller(
             self.store, self.schemas, self.artifacts
         ).install(build_geometry_bundle())

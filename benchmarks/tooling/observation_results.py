@@ -1,13 +1,13 @@
 """Normalize and compare Harbor model-in-the-loop observation results.
 
-This is the strict normalized observation evidence *v2* implementation.  It
-replaces v1 atomically and tightens three classes of contract that v1 left
+This is the strict normalized observation evidence *v3* implementation.  It
+replaces v2 atomically and tightens three classes of contract that v2 left
 implicit:
 
 * **Dataset/task selection** is normalized to exactly one of the two Harbor job
   forms -- ``datasets[].path`` with optional ``task_names`` or explicit
   ``tasks[].path``.  Mixed selections, outside-dataset paths, unknown task
-  names, empty selections, and the v1 implicit "fall back to all known tasks"
+  names, empty selections, and the v2 implicit "fall back to all known tasks"
   behavior are rejected.
 * **Artifact identity** binds ``job``/``trial``/``step``/canonical source
   path/artifact-relative path/digest for every observed trace artifact.
@@ -17,6 +17,8 @@ implicit:
   manifest, and malformed multistep paths.  The evidence fails closed:
   ``TIMEOUT``/``CANCELLED``/``ERROR`` and incomplete enumeration never produce
   ``VALID`` evidence and never authorize a causal claim.
+
+The reasoning_protocol trial member is required in v3; no v2 compatibility.
 """
 
 from __future__ import annotations
@@ -24,7 +26,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -36,11 +37,16 @@ from benchmarks.tooling import (
     observation_comparison,
     observation_selection,
 )
+from benchmarks.tooling.command_runner import git_head_sha
+from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import (
     ROOT,
-    HarborSuiteError,
     get_suite,
     task_digest,
+)
+from benchmarks.tooling.strict_boundaries import (
+    HarborJobSelection,
+    raise_strict_model,
 )
 
 
@@ -80,13 +86,10 @@ def _validate_contract(value: dict[str, Any], schema_name: str) -> None:
 
 
 def _git_sha() -> str:
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    value = git_head_sha(ROOT)
+    if value is None:
+        raise HarborSuiteError("unable to resolve git HEAD")
+    return value
 
 
 def _find_result(jobs_dir: Path) -> Path:
@@ -408,6 +411,57 @@ def _resolve_binding(
     return first, []
 
 
+def _parse_job_selection(job_path: Path) -> dict[str, Any]:
+    """Read and strictly validate the selection root of a Harbor job."""
+
+    job = _read_json(job_path)
+    if not isinstance(job, dict):
+        raise HarborSuiteError("Harbor job must be an object")
+    selection_payload: dict[str, Any] = {}
+    if "datasets" in job:
+        selection_payload["datasets"] = job["datasets"]
+    if "tasks" in job:
+        selection_payload["tasks"] = job["tasks"]
+    raise_strict_model(
+        HarborJobSelection,
+        selection_payload,
+        label=_display_path(job_path),
+    )
+    return job
+
+
+def _resolve_binding_values(
+    job: dict[str, Any],
+    runtime: dict[str, Any],
+    heldout_manifest: dict[str, Any] | None,
+) -> tuple[object | None, object | None, list[str]]:
+    """Resolve snapshot_id and harbor_version bindings across job/runtime/manifest."""
+
+    heldout_harbor_version = (
+        heldout_manifest.get("experiment", {}).get("harbor_version")
+        if heldout_manifest is not None
+        else None
+    )
+    heldout_snapshot_id = (
+        heldout_manifest.get("snapshot_lock", {}).get("lock_id")
+        if heldout_manifest is not None
+        else None
+    )
+    snapshot_id, snapshot_failures = _resolve_binding(
+        "snapshot_id",
+        job=job,
+        runtime=runtime,
+        heldout_value=heldout_snapshot_id,
+    )
+    harbor_version, harbor_failures = _resolve_binding(
+        "harbor_version",
+        job=job,
+        runtime=runtime,
+        heldout_value=heldout_harbor_version,
+    )
+    return snapshot_id, harbor_version, snapshot_failures + harbor_failures
+
+
 def build_observation_evidence(
     *,
     dataset: str,
@@ -418,9 +472,7 @@ def build_observation_evidence(
     runtime_snapshot: dict[str, Any] | None = None,
     heldout_manifest: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
-    job = _read_json(job_path)
-    if not isinstance(job, dict):
-        raise HarborSuiteError("Harbor job must be an object")
+    job = _parse_job_selection(job_path)
     result_path = (result_path or _find_result(jobs_dir)).resolve()
     payload = _read_json(result_path)
     if not isinstance(payload, dict):
@@ -521,9 +573,7 @@ def build_observation_evidence(
     snapshot_invariants = {
         key: runtime.get(key)
         for key in (
-            "bundle_id",
-            "bundle_version",
-            "bundle_manifest_digest",
+            "manifest_digest",
             "dataset_manifest_digest",
             "harbor_version",
             "agent",
@@ -537,30 +587,10 @@ def build_observation_evidence(
         )
         if key in runtime
     }
-    heldout_harbor_version = (
-        heldout_manifest.get("experiment", {}).get("harbor_version")
-        if heldout_manifest is not None
-        else None
+    snapshot_id, harbor_version, binding_failures = _resolve_binding_values(
+        job, runtime, heldout_manifest
     )
-    heldout_snapshot_id = (
-        heldout_manifest.get("dataset", {}).get("snapshot_id")
-        if heldout_manifest is not None
-        else None
-    )
-    snapshot_id, snapshot_failures = _resolve_binding(
-        "snapshot_id",
-        job=job,
-        runtime=runtime,
-        heldout_value=heldout_snapshot_id,
-    )
-    harbor_version, harbor_failures = _resolve_binding(
-        "harbor_version",
-        job=job,
-        runtime=runtime,
-        heldout_value=heldout_harbor_version,
-    )
-    failures.extend(snapshot_failures)
-    failures.extend(harbor_failures)
+    failures.extend(binding_failures)
     if not isinstance(snapshot_id, str) or not snapshot_id.startswith("sha256:"):
         failures.append(
             "snapshot_id must be a sha256 digest bound by the job or runtime"
@@ -617,6 +647,8 @@ def _heldout_plan_failures(
         failures.append("held-out plan digest mismatch")
     if ledger.get("plan_digest") != plan_digest:
         failures.append("held-out ledger does not bind the run plan")
+    if ledger.get("manifest_digest") != plan.get("manifest_digest"):
+        failures.append("held-out ledger does not bind the canonical manifest")
     if ledger.get("status") != "COMPLETE":
         failures.append("held-out execution ledger is not COMPLETE")
     selected = [
@@ -674,15 +706,7 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
     return {
         key: plan.get(key)
         for key in (
-            "bundle_manifest_digest",
-            "snapshot_id",
-            "harbor_version",
-            "agent",
-            "model",
-            "prompt_path",
-            "prompt_digest",
-            "reasoning_effort",
-            "randomization_seed",
+            "manifest_digest",
             "stage",
             "budget",
             "pair_count",
@@ -690,6 +714,50 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
         )
         if key in plan
     }
+
+
+_CAPABILITY_INVOKE_TOOL = "capability.invoke"
+
+
+def _mark_invoked_if_capability_used(
+    ledger: dict[str, Any],
+    trials: list[dict[str, Any]],
+    *,
+    contract_dir: Path,
+) -> bool:
+    """Transition treatment routing_status to AVAILABLE_INVOKED when
+    a successful Jacobian capability invocation is observed during
+    normalization.  Only actual observed tool_calls evidence this; the
+    preflight proves AVAILABLE_UNUSED and the runner must not override it.
+    Persists the updated contract to ``routing-status-c2.json``.
+
+    Fail closed: a trial with ``capability.invoke`` calls but non-COMPLETED
+    status or nonzero ``tool_errors`` does not evidence a successful
+    invocation and must not transition the routing status.
+    """
+
+    invoked = any(
+        isinstance(trial.get("tool_calls"), dict)
+        and trial["tool_calls"].get(_CAPABILITY_INVOKE_TOOL, 0) > 0
+        and trial.get("status") == "COMPLETED"
+        and trial.get("tool_errors") == 0
+        for trial in trials
+    )
+    if not invoked:
+        return False
+    routing = ledger.get("routing_status")
+    if not isinstance(routing, dict):
+        return False
+    c2 = routing.get("C2")
+    if not isinstance(c2, dict):
+        return False
+    if c2.get("routing_status") != "AVAILABLE_UNUSED":
+        return False
+    c2["routing_status"] = "AVAILABLE_INVOKED"
+    from benchmarks.tooling.heldout_runner import _write_routing_contract
+
+    _write_routing_contract(contract_dir, "C2", c2)
+    return True
 
 
 def collect_heldout_evidence(
@@ -716,6 +784,14 @@ def collect_heldout_evidence(
     )
     failures.extend(run_failures)
     experiment = manifest["experiment"]
+    if condition == "C2":
+        routing_changed = _mark_invoked_if_capability_used(
+            ledger, trials, contract_dir=ledger_path.parent
+        )
+        if routing_changed:
+            from benchmarks.tooling.heldout_runner import _write_ledger
+
+            _write_ledger(ledger_path, ledger)
     stage = str(plan.get("stage", ""))
     stage_tasks = (
         experiment["stages"][stage]["task_ids"] if stage in experiment["stages"] else []
@@ -729,9 +805,7 @@ def collect_heldout_evidence(
     task_digests = {str(item["id"]): str(item["digest"]) for item in manifest["tasks"]}
     failures.extend(observation_artifacts.artifact_source_reuse(trials))
     heldout_harbor_version = experiment.get("harbor_version")
-    bundle_id = manifest.get("bundle_id")
-    bundle_version = manifest.get("bundle_version")
-    manifest_snapshot_id = manifest.get("dataset", {}).get("snapshot_id")
+    manifest_snapshot_id = manifest.get("snapshot_lock", {}).get("lock_id")
     snapshot_id, snapshot_failures = _resolve_binding(
         "snapshot_id",
         job=plan,
@@ -748,7 +822,7 @@ def collect_heldout_evidence(
     failures.extend(harbor_failures)
     if not isinstance(snapshot_id, str) or not snapshot_id.startswith("sha256:"):
         failures.append(
-            "snapshot_id must be a sha256 digest bound by the plan, runtime, or manifest dataset"
+            "snapshot_id must be a sha256 digest bound by the plan, runtime, or manifest snapshot_lock"
         )
         snapshot_id = None
     if not isinstance(harbor_version, str) or not harbor_version:
@@ -756,11 +830,6 @@ def collect_heldout_evidence(
             "harbor_version must be a non-empty string bound by the plan, runtime, or manifest experiment"
         )
         harbor_version = None
-    if bundle_id is not None and isinstance(bundle_id, str):
-        # Surface the bundle identity in the runtime snapshot for traceability.
-        runtime_invariants.setdefault("bundle_id", bundle_id)
-    if bundle_version is not None and isinstance(bundle_version, str):
-        runtime_invariants.setdefault("bundle_version", bundle_version)
     eval_args = observation_selection.make_eval_args(
         "dataset-task-names",
         sorted(stage_tasks),

@@ -2,13 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jacobian.invalid/benchmarks/schemas/held-out-manifest.schema.json",
   "title": "Private held-out Jacobian evaluation bundle",
+  "description": "Canonical v3 held-out manifest. The Harbor snapshot lock is canonical: the manifest binds the lock ID/URI/digest, archive digest, selected task IDs/digests, runtime image, Jacobian catalog/policy, Harbor/agent/model/prompt/seed/budgets/stages/condition. Plans, ledgers, and reports refer to the manifest digest instead of duplicating mutable provenance. Archive tasks must agree with the snapshot lock. No v2 compatibility.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "bundle_id", "bundle_version", "archive", "dataset", "tasks", "conditions", "experiment"],
+  "required": ["schema_version", "bundle_id", "bundle_version", "snapshot_lock", "archive", "dataset", "tasks", "conditions", "experiment"],
   "properties": {
-    "schema_version": {"const": "2"},
+    "schema_version": {"const": "3"},
     "bundle_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
     "bundle_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "snapshot_lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "lock_uri", "lock_digest"],
+      "properties": {
+        "lock_id": {"$ref": "#/$defs/digest", "description": "The snapshot_id from the canonical Harbor snapshot lock. Identifies the immutable benchmark snapshot this held-out dataset binds to."},
+        "lock_uri": {"type": "string", "minLength": 1, "description": "Canonical URI where the snapshot lock file is stored."},
+        "lock_digest": {"$ref": "#/$defs/digest", "description": "Content-addressed digest of the snapshot lock file itself."}
+      }
+    },
     "archive": {
       "type": "object",
       "additionalProperties": false,
@@ -21,15 +32,11 @@
     "dataset": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "path", "manifest_digest", "snapshot_id", "minimum_independent_families"],
+      "required": ["id", "path", "manifest_digest", "minimum_independent_families"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
         "path": {"const": "dataset"},
         "manifest_digest": {"$ref": "#/$defs/digest"},
-        "snapshot_id": {
-          "$ref": "#/$defs/digest",
-          "description": "Immutable benchmark snapshot ID this held-out dataset binds to. Observation evidence v2 reads this and requires agreement with the job/runtime snapshot_id."
-        },
         "minimum_independent_families": {"type": "integer", "minimum": 2}
       }
     },

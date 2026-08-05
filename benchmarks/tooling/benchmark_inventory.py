@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
 import tomllib
 from collections import Counter
 from pathlib import Path
@@ -13,6 +12,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.tooling.harbor_suite import ROOT, Suite, load_registry, task_digest
 
 
@@ -21,9 +21,12 @@ def _sha256(path: Path) -> str:
 
 
 def _git(args: list[str]) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, check=True, capture_output=True, text=True
-    ).stdout.strip()
+    result = run_operator_command("git", args, cwd=ROOT, timeout_seconds=30.0)
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        raise RuntimeError(
+            result.diagnostic or result.stderr.decode(errors="replace")[:1024]
+        )
+    return result.stdout.decode("utf-8", errors="strict").strip()
 
 
 def _suite_inventory(suite: Suite) -> dict[str, Any]:

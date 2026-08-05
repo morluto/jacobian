@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling.harbor_suite import HarborSuiteError, get_suite, load_registry
+from benchmarks.tooling.errors import HarborSuiteError
+from benchmarks.tooling.harbor_suite import get_suite, load_registry
 from tests.unit.tooling.harbor_suite_support import (
     _make_canonical_task,
     _make_dataset_entry,

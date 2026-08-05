@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jacobian.invalid/benchmarks/schemas/held-out-routing-status.schema.json",
+  "title": "Held-out treatment infrastructure routing status contract",
+  "description": "Declares the routing and readiness status of Jacobian treatment infrastructure for a held-out evaluation. Treatment performs a bounded MCP initialize + catalog + describe probe before model execution and aborts unless infrastructure_status is READY. Control records NOT_CONFIGURED and performs no probe. Refers to the manifest digest for provenance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "manifest_digest", "condition_id", "infrastructure_status", "routing_status", "treatment", "routing", "checks", "failures"],
+  "properties": {
+    "schema_version": {"const": "2"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "condition_id": {"enum": ["C1", "C2"]},
+    "infrastructure_status": {
+      "enum": ["NOT_CONFIGURED", "READY", "UNAVAILABLE", "MISCONFIGURED"]
+    },
+    "routing_status": {
+      "enum": [
+        "NOT_APPLICABLE",
+        "AVAILABLE_UNUSED",
+        "AVAILABLE_INVOKED",
+        "MISROUTED",
+        "CONFIGURED_UNCALLABLE",
+        "UNKNOWN"
+      ]
+    },
+    "treatment": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["image", "server_version", "policy_profile", "catalog_digest", "policy_digest"],
+      "properties": {
+        "image": {"type": "string", "minLength": 1},
+        "server_version": {"type": "string", "minLength": 1},
+        "policy_profile": {"type": "string", "minLength": 1},
+        "catalog_digest": {"$ref": "#/$defs/digest"},
+        "policy_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "routing": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["compose_file", "mcp_url"],
+      "properties": {
+        "compose_file": {"type": "string"},
+        "mcp_url": {"type": "string"}
+      }
+    },
+    "probe": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["reachable", "probe_digest"],
+      "properties": {
+        "reachable": {"type": "boolean"},
+        "server_version_observed": {"type": ["string", "null"]},
+        "catalog_digest_observed": {"type": ["string", "null"]},
+        "policy_digest_observed": {"type": ["string", "null"]},
+        "policy_profile_observed": {"type": ["string", "null"]},
+        "tool_names": {
+          "type": ["array", "null"],
+          "items": {"type": "string"}
+        },
+        "discovery_matches": {
+          "type": ["array", "null"],
+          "items": {"type": "string"}
+        },
+        "probe_digest": {"$ref": "#/$defs/digest"},
+        "diagnostic": {"type": ["string", "null"]}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image_digest_pinned", "catalog_digest_bound", "policy_digest_bound", "server_version_bound", "policy_profile_bound", "server_version_match", "catalog_digest_match", "policy_digest_match", "required_tools_present", "describe_responded"],
+      "properties": {
+        "image_digest_pinned": {"type": "boolean"},
+        "catalog_digest_bound": {"type": "boolean"},
+        "policy_digest_bound": {"type": "boolean"},
+        "server_version_bound": {"type": "boolean"},
+        "policy_profile_bound": {"type": "boolean"},
+        "server_version_match": {"type": ["boolean", "null"]},
+        "catalog_digest_match": {"type": ["boolean", "null"]},
+        "policy_digest_match": {"type": ["boolean", "null"]},
+        "required_tools_present": {"type": ["boolean", "null"]},
+        "describe_responded": {"type": ["boolean", "null"]}
+      }
+    },
+    "failures": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -1,1 +1,176 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/trigonometric-power-sum-valuation"},"conclusion":{"enum":["DIVISIBILITY_CERTIFIED","INSUFFICIENT_EVIDENCE"]},"result":{"type":"object","additionalProperties":false,"required":["minimal_polynomial_descending","initial_power_sums","recurrence_coefficients","terms","induction_cases","conclusion"],"properties":{"minimal_polynomial_descending":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"integer"}},"initial_power_sums":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer"}},"recurrence_coefficients":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer"}},"terms":{"type":"array","minItems":25,"maxItems":25,"items":{"type":"object","additionalProperties":false,"required":["n","value","seven_adic_valuation","required_valuation"],"properties":{"n":{"type":"integer","minimum":0,"maximum":24},"value":{"type":"integer"},"seven_adic_valuation":{"type":"integer","minimum":0},"required_valuation":{"type":"integer","minimum":0}}}},"induction_cases":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["residue","coefficient_adjusted_offsets"],"properties":{"residue":{"type":"integer","minimum":0,"maximum":2},"coefficient_adjusted_offsets":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer","minimum":0}}}}},"conclusion":{"const":"DIVISIBLE_FOR_ALL_POSITIVE_N"}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED"]},"scope":{"type":"string"},"completeness":{"enum":["COMPLETE","PARTIAL","UNKNOWN"]},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "DIVISIBILITY_CERTIFIED",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "conclusion": {
+          "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
+        },
+        "induction_cases": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "coefficient_adjusted_offsets": {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "residue": {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "residue",
+              "coefficient_adjusted_offsets"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "initial_power_sums": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "minimal_polynomial_descending": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "recurrence_coefficients": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "terms": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "n": {
+                "maximum": 24,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "required_valuation": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "seven_adic_valuation": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "value": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "n",
+              "value",
+              "seven_adic_valuation",
+              "required_valuation"
+            ],
+            "type": "object"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "type": "array"
+        }
+      },
+      "required": [
+        "minimal_polynomial_descending",
+        "initial_power_sums",
+        "recurrence_coefficients",
+        "terms",
+        "induction_cases",
+        "conclusion"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/trigonometric-power-sum-valuation"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

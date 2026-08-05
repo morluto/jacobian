@@ -1,0 +1,347 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "enum": [
+      "NEGATIVE_TERM_BEFORE_2002",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/nonlinear-recurrence-certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "ELEMENTARY_REAL_ORDER_LEMMAS_TRUSTED"
+    ]
+  },
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "required_artifact_filenames": [
+    "evidence/nonlinear-recurrence-certificate.json"
+  ],
+  "schema_definitions": {
+    "extended_bound": {
+      "oneOf": [
+        {
+          "const": "NEGATIVE_INFINITY"
+        },
+        {
+          "const": "POSITIVE_INFINITY"
+        },
+        {
+          "$ref": "#/$defs/rational"
+        }
+      ]
+    },
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "terminal_bound": {
+      "additionalProperties": false,
+      "properties": {
+        "input_lower": {
+          "$ref": "#/$defs/extended_bound"
+        },
+        "input_upper": {
+          "$ref": "#/$defs/extended_bound"
+        },
+        "output_lower": {
+          "$ref": "#/$defs/extended_bound"
+        },
+        "output_upper": {
+          "$ref": "#/$defs/extended_bound"
+        }
+      },
+      "required": [
+        "input_lower",
+        "input_upper",
+        "output_lower",
+        "output_upper"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "TOTAL_REAL_RECURRENCE_FROM_A1_EQUALS_56",
+    "enum": null,
+    "pattern": null,
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "decrement_lower_bound": {
+        "$ref": "#/$defs/rational"
+      },
+      "initial_potential": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "negative_index_upper": {
+        "maximum": 2001,
+        "minimum": 2,
+        "type": "integer"
+      },
+      "phase_transitions": {
+        "maximum": 2001,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "potential_identity_coefficients": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "terminal_bounds": {
+        "items": {
+          "$ref": "#/$defs/terminal_bound"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "threshold": {
+        "$ref": "#/$defs/rational"
+      },
+      "threshold_index_upper": {
+        "maximum": 2001,
+        "minimum": 2,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "potential_identity_coefficients",
+      "initial_potential",
+      "threshold",
+      "decrement_lower_bound",
+      "phase_transitions",
+      "threshold_index_upper",
+      "terminal_bounds",
+      "negative_index_upper"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "extended_bound": {
+        "oneOf": [
+          {
+            "const": "NEGATIVE_INFINITY"
+          },
+          {
+            "const": "POSITIVE_INFINITY"
+          },
+          {
+            "$ref": "#/$defs/rational"
+          }
+        ]
+      },
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      },
+      "terminal_bound": {
+        "additionalProperties": false,
+        "properties": {
+          "input_lower": {
+            "$ref": "#/$defs/extended_bound"
+          },
+          "input_upper": {
+            "$ref": "#/$defs/extended_bound"
+          },
+          "output_lower": {
+            "$ref": "#/$defs/extended_bound"
+          },
+          "output_upper": {
+            "$ref": "#/$defs/extended_bound"
+          }
+        },
+        "required": [
+          "input_lower",
+          "input_upper",
+          "output_lower",
+          "output_upper"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "enum": [
+          "COMPLETE",
+          "PARTIAL",
+          "UNKNOWN"
+        ]
+      },
+      "conclusion": {
+        "enum": [
+          "NEGATIVE_TERM_BEFORE_2002",
+          "INSUFFICIENT_EVIDENCE"
+        ]
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/nonlinear-recurrence-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "ELEMENTARY_REAL_ORDER_LEMMAS_TRUSTED"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "decrement_lower_bound": {
+            "$ref": "#/$defs/rational"
+          },
+          "initial_potential": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "negative_index_upper": {
+            "maximum": 2001,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "phase_transitions": {
+            "maximum": 2001,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "potential_identity_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "terminal_bounds": {
+            "items": {
+              "$ref": "#/$defs/terminal_bound"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "threshold": {
+            "$ref": "#/$defs/rational"
+          },
+          "threshold_index_upper": {
+            "maximum": 2001,
+            "minimum": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "potential_identity_coefficients",
+          "initial_potential",
+          "threshold",
+          "decrement_lower_bound",
+          "phase_transitions",
+          "threshold_index_upper",
+          "terminal_bounds",
+          "negative_index_upper"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "TOTAL_REAL_RECURRENCE_FROM_A1_EQUALS_56",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/nonlinear-recurrence-crossing-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/nonlinear-recurrence-crossing-certificate",
+  "verification_record": null
+}

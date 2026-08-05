@@ -71,6 +71,7 @@ import {
   pythonVersionFromNpmVersion,
 } from "./bin/launcher.cjs";
 import {
+  classifyStartupFailure,
   EXPECTED_TOOLS,
   handshakeFailure,
   timeoutMessage,
@@ -300,6 +301,26 @@ test("doctor errors hide request ids and provide a recovery command", () => {
   const handshake = handshakeFailure("tool-catalog request");
   assert.match(handshake, /MCP tool-catalog request/);
   assert.match(handshake, /npx jacobian doctor/);
+});
+
+test("doctor classifies incompatible persisted state without exposing tracebacks", () => {
+  const diagnostic = classifyStartupFailure(
+    "StateDatabaseError: state migration 3 identity or checksum changed",
+    "Connection closed",
+  );
+  assert.equal(diagnostic.code, "STATE_MIGRATION_INCOMPATIBLE");
+  assert.match(diagnostic.message, /migration 3/);
+  assert.match(diagnostic.recovery, /fresh state directory/);
+  assert.doesNotMatch(diagnostic.message, /StateDatabaseError/);
+});
+
+test("doctor classifies a missing managed Jacobian runtime", () => {
+  const diagnostic = classifyStartupFailure(
+    "ModuleNotFoundError: No module named 'jacobian'",
+    "Connection closed",
+  );
+  assert.equal(diagnostic.code, "JACOBIAN_RUNTIME_UNAVAILABLE");
+  assert.match(diagnostic.recovery, /source-agent doctor/);
 });
 
 test("doctor validates the default capability-first MCP profile", () => {

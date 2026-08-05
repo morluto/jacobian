@@ -1,94 +1,204 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/bounded-variation-uniform-limit"},
-    "conclusion": {"const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["scale_q", "sequence", "limit_function", "argument", "uniform_certificate", "variation_formula", "checkpoints"],
-      "properties": {
-        "scale_q": {"type": "integer", "minimum": 2, "maximum": 9},
-        "sequence": {"type": "string"},
-        "limit_function": {"const": "0"},
-        "argument": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["uniform_convergence", "variation_behavior", "implication"],
-          "properties": {
-            "uniform_convergence": {"const": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO"},
-            "variation_behavior": {"const": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"},
-            "implication": {"const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"}
-          }
-        },
-        "uniform_certificate": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["sup_norm_numerator", "sup_norm_denominator_coefficient", "tends_to_zero"],
-          "properties": {
-            "sup_norm_numerator": {"const": 1},
-            "sup_norm_denominator_coefficient": {"type": "integer"},
-            "tends_to_zero": {"const": true}
-          }
-        },
-        "variation_formula": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["endpoint_segment_count", "interior_segment_count", "endpoint_jump_multiplier", "interior_jump_multiplier", "total_variation"],
-          "properties": {
-            "endpoint_segment_count": {"const": 2},
-            "interior_segment_count": {"type": "string"},
-            "endpoint_jump_multiplier": {"const": 1},
-            "interior_jump_multiplier": {"const": 2},
-            "total_variation": {"type": "string"}
-          }
-        },
-        "checkpoints": {
-          "type": "array",
-          "minItems": 4,
-          "maxItems": 10,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["n", "frequency", "amplitude", "interior_segments", "endpoint_contribution", "interior_contribution", "total_variation"],
-            "properties": {
-              "n": {"type": "integer", "minimum": 1},
-              "frequency": {"type": "integer"},
-              "amplitude": {"type": "string"},
-              "interior_segments": {"type": "integer"},
-              "endpoint_contribution": {"type": "string"},
-              "interior_contribution": {"type": "string"},
-              "total_variation": {"type": "string"}
-            }
-          }
-        }
-      }
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
     },
-    "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED"]},
-    "scope": {"const": "the full sequence on [0,2*pi] and all submitted exact checkpoints"},
-    "completeness": {"const": "COMPLETE"},
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"
+    },
     "evidence": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 1,
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["path", "sha256"],
         "properties": {
-          "path": {"const": "evidence/answer.txt"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-        }
-      }
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     },
     "limitations": {
-      "type": "array",
-      "minItems": 1,
+      "items": {
+        "const": "NO_PROOF_ASSISTANT_VERIFICATION"
+      },
       "maxItems": 1,
-      "items": {"const": "NO_PROOF_ASSISTANT_VERIFICATION"}
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "argument": {
+          "additionalProperties": false,
+          "properties": {
+            "implication": {
+              "const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"
+            },
+            "uniform_convergence": {
+              "const": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO"
+            },
+            "variation_behavior": {
+              "const": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
+            }
+          },
+          "required": [
+            "uniform_convergence",
+            "variation_behavior",
+            "implication"
+          ],
+          "type": "object"
+        },
+        "checkpoints": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "amplitude": {
+                "type": "string"
+              },
+              "endpoint_contribution": {
+                "type": "string"
+              },
+              "frequency": {
+                "type": "integer"
+              },
+              "interior_contribution": {
+                "type": "string"
+              },
+              "interior_segments": {
+                "type": "integer"
+              },
+              "n": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "total_variation": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "n",
+              "frequency",
+              "amplitude",
+              "interior_segments",
+              "endpoint_contribution",
+              "interior_contribution",
+              "total_variation"
+            ],
+            "type": "object"
+          },
+          "maxItems": 10,
+          "minItems": 4,
+          "type": "array"
+        },
+        "limit_function": {
+          "const": "0"
+        },
+        "scale_q": {
+          "maximum": 9,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "sequence": {
+          "type": "string"
+        },
+        "uniform_certificate": {
+          "additionalProperties": false,
+          "properties": {
+            "sup_norm_denominator_coefficient": {
+              "type": "integer"
+            },
+            "sup_norm_numerator": {
+              "const": 1
+            },
+            "tends_to_zero": {
+              "const": true
+            }
+          },
+          "required": [
+            "sup_norm_numerator",
+            "sup_norm_denominator_coefficient",
+            "tends_to_zero"
+          ],
+          "type": "object"
+        },
+        "variation_formula": {
+          "additionalProperties": false,
+          "properties": {
+            "endpoint_jump_multiplier": {
+              "const": 1
+            },
+            "endpoint_segment_count": {
+              "const": 2
+            },
+            "interior_jump_multiplier": {
+              "const": 2
+            },
+            "interior_segment_count": {
+              "type": "string"
+            },
+            "total_variation": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "endpoint_segment_count",
+            "interior_segment_count",
+            "endpoint_jump_multiplier",
+            "interior_jump_multiplier",
+            "total_variation"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "scale_q",
+        "sequence",
+        "limit_function",
+        "argument",
+        "uniform_certificate",
+        "variation_formula",
+        "checkpoints"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "the full sequence on [0,2*pi] and all submitted exact checkpoints",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/bounded-variation-uniform-limit"
     }
-  }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

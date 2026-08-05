@@ -82,7 +82,6 @@ def test_domain_error_fails_before_artifact_writes(domain_services) -> None:
     assert result.diagnostics[0].code == "NUMBER_THEORY_OPERATION_NOT_APPLICABLE"
     assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_number_theory_boundary_results(domain_services) -> None:
@@ -301,7 +300,6 @@ def test_modular_polynomial_residue_image_rejects_invalid_scope_before_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_NUMBER_THEORY_REQUEST"
     assert result.artifact_uris == ()
-    assert result.episode_uri is None
 
 
 def test_modular_polynomial_residue_image_assignment_bound_is_exact() -> None:

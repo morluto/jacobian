@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 
-from jacobian.bounded_process import BoundedProcessResult
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityInstallTier,
@@ -17,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermination
 from jacobian.provider_measurements import measure_provider
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
 from jacobian.runtime import create_runtime
@@ -236,8 +236,8 @@ def test_worker_proof_metadata_mismatch_fails_closed(
     cvc5_runtime: JacobianRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_worker(command: list[str], **_kwargs: Any) -> BoundedProcessResult:
-        Path(command[5]).write_bytes(
+    def fake_worker(request: ProcessRequest, **_kwargs: Any) -> ProcessResult:
+        Path(request.arguments[4]).write_bytes(
             b'(\n(step t0 (cl) :rule hole :args ("untranslated rewrite"))\n)\n'
         )
         stdout = json.dumps(
@@ -249,16 +249,16 @@ def test_worker_proof_metadata_mismatch_fails_closed(
             },
             separators=(",", ":"),
         ).encode()
-        return BoundedProcessResult(
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
             returncode=0,
             stdout=stdout,
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=False,
         )
 
-    monkeypatch.setattr("jacobian.sat_smt.cvc5.run_bounded_process", fake_worker)
+    monkeypatch.setattr("jacobian.sat_smt.cvc5.execute_process", fake_worker)
 
     result = _invoke(cvc5_runtime, _QF_UF_UNSAT)
 
@@ -274,14 +274,14 @@ def test_worker_timeout_fails_without_solver_conclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.sat_smt.cvc5.run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
+        "jacobian.sat_smt.cvc5.execute_process",
+        lambda *_args, **_kwargs: ProcessResult(
+            termination=ProcessTermination.TIMED_OUT,
             returncode=None,
             stdout=b"",
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
-            timed_out=True,
         ),
     )
 

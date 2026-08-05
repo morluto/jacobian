@@ -8,3 +8,19 @@ Define one typed subgroup artifact whose elements are the submitted subgroup, an
 - pairwise unequal cardinalities over distinct covering indices.
 
 Identify a pair of distinct indices exposing the difference. The verifier binds the shared artifact to the reconstructed subgroup, resolves the index references, rebuilds all modular cosets, checks disjointness and full coverage, and evaluates both predicates. The central defect is loss of source-index identity through value deduplication; vacuous truth is its singleton-range symptom here. A tiny `Z/2Z` witness, a source label, or an uncovered family is rejected. Do not claim the underlying conjecture is settled.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** one of `RANGE_PAIRWISE_IS_VACUOUS`, `INSUFFICIENT_EVIDENCE`
+- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** a string value
+- **Completeness:** one of `COMPLETE`, `PARTIAL`, `UNKNOWN`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `text/plain`.
+- **Required artifact filenames:** `evidence/answer.txt`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -140,7 +140,7 @@ uv run jacobian-mcp \
 
 `--anonymous-tenant-id` is fixed by the operator, never selected from a request.
 Give every independently operated anonymous test endpoint a different value so
-their research episodes and artifacts do not share one state
+their artifacts do not share one state
 directory. This is namespace isolation, not authentication: every caller that
 can reach the same endpoint still shares that endpoint's tenant. Do not use
 anonymous mode for a production or sensitive endpoint. A deliberately public,
@@ -373,7 +373,7 @@ subject to the same tenant-routing interface.
 
 ## Operational boundaries
 
-- Back up the state volume; artifacts and research episodes live there.
+- Back up the state volume; artifacts live there.
 - Run one Jacobian process per state root until a lease model is implemented.
 - Record the deployed git commit and the MCP-advertised package version. Keep
   host-local deployment notes outside source control; they supplement, rather
@@ -386,6 +386,6 @@ subject to the same tenant-routing interface.
 - Do not interpret HTTP success, solver completion, or an MCP response as a
   verified mathematical result.
 - Use the one-line `MCP capability attempt` records for operational counts.
-  Completed research episodes intentionally omit failed attempts, while the
-  attempt record distinguishes `COMPLETED`, `TIMEOUT`, `CANCELLED`, and `ERROR`
-  and retains only bounded status/provenance fields and argument digests.
+  The attempt record distinguishes `COMPLETED`, `TIMEOUT`, `CANCELLED`, and
+  `ERROR` and retains only bounded status/provenance fields and argument
+  digests.

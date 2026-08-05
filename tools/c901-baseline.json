@@ -68,6 +68,11 @@
       "complexity": 14
     },
     {
+      "path": "benchmarks/datasets/agent-workflow-v1/steiner-triple-system-27/tests/verifier.py",
+      "symbol": "_certificate_matches",
+      "complexity": 11
+    },
+    {
       "path": "benchmarks/datasets/agent-workflow-v1/subset-incidence-determinant/tests/verifier.py",
       "symbol": "_result",
       "complexity": 11

@@ -53,6 +53,7 @@ RESOURCE_DERIVED_TASKS = (
 )
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
+    "emerald-path-family-audit",
     "grid-independent-set-transfer",
     "image-complement-commutation",
     "lp-integrability-separator",

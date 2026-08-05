@@ -7,6 +7,7 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
+    _public_submission_is_valid,
     evidence_list_is_bound,
     false_verified_claim,
     is_regular_bounded_file,
@@ -18,7 +19,7 @@ from verifier_support import (
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 LIMITATION = "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
-RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,5})(?:/[1-9][0-9]{0,5})?$")
+RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$")
 
 
 def _load() -> dict[str, Any]:
@@ -108,8 +109,10 @@ def _evidence(value: object, result: object) -> bool:
         return False
     if not isinstance(result, dict) or not isinstance(result.get("trace"), list):
         return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None or not is_regular_bounded_file(path, max_bytes=4096):
+    path = resolve_evidence(
+        value[0], expected_path="evidence/answer.txt", max_bytes=4096
+    )
+    if path is None:
         return False
     try:
         lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
@@ -133,18 +136,16 @@ def main() -> None:
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
+    envelope_contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
+    contract = bool(envelope_contract and _public_submission_is_valid(submission))
     math_correct = _result(data.get("result"), _load())
     evidence_valid = _evidence(data.get("evidence"), data.get("result"))
-    scope_correct = bool(
-        type(data.get("claimed_assurance")) is str
-        and data.get("scope") == expected["required_scope"]
-    )
+    scope_correct = data.get("scope") == expected["required_scope"]
     assurance_correct = data.get("claimed_assurance") == expected["maximum_assurance"]
     limitations = data.get("limitations")
     limitations_correct = isinstance(limitations, list) and LIMITATION in limitations

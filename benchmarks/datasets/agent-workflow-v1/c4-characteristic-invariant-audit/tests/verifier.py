@@ -262,9 +262,7 @@ def _has_limitation(text, topic):
         topic in clause
         and (
             "not assessed" in clause
-            or re.search(
-                r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", clause
-            )
+            or re.search(r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", clause)
         )
         for clause in re.split(r"[.;]", text)
     )

@@ -7,3 +7,19 @@ Choose canonical positive rational `k != 1` and `c`. Put `A=(0,0)`, `B=(c,0)`, `
 The digest-bound `evidence/answer.txt` must contain exactly four nonempty lines: `apollonius-coefficient-certificate-v1`, `multiplier: <submitted multiplier>`, `circle_coefficients: <four submitted values joined by commas>`, and `distance_coefficients: <four submitted values joined by commas>`.
 
 Include this published limitation exactly: `The certificate repairs the annotated coordinate identity; it does not independently formalize every theorem or endpoint convention in the full geometry proof.` Assurance ceiling is `COMPUTED`.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** exactly `OMITTED_APOLLONIUS_IDENTITY_REPAIRED`
+- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** the exact value declared in `submission_schema.json`
+- **Completeness:** `COMPLETE`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `text/plain`.
+- **Required artifact filenames:** `evidence/answer.txt`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -1,1 +1,121 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/apollonius-gap-repair"},"conclusion":{"const":"OMITTED_APOLLONIUS_IDENTITY_REPAIRED"},"result":{"type":"object","additionalProperties":false,"required":["k","c","p","q","center","radius","circle_coefficients","distance_coefficients","multiplier"],"properties":{"k":{"type":"string"},"c":{"type":"string"},"p":{"type":"string"},"q":{"type":"string"},"center":{"type":"string"},"radius":{"type":"string"},"circle_coefficients":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"string"}},"distance_coefficients":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"string"}},"multiplier":{"type":"string"}}},"claimed_assurance":{"const":"COMPUTED"},"scope":{"const":"OPC_TEST_ROW_1_ANNOTATED_COORDINATE_GAP"},"completeness":{"const":"COMPLETE"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"type":"array","minItems":1,"items":{"type":"string"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "OMITTED_APOLLONIUS_IDENTITY_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "c": {
+          "type": "string"
+        },
+        "center": {
+          "type": "string"
+        },
+        "circle_coefficients": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "distance_coefficients": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "k": {
+          "type": "string"
+        },
+        "multiplier": {
+          "type": "string"
+        },
+        "p": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string"
+        },
+        "radius": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "k",
+        "c",
+        "p",
+        "q",
+        "center",
+        "radius",
+        "circle_coefficients",
+        "distance_coefficients",
+        "multiplier"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "OPC_TEST_ROW_1_ANNOTATED_COORDINATE_GAP",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/apollonius-gap-repair"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

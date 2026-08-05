@@ -11,14 +11,15 @@ different cycle sums must occur. The resulting total must be divisible by `p` bu
 
 Report the exact p-adic valuations of `m` and of the total, the local/global statuses, and the
 missing proof obligation. Write `/app/submission.json` and one digest-bound JSON evidence file at
-`evidence/divisibility-audit.json`. The evidence must repeat exactly the task ID, result, and
-limitations. Maximum assurance is `COMPUTED`; this audit invalidates one proof step and does not
-disprove the source theorem.
+`evidence/divisibility-audit.json`. The evidence object must contain exactly
+`schema_version: "1"`, the task ID, the result, and the limitations, with the latter three values
+matching the submission. Maximum assurance is `COMPUTED`; this audit invalidates one proof step and
+does not disprove the source theorem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string 1), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved.
+The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string "1"), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved. JSON numbers with integral values are valid wherever the submission schema declares type integer; booleans and non-integral numbers are not.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

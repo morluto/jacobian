@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import json
 import math
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +20,15 @@ EVIDENCE_PATH = "evidence/divisibility-audit.json"
 LIMITATION = "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
 
 
+class _JsonFloat(float):
+    """Preserve a JSON decimal token while remaining schema-compatible."""
+
+    def __new__(cls, value: str) -> _JsonFloat:
+        instance = super().__new__(cls, value)
+        instance.lexeme = value
+        return instance
+
+
 def _frozen() -> dict[str, Any]:
     try:
         value = json.loads((TESTS / "input.json").read_text())
@@ -30,7 +42,7 @@ def _submission() -> dict[str, Any] | None:
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(), parse_float=_JsonFloat)
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
@@ -39,8 +51,13 @@ def _submission() -> dict[str, Any] | None:
 def _integer(value: object) -> int | None:
     if type(value) is int:
         return value
-    if type(value) is float and math.isfinite(value) and value.is_integer():
-        return int(value)
+    if isinstance(value, _JsonFloat):
+        try:
+            exact = Decimal(value.lexeme)
+        except InvalidOperation:
+            return None
+        if exact.is_finite() and exact == exact.to_integral_value():
+            return int(exact)
     return None
 
 

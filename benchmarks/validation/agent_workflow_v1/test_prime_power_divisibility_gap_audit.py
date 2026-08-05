@@ -152,6 +152,27 @@ def test_accepts_schema_valid_integral_json_numbers(tmp_path: Path) -> None:
     assert reward["reward"] == 1.0
 
 
+def test_rejects_decimal_token_rounded_by_binary_float(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    task, app, logs = _prepare(tmp_path, submission)
+    evidence_path = app / "evidence/divisibility-audit.json"
+    evidence_text = evidence_path.read_text().replace(
+        '"prime":2', '"prime":2.0000000000000001', 1
+    )
+    evidence_path.write_text(evidence_text)
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
+    submission_text = json.dumps(submission).replace(
+        '"prime": 2', '"prime": 2.0000000000000001', 1
+    )
+    (app / "submission.json").write_text(submission_text)
+
+    reward = _run_verifier(task, app, logs)
+    assert reward["correctness"] == 0.0
+    assert reward["reward"] == 0.0
+
+
 def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> None:
     bad_conclusion = copy.deepcopy(_oracle())
     bad_conclusion["conclusion"] = "WRONG"

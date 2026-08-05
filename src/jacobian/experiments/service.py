@@ -349,7 +349,7 @@ class ExperimentService:
             )
             raise ExperimentError(
                 "The enumeration plugin is unavailable or incomplete. Call "
-                "capability.describe, choose a reference domain with "
+                "math.find, choose a reference domain with "
                 f"{capability_hint}, then retry."
             ) from exc
 

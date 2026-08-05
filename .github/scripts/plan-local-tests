@@ -31,6 +31,33 @@ def _catalog() -> dict[str, dict[str, object]]:
     catalog = data["catalog"]
     if not isinstance(catalog, dict):
         raise ValueError("CI catalog must be an object")
+    for name, entry in catalog.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"CI catalog entry {name} must be an object")
+        subsumes = entry.get("local_subsumes", [])
+        if (
+            not isinstance(subsumes, list)
+            or not all(isinstance(item, str) and item for item in subsumes)
+            or name in subsumes
+            or any(item not in catalog for item in subsumes)
+        ):
+            raise ValueError(f"CI catalog entry {name} has invalid local_subsumes")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in visiting:
+            raise ValueError("CI catalog local_subsumes must be acyclic")
+        if name in visited:
+            return
+        visiting.add(name)
+        for child in catalog[name].get("local_subsumes", []):
+            visit(str(child))
+        visiting.remove(name)
+        visited.add(name)
+
+    for name in catalog:
+        visit(name)
     return catalog
 
 
@@ -54,6 +81,19 @@ TOPOLOGY_LANES = (
     "lean",
     "e2e",
 )
+
+
+def local_command_lanes(lanes: list[str]) -> list[str]:
+    """Remove lanes whose local command is already owned by a selected gate."""
+
+    selected = set(lanes)
+    subsumed = {
+        str(subsumed_lane)
+        for lane in lanes
+        for subsumed_lane in _CATALOG[lane].get("local_subsumes", [])
+        if str(subsumed_lane) in selected
+    }
+    return [lane for lane in lanes if lane not in subsumed]
 
 HIGH_IMPACT_PATHS = {
     "src/jacobian/__init__.py",
@@ -440,6 +480,7 @@ def main() -> None:
     paths = sorted({entry.path for entry in entries})
     plan = classify(paths)
     lanes = [suite for suite in COMMANDS if plan.get(f"run-{suite}") == "true"]
+    command_lanes = local_command_lanes(lanes)
     tests, fallback = exact_tests(entries)
     # The classifier already owns deployment routing (run-deploy); re-deriving
     # it here would duplicate the deployment rule and could drift from it.
@@ -458,8 +499,10 @@ def main() -> None:
         print("  focused")
         for test in tests:
             print(f"  {test}")
-    elif fallback:
+    elif fallback and any(lane in TOPOLOGY_LANES for lane in lanes):
         print(f"  suite fallback ({fallback})")
+    elif fallback:
+        print("  not applicable (no pytest lane selected)")
     else:
         print("  none")
     print("commands:")
@@ -469,7 +512,7 @@ def main() -> None:
             print(f"    {command}")
     else:
         print("  planned lanes:")
-        for lane in lanes:
+        for lane in command_lanes:
             for command in COMMANDS[lane]:
                 print(f"    {command}")
     if deployment:
@@ -485,7 +528,9 @@ def main() -> None:
                 )
                 raise SystemExit(2)
         elif fallback:
-            commands = [command for lane in lanes for command in COMMANDS[lane]]
+            commands = [
+                command for lane in command_lanes for command in COMMANDS[lane]
+            ]
         else:
             commands = []
         if deployment:

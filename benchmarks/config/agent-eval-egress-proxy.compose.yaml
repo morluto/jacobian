@@ -1,0 +1,19 @@
+services:
+  main:
+    environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: ${JACOBIAN_EVAL_NO_PROXY:-localhost,127.0.0.1,jacobian}
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      no_proxy: ${JACOBIAN_EVAL_NO_PROXY:-localhost,127.0.0.1,jacobian}
+  harbor-docker-egress-control-sidecar:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - type: bind
+        source: ${JACOBIAN_EVAL_GOST_CONFIG:?set JACOBIAN_EVAL_GOST_CONFIG to the rendered GOST configuration}
+        target: /opt/egress-sidecar/gost.yaml
+        read_only: true

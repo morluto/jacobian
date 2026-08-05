@@ -18,7 +18,7 @@ the installed catalog.
 
 ## Discover and describe
 
-Call `capability.describe` without a capability ID to receive the installed
+Call `math.find` without a capability ID to receive the installed
 catalog. Select by mathematical outcome and domain tags, then describe the
 exact ID:
 
@@ -92,14 +92,14 @@ async def main() -> None:
     async with Client(server, raise_exceptions=True) as client:
         described = await tool(
             client,
-            "capability.describe",
+            "math.find",
             {"capability_id": "polynomial.compute.gcd"},
         )
         assert described["capability"]["modes"] == ["EXPLORE"]
 
         computed = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "polynomial.compute.gcd",
                 "mode": "EXPLORE",
@@ -114,14 +114,14 @@ async def main() -> None:
 
         verification_descriptor = await tool(
             client,
-            "capability.describe",
+            "math.find",
             {"capability_id": "polynomial.gcd.verify"},
         )
         assert verification_descriptor["capability"]["modes"] == ["VERIFY"]
 
         verified = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "polynomial.gcd.verify",
                 "mode": "VERIFY",

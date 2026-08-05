@@ -11,12 +11,12 @@ model-facing MCP surface contains two capability tools and, in `REQUIRED` or
 
 | MCP tool | Purpose |
 | --- | --- |
-| `capability.describe` | Search the compact installed index, or read one capability's exact schemas by ID. |
-| `capability.invoke` | Invoke an installed capability in `EXPLORE` or `VERIFY` mode. |
+| `math.find` | Find or inspect installed mathematical operations by desired outcome or exact ID. |
+| `math.run` | Run one installed mathematical operation in `EXPLORE` or `VERIFY` mode. |
 | `reasoning.write` | Append a bounded model-authored `PLAN`, `BEFORE_TOOL`, `AFTER_TOOL`, or `FINAL` summary. Available only in `REQUIRED` or `AUDIT` mode. |
 
 The reasoning log is not a mathematical capability, proof object, workspace, or
-chain-of-thought collector. In `REQUIRED` mode, every `capability.invoke` must
+chain-of-thought collector. In `REQUIRED` mode, every `math.run` must
 carry the `reasoning_run_id` and `reasoning_call_id` returned by the current
 `BEFORE_TOOL`. The server binds the actual execution status, assurance,
 completeness, result digest, and artifact URIs, then records whether the model's
@@ -30,11 +30,14 @@ that an operation is installed and invocable. It does not imply compatibility
 support, recommendation, conformance coverage, or authority to return
 `VERIFIED`.
 
-There are no alternate mathematical capability profiles and no public top-level
-MCP commands for individual mathematical operations. The operator may set the
-reasoning-log enforcement mode to `REQUIRED`, `AUDIT`, or `OFF`; `OFF` is the
-default and preserves the legacy two-tool surface. Adding a capability does not
-add a new MCP tool.
+The supported names are `math.find` and `math.run`. The superseded
+`capability.*` names are not exposed as aliases, so agents never choose between
+equivalent top-level tools. Adding a capability does not add a new MCP tool.
+
+The operator may separately set the reasoning-log enforcement mode to
+`REQUIRED`, `AUDIT`, or `OFF`; `OFF` is the default. Reasoning logging does not
+change capability membership, mathematical behavior, assurance, or checker
+authority.
 
 ## Capability contract
 
@@ -81,8 +84,8 @@ enabled bundled references, configured exclusions, and operator-installed
 adapters. A static list in this document would therefore describe only one
 installation snapshot.
 
-`capability.describe` has two forms. Search or browse to retrieve compact
-installed outcomes without loading every schema:
+`math.find` supports search, browse, and exact inspection. Search or
+browse retrieves compact installed outcomes without loading every schema:
 
 ```json
 {
@@ -107,8 +110,13 @@ result-level `portfolio_fit` distinguishes strong candidates, only weak lexical
 matches, and no lexical matches. These are transparent descriptor-retrieval
 signals, not a proof that an operation is mathematically suitable or absent.
 In particular, top-N ordering among `WEAK_LEXICAL_MATCH` entries must not be
-treated as capability fit. Start with five results, inspect only the strongest
-one or two relevant contracts, then search again only when useful.
+treated as capability fit.
+
+Each match is an operation card containing accepted input and artifact kinds,
+an output-schema summary, provider availability, exact-input scope, assurance
+ceiling, and factual relationships to installed compatible operations. These
+fields support the agent's decision; they do not recommend what it should do
+next.
 
 Discovery can also be constrained by `input_kind`. Installed descriptors
 declare whether they accept a structured request, formal proposition, or typed
@@ -118,21 +126,26 @@ General natural-language proof prose is not a formal artifact: declaring
 `NATURAL_LANGUAGE_PROOF`, or using an unambiguous phrase such as “informal
 proof” or “proof prose,” returns typed `NO_ROUTE` unless an installed provider
 explicitly accepts that input. The response's `routing_status` and
-`routing_basis` are separate from lexical `portfolio_fit`.
+`routing_basis` are separate from lexical `portfolio_fit`. Weak, empty, or
+incompatible results expose unranked recovery paths: reformulate the query,
+remove applicable filters, browse without arguments, or inspect
+`capability://catalog`. These paths do not imply that the requested operation is
+mathematically impossible or absent in principle.
 
-Call `capability.describe` again with one returned `capability_id` to receive
-the default `SUMMARY` exact projection. It is for judging fit and contains the
-one-line outcome, modes, tags, provider availability, input/output field
-summaries, and whether descriptor-owned invocation examples are available:
+Passing one `capability_id` returns the default `SUMMARY` exact projection. It
+contains the one-line outcome, modes, tags, provider availability, input/output
+field summaries, and whether descriptor-owned invocation examples are
+available:
 
 ```json
 {"capability_id": "universal_algebra.search.countermodel"}
 ```
 
-Once the outcome fits, request `view: "CONTRACT"` before invoking. It adds the
-complete validation-equivalent input schema (annotation/default and
-discriminator routing metadata are omitted), concise output/runtime summaries,
-related operations, and descriptor-owned validated invocation examples:
+The `CONTRACT` view adds the complete validation-equivalent input schema
+(annotation/default and discriminator routing metadata are omitted), concise
+output/runtime summaries, related operations, and descriptor-owned validated
+invocation examples. It is available whenever an agent does not already have
+the exact contract needed to construct a call:
 
 ```json
 {
@@ -141,8 +154,8 @@ related operations, and descriptor-owned validated invocation examples:
 }
 ```
 
-Use `view: "FULL"` when complete output schema, provider
-configuration, licensing, or other audit metadata is required:
+The `FULL` view adds complete output schema, provider configuration, licensing,
+and other audit metadata:
 
 ```json
 {
@@ -151,16 +164,14 @@ configuration, licensing, or other audit metadata is required:
 }
 ```
 
-Once a domain-owned producer fits the outcome, invoke it before separately
-searching for a checker. Follow the checker, certificate, and verification
-fields in the producer result rather than guessing that a generic verifier
-accepts its artifact.
-
-`capability.invoke` returns the Pydantic `CapabilityResult`. MCP Python SDK 2.0
+`math.run` returns the Pydantic `CapabilityResult`. MCP Python SDK 2.0
 derives its output schema, validates the returned value, serializes
 model-visible `content`, and supplies the same typed value in
 `structured_content`. Small, bounded mathematical outputs remain inline in the
 result. An empty `artifact_uris` means the value was not retained.
+An agent that already has an exact operation contract may invoke it directly;
+search, browse, and inspection are composable access paths, not a required
+sequence.
 
 Capabilities return resource URIs only when their mathematical outcome needs
 durable identity, independent retrieval, replay, resumability, evidence
@@ -225,7 +236,7 @@ Z3 search. Larger inputs return an unsupported non-conclusion.
 Useful low-level operations may retain descriptive IDs such as
 `claim.validate`, `witness.find`, `witness.verify`, or
 `certificate.verify`. Those names identify capabilities invoked through
-`capability.invoke`; they are not separate MCP tools.
+`math.run`; they are not separate MCP tools.
 
 `claim.conjunction.split` and `claim.implication.obligations` operate on the
 registered v1 `PROPOSITIONAL_STRUCTURE` artifact. They return only immediate,

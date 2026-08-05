@@ -44,7 +44,7 @@ async def main() -> None:
     async with Client(server, raise_exceptions=True) as client:
         searched = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "lean.declaration.search",
                 "mode": "EXPLORE",
@@ -61,7 +61,7 @@ async def main() -> None:
 
         inspected = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "lean.declaration.inspect",
                 "mode": "EXPLORE",
@@ -79,7 +79,7 @@ async def main() -> None:
 
         checked = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "lean.check",
                 "mode": "VERIFY",

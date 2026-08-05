@@ -46,7 +46,7 @@ checker conformance.
 Capability IDs below name candidate agent-facing contracts for the scenario.
 They do not imply that a capability is installed; agents must discover
 availability through `capability://catalog` and inspect the exact contract with
-`capability.describe`.
+`math.find`.
 
 ## Scenario record
 

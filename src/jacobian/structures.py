@@ -240,7 +240,7 @@ def _structure_failure_detail(exc: Exception) -> str:
         )
     if isinstance(exc, PluginRegistryError):
         return (
-            "The canonicalizer plugin is unavailable. Call capability.describe, "
+            "The canonicalizer plugin is unavailable. Call math.find, "
             "choose an installed reference domain, and retry."
         )
     return (

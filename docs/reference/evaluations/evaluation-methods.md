@@ -261,8 +261,8 @@ Measure:
 
 - installed CLI startup;
 - local MCP stdio startup;
-- `capability.describe` for one installed descriptor;
-- one small `capability.invoke` request;
+- `math.find` for one installed descriptor;
+- one small `math.run` request;
 - batch request encoding and decoding;
 - resource-handle response construction.
 

@@ -66,7 +66,7 @@ async def main() -> None:
         for capability_id in capability_ids:
             description = await tool(
                 client,
-                "capability.describe",
+                "math.find",
                 {"capability_id": capability_id},
             )
             assert description["capability"]["capability_id"] == capability_id
@@ -77,7 +77,7 @@ async def main() -> None:
 
         claim = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "artifact.put",
                 "mode": "EXPLORE",
@@ -108,7 +108,7 @@ async def main() -> None:
 
         candidate = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "artifact.put",
                 "mode": "EXPLORE",
@@ -139,7 +139,7 @@ async def main() -> None:
 
         validation = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "claim.validate",
                 "mode": "EXPLORE",
@@ -153,7 +153,7 @@ async def main() -> None:
 
         evaluation = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "evaluate.batch",
                 "mode": "EXPLORE",
@@ -176,7 +176,7 @@ async def main() -> None:
 
         found = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "witness.find",
                 "mode": "EXPLORE",
@@ -194,7 +194,7 @@ async def main() -> None:
 
         verified = await tool(
             client,
-            "capability.invoke",
+            "math.run",
             {
                 "capability_id": "witness.verify",
                 "mode": "VERIFY",

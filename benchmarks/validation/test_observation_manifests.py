@@ -199,7 +199,7 @@ def test_reasoning_protocol_is_extracted_without_summary_text(tmp_path: Path) ->
             {"run_id": run_id, "call_id": call_id},
         ),
         _tool_event(
-            "capability.invoke",
+            "math.run",
             {"reasoning_run_id": run_id, "reasoning_call_id": call_id},
             {"execution": {"status": "COMPLETED"}},
         ),

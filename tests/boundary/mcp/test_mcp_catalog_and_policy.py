@@ -48,7 +48,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             }
 
             listed = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"limit": 20},
             )
             index = json.loads(listed.content[0].text)
@@ -66,7 +66,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             cursor = index["next_cursor"]
             while cursor is not None:
                 next_page = await client.call_tool(
-                    "capability.describe",
+                    "math.find",
                     {"cursor": cursor, "limit": 20},
                 )
                 page = json.loads(next_page.content[0].text)
@@ -79,7 +79,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             assert indexed_ids == all_ids
 
             searched = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "query": "SAT UNSAT proof",
                     "input_kind": "STRUCTURED_REQUEST",
@@ -97,7 +97,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             assert expected_sat_ids.issubset(search_ids)
 
             coloring_search = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "query": (
                         "finite coloring forbidden monochromatic triples exact "
@@ -113,7 +113,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             assert expected_sat_ids.issubset(coloring_ids)
 
             materialize_description = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "capability_id": "sat.cnf.materialize",
                     "view": "CONTRACT",
@@ -130,14 +130,14 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             }.issuperset(expected_sat_ids - {"sat.cnf.materialize"})
 
             first_page = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"limit": 20},
             )
             first = json.loads(first_page.content[0].text)
             assert len(first["matches"]) <= 20
             assert first["next_cursor"] is not None
             second_page = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {"cursor": first["next_cursor"], "limit": 20},
             )
             second = json.loads(second_page.content[0].text)
@@ -148,7 +148,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             )
 
             invalid_cursor = await client.call_tool(
-                "capability.describe",
+                "math.find",
                 {
                     "query": "definitely-no-matching-capability",
                     "cursor": first["next_cursor"],

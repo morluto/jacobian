@@ -45,7 +45,7 @@ def _enumeration_failure_detail(exc: Exception, experiment_uri: str) -> str:
     if isinstance(exc, PluginRegistryError):
         return (
             "The enumeration stopped because a required plugin is unavailable. "
-            "Call capability.describe, reload the current plugin version, and start "
+            "Call math.find, reload the current plugin version, and start "
             "a new experiment."
         )
     return (

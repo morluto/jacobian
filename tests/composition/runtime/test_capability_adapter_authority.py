@@ -89,7 +89,7 @@ def test_unknown_capability_returns_an_actionable_result(
     assert result.diagnostics[0].message == (
         "Capability 'missing.capability' is not installed."
     )
-    assert "capability.describe" in (result.diagnostics[0].hint or "")
+    assert "math.find" in (result.diagnostics[0].hint or "")
     assert result.output["available_capability_ids"]
 
 
@@ -109,7 +109,7 @@ def test_unsupported_capability_mode_lists_available_modes(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "UNSUPPORTED_MODE"
-    assert "capability.describe" in (result.diagnostics[0].hint or "")
+    assert "math.find" in (result.diagnostics[0].hint or "")
     assert result.output["available_modes"] == ["EXPLORE"]
 
 

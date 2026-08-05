@@ -8,8 +8,8 @@ The conformance kit tests whether an independently installed package crosses
 Jacobian's registry, execution, artifact, and assurance boundaries without core
 or MCP changes. It is an executable extension gate, not a second unit-test
 framework. A conforming package exposes namespaced capability IDs through the
-installed catalog; agents inspect them with `capability.describe` and execute
-them with `capability.invoke`.
+installed catalog; agents inspect them with `math.find` and execute
+them with `math.run`.
 
 ## Scope
 
@@ -72,8 +72,8 @@ execution and assurance contract.
 
 | Check | Boundary exercised | Passing result |
 | --- | --- | --- |
-| Discovery | Installed catalog and `capability.describe` | Exact descriptor for each declared namespaced capability ID |
-| Execution success | Registry resolution and `capability.invoke` | Schema-valid result with no verification promotion |
+| Discovery | Installed catalog and `math.find` | Exact descriptor for each declared namespaced capability ID |
+| Execution success | Registry resolution and `math.run` | Schema-valid result with no verification promotion |
 | Declared failure | Capability worker lifecycle | `ERROR` with the declared detail |
 | Malformed output | Capability worker JSON boundary | `ERROR`; response is not accepted as mathematical evidence |
 | Timeout | Worker and durable budget | `TIMEOUT` with wall-limit stop reason |

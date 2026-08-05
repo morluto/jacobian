@@ -147,7 +147,7 @@ broad portfolio of mathematical capabilities. Each adapter declares a
 namespaced operation ID, version, supported `EXPLORE` and `VERIFY` modes, input
 and output JSON Schemas, and discovery metadata. The MCP projection exposes the
 installed descriptors through `capability://catalog` and the tool-callable
-`capability.describe` and `capability.invoke` pair, so a new Alloy, Lean,
+`math.find` and `math.run` pair, so a new Alloy, Lean,
 SAT/SMT, CAS, or domain adapter does not require another MCP tool or a
 generic-core type. The current catalog returns full descriptors. As the
 portfolio grows, discovery should add compact summaries, search, and ranking
@@ -339,7 +339,7 @@ registry is operator-managed and binds checker digests to supported claim,
 semantics, and certificate versions.
 
 Plugins define mathematical meaning; adapters present their operations through
-`capability.describe` and `capability.invoke`; the runtime enforces the common
+`math.find` and `math.run`; the runtime enforces the common
 artifact and assurance contract.
 
 ### Sealed plugin identity
@@ -510,8 +510,8 @@ the generic runtime only enforces bindings and evidence state.
 The engine is also available as a Python library and CLI. The public MCP
 surface is deliberately small:
 
-- `capability.describe` returns the exact contract for an installed capability.
-- `capability.invoke` performs the selected bounded operation.
+- `math.find` returns the exact contract for an installed capability.
+- `math.run` performs the selected bounded operation.
 - `capability://catalog` exposes installed capability descriptors.
 - Resources expose large artifacts, traces, and experiment state.
 - Tool responses return typed mathematical values in MCP structured content;
@@ -523,7 +523,7 @@ surface is deliberately small:
 The MCP Python SDK `2.0.0` owns statically declared tool schemas, typed result
 serialization and validation, structured content, progress, and transport
 cancellation. Jacobian retains descriptor-selected validation for the dynamic
-`capability.invoke` payload because the selected mathematical schema is not
+`math.run` payload because the selected mathematical schema is not
 known when the MCP tool is registered. Ordinary responses return the Pydantic
 `CapabilityResult` directly so the SDK produces synchronized model-visible
 `content` and application-facing `structured_content`. An explicit

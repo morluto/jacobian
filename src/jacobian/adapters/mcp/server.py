@@ -28,8 +28,8 @@ from jacobian.adapters.mcp.context import (
     _start_lean_warmup,
 )
 from jacobian.adapters.mcp.guidance import (
-    CAPABILITY_DESCRIBE_DESCRIPTION,
-    CAPABILITY_INVOKE_DESCRIPTION,
+    MATH_FIND_DESCRIPTION,
+    MATH_RUN_DESCRIPTION,
     REASONING_WRITE_DESCRIPTION,
     SERVER_DESCRIPTION,
     operating_guide,
@@ -104,7 +104,10 @@ class JacobianCoreExtension(Extension):
         self._reasoning_log_mode = reasoning_log_mode
 
     def settings(self) -> dict[str, Any]:
-        return {"version": "2", "reasoning_log_mode": self._reasoning_log_mode.value}
+        return {
+            "version": "2",
+            "reasoning_log_mode": self._reasoning_log_mode.value,
+        }
 
     def tools(self) -> tuple[ToolBinding, ...]:
         invoke_handler = {
@@ -114,21 +117,21 @@ class JacobianCoreExtension(Extension):
         }[self._reasoning_log_mode]
         bindings = [
             ToolBinding(
-                _safe_tool_handler("capability.describe", capability_describe),
+                _safe_tool_handler("math.find", capability_describe),
                 kwargs={
-                    "name": "capability.describe",
-                    "title": "Discover mathematical capabilities",
-                    "description": CAPABILITY_DESCRIBE_DESCRIPTION,
+                    "name": "math.find",
+                    "title": "Find or inspect mathematical operations",
+                    "description": MATH_FIND_DESCRIPTION,
                     "annotations": _tool_annotations(read_only=True, idempotent=True),
                     "structured_output": True,
                 },
             ),
             ToolBinding(
-                _safe_tool_handler("capability.invoke", invoke_handler),
+                _safe_tool_handler("math.run", invoke_handler),
                 kwargs={
-                    "name": "capability.invoke",
-                    "title": "Execute a mathematical capability",
-                    "description": CAPABILITY_INVOKE_DESCRIPTION,
+                    "name": "math.run",
+                    "title": "Run a mathematical operation",
+                    "description": MATH_RUN_DESCRIPTION,
                     "annotations": _tool_annotations(),
                     "structured_output": True,
                 },
@@ -281,7 +284,10 @@ class JacobianCoreExtension(Extension):
         return result
 
 
-def _safe_tool_handler(tool_name: str, handler: Any) -> Any:
+def _safe_tool_handler(
+    tool_name: str,
+    handler: Any,
+) -> Any:
     """Translate internal failures at the handler boundary before SDK rendering."""
 
     @wraps(handler)
@@ -447,11 +453,19 @@ def create_server(
         token_verifier=token_verifier,
         auth=auth,
         extensions=[
-            JacobianCoreExtension(runtime, tenant_router, selected_reasoning_mode)
+            JacobianCoreExtension(
+                runtime,
+                tenant_router,
+                selected_reasoning_mode,
+            )
         ],
     )
 
-    _register_resources_and_prompts(server, runtime, tenant_router)
+    _register_resources_and_prompts(
+        server,
+        runtime,
+        tenant_router,
+    )
     if selected_reasoning_mode is not ReasoningLogMode.OFF:
         _register_reasoning_resource(server, runtime, tenant_router)
     return server

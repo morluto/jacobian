@@ -55,8 +55,8 @@ consequential, use the
 [evaluation plan](docs/reference/evaluations/benchmark-contracts.md). Routine
 additions need no exhaustive pairwise or leave-one-out evaluation.
 
-The MCP interface exposes `capability.describe` for search and contract
-inspection, `capability.invoke` for execution, and `capability://catalog` for
+The MCP interface exposes `math.find` for search and contract
+inspection, `math.run` for execution, and `capability://catalog` for
 the complete machine-readable inventory. These are composable access paths,
 not a required sequence: an agent may invoke a known capability directly,
 search, browse, or revisit discovery as its investigation requires. Prefer
@@ -75,7 +75,7 @@ explicit `__all__` values, and cover namespace and import isolation in the
 public-API tests. Do not re-export domain APIs from the root `jacobian`
 namespace. Native functions accept and return Python or maintained
 backend-native values and call typed mathematical kernels directly; they must
-not invoke `capability.invoke`, construct a capability runtime, or expose MCP,
+not invoke `math.run`, construct a capability runtime, or expose MCP,
 artifact, provider-loading, or installation objects.
 
 Keep Pydantic models authoritative at capability, persistence, artifact, and

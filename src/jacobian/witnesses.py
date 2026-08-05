@@ -205,7 +205,7 @@ class WitnessSearchService:
                 if response.role != role:
                     raise ValueError(
                         "The plugin returned a different witness role than requested. "
-                        "Call capability.describe and retry with a supported role."
+                        "Call math.find and retry with a supported role."
                     )
                 if (
                     response.witness is None
@@ -347,7 +347,7 @@ def _witness_failure_detail(exc: Exception) -> str:
         )
     if isinstance(exc, PluginRegistryError):
         return (
-            "The witness plugin is unavailable. Call capability.describe, choose "
+            "The witness plugin is unavailable. Call math.find, choose "
             "an installed reference domain, and retry."
         )
     return (

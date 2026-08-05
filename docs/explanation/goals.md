@@ -60,7 +60,7 @@ or independent verification boundaries.
 ### Keep the public surface small
 
 Expose mathematical breadth through namespaced capabilities behind
-`capability.describe` and `capability.invoke`, not through a growing set of
+`math.find` and `math.run`, not through a growing set of
 top-level MCP tools. Remove compatibility wrappers and duplicate interfaces
 when they no longer serve a supported contract. Reuse maintained mathematical
 backends rather than accumulating custom infrastructure.

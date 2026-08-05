@@ -323,10 +323,10 @@ test("doctor classifies a missing managed Jacobian runtime", () => {
   assert.match(diagnostic.recovery, /source-agent doctor/);
 });
 
-test("doctor validates the default capability-first MCP profile", () => {
+test("doctor validates the canonical math MCP surface", () => {
   assert.deepEqual(EXPECTED_TOOLS, [
-    "capability.describe",
-    "capability.invoke",
+    "math.find",
+    "math.run",
   ]);
 });
 

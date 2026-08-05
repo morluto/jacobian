@@ -31,7 +31,7 @@ functions accept undirected simple NetworkX `Graph` objects. Each module's
 modules remain internal.
 
 This API shares typed mathematical kernels with the corresponding capability
-implementations, but it is not a facade over `capability.invoke`. Capability
+implementations, but it is not a facade over `math.run`. Capability
 requests, result contracts, artifacts, provenance, completeness, and
 verification remain available through the capability runtime and retain their
 existing wire semantics.

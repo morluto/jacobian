@@ -154,7 +154,7 @@ class SatCnfMaterializationAdapter:
                         "literals referring only to declared variables"
                     ),
                     hint=(
-                        "Call capability.describe for sat.cnf.materialize and correct "
+                        "Call math.find for sat.cnf.materialize and correct "
                         "the variable_names or clauses."
                     ),
                 )

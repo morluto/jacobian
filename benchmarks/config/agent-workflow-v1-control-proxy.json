@@ -12,7 +12,8 @@
     "force_build": true,
     "delete": true,
     "extra_docker_compose": [
-      "benchmarks/config/agent-eval-proxy.compose.yaml"
+      "benchmarks/config/agent-eval-codex.compose.yaml",
+      "benchmarks/config/agent-eval-egress-proxy.compose.yaml"
     ],
     "extra_allowed_hosts": [
       "api.openai.com",

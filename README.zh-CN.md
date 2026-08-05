@@ -114,7 +114,7 @@ witness.verify   →  FALSE  · VERIFIED
 
 ## 能力
 
-能力通过 `capability://catalog` 在运行时发现，使用 `capability.describe` 描述，并使用 `capability.invoke` 执行。已安装的 catalog 是事实来源，因为可用性可能取决于本地 backend。
+能力通过 `capability://catalog` 在运行时发现，使用 `math.find` 描述，并使用 `math.run` 执行。已安装的 catalog 是事实来源，因为可用性可能取决于本地 backend。
 
 | 领域 | 面向智能体的结果 |
 | --- | --- |
@@ -139,7 +139,7 @@ Jacobian 将四项职责分开：
 - **值可以直接组合。** 小型、有界的数学结果保持内联；artifact 用于可复用对象、可重放证据和大型载荷。
 - **检查器负责信任。** 插件和搜索代码不能授权检查器，也不能更改验证策略。
 
-公共 MCP 接口保持精简：能力 catalog，以及两个能力入口 `capability.describe` 和 `capability.invoke`。
+公共 MCP 接口保持精简：能力 catalog，以及两个能力入口 `math.find` 和 `math.run`。
 
 <a id="documentation"></a>
 
@@ -164,7 +164,7 @@ Jacobian 将四项职责分开：
 
 对于代码仓库副本，`jacobian setup --source <checkout> --state-dir <path> --profile full-python` 会显式地将客户端绑定到该源代码环境；受维护的 `scripts/setup-agent` 封装器会先完成所需的锁定同步和 doctor 检查。
 
-服务器只公布能力入口；`capability.describe(query=...)` 会先搜索已安装的精简结果，智能体再检查精确契约并调用它。这是一个工具箱接口：数学分解、探索和组合由智能体负责。
+服务器只公布两个能力入口：`math.find` 用于搜索、浏览或检查已安装的数学操作，`math.run` 用于执行其中一个操作。两者是可以自由组合的工具，不规定研究顺序；数学表示、分解、探索、验证时机和停止条件都由智能体决定。
 
 支持 MCP resource 的客户端可以读取 `jacobian://instructions` 获取操作指南，读取 `capability://catalog` 获取完整的机器可读 inventory。支持 prompt 的客户端还可以选择请求 `jacobian-discover` 或 `jacobian-check-evidence`，以获得协议脚手架。
 

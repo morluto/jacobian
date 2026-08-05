@@ -75,6 +75,23 @@ requires a structurally complete `PLAN`/call-cycle/`FINAL` trace for every
 workflow observations remain non-causal; protected runs must also freeze the
 model, prompt, agent version, task digests, sampling settings, and budgets.
 
+To evaluate the canonical `math.find` and `math.run` surface, keep each model,
+task set, and prompt condition in a separate result root:
+
+```sh
+make agent-eval \
+  DATASET=agent-workflow-v1 JACOBIAN_ENABLED=1 \
+  TASKS=graph-counterexample EVAL_EXECUTE=1 \
+  EVAL_ARGS="--job-name adoption --jobs-dir benchmarks/results/adoption"
+```
+
+Inspect appropriate adoption, argument validity, discovery-to-execution
+continuation, irrelevant calls, native-tool fallback, correctness, tokens, and
+elapsed time. A correct no-call run may mean the task does not require a
+Jacobian affordance, so include negative controls and tasks that discriminate
+tool adoption. Public-suite observations remain directional workflow evidence,
+not a causal performance claim.
+
 Five tasks have an operator-authorized verification record and may accept
 `VERIFIED`; the remaining tasks are capped at `COMPUTED`. A wrong result or an
 unsupported certification claim forces reward to zero. These are workflow

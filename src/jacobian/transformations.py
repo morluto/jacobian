@@ -312,7 +312,7 @@ def _transformation_failure_detail(exc: Exception) -> str:
         )
     if isinstance(exc, PluginRegistryError):
         return (
-            "The transformer plugin is unavailable. Call capability.describe, "
+            "The transformer plugin is unavailable. Call math.find, "
             "choose an installed reference domain, and retry."
         )
     return (

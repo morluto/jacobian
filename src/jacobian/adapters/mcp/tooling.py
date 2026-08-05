@@ -188,7 +188,7 @@ def _claim_reasoning_call(
         if required:
             raise ReasoningProtocolError(
                 "REASONING_LOG_REQUIRED",
-                "capability.invoke requires the run_id and call_id from BEFORE_TOOL.",
+                "math.run requires the run_id and call_id from BEFORE_TOOL.",
                 "Call reasoning.write with PLAN, then BEFORE_TOOL, and retry with its IDs.",
             )
         if audit:

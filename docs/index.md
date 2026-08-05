@@ -81,7 +81,7 @@ performance measurement, and regression policy.
 **Reference scenarios:** [Worked cases](reference/scenarios/index.md) —
 mathematical scenario catalog and certified-homology case.
 
-Use the runtime `capability://catalog` and `capability.describe` for the
+Use the runtime `capability://catalog` and `math.find` for the
 installed capability inventory and exact operation schemas.
 
 ## Explanation

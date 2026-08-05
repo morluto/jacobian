@@ -30,7 +30,10 @@ OBSERVATION_PROXY_JOB = (
     / "jacobian-observation-proxy.json"
 )
 MCP_CONFIG = ROOT / "benchmarks" / "config" / "jacobian.mcp.json"
-PROXY_COMPOSE = ROOT / "benchmarks" / "config" / "agent-eval-proxy.compose.yaml"
+CODEX_COMPOSE = ROOT / "benchmarks" / "config" / "agent-eval-codex.compose.yaml"
+EGRESS_PROXY_COMPOSE = (
+    ROOT / "benchmarks" / "config" / "agent-eval-egress-proxy.compose.yaml"
+)
 OBSERVATION_COMPOSE = (
     ROOT
     / "benchmarks"
@@ -38,6 +41,7 @@ OBSERVATION_COMPOSE = (
     / "agent-workflow-v1"
     / "jacobian-observation.compose.yaml"
 )
+LOOPBACK_MCP_CONFIG = ROOT / "benchmarks" / "config" / "jacobian-loopback.mcp.json"
 
 
 def test_observation_job_uses_harbor_dataset_selection() -> None:
@@ -68,7 +72,7 @@ def test_observation_job_keeps_the_minimal_jacobian_treatment() -> None:
 
     assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
     assert job["environment"]["extra_docker_compose"] == [
-        "benchmarks/datasets/agent-workflow-v1/jacobian-observation.compose.yaml"
+        "benchmarks/datasets/agent-workflow-v1/jacobian-observation.compose.yaml",
     ]
 
 
@@ -89,21 +93,49 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
         "JACOBIAN_EVAL_ALL_PROXY ?= $(call _jacobian_eval_container_proxy,$(ALL_PROXY))"
         in makefile
     )
+    assert "JACOBIAN_EVAL_CODEX_BINARY" in makefile
+    assert "JACOBIAN_EVAL_UPSTREAM_PROXY" in makefile
+    assert "benchmarks.tooling.harbor_proxy" in makefile
+    assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in makefile
     assert 'JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)"' in makefile
     assert "agent-workflow-v1-control-proxy.json" in makefile
     assert "jacobian-observation-proxy.json" in makefile
+    assert "jacobian-loopback.mcp.json" in makefile
 
 
 def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> None:
     proxy_job = json.loads(OBSERVATION_PROXY_JOB.read_text())
-    proxy_overlay = PROXY_COMPOSE.read_text()
-
+    proxy_overlay = EGRESS_PROXY_COMPOSE.read_text()
+    codex_overlay = CODEX_COMPOSE.read_text()
     assert proxy_job["environment"]["extra_docker_compose"] == [
-        "benchmarks/config/agent-eval-proxy.compose.yaml",
+        "benchmarks/config/agent-eval-codex.compose.yaml",
+        "benchmarks/config/agent-eval-egress-proxy.compose.yaml",
         "benchmarks/datasets/agent-workflow-v1/jacobian-observation.compose.yaml",
     ]
     assert "NO_PROXY" in proxy_overlay
+    assert "127.0.0.1" in proxy_overlay
     assert "jacobian" in proxy_overlay
+    assert "host.docker.internal:host-gateway" in proxy_overlay
+    assert "harbor-docker-egress-control-sidecar:" in proxy_overlay
+    assert "JACOBIAN_EVAL_GOST_CONFIG" in proxy_overlay
+    assert 'HTTPS_PROXY: ""' in proxy_overlay
+    assert "JACOBIAN_EVAL_CODEX_BINARY" in codex_overlay
+    assert "target: /usr/local/bin/codex" in codex_overlay
+
+
+def test_jacobian_sidecar_keeps_its_project_network_under_egress_control() -> None:
+    observation_overlay = (
+        ROOT
+        / "benchmarks"
+        / "datasets"
+        / "agent-workflow-v1"
+        / "jacobian-observation.compose.yaml"
+    ).read_text()
+
+    assert "jacobian:" in observation_overlay
+    assert "networks:" not in observation_overlay
+    assert "condition: service_healthy" in observation_overlay
+    assert "socket.create_connection" in observation_overlay
 
 
 def test_proxy_control_job_is_valid_harbor_job_json() -> None:
@@ -117,7 +149,8 @@ def test_proxy_control_job_is_valid_harbor_job_json() -> None:
         }
     ]
     assert job["environment"]["extra_docker_compose"] == [
-        "benchmarks/config/agent-eval-proxy.compose.yaml"
+        "benchmarks/config/agent-eval-codex.compose.yaml",
+        "benchmarks/config/agent-eval-egress-proxy.compose.yaml",
     ]
 
 
@@ -127,7 +160,7 @@ def test_compose_overlays_parse_as_valid_yaml() -> None:
     The gate claims to cover Compose overlays, so the owning tests must parse
     them as YAML rather than only asserting on substring presence.
     """
-    for compose_path in (PROXY_COMPOSE, OBSERVATION_COMPOSE):
+    for compose_path in (CODEX_COMPOSE, EGRESS_PROXY_COMPOSE, OBSERVATION_COMPOSE):
         parsed = yaml.safe_load(compose_path.read_text())
         assert isinstance(parsed, dict), f"{compose_path.name}: root must be a mapping"
         assert "services" in parsed, f"{compose_path.name}: missing services table"
@@ -137,14 +170,16 @@ def test_compose_overlays_parse_as_valid_yaml() -> None:
 
 
 def test_proxy_compose_overlay_declares_proxy_environment() -> None:
-    parsed = yaml.safe_load(PROXY_COMPOSE.read_text())
+    parsed = yaml.safe_load(EGRESS_PROXY_COMPOSE.read_text())
     main = parsed["services"]["main"]
 
-    assert "extra_hosts" in main
     assert "environment" in main
     env = main["environment"]
     for key in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
         assert key in env, f"proxy compose missing {key}"
+
+    sidecar = parsed["services"]["harbor-docker-egress-control-sidecar"]
+    assert "host.docker.internal:host-gateway" in sidecar["extra_hosts"]
 
 
 def test_observation_compose_overlay_declares_jacobian_service() -> None:
@@ -157,6 +192,7 @@ def test_observation_mcp_config_is_external_to_the_task_job() -> None:
     job = json.loads(JOB.read_text())
     control = json.loads(CONTROL_JOB.read_text())
     mcp = json.loads(MCP_CONFIG.read_text())
+    loopback_mcp = json.loads(LOOPBACK_MCP_CONFIG.read_text())
 
     assert "mcp_servers" not in job["agents"][0]
     assert "mcp_servers" not in control["agents"][0]
@@ -165,6 +201,13 @@ def test_observation_mcp_config_is_external_to_the_task_job() -> None:
             "name": "jacobian",
             "transport": "streamable-http",
             "url": "http://jacobian:8000/mcp",
+        }
+    ]
+    assert loopback_mcp["mcp_servers"] == [
+        {
+            "name": "jacobian",
+            "transport": "streamable-http",
+            "url": "http://127.0.0.1:8000/mcp",
         }
     ]
 
@@ -217,4 +260,14 @@ def test_validate_all_catches_a_malformed_proxy_control_job(
     assert any("control-proxy" in f for f in failures), (
         f"expected a contract failure for the malformed proxy control job, "
         f"got: {failures}"
+    )
+
+
+def test_paired_jobs_keep_the_same_egress_allowlist() -> None:
+    treatment = json.loads(JOB.read_text())
+    control = json.loads(CONTROL_JOB.read_text())
+
+    assert (
+        treatment["environment"]["extra_allowed_hosts"]
+        == control["environment"]["extra_allowed_hosts"]
     )

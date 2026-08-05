@@ -1,0 +1,64 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/fiber-dimension-semicontinuity-repair",
+  "submission_path": "/app/submission.json",
+  "assurance_ceiling": "COMPUTED",
+  "allowed_assurance": ["COMPUTED"],
+  "allowed_completeness": ["COMPLETE"],
+  "conclusion": {"const": "SEMICONTINUITY_PROOF_REPAIRED"},
+  "scope": {"type": "string", "const": "FROZEN_AFFINE_PRESENTATION_AND_IDENTIFIED_PROOF_GAPS", "enum": null, "pattern": null},
+  "evidence": {
+    "min_items": 1,
+    "max_items": 1,
+    "allowed_paths": ["evidence/answer.txt"],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "media_types": ["text/plain"],
+    "payload_shape": null
+  },
+  "required_artifact_filenames": ["evidence/answer.txt"],
+  "public_notes": "The verifier reports proof repair, symbolic ideal equality, fiber ranks, evidence, input binding, scope, completeness, limitations, protocol, and assurance separately. Sparse polynomials use canonical rational coefficients and bounded two-variable exponent vectors; duplicate monomials and zero terms are rejected.",
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["tensor_repair", "global_repair", "ideal_generators", "fiber_checks"],
+    "properties": {
+      "tensor_repair": {"const": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"},
+      "global_repair": {"const": "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"},
+      "ideal_generators": {"type": "array", "minItems": 2, "maxItems": 6, "items": {"$ref": "#/$defs/polynomial"}},
+      "fiber_checks": {
+        "type": "array", "minItems": 4, "maxItems": 4,
+        "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["point", "matrix_rank", "cokernel_dimension"],
+          "properties": {
+            "point": {
+              "type": "object", "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": {"x": {"$ref": "#/$defs/rational"}, "y": {"$ref": "#/$defs/rational"}}
+            },
+            "matrix_rank": {"type": "integer", "minimum": 0, "maximum": 2},
+            "cokernel_dimension": {"type": "integer", "minimum": 0, "maximum": 2}
+          }
+        }
+      }
+    }
+  },
+  "limitations": {"const": ["The verifier checks the frozen affine presentation and the two identified proof obligations; it does not formalize the full scheme-theoretic semicontinuity theorem."]},
+  "schema_definitions": {
+    "rational": {"type": "string", "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$"},
+    "term": {
+      "type": "object", "additionalProperties": false,
+      "required": ["coefficient", "exponents"],
+      "properties": {
+        "coefficient": {"$ref": "#/$defs/rational"},
+        "exponents": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0, "maximum": 4}}
+      }
+    },
+    "polynomial": {
+      "type": "object", "additionalProperties": false,
+      "required": ["terms"],
+      "properties": {"terms": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"$ref": "#/$defs/term"}}}
+    }
+  },
+  "submission_schema": {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"properties":{"task_id":{"const":"jacobian/fiber-dimension-semicontinuity-repair"},"conclusion":{"const":"SEMICONTINUITY_PROOF_REPAIRED"},"result":{"type":"object","additionalProperties":false,"required":["tensor_repair","global_repair","ideal_generators","fiber_checks"],"properties":{"tensor_repair":{"const":"RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"},"global_repair":{"const":"GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"},"ideal_generators":{"type":"array","minItems":2,"maxItems":6,"items":{"$ref":"#/$defs/polynomial"}},"fiber_checks":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"object","additionalProperties":false,"required":["point","matrix_rank","cokernel_dimension"],"properties":{"point":{"type":"object","additionalProperties":false,"required":["x","y"],"properties":{"x":{"$ref":"#/$defs/rational"},"y":{"$ref":"#/$defs/rational"}}},"matrix_rank":{"type":"integer","minimum":0,"maximum":2},"cokernel_dimension":{"type":"integer","minimum":0,"maximum":2}}}}}},"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED","CHECKED","VERIFIED"]},"scope":{"type":"string","const":"FROZEN_AFFINE_PRESENTATION_AND_IDENTIFIED_PROOF_GAPS"},"evidence":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"const":"evidence/answer.txt"},"sha256":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}}},"limitations":{"const":["The verifier checks the frozen affine presentation and the two identified proof obligations; it does not formalize the full scheme-theoretic semicontinuity theorem."]},"completeness":{"const":"COMPLETE"}},"$defs":{"rational":{"type":"string","pattern":"^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$"},"term":{"type":"object","additionalProperties":false,"required":["coefficient","exponents"],"properties":{"coefficient":{"$ref":"#/$defs/rational"},"exponents":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":0,"maximum":4}}}},"polynomial":{"type":"object","additionalProperties":false,"required":["terms"],"properties":{"terms":{"type":"array","minItems":1,"maxItems":12,"items":{"$ref":"#/$defs/term"}}}}}}
+}

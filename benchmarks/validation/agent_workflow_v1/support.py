@@ -54,6 +54,7 @@ RESOURCE_DERIVED_TASKS = (
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "emerald-path-family-audit",
+    "sine-integral-asymptotic-audit",
     "steiner-triple-system-27",
 )
 # Tasks whose verifier reports mathematical correctness independently of
@@ -65,6 +66,7 @@ INPUT_BINDING_DECOUPLED_TASKS = (
     "integer-perturbation-domain-audit",
     "necklace-burnside-certificate",
     "pythagorean-generator-recurrence",
+    "sine-integral-asymptotic-audit",
     "steiner-triple-system-27",
 )
 VERIFIER_TASKS = tuple(

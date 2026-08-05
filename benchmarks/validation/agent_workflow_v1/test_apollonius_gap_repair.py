@@ -114,9 +114,7 @@ def test_rejects_explosive_and_noncanonical_rationals(tmp_path: Path) -> None:
         assert reward["protocol_compliance"] == 0.0
 
 
-@pytest.mark.parametrize(
-    ("field", "value"), (("k", "1"), ("c", "0"), ("radius", "-1"))
-)
+@pytest.mark.parametrize(("field", "value"), (("k", "1"), ("c", "0"), ("radius", "-1")))
 def test_declared_rational_constraints_are_protocol_requirements(
     tmp_path: Path, field: str, value: str
 ) -> None:

@@ -355,6 +355,57 @@ def test_accepts_schema_valid_long_canonical_rational(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
+    """Evidence remains valid beyond the submission/input byte threshold."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    with evidence_path.open("ab") as stream:
+        for _ in range(17):
+            stream.write(b" " * 1024 * 1024)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["input_binding"] == 1.0
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_rejects_malformed_utf8_after_valid_evidence(tmp_path: Path) -> None:
+    """A valid prefix cannot earn credit before strict decoding reaches EOF."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    with evidence_path.open("ab") as stream:
+        stream.write(b"\xff")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_rejects_malformed_result_json_after_valid_prose(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    prose = "\n".join(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if not line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(prose + "\nRESULT_JSON:{\n", encoding="utf-8")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_reports_tampered_input_separately_from_math_correctness(
     tmp_path: Path,
 ) -> None:

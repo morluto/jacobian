@@ -51,3 +51,68 @@ def test_rejects_duplicate_evidence_descriptor(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] < 1.0
+
+
+def test_math_correctness_independent_of_protocol(tmp_path: Path) -> None:
+    """A valid countermodel with a protocol defect must still report correctness."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    # Duplicating the evidence descriptor breaks the protocol but the
+    # countermodel is still mathematically valid.
+    submission["evidence"].append(dict(submission["evidence"][0]))
+    support._write_json(app / "submission.json", submission)
+
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_rejects_above_ceiling_assurance_claim(tmp_path: Path) -> None:
+    """A CHECKED assurance claim must fail closed, not just lose assurance credit."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "CHECKED"
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["reward"] == 0.0
+
+
+def test_zero_reward_for_malformed_evidence(tmp_path: Path) -> None:
+    """An escaped or wrong-digest evidence descriptor must zero aggregate reward."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = "sha256:" + "0" * 64
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+    assert rejected["correctness"] == 1.0
+
+
+def test_rejects_unrelated_evidence_content(tmp_path: Path) -> None:
+    """Evidence with a RESULT_JSON marker that does not match the result is invalid."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    # Change the result but leave the evidence marker unchanged.
+    submission["result"]["gap_witness"] = "1/3"
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_rejects_evidence_without_result_marker(tmp_path: Path) -> None:
+    """Evidence without a RESULT_JSON marker must not earn evidence credit."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    answer_path = app / "evidence" / "answer.txt"
+    answer_path.write_text("A derivation without a result marker.\n")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = support._digest(answer_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0

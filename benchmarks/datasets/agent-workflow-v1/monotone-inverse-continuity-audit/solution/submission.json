@@ -12,9 +12,16 @@
     "right_endpoint_value": "6",
     "gap_witness": "1"
   },
-  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:e612d687fcb0f3a802c1e3640586865f69cefadc46bb50e5c9d5ffc2b83091f0"}],
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:d986fc5c91dbd6298657a1aee7939574f700882a5099312ec87e56d995f72588"
+    }
+  ],
   "scope": "DECLARED_PIECEWISE_RATIONAL_FAMILY_ON_CLOSED_INTERVAL",
   "completeness": "COMPLETE",
   "claimed_assurance": "COMPUTED",
-  "limitations": ["The certificate covers only the declared piecewise rational family and does not machine-check the source Lean declaration."]
+  "limitations": [
+    "The certificate covers only the declared piecewise rational family and does not machine-check the source Lean declaration."
+  ]
 }

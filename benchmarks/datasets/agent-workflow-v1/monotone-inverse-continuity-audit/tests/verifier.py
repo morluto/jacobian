@@ -7,10 +7,14 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 E = Path("/tests")
+W = Path("/app")
+ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def _fraction(value):
@@ -75,6 +79,52 @@ def _valid_countermodel(result, source):
     )
 
 
+def _evidence_matches_result(submission):
+    """Bind evidence content to the submitted countermodel.
+
+    The public instruction requires a concise derivation in answer.txt.
+    A digest-bound file of unrelated bytes, or the original solution's
+    derivation after an alternate countermodel is submitted, must not
+    score as valid evidence.  The evidence must carry a RESULT_JSON marker
+    whose canonical JSON exactly equals the submitted result.
+    """
+
+    if not isinstance(submission, dict):
+        return False
+    evidence = submission.get("evidence")
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if not text.strip():
+        return False
+    marker = None
+    for line in text.splitlines():
+        if line.startswith("RESULT_JSON:"):
+            marker = line[len("RESULT_JSON:") :].strip()
+            break
+    if marker is None:
+        return False
+    try:
+        parsed = json.loads(marker)
+    except (ValueError, RecursionError, MemoryError):
+        return False
+    if not isinstance(parsed, dict):
+        return False
+    expected = json.dumps(
+        submission.get("result"),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    actual = json.dumps(parsed, sort_keys=True, separators=(",", ":"))
+    return actual == expected
+
+
 def main():
     submission = load_submission()
     source = json.loads((E / "input.json").read_text())
@@ -84,34 +134,50 @@ def main():
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         verification_record="forbidden",
+        allowed_assurances=ALLOWED_ASSURANCES,
     )
-    math_correct = bool(
-        contract and _valid_countermodel(submission.get("result"), source)
-    )
+    result = submission.get("result") if isinstance(submission, dict) else None
+    # Mathematical correctness is evaluated independently of the envelope and
+    # input binding so a protocol, assurance, or input-validity failure is not
+    # misreported as wrong mathematics.  Input validity is reported as its own
+    # diagnostic and only aggregate reward is gated on it.
+    math_correct = _valid_countermodel(result, source)
+    input_bound = workspace_input_is_bound()
     evidence_valid = bool(
-        contract
+        isinstance(submission, dict)
         and isinstance(submission.get("evidence"), list)
         and len(submission["evidence"]) == 1
         and evidence_list_is_bound(
             submission["evidence"], expected_path="evidence/answer.txt"
         )
+        and _evidence_matches_result(submission)
     )
     scope_correct = bool(
-        contract
+        isinstance(submission, dict)
         and submission.get("scope") == expected["required_scope"]
         and submission.get("limitations") == expected["limitations"]
     )
     assurance_correct = bool(
-        contract
+        isinstance(submission, dict)
         and submission.get("claimed_assurance") == expected["maximum_assurance"]
     )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False
     )
-    correct = bool(contract and math_correct and not false_certification)
+    # Aggregate reward is zero for wrong mathematics, false certification,
+    # malformed or escaped evidence, or unbound input.  Scope and assurance
+    # failures reduce reward but do not zero it, preserving diagnostic
+    # independence.
+    aggregate_eligible = bool(
+        contract
+        and math_correct
+        and input_bound
+        and evidence_valid
+        and not false_certification
+    )
     reward = (
-        0
-        if not correct
+        0.0
+        if not aggregate_eligible
         else 0.7 + 0.1 * evidence_valid + 0.1 * scope_correct + 0.1 * assurance_correct
     )
     output = Path("/logs/verifier/reward.json")
@@ -120,6 +186,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
+                "input_binding": float(input_bound),
                 "evidence_validity": float(evidence_valid),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),

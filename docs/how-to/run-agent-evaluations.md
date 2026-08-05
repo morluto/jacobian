@@ -30,8 +30,8 @@ paths only for shared Harbor tooling, schemas, registry, suite policy, or
 other control-plane changes. Pass `TASKS="..."` for a bounded dataset Oracle;
 pass `FULL=1` only when a complete dataset sweep is intentional.
 
-For changes limited to Harbor job JSON, MCP configuration, Compose overlays,
-or their execution helpers, use the focused local handoff instead:
+For changes limited to Harbor job JSON, MCP configuration, job-level Compose
+overlays, or their execution helpers, use the focused local handoff instead:
 
 ```sh
 make harbor-execution-check
@@ -39,7 +39,9 @@ make harbor-execution-check
 
 This checks repository Harbor contracts and the execution-configuration unit
 tests without running the task-specific verifier regression corpus, an Oracle,
-Docker, or a model.
+Docker, or a model. Task `environment/docker-compose.yaml` files are
+executable benchmark input, not job overlays; they remain gated by
+`make harbor-check-task` and `make harbor-oracle-task`.
 
 Task README and `benchmarks/validation/` changes do not require an Oracle;
 they affect documentation or deterministic host-side validation. Changes to a

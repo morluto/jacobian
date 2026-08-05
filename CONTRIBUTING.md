@@ -20,7 +20,7 @@ capability membership.
 | --- | --- | --- |
 | Documentation, benchmark README, or `benchmarks/validation/` | `make docs-command-check` (and `make docs-linkcheck` for Markdown links) | None |
 | Focused Python behavior | `make test-plan BASE=<revision>`, the selected lane, then `make check` | None |
-| Harbor job, MCP, Compose, or execution configuration | `make harbor-execution-check` | None |
+| Harbor job JSON, MCP config, job-level Compose overlay, or execution helper | `make harbor-execution-check` | None |
 | Benchmark task input or verifier | `make harbor-check-task DATASET=... TASKS=...`, then `make harbor-oracle-task DATASET=... TASKS=...` | Exact selected-task Oracle |
 | Deployment entrypoint | `make deploy-check` | None |
 | CI, dependencies, or unknown paths | `make check-static` plus affected tests | As required by the selected plan |

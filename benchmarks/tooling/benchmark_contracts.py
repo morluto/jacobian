@@ -318,6 +318,22 @@ def validate_all() -> list[str]:
             BENCHMARKS / "config" / "agent-workflow-v1-control.json", suites[0]
         )
     )
+    failures.extend(
+        _validate_job(
+            BENCHMARKS / "config" / "agent-workflow-v1-control-proxy.json",
+            suites[0],
+        )
+    )
+    failures.extend(
+        _validate_job(
+            BENCHMARKS
+            / "datasets"
+            / "agent-workflow-v1"
+            / "jobs"
+            / "jacobian-observation-proxy.json",
+            suites[0],
+        )
+    )
     failures.extend(_observation_pair_failures())
     failures.extend(_snapshot_contract_failures())
     return failures

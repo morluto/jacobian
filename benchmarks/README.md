@@ -81,9 +81,12 @@ from the fixed `agent-workflow-v1` snapshots. Its task bundles are solvable
 without Jacobian and do not yet include the later comparison harness.
 
 `harbor-execution-check` is the focused local gate for job JSON, MCP
-configuration, Compose overlays, and their execution helpers. It checks Harbor
-contracts and the owning tooling tests without running the task-specific
-verifier regression corpus. `harbor-check-task` and `harbor-oracle-task`
+configuration, job-level Compose overlays, and their execution helpers. It
+checks Harbor contracts and the owning tooling tests without running the
+task-specific verifier regression corpus. Task
+`environment/docker-compose.yaml` files are executable benchmark input, not
+job overlays, and remain gated by `harbor-check-task` and
+`harbor-oracle-task`. `harbor-check-task` and `harbor-oracle-task`
 require an explicit dataset and task selection and are the normal gates for a
 leaf task. The full `harbor-check`/`harbor-oracle` paths remain for shared
 tooling, schemas, registry, suite policy, and control-plane changes.

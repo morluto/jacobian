@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+import yaml
+from benchmarks.tooling.benchmark_contracts import validate_all
 from benchmarks.tooling.harbor_suite import get_suite
 
 ROOT = Path(__file__).parents[3]
@@ -15,7 +18,26 @@ JOB = (
     / "jacobian-observation.json"
 )
 CONTROL_JOB = ROOT / "benchmarks" / "config" / "agent-workflow-v1-control.json"
+CONTROL_PROXY_JOB = (
+    ROOT / "benchmarks" / "config" / "agent-workflow-v1-control-proxy.json"
+)
+OBSERVATION_PROXY_JOB = (
+    ROOT
+    / "benchmarks"
+    / "datasets"
+    / "agent-workflow-v1"
+    / "jobs"
+    / "jacobian-observation-proxy.json"
+)
 MCP_CONFIG = ROOT / "benchmarks" / "config" / "jacobian.mcp.json"
+PROXY_COMPOSE = ROOT / "benchmarks" / "config" / "agent-eval-proxy.compose.yaml"
+OBSERVATION_COMPOSE = (
+    ROOT
+    / "benchmarks"
+    / "datasets"
+    / "agent-workflow-v1"
+    / "jacobian-observation.compose.yaml"
+)
 
 
 def test_observation_job_uses_harbor_dataset_selection() -> None:
@@ -73,19 +95,8 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
 
 
 def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> None:
-    proxy_job = json.loads(
-        (
-            ROOT
-            / "benchmarks"
-            / "datasets"
-            / "agent-workflow-v1"
-            / "jobs"
-            / "jacobian-observation-proxy.json"
-        ).read_text()
-    )
-    proxy_overlay = (
-        ROOT / "benchmarks" / "config" / "agent-eval-proxy.compose.yaml"
-    ).read_text()
+    proxy_job = json.loads(OBSERVATION_PROXY_JOB.read_text())
+    proxy_overlay = PROXY_COMPOSE.read_text()
 
     assert proxy_job["environment"]["extra_docker_compose"] == [
         "benchmarks/config/agent-eval-proxy.compose.yaml",
@@ -93,6 +104,53 @@ def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> Non
     ]
     assert "NO_PROXY" in proxy_overlay
     assert "jacobian" in proxy_overlay
+
+
+def test_proxy_control_job_is_valid_harbor_job_json() -> None:
+    job = json.loads(CONTROL_PROXY_JOB.read_text())
+
+    assert job["n_attempts"] == 3
+    assert job["datasets"] == [
+        {
+            "path": "benchmarks/datasets/agent-workflow-v1",
+            "task_names": ["graph-counterexample"],
+        }
+    ]
+    assert job["environment"]["extra_docker_compose"] == [
+        "benchmarks/config/agent-eval-proxy.compose.yaml"
+    ]
+
+
+def test_compose_overlays_parse_as_valid_yaml() -> None:
+    """Syntactically broken overlays must not pass the execution-config gate.
+
+    The gate claims to cover Compose overlays, so the owning tests must parse
+    them as YAML rather than only asserting on substring presence.
+    """
+    for compose_path in (PROXY_COMPOSE, OBSERVATION_COMPOSE):
+        parsed = yaml.safe_load(compose_path.read_text())
+        assert isinstance(parsed, dict), f"{compose_path.name}: root must be a mapping"
+        assert "services" in parsed, f"{compose_path.name}: missing services table"
+        assert isinstance(parsed["services"], dict), (
+            f"{compose_path.name}: services must be a mapping"
+        )
+
+
+def test_proxy_compose_overlay_declares_proxy_environment() -> None:
+    parsed = yaml.safe_load(PROXY_COMPOSE.read_text())
+    main = parsed["services"]["main"]
+
+    assert "extra_hosts" in main
+    assert "environment" in main
+    env = main["environment"]
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
+        assert key in env, f"proxy compose missing {key}"
+
+
+def test_observation_compose_overlay_declares_jacobian_service() -> None:
+    parsed = yaml.safe_load(OBSERVATION_COMPOSE.read_text())
+
+    assert "jacobian" in parsed["services"]
 
 
 def test_observation_mcp_config_is_external_to_the_task_job() -> None:
@@ -123,3 +181,40 @@ def test_paired_jobs_use_three_attempts_per_condition() -> None:
 
     assert treatment["n_attempts"] == 3
     assert control["n_attempts"] == 3
+
+
+def test_validate_all_covers_proxy_control_and_observation_jobs() -> None:
+    """The execution-config gate must validate proxied job configs, not skip them.
+
+    ``validate_all`` is the contract layer beneath ``make harbor-contracts``,
+    which is the first step of ``make harbor-execution-check``.  A malformed
+    proxied control or observation job must be caught here rather than only
+    failing when an operator runs the proxied evaluation.
+    """
+    failures = validate_all()
+
+    # The committed proxy jobs are valid, so there must be no failures.
+    assert failures == [], "benchmark contract failures:\n" + "\n".join(failures)
+
+
+def test_validate_all_catches_a_malformed_proxy_control_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed proxied control job must not pass the execution-config gate."""
+    from benchmarks.tooling import benchmark_contracts
+
+    original_read_json = benchmark_contracts._read_json
+
+    def patched_read_json(path: Path) -> object:
+        if path.name == "agent-workflow-v1-control-proxy.json":
+            return {"n_attempts": "not-an-integer"}
+        return original_read_json(path)
+
+    monkeypatch.setattr(benchmark_contracts, "_read_json", patched_read_json)
+
+    failures = validate_all()
+
+    assert any("control-proxy" in f for f in failures), (
+        f"expected a contract failure for the malformed proxy control job, "
+        f"got: {failures}"
+    )

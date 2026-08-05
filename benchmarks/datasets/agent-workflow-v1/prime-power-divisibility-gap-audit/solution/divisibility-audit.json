@@ -1,0 +1,19 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/prime-power-divisibility-gap-audit",
+  "result": {
+    "prime": 2,
+    "exponent": 3,
+    "coprime_factor": 1,
+    "modulus": 8,
+    "cycle_count": 4,
+    "cycle_groups": [{"multiplicity": 3, "cycle_sum": 2}, {"multiplicity": 1, "cycle_sum": 4}],
+    "total_sum": 10,
+    "p_valuation_modulus": 3,
+    "p_valuation_total": 1,
+    "local_statement": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P",
+    "global_statement": "TOTAL_NOT_DIVISIBLE_BY_M",
+    "missing_condition": "PRIME_POWER_MULTIPLICITIES"
+  },
+  "limitations": ["The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."]
+}

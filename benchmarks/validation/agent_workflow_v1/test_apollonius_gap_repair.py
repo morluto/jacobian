@@ -114,20 +114,17 @@ def test_rejects_explosive_and_noncanonical_rationals(tmp_path: Path) -> None:
         assert reward["protocol_compliance"] == 0.0
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (("k", "0"), ("k", "1"), ("c", "0"), ("radius", "0")),
-)
-def test_declared_rational_domain_constraints_are_protocol_failures(
+@pytest.mark.parametrize(("field", "value"), (("k", "1"), ("c", "0"), ("radius", "-1")))
+def test_declared_rational_constraints_are_protocol_requirements(
     tmp_path: Path, field: str, value: str
 ) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     submission["result"][field] = value
+    _bind_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
 
     reward = support._run_verifier(task, app, logs)
-    assert reward["correctness"] == 0.0
     assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0
 

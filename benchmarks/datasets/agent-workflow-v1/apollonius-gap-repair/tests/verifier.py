@@ -122,9 +122,15 @@ def _result_values_protocol_valid(value: object) -> bool:
     }
     if not isinstance(value, dict) or not fields.issubset(value):
         return False
-    if not all(
-        _q(value[name]) is not None
-        for name in fields - {"circle_coefficients", "distance_coefficients"}
+    scalar_names = fields - {"circle_coefficients", "distance_coefficients"}
+    scalars = {name: _q(value[name]) for name in scalar_names}
+    if any(parsed is None for parsed in scalars.values()):
+        return False
+    if not (
+        scalars["k"] > 0
+        and scalars["k"] != 1
+        and scalars["c"] > 0
+        and scalars["radius"] > 0
     ):
         return False
     return all(
@@ -136,13 +142,9 @@ def _result_values_protocol_valid(value: object) -> bool:
 
 
 def _result_protocol_valid(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    k = _q(value.get("k"))
-    c = _q(value.get("c"))
-    radius = _q(value.get("radius"))
     return bool(
-        set(value)
+        isinstance(value, dict)
+        and set(value)
         == {
             "k",
             "c",
@@ -155,13 +157,6 @@ def _result_protocol_valid(value: object) -> bool:
             "multiplier",
         }
         and _result_values_protocol_valid(value)
-        and k is not None
-        and c is not None
-        and radius is not None
-        and k > 0
-        and k != 1
-        and c > 0
-        and radius > 0
     )
 
 

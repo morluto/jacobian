@@ -194,7 +194,7 @@ def test_verifiers_reject_unhashable_assurance(
 
     rejected = support._run_verifier(task, app, logs)
     expected_scope = (
-        1.0 if task_name in support.SCOPE_INDEPENDENT_ASSURANCE_TASKS else 0.0
+        1.0 if task_name in support.UNHASHABLE_ASSURANCE_SCOPE_TASKS else 0.0
     )
     assert rejected["scope_accuracy"] == expected_scope
     assert rejected["reward"] == 0.0

@@ -60,6 +60,9 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "pythagorean-generator-recurrence",
     "prime-power-divisibility-gap-audit",
 )
+# Tasks whose scope diagnostic remains independent when the assurance value
+# itself bypasses the public schema's string validation.
+UNHASHABLE_ASSURANCE_SCOPE_TASKS = ("prime-power-divisibility-gap-audit",)
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.

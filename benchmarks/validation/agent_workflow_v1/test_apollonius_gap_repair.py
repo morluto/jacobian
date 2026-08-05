@@ -63,6 +63,20 @@ def test_rejects_corrupt_proportionality(tmp_path: Path) -> None:
     assert support._run_verifier(task, app, logs)["correctness"] == 0.0
 
 
+def test_extra_result_field_is_protocol_only(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["result"]["unexpected"] = True
+    _bind_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0
+
+
 def test_rejects_unbound_explanation(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     sub = _load(app)

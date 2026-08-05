@@ -1,41 +1,153 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
   "properties": {
-    "task_id": {"const": "jacobian/prime-power-divisibility-gap-audit"},
-    "conclusion": {"const": "PRIMEWISE_TO_MODULUS_INFERENCE_INVALID"},
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["prime", "exponent", "coprime_factor", "modulus", "cycle_count", "cycle_groups", "total_sum", "p_valuation_modulus", "p_valuation_total", "local_statement", "global_statement", "missing_condition"],
-      "properties": {
-        "prime": {"type": "integer", "minimum": 2, "maximum": 29},
-        "exponent": {"type": "integer", "minimum": 2, "maximum": 6},
-        "coprime_factor": {"const": 1},
-        "modulus": {"type": "integer", "minimum": 4, "maximum": 10000},
-        "cycle_count": {"type": "integer", "minimum": 4},
-        "cycle_groups": {
-          "type": "array", "minItems": 2, "maxItems": 6,
-          "items": {
-            "type": "object", "additionalProperties": false,
-            "required": ["multiplicity", "cycle_sum"],
-            "properties": {"multiplicity": {"type": "integer", "minimum": 1}, "cycle_sum": {"type": "integer", "minimum": 1}}
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "PRIMEWISE_TO_MODULUS_INFERENCE_INVALID"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/divisibility-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
         },
-        "total_sum": {"type": "integer", "minimum": 1},
-        "p_valuation_modulus": {"type": "integer", "minimum": 2},
-        "p_valuation_total": {"type": "integer", "minimum": 1},
-        "local_statement": {"const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"},
-        "global_statement": {"const": "TOTAL_NOT_DIVISIBLE_BY_M"},
-        "missing_condition": {"const": "PRIME_POWER_MULTIPLICITIES"}
-      }
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     },
-    "claimed_assurance": {"const": "COMPUTED"},
-    "scope": {"const": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE"},
-    "completeness": {"const": "COMPLETE"},
-    "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/divisibility-audit.json"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
-  }
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "coprime_factor": {
+          "const": 1
+        },
+        "cycle_count": {
+          "minimum": 4,
+          "type": "integer"
+        },
+        "cycle_groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cycle_sum": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "multiplicity": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "multiplicity",
+              "cycle_sum"
+            ],
+            "type": "object"
+          },
+          "maxItems": 6,
+          "minItems": 2,
+          "type": "array"
+        },
+        "exponent": {
+          "maximum": 6,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "global_statement": {
+          "const": "TOTAL_NOT_DIVISIBLE_BY_M"
+        },
+        "local_statement": {
+          "const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
+        },
+        "missing_condition": {
+          "const": "PRIME_POWER_MULTIPLICITIES"
+        },
+        "modulus": {
+          "maximum": 10000,
+          "minimum": 4,
+          "type": "integer"
+        },
+        "p_valuation_modulus": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "p_valuation_total": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "prime": {
+          "maximum": 29,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "total_sum": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "exponent",
+        "coprime_factor",
+        "modulus",
+        "cycle_count",
+        "cycle_groups",
+        "total_sum",
+        "p_valuation_modulus",
+        "p_valuation_total",
+        "local_statement",
+        "global_statement",
+        "missing_condition"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/prime-power-divisibility-gap-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
 }

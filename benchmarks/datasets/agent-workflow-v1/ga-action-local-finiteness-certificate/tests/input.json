@@ -1,0 +1,13 @@
+{
+  "action": {"x_image": "x+t*y", "y_image": "y", "group_law": "addition"},
+  "coefficient_domain": "QQ",
+  "f": [
+    {"coefficient": "7", "x_degree": 0, "y_degree": 4},
+    {"coefficient": "5", "x_degree": 1, "y_degree": 3},
+    {"coefficient": "-3", "x_degree": 2, "y_degree": 2},
+    {"coefficient": "2", "x_degree": 3, "y_degree": 1},
+    {"coefficient": "1", "x_degree": 4, "y_degree": 0}
+  ],
+  "required_basis_dimension": 5,
+  "task_id": "jacobian/ga-action-local-finiteness-certificate"
+}

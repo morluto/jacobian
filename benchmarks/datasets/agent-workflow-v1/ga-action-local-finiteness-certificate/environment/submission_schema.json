@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "rational": {
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+      "type": "string"
+    },
+    "t_polynomial": {
+      "items": {
+        "$ref": "#/$defs/t_term"
+      },
+      "maxItems": 5,
+      "minItems": 0,
+      "type": "array"
+    },
+    "t_term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/rational"
+        },
+        "degree": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "coefficient",
+        "degree"
+      ],
+      "type": "object"
+    },
+    "xy_polynomial": {
+      "items": {
+        "$ref": "#/$defs/xy_term"
+      },
+      "maxItems": 5,
+      "minItems": 1,
+      "type": "array"
+    },
+    "xy_term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/rational"
+        },
+        "x_degree": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y_degree": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "coefficient",
+        "x_degree",
+        "y_degree"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FINITE_INVARIANT_SUBSPACE_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "action_matrix": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/t_polynomial"
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "type": "array"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "basis": {
+          "items": {
+            "$ref": "#/$defs/xy_polynomial"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "f_coordinates": {
+          "items": {
+            "$ref": "#/$defs/rational"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "f_coordinates",
+        "action_matrix"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "FROZEN_QQ_ADDITIVE_ACTION_DEGREE_FOUR",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/ga-action-local-finiteness-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

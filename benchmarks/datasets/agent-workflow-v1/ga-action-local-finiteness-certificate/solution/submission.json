@@ -1,0 +1,26 @@
+{
+  "claimed_assurance": "COMPUTED",
+  "completeness": "COMPLETE",
+  "conclusion": "FINITE_INVARIANT_SUBSPACE_CERTIFIED",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:0e1f16cea737aa95788ba01a854f82568d7c1c9860731b4b5c5f89289b612082"}],
+  "limitations": ["The general local-finiteness theorem is not machine-formalized."],
+  "result": {
+    "action_matrix": [
+      [[{"coefficient":"1","degree":0}],[{"coefficient":"1","degree":1}],[{"coefficient":"1","degree":2}],[{"coefficient":"1","degree":3}],[{"coefficient":"1","degree":4}]],
+      [[],[{"coefficient":"1","degree":0}],[{"coefficient":"2","degree":1}],[{"coefficient":"3","degree":2}],[{"coefficient":"4","degree":3}]],
+      [[],[],[{"coefficient":"1","degree":0}],[{"coefficient":"3","degree":1}],[{"coefficient":"6","degree":2}]],
+      [[],[],[],[{"coefficient":"1","degree":0}],[{"coefficient":"4","degree":1}]],
+      [[],[],[],[],[{"coefficient":"1","degree":0}]]
+    ],
+    "basis": [
+      [{"coefficient":"1","x_degree":0,"y_degree":4}],
+      [{"coefficient":"1","x_degree":1,"y_degree":3}],
+      [{"coefficient":"1","x_degree":2,"y_degree":2}],
+      [{"coefficient":"1","x_degree":3,"y_degree":1}],
+      [{"coefficient":"1","x_degree":4,"y_degree":0}]
+    ],
+    "f_coordinates": ["7","5","-3","2","1"]
+  },
+  "scope": "FROZEN_QQ_ADDITIVE_ACTION_DEGREE_FOUR",
+  "task_id": "jacobian/ga-action-local-finiteness-certificate"
+}

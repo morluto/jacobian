@@ -1,0 +1,17 @@
+{
+  "analysis": {
+    "candidate_ids": [],
+    "contamination": "PUBLIC_ABSTRACT_PROOF_TRANSFORMED_TO_NEW_SYMBOLIC_CERTIFICATE",
+    "current_capabilities": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "gap_classes": ["SYMBOLIC_CONSTRUCTION", "PROOF_GROUNDING"],
+    "mathematical_moves": [
+      "Construct a non-unique rational basis, derive its polynomial representation matrix, and replay the additive-group law exactly."
+    ],
+    "next_action": "Use exact polynomial and rational linear-algebra primitives; a theorem-specific algebraic-group wrapper is not justified by one task."
+  },
+  "historical_provenance_id": "jacobian.agent-workflow-v1.capability-gap-analysis",
+  "provenance_status": "historical",
+  "schema_version": "1",
+  "task_id": "ga-action-local-finiteness-certificate"
+}

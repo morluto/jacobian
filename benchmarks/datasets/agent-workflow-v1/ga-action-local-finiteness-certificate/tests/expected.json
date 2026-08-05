@@ -1,0 +1,6 @@
+{
+  "conclusion": "FINITE_INVARIANT_SUBSPACE_CERTIFIED",
+  "maximum_assurance": "COMPUTED",
+  "required_scope": "FROZEN_QQ_ADDITIVE_ACTION_DEGREE_FOUR",
+  "task_id": "jacobian/ga-action-local-finiteness-certificate"
+}

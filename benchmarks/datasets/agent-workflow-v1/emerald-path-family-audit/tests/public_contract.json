@@ -28,7 +28,7 @@
       "type": "string"
     }
   },
-  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.",
+  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately. Rational certificate fields are bounded to at most 64 base-10 digits per numerator and denominator so parsing remains deterministic and resource-bounded.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -52,15 +52,19 @@
     ],
     "properties": {
       "alpha": {
+        "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
         "type": "string"
       },
       "beta": {
+        "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
         "type": "string"
       },
       "even_offset": {
+        "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
         "type": "string"
       },
       "odd_offset": {
+        "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
         "type": "string"
       },
       "trace": {
@@ -88,6 +92,7 @@
               "type": "integer"
             },
             "value": {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
               "type": "string"
             },
             "floor": {

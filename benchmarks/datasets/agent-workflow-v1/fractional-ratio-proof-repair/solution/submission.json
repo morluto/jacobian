@@ -1,0 +1,135 @@
+{
+  "task_id": "jacobian/fractional-ratio-proof-repair",
+  "conclusion": "PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED",
+  "result": {
+    "contract_mismatches": [
+      "OBJECTIVE_REPLACED",
+      "BINARY_DOMAIN_RELAXED",
+      "UNDECLARED_BUDGET_ADDED"
+    ],
+    "selected_indices": [
+      0,
+      2,
+      4
+    ],
+    "attained_ratio": "19/9",
+    "constant_residual": -146,
+    "item_residuals": [
+      {
+        "index": 0,
+        "value": 96
+      },
+      {
+        "index": 1,
+        "value": -88
+      },
+      {
+        "index": 2,
+        "value": 36
+      },
+      {
+        "index": 3,
+        "value": -53
+      },
+      {
+        "index": 4,
+        "value": 14
+      },
+      {
+        "index": 5,
+        "value": -77
+      },
+      {
+        "index": 6,
+        "value": -44
+      },
+      {
+        "index": 7,
+        "value": -57
+      },
+      {
+        "index": 8,
+        "value": -92
+      },
+      {
+        "index": 9,
+        "value": -104
+      },
+      {
+        "index": 10,
+        "value": -127
+      },
+      {
+        "index": 11,
+        "value": -182
+      },
+      {
+        "index": 12,
+        "value": -125
+      },
+      {
+        "index": 13,
+        "value": -202
+      },
+      {
+        "index": 14,
+        "value": -280
+      },
+      {
+        "index": 15,
+        "value": -302
+      },
+      {
+        "index": 16,
+        "value": -362
+      },
+      {
+        "index": 17,
+        "value": -458
+      },
+      {
+        "index": 18,
+        "value": -518
+      },
+      {
+        "index": 19,
+        "value": -634
+      },
+      {
+        "index": 20,
+        "value": -692
+      },
+      {
+        "index": 21,
+        "value": -866
+      },
+      {
+        "index": 22,
+        "value": -944
+      },
+      {
+        "index": 23,
+        "value": -1042
+      }
+    ],
+    "positive_residual_indices": [
+      0,
+      2,
+      4
+    ],
+    "maximum_residual_sum": 0,
+    "repair_method": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "frozen-24-item-binary-fractional-ratio-instance",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:162971e7d079353dc7dcd875ce9545329b161457b02d51b56d10f7425d6b5f9b"
+    }
+  ],
+  "limitations": [
+    "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
+  ]
+}

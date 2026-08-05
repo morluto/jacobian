@@ -1,0 +1,16 @@
+{
+  "task_id": "jacobian/fractional-ratio-proof-repair",
+  "source": {"dataset": "Jiahao004/DeepTheorem", "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8", "split": "train", "row_index": 10007, "source_id": 86829, "license": "MIT", "canonical_row_sha256": "26efb3611a768b9564ce93ee36adb61092fc73e50a5b505f195d7ee33cb08821"},
+  "original_contract": {"objective": "maximize_(alpha+t_dot_x)/(beta+f_dot_x)", "domain": "x_in_{0,1}^n", "budget": null},
+  "public_proof_contract": {"objective": "maximize_t_dot_x", "domain": "x_in_[0,1]^n", "budget": "f_dot_x<=B"},
+  "alpha": 7,
+  "beta": 11,
+  "items": [
+    {"index": 0, "t": 17, "f": 3}, {"index": 1, "t": 5, "f": 7}, {"index": 2, "t": 23, "f": 9}, {"index": 3, "t": 11, "f": 8},
+    {"index": 4, "t": 29, "f": 13}, {"index": 5, "t": 2, "f": 5}, {"index": 6, "t": 31, "f": 17}, {"index": 7, "t": 19, "f": 12},
+    {"index": 8, "t": 13, "f": 11}, {"index": 9, "t": 37, "f": 23}, {"index": 10, "t": 7, "f": 10}, {"index": 11, "t": 41, "f": 29},
+    {"index": 12, "t": 3, "f": 8}, {"index": 13, "t": 43, "f": 31}, {"index": 14, "t": 47, "f": 37}, {"index": 15, "t": 53, "f": 41},
+    {"index": 16, "t": 59, "f": 47}, {"index": 17, "t": 61, "f": 53}, {"index": 18, "t": 67, "f": 59}, {"index": 19, "t": 71, "f": 67},
+    {"index": 20, "t": 73, "f": 71}, {"index": 21, "t": 79, "f": 83}, {"index": 22, "t": 83, "f": 89}, {"index": 23, "t": 89, "f": 97}
+  ]
+}

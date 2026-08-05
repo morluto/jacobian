@@ -1,0 +1,15 @@
+{
+  "task_id": "jacobian/steiner-triple-system-27",
+  "source": {
+    "dataset": "AI-MO/CombiBench",
+    "revision": "ded8b32e2a5ac01cac6b2b89d0b1edc43215cff4",
+    "split": "test",
+    "row": 38,
+    "theorem_name": "brualdi_ch10_34",
+    "license": "MIT"
+  },
+  "point_set": {"minimum": 0, "maximum": 26, "cardinality": 27},
+  "block_size": 3,
+  "pair_multiplicity": 1,
+  "required_block_count": 117
+}

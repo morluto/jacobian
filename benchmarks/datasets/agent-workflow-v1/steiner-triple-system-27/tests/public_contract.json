@@ -1,0 +1,168 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "STEINER_TRIPLE_SYSTEM_CONSTRUCTED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "The verifier checks the submitted finite order-27 design and does not prove the source theorem for arbitrary v and t."
+    ]
+  },
+  "public_notes": "The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {
+    "const": "FINITE_STEINER_TRIPLE_SYSTEM_OF_ORDER_27",
+    "enum": null,
+    "pattern": null
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "order",
+      "blocks"
+    ],
+    "properties": {
+      "order": {
+        "const": 27
+      },
+      "blocks": {
+        "type": "array",
+        "minItems": 117,
+        "maxItems": 117,
+        "uniqueItems": true,
+        "items": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 26
+          }
+        }
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/steiner-triple-system-27"
+      },
+      "conclusion": {
+        "const": "STEINER_TRIPLE_SYSTEM_CONSTRUCTED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "order",
+          "blocks"
+        ],
+        "properties": {
+          "order": {
+            "const": 27
+          },
+          "blocks": {
+            "type": "array",
+            "minItems": 117,
+            "maxItems": 117,
+            "uniqueItems": true,
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 26
+              }
+            }
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "const": "FINITE_STEINER_TRIPLE_SYSTEM_OF_ORDER_27",
+        "type": "string"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "The verifier checks the submitted finite order-27 design and does not prove the source theorem for arbitrary v and t."
+        ]
+      }
+    }
+  },
+  "task_id": "jacobian/steiner-triple-system-27",
+  "verification_record": null
+}

@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/regina",
+  "provider": "regina",
+  "contract": "jacobian.regina-outcomes-spike/v1",
+  "pin_sha256": "sha256:b5736de228ddc8b4e6dbdf375736b78faafb68add6ae57c49facaafebf8fb7bc"
+}

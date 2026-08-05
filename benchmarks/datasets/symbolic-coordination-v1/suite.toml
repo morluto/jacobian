@@ -1,0 +1,18 @@
+schema_version = "2"
+
+[dataset]
+id = "jacobian/symbolic-coordination-v1"
+title = "Symbolic polynomial-map coordination pilot"
+purpose = "Hand-auditable polynomial-map claim assessments with exact clean-room certificate replay."
+claim_class = "workflow-observation-pilot"
+answer_visibility = "hidden-at-runtime"
+default_execution_profile = "oracle-only"
+keywords = [
+    "mathematics",
+    "polynomial-maps",
+    "symbolic-coordination",
+    "exact-certificates",
+]
+authors = [
+    { name = "Jacobian contributors", email = "maintainers@jacobian.invalid" },
+]

@@ -58,7 +58,10 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "image-complement-commutation",
     "lp-integrability-separator",
     "necklace-burnside-certificate",
+    "prime-power-divisibility-gap-audit",
     "pythagorean-generator-recurrence",
+    "sine-integral-asymptotic-audit",
+    "steiner-triple-system-27",
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
@@ -66,8 +69,12 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 INPUT_BINDING_DECOUPLED_TASKS = (
     "closed-set-distance-strengthening-audit",
     "extremal-subset-sum-semantic-audit",
+    "integer-perturbation-domain-audit",
     "necklace-burnside-certificate",
+    "prime-power-divisibility-gap-audit",
     "pythagorean-generator-recurrence",
+    "sine-integral-asymptotic-audit",
+    "steiner-triple-system-27",
 )
 VERIFIER_TASKS = tuple(
     sorted(

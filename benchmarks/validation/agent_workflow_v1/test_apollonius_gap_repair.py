@@ -173,3 +173,16 @@ def test_completeness_and_protocol_are_reported(tmp_path: Path) -> None:
     assert reward["completeness_accuracy"] == 0.0
     assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0
+
+
+def test_unsupported_assurance_is_a_protocol_failure(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["claimed_assurance"] = "CHECKED"
+    support._write_json(app / "submission.json", submission)
+
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["assurance_calibration"] == 0.0
+    assert reward["protocol_compliance"] == 0.0
+    assert reward["reward"] == 0.0

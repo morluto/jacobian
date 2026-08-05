@@ -201,6 +201,7 @@ def main() -> None:
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
         min_limitations=1,
+        allowed_assurances=frozenset({"COMPUTED"}),
         verification_record="forbidden",
     )
     contract = bool(

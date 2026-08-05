@@ -1,0 +1,10 @@
+{
+  "claimed_assurance": "COMPUTED",
+  "completeness": "COMPLETE",
+  "conclusion": "OLD_LEMMA_REFUTED_WITH_REPAIR_BOUNDARY",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:15f2b4421e2053a8024a7d9f42b82c7db15d41bd426a22138a3fe5192b3b881c"}],
+  "limitations": ["Dumas's theorem and the corrected general lemma are not machine-formalized."],
+  "result": {"ell": 2, "factor_left": ["4", "0", "1"], "factor_right": ["8", "0", "0", "0", "1"], "j": 6, "prime": 2},
+  "scope": "FROZEN_DVR_LEMMA_EXACT_INTEGER_WITNESS",
+  "task_id": "jacobian/newton-polygon-factorization-audit"
+}

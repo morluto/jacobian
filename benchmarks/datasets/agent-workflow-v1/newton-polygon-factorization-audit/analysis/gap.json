@@ -1,0 +1,15 @@
+{
+  "analysis": {
+    "candidate_ids": [],
+    "contamination": "PUBLIC_AUTHOR_CORRECTION_WITH_NEW_COUNTEREXAMPLE_CERTIFICATE",
+    "current_capabilities": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "gap_classes": ["LITERATURE_PROOF_AUDIT", "VALUATION_GEOMETRY"],
+    "mathematical_moves": ["Construct factors, compute their convolution and p-adic Newton polygon, and separate the erroneous statement from its repair."],
+    "next_action": "Reuse exact integer, valuation, and convex-hull primitives; no theorem-specific capability is warranted."
+  },
+  "historical_provenance_id": "jacobian.agent-workflow-v1.capability-gap-analysis",
+  "provenance_status": "historical",
+  "schema_version": "1",
+  "task_id": "newton-polygon-factorization-audit"
+}

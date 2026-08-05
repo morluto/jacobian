@@ -1,0 +1,8 @@
+{
+  "coefficient_domain": "ZZ",
+  "corrected_left_edge_conditions": ["strict_left_slope", "primitive_left_edge"],
+  "old_conclusion": "one factor has constant-term valuation zero",
+  "old_hypotheses": ["v(a_j)=0", "right_edge_strict_below_internal_points", "primitive_right_edge"],
+  "source": {"arxiv_id": "2505.08549", "error_location": "Lemma 8", "versions": ["v1", "v2"]},
+  "task_id": "jacobian/newton-polygon-factorization-audit"
+}

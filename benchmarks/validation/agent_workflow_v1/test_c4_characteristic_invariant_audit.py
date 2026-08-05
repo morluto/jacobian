@@ -158,6 +158,31 @@ def test_rejects_lean_compile_overclaim(tmp_path: Path) -> None:
     assert rejected["limitation_accuracy"] == 0.0
 
 
+def test_rejects_lean_compile_overclaim_in_evidence(tmp_path: Path) -> None:
+    """Evidence prose must obey the same prohibition as limitations."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "induced characteristic not assessed. The upstream Lean theorem compiles correctly.\n"
+        + evidence_path.read_text()
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_rejects_missing_conjecture_limitation(tmp_path: Path) -> None:
+    """Both the Lean and corrected-conjecture limitations are required."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = ["No Lean compilation is claimed."]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+
+
 def test_rejects_affirmative_conjecture_proof_claim(tmp_path: Path) -> None:
     """Limitations that affirm the corrected conjecture is proved must be rejected."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
@@ -182,6 +207,51 @@ def test_accepts_equivalent_no_claim_limitation(tmp_path: Path) -> None:
     accepted = support._run_verifier(task, app, logs)
     assert accepted["limitation_accuracy"] == 1.0
     assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_accepts_result_marker_after_prose(tmp_path: Path) -> None:
+    """Evidence prose may appear after the result marker."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\ninduced characteristic not assessed\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+
+
+def test_rejects_bool_int_coercion_in_result_marker(tmp_path: Path) -> None:
+    """Digest-bound JSON must preserve exact integer-versus-boolean types."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    marker_result = json.loads(json.dumps(submission["result"]))
+    marker_result["witnesses"][0]["induced_c4_count"] = False
+    evidence_path.write_text(
+        "induced characteristic not assessed\nRESULT_JSON: "
+        + json.dumps(marker_result, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+
+
+def test_scope_diagnostic_is_independent_of_contract(tmp_path: Path) -> None:
+    """An unsupported assurance must not erase a correct scope diagnostic."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "CHECKED"
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["assurance_calibration"] == 0.0
 
 
 def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:

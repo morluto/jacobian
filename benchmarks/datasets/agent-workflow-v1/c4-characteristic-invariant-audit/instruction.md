@@ -16,14 +16,15 @@ pair and the edge list is lexicographically sorted. Respect each witness's
 vertex bounds. Report the exact induced-C4 count and characteristic value.
 
 Do not claim the upstream Lean theorem compiles or that the source-corrected
-conjecture is proved. Write the exact schema to `submission.json`. Put a concise
-audit in `evidence/answer.txt`, include a `RESULT_JSON:` line containing the
-submitted result as JSON, and bind its SHA-256 digest.
+conjecture is proved. State both limitations in the `limitations` field. Write
+the exact schema to `submission.json`. Put a concise audit in
+`evidence/answer.txt`, include a `RESULT_JSON:` line containing the submitted
+result as JSON, and bind its SHA-256 digest.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, exact finite scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State that no Lean compilation or proof of the source-corrected conjecture is claimed.
+The verifier checks the declared result, exact finite scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State both that Lean compilation is not assessed and that proof of the source-corrected conjecture is not claimed.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

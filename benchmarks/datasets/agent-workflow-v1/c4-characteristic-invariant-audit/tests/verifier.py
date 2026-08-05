@@ -172,9 +172,17 @@ def _evidence(evidence, result):
             for line in text.splitlines()
             if line.startswith("RESULT_JSON:")
         )
-        prose = text.split("RESULT_JSON:", 1)[0].casefold()
+        prose = "\n".join(
+            line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
+        ).casefold()
+        if _has_affirmative_prohibited_claim(prose):
+            return False
+        canonical_marker = json.dumps(
+            json.loads(marker), sort_keys=True, separators=(",", ":")
+        )
+        canonical_result = json.dumps(result, sort_keys=True, separators=(",", ":"))
         return (
-            json.loads(marker) == result
+            canonical_marker == canonical_result
             and "induced" in prose
             and "characteristic" in prose
             and "not assessed" in prose
@@ -201,27 +209,39 @@ def _limitations_valid(limitations):
     if not isinstance(limitations, list):
         return False
     has_lean_limitation = False
+    has_conjecture_limitation = False
     for item in limitations:
         if not isinstance(item, str):
             return False
         folded = item.casefold()
+        if _has_affirmative_prohibited_claim(folded):
+            return False
         if "lean" in folded and (
             "not assessed" in folded
             or re.search(r"\b(?:no|not)\b.{0,80}\b(?:claim|claimed)\b", folded)
         ):
             has_lean_limitation = True
-        clauses = re.split(r"[.;]|\s*,\s*(?:and|but)\s+|\s+(?:and|but)\s+", folded)
-        for clause in clauses:
-            if not ("lean" in folded or "conjecture" in folded):
-                continue
-            for match in re.finditer(
-                r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled)\b",
-                clause,
-            ):
-                prefix = clause[: match.start()]
-                if not re.search(r"\b(?:no|not|never)\b", prefix[-80:]):
-                    return False
-    return has_lean_limitation
+        if "conjecture" in folded and (
+            "not assessed" in folded
+            or re.search(r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", folded)
+        ):
+            has_conjecture_limitation = True
+    return has_lean_limitation and has_conjecture_limitation
+
+
+def _has_affirmative_prohibited_claim(text):
+    clauses = re.split(r"[.;]|\s*,\s*(?:and|but)\s+|\s+(?:and|but)\s+", text)
+    for clause in clauses:
+        if not ("lean" in clause or "conjecture" in clause):
+            continue
+        for match in re.finditer(
+            r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled)\b",
+            clause,
+        ):
+            prefix = clause[: match.start()]
+            if not re.search(r"\b(?:no|not|never)\b", prefix[-80:]):
+                return True
+    return False
 
 
 def main():
@@ -242,7 +262,8 @@ def main():
         and _evidence(submission.get("evidence"), submission.get("result"))
     )
     scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
+        isinstance(submission, dict)
+        and submission.get("scope") == expected["required_scope"]
     )
     assurance_correct = bool(
         contract

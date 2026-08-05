@@ -18,6 +18,23 @@ ROLES = {"C4_FREE_ZERO_COUNT", "MULTIPLE_INDUCED_C4", "CHORDED_C4_ZERO_INDUCED"}
 ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 _EVIDENCE_READ_BYTES = 64 * 1024
 _MAX_EVIDENCE_LINE_BYTES = 1024 * 1024
+_PROHIBITED_CLAIM = re.compile(
+    r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled|"
+    r"(?:has|have|had|admits|admit|possesses|possess)\s+(?:a\s+)?proof)\b"
+)
+_THEOREM_SUBJECT = re.compile(
+    r"\s*(?:(?:no|the|this|that|its)\s+)?"
+    r"(?:(?:upstream|source-corrected|corrected)\s+)*"
+    r"(?:lean(?:\s+(?:theorem|compilation))?|theorem|conjecture|proof)\b"
+)
+_ELIDED_SUBJECT_PREFIX = re.compile(
+    r"\s*(?:(?:also|actually|still|then|yet)\s+)?"
+    r"(?:(?:is|are|was|were|has|have|had|do|does|did|can|could|may|might|"
+    r"must|shall|should|will|would)(?:\s+been)?\s+)?(?:not\s+)?"
+)
+_EXPLICIT_OTHER_SUBJECT = re.compile(
+    r"\s*(?:the|a|an|this|that|these|those|our|their|finite|graph)\b"
+)
 
 
 def _frozen_source():
@@ -269,18 +286,27 @@ def _has_limitation(text, topic):
 
 
 def _has_affirmative_prohibited_claim(text):
-    clauses = re.split(r"[.;]|\s*,\s*(?:and|but)\s+|\s+(?:and|but)\s+", text)
-    for clause in clauses:
-        if not any(topic in clause for topic in ("lean", "conjecture", "theorem")):
-            continue
-        for match in re.finditer(
-            r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled|"
-            r"(?:has|have|had|admits|admit|possesses|possess)\s+(?:a\s+)?proof)\b",
-            clause,
-        ):
-            prefix = clause[: match.start()][-80:]
-            if not re.search(r"\b(?:no|never)\b|\bnot\b(?!\s+only\b)", prefix):
-                return True
+    for sentence in re.split(r"[.;]", text):
+        theorem_context = False
+        for clause in re.split(r"\s*,?\s+(?:and|but)\s+", sentence):
+            matches = tuple(_PROHIBITED_CLAIM.finditer(clause))
+            theorem_subject = bool(_THEOREM_SUBJECT.match(clause))
+            claim_is_elided = bool(
+                matches
+                and _ELIDED_SUBJECT_PREFIX.fullmatch(clause[: matches[0].start()])
+            )
+            if theorem_subject:
+                theorem_context = True
+            elif (matches and not claim_is_elided) or (
+                not matches and _EXPLICIT_OTHER_SUBJECT.match(clause)
+            ):
+                theorem_context = False
+            if not theorem_context:
+                continue
+            for match in matches:
+                prefix = clause[: match.start()][-80:]
+                if not re.search(r"\b(?:no|never)\b|\bnot\b(?!\s+only\b)", prefix):
+                    return True
     return False
 
 

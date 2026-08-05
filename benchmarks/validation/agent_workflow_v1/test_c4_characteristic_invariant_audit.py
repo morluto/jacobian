@@ -266,6 +266,109 @@ def test_rejects_split_lean_compile_overclaim(tmp_path: Path) -> None:
     assert rejected["limitation_accuracy"] == 0.0
 
 
+def test_rejects_elided_subject_compile_overclaim(tmp_path: Path) -> None:
+    """A coordinated predicate inherits its upstream theorem subject."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "The upstream Lean theorem is not assessed and compiles correctly; "
+        "no proof of the source-corrected conjecture is claimed."
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize("intervening", ["no proof is claimed", "is not verified"])
+def test_retains_theorem_context_across_negated_predicates(
+    tmp_path: Path, intervening: str
+) -> None:
+    """Negated coordinated predicates must not clear the inherited subject."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        f"The upstream Lean theorem is not assessed and {intervening} but "
+        "compiles correctly; no proof of the source-corrected conjecture is claimed."
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize("predicate", ["can compile", "does compile", "has compiled"])
+def test_rejects_modal_elided_subject_compile_overclaim(
+    tmp_path: Path, predicate: str
+) -> None:
+    """Modal and auxiliary predicates inherit the upstream theorem subject."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        f"The upstream Lean theorem is not assessed and {predicate} correctly; "
+        "no proof of the source-corrected conjecture is claimed."
+    ]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_rejects_elided_subject_compile_overclaim_in_evidence(
+    tmp_path: Path,
+) -> None:
+    """Evidence must retain theorem context across a conjunction too."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path.write_text(
+        "The upstream Lean theorem is not assessed and compiles correctly; "
+        "no proof of the source-corrected conjecture is claimed.\n"
+        "The induced count and characteristic are audited.\n"
+        "RESULT_JSON: "
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_accepts_explicit_finite_subject_after_theorem_limitation(
+    tmp_path: Path,
+) -> None:
+    """An explicit finite-audit subject must not inherit theorem context."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "The upstream Lean theorem is not assessed and the finite graph "
+        "certificates were verified by exhaustive enumeration; no proof of "
+        "the source-corrected conjecture is claimed."
+    ]
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["limitation_accuracy"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_accepts_theorem_object_in_finite_certificate_claim(tmp_path: Path) -> None:
+    """A theorem object must not replace an explicit finite-certificate subject."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "Lean compilation is not assessed.",
+        "The finite graph certificates were verified against the upstream Lean "
+        "theorem and compile correctly.",
+        "No proof of the source-corrected conjecture is claimed.",
+    ]
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["limitation_accuracy"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
 def test_accepts_equivalent_evidence_limitation_wording(tmp_path: Path) -> None:
     """Evidence may use an equivalent no-claim limitation without a keyword."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")

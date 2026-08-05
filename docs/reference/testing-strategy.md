@@ -6,7 +6,7 @@
 
 | Change | First local check | Escalate when |
 | --- | --- | --- |
-| Documentation or benchmark README/validation | `make docs-command-check` and `make docs-linkcheck` | No Oracle is needed |
+| Documentation or benchmark README/validation | `make docs-linkcheck` | No Oracle is needed |
 | Python behavior | `make test-plan BASE=<revision>` and the selected semantic lane | Finish with `make check` |
 | Benchmark task input or verifier | `make harbor-check-task DATASET=... TASKS=...` | Run `make harbor-oracle-task ...` for the selected task |
 | Deployment entrypoint | `make deploy-check` | Include affected process checks for code changes |

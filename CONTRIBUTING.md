@@ -18,7 +18,7 @@ capability membership.
 
 | Change | Start here | Oracle requirement |
 | --- | --- | --- |
-| Documentation, benchmark README, or `benchmarks/validation/` | `make docs-command-check` (and `make docs-linkcheck` for Markdown links) | None |
+| Documentation, benchmark README, or `benchmarks/validation/` | `make docs-linkcheck` | None |
 | Focused Python behavior | `make test-plan BASE=<revision>`, the selected lane, then `make check` | None |
 | Benchmark task input or verifier | `make harbor-check-task DATASET=... TASKS=...`, then `make harbor-oracle-task DATASET=... TASKS=...` | Exact selected-task Oracle |
 | Deployment entrypoint | `make deploy-check` | None |
@@ -143,7 +143,7 @@ aid; `make check` and CI remain the handoff gates.
 
 | Change | Local handoff | CI adds |
 | --- | --- | --- |
-| Docs only | `make docs-command-check` and `make docs-linkcheck` | Documentation |
+| Docs only | `make docs-linkcheck` | Documentation |
 | Focused Python | affected target, then `make check` | Planned Python/static/package lanes |
 | Benchmark task or verifier | `make harbor-check-task DATASET=... TASKS=...` and `make harbor-oracle-task DATASET=... TASKS=...` | Exact task contract and Oracle |
 | Benchmark README or validation regression | focused Harbor checks | Contract checks; no Oracle |

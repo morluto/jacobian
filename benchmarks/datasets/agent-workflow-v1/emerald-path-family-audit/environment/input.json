@@ -1,0 +1,1 @@
+{"task_id":"jacobian/emerald-path-family-audit","source":{"dataset":"wenjiema02/ProofBench","revision":"3d934386531b13187bd3f778b13ca53e2a01e89e","split":"train","row":14,"problem_id":"APMO-2025-2","license":"MIT"},"band":2025,"published_model_conclusion":"ONLY_ALPHA_EQUALS_BETA_EQUALS_ONE","trace_length":16}

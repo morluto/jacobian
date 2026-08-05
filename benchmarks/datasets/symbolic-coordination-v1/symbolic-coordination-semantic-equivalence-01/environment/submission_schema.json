@@ -1,0 +1,439 @@
+{
+  "$defs": {
+    "grid": {
+      "additionalProperties": false,
+      "properties": {
+        "max_denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_numerator": {
+          "type": "integer"
+        },
+        "min_numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min_numerator",
+        "max_numerator",
+        "max_denominator"
+      ],
+      "type": "object"
+    },
+    "map": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/polynomial"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "type": "array"
+        },
+        "domain": {
+          "const": "QQ"
+        },
+        "map_schema_version": {
+          "const": "1"
+        },
+        "variables": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "map_schema_version",
+        "domain",
+        "variables",
+        "coordinates"
+      ],
+      "type": "object"
+    },
+    "point": {
+      "items": {
+        "$ref": "#/$defs/rational"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "type": "array"
+    },
+    "polynomial": {
+      "additionalProperties": false,
+      "properties": {
+        "terms": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "coefficient": {
+                "$ref": "#/$defs/rational"
+              },
+              "exponents": {
+                "items": {
+                  "maximum": 32,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "coefficient",
+              "exponents"
+            ],
+            "type": "object"
+          },
+          "maxItems": 128,
+          "type": "array"
+        }
+      },
+      "required": [
+        "terms"
+      ],
+      "type": "object"
+    },
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "den": {
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^-?(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "enum": [
+        "TRUE",
+        "FALSE",
+        "UNKNOWN"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "additionalProperties": false,
+          "properties": {
+            "binding_schema_version": {
+              "const": "1"
+            },
+            "checker_id": {
+              "const": "symbolic-coordination-v1.clean-room-polynomial-map-checker@1"
+            },
+            "claim_id": {
+              "const": "claim://symbolic-coordination-v1/symbolic-coordination-semantic-equivalence-01"
+            },
+            "forward_map_sha256": {
+              "const": "sha256:f20afa918d2494f4e5212ea38699ddb7df5b50d8844d91e2297a53c5804df89b"
+            },
+            "scope_id": {
+              "const": "scope://symbolic-coordination-v1/symbolic-coordination-semantic-equivalence-01"
+            },
+            "semantics_id": {
+              "const": "exact-sparse-polynomial-maps-over-QQ@1"
+            },
+            "subject_sha256": {
+              "const": "sha256:4cde381f447d93218c493be0bfd5a5b8a30450e9bc7cd85539cc98511af107a8"
+            }
+          },
+          "required": [
+            "binding_schema_version",
+            "claim_id",
+            "semantics_id",
+            "scope_id",
+            "forward_map_sha256",
+            "subject_sha256",
+            "checker_id"
+          ],
+          "type": "object"
+        },
+        "case_id": {
+          "const": "symbolic-coordination-semantic-equivalence-01"
+        },
+        "certificate": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "checked_directions": {
+                  "const": [
+                    "INVERSE_AFTER_FORWARD",
+                    "FORWARD_AFTER_INVERSE"
+                  ]
+                },
+                "forward_after_inverse_residuals": {
+                  "items": {
+                    "$ref": "#/$defs/polynomial"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "inverse_after_forward_residuals": {
+                  "items": {
+                    "$ref": "#/$defs/polynomial"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "inverse_map": {
+                  "$ref": "#/$defs/map"
+                },
+                "kind": {
+                  "const": "TWO_SIDED_COMPOSITION_REPLAY"
+                },
+                "source_variables": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "target_variables": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "source_variables",
+                "target_variables",
+                "inverse_map",
+                "inverse_after_forward_residuals",
+                "forward_after_inverse_residuals",
+                "checked_directions"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "determinant": {
+                  "$ref": "#/$defs/polynomial"
+                },
+                "global_invertibility": {
+                  "const": "NOT_ESTABLISHED_BY_KELLER_CERTIFICATE"
+                },
+                "keller_condition": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "KELLER_DETERMINANT_REPLAY"
+                },
+                "variable_order": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "variable_order",
+                "determinant",
+                "keller_condition",
+                "global_invertibility"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "common_image": {
+                  "$ref": "#/$defs/point"
+                },
+                "first_point": {
+                  "$ref": "#/$defs/point"
+                },
+                "global_consequence": {
+                  "const": "MAP_NOT_INJECTIVE_OVER_QQ"
+                },
+                "grid": {
+                  "$ref": "#/$defs/grid"
+                },
+                "kind": {
+                  "const": "COLLISION_WITNESS_REPLAY"
+                },
+                "second_point": {
+                  "$ref": "#/$defs/point"
+                }
+              },
+              "required": [
+                "kind",
+                "grid",
+                "first_point",
+                "second_point",
+                "common_image",
+                "global_consequence"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "examined_point_count": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "global_consequence": {
+                  "const": "NOT_ESTABLISHED"
+                },
+                "grid": {
+                  "$ref": "#/$defs/grid"
+                },
+                "kind": {
+                  "const": "BOUNDED_GRID_EXHAUSTION_REPLAY"
+                }
+              },
+              "required": [
+                "kind",
+                "grid",
+                "examined_point_count",
+                "global_consequence"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "examined_point_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "global_consequence": {
+                  "const": "NOT_ESTABLISHED"
+                },
+                "grid": {
+                  "$ref": "#/$defs/grid"
+                },
+                "kind": {
+                  "const": "SEARCH_NONCONCLUSION"
+                },
+                "stop_reason": {
+                  "enum": [
+                    "TIMEOUT",
+                    "INCOMPLETE"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "grid",
+                "stop_reason",
+                "examined_point_count",
+                "global_consequence"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "family": {
+          "const": "semantic-equivalence"
+        },
+        "verdict": {
+          "enum": [
+            "VALID_TWO_SIDED_INVERSE",
+            "INVALID_INVERSE_CANDIDATE",
+            "KELLER_CONDITION_ONLY",
+            "NOT_KELLER",
+            "COLLISION_FOUND",
+            "NO_COLLISION_IN_DECLARED_GRID",
+            "UNKNOWN"
+          ]
+        }
+      },
+      "required": [
+        "case_id",
+        "family",
+        "verdict",
+        "bindings",
+        "certificate"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-semantic-equivalence-01",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/symbolic-coordination-semantic-equivalence-01"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

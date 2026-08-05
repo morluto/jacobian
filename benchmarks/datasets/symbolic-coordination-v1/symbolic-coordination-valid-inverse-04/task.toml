@@ -1,0 +1,44 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/symbolic-coordination-valid-inverse-04"
+version = "1.0.0"
+description = "Assess one exact polynomial-map claim in the valid-two-sided-inverse pilot family."
+keywords = ["polynomial", "map", "symbolic-coordination", "exact-certificate"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+field = "algebra"
+assurance_ceiling = "CHECKED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "deterministic-hand-auditable-pilot"
+fixture_digest = "sha256:9d452ad5e4cbf4bfcc74fda9deb8a857222dec7ab21a3ea64e3aec59ba34327e"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["polynomial-map", "coordination", "offline", "clean-room-verifier"]
+case_version = "symbolic-coordination-v1/pilot-1"
+generator_version = "symbolic-coordination-pilot-generator@1"
+derivation = "Issue #477 deterministic hand-auditable polynomial-map pilot fixture."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

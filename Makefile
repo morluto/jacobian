@@ -381,7 +381,7 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 		$(if $(TASKS),--tasks $(TASKS),)
 
 harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with tasks.
-	@set -e; for dataset in agent-workflow-v1 public-reproductions-v1 research-diagnostics-v1 provider-feasibility-v1; do \
+	@set -e; for dataset in agent-workflow-v1 symbolic-coordination-v1 public-reproductions-v1 research-diagnostics-v1 provider-feasibility-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done
 

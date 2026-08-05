@@ -19,6 +19,7 @@ evaluation bundle.
 | Dataset | Purpose | Default execution |
 | --- | --- | --- |
 | `jacobian/agent-workflow-v1` | Fixed Jacobian-enabled mathematical workflows | Oracle and optional observation |
+| `jacobian/symbolic-coordination-v1` | Exact polynomial-map coordination pilot | Oracle |
 | `jacobian/public-reproductions-v1` | Replay known public mathematical cases | Oracle |
 | `jacobian/research-diagnostics-v1` | Answer-visible research challenges | Oracle diagnostics |
 | `jacobian/provider-feasibility-v1` | Pinned optional-backend checks | Oracle |
@@ -73,6 +74,10 @@ make harbor-oracle DATASET=agent-workflow-v1 FULL=1
 make harbor-oracle-all
 make provider-eval PROVIDER=cgal
 ```
+
+`symbolic-coordination-v1` keeps its deterministic 26-case PR1 pilot separate
+from the fixed `agent-workflow-v1` snapshots. Its task bundles are solvable
+without Jacobian and do not yet include the later comparison harness.
 
 `harbor-check-task` and `harbor-oracle-task` require an explicit dataset and
 task selection and are the normal gates for a leaf task. The full

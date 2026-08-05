@@ -1,0 +1,148 @@
+{
+  "$defs": {
+    "poly": {
+      "items": {
+        "$ref": "#/$defs/term"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "type": "array"
+    },
+    "term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+          "type": "string"
+        },
+        "exponents": {
+          "items": {
+            "maximum": 8,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "coefficient",
+        "exponents"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "EXPLICIT_TRANSFER_CHAIN_REPAIRS_COMPRESSED_PROOF"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "d2_delta_denominator": {
+          "$ref": "#/$defs/poly"
+        },
+        "d2_delta_numerator": {
+          "$ref": "#/$defs/poly"
+        },
+        "d_delta_inverse": {
+          "$ref": "#/$defs/poly"
+        },
+        "delta_inverse": {
+          "$ref": "#/$defs/poly"
+        },
+        "norm_polynomial": {
+          "$ref": "#/$defs/poly"
+        },
+        "p_denominator": {
+          "$ref": "#/$defs/poly"
+        },
+        "p_numerator": {
+          "$ref": "#/$defs/poly"
+        },
+        "q_denominator": {
+          "$ref": "#/$defs/poly"
+        },
+        "q_numerator": {
+          "$ref": "#/$defs/poly"
+        },
+        "s_forward": {
+          "$ref": "#/$defs/poly"
+        }
+      },
+      "required": [
+        "p_numerator",
+        "p_denominator",
+        "q_numerator",
+        "q_denominator",
+        "d_delta_inverse",
+        "d2_delta_numerator",
+        "d2_delta_denominator",
+        "s_forward",
+        "delta_inverse",
+        "norm_polynomial"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "exact-birational-and-quadratic-transfer-over-QQ",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/algebraic-independence-transfer-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

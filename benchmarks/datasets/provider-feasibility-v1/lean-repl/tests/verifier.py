@@ -14,6 +14,53 @@ if isinstance(submission, dict) and isinstance(submission.get("evidence"), list)
         expected_path="evidence/provider-report.json",
     )
 result = submission.get("result") if isinstance(submission, dict) else None
+tasks = report.get("tasks") if isinstance(report, dict) else None
+expected_tasks = (
+    (
+        "CONJUNCTION-DECOMPOSITION",
+        (
+            ("constructor", 2, 0),
+            ("exact hP", 1, 0),
+            ("exact hQ", 0, 0),
+        ),
+    ),
+    ("LOCAL-PREMISE-APPLICATION", (("exact h hP", 0, 0),)),
+)
+
+
+def _task_trace_matches(task, expected):
+    if not isinstance(task, dict) or task.get("task_id") != expected[0]:
+        return False
+    traces = task.get("tactics") if isinstance(task, dict) else None
+    expected_traces = expected[1]
+    if not isinstance(traces, list) or len(traces) != len(expected_traces):
+        return False
+    return all(
+        isinstance(trace, dict)
+        and trace.get("tactic") == tactic
+        and type(trace.get("goal_count")) is int
+        and trace.get("goal_count") == goal_count
+        and type(trace.get("error_count")) is int
+        and trace.get("error_count") == error_count
+        for trace, (tactic, goal_count, error_count) in zip(
+            traces, expected_traces, strict=True
+        )
+    )
+
+
+valid_tasks = bool(
+    isinstance(tasks, list)
+    and len(tasks) == len(expected_tasks)
+    and all(
+        isinstance(item, dict) and type(item.get("task_id")) is str for item in tasks
+    )
+    and tuple(item["task_id"] for item in tasks)
+    == tuple(expected[0] for expected in expected_tasks)
+    and all(
+        _task_trace_matches(item, expected)
+        for item, expected in zip(tasks, expected_tasks, strict=True)
+    )
+)
 valid = bool(
     isinstance(submission, dict)
     and set(submission)
@@ -45,12 +92,7 @@ valid = bool(
     and report.get("completed_count") == 2
     and report.get("parameter_error_count") == 0
     and report.get("return_code") == 0
-    and all(
-        isinstance(item, dict)
-        and item.get("completed") is True
-        and item.get("decomposition_observed") is True
-        for item in report.get("tasks", [])
-    )
+    and valid_tasks
 )
 target = Path("/logs/verifier/reward.json")
 target.parent.mkdir(parents=True, exist_ok=True)

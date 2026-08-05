@@ -1,0 +1,4 @@
+steiner-triple-system-certificate-v1
+result_sha256: 42829b7530e1d26d95f0f2c1e4ee0aa49d9fec15a7e3591f2cf4d742287499ec
+order: 27
+block_count: 117

@@ -197,9 +197,18 @@ def _timing_seconds(value: Any) -> float | None:
 
 def _trial_status(trial: dict[str, Any], exception: Any) -> str:
     raw = trial.get("status")
-    if isinstance(raw, str) and raw in {"TIMEOUT", "CANCELLED"}:
+    if isinstance(raw, str) and raw in {
+        "RUNNING",
+        "PENDING",
+        "FAILED",
+        "ERROR",
+        "TIMEOUT",
+        "CANCELLED",
+    }:
         return raw
     if exception is not None:
+        return "ERROR"
+    if isinstance(raw, str) and raw != "COMPLETED":
         return "ERROR"
     return "COMPLETED"
 

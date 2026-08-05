@@ -1,0 +1,7 @@
+{
+  "task_id": "jacobian/steiner-triple-system-27",
+  "conclusion": "STEINER_TRIPLE_SYSTEM_CONSTRUCTED",
+  "required_scope": "FINITE_STEINER_TRIPLE_SYSTEM_OF_ORDER_27",
+  "maximum_assurance": "COMPUTED",
+  "limitations": ["The verifier checks the submitted finite order-27 design and does not prove the source theorem for arbitrary v and t."]
+}

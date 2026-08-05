@@ -10,10 +10,11 @@ lanes to the triggering event and the base/head (or merge-group) SHA, records a
 digest of the planner itself, and records a digest of the benchmark topology so
 downstream jobs can confirm they are validating the exact tree the planner saw.
 The plan selects independent evidence roles -- record/schema conformance,
-prospective digest/record freshness, merge-group inventory validation, and the
-Docker Oracle lane. CI may execute deterministic roles in one checkout when
-they share the same contract gate; it must not duplicate the expensive work.
-Unknown benchmark paths fail closed to the full portfolio.
+focused or full host-verifier regressions, prospective digest/record freshness,
+merge-group inventory validation, and the Docker Oracle lane. CI may execute
+deterministic roles in one checkout when they share the same contract gate; it
+must not duplicate the expensive work. Unknown benchmark paths fail closed to
+the full portfolio.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 from _ci_paths import normalize_paths, path_values  # noqa: E402
 
-PLAN_VERSION = "1"
+PLAN_VERSION = "2"
 EVENTS = ("pull_request", "merge_group", "push", "schedule", "workflow_dispatch")
 MODES = ("none", "changed", "integration", "full")
 MAX_PULL_REQUEST_ORACLE_TASKS = 8
@@ -75,6 +76,19 @@ BENCHMARK_EXECUTION_CONTROL_PATHS = frozenset(
     }
 )
 BENCHMARK_CONFIG_PREFIX = "benchmarks/config/"
+HOST_VALIDATION_ROOT = "benchmarks/validation"
+HOST_VALIDATION_FULL_SHARDS = 4
+HOST_VALIDATION_DATASET_FILES = {
+    "symbolic-coordination-v1": (
+        "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py",
+    ),
+    "research-diagnostics-v1": (
+        "benchmarks/validation/research_diagnostics_v1/test_structured_verifiers.py",
+    ),
+    "provider-feasibility-v1": (
+        "benchmarks/validation/test_provider_download_integrity.py",
+    ),
+}
 
 
 def _json(value: object) -> str:
@@ -220,6 +234,7 @@ def _emit(
     record_schema: bool,
     prospective_digest: bool,
     inventory: bool,
+    host_validation: list[dict[str, Any]],
     run_oracle: bool,
     scope: str,
     matrix: list[dict[str, Any]],
@@ -237,11 +252,153 @@ def _emit(
         "run-benchmark-record-schema": str(record_schema).lower(),
         "run-benchmark-prospective-digest": str(prospective_digest).lower(),
         "run-benchmark-inventory": str(inventory).lower(),
+        "run-benchmark-host-validation": str(bool(host_validation)).lower(),
+        "benchmark-host-validation-matrix": _json(host_validation),
         "run-benchmark-oracle": str(run_oracle).lower(),
         "benchmark-oracle-scope": scope,
         "benchmark-oracle-matrix": _json(matrix),
         "benchmark-plan-reasons": _json(list(dict.fromkeys(reasons))),
     }
+
+
+def _host_entry(
+    *,
+    name: str,
+    selector: str,
+    keyword: str = "",
+    splits: int = 0,
+    group: int = 0,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "selector": selector,
+        "keyword": keyword,
+        "splits": splits,
+        "group": group,
+    }
+
+
+def _full_host_validation() -> list[dict[str, Any]]:
+    return [
+        _host_entry(
+            name=f"full-{group}-of-{HOST_VALIDATION_FULL_SHARDS}",
+            selector=HOST_VALIDATION_ROOT,
+            splits=HOST_VALIDATION_FULL_SHARDS,
+            group=group,
+        )
+        for group in range(1, HOST_VALIDATION_FULL_SHARDS + 1)
+    ]
+
+
+def _dataset_host_validation(dataset: str) -> list[dict[str, Any]]:
+    return [
+        _host_entry(name=f"{dataset}-{index}", selector=selector)
+        for index, selector in enumerate(
+            HOST_VALIDATION_DATASET_FILES.get(dataset, ()), start=1
+        )
+    ]
+
+
+def _task_host_validation(dataset: str, task: str) -> list[dict[str, Any]]:
+    if dataset == "agent-workflow-v1":
+        dedicated = (
+            ROOT
+            / "benchmarks"
+            / "validation"
+            / "agent_workflow_v1"
+            / f"test_{task.replace('-', '_')}.py"
+        )
+        entries: list[dict[str, Any]] = []
+        if dedicated.is_file():
+            entries.append(
+                _host_entry(
+                    name=f"{task}-specific",
+                    selector=dedicated.relative_to(ROOT).as_posix(),
+                )
+            )
+        entries.append(
+            _host_entry(
+                name=f"{task}-generic",
+                selector=(
+                    "benchmarks/validation/agent_workflow_v1/"
+                    "test_generic_verifier_contracts.py"
+                ),
+                keyword=task,
+            )
+        )
+        return entries
+    if dataset == "public-reproductions-v1" and task == "sat-erdos-schur-f4":
+        return [
+            _host_entry(
+                name=task,
+                selector="benchmarks/validation/test_sat_erdos_schur_f4.py",
+            )
+        ]
+    return _dataset_host_validation(dataset)
+
+
+def _host_validation_plan(
+    benchmark_paths: list[str], suites_by_id: dict[str, Any]
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    full = False
+    for path in benchmark_paths:
+        if path.startswith("benchmarks/validation/"):
+            candidate = ROOT / path
+            if candidate.is_file() and candidate.name.startswith("test_"):
+                entries.append(_host_entry(name=candidate.stem, selector=path))
+            elif candidate.suffix == ".py":
+                parent = candidate.parent.relative_to(ROOT).as_posix()
+                entries.append(_host_entry(name=candidate.parent.name, selector=parent))
+            else:
+                full = True
+            continue
+        parts = Path(path).parts
+        if len(parts) >= 4 and parts[:2] == ("benchmarks", "datasets"):
+            dataset = parts[2]
+            suite = suites_by_id.get(dataset)
+            task_ids = {ref.path.name for ref in suite.tasks} if suite else set()
+            relative = parts[3:]
+            task = relative[0] if len(relative) >= 2 else None
+            if task in task_ids:
+                if relative[1:] != ("README.md",):
+                    entries.extend(_task_host_validation(dataset, task))
+                continue
+            if relative[:1] == ("members",) and len(relative) == 2:
+                member = Path(relative[1]).stem
+                if member in task_ids:
+                    entries.extend(_task_host_validation(dataset, member))
+                    continue
+            if relative[:1] in {("README.md",), ("dataset.toml",)}:
+                continue
+            dataset_entries = _dataset_host_validation(dataset)
+            if dataset_entries:
+                entries.extend(dataset_entries)
+            else:
+                full = True
+            continue
+        if path in {
+            "benchmarks/README.md",
+            "benchmarks/__init__.py",
+        } or path.startswith("benchmarks/templates/"):
+            continue
+        if path == "benchmarks/adapters/README.md":
+            continue
+        if path.startswith("benchmarks/adapters/"):
+            entries.append(
+                _host_entry(
+                    name="benchmark-adapters",
+                    selector="benchmarks/validation/test_benchmark_adapters.py",
+                )
+            )
+            continue
+        full = True
+    if full:
+        return _full_host_validation()
+    unique = {(entry["selector"], entry["keyword"]): entry for entry in entries}
+    return sorted(
+        unique.values(), key=lambda entry: (entry["selector"], entry["keyword"])
+    )
 
 
 def _oracle_matrix(
@@ -540,6 +697,7 @@ def plan(
             record_schema=True,
             prospective_digest=True,
             inventory=True,
+            host_validation=_full_host_validation(),
             run_oracle=True,
             scope="all",
             matrix=matrix,
@@ -565,6 +723,7 @@ def plan(
             record_schema=False,
             prospective_digest=False,
             inventory=False,
+            host_validation=[],
             run_oracle=False,
             scope="none",
             matrix=[],
@@ -585,6 +744,7 @@ def plan(
     classification = _classify_benchmark_paths(
         benchmark_paths, suites_by_id, integration=integration
     )
+    host_validation = _host_validation_plan(benchmark_paths, suites_by_id)
     oracle_tasks = classification.oracle_tasks
     affected_datasets = classification.affected_datasets
     reasons = classification.reasons
@@ -641,6 +801,7 @@ def plan(
         record_schema=True,
         prospective_digest=digest_relevant,
         inventory=mode in {"integration", "full"},
+        host_validation=host_validation,
         run_oracle=run_oracle,
         scope=scope,
         matrix=matrix if run_oracle else [],

@@ -36,6 +36,8 @@ jobs:
       run-benchmark-record-schema: ${{ steps.plan.outputs.run-benchmark-record-schema }}
       run-benchmark-prospective-digest: ${{ steps.plan.outputs.run-benchmark-prospective-digest }}
       run-benchmark-inventory: ${{ steps.plan.outputs.run-benchmark-inventory }}
+      run-benchmark-host-validation: ${{ steps.plan.outputs.run-benchmark-host-validation }}
+      benchmark-host-validation-matrix: ${{ steps.plan.outputs.benchmark-host-validation-matrix }}
       run-benchmark-oracle: ${{ steps.plan.outputs.run-benchmark-oracle }}
       benchmark-oracle-scope: ${{ steps.plan.outputs.benchmark-oracle-scope }}
       benchmark-oracle-matrix: ${{ steps.plan.outputs.benchmark-oracle-matrix }}
@@ -157,7 +159,7 @@ jobs:
         run: uv run --locked python tools/check_benchmark_static.py
 
   contracts:
-    name: Benchmark Contracts, Records & Digests
+    name: Benchmark Contracts, Adapters, Records & Digests
     needs: plan
     if: needs.plan.outputs.run-benchmark-record-schema == 'true'
     runs-on: ubuntu-latest
@@ -170,8 +172,44 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-      - name: Validate benchmark contracts, schemas, records, and digests
-        run: make harbor-validate
+      - name: Validate benchmark contracts, adapters, schemas, records, and digests
+        run: make harbor-contracts harbor-adapter-checks
+
+  host_validation:
+    name: Host Verifiers (${{ matrix.name }})
+    needs: plan
+    if: needs.plan.outputs.run-benchmark-host-validation == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.benchmark-host-validation-matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - name: Run selected host-side verifier regressions
+        env:
+          SELECTOR: ${{ matrix.selector }}
+          KEYWORD: ${{ matrix.keyword }}
+          SPLITS: ${{ matrix.splits }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -eu
+          pytest_args=()
+          if [ -n "$KEYWORD" ]; then
+            pytest_args=(-k "$KEYWORD")
+          fi
+          if [ "$SPLITS" -gt 0 ]; then
+            pytest_args+=(--splits "$SPLITS" --group "$GROUP")
+          fi
+          make harbor-validation-tests TESTS="$SELECTOR" PYTEST_ARGS="${pytest_args[*]}"
 
   inventory:
     name: Benchmark Inventory Validation
@@ -234,7 +272,7 @@ jobs:
   validation:
     name: Benchmark Validation
     if: ${{ always() }}
-    needs: [plan, static, contracts, inventory, oracle]
+    needs: [plan, static, contracts, host_validation, inventory, oracle]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -245,9 +283,11 @@ jobs:
           RECORD_SCHEMA_FLAG: ${{ needs.plan.outputs.run-benchmark-record-schema }}
           PROSPECTIVE_DIGEST_FLAG: ${{ needs.plan.outputs.run-benchmark-prospective-digest }}
           INVENTORY_FLAG: ${{ needs.plan.outputs.run-benchmark-inventory }}
+          HOST_VALIDATION_FLAG: ${{ needs.plan.outputs.run-benchmark-host-validation }}
           ORACLE_FLAG: ${{ needs.plan.outputs.run-benchmark-oracle }}
           STATIC_RESULT: ${{ needs.static.result }}
           CONTRACTS_RESULT: ${{ needs.contracts.result }}
+          HOST_VALIDATION_RESULT: ${{ needs.host_validation.result }}
           INVENTORY_RESULT: ${{ needs.inventory.result }}
           ORACLE_RESULT: ${{ needs.oracle.result }}
         run: |
@@ -291,12 +331,14 @@ jobs:
             *) echo "invalid record-schema plan flag: $RECORD_SCHEMA_FLAG" >&2; exit 1 ;;
           esac
           check_lane "$PLAN_CHECK" "$STATIC_RESULT" "static"
+          check_lane "$HOST_VALIDATION_FLAG" "$HOST_VALIDATION_RESULT" "host-validation"
           check_lane "$INVENTORY_FLAG" "$INVENTORY_RESULT" "inventory"
           check_lane "$ORACLE_FLAG" "$ORACLE_RESULT" "oracle"
           case "$PLAN_CHECK" in
             true) ;;
             false)
               test "$CONTRACTS_RESULT" = skipped
+              test "$HOST_VALIDATION_RESULT" = skipped
               test "$INVENTORY_RESULT" = skipped
               test "$ORACLE_RESULT" = skipped
               ;;

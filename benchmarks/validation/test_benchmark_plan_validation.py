@@ -27,7 +27,7 @@ def _run(plan: dict[str, str]) -> subprocess.CompletedProcess[str]:
 
 def _plan() -> dict[str, str]:
     return {
-        "benchmark-plan-version": "1",
+        "benchmark-plan-version": "2",
         "benchmark-plan-event": "pull_request",
         "benchmark-plan-base-sha": SHA,
         "benchmark-plan-head-sha": "1" * 40,
@@ -38,6 +38,18 @@ def _plan() -> dict[str, str]:
         "run-benchmark-record-schema": "true",
         "run-benchmark-prospective-digest": "true",
         "run-benchmark-inventory": "false",
+        "run-benchmark-host-validation": "true",
+        "benchmark-host-validation-matrix": json.dumps(
+            [
+                {
+                    "name": "task",
+                    "selector": "benchmarks/validation/test_task.py",
+                    "keyword": "",
+                    "splits": 0,
+                    "group": 0,
+                }
+            ]
+        ),
         "run-benchmark-oracle": "true",
         "benchmark-oracle-scope": "changed-tasks",
         "benchmark-oracle-matrix": json.dumps(
@@ -62,7 +74,7 @@ def test_valid_benchmark_plan_is_accepted() -> None:
 
 def test_skipped_plan_is_accepted_with_empty_topology_and_no_lanes() -> None:
     plan = {
-        "benchmark-plan-version": "1",
+        "benchmark-plan-version": "2",
         "benchmark-plan-event": "pull_request",
         "benchmark-plan-base-sha": "",
         "benchmark-plan-head-sha": "",
@@ -73,6 +85,8 @@ def test_skipped_plan_is_accepted_with_empty_topology_and_no_lanes() -> None:
         "run-benchmark-record-schema": "false",
         "run-benchmark-prospective-digest": "false",
         "run-benchmark-inventory": "false",
+        "run-benchmark-host-validation": "false",
+        "benchmark-host-validation-matrix": "[]",
         "run-benchmark-oracle": "false",
         "benchmark-oracle-scope": "none",
         "benchmark-oracle-matrix": "[]",
@@ -86,7 +100,7 @@ def test_skipped_plan_is_accepted_with_empty_topology_and_no_lanes() -> None:
 
 def test_unknown_plan_version_is_rejected() -> None:
     plan = _plan()
-    plan["benchmark-plan-version"] = "2"
+    plan["benchmark-plan-version"] = "3"
 
     result = _run(plan)
 
@@ -130,6 +144,8 @@ def test_skipped_plan_must_not_carry_a_topology_digest() -> None:
     plan["run-benchmark-record-schema"] = "false"
     plan["run-benchmark-prospective-digest"] = "false"
     plan["run-benchmark-inventory"] = "false"
+    plan["run-benchmark-host-validation"] = "false"
+    plan["benchmark-host-validation-matrix"] = "[]"
     plan["run-benchmark-oracle"] = "false"
     plan["benchmark-oracle-scope"] = "none"
     plan["benchmark-oracle-matrix"] = "[]"
@@ -179,6 +195,8 @@ def test_prospective_digest_lane_requires_checks() -> None:
     plan = _plan()
     plan["run-benchmark-check"] = "false"
     plan["run-benchmark-record-schema"] = "false"
+    plan["run-benchmark-host-validation"] = "false"
+    plan["benchmark-host-validation-matrix"] = "[]"
     plan["run-benchmark-oracle"] = "false"
     plan["benchmark-oracle-scope"] = "none"
     plan["benchmark-oracle-matrix"] = "[]"
@@ -234,6 +252,40 @@ def test_disabled_oracle_must_have_none_scope_and_empty_matrix() -> None:
 
     assert result.returncode != 0
     assert "disabled" in result.stderr.lower()
+
+
+def test_host_validation_flag_requires_a_nonempty_matrix() -> None:
+    plan = _plan()
+    plan["benchmark-host-validation-matrix"] = "[]"
+
+    result = _run(plan)
+
+    assert result.returncode != 0
+    assert "host validation flag and matrix disagree" in result.stderr
+
+
+def test_host_validation_selector_cannot_escape_validation_tree() -> None:
+    plan = _plan()
+    matrix = json.loads(plan["benchmark-host-validation-matrix"])
+    matrix[0]["selector"] = "benchmarks/validation/../datasets"
+    plan["benchmark-host-validation-matrix"] = json.dumps(matrix)
+
+    result = _run(plan)
+
+    assert result.returncode != 0
+    assert "invalid selector" in result.stderr
+
+
+def test_host_validation_requires_every_declared_shard() -> None:
+    plan = _plan()
+    matrix = json.loads(plan["benchmark-host-validation-matrix"])
+    matrix[0].update({"splits": 2, "group": 1})
+    plan["benchmark-host-validation-matrix"] = json.dumps(matrix)
+
+    result = _run(plan)
+
+    assert result.returncode != 0
+    assert "incomplete" in result.stderr
 
 
 def test_duplicate_dataset_task_pair_is_rejected() -> None:

@@ -172,6 +172,26 @@ def test_harbor_execution_check_stays_out_of_the_full_verifier_corpus() -> None:
     assert "harbor-oracle" not in result.stdout
 
 
+def test_make_semantic_lane_forwards_pytest_arguments() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "--dry-run",
+            "test-process",
+            "TESTS=tests/boundary/process/tooling/test_local_validation_tools.py",
+            "PYTEST_ARGS=-k target_test --junitxml=pytest.xml",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert '--pytest-args "--durations=10 -k target_test --junitxml=pytest.xml"' in (
+        result.stdout
+    )
+
+
 def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None:
     from benchmarks.tooling.command_runner import ToolCommandStatus
     from tools import test_topology

@@ -72,6 +72,11 @@ owns required semantic lanes and fail-closed infrastructure coverage. Use
 `make harbor-plan BASE=origin/main`
 for benchmark contracts and Oracle scope; run it through Make because the
 planner requires the pinned Harbor runtime to compute task digests.
+The plan also selects host-side verifier regressions: task- or dataset-owned
+modules for focused changes, the changed validation file itself, and the full
+`benchmarks/validation` suite, sharded in hosted CI, for shared or unclassified
+infrastructure. To reproduce one selected host check locally, run
+`make harbor-validation-tests TESTS=<pytest-file-or-directory>`.
 Tests can be narrowed without learning another wrapper:
 
 ```sh

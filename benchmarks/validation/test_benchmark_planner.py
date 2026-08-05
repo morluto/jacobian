@@ -45,6 +45,10 @@ def _matrix_tasks(result: dict[str, str]) -> set[str]:
     return {str(task) for item in _matrix(result) for task in item["tasks"]}
 
 
+def _host_matrix(result: dict[str, str]) -> list[dict[str, object]]:
+    return json.loads(result["benchmark-host-validation-matrix"])
+
+
 def _assert_plan_valid(result: dict[str, str]) -> None:
     payload = "\n".join(f"{key}={value}" for key, value in result.items()) + "\n"
     proc = subprocess.run(
@@ -64,7 +68,7 @@ def _lane(result: dict[str, str], key: str) -> bool:
 def test_product_only_changes_skip_benchmark_work() -> None:
     result = planner.plan(["src/jacobian/math.py"], event="pull_request")
 
-    assert result["benchmark-plan-version"] == "1"
+    assert result["benchmark-plan-version"] == "2"
     assert result["benchmark-plan-event"] == "pull_request"
     assert result["benchmark-plan-mode"] == "none"
     assert result["benchmark-topology-digest"] == ""
@@ -91,7 +95,7 @@ def test_plan_is_versioned_and_bound_to_event_base_head_sha() -> None:
         head=head,
     )
 
-    assert result["benchmark-plan-version"] == "1"
+    assert result["benchmark-plan-version"] == "2"
     assert result["benchmark-plan-event"] == "pull_request"
     assert result["benchmark-plan-base-sha"] == base
     assert result["benchmark-plan-head-sha"] == head
@@ -248,6 +252,75 @@ def test_executable_task_change_selects_exact_task_without_version_bump() -> Non
     assert len(matrix) == 1
     assert matrix[0]["dataset"] == "agent-workflow-v1"
     assert matrix[0]["tasks"] == ["parameterized-sharp-bound-audit"]
+    host_matrix = _host_matrix(result)
+    assert result["run-benchmark-host-validation"] == "true"
+    assert {(entry["selector"], entry["keyword"]) for entry in host_matrix} == {
+        (
+            "benchmarks/validation/agent_workflow_v1/"
+            "test_parameterized_sharp_bound_audit.py",
+            "",
+        ),
+        (
+            "benchmarks/validation/agent_workflow_v1/"
+            "test_generic_verifier_contracts.py",
+            "parameterized-sharp-bound-audit",
+        ),
+    }
+    _assert_plan_valid(result)
+
+
+def test_dataset_owned_task_selects_shared_host_regression() -> None:
+    result = planner.plan(
+        [
+            "benchmarks/datasets/symbolic-coordination-v1/"
+            "symbolic-coordination-valid-inverse-01/tests/verifier.py"
+        ],
+        event="pull_request",
+    )
+
+    assert _host_matrix(result) == [
+        {
+            "name": "symbolic-coordination-v1-1",
+            "selector": (
+                "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py"
+            ),
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
+def test_changed_validation_test_selects_itself() -> None:
+    path = "benchmarks/validation/test_benchmark_timings.py"
+    result = planner.plan([path], event="pull_request")
+
+    assert _host_matrix(result) == [
+        {
+            "name": "test_benchmark_timings",
+            "selector": path,
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
+def test_shared_benchmark_support_falls_back_to_full_host_validation() -> None:
+    result = planner.plan(["benchmarks/tooling/harbor_suite.py"], event="pull_request")
+
+    assert _host_matrix(result) == [
+        {
+            "name": f"full-{group}-of-4",
+            "selector": "benchmarks/validation",
+            "keyword": "",
+            "splits": 4,
+            "group": group,
+        }
+        for group in range(1, 5)
+    ]
     _assert_plan_valid(result)
 
 
@@ -518,7 +591,7 @@ def test_unknown_benchmark_path_fails_closed_to_full_portfolio() -> None:
 def test_force_full_includes_each_dataset_task_pair() -> None:
     result = planner.plan([], event="workflow_dispatch", force_full=True)
 
-    assert result["benchmark-plan-version"] == "1"
+    assert result["benchmark-plan-version"] == "2"
     assert result["benchmark-oracle-scope"] == "all"
     assert result["benchmark-plan-mode"] == "full"
     assert result["run-benchmark-check"] == "true"

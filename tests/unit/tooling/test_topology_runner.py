@@ -35,6 +35,47 @@ def test_full_parallel_lane_retains_configured_workers() -> None:
     assert command[command.index("--dist") + 1] == "worksteal"
 
 
+def test_explicit_xdist_zero_suppresses_lane_worker_pool() -> None:
+    topology = load_topology(ROOT / "tests" / "topology.toml")
+
+    command = pytest_command(topology, "process", extra_args=["-n", "0"])
+
+    # The user's serial request is honored; lane defaults do not override it.
+    assert command[command.index("-n") + 1] == "0"
+    assert "--dist" not in command
+
+
+def test_explicit_xdist_zero_equals_form_suppresses_lane_worker_pool() -> None:
+    topology = load_topology(ROOT / "tests" / "topology.toml")
+
+    command = pytest_command(topology, "process", extra_args=["-n=0"])
+
+    assert "-n=0" in command
+    assert "--dist" not in command
+
+
+def test_explicit_numprocesses_suppresses_lane_worker_pool() -> None:
+    topology = load_topology(ROOT / "tests" / "topology.toml")
+
+    command = pytest_command(topology, "process", extra_args=["--numprocesses", "0"])
+
+    assert command[command.index("--numprocesses") + 1] == "0"
+    assert "--dist" not in command
+    assert "-n" not in command
+
+
+def test_dry_run_explicit_xdist_zero_suppresses_lane_workers(capsys) -> None:
+    rc = main(["process", "--pytest-args=-n 0", "--dry-run"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    command = out.splitlines()[-1]
+    # The lane's configured ``-n 2 --dist worksteal`` is not appended.
+    assert "-n 0" in command
+    assert "-n 2" not in command
+    assert "--dist" not in command
+
+
 def test_focused_serial_lane_remains_serial_and_preserves_extra_args() -> None:
     topology = load_topology(ROOT / "tests" / "topology.toml")
 
@@ -82,6 +123,23 @@ def test_dry_run_focused_selector_reports_zero_workers(capsys) -> None:
     assert "# distribution: none" in out
     assert "# selectors: 1" in out
     assert "-n" not in out.splitlines()[-1]
+
+
+def test_dry_run_forwards_explicit_pytest_arguments(capsys) -> None:
+    rc = main(
+        [
+            "process",
+            "--pytest-args=-k target_test --junitxml=pytest.xml",
+            "tests/boundary/process/tooling/test_local_validation_tools.py",
+            "--dry-run",
+        ]
+    )
+    command = capsys.readouterr().out.splitlines()[-1]
+
+    assert rc == 0
+    assert "--pytest-args=" not in command
+    assert "-k target_test" in command
+    assert "--junitxml=pytest.xml" in command
 
 
 def test_dry_run_serial_lane_reports_no_workers(capsys) -> None:

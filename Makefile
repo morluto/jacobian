@@ -160,8 +160,9 @@ check-changed: ## Run format, types, and exact changed-path tests.
 	$(MAKE) test-changed BASE="$(or $(BASE),origin/main)"
 
 define run_topology_lane
-	PYTEST_ADDOPTS="$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
-		$(TOPOLOGY_RUNNER) $(1) $(if $(TESTS),$(TESTS))
+	$(TOPOLOGY_RUNNER) $(1) \
+		--pytest-args "$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
+		$(if $(TESTS),$(TESTS))
 endef
 
 test-unit: ## Run pure contracts and models (10s lane, sequential).
@@ -327,7 +328,7 @@ harbor-adapter-checks: ## Check every repository-owned Harbor adapter.
 
 harbor-validation-tests: ## Run Harbor's host-side validation test suite.
 	$(UV_RUN) pytest -n $(HARBOR_VALIDATION_WORKERS) \
-		$(PYTEST_DIAGNOSTIC_ARGS) benchmarks/validation $(PYTEST_ARGS)
+		$(PYTEST_DIAGNOSTIC_ARGS) $(if $(TESTS),$(TESTS),benchmarks/validation) $(PYTEST_ARGS)
 
 harbor-validate: harbor-contracts harbor-adapter-checks harbor-validation-tests ## Run all repository-owned Harbor checks under the pinned Harbor runtime.
 

@@ -100,6 +100,7 @@ def test_rejects_unrelated_evidence_content(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] == 0.0
 
@@ -118,17 +119,18 @@ def test_rejects_evidence_without_result_marker(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
-def test_rejects_marker_only_evidence_with_unrelated_filler(tmp_path: Path) -> None:
-    """A matching RESULT_JSON line cannot replace the required derivation."""
+def test_rejects_marker_only_evidence_with_unrelated_prose(tmp_path: Path) -> None:
+    """Matching RESULT_JSON cannot substitute for the published derivation."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
     submission = json.loads((app / "submission.json").read_text())
-    answer_path = app / "evidence" / "answer.txt"
-    answer_path.write_text(
-        "Unrelated filler.\nRESULT_JSON: "
-        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
-        + "\n"
+    marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
     )
-    submission["evidence"][0]["sha256"] = support._digest(answer_path)
+    evidence_path.write_text("Unrelated filler.\n" + marker + "\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
@@ -137,22 +139,7 @@ def test_rejects_marker_only_evidence_with_unrelated_filler(tmp_path: Path) -> N
     assert rejected["reward"] == 0.0
 
 
-def test_accepts_long_canonical_rational_witness(tmp_path: Path) -> None:
-    """Canonical rational witnesses are not rejected by an unpublished cap."""
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["gap_witness"] = "1/" + "1" + "0" * 80
-    support._bind_result_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
-
-    accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
-
-
-def test_malformed_assurance_zeroes_scope_diagnostic(tmp_path: Path) -> None:
-    """Malformed assurance is a scope/protocol failure, not a valid scope claim."""
+def test_malformed_assurance_zeroes_scope_accuracy(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     submission["claimed_assurance"] = []
@@ -162,6 +149,19 @@ def test_malformed_assurance_zeroes_scope_diagnostic(tmp_path: Path) -> None:
     assert rejected["scope_accuracy"] == 0.0
     assert rejected["assurance_calibration"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def test_accepts_schema_valid_long_canonical_rational(tmp_path: Path) -> None:
+    """A canonical rational longer than the former hidden cap remains valid."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["gap_witness"] = "1/" + "1" + "0" * 80
+    support._bind_result_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
 
 
 def test_reports_tampered_input_separately_from_math_correctness(

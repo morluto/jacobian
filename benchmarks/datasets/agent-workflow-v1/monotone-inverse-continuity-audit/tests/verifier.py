@@ -82,11 +82,11 @@ def _valid_countermodel(result, source):
 def _evidence_matches_result(submission):
     """Bind evidence content to the submitted countermodel.
 
-    The public instruction requires a concise derivation in answer.txt.
-    A digest-bound file of unrelated bytes, or the original solution's
-    derivation after an alternate countermodel is submitted, must not
-    score as valid evidence.  The evidence must carry a RESULT_JSON marker
-    whose canonical JSON exactly equals the submitted result.
+    The public instruction requires a concise derivation in answer.txt. A
+    digest-bound file of unrelated bytes, or a marker-only file, must not score
+    as valid evidence. The marker binds the structured values, while the prose
+    must state the published monotonicity, jump, omitted-image, and inverse
+    obligations.
     """
 
     if not isinstance(submission, dict):
@@ -103,35 +103,38 @@ def _evidence_matches_result(submission):
         return False
     if not text.strip():
         return False
-    prose = " ".join(
-        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-    ).casefold()
-    # The visible contract requires a concise derivation, not merely a
-    # digest-bound file containing the structured result.  These clauses accept
-    # equivalent wording while requiring the mathematical bridge from the
-    # submitted parameters to the omitted-image counterexample.
-    has_branch_monotonicity = (
-        "strictly increasing" in prose or "strict monotonic" in prose
-    ) and "slope" in prose
-    has_cross_branch_jump = "jump" in prose and (
-        "cross" in prose or ("left" in prose and "right" in prose)
+    prose = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.startswith("RESULT_JSON:")
+    ]
+    normalized = " ".join(prose).casefold()
+    branches_are_increasing = bool(
+        re.search(r"\b(?:both|each)\s+branches?\b", normalized)
+        and re.search(r"\bstrictly\s+(?:increas(?:e|es|ing|ed)|monotone)\b", normalized)
     )
-    has_image_gap = "image" in prose and any(
-        term in prose for term in ("union", "gap", "omits", "omitted")
+    positive_jump_is_explained = bool(
+        re.search(r"\b(?:positive|upward|strictly positive|nonzero)\b", normalized)
+        and re.search(r"\b(?:jump|discontinu(?:ity|ous))\b", normalized)
     )
-    has_missing_witness = "between" in prose and any(
-        term in prose for term in ("no preimage", "no inverse", "omitted", "missing")
+    omitted_image_is_explained = bool(
+        "image" in normalized
+        and re.search(
+            r"\b(?:omit(?:s|ted)?|gap|missing|exclude(?:s|d)?|no preimage)\b",
+            normalized,
+        )
+        and re.search(r"\b(?:between|endpoint|full interval|no preimage)\b", normalized)
     )
-    has_inverse_consequence = "inverse" in prose and any(
-        term in prose for term in ("interval", "endpoint", "preimage")
+    inverse_failure_is_explained = bool(
+        re.search(r"\b(?:inverse|preimage)\b", normalized)
+        and re.search(r"\b(?:no|not|fail(?:s|ure)?|without|omits?)\b", normalized)
     )
     if not all(
         (
-            has_branch_monotonicity,
-            has_cross_branch_jump,
-            has_image_gap,
-            has_missing_witness,
-            has_inverse_consequence,
+            branches_are_increasing,
+            positive_jump_is_explained,
+            omitted_image_is_explained,
+            inverse_failure_is_explained,
         )
     ):
         return False

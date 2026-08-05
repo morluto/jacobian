@@ -1,0 +1,23 @@
+{
+  "source": {
+    "dataset": "Jiahao004/DeepTheorem",
+    "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8",
+    "split": "train",
+    "row": 10001,
+    "source_id": 86892,
+    "row_sha256": "sha256:8be03d5c7464658a27833f65a0d8b8198ea5d2d0658d088f667bb30754dd36da",
+    "license": "MIT"
+  },
+  "claim": "If every element of a finite subgroup G <= SL_3(F_q) fixes some nonzero vector, then G fixes a common nonzero vector.",
+  "contract": {
+    "allowed_primes": [3, 5, 7, 11, 13],
+    "dimension": 3,
+    "generator_count": 2,
+    "minimum_group_order": 6,
+    "maximum_group_order": 48
+  },
+  "benchmark_family": "Regression",
+  "primary_reasoning_objective": "construct and certify the quantifier separation between elementwise fixed spaces and their global intersection",
+  "difficulty": "Hard (provisional)",
+  "assurance_boundary": "Exact finite-field group closure and linear algebra are recomputed; no classification of all finite linear groups is claimed."
+}

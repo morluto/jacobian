@@ -1,0 +1,1 @@
+{"task_id":"jacobian/elementwise-fixed-no-global-invariant","conclusion":"ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL","maximum_assurance":"COMPUTED","required_scope":"finite subgroups of SL_3 over one declared allowed prime field"}

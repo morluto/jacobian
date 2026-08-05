@@ -30,6 +30,7 @@ RATIONAL_TASK = "rational-linear-solution"
 RESOURCE_DERIVED_TASKS = (
     "autoformalization-semantic-audit",
     "calendar-good-days-audit",
+    "elementwise-fixed-no-global-invariant",
     "finite-magma-countermodel",
     "gaussian-moment-generality-audit",
     "generated-lemma-vacuity-audit",

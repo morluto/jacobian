@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.agent-workflow-v1.capability-gap-analysis",
+  "task_id": "elementwise-fixed-no-global-invariant",
+  "analysis": {
+    "mathematical_moves": [
+      "Construct a determinant-one finite matrix group over an odd prime field.",
+      "Certify every element has a nonzero fixed vector while the common fixed-space intersection is zero."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MISSING_OPERATION", "MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "DEFER_RESEARCH",
+    "next_action": "Retain the exact finite-action verifier as a regression before proposing a reusable group-action certificate capability."
+  }
+}

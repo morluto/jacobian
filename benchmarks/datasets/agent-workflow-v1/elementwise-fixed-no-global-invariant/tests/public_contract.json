@@ -1,0 +1,80 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/elementwise-fixed-no-global-invariant",
+  "submission_path": "/app/submission.json",
+  "allowed_assurance": ["UNVERIFIED", "COMPUTED"],
+  "assurance_ceiling": "COMPUTED",
+  "allowed_completeness": ["COMPLETE"],
+  "conclusion": {"const": "ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL"},
+  "scope": {"type": "string", "const": "finite subgroups of SL_3 over one declared allowed prime field", "enum": null, "pattern": null},
+  "evidence": {
+    "min_items": 1, "max_items": 1,
+    "allowed_paths": ["evidence/answer.txt"],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "media_types": ["text/plain"],
+    "payload_shape": null
+  },
+  "required_artifact_filenames": ["evidence/answer.txt"],
+  "verification_record": null,
+  "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+  "public_notes": "The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection.",
+  "schema_definitions": {
+    "entry": {"type": "integer", "minimum": 0, "maximum": 12},
+    "vector": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/entry"}},
+    "matrix": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/vector"}},
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["field_prime", "generators", "group_elements", "fixed_vectors", "common_fixed_dimension"],
+      "properties": {
+        "field_prime": {"enum": [3, 5, 7, 11, 13]},
+        "generators": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/matrix"}},
+        "group_elements": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/matrix"}},
+        "fixed_vectors": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/vector"}},
+        "common_fixed_dimension": {"const": 0}
+      }
+    }
+  },
+  "submission_result": {"$ref": "#/$defs/result"},
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+    "properties": {
+      "task_id": {"const": "jacobian/elementwise-fixed-no-global-invariant"},
+      "conclusion": {"const": "ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL"},
+      "result": {"$ref": "#/$defs/result"},
+      "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+      "scope": {"type": "string", "const": "finite subgroups of SL_3 over one declared allowed prime field"},
+      "completeness": {"const": "COMPLETE"},
+      "evidence": {
+        "type": "array", "minItems": 1, "maxItems": 1,
+        "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"const": "evidence/answer.txt"},
+            "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+          }
+        }
+      },
+      "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+    },
+    "$defs": {
+      "entry": {"type": "integer", "minimum": 0, "maximum": 12},
+      "vector": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/entry"}},
+      "matrix": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/vector"}},
+      "result": {
+        "type": "object", "additionalProperties": false,
+        "required": ["field_prime", "generators", "group_elements", "fixed_vectors", "common_fixed_dimension"],
+        "properties": {
+          "field_prime": {"enum": [3, 5, 7, 11, 13]},
+          "generators": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/matrix"}},
+          "group_elements": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/matrix"}},
+          "fixed_vectors": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/vector"}},
+          "common_fixed_dimension": {"const": 0}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "entry": {
+      "maximum": 12,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "matrix": {
+      "items": {
+        "$ref": "#/$defs/vector"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "common_fixed_dimension": {
+          "const": 0
+        },
+        "field_prime": {
+          "enum": [
+            3,
+            5,
+            7,
+            11,
+            13
+          ]
+        },
+        "fixed_vectors": {
+          "items": {
+            "$ref": "#/$defs/vector"
+          },
+          "maxItems": 48,
+          "minItems": 6,
+          "type": "array"
+        },
+        "generators": {
+          "items": {
+            "$ref": "#/$defs/matrix"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "group_elements": {
+          "items": {
+            "$ref": "#/$defs/matrix"
+          },
+          "maxItems": 48,
+          "minItems": 6,
+          "type": "array"
+        }
+      },
+      "required": [
+        "field_prime",
+        "generators",
+        "group_elements",
+        "fixed_vectors",
+        "common_fixed_dimension"
+      ],
+      "type": "object"
+    },
+    "vector": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "finite subgroups of SL_3 over one declared allowed prime field",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/elementwise-fixed-no-global-invariant"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

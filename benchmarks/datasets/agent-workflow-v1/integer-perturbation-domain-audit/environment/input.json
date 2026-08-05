@@ -1,0 +1,8 @@
+{
+  "task_id": "jacobian/integer-perturbation-domain-audit",
+  "source": {"repository": "google-deepmind/formal-conjectures", "revision": "b2e608fc52d765510915a244bb69b1a2741acc3c", "issue": 4264},
+  "informal_contract": "For every bounded integer-valued perturbation b, require both b(n) != 0 and a(n) + b(n) != 0.",
+  "formalized_contract": "b : Nat -> Nat with BddAbove(range b), b(n) != 0, and a(n) + b(n) != 0.",
+  "witness_contract": {"period_min": 4, "period_max": 8, "value_abs_max": 100, "minimum_cancellations": 2},
+  "audit_scope": {"finite_periodic_semantics": true, "lean_compilation": false, "irrationality_claim": "NOT_ASSESSED"}
+}

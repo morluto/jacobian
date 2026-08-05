@@ -150,6 +150,15 @@ def _comparison_failures(
         for name, value in (("control", control), ("treatment", treatment))
         if value.get("status") != "VALID"
     ]
+    failures.extend(
+        f"{name} evidence claims VALID but has non-COMPLETED trials"
+        for name, value in (("control", control), ("treatment", treatment))
+        if value.get("status") == "VALID"
+        and any(
+            isinstance(trial, dict) and trial.get("status") != "COMPLETED"
+            for trial in value.get("trials", [])
+        )
+    )
     if (control.get("condition"), treatment.get("condition")) not in {
         ("control", "treatment"),
         ("C1", "C2"),

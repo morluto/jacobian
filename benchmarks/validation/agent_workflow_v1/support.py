@@ -53,12 +53,8 @@ RESOURCE_DERIVED_TASKS = (
 )
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
-    "grid-independent-set-transfer",
-    "image-complement-commutation",
-    "lp-integrability-separator",
-    "necklace-burnside-certificate",
-    "pythagorean-generator-recurrence",
     "apollonius-gap-repair",
+    "steiner-triple-system-27",
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
@@ -66,8 +62,10 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 INPUT_BINDING_DECOUPLED_TASKS = (
     "apollonius-gap-repair",
     "extremal-subset-sum-semantic-audit",
+    "integer-perturbation-domain-audit",
     "necklace-burnside-certificate",
     "pythagorean-generator-recurrence",
+    "steiner-triple-system-27",
 )
 VERIFIER_TASKS = tuple(
     sorted(

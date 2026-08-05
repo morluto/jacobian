@@ -1,0 +1,41 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/integer-perturbation-domain-audit"
+version = "1.0.0"
+description = "Audit an integer-to-natural perturbation-domain weakening with exact symbolic and periodic certificates."
+keywords = ["semantic-alignment", "integer-domain", "quantifiers", "autoformalization"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+field = "number-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-issue-derived-semantic-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["number-theory", "semantic-audit", "construction", "offline"]
+case_version = "agent-workflow-v1"
+contamination_class = "public-answer-visible"
+fixture_digest = "sha256:6c22bbb15c427c699ae83b8b8974d9f0b69a526e6f77cb09e23054c4d002f9ef"
+derivation = "Derived from google-deepmind/formal-conjectures issue 4264 at revision b2e608fc52d765510915a244bb69b1a2741acc3c."
+
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -306,74 +306,82 @@ class _MarkerScanner:
         return isinstance(parsed, dict) and parsed == self._expected
 
 
-def _stream_evidence_matches_result(target, result):
-    prose = _ProseScanner()
-    stored_marker = None
-    marker_count = 0
-    marker = None
-    prefix = ""
-    mode = "prefix"
-    decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
+class _EvidenceStreamScanner:
+    """Consume evidence lines while retaining only bounded scanner state."""
 
-    def consume_line(text):
-        nonlocal marker, mode, prefix
-        if mode == "marker":
-            marker.feed(text)
-            return
-        if mode == "prose":
-            prose.feed(text)
-            return
-        needed = len(RESULT_PREFIX) - len(prefix)
-        candidate = text[:needed]
-        expected = RESULT_PREFIX[len(prefix) : len(prefix) + len(candidate)]
-        if candidate != expected:
-            prose.feed(prefix + text)
-            prefix = ""
-            mode = "prose"
-            return
-        prefix += candidate
-        remainder = text[len(candidate) :]
-        if prefix == RESULT_PREFIX:
-            marker = _MarkerScanner(result)
-            mode = "marker"
-            marker.feed(remainder)
+    def __init__(self, result):
+        self._result = result
+        self._prose = _ProseScanner()
+        self._stored_marker = None
+        self._marker_count = 0
+        self._marker = None
+        self._prefix = ""
+        self._mode = "prefix"
 
-    def finish_line():
-        nonlocal marker, marker_count, mode, prefix, stored_marker
-        if mode == "marker":
-            marker_count += 1
-            if marker_count == 1:
-                stored_marker = marker
-        elif mode == "prefix":
-            prose.feed(prefix)
-        prose.feed(" ")
-        marker = None
-        prefix = ""
-        mode = "prefix"
-
-    def consume(text):
-        pieces = LINE_BREAKS.split(text)
-        for index, piece in enumerate(pieces):
+    def consume(self, text):
+        for index, piece in enumerate(LINE_BREAKS.split(text)):
             if index % 2:
-                finish_line()
+                self._finish_line()
             elif piece:
-                consume_line(piece)
+                self._consume_line(piece)
+
+    def finish(self):
+        self._finish_line()
+        self._prose.finish()
+        return bool(
+            self._marker_count == 1
+            and self._stored_marker is not None
+            and self._stored_marker.matches()
+            and self._prose.matches_obligations()
+        )
+
+    def _consume_line(self, text):
+        if self._mode == "marker":
+            self._marker.feed(text)
+            return
+        if self._mode == "prose":
+            self._prose.feed(text)
+            return
+        needed = len(RESULT_PREFIX) - len(self._prefix)
+        candidate = text[:needed]
+        expected = RESULT_PREFIX[len(self._prefix) : len(self._prefix) + len(candidate)]
+        if candidate != expected:
+            self._prose.feed(self._prefix + text)
+            self._prefix = ""
+            self._mode = "prose"
+            return
+        self._prefix += candidate
+        remainder = text[len(candidate) :]
+        if self._prefix == RESULT_PREFIX:
+            self._marker = _MarkerScanner(self._result)
+            self._mode = "marker"
+            self._marker.feed(remainder)
+
+    def _finish_line(self):
+        if self._mode == "marker":
+            self._marker_count += 1
+            if self._marker_count == 1:
+                self._stored_marker = self._marker
+        elif self._mode == "prefix":
+            self._prose.feed(self._prefix)
+        self._prose.feed(" ")
+        self._marker = None
+        self._prefix = ""
+        self._mode = "prefix"
+
+
+def _stream_evidence_matches_result(target, result):
+    scanner = _EvidenceStreamScanner(result)
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
 
     try:
         with target.open("rb") as stream:
             for block in iter(lambda: stream.read(EVIDENCE_CHUNK_BYTES), b""):
-                consume(decoder.decode(block))
-            consume(decoder.decode(b"", final=True))
+                scanner.consume(decoder.decode(block))
+            scanner.consume(decoder.decode(b"", final=True))
     except (OSError, UnicodeError, MemoryError):
         return False
-    finish_line()
-    prose.finish()
-    return bool(
-        marker_count == 1
-        and stored_marker is not None
-        and stored_marker.matches()
-        and prose.matches_obligations()
-    )
+    return scanner.finish()
 
 
 def _evidence_matches_result(submission):

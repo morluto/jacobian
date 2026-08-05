@@ -54,6 +54,7 @@ RESOURCE_DERIVED_TASKS = (
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "closed-set-distance-strengthening-audit",
+    "apollonius-gap-repair",
     "emerald-path-family-audit",
     "grid-independent-set-transfer",
     "image-complement-commutation",
@@ -69,6 +70,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
     "closed-set-distance-strengthening-audit",
+    "apollonius-gap-repair",
     "emerald-path-family-audit",
     "extremal-subset-sum-semantic-audit",
     "integer-perturbation-domain-audit",

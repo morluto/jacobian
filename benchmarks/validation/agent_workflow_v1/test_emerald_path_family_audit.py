@@ -126,11 +126,11 @@ def test_rejects_explosive_rational_spelling(tmp_path: Path) -> None:
     assert support._run_verifier(task, app, logs)["correctness"] == 0.0
 
 
-def test_rejects_oversized_evidence(tmp_path: Path) -> None:
+def test_streams_huge_digest_bound_evidence(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     path = app / "evidence/answer.txt"
-    path.write_text("x" * 4097)
+    path.write_bytes(b"emerald-path-family-certificate-v1\n" + b"x" * (8 * 1024 * 1024))
     submission["evidence"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
@@ -138,6 +138,21 @@ def test_rejects_oversized_evidence(tmp_path: Path) -> None:
     reward = support._run_verifier(task, app, logs)
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_reports_protocol_compliance_separately(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["limitations"] = []
+    support._write_json(app / "submission.json", submission)
+
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["assurance_calibration"] == 1.0
+    assert reward["protocol_compliance"] == 0.0
     assert reward["reward"] == 0.0
 
 

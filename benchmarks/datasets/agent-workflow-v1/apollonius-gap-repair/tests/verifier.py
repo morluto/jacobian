@@ -198,6 +198,7 @@ def main() -> None:
         submission,
         task_id=expected["task_id"],
         conclusion=expected["conclusion"],
+        allowed_assurances=frozenset({"COMPUTED"}),
         min_limitations=1,
         verification_record="forbidden",
     )

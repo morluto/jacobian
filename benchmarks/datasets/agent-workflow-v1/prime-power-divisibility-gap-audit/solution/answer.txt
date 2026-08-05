@@ -1,0 +1,1 @@
+Primewise divisibility does not retain multiplicity. The submitted ledger makes every cycle sum divisible by p while its total has smaller p-adic valuation than the modulus.

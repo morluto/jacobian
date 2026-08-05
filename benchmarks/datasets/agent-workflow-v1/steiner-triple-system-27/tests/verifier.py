@@ -89,45 +89,45 @@ def _certificate_matches(path, expected_lines):
 
     max_line_bytes = max(map(len, expected_lines))
     matched = 0
-    line = bytearray()
-    started = False
-    overflow = False
     try:
-        with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(65_536), b""):
-                for byte in chunk:
-                    if byte == ord("\n"):
-                        if started:
-                            if (
-                                matched >= len(expected_lines)
-                                or overflow
-                                or bytes(line).rstrip(b" \t\r\v\f")
-                                != expected_lines[matched]
-                            ):
-                                return False
-                            matched += 1
-                        line.clear()
-                        started = False
-                        overflow = False
-                        continue
-                    if not started and byte in b" \t\r\v\f":
-                        continue
-                    started = True
-                    if len(line) < max_line_bytes:
-                        line.append(byte)
-                    else:
-                        overflow = True
-            if started:
-                if (
-                    matched >= len(expected_lines)
-                    or overflow
-                    or bytes(line).rstrip(b" \t\r\v\f") != expected_lines[matched]
-                ):
-                    return False
-                matched += 1
+        for line, overflow in _certificate_lines(path, max_line_bytes):
+            if not _certificate_line_matches(line, overflow, expected_lines, matched):
+                return False
+            matched += 1
     except (OSError, UnicodeError):
         return False
     return matched == len(expected_lines)
+
+
+def _certificate_lines(path, max_line_bytes):
+    line = bytearray()
+    started = False
+    overflow = False
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65_536), b""):
+            for byte in chunk:
+                if byte == ord("\n"):
+                    if started:
+                        yield bytes(line), overflow
+                    line.clear()
+                    started = False
+                    overflow = False
+                    continue
+                if not started and byte in b" \t\r\v\f":
+                    continue
+                started = True
+                if len(line) < max_line_bytes:
+                    line.append(byte)
+                else:
+                    overflow = True
+        if started:
+            yield bytes(line), overflow
+
+
+def _certificate_line_matches(line, overflow, expected_lines, matched):
+    if matched >= len(expected_lines) or overflow:
+        return False
+    return line.rstrip(b" \t\r\v\f") == expected_lines[matched]
 
 
 def main():

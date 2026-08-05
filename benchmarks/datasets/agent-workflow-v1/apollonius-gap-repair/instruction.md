@@ -2,4 +2,8 @@
 
 An OPC proof received human score zero after asserting, without computation, that the circle with diameter the internal/external ratio points implies `MA^2 = k^2 MB^2`.
 
-Choose canonical positive rational `k != 1` and `c`. Put `A=(0,0)`, `B=(c,0)`, `P=kc/(k+1)`, and `Q=kc/(k-1)`. Submit `P,Q`, the center and positive radius of the diameter circle, and coefficient vectors in basis `[x^2,y^2,x,1]` for its expanded equation and for `MA^2-k^2 MB^2`. Submit the exact proportionality multiplier proving the omitted identity. Exactly one digest-bound explanation is required. Assurance ceiling is `COMPUTED`.
+Choose canonical positive rational `k != 1` and `c`. Put `A=(0,0)`, `B=(c,0)`, `P=kc/(k+1)`, and `Q=kc/(k-1)`. Submit `P,Q`, the center and positive radius of the diameter circle, and coefficient vectors in basis `[x^2,y^2,x,1]` for its expanded equation and for `MA^2-k^2 MB^2`. Submit the exact proportionality multiplier proving the omitted identity.
+
+The digest-bound `evidence/answer.txt` must contain exactly four nonempty lines: `apollonius-coefficient-certificate-v1`, `multiplier: <submitted multiplier>`, `circle_coefficients: <four submitted values joined by commas>`, and `distance_coefficients: <four submitted values joined by commas>`.
+
+Include this published limitation exactly: `The certificate repairs the annotated coordinate identity; it does not independently formalize every theorem or endpoint convention in the full geometry proof.` Assurance ceiling is `COMPUTED`.

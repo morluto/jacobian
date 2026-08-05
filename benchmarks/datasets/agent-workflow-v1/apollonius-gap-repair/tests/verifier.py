@@ -4,11 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
-    load_submission,
+    is_regular_bounded_file,
     resolve_evidence,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
@@ -17,13 +19,21 @@ LIMITATION = "The certificate repairs the annotated coordinate identity; it does
 
 def _load() -> dict[str, Any]:
     try:
-        a, b = WORKSPACE / "input.json", TESTS / "input.json"
-        if a.is_symlink() or b.is_symlink() or a.read_bytes() != b.read_bytes():
-            return {}
-        value = json.loads(b.read_text())
+        value = json.loads((TESTS / "input.json").read_text())
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _submission() -> dict[str, Any] | None:
+    path = WORKSPACE / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _q(value: object) -> Fraction | None:
@@ -96,23 +106,39 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object) -> bool:
+def _evidence(value: object, result: object) -> bool:
     if (
         not evidence_list_is_bound(value, expected_path="evidence/answer.txt")
         or not isinstance(value, list)
         or len(value) != 1
     ):
         return False
+    if not isinstance(result, dict):
+        return False
+    circle = result.get("circle_coefficients")
+    distance = result.get("distance_coefficients")
+    if not all(
+        isinstance(items, list) and all(isinstance(item, str) for item in items)
+        for items in (circle, distance)
+    ):
+        return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     try:
-        return path is not None and "polynomial" in path.read_text().lower()
+        lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
     except (OSError, UnicodeError):
         return False
+    return lines == [
+        "apollonius-coefficient-certificate-v1",
+        f"multiplier: {result.get('multiplier')}",
+        "circle_coefficients: " + ",".join(circle),
+        "distance_coefficients: " + ",".join(distance),
+    ]
 
 
 def main() -> None:
-    submission = load_submission()
+    submission = _submission()
     data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
@@ -120,8 +146,8 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    math_correct = bool(contract and _result(data.get("result"), _load()))
-    evidence_valid = bool(math_correct and _evidence(data.get("evidence")))
+    math_correct = _result(data.get("result"), _load())
+    evidence_valid = _evidence(data.get("evidence"), data.get("result"))
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
     assurance_correct = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
@@ -130,7 +156,9 @@ def main() -> None:
         submission, verification_record_bound=False
     )
     correct = (
-        math_correct
+        input_bound
+        and contract
+        and math_correct
         and evidence_valid
         and scope_correct
         and assurance_correct
@@ -144,6 +172,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
+                "input_binding": float(input_bound),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
                 "reward": float(correct),

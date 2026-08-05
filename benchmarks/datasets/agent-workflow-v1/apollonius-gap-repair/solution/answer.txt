@@ -1,1 +1,4 @@
-Expanding both equations shows that the distance-difference polynomial is exactly (1-k^2) times the diameter-circle polynomial, filling the computation omitted by the scored proof.
+apollonius-coefficient-certificate-v1
+multiplier: -3
+circle_coefficients: 1,1,-8,12
+distance_coefficients: -3,-3,24,-36

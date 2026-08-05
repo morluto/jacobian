@@ -107,6 +107,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
             multiplicity is None
             or cycle_sum is None
             or multiplicity < 1
+            or cycle_sum < 1
             or cycle_sum in seen_sums
             or cycle_sum % prime
         ):
@@ -144,8 +145,10 @@ def _evidence(submission: dict[str, Any]) -> bool:
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload["schema_version"] == "1"
         and payload["task_id"] == submission.get("task_id")
-        and payload["result"] == submission.get("result")
-        and payload["limitations"] == submission.get("limitations")
+        and json.dumps(payload["result"], sort_keys=True, separators=(",", ":"))
+        == json.dumps(submission.get("result"), sort_keys=True, separators=(",", ":"))
+        and json.dumps(payload["limitations"], separators=(",", ":"))
+        == json.dumps(submission.get("limitations"), separators=(",", ":"))
     )
 
 
@@ -162,9 +165,9 @@ def main() -> None:
     )
     math_correct = _result(data.get("result"), _frozen())
     evidence_valid = _evidence(data)
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
+    scope_correct = data.get("scope") == expected["required_scope"]
     assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
+        data.get("claimed_assurance") == expected["maximum_assurance"]
     )
     false_certification = false_verified_claim(
         submission, verification_record_bound=False

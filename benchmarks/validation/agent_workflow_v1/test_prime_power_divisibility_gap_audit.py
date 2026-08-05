@@ -113,6 +113,16 @@ def test_schema_bypass_values_fail_closed(tmp_path: Path) -> None:
         ("boolean-valuation", lambda result: result.update(p_valuation_total=True)),
         ("large-prime", lambda result: result.update(prime=31)),
         ("coprime-factor", lambda result: result.update(coprime_factor=3)),
+        (
+            "zero-cycle-sum",
+            lambda result: result.update(
+                cycle_groups=[
+                    {"multiplicity": 3, "cycle_sum": 0},
+                    {"multiplicity": 1, "cycle_sum": 2},
+                ],
+                total_sum=2,
+            ),
+        ),
     ]:
         submission = copy.deepcopy(_oracle())
         mutation(submission["result"])
@@ -127,6 +137,8 @@ def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> Non
     reward = _verify(tmp_path / "protocol", bad_conclusion)
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 1.0
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["assurance_calibration"] == 1.0
     assert reward["reward"] == 0.0
 
     submission = copy.deepcopy(_oracle())
@@ -135,4 +147,22 @@ def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> Non
     reward = _run_verifier(task, app, logs)
     assert reward["input_binding"] == 0.0
     assert reward["correctness"] == 1.0
+    assert reward["reward"] == 0.0
+
+
+def test_evidence_comparison_uses_exact_json_types(tmp_path: Path) -> None:
+    submission = copy.deepcopy(_oracle())
+    task, app, logs = _prepare(tmp_path, submission)
+    evidence_path = app / "evidence/divisibility-audit.json"
+    evidence = json.loads(evidence_path.read_text())
+    evidence["result"]["p_valuation_total"] = True
+    evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission))
+
+    reward = _run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 0.0
     assert reward["reward"] == 0.0

@@ -108,6 +108,17 @@ def test_evidence_requires_four_coefficients(tmp_path: Path) -> None:
     assert reward["reward"] == 0.0
 
 
+def test_evidence_requires_string_multiplier(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["result"]["multiplier"] = ["-3"]
+    _bind_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
 def test_rejects_oversized_evidence(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)

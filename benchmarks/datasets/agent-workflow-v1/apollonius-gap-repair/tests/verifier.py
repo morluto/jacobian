@@ -119,12 +119,13 @@ def _evidence(value: object, result: object) -> bool:
         return False
     circle = result.get("circle_coefficients")
     distance = result.get("distance_coefficients")
+    multiplier = result.get("multiplier")
     if not all(
         isinstance(items, list)
         and len(items) == 4
         and all(isinstance(item, str) for item in items)
         for items in (circle, distance)
-    ):
+    ) or not isinstance(multiplier, str):
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None or not is_regular_bounded_file(path, max_bytes=4096):
@@ -135,7 +136,7 @@ def _evidence(value: object, result: object) -> bool:
         return False
     return lines == [
         "apollonius-coefficient-certificate-v1",
-        f"multiplier: {result.get('multiplier')}",
+        f"multiplier: {multiplier}",
         "circle_coefficients: " + ",".join(circle),
         "distance_coefficients: " + ",".join(distance),
     ]

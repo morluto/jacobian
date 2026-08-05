@@ -13,7 +13,7 @@
       "properties": {
         "prime": {"type": "integer", "minimum": 2, "maximum": 29},
         "exponent": {"type": "integer", "minimum": 2, "maximum": 6},
-        "coprime_factor": {"type": "integer", "minimum": 1, "maximum": 20},
+        "coprime_factor": {"const": 1},
         "modulus": {"type": "integer", "minimum": 4, "maximum": 10000},
         "cycle_count": {"type": "integer", "minimum": 4},
         "cycle_groups": {

@@ -50,20 +50,23 @@ def test_oracle_and_alternative_countermodel(tmp_path: Path) -> None:
     alternative["result"].update(
         {
             "prime": 3,
-            "exponent": 2,
-            "coprime_factor": 2,
-            "modulus": 18,
-            "cycle_count": 6,
+            "exponent": 3,
+            "coprime_factor": 1,
+            "modulus": 27,
+            "cycle_count": 9,
             "cycle_groups": [
-                {"multiplicity": 5, "cycle_sum": 3},
+                {"multiplicity": 8, "cycle_sum": 3},
                 {"multiplicity": 1, "cycle_sum": 6},
             ],
-            "total_sum": 21,
-            "p_valuation_modulus": 2,
+            "total_sum": 30,
+            "p_valuation_modulus": 3,
             "p_valuation_total": 1,
         }
     )
     assert _verify(tmp_path / "alternative", alternative)["reward"] == 1.0
+    reversed_groups = copy.deepcopy(_oracle())
+    reversed_groups["result"]["cycle_groups"].reverse()
+    assert _verify(tmp_path / "reversed", reversed_groups)["reward"] == 1.0
 
 
 def test_rejects_corrupt_prime_power_and_cycle_ledger(tmp_path: Path) -> None:
@@ -102,3 +105,34 @@ def test_rejects_tiny_or_false_certification_shortcuts(tmp_path: Path) -> None:
     verified = copy.deepcopy(_oracle())
     verified["claimed_assurance"] = "VERIFIED"
     assert _verify(tmp_path / "verified", verified)["false_certification"] is True
+
+
+def test_schema_bypass_values_fail_closed(tmp_path: Path) -> None:
+    for name, mutation in [
+        ("zero-total", lambda result: result.update(total_sum=0)),
+        ("boolean-valuation", lambda result: result.update(p_valuation_total=True)),
+        ("large-prime", lambda result: result.update(prime=31)),
+        ("coprime-factor", lambda result: result.update(coprime_factor=3)),
+    ]:
+        submission = copy.deepcopy(_oracle())
+        mutation(submission["result"])
+        reward = _verify(tmp_path / name, submission)
+        assert reward["correctness"] == 0.0
+        assert reward["reward"] == 0.0
+
+
+def test_protocol_and_input_failures_preserve_diagnostics(tmp_path: Path) -> None:
+    bad_conclusion = copy.deepcopy(_oracle())
+    bad_conclusion["conclusion"] = "WRONG"
+    reward = _verify(tmp_path / "protocol", bad_conclusion)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 0.0
+
+    submission = copy.deepcopy(_oracle())
+    task, app, logs = _prepare(tmp_path / "input", submission)
+    (app / "input.json").write_text("{}")
+    reward = _run_verifier(task, app, logs)
+    assert reward["input_binding"] == 0.0
+    assert reward["correctness"] == 1.0
+    assert reward["reward"] == 0.0

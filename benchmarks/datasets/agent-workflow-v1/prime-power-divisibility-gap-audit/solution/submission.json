@@ -4,11 +4,11 @@
   "result": {
     "prime": 2,
     "exponent": 3,
-    "coprime_factor": 3,
-    "modulus": 24,
-    "cycle_count": 12,
-    "cycle_groups": [{"multiplicity": 11, "cycle_sum": 2}, {"multiplicity": 1, "cycle_sum": 4}],
-    "total_sum": 26,
+    "coprime_factor": 1,
+    "modulus": 8,
+    "cycle_count": 4,
+    "cycle_groups": [{"multiplicity": 3, "cycle_sum": 2}, {"multiplicity": 1, "cycle_sum": 4}],
+    "total_sum": 10,
     "p_valuation_modulus": 3,
     "p_valuation_total": 1,
     "local_statement": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P",
@@ -18,6 +18,6 @@
   "claimed_assurance": "COMPUTED",
   "scope": "OPC_TEST_ROW_41_DIVISIBILITY_INFERENCE",
   "completeness": "COMPLETE",
-  "evidence": [{"path": "evidence/divisibility-audit.json", "sha256": "sha256:92e10c7c67cdfeee077db81d939ccce4f6cc217c1a68d84ac553a158859808d1"}],
+  "evidence": [{"path": "evidence/divisibility-audit.json", "sha256": "sha256:6f47c6929ca1d190d2b7555e19da0d1c868dff80b4144f2e27cb7d4f78407764"}],
   "limitations": ["The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."]
 }

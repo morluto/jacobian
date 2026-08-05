@@ -4,10 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     false_verified_claim,
-    load_submission,
+    is_regular_bounded_file,
     read_evidence_json,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
@@ -17,17 +19,21 @@ LIMITATION = "The countermodel refutes the frozen divisibility inference; it doe
 
 def _frozen() -> dict[str, Any]:
     try:
-        visible, hidden = WORKSPACE / "input.json", TESTS / "input.json"
-        if (
-            visible.is_symlink()
-            or hidden.is_symlink()
-            or visible.read_bytes() != hidden.read_bytes()
-        ):
-            return {}
-        value = json.loads(hidden.read_text())
+        value = json.loads((TESTS / "input.json").read_text())
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _submission() -> dict[str, Any] | None:
+    path = WORKSPACE / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _integer(value: object) -> int | None:
@@ -77,12 +83,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     total = _integer(value["total_sum"])
     if None in {prime, exponent, factor, modulus, cycle_count, total}:
         return False
-    if not (
-        _prime(prime)
-        and 2 <= exponent <= 6
-        and 1 <= factor <= 20
-        and math.gcd(prime, factor) == 1
-    ):
+    if not (2 <= prime <= 29 and _prime(prime) and 2 <= exponent <= 6 and factor == 1):
         return False
     if (
         modulus != prime**exponent * factor
@@ -96,7 +97,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         return False
     multiplicity_sum = 0
     recomputed_total = 0
-    prior_sum = 0
+    seen_sums: set[int] = set()
     for group in groups:
         if not isinstance(group, dict) or set(group) != {"multiplicity", "cycle_sum"}:
             return False
@@ -106,13 +107,17 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
             multiplicity is None
             or cycle_sum is None
             or multiplicity < 1
-            or cycle_sum <= prior_sum
+            or cycle_sum in seen_sums
             or cycle_sum % prime
         ):
             return False
-        prior_sum = cycle_sum
+        seen_sums.add(cycle_sum)
         multiplicity_sum += multiplicity
         recomputed_total += multiplicity * cycle_sum
+    reported_modulus_valuation = _integer(value["p_valuation_modulus"])
+    reported_total_valuation = _integer(value["p_valuation_total"])
+    if total <= 0 or None in {reported_modulus_valuation, reported_total_valuation}:
+        return False
     valuation_modulus = _valuation(modulus, prime)
     valuation_total = _valuation(total, prime)
     return bool(
@@ -120,8 +125,8 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         and recomputed_total == total
         and total % prime == 0
         and total % modulus != 0
-        and valuation_modulus == exponent == value["p_valuation_modulus"]
-        and valuation_total == value["p_valuation_total"]
+        and valuation_modulus == exponent == reported_modulus_valuation
+        and valuation_total == reported_total_valuation
         and 1 <= valuation_total < valuation_modulus
         and value["local_statement"] == "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
         and value["global_statement"] == "TOTAL_NOT_DIVISIBLE_BY_M"
@@ -145,8 +150,9 @@ def _evidence(submission: dict[str, Any]) -> bool:
 
 
 def main() -> None:
-    submission = load_submission()
+    submission = _submission()
     data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
     contract = strict_submission_contract(
         submission,
@@ -154,8 +160,8 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    math_correct = bool(contract and _result(data.get("result"), _frozen()))
-    evidence_valid = bool(math_correct and _evidence(data))
+    math_correct = _result(data.get("result"), _frozen())
+    evidence_valid = _evidence(data)
     scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
     assurance_correct = bool(
         contract and data.get("claimed_assurance") == expected["maximum_assurance"]
@@ -164,7 +170,9 @@ def main() -> None:
         submission, verification_record_bound=False
     )
     correct = bool(
-        math_correct
+        input_bound
+        and contract
+        and math_correct
         and evidence_valid
         and scope_correct
         and assurance_correct
@@ -178,6 +186,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
+                "input_binding": float(input_bound),
                 "scope_accuracy": float(scope_correct),
                 "assurance_calibration": float(assurance_correct),
                 "reward": float(correct),

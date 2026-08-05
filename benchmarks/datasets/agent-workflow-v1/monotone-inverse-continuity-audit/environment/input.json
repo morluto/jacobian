@@ -1,0 +1,21 @@
+{
+  "task_id": "jacobian/monotone-inverse-continuity-audit",
+  "source": {
+    "dataset": "taoanalysisbench/TaoAnalysisBench",
+    "revision": "339937d75342072a31903739b1bbbe72e1b40c21",
+    "problem_id": "taobench_000453_textbook",
+    "license": "CC-BY-4.0"
+  },
+  "interval": {"left": "-2", "right": "2", "breakpoint": "0"},
+  "family": {
+    "left": "f(x) = left_slope*x + offset for x < 0",
+    "right": "f(x) = right_slope*x + offset + jump for x >= 0"
+  },
+  "parameter_bounds": {
+    "left_slope": {"minimum": "1/2", "maximum": "5"},
+    "right_slope": {"minimum": "1/2", "maximum": "5"},
+    "jump": {"minimum": "1/2", "maximum": "5"},
+    "offset": {"minimum": "-5", "maximum": "5"}
+  },
+  "claim_under_audit": "Strict monotonicity alone on a compact interval guarantees interval image and a continuous two-sided inverse on the full endpoint interval."
+}

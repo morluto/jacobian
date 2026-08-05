@@ -37,6 +37,18 @@ def test_json_evidence_task_fixture_starts_valid(tmp_path: Path) -> None:
     assert support._run_verifier(task, app, logs)["reward"] == pytest.approx(1.0)
 
 
+def test_generated_json_evidence_task_fixture_starts_valid(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(
+        tmp_path, "inversion-aggregate-mask-audit", "computed"
+    )
+
+    evidence_path = app / "evidence" / "inversion-audit.json"
+    submission = json.loads((app / "submission.json").read_text())
+    assert evidence_path.is_file()
+    assert submission["evidence"][0]["sha256"] == support._digest(evidence_path)
+    assert support._run_verifier(task, app, logs)["reward"] == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize("task_name", support.VERIFICATION_RECORD_TASKS)
 def test_verifier_scoring_separates_math_from_verification_record(
     tmp_path: Path,

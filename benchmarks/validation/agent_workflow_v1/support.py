@@ -211,9 +211,22 @@ def _prepare_case(
         destination = app / evidence_path
         destination.parent.mkdir(parents=True, exist_ok=True)
         fixture = task / "solution" / evidence_path.name
-        if not fixture.is_file():
-            fixture = task / "solution" / "answer.txt"
-        shutil.copy2(fixture, destination)
+        if fixture.is_file():
+            shutil.copy2(fixture, destination)
+        elif evidence_path.suffix == ".json":
+            _write_json(
+                destination,
+                {
+                    "schema_version": "1",
+                    "task_id": submission["task_id"],
+                    "result": submission["result"],
+                    "limitations": submission["limitations"],
+                },
+            )
+            descriptor["sha256"] = _digest(destination)
+        else:
+            shutil.copy2(task / "solution" / "answer.txt", destination)
+            descriptor["sha256"] = _digest(destination)
 
     if scenario == "computed":
         submission["claimed_assurance"] = "COMPUTED"

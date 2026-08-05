@@ -90,6 +90,42 @@ def test_accepts_consecutive_point_pairs_independent_of_array_order(
     assert result["reward"] == 1.0
 
 
+def test_pair_consecutiveness_is_protocol_not_mathematical_failure(
+    tmp_path: Path,
+) -> None:
+    submission = copy.deepcopy(_oracle())
+    pairs = _pairs(4)
+    pairs.pop(3)
+    pairs.append(_pairs(12)[0])
+    submission["result"]["point_pairs"] = pairs
+
+    result = _verify(tmp_path / "nonconsecutive-pairs", submission)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_witness_start_bound_is_protocol_not_mathematical_failure(
+    tmp_path: Path,
+) -> None:
+    submission = copy.deepcopy(_oracle())
+    submission["result"]["start_index"] = 7
+    submission["result"]["point_pairs"] = _pairs(7)
+    submission["result"]["epsilon_witnesses"] = [
+        {"epsilon": "1/3", "index": 4, "distance": "1/4"},
+        {"epsilon": "1/5", "index": 8, "distance": "1/8"},
+        {"epsilon": "1/10", "index": 11, "distance": "1/11"},
+        {"epsilon": "1/20", "index": 21, "distance": "1/21"},
+    ]
+
+    result = _verify(tmp_path / "witness-before-start", submission)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 0.0
+
+
 def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
     for name, mutation in [
         (

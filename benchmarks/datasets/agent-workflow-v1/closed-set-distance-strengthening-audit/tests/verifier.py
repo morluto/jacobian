@@ -169,6 +169,10 @@ def _witness_fields(
 def _result_schema(value: object) -> bool:
     if not _result_shape(value):
         return False
+    start = value["start_index"]
+    pairs = value["point_pairs"]
+    if {row["index"] for row in pairs} != set(range(start, start + len(pairs))):
+        return False
     for row in value["point_pairs"]:
         if not all(
             _canonical_rational(item)
@@ -187,8 +191,9 @@ def _result_schema(value: object) -> bool:
         if parsed is None:
             return False
         epsilon, index, _ = parsed
-        if prior_epsilon is not None and (
-            epsilon >= prior_epsilon or index <= prior_index
+        if index < start or (
+            prior_epsilon is not None
+            and (epsilon >= prior_epsilon or index <= prior_index)
         ):
             return False
         prior_epsilon, prior_index = epsilon, index
@@ -207,9 +212,6 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         or len(pairs) != frozen.get("sample_count")
     ):
         return False
-    expected_indices = set(range(start, start + len(pairs)))
-    if {row["index"] for row in pairs} != expected_indices:
-        return False
     for row in pairs:
         if not _pair_row(row, row["index"]):
             return False
@@ -221,12 +223,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         if parsed is None:
             return False
         epsilon, index, distance = parsed
-        if (
-            index < start
-            or index > 100000
-            or distance != Fraction(1, index)
-            or not distance < epsilon
-        ):
+        if index > 100000 or distance != Fraction(1, index) or not distance < epsilon:
             return False
     return bool(
         value["natural_conclusion"] == "SEPARATED_SETS"

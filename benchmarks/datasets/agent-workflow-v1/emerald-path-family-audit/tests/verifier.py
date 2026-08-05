@@ -43,11 +43,11 @@ def _submission() -> dict[str, Any] | None:
 
 
 def _fraction(value: object) -> Fraction | None:
-    if not isinstance(value, str) or RATIONAL.fullmatch(value) is None:
+    if type(value) is not str or RATIONAL.fullmatch(value) is None:
         return None
     try:
         parsed = Fraction(value)
-    except (ValueError, ZeroDivisionError):
+    except (MemoryError, OverflowError, ValueError, ZeroDivisionError):
         return None
     return parsed
 

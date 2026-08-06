@@ -9,6 +9,8 @@ Submit both full multiplication tensors, both unit vectors, the coordinate matri
 
 The verifier independently enumerates every possible linear functional (`5^5` for `A`, `5^3` for `B`) and checks multiplicativity on all basis pairs. It also rebuilds every product and power. A bijection on the three nonempty rational-point sets therefore coexists with a reducedness obstruction to algebra—and hence affine-scheme—isomorphism.
 
+The evidence file must be at most 65536 bytes and its first line must be exactly: `Both affine schemes are nonempty and have the same three rational points under the induced map. A has a nonzero order-three nilpotent while B is reduced, so they are not isomorphic.` Additional lines are allowed and ignored.
+
 The public submission contract is generated below from `tests/public_contract.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

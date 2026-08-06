@@ -3,9 +3,12 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -14,6 +17,8 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 P = 5
 LIMITATION = "The verifier certifies one finite affine countermodel over F_5, not a general theorem about schemes or functors of points."
+EVIDENCE_SENTENCE = "Both affine schemes are nonempty and have the same three rational points under the induced map. A has a nonzero order-three nilpotent while B is reduced, so they are not isomorphic."
+EXPECTED_COLUMNS = [[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]]
 
 
 def tensor(dimension: int, products: dict[tuple[int, int], int]):
@@ -110,7 +115,9 @@ def valid_result(result):
     if result["a_multiplication"] != a_table or result["b_multiplication"] != b_table:
         return False
     columns = result["morphism_columns"]
-    if not valid_morphism(columns, a_table, b_table, a_unit, b_unit):
+    if columns != EXPECTED_COLUMNS or not valid_morphism(
+        columns, a_table, b_table, a_unit, b_unit
+    ):
         return False
     if sorted(result["a_points"]) != sorted(a_points) or sorted(
         result["b_points"]
@@ -155,10 +162,32 @@ def valid_result(result):
 def evidence_ok(evidence):
     # The finite-algebra certificate is independently replayed from the typed
     # result.  The public evidence contract requires only one bound text file.
-    return evidence_list_is_bound(evidence)
+    if not evidence_list_is_bound(evidence):
+        return False
+    resolved = resolve_evidence(
+        evidence[0], expected_path="evidence/answer.txt", max_bytes=65_536
+    )
+    if resolved is None:
+        return False
+    try:
+        return resolved.read_text().splitlines()[0] == EVIDENCE_SENTENCE
+    except (OSError, UnicodeError, IndexError):
+        return False
+
+
+def raw_submission():
+    path = WORKSPACE / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def main():
+    raw = raw_submission()
     expected = json.loads((TESTS / "expected.json").read_text())
     input_binding = workspace_input_is_bound()
     submission = load_submission(
@@ -171,24 +200,19 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    result = submission.get("result") if isinstance(submission, dict) else None
+    result = raw.get("result") if isinstance(raw, dict) else None
     mathematical = valid_result(result)
-    evidence = bool(
-        isinstance(submission, dict) and evidence_ok(submission.get("evidence"))
-    )
+    evidence = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
     scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == "finite-affine-schemes-over-F5-certificate"
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == [LIMITATION]
+        isinstance(raw, dict)
+        and raw.get("scope") == "finite-affine-schemes-over-F5-certificate"
+        and raw.get("completeness") == "COMPLETE"
+        and raw.get("limitations") == [LIMITATION]
     )
     assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "COMPUTED"
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
     )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
+    false_certification = false_verified_claim(raw, verification_record_bound=False)
     accepted = bool(
         contract
         and input_binding

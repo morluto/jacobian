@@ -1,0 +1,70 @@
+{
+  "environment": {
+    "profiles": [
+      "core-python-minimal-verifier"
+    ],
+    "summary_digest": "sha256:ed08599e1a84bc9fb4c01c6e6429a901f06e7ce2abc188682b1c278c8aac44b6"
+  },
+  "evaluation": {
+    "oracle_job_digest": "sha256:7bb490d39c0189e21604b5a9f74cdc22dc64ef03cb6c8b2282d3892bd5c6146a",
+    "oracle_jobs_dir": "benchmarks/results/conjecture-probes-v1-oracle",
+    "task_ids": [
+      "vizing-bounded-cartesian-products"
+    ]
+  },
+  "harbor_version": "0.20.0",
+  "lock_digest": "sha256:1e7b4aade9109fed37360f72e32fd8023e8059b17e2256cd764368a81a616773",
+  "schema_version": "1",
+  "snapshot_id": "sha256:1e7b4aade9109fed37360f72e32fd8023e8059b17e2256cd764368a81a616773",
+  "source": {
+    "dirty": false,
+    "environment_profiles_digest": "sha256:46d82dd49f5f940fbff375c7aaa6c29c364ac2f5a55bc31aca9e90502d836056",
+    "registry_digest": "sha256:058f2dcf145478e1ecc1ed683211d02d2ebd73355d908d75fe41c269efcec710",
+    "tree_sha": "632532b96bddbb113f7b85ebfd9590b23f34158d"
+  },
+  "suite": {
+    "answer_visibility": "public",
+    "authors": [
+      {
+        "email": "maintainers@jacobian.invalid",
+        "name": "Jacobian contributors"
+      }
+    ],
+    "claim_class": "bounded-conjecture-progress",
+    "default_execution_profile": "oracle-only",
+    "evaluation_kind": "conjecture-probe",
+    "id": "conjecture-probes-v1",
+    "keywords": [
+      "mathematics",
+      "conjecture-probes",
+      "graph-theory",
+      "exact-witnesses",
+      "offline"
+    ],
+    "name": "jacobian/conjecture-probes-v1",
+    "publication_status": "local",
+    "purpose": "Public, independently checked bounded progress on explicit finite conjecture scopes.",
+    "required_provider": "core",
+    "runtime_profile": "core",
+    "scored": true,
+    "suite_header_digest": "sha256:7f013af1e38220713ae9d3a0e6b1e73767b4f67217112b0cc1a75d01793b09e2",
+    "title": "Jacobian bounded conjecture probes"
+  },
+  "tasks": [
+    {
+      "assurance_ceiling": "CHECKED",
+      "digest": "sha256:ba4f252c314fd311cbf983b5a9b9c76b03c13b9f5ef63f54a60231706c87e67d",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python-minimal-verifier",
+        "verifier_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
+      },
+      "environment_profile": "core-python-minimal-verifier",
+      "id": "vizing-bounded-cartesian-products",
+      "member_digest": "sha256:aaffc3eec6ff014370528c2b538135ba14e081e07a42fbd335be49702eb6216e",
+      "name": "jacobian/vizing-bounded-cartesian-products",
+      "required_provider": "core"
+    }
+  ]
+}

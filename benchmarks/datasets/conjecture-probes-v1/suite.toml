@@ -1,0 +1,19 @@
+schema_version = "2"
+
+[dataset]
+id = "jacobian/conjecture-probes-v1"
+title = "Jacobian bounded conjecture probes"
+purpose = "Public, independently checked bounded progress on explicit finite conjecture scopes."
+claim_class = "bounded-conjecture-progress"
+answer_visibility = "public"
+default_execution_profile = "oracle-only"
+keywords = [
+    "mathematics",
+    "conjecture-probes",
+    "graph-theory",
+    "exact-witnesses",
+    "offline",
+]
+authors = [
+    { name = "Jacobian contributors", email = "maintainers@jacobian.invalid" },
+]

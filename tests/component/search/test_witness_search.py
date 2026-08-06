@@ -171,7 +171,7 @@ def _witness_fixture(
     )
     plugins = PluginRegistry(store)
     implementation = plugins.register_implementation(
-        "tests.support.plugin_entrypoints:find_fixture_witness"
+        "tests.support.search_entrypoints:find_fixture_witness"
     )
     manifest = artifacts.put(
         schema_uri=manifest_schema,
@@ -189,7 +189,7 @@ def _witness_fixture(
                 "WitnessOracle": {
                     "implementation_uri": implementation,
                     "entrypoint": (
-                        "tests.support.plugin_entrypoints:find_fixture_witness"
+                        "tests.support.search_entrypoints:find_fixture_witness"
                     ),
                     "version": "1",
                 }

@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "matrix analysis"
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "linear-algebra"
 field = "matrix-analysis"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

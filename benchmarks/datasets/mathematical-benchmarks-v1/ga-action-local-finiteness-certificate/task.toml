@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/ga-action-local-finiteness-certificate"
+version = "1.0.0"
+description = "Construct and replay an exact finite invariant-subspace certificate."
+keywords = ["algebraic-groups", "coordinate-rings", "coactions", "symbolic-linear-algebra"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
+field = "algebraic-geometry"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "dataset-theorem-transformed-certificate"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["symbolic-construction", "invariant-subspace", "alternative-bases", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-theorem-transformed-certificate"
+fixture_digest = "sha256:b2cfc2de71b78e1e4cc4d9ea6296820a480f9fd119cefb8f5fe7c27e85ec0110"
+derivation = "Derived from Jiahao004/DeepTheorem train row 10019 at revision f5935720f176cedff4ecd8ebf83d1696e31cfac8."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

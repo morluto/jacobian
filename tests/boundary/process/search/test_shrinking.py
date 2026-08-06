@@ -57,7 +57,7 @@ def test_shrinker_rejects_non_improving_proposal(tmp_path: Path) -> None:
     ) = _shrink_fixture(
         tmp_path,
         reducer_entrypoint=(
-            "tests.support.plugin_entrypoints:reduce_without_improvement"
+            "tests.support.shrinking_entrypoints:reduce_without_improvement"
         ),
     )
 
@@ -91,7 +91,7 @@ def test_shrinker_does_not_trust_empty_reducer_response_for_minimality(
     ) = _shrink_fixture(
         tmp_path,
         reducer_entrypoint=(
-            "tests.support.plugin_entrypoints:reduce_once_then_claim_complete"
+            "tests.support.shrinking_entrypoints:reduce_once_then_claim_complete"
         ),
     )
 
@@ -125,7 +125,7 @@ def test_shrinker_does_not_treat_checker_error_as_boundary_rejection(
     ) = _shrink_fixture(
         tmp_path,
         checker_entrypoint=(
-            "tests.support.plugin_entrypoints:preserve_positive_except_failed_boundary"
+            "tests.support.shrinking_entrypoints:preserve_positive_except_failed_boundary"
         ),
     )
 
@@ -151,9 +151,9 @@ def _shrink_fixture(
     root: Path,
     *,
     reducer_entrypoint: str = (
-        "tests.support.plugin_entrypoints:reduce_positive_value"
+        "tests.support.shrinking_entrypoints:reduce_positive_value"
     ),
-    checker_entrypoint: str = ("tests.support.plugin_entrypoints:preserve_positive"),
+    checker_entrypoint: str = ("tests.support.shrinking_entrypoints:preserve_positive"),
 ) -> tuple[ShrinkService, ArtifactRepository, str, str, str, str]:
     store = ArtifactRepository(root)
     schemas = SchemaRegistry(store)

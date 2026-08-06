@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/metric-tsp-proof-repair"
+version = "1.0.0"
+description = "Repair an exactness overclaim in the double-tree Metric TSP argument."
+keywords = ["proof-repair", "approximation", "metric-tsp", "optimization"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "graph-theory"
+field = "graph-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-proof-repair"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["proof-repair", "graph-optimization", "approximation", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-proof-repair"
+fixture_digest = "sha256:61003735e324249d09bc8e89f844d2ed939d6102fc9c26c8e7b6a503e2ed0c95"
+derivation = "Derived from forge-reason-v1 validation row 11 with an independently generated exact metric fixture."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/closed-set-distance-strengthening-audit"
+version = "1.0.0"
+description = "Audit a uniform-distance strengthening of closed-set separation."
+keywords = ["autoformalization", "metric-space", "semantic-audit", "counterexample-family"]
+[metadata]
+evaluation_kind = "public-reproduction"
+domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
+field = "topology"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "public"
+provenance_class = "public-autoformalization-public-reproduction"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "assurance", "semantic-strengthening", "offline"]
+case_version = "public-reproductions-v1"
+contamination_class = "public-answer-visible-reproduction"
+fixture_digest = "sha256:4887f3c35c1fff78f76fe950d4e357794fe9c77d27cef2ed302bcce0962de841"
+derivation = "Derived from PAug/ProofNetVerif test row 18 at revision 91183e5b12d64374827bf2782db629b5b0f8f319 (MIT)."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

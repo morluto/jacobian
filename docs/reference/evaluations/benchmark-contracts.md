@@ -6,9 +6,10 @@ All executable benchmark cases are Harbor tasks under their dataset roots
 ([`benchmarks/datasets/`](../../../benchmarks/README.md)). The datasets
 retain separate claims:
 
-- `agent-workflow-v1` checks fixed workflows and evidence handling;
+- `mathematical-benchmarks-v1` checks fixed workflows and evidence handling;
 - `symbolic-coordination-v1` owns the exact polynomial-map coordination pilot;
 - `public-reproductions-v1` replays known public mathematical outcomes;
+- `conjecture-probes-v1` checks independently replayable bounded conjecture progress;
 - `research-diagnostics-v1` supports answer-visible case diagnostics;
 - `provider-feasibility-v1` reproduces optional-provider pins and outcomes;
 - `examples-v1` owns non-comparative tutorial and smoke workflows.
@@ -23,6 +24,9 @@ Dataset identity is a claim boundary: workflow observations, public
 reproductions, answer-visible research diagnostics, runtime measurements,
 provider feasibility, and examples must not share an interpretation merely
 because they use one task format.
+Subject taxonomy is separate from that boundary. Every member carries a
+controlled `primary_domain` and a detailed `field`; these values organize the
+portfolio but never rank tasks or prescribe a workflow.
 
 The ownership boundary is deliberate. `benchmarks/datasets/` contains
 executable Harbor cases and task-owned analysis records, while
@@ -62,7 +66,7 @@ task-ID uniqueness, or other control-plane changes:
 ```sh
 make harbor-check
 make benchmark-inventory OUTPUT=/tmp/benchmark-inventory.json
-make harbor-oracle DATASET=agent-workflow-v1 FULL=1
+make harbor-oracle DATASET=mathematical-benchmarks-v1 FULL=1
 ```
 
 A task README or a host-side regression under `benchmarks/validation/` changes
@@ -109,3 +113,15 @@ ignored `dist/harbor/` from that lock.
 
 See [evaluation methods](evaluation-methods.md) for workflow observation,
 performance measurement, and interpretation guidance.
+
+### Dataset migration
+
+The former `agent-workflow-v1` corpus is now
+`mathematical-benchmarks-v1`, with registry ID
+`jacobian/mathematical-benchmarks-v1`. Task IDs remain stable. Five known
+reproductions—`balanced-row-permutation`,
+`closed-set-distance-strengthening-audit`, `coin-process-potential`,
+`cyclic-vector-inequality`, and `superposition-proof-replay`—are members of
+`public-reproductions-v1`. No active compatibility alias exists. The historical
+`benchmarks/snapshots/agent-workflow-v1/` lock and ignored result paths are
+preserved as historical evidence.

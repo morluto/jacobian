@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/sine-integral-asymptotic-audit"
+version = "1.0.0"
+description = "Audit a published sine-integral asymptotic sign with an exact tail certificate."
+keywords = ["asymptotic-expansion", "proof-audit", "integration-by-parts", "symbolic-certificate"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "analysis"
+field = "analysis"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "dataset-answer-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["asymptotic-audit", "sign-error", "exact-symbolic-replay", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived"
+fixture_digest = "sha256:8f1ae846d3c760ad965d9307694b05a033d585e71efc5f974d8c5a947b0ceccb"
+derivation = "Derived from JVRoggeveen/HARDMath2 train row 2 at immutable revision 5de45cfcb643fb72dafdd72de7c3c853b40d8157."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

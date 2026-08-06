@@ -176,7 +176,7 @@ def test_search_pauses_and_resumes_without_duplicate_lineage(
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
         proposer_entrypoint=(
-            "tests.support.plugin_entrypoints:propose_fixture_values_slowly"
+            "tests.support.search_entrypoints:propose_fixture_values_slowly"
         ),
     )
     handle = fresh_complete_runtime.services.search.start(

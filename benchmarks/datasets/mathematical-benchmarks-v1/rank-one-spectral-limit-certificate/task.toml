@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/rank-one-spectral-limit-certificate"
+version = "1.0.0"
+description = "Derive an exact rank-one determinant root and certify its asymptotic limit."
+keywords = ["matrix-determinant-lemma", "rank-one", "telescoping", "spectral-limit"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "linear-algebra"
+field = "linear-algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-symbolic-certificate"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "regression", "symbolic-reasoning", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-symbolic-certificate"
+fixture_digest = "sha256:1e5d22c458ce0a6dfeb640d40d301a7c1de85e635c1392ddd2880625e34ed1fd"
+derivation = "Derived from ByteDance-Seed/BeyondAIME test row 1 at revision c705198ae1043810b1e1693bd879250b51a7a523 (CC0-1.0)."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

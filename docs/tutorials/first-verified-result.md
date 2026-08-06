@@ -21,8 +21,8 @@ repository root:
 uv sync --dev
 ```
 
-On macOS, see the
-[Z3 installation note](../../README.md#macos-and-z3) if environment setup
+On macOS, see
+[Troubleshoot Z3 installation on macOS](../how-to/troubleshoot-z3-macos.md) if environment setup
 falls back to a source build.
 
 ## Run the capability sequence

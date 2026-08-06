@@ -103,7 +103,7 @@ option.
 precommit` applies those fixes and then runs the routine handoff checks.
 
 On macOS, read the
-[Z3 installation note](README.md#macos-and-z3) before troubleshooting a
+[Z3 installation guide](docs/how-to/troubleshoot-z3-macos.md) before troubleshooting a
 source-build failure from `uv sync --dev`.
 
 Use focused tests while implementing. Run `make check` (or the affected

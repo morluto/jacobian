@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/rational-pole-vieta-audit"
+version = "1.0.0"
+description = "Audit pole handling and repair a rational-equation root-sum proof with exact polynomial evidence."
+keywords = ["regression", "proof-step-audit", "rational-equation", "vieta"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "algebra"
+field = "algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "licensed-dataset-derived-proof-step-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium-hard"
+category = "mathematics"
+tags = ["regression", "domain-audit", "symbolic-repair", "difficulty-provisional", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-process-supervision-derived"
+fixture_digest = "sha256:aa18e213513847cf9839618399c4b0f2f26fe9d3e865b2a29aef8c0807bb9e2f"
+derivation = "Derived from openai/prm800k phase2_test row 15 at blob 32ba2267b92a5ad62ecbe0a454d742f713dd6958."
+[agent]
+timeout_sec = 900.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

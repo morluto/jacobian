@@ -9,7 +9,7 @@ remains `COMPUTED`; only successful runtime replay returns `VERIFIED`.
 ## Prerequisites
 
 Install the locked Python environment and prepare the pinned Lean runtime as
-described in the [Lean setup](../../README.md#lean-certificates).
+described in [Install optional backends](../how-to/install-optional-backends.md#lean-certificates).
 
 ## Run the public composition
 

@@ -115,9 +115,10 @@ treated as capability fit.
 Each match is an operation card containing accepted input and artifact kinds,
 an output-schema summary, provider availability, exact-input scope, assurance
 ceiling, factual relationships to installed compatible operations, and one
-size-bounded validated invocation example when the descriptor supplies one.
-These fields support the agent's decision; examples illustrate valid payloads
-and do not recommend what it should do next.
+size-bounded validated invocation example when the descriptor supplies one. If
+there is no example, the card instead exposes the input schema's required and
+available top-level fields. These fields support the agent's decision; examples
+illustrate valid payloads and do not recommend what it should do next.
 
 Discovery can also be constrained by `input_kind`. Installed descriptors
 declare whether they accept a structured request, formal proposition, or typed

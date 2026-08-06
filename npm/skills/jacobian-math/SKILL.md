@@ -7,12 +7,29 @@ description: Use Jacobian for specialized exact mathematics, including matrix de
 
 <!-- Managed by Jacobian's Codex integration. -->
 
-Use `math.find` with a specific plain-language outcome and any domain or mode
-already implied by the task; a capability ID is not required. Request only as
-many matches as are useful because lower `limit` values reduce context. Inspect
-the `CONTRACT` view only when its typed schema is needed to construct the
-`math.run` payload; a discovery card's validated `invocation_example` may
-already provide a sufficient payload shape.
+Call `math.run` directly when the requested local outcome exactly matches one of
+these stable built-in contracts; replace the example values but preserve the
+shown JSON types:
+
+- `integer.compute.gcd`, `integer.compute.lcm`, or
+  `integer.compute.extended_gcd` in `EXPLORE` mode:
+  `{"left":"84","right":"30"}`.
+- `matrix.determinant.compute` or `matrix.rank.compute` in `EXPLORE` mode:
+  `{"matrix":{"domain":"QQ","entries":[[{"num":"1","den":"1"}]]}}`.
+- `polynomial.compute.gcd` in `EXPLORE` mode: payload keys are `left` and
+  `right`; each value has shape
+  `{"polynomial_schema_version":"1","domain":"QQ","variables":["x"],"polynomial":{"terms":[{"coefficient":{"num":"1","den":"1"},"exponents":[2]}]}}`.
+- For a requested independent determinant check,
+  `matrix.determinant.verify` in `VERIFY` mode:
+  `{"determinant_uri":"<determinant_uri from compute output>"}`.
+
+For other outcomes or unfamiliar payloads, use `math.find` with a specific
+plain-language outcome and any domain or mode already implied by the task; a
+capability ID is not required. Request only as many matches as are useful
+because lower `limit` values reduce context. Inspect the `CONTRACT` view only
+when its typed schema is needed to construct the `math.run` payload. A discovery
+card's validated `invocation_example`, or its required top-level fields when no
+example is available, may already provide a sufficient payload shape.
 
 Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned. Treat timeouts, errors, incomplete

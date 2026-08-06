@@ -30,16 +30,24 @@ skill digest, evaluator and telemetry-parser digests, MCP server metadata, tool
 schemas and descriptions, and catalog digest. Raw JSONL and stderr are retained
 with SHA-256 digests.
 
-The v1 suite separates an explicit integration canary from affordance and latent
-cases. Per-run observations report discovery, exact contract inspection,
-invocation, completion, and independently bound `VERIFIED` evidence. Shell calls,
-tool errors, tokens, MCP wire bytes, model-visible bytes, and logical payload bytes
-are independent diagnostics rather than proxies for mathematical correctness.
-The cumulative Codex input-token count may grow much faster than MCP payload
-bytes because each later model turn includes earlier tool results; compare both
+The default v2 suite covers matrix, integer, polynomial, and independent
+verification outcomes. It also includes negative cases whose `ABSTAIN`
+expectation permits no Jacobian MCP tool calls or resource reads. The v1 suite
+remains available by setting
+`VISIBILITY_CASES=benchmarks/config/codex-visibility-v1.json`.
+
+Per-run observations report discovery, exact contract inspection, invocation,
+completion, discovery-free invocation, abstention, unexpected capabilities, and
+independently bound `VERIFIED` evidence. Summary cost totals separate cached and
+uncached input tokens and include MCP calls and model-visible bytes. Shell calls,
+tool errors, token counts, MCP wire bytes, and logical payload bytes remain
+independent diagnostics rather than proxies for mathematical correctness. The
+cumulative Codex input-token count may grow much faster than MCP payload bytes
+because each later model turn includes earlier tool results; compare both
 dimensions rather than treating adoption alone as a win.
 
 For an A/B claim, hold the suite digest, Codex version, model, reasoning effort,
 MCP catalog, budgets, and repetition count fixed. Change only the visibility
-condition, use multiple repetitions, and report each cue level separately. Public
-v1 results are regression evidence, not held-out causal evidence.
+condition, use multiple repetitions, and report each cue level and expectation
+separately. Public suite results are regression evidence, not held-out causal
+evidence.

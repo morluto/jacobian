@@ -113,6 +113,37 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
             ):
                 assert compute_text[decision_field] == compute[decision_field]
 
+            verifier_discovery = await client.call_tool(
+                "math.find",
+                {
+                    "query": "independently verify an exact determinant artifact",
+                    "domain": "matrix",
+                    "mode": "VERIFY",
+                    "limit": 3,
+                },
+            )
+            assert isinstance(verifier_discovery.structured_content, dict)
+            verifier = next(
+                match
+                for match in verifier_discovery.structured_content["matches"]
+                if match["capability_id"] == "matrix.determinant.verify"
+            )
+            assert "invocation_example" not in verifier
+            assert verifier["input_schema_summary"] == {
+                "type": "object",
+                "required": ["determinant_uri"],
+                "property_names": ["determinant_uri"],
+            }
+            verifier_text = next(
+                match
+                for match in json.loads(verifier_discovery.content[0].text)["matches"]
+                if match["capability_id"] == "matrix.determinant.verify"
+            )
+            assert (
+                verifier_text["input_schema_summary"]
+                == verifier["input_schema_summary"]
+            )
+
             compute_contract = await client.call_tool(
                 "math.find",
                 {

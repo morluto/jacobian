@@ -527,7 +527,7 @@ agent-eval-compare: ## Compare normalized observations (CONTROL=..., TREATMENT=.
 	$(UV_RUN) python -m benchmarks.tooling.observation_results compare \
 		--control "$(CONTROL)" --treatment "$(TREATMENT)" --output "$(OUTPUT)"
 
-VISIBILITY_CASES ?= benchmarks/config/codex-visibility-v1.json
+VISIBILITY_CASES ?= benchmarks/config/codex-visibility-v2.json
 VISIBILITY_REPETITIONS ?= 1
 VISIBILITY_REASONING_EFFORT ?= high
 

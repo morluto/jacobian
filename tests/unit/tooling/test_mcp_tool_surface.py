@@ -49,3 +49,8 @@ def test_server_instructions_front_load_implicit_activation_signal() -> None:
     assert "matrix or polynomial" in prefix
     assert "even when the user does not name jacobian" in prefix
     assert "math.find" in prefix
+
+
+def test_server_instructions_allow_known_contracts_to_run_directly() -> None:
+    assert "exact installed capability ID" in SERVER_INSTRUCTIONS
+    assert "math.run may execute a known contract directly" in SERVER_INSTRUCTIONS

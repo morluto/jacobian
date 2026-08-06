@@ -1,0 +1,86 @@
+{
+  "schema_version": "2",
+  "suite_id": "codex-jacobian-visibility-v2",
+  "cases": [
+    {
+      "case_id": "explicit-determinant-canary",
+      "cue_level": "EXPLICIT",
+      "prompt": "Use available Jacobian mathematical tools to compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return the determinant and the capability ID used.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-determinant",
+      "cue_level": "LATENT",
+      "prompt": "Compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return only the determinant and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-matrix-rank",
+      "cue_level": "LATENT",
+      "prompt": "Compute the exact rank and pivot columns of [[2, 4, 1, 3], [1, 2, 0, 1], [3, 6, 1, 4], [0, 0, 2, 2]]. Return the rank, pivot columns, and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "matrix.rank.compute"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-integer-gcd",
+      "cue_level": "LATENT",
+      "prompt": "Compute the exact greatest common divisor of 1234567890 and 987654321. Return only the gcd and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "integer.compute.gcd"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-euler-totient-fallback",
+      "cue_level": "LATENT",
+      "prompt": "Compute the exact Euler totient of 840. Return only the value and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "integer.compute.euler_totient"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-polynomial-gcd",
+      "cue_level": "LATENT",
+      "prompt": "Over the rational numbers, compute the monic polynomial gcd of x^4 - 1 and x^3 - x, including exact Bezout coefficients. Return the gcd and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "polynomial.compute.gcd"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-independent-verification",
+      "cue_level": "LATENT",
+      "prompt": "Compute and independently verify the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. State the determinant and the assurance level supported by the evidence.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute",
+        "matrix.determinant.verify"
+      ],
+      "require_verified": true
+    },
+    {
+      "case_id": "negative-conceptual-matrix",
+      "cue_level": "LATENT",
+      "expectation": "ABSTAIN",
+      "prompt": "In one sentence for a beginner, define what a square matrix is.",
+      "expected_capability_ids": [],
+      "require_verified": false
+    },
+    {
+      "case_id": "negative-string-transform",
+      "cue_level": "LATENT",
+      "expectation": "ABSTAIN",
+      "prompt": "Return the lowercase form of the string JACOBIAN and nothing else.",
+      "expected_capability_ids": [],
+      "require_verified": false
+    }
+  ]
+}

@@ -30,7 +30,7 @@ from jacobian.canonical import canonicalize_json
 from jacobian.eval.telemetry import parse_agent_transcript
 
 _ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v1.json"
+_DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v2.json"
 _REQUIRED_TOOLS = frozenset({"math.find", "math.run"})
 _LOCAL_VERIFICATION_URI_PREFIX = "artifact://"
 _CODEX_ENVIRONMENT = (
@@ -57,6 +57,13 @@ class CueLevel(StrEnum):
     LATENT = "LATENT"
 
 
+class AdoptionExpectation(StrEnum):
+    """Whether the prompt should use or abstain from Jacobian MCP tools."""
+
+    USE = "USE"
+    ABSTAIN = "ABSTAIN"
+
+
 class VisibilityCase(BaseModel):
     """One agent-visible prompt plus hidden trajectory expectations."""
 
@@ -65,13 +72,26 @@ class VisibilityCase(BaseModel):
     case_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     cue_level: CueLevel
     prompt: str = Field(min_length=1)
-    expected_capability_ids: tuple[str, ...] = Field(min_length=1)
+    expectation: AdoptionExpectation = AdoptionExpectation.USE
+    expected_capability_ids: tuple[str, ...] = ()
     require_verified: bool = False
 
     @model_validator(mode="after")
-    def _unique_capabilities(self) -> VisibilityCase:
+    def _valid_expectation(self) -> VisibilityCase:
         if len(set(self.expected_capability_ids)) != len(self.expected_capability_ids):
             raise ValueError("expected_capability_ids must be unique")
+        if (
+            self.expectation is AdoptionExpectation.USE
+            and not self.expected_capability_ids
+        ):
+            raise ValueError("USE cases require expected_capability_ids")
+        if (
+            self.expectation is AdoptionExpectation.ABSTAIN
+            and self.expected_capability_ids
+        ):
+            raise ValueError("ABSTAIN cases cannot declare expected_capability_ids")
+        if self.expectation is AdoptionExpectation.ABSTAIN and self.require_verified:
+            raise ValueError("ABSTAIN cases cannot require verification")
         return self
 
 
@@ -80,7 +100,7 @@ class VisibilitySuite(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["1"]
+    schema_version: Literal["1", "2"]
     suite_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     cases: tuple[VisibilityCase, ...] = Field(min_length=1)
 
@@ -89,6 +109,10 @@ class VisibilitySuite(BaseModel):
         case_ids = [case.case_id for case in self.cases]
         if len(set(case_ids)) != len(case_ids):
             raise ValueError("case_id values must be unique")
+        if self.schema_version == "1" and any(
+            case.expectation is not AdoptionExpectation.USE for case in self.cases
+        ):
+            raise ValueError("schema version 1 supports only USE cases")
         return self
 
 
@@ -134,14 +158,16 @@ def classify_visibility(
         )
         if isinstance(capability_id, str)
     }
-    attempted = {
+    attempted_sequence = [
         value
         for value in telemetry.get("capability_attempt_ids", [])
         if isinstance(value, str)
-    }
-    completed = {
+    ]
+    attempted = set(attempted_sequence)
+    completed_sequence = [
         value for value in telemetry.get("capability_ids", []) if isinstance(value, str)
-    }
+    ]
+    completed = set(completed_sequence)
     verified = any(
         isinstance(invocation, Mapping)
         and isinstance(invocation.get("capability_id"), str)
@@ -149,12 +175,23 @@ def classify_visibility(
         and _is_verified_invocation(invocation)
         for invocation in telemetry.get("capability_invocations", [])
     )
+    mcp_calls = [
+        value for value in telemetry.get("mcp_calls", []) if isinstance(value, str)
+    ]
+    discovery_call_count = int(telemetry.get("capability_describe_index_calls", 0))
+    inspection_call_count = int(telemetry.get("capability_describe_exact_calls", 0))
+    resource_read_count = int(telemetry.get("mcp_resource_read_attempts", 0))
+    expected_attempted = expected & attempted
     observed = {
         "discovered": bool(telemetry.get("capability_describe_index_calls", 0)),
         "inspected": bool(telemetry.get("capability_describe_exact_calls", 0)),
         "invoked": bool(attempted),
         "completed": bool(completed),
         "verified": verified,
+        "discovery_free_invocation": bool(expected_attempted)
+        and not discovery_call_count
+        and not inspection_call_count,
+        "abstained": not mcp_calls and not resource_read_count,
     }
     expected_observed = {
         "described": sorted(expected & described),
@@ -162,17 +199,37 @@ def classify_visibility(
         "completed": sorted(expected & completed),
         "missing_completed": sorted(expected - completed),
     }
-    contract_satisfied = not expected_observed["missing_completed"] and (
-        verified or not case.require_verified
-    )
+    if case.expectation is AdoptionExpectation.ABSTAIN:
+        contract_satisfied = observed["abstained"]
+    else:
+        contract_satisfied = not expected_observed["missing_completed"] and (
+            verified or not case.require_verified
+        )
+    usage = telemetry.get("usage")
+    uncached_input_tokens = None
+    if isinstance(usage, Mapping):
+        input_tokens = usage.get("input_tokens")
+        cached_input_tokens = usage.get("cached_input_tokens")
+        if isinstance(input_tokens, int) and isinstance(cached_input_tokens, int):
+            uncached_input_tokens = max(0, input_tokens - cached_input_tokens)
     return {
+        "expectation": case.expectation,
         "observed": observed,
         "expected_capabilities": expected_observed,
+        "unexpected_capabilities": {
+            "attempted": sorted(attempted - expected),
+            "completed": sorted(completed - expected),
+        },
         "contract_satisfied": contract_satisfied,
         "tool_error_count": telemetry.get("tool_error_count", 0),
         "parameter_error_count": telemetry.get("parameter_error_count", 0),
         "shell_call_count": len(telemetry.get("shell_calls", [])),
-        "usage": telemetry.get("usage"),
+        "usage": usage,
+        "uncached_input_tokens": uncached_input_tokens,
+        "mcp_call_count": len(mcp_calls),
+        "math_find_call_count": discovery_call_count + inspection_call_count,
+        "math_run_call_count": len(attempted_sequence),
+        "mcp_resource_read_count": resource_read_count,
         "mcp_wire_bytes": telemetry.get("mcp_wire_bytes", 0),
         "mcp_model_visible_bytes": telemetry.get("mcp_model_visible_bytes", 0),
         "mcp_logical_payload_bytes": telemetry.get("mcp_logical_payload_bytes", 0),
@@ -349,6 +406,7 @@ def _run_case(
     return {
         "case_id": case.case_id,
         "cue_level": case.cue_level,
+        "expectation": case.expectation,
         "repetition": repetition,
         "command": {
             "status": result.status,
@@ -471,7 +529,7 @@ def main() -> None:
         for run in runs
     )
     report = {
-        "schema_version": "1",
+        "schema_version": "2",
         "suite": {
             "suite_id": suite.suite_id,
             "digest": _json_digest(suite_payload),
@@ -510,6 +568,36 @@ def main() -> None:
             "verified_count": sum(
                 run["classification"]["observed"]["verified"] for run in runs
             ),
+            "discovery_free_invocation_count": sum(
+                run["classification"]["observed"]["discovery_free_invocation"]
+                for run in runs
+            ),
+            "abstained_count": sum(
+                run["classification"]["observed"]["abstained"] for run in runs
+            ),
+            "cost_totals": {
+                "input_tokens": sum(
+                    (run["classification"]["usage"] or {}).get("input_tokens", 0)
+                    for run in runs
+                ),
+                "cached_input_tokens": sum(
+                    (run["classification"]["usage"] or {}).get("cached_input_tokens", 0)
+                    for run in runs
+                ),
+                "uncached_input_tokens": sum(
+                    run["classification"]["uncached_input_tokens"] or 0 for run in runs
+                ),
+                "output_tokens": sum(
+                    (run["classification"]["usage"] or {}).get("output_tokens", 0)
+                    for run in runs
+                ),
+                "mcp_calls": sum(
+                    run["classification"]["mcp_call_count"] for run in runs
+                ),
+                "mcp_model_visible_bytes": sum(
+                    run["classification"]["mcp_model_visible_bytes"] for run in runs
+                ),
+            },
         },
     }
     (output / "report.json").write_text(

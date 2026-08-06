@@ -244,7 +244,9 @@ def _discovery_operation_card(
         **(
             {"invocation_example": invocation_example}
             if invocation_example is not None
-            else {}
+            else {
+                "input_schema_summary": _input_schema_summary(descriptor.input_schema)
+            }
         ),
     }
 

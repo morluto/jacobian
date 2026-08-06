@@ -21,12 +21,13 @@ from jacobian.eval.telemetry import parse_reasoning_protocol_trace
 
 _MCP_TOOL_CALL = re.compile(
     r"\bMCP tool call tool=(math\.(?:find|run)|reasoning\.write)\b"
-    r".{0,512}?\bstatus=(success|error)\b",
+    r".{0,512}?\bstatus=(success|error)\b"
+    r".{0,512}?\brequest_digest=([0-9a-f]{16}|none)\b",
     re.DOTALL,
 )
 _MCP_CAPABILITY_ATTEMPT = re.compile(
-    r"\bMCP capability attempt\b.{0,2048}?"
-    r"\bexecution_status=([A-Z_]+)\b",
+    r"\bMCP capability attempt request_digest=([0-9a-f]{16}|none)\b"
+    r".{0,2048}?\bexecution_status=([A-Z_]+)\b",
     re.DOTALL,
 )
 
@@ -43,30 +44,23 @@ def _canonical_tool_name(value: str) -> str:
 def _read_mcp_runtime_log(path: Path, calls: Counter[str]) -> int:
     """Count server-observed MCP calls and failed mathematical attempts."""
 
-    errors = 0
-    pending_run_failures = 0
     text = path.read_text(encoding="utf-8")
-    events = sorted(
-        [
-            (match.start(), "attempt", match)
-            for match in _MCP_CAPABILITY_ATTEMPT.finditer(text)
-        ]
-        + [(match.start(), "tool", match) for match in _MCP_TOOL_CALL.finditer(text)],
-        key=lambda item: item[0],
-    )
-    for _position, event_type, match in events:
-        if event_type == "attempt":
-            if match.group(1) != "COMPLETED":
-                pending_run_failures += 1
-            continue
-        tool, status = match.groups()
+    failed_attempts: Counter[str] = Counter()
+    transport_errors: Counter[str] = Counter()
+    for match in _MCP_CAPABILITY_ATTEMPT.finditer(text):
+        request_digest, execution_status = match.groups()
+        if execution_status != "COMPLETED":
+            failed_attempts[request_digest] += 1
+    for match in _MCP_TOOL_CALL.finditer(text):
+        tool, status, request_digest = match.groups()
         calls[tool] += 1
-        if tool == "math.run" and pending_run_failures:
-            errors += 1
-            pending_run_failures -= 1
-        elif status == "error":
-            errors += 1
-    return errors + pending_run_failures
+        if status == "error":
+            transport_errors[request_digest] += 1
+    request_digests = set(failed_attempts) | set(transport_errors)
+    return sum(
+        max(failed_attempts[digest], transport_errors[digest])
+        for digest in request_digests
+    )
 
 
 def _read_json(path: Path) -> Any:
@@ -123,9 +117,10 @@ def _read_trace(
     calls: Counter[str],
     *,
     ignored_tools: frozenset[str] = frozenset(),
+    mcp_runtime_log: bool = False,
 ) -> int:
     try:
-        if path.suffix == ".log":
+        if mcp_runtime_log:
             return _read_mcp_runtime_log(path, calls)
         if path.suffix == ".jsonl":
             return sum(
@@ -135,7 +130,7 @@ def _read_trace(
             )
         if path.suffix == ".json":
             return _walk_trace(_read_json(path), calls, ignored_tools=ignored_tools)
-    except (OSError, json.JSONDecodeError, HarborSuiteError):
+    except (OSError, UnicodeError, json.JSONDecodeError, HarborSuiteError):
         return 1
     return 0
 
@@ -549,7 +544,15 @@ def trial_artifacts(
     """
 
     if trial_path is None:
-        return [], {}, 0, []
+        inline_failures = [
+            f"trial {trial_name}: configured artifact is missing without a "
+            f"trial manifest (source={source!r}, service={service!r})"
+            for source, service in sorted(
+                configured_artifacts or set(),
+                key=lambda item: (item[0], item[1] or ""),
+            )
+        ]
+        return [], {}, 0, inline_failures
     root = trial_path.parent
     artifacts: list[dict[str, Any]] = []
     failures: list[str] = []
@@ -596,7 +599,7 @@ def trial_artifacts(
         _artifact_host_path(root, artifact)
         for artifact in artifacts
         if artifact.get("service") == "jacobian"
-        and Path(artifact["artifact_path"]).suffix == ".log"
+        and artifact.get("manifest_source") == "/logs/jacobian/mcp.log"
     ]
     agent_traces = [
         _artifact_host_path(root, artifact)
@@ -615,7 +618,9 @@ def trial_artifacts(
     errors = sum(
         _read_trace(path, calls, ignored_tools=ignored_tools) for path in agent_traces
     )
-    errors += sum(_read_trace(path, calls) for path in runtime_logs)
+    errors += sum(
+        _read_trace(path, calls, mcp_runtime_log=True) for path in runtime_logs
+    )
     return artifacts, dict(sorted(calls.items())), errors, failures
 
 

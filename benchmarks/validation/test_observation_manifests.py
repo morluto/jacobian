@@ -292,19 +292,22 @@ def test_server_runtime_log_accounts_for_nested_jacobian_calls(
             },
             {
                 "source": "/logs/jacobian/mcp.log",
-                "destination": "artifacts/logs/jacobian/mcp.log",
+                "destination": "artifacts/telemetry/runtime.txt",
                 "type": "file",
                 "status": "ok",
                 "service": "jacobian",
                 "_content": "\n".join(
                     [
-                        "INFO MCP capability attempt execution_status=COMPLETED",
+                        "INFO MCP capability attempt request_digest=aaaaaaaaaaaaaaaa",
+                        "     execution_status=ERROR",
+                        "INFO MCP tool call tool=math.run status=error",
+                        "     request_digest=bbbbbbbbbbbbbbbb",
+                        "INFO MCP capability attempt request_digest=cccccccccccccccc",
+                        "     execution_status=COMPLETED",
                         "INFO MCP tool call tool=math.run          server.py:314",
-                        "     status=success duration_ms=1.0",
-                        "INFO MCP capability attempt execution_status=ERROR",
+                        "     status=success request_digest=aaaaaaaaaaaaaaaa",
                         "INFO MCP tool call tool=math.run status=success",
-                        "INFO MCP capability attempt execution_status=COMPLETED",
-                        "INFO MCP tool call tool=math.run status=success",
+                        "     request_digest=cccccccccccccccc",
                     ]
                 ),
             },
@@ -318,7 +321,7 @@ def test_server_runtime_log_accounts_for_nested_jacobian_calls(
     )
 
     assert calls == {"exec": 1, "math.run": 3}
-    assert errors == 1
+    assert errors == 2
     assert failures == []
 
 
@@ -675,6 +678,54 @@ def test_missing_configured_sidecar_artifact_is_a_failure(tmp_path: Path) -> Non
         "configured artifact is missing" in failure and "service='jacobian'" in failure
         for failure in failures
     )
+
+
+def test_inline_trial_rejects_every_configured_artifact_as_missing() -> None:
+    artifacts, calls, errors, failures = _trial_artifacts(
+        None,
+        "attempt-0",
+        "job.json",
+        configured_artifacts={
+            ("/logs/agent/trajectory.json", None),
+            ("/logs/jacobian/mcp.log", "jacobian"),
+        },
+    )
+
+    assert artifacts == []
+    assert calls == {}
+    assert errors == 0
+    assert len(failures) == 2
+    assert all("missing without a trial manifest" in failure for failure in failures)
+
+
+def test_non_utf8_runtime_log_is_a_fail_closed_tool_error(tmp_path: Path) -> None:
+    trial_dir = tmp_path / "trial-0"
+    trial_dir.mkdir()
+    _write_trial_manifest(
+        trial_dir,
+        [
+            {
+                "source": "/logs/jacobian/mcp.log",
+                "destination": "artifacts/telemetry/runtime.bin",
+                "type": "file",
+                "status": "ok",
+                "service": "jacobian",
+                "_content": "placeholder",
+            }
+        ],
+    )
+    runtime_log = trial_dir / "artifacts" / "telemetry" / "runtime.bin"
+    runtime_log.write_bytes(b"MCP tool call \xff")
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    _artifacts, calls, errors, failures = _trial_artifacts(
+        result_path, "attempt-0", "job.json"
+    )
+
+    assert calls == {}
+    assert errors == 1
+    assert failures == []
 
 
 def test_empty_non_convention_manifest_entry_is_a_failure(tmp_path: Path) -> None:

@@ -148,7 +148,7 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
         normalized["artifacts"] = [
             entry
             for entry in artifacts
-            if not (isinstance(entry, dict) and entry.get("service") == "jacobian")
+            if entry != {"source": "/logs/jacobian/mcp.log", "service": "jacobian"}
         ]
     environment = normalized.get("environment")
     if isinstance(environment, dict):

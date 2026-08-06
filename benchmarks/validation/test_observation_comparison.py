@@ -179,12 +179,17 @@ def test_reasoning_comparison_rejects_divergent_condition_invariants() -> None:
 
 def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> None:
     control = {
+        "artifacts": ["/logs/agent/trajectory.json"],
         "environment": {
             "extra_docker_compose": ["benchmarks/config/agent-eval-proxy.compose.yaml"]
         },
         "agents": [{"name": "codex"}],
     }
     treatment = {
+        "artifacts": [
+            "/logs/agent/trajectory.json",
+            {"source": "/logs/jacobian/mcp.log", "service": "jacobian"},
+        ],
         "environment": {
             "extra_docker_compose": [
                 "benchmarks/config/agent-eval-proxy.compose.yaml",
@@ -207,7 +212,12 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
 
     assert _comparison_job(control) == _comparison_job(treatment)
 
+    treatment["artifacts"].append({"source": "/state", "service": "jacobian"})
+    assert _comparison_job(control) != _comparison_job(treatment)
+    treatment["artifacts"].pop()
+
     heldout_treatment = {
+        "artifacts": ["/logs/agent/trajectory.json"],
         "environment": {
             "extra_docker_compose": [
                 "benchmarks/config/agent-eval-proxy.compose.yaml",

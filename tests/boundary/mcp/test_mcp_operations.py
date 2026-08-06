@@ -15,7 +15,11 @@ import pytest
 
 from jacobian.adapters.mcp.context import _public_tool_error
 from jacobian.adapters.mcp.server import create_server
-from jacobian.adapters.mcp.tooling import _request_trace_digest, _run_blocking
+from jacobian.adapters.mcp.tooling import (
+    _request_id_digest,
+    _request_trace_digest,
+    _run_blocking,
+)
 
 MCP_TOOL_NAMES = {
     "math.find",
@@ -38,6 +42,8 @@ def test_mcp_trace_correlation_hashes_headers_without_retaining_them() -> None:
     assert source == "traceparent"
     assert traceparent not in digest
     assert "private-request-id" not in digest
+    request_digest = _request_id_digest(RequestContext())
+    assert request_digest == hashlib.sha256(b"private-request-id").hexdigest()[:16]
 
 
 def test_mcp_logs_bounded_tool_metrics_without_arguments(
@@ -77,6 +83,7 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     assert "duration_ms=" in metric
     assert "response_bytes=" in metric
     assert "argument_digest=sha256:" in metric
+    assert "request_digest=" in metric
     assert "private-query-marker" not in metric
     attempt = next(
         message
@@ -87,6 +94,17 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     assert "execution_status=ERROR" in attempt
     assert "diagnostic_codes=UNKNOWN_CAPABILITY" in attempt
     assert "trace_digest=" in attempt
+    assert "request_digest=" in attempt
+    run_metric = next(
+        message
+        for message in messages
+        if "MCP tool call tool=math.run status=success" in message
+    )
+    metric_request = metric.split("request_digest=", 1)[1].split(" ", 1)[0]
+    run_request = run_metric.split("request_digest=", 1)[1].split(" ", 1)[0]
+    attempt_request = attempt.split("request_digest=", 1)[1].split(" ", 1)[0]
+    assert metric_request != attempt_request
+    assert run_request == attempt_request
     assert "argument_digest=sha256:" in attempt
     assert "private-payload-marker" not in attempt
 

@@ -111,6 +111,20 @@ def _request_trace_digest(ctx: Any | None) -> tuple[str, str]:
     return digest, "request_id"
 
 
+def _request_id_digest(ctx: Any | None) -> str:
+    """Return a bounded per-request correlation digest for telemetry joins."""
+
+    if ctx is None:
+        return "none"
+    try:
+        request_id = str(ctx.request_id)
+    except (AttributeError, TypeError, ValueError):
+        return "none"
+    if not request_id or len(request_id) > 256:
+        return "none"
+    return hashlib.sha256(request_id.encode("utf-8")).hexdigest()[:16]
+
+
 def _response_size(value: Any) -> int:
     try:
         if hasattr(value, "model_dump_json"):
@@ -133,6 +147,7 @@ def _log_capability_attempt(
     mode: CapabilityMode,
     started: float,
     argument_digest: str,
+    request_digest: str,
     trace_digest: str,
     trace_source: str,
     result: CapabilityResult | None = None,
@@ -153,11 +168,12 @@ def _log_capability_attempt(
         response_bytes = 0
     codes = ",".join(diagnostic_codes[:8]) or "none"
     _LOGGER.info(
-        "MCP capability attempt trace_digest=%s trace_source=%s "
+        "MCP capability attempt request_digest=%s trace_digest=%s trace_source=%s "
         "capability_id=%s capability_version=%s mode=%s "
         "execution_status=%s assurance=%s diagnostic_codes=%s "
         "attempt_duration_ms=%.3f operation_runtime_ms=%s "
         "response_bytes=%d argument_digest=%s",
+        request_digest,
         trace_digest,
         trace_source,
         capability_id,
@@ -264,6 +280,7 @@ async def _invoke_capability_attempt(
         }
     )
     trace_digest, trace_source = _request_trace_digest(ctx)
+    request_digest = _request_id_digest(ctx)
     cancellation_event = threading.Event()
     bound = _claim_reasoning_call(
         runtime,
@@ -306,6 +323,7 @@ async def _invoke_capability_attempt(
                 mode=mode,
                 started=started,
                 argument_digest=argument_digest,
+                request_digest=request_digest,
                 trace_digest=trace_digest,
                 trace_source=trace_source,
                 result=drained,
@@ -327,6 +345,7 @@ async def _invoke_capability_attempt(
                 mode=mode,
                 started=started,
                 argument_digest=argument_digest,
+                request_digest=request_digest,
                 trace_digest=trace_digest,
                 trace_source=trace_source,
                 execution_status="CANCELLED",
@@ -350,6 +369,7 @@ async def _invoke_capability_attempt(
             mode=mode,
             started=started,
             argument_digest=argument_digest,
+            request_digest=request_digest,
             trace_digest=trace_digest,
             trace_source=trace_source,
             execution_status="ERROR",
@@ -372,6 +392,7 @@ async def _invoke_capability_attempt(
         mode=mode,
         started=started,
         argument_digest=argument_digest,
+        request_digest=request_digest,
         trace_digest=trace_digest,
         trace_source=trace_source,
         result=result,

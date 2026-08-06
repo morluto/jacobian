@@ -42,6 +42,8 @@ from jacobian.adapters.mcp.resources import (
 )
 from jacobian.adapters.mcp.tooling import (
     _argument_digest,
+    _request_id_digest,
+    _request_trace_digest,
     _response_size,
     _tool_annotations,
 )
@@ -228,6 +230,8 @@ class JacobianCoreExtension(Extension):
         started = time.monotonic()
         arguments = params.arguments or {}
         argument_digest = _argument_digest(arguments)
+        request_digest = _request_id_digest(ctx)
+        trace_digest, trace_source = _request_trace_digest(ctx)
         try:
             with ExitStack() as request_resources:
                 if self._tenant_router is not None:
@@ -263,7 +267,15 @@ class JacobianCoreExtension(Extension):
                     )
                 result = await call_next(ctx)
         except MCPError:
-            _log_tool_call(params.name, started, argument_digest, status="error")
+            _log_tool_call(
+                params.name,
+                started,
+                argument_digest,
+                request_digest=request_digest,
+                trace_digest=trace_digest,
+                trace_source=trace_source,
+                status="error",
+            )
             raise
         except Exception as exc:
             _LOGGER.warning("MCP tool %s failed", params.name, exc_info=exc)
@@ -271,6 +283,9 @@ class JacobianCoreExtension(Extension):
                 params.name,
                 started,
                 argument_digest,
+                request_digest=request_digest,
+                trace_digest=trace_digest,
+                trace_source=trace_source,
                 status="error",
             )
             raise ToolError(_public_tool_error(params.name, exc)) from exc
@@ -278,6 +293,9 @@ class JacobianCoreExtension(Extension):
             params.name,
             started,
             argument_digest,
+            request_digest=request_digest,
+            trace_digest=trace_digest,
+            trace_source=trace_source,
             status="success",
             result=result,
         )
@@ -308,14 +326,21 @@ def _log_tool_call(
     started: float,
     argument_digest: str,
     *,
+    request_digest: str,
+    trace_digest: str,
+    trace_source: str,
     status: str,
     result: Any | None = None,
 ) -> None:
     _LOGGER.info(
-        "MCP tool call tool=%s status=%s duration_ms=%.3f "
+        "MCP tool call tool=%s status=%s request_digest=%s "
+        "trace_digest=%s trace_source=%s duration_ms=%.3f "
         "response_bytes=%d argument_digest=%s",
         name,
         status,
+        request_digest,
+        trace_digest,
+        trace_source,
         (time.monotonic() - started) * 1000,
         0 if result is None else _response_size(result),
         argument_digest,

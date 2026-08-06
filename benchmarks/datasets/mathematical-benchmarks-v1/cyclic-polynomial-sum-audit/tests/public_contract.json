@@ -1,0 +1,116 @@
+{
+  "allowed_assurance": ["UNVERIFIED", "COMPUTED"],
+  "allowed_completeness": ["COMPLETE"],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {"const": "CLAIM_INCONSISTENT"},
+  "evidence": {
+    "allowed_paths": ["evidence/answer.txt"],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": ["text/plain"],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {"items": {"type": "string"}, "type": "array"},
+  "public_notes": "The verifier independently replays the exact elimination, proposed-value evaluations, radical roots, and excluded-branch residual.",
+  "required_artifact_filenames": ["evidence/answer.txt"],
+  "schema_definitions": {
+    "rational_string": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"},
+    "quadratic_root": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rational", "radical_coefficient", "radicand"],
+      "properties": {
+        "rational": {"$ref": "#/$defs/rational_string"},
+        "radical_coefficient": {"$ref": "#/$defs/rational_string"},
+        "radicand": {"type": "integer", "minimum": 2, "maximum": 10000}
+      }
+    }
+  },
+  "schema_version": "1",
+  "scope": {"const": "cyclic-polynomial-sum-audit exact elimination certificate", "type": "string"},
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "necessary_polynomial": {"items": {"type": "integer", "minimum": -1000000, "maximum": 1000000}, "maxItems": 8, "minItems": 2, "type": "array"},
+      "proposed_evaluations": {"items": {"$ref": "#/$defs/rational_string"}, "maxItems": 2, "minItems": 2, "type": "array"},
+      "proposed_classifications": {"items": {"enum": ["PASSES_NECESSARY_CONDITION", "FAILS_NECESSARY_CONDITION"]}, "maxItems": 2, "minItems": 2, "type": "array"},
+      "remaining_real_roots": {"items": {"$ref": "#/$defs/quadratic_root"}, "maxItems": 2, "minItems": 2, "type": "array"},
+      "excluded_branch": {
+        "type": "object", "additionalProperties": false,
+        "required": ["sum", "pair_sum", "product", "product_consequence_lhs", "product_consequence_rhs", "residual"],
+        "properties": {
+          "sum": {"$ref": "#/$defs/rational_string"},
+          "pair_sum": {"$ref": "#/$defs/rational_string"},
+          "product": {"$ref": "#/$defs/rational_string"},
+          "product_consequence_lhs": {"$ref": "#/$defs/rational_string"},
+          "product_consequence_rhs": {"$ref": "#/$defs/rational_string"},
+          "residual": {"$ref": "#/$defs/rational_string"}
+        }
+      }
+    },
+    "required": ["necessary_polynomial", "proposed_evaluations", "proposed_classifications", "remaining_real_roots", "excluded_branch"],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "rational_string": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"},
+      "quadratic_root": {
+        "type": "object", "additionalProperties": false,
+        "required": ["rational", "radical_coefficient", "radicand"],
+        "properties": {
+          "rational": {"$ref": "#/$defs/rational_string"},
+          "radical_coefficient": {"$ref": "#/$defs/rational_string"},
+          "radicand": {"type": "integer", "minimum": 2, "maximum": 10000}
+        }
+      }
+    },
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+    "properties": {
+      "task_id": {"const": "jacobian/cyclic-polynomial-sum-audit"},
+      "conclusion": {"const": "CLAIM_INCONSISTENT"},
+      "result": {
+        "type": "object", "additionalProperties": false,
+        "required": ["necessary_polynomial", "proposed_evaluations", "proposed_classifications", "remaining_real_roots", "excluded_branch"],
+        "properties": {
+          "necessary_polynomial": {"items": {"type": "integer", "minimum": -1000000, "maximum": 1000000}, "maxItems": 8, "minItems": 2, "type": "array"},
+          "proposed_evaluations": {"items": {"$ref": "#/$defs/rational_string"}, "maxItems": 2, "minItems": 2, "type": "array"},
+          "proposed_classifications": {"items": {"enum": ["PASSES_NECESSARY_CONDITION", "FAILS_NECESSARY_CONDITION"]}, "maxItems": 2, "minItems": 2, "type": "array"},
+          "remaining_real_roots": {"items": {"$ref": "#/$defs/quadratic_root"}, "maxItems": 2, "minItems": 2, "type": "array"},
+          "excluded_branch": {
+            "type": "object", "additionalProperties": false,
+            "required": ["sum", "pair_sum", "product", "product_consequence_lhs", "product_consequence_rhs", "residual"],
+            "properties": {
+              "sum": {"$ref": "#/$defs/rational_string"},
+              "pair_sum": {"$ref": "#/$defs/rational_string"},
+              "product": {"$ref": "#/$defs/rational_string"},
+              "product_consequence_lhs": {"$ref": "#/$defs/rational_string"},
+              "product_consequence_rhs": {"$ref": "#/$defs/rational_string"},
+              "residual": {"$ref": "#/$defs/rational_string"}
+            }
+          }
+        }
+      },
+      "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+      "scope": {"type": "string", "const": "cyclic-polynomial-sum-audit exact elimination certificate"},
+      "completeness": {"const": "COMPLETE"},
+      "evidence": {
+        "type": "array", "minItems": 1, "maxItems": 1,
+        "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"const": "evidence/answer.txt"},
+            "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+          }
+        }
+      },
+      "limitations": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "task_id": "jacobian/cyclic-polynomial-sum-audit",
+  "verification_record": null
+}

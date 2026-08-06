@@ -1,0 +1,33 @@
+{
+  "task_id": "jacobian/fiber-dimension-semicontinuity-repair",
+  "source": {
+    "dataset": "Jiahao004/DeepTheorem",
+    "revision": "f5935720f176cedff4ecd8ebf83d1696e31cfac8",
+    "split": "train",
+    "row": 10018,
+    "source_id": 87287,
+    "row_sha256": "8e8c71c00b23049df34c6a4de70f78d7fedecfede4c6a7547eb5c4c7a184ebc3",
+    "license": "MIT"
+  },
+  "theorem": "For a coherent sheaf F on a finite-type k-scheme X, x maps to dim_{k(x)} F tensor k(x) upper semicontinuously.",
+  "proof_defects": [
+    "The generated proof says k(y) is flat over the local ring, although only right exactness is needed for the displayed cokernel sequence.",
+    "The generated proof concludes global closedness by taking a union of locally closed descriptions, which is not a valid local-to-global argument."
+  ],
+  "frozen_affine_presentation": {
+    "base_ring": "QQ[x,y]",
+    "map_matrix": [
+      ["x", "y", "0"],
+      ["0", "x", "y"]
+    ],
+    "cokernel_target_rank": 2,
+    "fiber_dimension_threshold": 1,
+    "rank_upper_bound": 1
+  },
+  "fiber_points": [
+    {"x": "0", "y": "0"},
+    {"x": "1", "y": "0"},
+    {"x": "0", "y": "1"},
+    {"x": "1", "y": "1"}
+  ]
+}

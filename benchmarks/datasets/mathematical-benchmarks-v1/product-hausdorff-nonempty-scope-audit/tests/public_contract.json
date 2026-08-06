@@ -1,0 +1,244 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/product-hausdorff-nonempty-scope-audit",
+  "submission_path": "/app/submission.json",
+  "assurance_ceiling": "COMPUTED",
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "verification_record": null,
+  "conclusion": {
+    "const": "EMPTY_FACTOR_MASKS_NON_HAUSDORFF_FACTOR"
+  },
+  "scope": {
+    "type": "string",
+    "const": "FINITE_TOPOLOGICAL_PRODUCT_SCOPE_COUNTERMODEL",
+    "enum": null,
+    "pattern": null
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/product-hausdorff-audit.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "required_artifact_filenames": [
+    "evidence/product-hausdorff-audit.json"
+  ],
+  "public_notes": "Complete finite-topology replay; Lean elaboration and infinite spaces remain outside scope.",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "limitations": {
+    "const": [
+      "FINITE_TOPOLOGIES_ONLY",
+      "LEAN_ELABORATION_NOT_ASSESSED"
+    ]
+  },
+  "schema_definitions": {
+    "open_set": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 6
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factor_cardinalities",
+        "bad_factor_topology",
+        "empty_factor_index",
+        "product_cardinality",
+        "product_is_hausdorff",
+        "bad_factor_is_t0",
+        "bad_factor_is_hausdorff",
+        "missing_assumption"
+      ],
+      "properties": {
+        "factor_cardinalities": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7
+          }
+        },
+        "bad_factor_topology": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/open_set"
+          }
+        },
+        "empty_factor_index": {
+          "const": 1
+        },
+        "product_cardinality": {
+          "const": 0
+        },
+        "product_is_hausdorff": {
+          "const": true
+        },
+        "bad_factor_is_t0": {
+          "const": true
+        },
+        "bad_factor_is_hausdorff": {
+          "const": false
+        },
+        "missing_assumption": {
+          "const": "ALL_FACTORS_NONEMPTY"
+        }
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/product-hausdorff-nonempty-scope-audit"
+      },
+      "conclusion": {
+        "const": "EMPTY_FACTOR_MASKS_NON_HAUSDORFF_FACTOR"
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "FINITE_TOPOLOGICAL_PRODUCT_SCOPE_COUNTERMODEL"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/product-hausdorff-audit.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "FINITE_TOPOLOGIES_ONLY",
+          "LEAN_ELABORATION_NOT_ASSESSED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      }
+    },
+    "$defs": {
+      "open_set": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        }
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "factor_cardinalities",
+          "bad_factor_topology",
+          "empty_factor_index",
+          "product_cardinality",
+          "product_is_hausdorff",
+          "bad_factor_is_t0",
+          "bad_factor_is_hausdorff",
+          "missing_assumption"
+        ],
+        "properties": {
+          "factor_cardinalities": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7
+            }
+          },
+          "bad_factor_topology": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/open_set"
+            }
+          },
+          "empty_factor_index": {
+            "const": 1
+          },
+          "product_cardinality": {
+            "const": 0
+          },
+          "product_is_hausdorff": {
+            "const": true
+          },
+          "bad_factor_is_t0": {
+            "const": true
+          },
+          "bad_factor_is_hausdorff": {
+            "const": false
+          },
+          "missing_assumption": {
+            "const": "ALL_FACTORS_NONEMPTY"
+          }
+        }
+      }
+    }
+  }
+}

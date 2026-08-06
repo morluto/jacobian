@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/domino-profile-transfer-audit"
+version = "1.0.0"
+description = "Repair a long-board domino count with an exact profile-transfer and modular exponentiation certificate."
+keywords = ["regression", "tilings", "transfer-matrix", "proof-repair"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "combinatorics"
+field = "enumerative combinatorics"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "licensed-dataset-derived-proof-repair"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["regression", "profile-dp", "exact-modular-certificate", "difficulty-provisional", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-evaluation-trace-derived"
+fixture_digest = "sha256:9b220f14fa03ebb78966c189179aae2d2c23753849be665ee2e28745fe7d416c"
+derivation = "Derived from INSAIT-Institute/OPC test row 5 at revision dcc3b4804e2d126ea34b13e3e0cd998c3302644b."
+[agent]
+timeout_sec = 900.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

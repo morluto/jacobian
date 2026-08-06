@@ -1,0 +1,57 @@
+{
+  "allowed_assurance": ["UNVERIFIED", "COMPUTED"],
+  "allowed_completeness": ["COMPLETE"],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {"const": "PROPOSED_CONTRACT_TOO_WEAK"},
+  "evidence": {"allowed_paths": ["evidence/answer.txt"], "digest_pattern": "^sha256:[0-9a-f]{64}$", "max_items": 1, "media_types": ["text/plain"], "min_items": 1, "payload_shape": null},
+  "limitations": {"type": "array", "items": {"type": "string"}},
+  "public_notes": "The verifier exhaustively adjudicates the submitted finite topology model under ordinary family inclusion.",
+  "required_artifact_filenames": ["evidence/answer.txt"],
+  "schema_definitions": {
+    "topology": {"type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 15}}
+  },
+  "schema_version": "1",
+  "scope": {"type": "string", "const": "topology-generation-order-audit finite semantic countermodel"},
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "type": "object", "additionalProperties": false,
+    "required": ["universe_size", "input_topologies", "generated_topology", "common_subtopology", "witness_open_set", "diagnosis"],
+    "properties": {
+      "universe_size": {"type": "integer", "enum": [3, 4]},
+      "input_topologies": {"type": "array", "minItems": 2, "maxItems": 4, "items": {"$ref": "#/$defs/topology"}},
+      "generated_topology": {"$ref": "#/$defs/topology"},
+      "common_subtopology": {"$ref": "#/$defs/topology"},
+      "witness_open_set": {"type": "integer", "minimum": 0, "maximum": 15},
+      "diagnosis": {"const": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"}
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {"topology": {"type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 15}}},
+    "type": "object", "additionalProperties": false,
+    "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+    "properties": {
+      "task_id": {"const": "jacobian/topology-generation-order-audit"},
+      "conclusion": {"const": "PROPOSED_CONTRACT_TOO_WEAK"},
+      "result": {
+        "type": "object", "additionalProperties": false,
+        "required": ["universe_size", "input_topologies", "generated_topology", "common_subtopology", "witness_open_set", "diagnosis"],
+        "properties": {
+          "universe_size": {"type": "integer", "enum": [3, 4]},
+          "input_topologies": {"type": "array", "minItems": 2, "maxItems": 4, "items": {"$ref": "#/$defs/topology"}},
+          "generated_topology": {"$ref": "#/$defs/topology"},
+          "common_subtopology": {"$ref": "#/$defs/topology"},
+          "witness_open_set": {"type": "integer", "minimum": 0, "maximum": 15},
+          "diagnosis": {"const": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"}
+        }
+      },
+      "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+      "scope": {"type": "string", "const": "topology-generation-order-audit finite semantic countermodel"},
+      "completeness": {"const": "COMPLETE"},
+      "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+      "limitations": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "task_id": "jacobian/topology-generation-order-audit",
+  "verification_record": null
+}

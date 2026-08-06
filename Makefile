@@ -26,7 +26,7 @@ endif
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help help-all uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-command-check docs-linkcheck deploy-check
+.PHONY: help help-all uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare codex-visibility provider-eval clean docs-command-check docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian common developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / && ($$1 in wanted) {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -526,6 +526,27 @@ agent-eval-compare: ## Compare normalized observations (CONTROL=..., TREATMENT=.
 	@test -n "$(CONTROL)" -a -n "$(TREATMENT)" -a -n "$(OUTPUT)" || { echo "CONTROL, TREATMENT, and OUTPUT are required" >&2; exit 2; }
 	$(UV_RUN) python -m benchmarks.tooling.observation_results compare \
 		--control "$(CONTROL)" --treatment "$(TREATMENT)" --output "$(OUTPUT)"
+
+VISIBILITY_CASES ?= benchmarks/config/codex-visibility-v1.json
+VISIBILITY_REPETITIONS ?= 1
+VISIBILITY_REASONING_EFFORT ?= high
+
+codex-visibility: ## Measure Codex adoption of Jacobian (VISIBILITY_EXECUTE=1, VISIBILITY_MCP_URL=..., VISIBILITY_MODEL=..., VISIBILITY_OUTPUT=...).
+	@set -e; \
+	if [ "$(VISIBILITY_EXECUTE)" != "1" ]; then \
+		echo "Model execution is opt-in. Set VISIBILITY_EXECUTE=1 after reviewing $(VISIBILITY_CASES)."; \
+		exit 0; \
+	fi; \
+	test -n "$(VISIBILITY_MCP_URL)" -a -n "$(VISIBILITY_MODEL)" -a -n "$(VISIBILITY_OUTPUT)" || { \
+		echo "VISIBILITY_MCP_URL, VISIBILITY_MODEL, and VISIBILITY_OUTPUT are required" >&2; \
+		exit 2; \
+	}; \
+	$(UV_RUN) python -m benchmarks.tooling.codex_visibility \
+		--execute --cases "$(VISIBILITY_CASES)" --mcp-url "$(VISIBILITY_MCP_URL)" \
+		--model "$(VISIBILITY_MODEL)" --reasoning-effort "$(VISIBILITY_REASONING_EFFORT)" \
+		--repetitions "$(VISIBILITY_REPETITIONS)" --output "$(VISIBILITY_OUTPUT)" \
+		$(foreach case,$(VISIBILITY_CASES_SELECTED),--case "$(case)") \
+		$(if $(VISIBILITY_SKILL),--skill "$(VISIBILITY_SKILL)",)
 
 provider-eval: ## Run pinned provider feasibility jobs (PROVIDER=cddlib|cgal|gudhi|lean-repl|nauty|regina).
 	@test -n "$(PROVIDER)" || { echo "PROVIDER is required" >&2; exit 2; }

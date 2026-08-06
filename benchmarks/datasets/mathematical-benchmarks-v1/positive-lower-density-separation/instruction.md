@@ -11,7 +11,7 @@ The explanation must affirmatively state the certified separation: that the lowe
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. In the solver's own words, the limitations array must disclose that finitely many replayed levels do not prove the infinite limit or the Erdős problem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

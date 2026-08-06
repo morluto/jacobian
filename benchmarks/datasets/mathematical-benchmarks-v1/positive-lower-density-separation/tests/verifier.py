@@ -16,6 +16,21 @@ from verifier_support import (
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
 
+
+def _limitations_valid(value: object) -> bool:
+    if not (
+        isinstance(value, list)
+        and len(value) == 1
+        and isinstance(value[0], str)
+    ):
+        return False
+    text = value[0].casefold()
+    return (
+        any(term in text for term in ("eight", "8", "finite", "exact levels"))
+        and any(term in text for term in ("infinite limit", "erdős", "erdos"))
+        and any(term in text for term in ("not prove", "do not prove", "does not prove", "not machine"))
+    )
+
 # The published prose obligation is structural, not verbatim: the explanation
 # must affirmatively state the separation and its limitation, accept equivalent
 # phrasing, and reject contradictory or unrelated text.
@@ -220,7 +235,7 @@ def main():
         and raw.get("scope")
         == "parameterized-geometric-block-family-with-eight-replayed-levels"
         and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == [LIMITATION]
+        and _limitations_valid(raw.get("limitations"))
     )
     assurance = bool(
         isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"

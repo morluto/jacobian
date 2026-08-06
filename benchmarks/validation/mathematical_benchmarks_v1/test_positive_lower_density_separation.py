@@ -19,6 +19,19 @@ def _run(tmp_path: Path, mutate=None):
     return support._run_verifier(task, app, logs)
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    result = _run(
+        tmp_path,
+        lambda submission: submission.update(
+            limitations=[
+                "These eight finite levels do not prove the infinite limit or the Erdos problem."
+            ]
+        ),
+    )
+    assert result["scope_accuracy"] == 1.0
+    assert result["reward"] == 1.0
+
+
 def _set_base(submission, b):
     levels = []
     for m in range(8):

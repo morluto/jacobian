@@ -75,9 +75,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erd\u0151s problem."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

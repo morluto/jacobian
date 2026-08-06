@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.agent_workflow_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import support
 
 ROOT = Path(__file__).parents[2]
 TASK = (

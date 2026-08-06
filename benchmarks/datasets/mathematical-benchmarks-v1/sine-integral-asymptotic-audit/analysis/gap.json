@@ -1,0 +1,19 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "sine-integral-asymptotic-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Derive a repeated integration-by-parts tail identity.",
+      "Detect the published coefficient-sign defect by exact symbolic differentiation.",
+      "Bind the finite expansion to an explicit integral remainder bound."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_INCORRECT_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep asymptotic sign auditing and symbolic remainder reasoning agent-owned."
+  }
+}

@@ -8,6 +8,7 @@ keywords = ["lean", "premise-retrieval", "mathlib", "reproduction"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
 field = "proof-assistants"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

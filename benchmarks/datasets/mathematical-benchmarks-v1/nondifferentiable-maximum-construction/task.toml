@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/nondifferentiable-maximum-construction"
+version = "1.0.0"
+description = "Construct and certify a continuous function with a nondifferentiable interior maximum."
+keywords = ["real-analysis", "construction", "continuity", "nondifferentiability"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "analysis"
+field = "analysis"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-analysis-construction"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["real-analysis", "construction", "piecewise-linear", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-analysis-construction"
+fixture_digest = "sha256:6d090d457ad346d66194a01a548a0e55d0d3d258fa0712934d19d5d0d44489ac"
+derivation = "Derived from TaoAnalysisBench taobench_000001."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

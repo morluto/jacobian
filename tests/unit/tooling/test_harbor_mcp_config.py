@@ -12,11 +12,11 @@ JOB = (
     ROOT
     / "benchmarks"
     / "datasets"
-    / "agent-workflow-v1"
+    / "mathematical-benchmarks-v1"
     / "jobs"
     / "jacobian-observation.json"
 )
-CONTROL_JOB = ROOT / "benchmarks" / "config" / "agent-workflow-v1-control.json"
+CONTROL_JOB = ROOT / "benchmarks" / "config" / "mathematical-benchmarks-v1-control.json"
 MCP_CONFIG = ROOT / "benchmarks" / "config" / "jacobian.mcp.json"
 LOOPBACK_MCP_CONFIG = ROOT / "benchmarks" / "config" / "jacobian-loopback.mcp.json"
 
@@ -52,6 +52,6 @@ def test_observation_mcp_config_is_external_to_the_task_job() -> None:
 
 
 def test_observation_dataset_contains_the_canonical_task() -> None:
-    suite = get_suite("agent-workflow-v1")
+    suite = get_suite("mathematical-benchmarks-v1")
 
     assert any(ref.path.name == "graph-counterexample" for ref in suite.tasks)

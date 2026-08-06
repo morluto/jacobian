@@ -14,6 +14,7 @@ category = "software-systems"
 tags = ["provider", "oracle-only", "pinned"]
 evaluation_kind = "provider-feasibility"
 domain = "software-systems"
+primary_domain = "software-systems"
 field = "provider-integration"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

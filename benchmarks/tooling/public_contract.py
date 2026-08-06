@@ -2,7 +2,7 @@
 
 This is not a Harbor source adapter and does not define an alternate task
 format. It validates one verifier-owned declaration and deterministically
-projects the standard Harbor files used by ``agent-workflow-v1`` tasks.
+projects the standard Harbor files used by ``mathematical-benchmarks-v1`` tasks.
 
 The ``public_contract.json`` is the single repository-time source of truth for
 the agent-visible public protocol of one task.  From it, this module

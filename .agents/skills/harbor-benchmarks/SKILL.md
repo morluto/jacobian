@@ -112,8 +112,8 @@ Use the pinned Harbor runner from the repository:
 uvx --from harbor==0.20.0 harbor --version
 make harbor-plan BASE=origin/main
 make harbor-sync
-make harbor-check-task DATASET=agent-workflow-v1 TASKS="task-id"
-make harbor-oracle-task DATASET=agent-workflow-v1 TASKS="task-id"
+make harbor-check-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
+make harbor-oracle-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
 ```
 
 The selected-task commands are the normal leaf-task gates and require an
@@ -161,11 +161,17 @@ After any verifier Python (`tests/verifier.py`) or Dockerfile change, run
 task's `tests/Dockerfile`. The `harbor-contracts` gate rejects stale checksum
 labels; `harbor-sync` recomputes them from the current verifier source.
 
-### Validation regression layout (`agent-workflow-v1`)
+### Validation regression layout
 
-Put new or changed task verifier attack tests in a **per-task leaf module**:
+Put new or changed task verifier attack tests in a **per-dataset, per-task leaf
+module**:
 
-`benchmarks/validation/agent_workflow_v1/test_<task_id_with_underscores>.py`
+- `benchmarks/validation/mathematical_benchmarks_v1/test_<task_id_with_underscores>.py`
+- `benchmarks/validation/public_reproductions_v1/test_<task_id_with_underscores>.py`
+- `benchmarks/validation/conjecture_probes_v1/test_<task_id_with_underscores>.py`
+
+Use the validation package matching the task's owning dataset; do not route a
+relocated task through its former dataset package.
 
 Do **not** append to a shared `test_task_regressions_*.py` dump (those files
 are gone; do not recreate them). Suite-wide contracts stay in
@@ -194,7 +200,7 @@ topology; keep Harbor validation from entering product Python coverage.
 Only create a snapshot for an intentional evaluation or publication boundary:
 
 ```sh
-make benchmark-snapshot DATASET=agent-workflow-v1
+make benchmark-snapshot DATASET=mathematical-benchmarks-v1
 make benchmark-snapshot-validate \
   LOCK=benchmarks/snapshots/<dataset>/<digest>.lock.json
 make benchmark-publish \
@@ -254,7 +260,7 @@ only when overriding the default local image. Use the toggle explicitly:
 ```sh
 export JACOBIAN_MODEL='your-model'
 export JACOBIAN_IMAGE='jacobian:local'
-make agent-eval DATASET=agent-workflow-v1 \
+make agent-eval DATASET=mathematical-benchmarks-v1 \
   JACOBIAN_ENABLED=1 EVAL_EXECUTE=1
 ```
 

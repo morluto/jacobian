@@ -36,16 +36,6 @@
     "tools/check_doc_commands.py": [
       "tests/unit/tooling/test_doc_commands.py"
     ],
-    "tools/check_architecture.py": [
-      "tests/unit/tooling/test_architecture_process_policies.py",
-      "tests/unit/tooling/test_architecture_harbor_contracts.py",
-      "tests/unit/tooling/test_architecture_unsupported_surfaces.py",
-      "tests/unit/tooling/test_architecture_diagnostics.py"
-    ],
-    "src/jacobian/process_policy.py": [
-      "tests/unit/contracts/test_process_policy_contracts.py",
-      "tests/boundary/process/test_process_policy.py"
-    ],
     "tests/support/process_entrypoints.py": [
       "tests/boundary/process/test_worker_error_protocol.py",
       "tests/component/plugins/test_plugin_execution.py",

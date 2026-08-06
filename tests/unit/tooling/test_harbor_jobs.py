@@ -39,6 +39,7 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
     assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
 
 
+@pytest.mark.timeout(30)
 def test_validate_all_covers_proxy_control_and_observation_jobs() -> None:
     """The execution-config gate must validate proxied job configs, not skip them.
 
@@ -53,6 +54,7 @@ def test_validate_all_covers_proxy_control_and_observation_jobs() -> None:
     assert failures == [], "benchmark contract failures:\n" + "\n".join(failures)
 
 
+@pytest.mark.timeout(30)
 def test_validate_all_catches_a_malformed_proxy_control_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

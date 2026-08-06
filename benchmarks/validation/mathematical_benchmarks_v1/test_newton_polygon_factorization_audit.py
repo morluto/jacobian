@@ -66,6 +66,23 @@ def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> 
     assert accepted["reward"] == 1.0
 
 
+def test_accepts_numeric_explanation_without_oracle_phrases(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "The Newton polygon lower hull contains the submitted primitive edge, "
+        "so the old right-edge hypotheses hold. The two factor constants have "
+        "p-adic valuations 2 and 3; neither is zero. The corrected left-edge "
+        "primitivity test fails because its gcd is greater than one.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
 def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

@@ -59,13 +59,13 @@ _EXPLANATION_FACTS = {
         re.compile(
             r"\bconstant[- ]term\s+valuations?\b.{0,96}\b(?:factor|both)\b"
         ),
-    ),
-    "old_conclusion_contradicted": (
         re.compile(
-            r"\b(?:contradict|refut|violat).{0,64}\bold\s+conclusion\b"
+            r"\bfactor\s+constants?\b.{0,128}\bvaluations?\b"
+            r".{0,128}\b(?:non[- ]?zero|neither\b.{0,32}\bzero|not\b.{0,32}\bzero)\b"
         ),
         re.compile(
-            r"\bold\s+conclusion\b.{0,64}\b(?:contradict|refut|violat)"
+            r"\bfactor\b.{0,128}\bvaluations?\b.{0,128}"
+            r"\b(?:positive|greater\s+than\s+zero|>\s*0)\b"
         ),
     ),
     "corrected_left_edge_fails": (
@@ -78,14 +78,14 @@ _EXPLANATION_FACTS = {
             r".{0,64}\b(?:fail|greater\s+than\s+one|>\s*1)"
         ),
     ),
-    "repair_not_refuted": (
-        re.compile(r"\bdoes\s+not\s+refute\b.{0,48}\b(?:repair|correction)\b"),
-        re.compile(r"\b(?:repair|correction)\b.{0,48}\bnot\s+refuted\b"),
-    ),
 }
 _EXPLANATION_CONTRADICTIONS = (
     re.compile(r"\bold\s+hypotheses?\b.{0,32}\b(?:fail|do\s+not\s+hold)\b"),
     re.compile(r"\bconstant[- ]term\s+valuations?\b.{0,32}\b(?:zero|nonpositive)\b"),
+    re.compile(
+        r"\bfactor\s+constants?\b.{0,64}\bvaluations?\b.{0,64}"
+        r"\b(?:one\b.{0,16}\bzero|includes?\s+zero)\b"
+    ),
     re.compile(r"\bcorrected?\s+left[- ]edge\b.{0,32}\bconditions?\s+hold\b"),
     re.compile(
         r"(?<!not )(?<!n't )\brefutes?\b.{0,32}\b(?:repair|correction)\b"

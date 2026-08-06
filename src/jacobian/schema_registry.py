@@ -92,58 +92,6 @@ def _validated_schema(canonical_schema: bytes) -> Draft202012Validator:
     return Draft202012Validator(normalized, format_checker=FormatChecker())
 
 
-@lru_cache(maxsize=1024)
-def _trusted_validated_schema(canonical_schema: bytes) -> Draft202012Validator:
-    """Compile a schema without re-validating against the meta-schema.
-
-    Pydantic's model_json_schema() produces valid Draft 2020-12 schemas
-    by construction.  Skipping the expensive meta-schema walk for those
-    schemas eliminates the dominant cost of runtime construction (~6.7s
-    across 527 unique schemas at ~12.7ms each).  External references are
-    still rejected; only the meta-schema check is skipped.
-    """
-
-    normalized = loads_strict_json(canonical_schema)
-    _reject_external_references(normalized)
-    return Draft202012Validator(normalized, format_checker=FormatChecker())
-
-
-def _uses_operator_owned_pydantic_schema(model: type[BaseModel]) -> bool:
-    """Return whether Pydantic owns the complete model schema generation path."""
-
-    model_schema_method = getattr(model.model_json_schema, "__func__", None)
-    base_schema_method = getattr(BaseModel.model_json_schema, "__func__", None)
-    model_schema_hook = getattr(model.__get_pydantic_json_schema__, "__func__", None)
-    base_schema_hook = getattr(BaseModel.__get_pydantic_json_schema__, "__func__", None)
-    return (
-        model.__module__.startswith("jacobian.")
-        and model_schema_method is base_schema_method
-        and model_schema_hook is base_schema_hook
-        and model.model_config.get("json_schema_extra") is None
-        and _core_schema_uses_only_pydantic_defaults(model.__pydantic_core_schema__)
-    )
-
-
-def _core_schema_uses_only_pydantic_defaults(value: Any) -> bool:
-    if isinstance(value, list | tuple):
-        return all(_core_schema_uses_only_pydantic_defaults(item) for item in value)
-    if not isinstance(value, dict):
-        return True
-    if value.get("pydantic_js_extra") is not None or value.get(
-        "pydantic_js_annotation_functions"
-    ):
-        return False
-    base_schema_hook = getattr(BaseModel.__get_pydantic_json_schema__, "__func__", None)
-    for hook in value.get("pydantic_js_functions", ()):
-        function = getattr(hook, "__func__", hook)
-        module = getattr(function, "__module__", "")
-        if function is not base_schema_hook and not module.startswith("pydantic."):
-            return False
-    return all(
-        _core_schema_uses_only_pydantic_defaults(item) for item in value.values()
-    )
-
-
 class SchemaRegistry:
     """Store and apply closed local JSON Schemas used by artifact contracts."""
 
@@ -163,23 +111,6 @@ class SchemaRegistry:
         schema: dict[str, Any],
     ) -> str:
         """Register a schema after rejecting unsupported external references."""
-
-        return self._register(
-            name=name,
-            version=version,
-            schema=schema,
-            skip_meta_validation=False,
-        )
-
-    def _register(
-        self,
-        *,
-        name: str,
-        version: str,
-        schema: dict[str, Any],
-        skip_meta_validation: bool,
-    ) -> str:
-        """Register one schema under an internally established trust policy."""
 
         self._reconcile_pending()
         canonical_schema = canonicalize_json(schema)
@@ -207,10 +138,7 @@ class SchemaRegistry:
             version=version,
             definition=schema,
         )
-        if skip_meta_validation:
-            _trusted_validated_schema(canonical_schema)
-        else:
-            _validated_schema(canonical_schema)
+        _validated_schema(canonical_schema)
         schema_uri = self.store.register_descriptor(
             kind="schema",
             name=name,
@@ -242,12 +170,10 @@ class SchemaRegistry:
         repeats this registration after every restart before accepting writes.
         """
 
-        schema = model_schema(model)
-        schema_uri = self._register(
+        schema_uri = self.register(
             name=name,
             version=version,
-            schema=schema,
-            skip_meta_validation=_uses_operator_owned_pydantic_schema(model),
+            schema=model_schema(model),
         )
         self._bind_model_contract(schema_uri, model)
         if producer_only:

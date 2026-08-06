@@ -6,8 +6,6 @@ from typing import Annotated, Any, Self
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
-import jacobian.schema_registry as schema_registry
-from jacobian.contracts.results import ResultEnvelope
 from jacobian.schema_registry import (
     SchemaRegistry,
     SchemaRegistryError,
@@ -119,28 +117,6 @@ def test_customized_model_schema_is_validated_before_persistence(
     )
     with pytest.raises(StorageError):
         store.get_descriptor(uri, expected_kind="schema")
-
-
-def test_operator_owned_default_model_skips_redundant_meta_validation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def unexpected_meta_validation(_canonical_schema: bytes) -> None:
-        pytest.fail("default operator-owned Pydantic schema was revalidated")
-
-    monkeypatch.setattr(
-        schema_registry,
-        "_validated_schema",
-        unexpected_meta_validation,
-    )
-
-    uri = SchemaRegistry(ArtifactRepository(tmp_path)).register_model(
-        name="operator-owned-result-envelope",
-        version="1",
-        model=ResultEnvelope,
-    )
-
-    assert uri.startswith("artifact://sha256/")
 
 
 def test_schema_validator_cache_is_bound_to_canonical_schema(

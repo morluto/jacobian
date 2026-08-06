@@ -2,12 +2,12 @@
 
 For the frozen diagonal matrices `A,B` and matrix `P` over `Z/125Z`, certify `PA=BP`, invertibility of `P`, and the resulting diagonal-entry permutation. Submit both matrix products, the determinant modulo 125, a row-to-column permutation selecting only unit entries of `P`, its sign and signed determinant term, and the six matched diagonal pairs. The verifier recomputes the full determinant expansion and every modular relation.
 
-Bind an explanation with one `RESULT_JSON:` line. Do not claim the general theorem is machine verified.
+Bind one text explanation as `evidence/answer.txt`. The independently replayed typed certificate belongs in `submission.json`; no duplicate private serialization is required in the prose. Do not claim the general theorem is machine verified.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation.
+Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. The limitations array must exactly state: The verifier certifies only the frozen matrix certificate, not the general local-ring theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

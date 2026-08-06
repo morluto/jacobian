@@ -19,6 +19,51 @@ def test_oracle_certificate_is_accepted(tmp_path: Path) -> None:
     assert reward["correctness"] == 1.0
 
 
+def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("The typed matrix certificate is in submission.json.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
+def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    (app / "input.json").write_text("{}")
+    reward = support._run_verifier(task, app, logs)
+    assert reward["input_binding"] == 0.0
+    assert reward["correctness"] == 1.0
+    assert reward["reward"] == 0.0
+
+
+def test_integral_float_permutation_is_rejected_without_crashing(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["unit_permutation"] = [
+        float(value) for value in submission["result"]["unit_permutation"]
+    ]
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_reordered_matched_pairs_are_accepted(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["matched_pairs"].reverse()
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_corrupted_matrix_product_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

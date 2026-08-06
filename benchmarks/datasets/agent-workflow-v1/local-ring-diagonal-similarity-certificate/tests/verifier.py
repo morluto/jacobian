@@ -7,7 +7,6 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
-    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -50,7 +49,11 @@ def valid(r, d):
         % 125
     )
     perm = r.get("unit_permutation")
-    if not isinstance(perm, list) or sorted(perm) != list(range(6)):
+    if (
+        not isinstance(perm, list)
+        or any(type(value) is not int for value in perm)
+        or sorted(perm) != list(range(6))
+    ):
         return False
     entries = [matrix[i][perm[i]] for i in range(6)]
     pairs = [
@@ -73,36 +76,30 @@ def valid(r, d):
         and all(math.gcd(x, 125) == 1 for x in entries)
         and r.get("permutation_sign") == sign(perm)
         and r.get("signed_term_modulus") == sign(perm) * math.prod(entries) % 125
-        and r.get("matched_pairs") == pairs
+        and isinstance(r.get("matched_pairs"), list)
+        and len(r["matched_pairs"]) == 6
+        and all(
+            isinstance(pair, dict)
+            and set(pair) == {"row", "column", "b_value", "a_value", "unit_entry"}
+            and all(type(value) is int for value in pair.values())
+            for pair in r["matched_pairs"]
+        )
+        and sorted(r["matched_pairs"], key=lambda pair: pair.get("row", -1)) == pairs
         and all(x["a_value"] == x["b_value"] for x in pairs)
     )
 
 
-def evidence_ok(e, r):
-    if not evidence_list_is_bound(e):
-        return False
-    p = resolve_evidence(e[0], expected_path="evidence/answer.txt")
-    if p is None:
-        return False
-    try:
-        text = p.read_text()
-        lines = [x for x in text.splitlines() if x.startswith("RESULT_JSON:")]
-        return (
-            len(lines) == 1
-            and json.loads(lines[0].removeprefix("RESULT_JSON:").strip()) == r
-            and all(
-                w in text.lower()
-                for w in ("determinant", "unit", "permutation", "diagonal")
-            )
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
+def evidence_ok(e):
+    # The typed matrix certificate is replayed independently.  The public
+    # evidence contract requires only one digest-bound text artifact.
+    return evidence_list_is_bound(e)
 
 
 def main():
     e = json.loads((T / "expected.json").read_text())
     d = json.loads((T / "input.json").read_text())
-    s = load_submission(W / "submission.json")
+    input_binding = workspace_input_is_bound()
+    s = load_submission(W / "submission.json", require_input_binding=False)
     c = strict_submission_contract(
         s,
         task_id=e["task_id"],
@@ -111,8 +108,8 @@ def main():
         verification_record="forbidden",
     )
     r = s.get("result") if isinstance(s, dict) else None
-    m = bool(workspace_input_is_bound() and valid(r, d))
-    ev = bool(isinstance(s, dict) and evidence_ok(s.get("evidence"), r))
+    m = valid(r, d)
+    ev = bool(isinstance(s, dict) and evidence_ok(s.get("evidence")))
     sc = bool(
         isinstance(s, dict)
         and s.get("scope") == "frozen-six-dimensional-Z-mod-125-certificate"
@@ -121,12 +118,13 @@ def main():
     )
     a = bool(isinstance(s, dict) and s.get("claimed_assurance") == "COMPUTED")
     f = false_verified_claim(s, verification_record_bound=False)
-    ok = bool(c and m and ev and sc and not f)
+    ok = bool(c and input_binding and m and ev and sc and not f)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(bool(c)),
+                "input_binding": float(input_binding),
                 "correctness": float(m),
                 "evidence_validity": float(ev),
                 "scope_accuracy": float(sc),

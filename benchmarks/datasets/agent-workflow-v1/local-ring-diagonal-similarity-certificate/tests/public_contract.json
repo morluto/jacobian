@@ -23,12 +23,12 @@
     "payload_shape": null
   },
   "limitations": {
-    "items": {
-      "type": "string"
-    },
+    "const": [
+      "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
+    ],
     "type": "array"
   },
-  "public_notes": "Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation.",
+  "public_notes": "Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. The limitations array must exactly state: The verifier certifies only the frozen matrix certificate, not the general local-ring theorem.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -55,7 +55,7 @@
         "minItems": 1,
         "type": "array"
       },
-      "limitations": { "items": { "type": "string" }, "type": "array" },
+      "limitations": { "const": ["The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."], "type": "array" },
       "result": {
         "additionalProperties": false,
         "properties": {

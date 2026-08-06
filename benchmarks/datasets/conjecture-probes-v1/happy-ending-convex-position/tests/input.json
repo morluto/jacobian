@@ -1,0 +1,20 @@
+{
+  "task_id": "jacobian/happy-ending-convex-position",
+  "conjecture_id": "C-017",
+  "scope_identity": "happy-ending-convex-position:points-v1",
+  "points": [
+    {"id": "P00", "x": -35, "y": 12},
+    {"id": "P01", "x": 24, "y": 18},
+    {"id": "P02", "x": -19, "y": -33},
+    {"id": "P03", "x": -17, "y": -3},
+    {"id": "P04", "x": 26, "y": 6},
+    {"id": "P05", "x": -4, "y": -14},
+    {"id": "P06", "x": -21, "y": 30},
+    {"id": "P07", "x": 23, "y": -40},
+    {"id": "P08", "x": 38, "y": 18},
+    {"id": "P09", "x": 7, "y": 10},
+    {"id": "P10", "x": 5, "y": 12},
+    {"id": "P11", "x": 39, "y": 5},
+    {"id": "P12", "x": 30, "y": -12}
+  ]
+}

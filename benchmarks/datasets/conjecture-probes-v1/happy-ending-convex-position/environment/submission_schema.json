@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "count_row": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "maximum": 13,
+          "minimum": 3,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "count"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "HAPPY_ENDING_FINITE_CONVEX_POSITION"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "THIRTEEN_FROZEN_POINTS",
+        "NO_GENERAL_ERDOS_SZEKERES_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "convex_subset_counts": {
+          "items": {
+            "$ref": "#/$defs/count_row"
+          },
+          "maxItems": 11,
+          "minItems": 11,
+          "type": "array"
+        },
+        "general_position": {
+          "const": true
+        },
+        "maximum_convex_size": {
+          "maximum": 13,
+          "minimum": 3,
+          "type": "integer"
+        },
+        "maximum_witness_cyclic": {
+          "items": {
+            "pattern": "^P(?:0[0-9]|1[0-2])$",
+            "type": "string"
+          },
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "scope_identity": {
+          "const": "happy-ending-convex-position:points-v1"
+        }
+      },
+      "required": [
+        "general_position",
+        "convex_subset_counts",
+        "maximum_convex_size",
+        "maximum_witness_cyclic",
+        "scope_identity"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "happy-ending-convex-position:points-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/happy-ending-convex-position"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

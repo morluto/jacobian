@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/happy-ending-convex-position"
+version = "1.0.0"
+description = "Count every convex-position subset of thirteen frozen integer points and certify a maximum witness."
+keywords = ["discrete-geometry", "erdos-szekeres", "convex-position", "orientation", "conjecture-probe"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
+field = "discrete-geometry"
+assurance_ceiling = "CHECKED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "authored-conjecture-probe"
+fixture_digest = "sha256:fa189aa5de5703c6eae54197b5f907eeaf3ebdba8326c3c71cbdd56e465a5b1e"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "discrete-geometry", "exact-orientation", "exhaustive", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "authored-finite-conjecture-probe"
+derivation = "Authored finite convex-position probe derived from retained conjecture row C-017."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

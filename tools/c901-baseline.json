@@ -28,6 +28,11 @@
       "complexity": 11
     },
     {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/elementwise-fixed-no-global-invariant/tests/verifier.py",
+      "symbol": "certificate_valid",
+      "complexity": 11
+    },
+    {
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/fiber-dimension-semicontinuity-repair/tests/verifier.py",
       "symbol": "_fiber_checks",
       "complexity": 12
@@ -36,6 +41,26 @@
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/finite-partition/tests/verifier.py",
       "symbol": "main",
       "complexity": 12
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/finite-scheme-rational-points-audit/tests/verifier.py",
+      "symbol": "valid_result",
+      "complexity": 13
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/fractional-ratio-proof-repair/tests/verifier.py",
+      "symbol": "_evidence_explains_clauses",
+      "complexity": 26
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/fractional-ratio-proof-repair/tests/verifier.py",
+      "symbol": "valid_result",
+      "complexity": 12
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/ga-action-local-finiteness-certificate/tests/verifier.py",
+      "symbol": "_certificate_valid",
+      "complexity": 15
     },
     {
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/graph-counterexample/tests/verifier.py",
@@ -61,6 +86,16 @@
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/lean-guard-scope-assurance/tests/verifier.py",
       "symbol": "_result",
       "complexity": 13
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/marginal-joint-product-audit/tests/verifier.py",
+      "symbol": "_evidence_explains_clauses",
+      "complexity": 17
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/newton-polygon-factorization-audit/tests/verifier.py",
+      "symbol": "_certificate_valid",
+      "complexity": 11
     },
     {
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/nonclosed-projection-image/tests/verifier.py",

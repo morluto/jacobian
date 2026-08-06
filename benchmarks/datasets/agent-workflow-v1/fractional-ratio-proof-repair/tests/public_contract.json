@@ -79,6 +79,7 @@
       },
       "selected_indices": {
         "type": "array",
+        "maxItems": 24,
         "items": {
           "type": "integer",
           "minimum": 0,
@@ -104,6 +105,7 @@
       },
       "positive_residual_indices": {
         "type": "array",
+        "maxItems": 24,
         "items": {
           "type": "integer",
           "minimum": 0,
@@ -179,6 +181,7 @@
           },
           "selected_indices": {
             "type": "array",
+            "maxItems": 24,
             "items": {
               "type": "integer",
               "minimum": 0,
@@ -204,6 +207,7 @@
           },
           "positive_residual_indices": {
             "type": "array",
+            "maxItems": 24,
             "items": {
               "type": "integer",
               "minimum": 0,

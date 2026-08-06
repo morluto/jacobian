@@ -4,9 +4,12 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -14,12 +17,23 @@ from verifier_support import (
 W, T = Path("/app"), Path("/tests")
 MISMATCHES = {"OBJECTIVE_REPLACED", "BINARY_DOMAIN_RELAXED", "UNDECLARED_BUDGET_ADDED"}
 LIMITATION = "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
+EVIDENCE_SENTENCE = "The public proof replaces the ratio objective, relaxes the binary domain, and adds an undeclared budget. The exact residual certificate repairs the frozen objective: every coordinate is chosen by its signed residual and the maximum transformed residual is zero."
 
 
 def evidence_ok(evidence):
     # The typed residual certificate is replayed independently.  The public
     # evidence contract requires one digest-bound text artifact only.
-    return evidence_list_is_bound(evidence)
+    if not evidence_list_is_bound(evidence):
+        return False
+    path = resolve_evidence(
+        evidence[0], expected_path="evidence/answer.txt", max_bytes=65_536
+    )
+    if path is None:
+        return False
+    try:
+        return path.read_text().splitlines()[0] == EVIDENCE_SENTENCE
+    except (OSError, UnicodeError, IndexError):
+        return False
 
 
 def valid_result(result, data):
@@ -91,7 +105,8 @@ def valid_result(result, data):
     positives = [i for i, value in enumerate(residuals) if value > 0]
     submitted_positives = result.get("positive_residual_indices")
     return (
-        result.get("constant_residual") == constant
+        type(result.get("constant_residual")) is int
+        and result.get("constant_residual") == constant
         and isinstance(submitted_positives, list)
         and all(type(i) is int for i in submitted_positives)
         and len(submitted_positives) == len(set(submitted_positives))
@@ -101,7 +116,19 @@ def valid_result(result, data):
     )
 
 
+def raw_submission():
+    path = W / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def main():
+    raw = raw_submission()
     expected = json.loads((T / "expected.json").read_text())
     data = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
@@ -113,22 +140,19 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    result = submission.get("result") if isinstance(submission, dict) else None
+    result = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(result, data)
-    ev_ok = bool(
-        isinstance(submission, dict) and evidence_ok(submission.get("evidence"))
-    )
+    ev_ok = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
     scope_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == "frozen-24-item-binary-fractional-ratio-instance"
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == [LIMITATION]
+        isinstance(raw, dict)
+        and raw.get("scope") == "frozen-24-item-binary-fractional-ratio-instance"
+        and raw.get("completeness") == "COMPLETE"
+        and raw.get("limitations") == [LIMITATION]
     )
     assurance_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "COMPUTED"
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
     )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
+    false_cert = false_verified_claim(raw, verification_record_bound=False)
     correct = bool(
         contract and input_binding and math_ok and ev_ok and scope_ok and not false_cert
     )

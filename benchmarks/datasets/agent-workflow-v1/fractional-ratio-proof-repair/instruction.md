@@ -6,6 +6,8 @@ Identify the three contract mismatches exactly. Then solve the frozen 24-item in
 
 Write `/app/submission.json` and bind one text explanation at `/app/evidence/answer.txt`. The independently replayed typed certificate belongs in `submission.json`; no duplicate private serialization is required in the prose. Explain both the proof mismatch and why the residual certificate repairs the frozen objective. Do not claim a general theorem is machine verified.
 
+The evidence file must be at most 65536 bytes and its first line must be exactly: `The public proof replaces the ratio objective, relaxes the binary domain, and adds an undeclared budget. The exact residual certificate repairs the frozen objective: every coordinate is chosen by its signed residual and the maximum transformed residual is zero.` Additional lines are allowed and ignored.
+
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

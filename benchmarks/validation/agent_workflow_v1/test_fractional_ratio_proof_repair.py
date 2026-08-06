@@ -22,11 +22,15 @@ def test_oracle_passes(tmp_path: Path) -> None:
     assert _run(tmp_path)["reward"] == 1.0
 
 
-def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+def test_published_evidence_sentence_needs_no_private_marker(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    evidence.write_text("Residual certificate supplied in submission.json.\n")
+    evidence.write_text(
+        "The public proof replaces the ratio objective, relaxes the binary domain, and adds an undeclared budget. "
+        "The exact residual certificate repairs the frozen objective: every coordinate is chosen by its signed "
+        "residual and the maximum transformed residual is zero.\n"
+    )
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
@@ -80,6 +84,21 @@ def test_rejects_corrupted_item_residual(tmp_path: Path) -> None:
         s["result"]["item_residuals"][7]["value"] += 1
 
     assert _run(tmp_path, mutate)["reward"] == 0.0
+
+
+def test_boolean_constant_residual_is_rejected(tmp_path: Path) -> None:
+    result = _run(
+        tmp_path, lambda s: s["result"].__setitem__("constant_residual", False)
+    )
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_bad_scope_preserves_math_diagnostic(tmp_path: Path) -> None:
+    result = _run(tmp_path, lambda s: s.__setitem__("scope", "wrong"))
+    assert result["correctness"] == 1.0
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0
 
 
 def test_rejects_corrupted_ratio(tmp_path: Path) -> None:

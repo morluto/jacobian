@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/pythagorean-generator-recurrence"
+version = "1.0.0"
+description = "Derive and replay an invariant-preserving generator recurrence for almost-isosceles Pythagorean triangles."
+keywords = ["number-theory", "pythagorean-triples", "quadratic-forms", "recurrence"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "number-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-regression"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "quadratic-invariant", "construction", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-theorem-transformed-alternative-seed-trace"
+fixture_digest = "sha256:fb83df632dd46fdf2b232b57b16f9fa514d37ec3e0be7631fde59d56a07803f8"
+derivation = "Exact recurrence certificate derived from NaturalProofs train row 54 at revision bdf412319e160046fd966f7d72d776d3d7b866a0."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

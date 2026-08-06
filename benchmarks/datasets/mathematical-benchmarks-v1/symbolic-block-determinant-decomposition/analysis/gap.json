@@ -1,0 +1,32 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "symbolic-block-determinant-decomposition",
+  "analysis": {
+    "mathematical_moves": [
+      "Construct a rational basis separating the common and sum-zero block-index channels.",
+      "Replay an exact symbolic similarity identity over a polynomial coefficient ring.",
+      "Derive a determinant factorization without assuming either block channel is invertible."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "matrix.determinant.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Computes one exact determinant but does not synthesize or certify a symbolic invariant-subspace decomposition."
+      },
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Can replay scalar polynomial identities, while the benchmark composes a structured matrix similarity certificate."
+      }
+    ],
+    "gap_classes": [
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Use as a symbolic construction diagnostic; do not add a block-matrix-specific alias without repeated independent workflows."
+  }
+}

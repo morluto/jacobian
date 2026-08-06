@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "submodular optim
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "optimization"
 field = "submodular-optimization"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

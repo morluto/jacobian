@@ -8,6 +8,7 @@ keywords = ["gaussian-moment", "complex-gaussian", "exact-rational", "verificati
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
+primary_domain = "probability-statistics"
 field = "probability"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

@@ -3,87 +3,92 @@
   "max_complexity": 10,
   "violations": [
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/cubic-image-classification/tests/verifier.py",
+      "path": "benchmarks/datasets/conjecture-probes-v1/vizing-bounded-cartesian-products/tests/verifier.py",
+      "symbol": "_frozen",
+      "complexity": 11
+    },
+    {
+      "path": "benchmarks/datasets/conjecture-probes-v1/vizing-bounded-cartesian-products/tests/verifier.py",
+      "symbol": "_math",
+      "complexity": 17
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/cubic-image-classification/tests/verifier.py",
       "symbol": "_result",
       "complexity": 12
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/cyclotomic-reciprocity-certificate/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/cyclotomic-reciprocity-certificate/tests/verifier.py",
       "symbol": "_result_is_valid",
       "complexity": 11
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/finite-partition/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/finite-partition/tests/verifier.py",
       "symbol": "main",
       "complexity": 12
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/graph-counterexample/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/graph-counterexample/tests/verifier.py",
       "symbol": "graph_ok",
       "complexity": 17
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/grid-independent-set-transfer/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/grid-independent-set-transfer/tests/verifier.py",
       "symbol": "_result_shape_ok",
       "complexity": 12
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/indexed-pairwise-vacuity/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/indexed-pairwise-vacuity/tests/verifier.py",
       "symbol": "_evidence_valid",
       "complexity": 15
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/knight-cycle-game-strategy/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/knight-cycle-game-strategy/tests/verifier.py",
       "symbol": "_cycle",
       "complexity": 15
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/lean-guard-scope-assurance/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/lean-guard-scope-assurance/tests/verifier.py",
       "symbol": "_result",
       "complexity": 13
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/nonclosed-projection-image/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/nonclosed-projection-image/tests/verifier.py",
       "symbol": "_witness",
       "complexity": 14
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/nonlinear-recurrence-crossing-certificate/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/nonlinear-recurrence-crossing-certificate/tests/verifier.py",
       "symbol": "_result_valid",
       "complexity": 20
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/permutation-inversion-involution/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/permutation-inversion-involution/tests/verifier.py",
       "symbol": "valid",
       "complexity": 13
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/polynomial-normalization/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/polynomial-normalization/tests/verifier.py",
       "symbol": "main",
       "complexity": 14
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/propositional-rewrite-trace-replay/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/propositional-rewrite-trace-replay/tests/verifier.py",
       "symbol": "_rewrite",
       "complexity": 14
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/subset-incidence-determinant/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/subset-incidence-determinant/tests/verifier.py",
       "symbol": "_result",
       "complexity": 11
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/superposition-proof-replay/tests/verifier.py",
-      "symbol": "_replay",
-      "complexity": 13
-    },
-    {
-      "path": "benchmarks/datasets/agent-workflow-v1/ternary-distance-code-optimum/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/ternary-distance-code-optimum/tests/verifier.py",
       "symbol": "_evidence",
       "complexity": 12
     },
     {
-      "path": "benchmarks/datasets/agent-workflow-v1/ternary-distance-code-optimum/tests/verifier.py",
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/ternary-distance-code-optimum/tests/verifier.py",
       "symbol": "_upper_bound",
       "complexity": 13
     },
@@ -108,8 +113,18 @@
       "complexity": 14
     },
     {
+      "path": "benchmarks/datasets/public-reproductions-v1/superposition-proof-replay/tests/verifier.py",
+      "symbol": "_replay",
+      "complexity": 13
+    },
+    {
       "path": "benchmarks/datasets/research-diagnostics-v1/jcb-postdoc-016/tests/verifier.py",
       "symbol": "_value_decisions",
+      "complexity": 11
+    },
+    {
+      "path": "benchmarks/tooling/benchmark_inventory.py",
+      "symbol": "build_inventory",
       "complexity": 11
     },
     {

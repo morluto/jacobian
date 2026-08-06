@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/hyperplane-arrangement-regions"
+version = "1.0.0"
+description = "Certify the region count of a cube-and-tetrahedron plane arrangement."
+keywords = ["geometry", "hyperplane-arrangement", "regions", "exact"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
+field = "discrete-geometry"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-workflow-regression"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["regression", "arrangements", "exact-rational", "difficulty-provisional"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-answer-visible-certificate-transformed"
+fixture_digest = "sha256:f4d24cc6176b17fa1184b6f0cd08610d061f65ba362be279651d4b920abadebe"
+derivation = "Derived from ByteDance-Seed/BeyondAIME train row 20 at revision c705198ae1043810b1e1693bd879250b51a7a523."
+[agent]
+timeout_sec = 900.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "algebraic geomet
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
 field = "algebraic-geometry"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

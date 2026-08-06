@@ -1,0 +1,21 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "nondifferentiable-maximum-construction",
+  "analysis": {
+    "mathematical_moves": [
+      "Construct a continuous two-branch piecewise-linear function and compare one-sided slopes."
+    ],
+    "current_capabilities": [],
+    "gap_classes": [
+      "MISSING_OPERATION"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "piecewise-linear-local-certificate"
+    ],
+    "disposition": "DEFER_RESEARCH",
+    "next_action": "Mine independent piecewise-linear continuity and extremum episodes before fixing a domain contract."
+  }
+}

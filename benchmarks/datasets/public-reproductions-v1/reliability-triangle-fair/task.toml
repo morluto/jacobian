@@ -8,6 +8,7 @@ keywords = ["network-reliability", "exact-probability", "graph", "verification"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
+primary_domain = "graph-theory"
 field = "graph-theory"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

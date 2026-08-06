@@ -1,9 +1,10 @@
 # Jacobian Harbor datasets
 
-Every executable benchmark case is a self-contained Harbor task. The five
-dataset identities below keep workflow observations, public reproductions,
-research diagnostics, provider feasibility, and examples from making
-incompatible claims look comparable.
+Every executable benchmark case is a self-contained Harbor task. Dataset
+identity is an evaluation contract: it records what a result may support, not
+which mathematical subject the task belongs to. Subject organization lives in
+the required `primary_domain` taxonomy and the more detailed `field` metadata;
+tasks remain direct children of their dataset roots.
 
 `benchmarks/datasets/<dataset>/` is the Harbor dataset root and contains the
 dataset's executable task bundles directly. `members/` retains Jacobian's
@@ -18,9 +19,10 @@ evaluation bundle.
 
 | Dataset | Purpose | Default execution |
 | --- | --- | --- |
-| `jacobian/agent-workflow-v1` | Fixed Jacobian-enabled mathematical workflows | Oracle and optional observation |
+| `jacobian/mathematical-benchmarks-v1` | Fixed hidden-runtime mathematical tasks | Oracle and optional observation |
 | `jacobian/symbolic-coordination-v1` | Exact polynomial-map coordination pilot | Oracle |
 | `jacobian/public-reproductions-v1` | Replay known public mathematical cases | Oracle |
+| `jacobian/conjecture-probes-v1` | Independently checked bounded conjecture progress | Oracle |
 | `jacobian/research-diagnostics-v1` | Answer-visible research challenges | Oracle diagnostics |
 | `jacobian/provider-feasibility-v1` | Pinned optional-backend checks | Oracle |
 | `jacobian/examples-v1` | Tutorial and smoke workflows | Oracle |
@@ -53,7 +55,7 @@ updates only the selected verifier checksum labels. The read-only Harbor gates
 validate local support files and never synchronize unrelated tasks.
 
 `benchmarks/tooling/public_contract.py` is internal repository tooling, not an
-adapter. For `agent-workflow-v1`, each verifier owns one
+adapter. For `mathematical-benchmarks-v1`, each verifier owns one
 `tests/public_contract.json`; the tool projects only the standard agent-visible
 `instruction.md` and `environment/submission_schema.json` files. The checked-in
 task-local declaration is copied into the separate verifier image so protocol
@@ -64,20 +66,20 @@ validation does not depend on files from the agent context.
 ```sh
 make harbor-plan BASE=origin/main
 make harbor-execution-check
-make harbor-check-task DATASET=agent-workflow-v1 TASKS="task-id"
+make harbor-check-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
 make benchmark-inventory OUTPUT=/tmp/benchmark-inventory.json
-make benchmark-snapshot DATASET=agent-workflow-v1
-make benchmark-snapshot-validate LOCK=benchmarks/snapshots/agent-workflow-v1/<digest>.lock.json
-make benchmark-publish LOCK=benchmarks/snapshots/agent-workflow-v1/<digest>.lock.json
-make harbor-oracle-task DATASET=agent-workflow-v1 TASKS="task-id"
+make benchmark-snapshot DATASET=mathematical-benchmarks-v1
+make benchmark-snapshot-validate LOCK=benchmarks/snapshots/mathematical-benchmarks-v1/<digest>.lock.json
+make benchmark-publish LOCK=benchmarks/snapshots/mathematical-benchmarks-v1/<digest>.lock.json
+make harbor-oracle-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
 make harbor-check
-make harbor-oracle DATASET=agent-workflow-v1 FULL=1
+make harbor-oracle DATASET=mathematical-benchmarks-v1 FULL=1
 make harbor-oracle-all
 make provider-eval PROVIDER=cgal
 ```
 
-`symbolic-coordination-v1` keeps its deterministic 26-case PR1 pilot separate
-from the fixed `agent-workflow-v1` snapshots. Its task bundles are solvable
+`symbolic-coordination-v1` keeps its deterministic 26-case pilot separate
+from the fixed `mathematical-benchmarks-v1` snapshots. Its task bundles are solvable
 without Jacobian and do not yet include the later comparison harness.
 
 `harbor-execution-check` is the focused local gate for job JSON, MCP
@@ -155,3 +157,23 @@ make rewards across these datasets comparable.
 See [authoring a Harbor benchmark task](../docs/how-to/author-harbor-benchmark-task.md),
 [benchmark contracts](../docs/reference/evaluations/benchmark-contracts.md), and the
 [Harbor benchmarks skill](../.agents/skills/harbor-benchmarks/SKILL.md).
+
+## Research loop and subject taxonomy
+
+Broad mathematical benchmarks expose workflow gaps. Targeted contract suites
+isolate one failure mode or mathematical obligation. Protected held-out runs
+then test causal improvements on a frozen, non-public contract. Conjecture
+probes occupy a separate rung: they score only independently checked bounded
+progress on an explicit finite scope and never imply a global theorem.
+
+Each member records a fixed `primary_domain` such as `graph-theory` alongside
+its detailed `field` such as `graph-domination`. These labels support filtering
+and inventory reporting; they are not scoring signals and do not prescribe a
+tool, decomposition, or research strategy. The inventory tool accepts
+`--dataset`, `--primary-domain`, and `--field`; unknown or empty selections fail
+closed.
+
+The active `agent-workflow-v1` identity was renamed to
+`mathematical-benchmarks-v1`; no active compatibility alias exists. Its
+historical `agent-workflow-v1` snapshot and ignored result directories remain
+byte-for-byte evidence of the earlier evaluation boundary and are not rewritten.

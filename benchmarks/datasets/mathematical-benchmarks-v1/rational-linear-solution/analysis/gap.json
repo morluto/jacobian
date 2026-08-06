@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "rational-linear-solution",
+  "analysis": {
+    "mathematical_moves": [
+      "Solve an exact rational linear system and replay substitution."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "linear.rational_solution.find",
+        "availability": "AVAILABLE",
+        "boundary": "Returns one exact rational solution."
+      },
+      {
+        "capability_id": "linear.rational_solution.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Checks the supplied solution but does not certify uniqueness."
+      }
+    ],
+    "gap_classes": [
+      "EXISTING_WORKS",
+      "MISSING_CHECKER"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "USE_EXISTING",
+    "next_action": "Keep assurance capped to the checked claim; uniqueness remains an explicit open obligation, not an inferred conclusion."
+  }
+}

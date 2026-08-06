@@ -1,1 +1,1 @@
-{"task_id":"jacobian/disjoint-closed-distance-scope-audit","conclusion":"FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS"}
+{"task_id":"jacobian/disjoint-closed-distance-scope-audit","conclusion":"DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE"}

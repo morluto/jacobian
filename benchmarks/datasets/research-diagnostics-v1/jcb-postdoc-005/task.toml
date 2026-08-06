@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "probability theo
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "probability-statistics"
 field = "probability-theory"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

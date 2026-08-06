@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/vizing-bounded-cartesian-products"
+version = "1.0.0"
+description = "Probe the Vizing domination-number Cartesian-product lower bound on eight frozen graphs and thirteen Cartesian pairs."
+keywords = ["graph-theory", "domination-number", "cartesian-product", "vizing-conjecture", "conjecture-probe"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "graph-theory"
+field = "graph-domination"
+assurance_ceiling = "CHECKED"
+answer_visibility = "public"
+provenance_class = "authored-conjecture-probe"
+fixture_digest = "sha256:f31cf9177bd1b072063b278c59ba22a295c83dae288d1f9e1cb0e46585e3abd1"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["difficulty-provisional", "graph-theory", "domination-number", "cartesian-product", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "authored-finite-conjecture-probe"
+derivation = "Authored finite probe of the Vizing domination-number Cartesian-product lower bound over eight adjacency-list graphs and thirteen Cartesian pairs."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/lean-guard-scope-assurance"
+version = "1.0.0"
+description = "Calibrate semantic-guard findings across Lean scope and pathological types."
+keywords = ["lean", "semantic-guards", "scope", "assurance-audit"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
+field = "formal-mathematics"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-formal-audit-tests"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["semantic-traps", "guard-scope", "assurance-calibration", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-formal-audit-tests"
+fixture_digest = "sha256:45f72f89314ea66f1dbd5a04ebbe55b83f830bc39f6388b6034c8da28c312a0b"
+derivation = "Derived from ATP Checkers test/PrefixScopeTests.lean at commit 3e7e99d027fece04d9cd96288cdd040c366458e5."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

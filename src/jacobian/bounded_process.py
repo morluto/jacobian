@@ -607,6 +607,7 @@ class BoundedInteractiveProcess:
         self._stderr_thread: threading.Thread | None = None
         self._stderr_captured: bytearray = bytearray()
         self._stderr_exceeded = threading.Event()
+        self._stderr_checkpoint_lock = threading.Lock()
         self._stderr_checkpoint_requested = threading.Event()
         self._stderr_checkpoint_complete = threading.Event()
         self._started_at = 0.0
@@ -782,12 +783,24 @@ class BoundedInteractiveProcess:
         return response
 
     def _synchronize_stderr(self, deadline: float) -> None:
-        self._stderr_checkpoint_complete.clear()
-        self._stderr_checkpoint_requested.set()
+        with self._stderr_checkpoint_lock:
+            overflowed = self._stderr_exceeded.is_set()
+            if not overflowed:
+                stderr_thread = self._stderr_thread
+                if stderr_thread is None or not stderr_thread.is_alive():
+                    return
+                self._stderr_checkpoint_complete.clear()
+                self._stderr_checkpoint_requested.set()
+        if overflowed:
+            self._stop_process_locked()
+            raise InteractiveProcessError(
+                "interactive process exceeded its stderr limit"
+            )
         checkpointed = self._stderr_checkpoint_complete.wait(
             max(0.0, deadline - time.monotonic())
         )
-        self._stderr_checkpoint_requested.clear()
+        with self._stderr_checkpoint_lock:
+            self._stderr_checkpoint_requested.clear()
         if not checkpointed:
             self._stop_process_locked()
             raise InteractiveProcessError("interactive stderr drain timed out")
@@ -862,7 +875,8 @@ class BoundedInteractiveProcess:
                     chunk = os.read(stderr.fileno(), 65_536)
                 except BlockingIOError:
                     if self._stderr_checkpoint_requested.is_set():
-                        self._stderr_checkpoint_complete.set()
+                        with self._stderr_checkpoint_lock:
+                            self._stderr_checkpoint_complete.set()
                     if process.poll() is not None:
                         return
                     time.sleep(0.001)
@@ -879,7 +893,8 @@ class BoundedInteractiveProcess:
         except (OSError, ValueError):
             return
         finally:
-            self._stderr_checkpoint_complete.set()
+            with self._stderr_checkpoint_lock:
+                self._stderr_checkpoint_complete.set()
 
     def _terminate_child(self, process: subprocess.Popen[str]) -> None:
         """Send SIGTERM/terminate, then SIGKILL/kill if the deadline expires."""

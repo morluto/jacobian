@@ -30,7 +30,7 @@ def test_enumerator_candidate_is_validated_before_archival(
 ) -> None:
     plugin_id = _install_matrix_enumerator_plugin(
         authorized_complete_runtime,
-        entrypoint="tests.support.plugin_entrypoints:enumerate_invalid_candidate",
+        entrypoint="tests.support.search_entrypoints:enumerate_invalid_candidate",
     )
     claim_uri = _matrix_claim_for_plugin(
         authorized_complete_runtime,
@@ -67,7 +67,7 @@ def test_enumerator_timeout_remains_a_bounded_nonconclusion(
 ) -> None:
     plugin_id = _install_matrix_enumerator_plugin(
         authorized_complete_runtime,
-        entrypoint="tests.support.plugin_entrypoints:wait_forever",
+        entrypoint="tests.support.process_entrypoints:wait_forever",
     )
     claim_uri = _matrix_claim_for_plugin(
         authorized_complete_runtime,
@@ -112,7 +112,7 @@ def test_evaluator_timeout_prevents_complete_enumeration_result(
     plugin_id = _install_matrix_enumerator_plugin(
         authorized_complete_runtime,
         entrypoint="jacobian.plugins.matrices:enumerate_candidates_capability",
-        evaluator_entrypoint="tests.support.plugin_entrypoints:wait_forever",
+        evaluator_entrypoint="tests.support.process_entrypoints:wait_forever",
     )
     claim_uri = _matrix_claim_for_plugin(
         authorized_complete_runtime,

@@ -16,7 +16,7 @@ from jacobian.verification._helpers import _checker_failure_detail
     [
         (
             "jacobian.plugin_worker",
-            "tests.support.plugin_entrypoints:echo",
+            "tests.support.process_entrypoints:echo",
             "The plugin changed after it was registered. Reload Jacobian to "
             "register the current plugin version, then retry.",
         ),
@@ -61,7 +61,7 @@ def test_source_changes_cross_worker_boundary_as_typed_codes(
     [
         (
             "jacobian.plugin_worker",
-            "tests.support.plugin_entrypoints:imitate_source_change",
+            "tests.support.process_entrypoints:imitate_source_change",
         ),
         (
             "jacobian.checker_worker",

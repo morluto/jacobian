@@ -13,11 +13,11 @@ JOB = (
     ROOT
     / "benchmarks"
     / "datasets"
-    / "agent-workflow-v1"
+    / "mathematical-benchmarks-v1"
     / "jobs"
     / "jacobian-observation.json"
 )
-CONTROL_JOB = ROOT / "benchmarks" / "config" / "agent-workflow-v1-control.json"
+CONTROL_JOB = ROOT / "benchmarks" / "config" / "mathematical-benchmarks-v1-control.json"
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -32,7 +32,7 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
     assert "tasks" not in job
     assert job["datasets"] == [
         {
-            "path": "benchmarks/datasets/agent-workflow-v1",
+            "path": "benchmarks/datasets/mathematical-benchmarks-v1",
             "task_names": ["graph-counterexample"],
         }
     ]
@@ -62,7 +62,7 @@ def test_validate_all_catches_a_malformed_proxy_control_job(
     original_read_json = benchmark_contracts._read_json
 
     def patched_read_json(path: Path) -> object:
-        if path.name == "agent-workflow-v1-control-proxy.json":
+        if path.name == "mathematical-benchmarks-v1-control-proxy.json":
             return {"n_attempts": "not-an-integer"}
         return original_read_json(path)
 

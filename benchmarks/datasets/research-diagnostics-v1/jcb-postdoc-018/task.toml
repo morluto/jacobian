@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "extremal graph t
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "graph-theory"
 field = "extremal-graph-theory"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/diophantine-ratio-family-repair"
+version = "1.0.0"
+description = "Repair a broken Vieta argument with an exact infinite Diophantine family."
+keywords = ["proof-repair", "diophantine", "parametric-family", "divisibility"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "diophantine-equations"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-proof-repair"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["proof-repair", "symbolic-construction", "infinite-family", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-proof-visible-but-invalid"
+fixture_digest = "sha256:a56ea3efd24d517b23f7faec17262cc9ab5ad4b473a401f1bf98d220c036a96f"
+derivation = "Derived from Xerv-AI/GRAD train row 19 at revision 71595210590450202b7b69225bc07e9e01b13c5c."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

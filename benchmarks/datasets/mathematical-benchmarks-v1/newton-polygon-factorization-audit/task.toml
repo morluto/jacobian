@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/newton-polygon-factorization-audit"
+version = "1.0.0"
+description = "Construct an exact counterexample to an author-corrected Newton-polygon lemma."
+keywords = ["proof-audit", "newton-polygon", "valuation", "factorization"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "number-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "author-corrected-paper-proof-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["literature-proof-diagnosis", "alternative-counterexamples", "exact-valuations", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-correction-transformed-counterexample"
+fixture_digest = "sha256:bae5e43720bacfd6f283f767134249c6ffb1b3950ab95d16d3830f9dc05bc76c"
+derivation = "Derived from ArxivMathGradingBench row 32 and arXiv:2505.08549v1/v2."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

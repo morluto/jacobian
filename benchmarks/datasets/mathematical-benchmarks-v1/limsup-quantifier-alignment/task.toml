@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/limsup-quantifier-alignment"
+version = "1.0.0"
+description = "Separate an intended existential limsup upper bound from a proposed universal lower bound."
+keywords = ["assurance", "autoformalization", "quantifiers", "limsup"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
+field = "logic-and-formalization"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "official-defect-derived-trust-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["assurance", "semantic-alignment", "quantifier-polarity", "offline", "difficulty-provisional"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-issue-derived-assurance-audit"
+fixture_digest = "sha256:aaed1111683d2f811d94f70474b3fa818c4634f852e082f646ee61bda13d3620"
+derivation = "Derived from formal-conjectures issue 1347 and source commit 37a34a76ea03c9ab157981bf4495a8c3a1add68a."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

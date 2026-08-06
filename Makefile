@@ -405,7 +405,7 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 		$(if $(TASKS),--tasks $(TASKS),)
 
 harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with tasks.
-	@set -e; for dataset in agent-workflow-v1 symbolic-coordination-v1 public-reproductions-v1 research-diagnostics-v1 provider-feasibility-v1; do \
+	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1 research-diagnostics-v1 provider-feasibility-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done
 
@@ -458,25 +458,25 @@ endif
 
 ifeq ($(JACOBIAN_ENABLED),0)
 ifeq ($(JACOBIAN_EVAL_PROXY),1)
-EVAL_CONFIG ?= benchmarks/config/agent-workflow-v1-control-proxy.json
+EVAL_CONFIG ?= benchmarks/config/mathematical-benchmarks-v1-control-proxy.json
 else
-EVAL_CONFIG ?= benchmarks/config/agent-workflow-v1-control.json
+EVAL_CONFIG ?= benchmarks/config/mathematical-benchmarks-v1-control.json
 endif
 override MCP_CONFIG :=
 else
 ifeq ($(JACOBIAN_EVAL_PROXY),1)
-EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation-proxy.json
+EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)/jobs/jacobian-observation-proxy.json
 MCP_CONFIG ?= benchmarks/config/jacobian-loopback.mcp.json
 else
-EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation.json
+EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)/jobs/jacobian-observation.json
 MCP_CONFIG ?= benchmarks/config/jacobian.mcp.json
 endif
 endif
 
-agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROXY=0|1, DATASET=agent-workflow-v1, EVAL_EXECUTE=1).
+agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROXY=0|1, DATASET=mathematical-benchmarks-v1, EVAL_EXECUTE=1).
 	@set -e; \
 	if [ "$(EVAL_EXECUTE)" != "1" ]; then \
-		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1"; \
+		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=mathematical-benchmarks-v1 EVAL_EXECUTE=1"; \
 		exit 0; \
 	fi; \
 	if [ -z "$${JACOBIAN_MODEL:-}" ]; then \
@@ -510,13 +510,13 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 		-m "$${JACOBIAN_MODEL}" \
 		--ak "web_search=$(CODEX_WEB_SEARCH)" \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
-		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
+		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS)
 
 agent-eval-validate: ## Normalize one observation (RESULTS=..., JOB=..., CONDITION=..., OUTPUT=...).
 	@test -n "$(RESULTS)" -a -n "$(JOB)" -a -n "$(CONDITION)" -a -n "$(OUTPUT)" || { echo "RESULTS, JOB, CONDITION, and OUTPUT are required" >&2; exit 2; }
 	$(UV_RUN) python -m benchmarks.tooling.observation_results validate \
-		--dataset "$(or $(DATASET),agent-workflow-v1)" --condition "$(CONDITION)" \
+		--dataset "$(or $(DATASET),mathematical-benchmarks-v1)" --condition "$(CONDITION)" \
 		--job "$(JOB)" --jobs-dir "$(RESULTS)" --output "$(OUTPUT)" \
 		$(if $(RESULT),--result "$(RESULT)",) \
 		$(if $(RUNTIME_SNAPSHOT),--runtime-snapshot "$(RUNTIME_SNAPSHOT)",) \

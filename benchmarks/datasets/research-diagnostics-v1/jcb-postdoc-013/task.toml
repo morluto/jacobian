@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "enumerative comb
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "combinatorics"
 field = "enumerative-combinatorics"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

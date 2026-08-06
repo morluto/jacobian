@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "VIZING_BOUNDED_PROBE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "EIGHT_FROZEN_GRAPHS_THIRTEEN_CARTESIAN_PAIRS",
+        "NO_GLOBAL_VIZING_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "derived_conclusion": {
+          "enum": [
+            "HOLDS_ON_FROZEN_PAIR_SET",
+            "VIOLATION_IN_FROZEN_PAIR_SET"
+          ]
+        },
+        "graphs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "domination_number": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "edge_count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "enum": [
+                  "P4",
+                  "C4",
+                  "P5",
+                  "C5",
+                  "K2,3",
+                  "house",
+                  "bull",
+                  "corona-K3"
+                ]
+              },
+              "minimum_dominating_set": {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "vertex_count": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "vertex_count",
+              "edge_count",
+              "domination_number",
+              "minimum_dominating_set"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "pairs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "bound_holds": {
+                "type": "boolean"
+              },
+              "factor_product": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "gamma_left": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "gamma_product": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "gamma_right": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "left": {
+                "enum": [
+                  "P4",
+                  "C4",
+                  "P5",
+                  "C5",
+                  "K2,3",
+                  "house",
+                  "bull",
+                  "corona-K3"
+                ]
+              },
+              "left_minimum_dominating_set": {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "product_minimum_dominating_set": {
+                "items": {
+                  "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "product_vertex_count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "right": {
+                "enum": [
+                  "P4",
+                  "C4",
+                  "P5",
+                  "C5",
+                  "K2,3",
+                  "house",
+                  "bull",
+                  "corona-K3"
+                ]
+              },
+              "right_minimum_dominating_set": {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "left",
+              "right",
+              "gamma_left",
+              "gamma_right",
+              "gamma_product",
+              "factor_product",
+              "product_vertex_count",
+              "left_minimum_dominating_set",
+              "right_minimum_dominating_set",
+              "product_minimum_dominating_set",
+              "bound_holds"
+            ],
+            "type": "object"
+          },
+          "maxItems": 13,
+          "minItems": 13,
+          "type": "array"
+        },
+        "scope_identity": {
+          "const": "vizing-bounded-cartesian-products:graphs-v1:pairs-v1"
+        }
+      },
+      "required": [
+        "graphs",
+        "pairs",
+        "derived_conclusion",
+        "scope_identity"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "vizing-bounded-cartesian-products:graphs-v1:pairs-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/vizing-bounded-cartesian-products"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -90,11 +90,12 @@ def _write_suite_toml(
         for entry in tasks:
             task_id = str(entry["id"]).removeprefix("jacobian/")
             member = {
-                "schema_version": "1",
+                "schema_version": "2",
                 "task_id": task_id,
                 "task_name": f"jacobian/{task_id}",
                 "evaluation_kind": "workflow",
                 "domain": "test",
+                "primary_domain": "algebra",
                 "field": "test",
                 "provenance_class": "hand-designed",
                 "provenance_ref": "unit-test fixture",
@@ -132,6 +133,7 @@ def _make_minimal_task(root: Path, *, task_id: str = "jacobian/test-v1-a") -> Pa
             [metadata]
             evaluation_kind = "workflow"
             domain = "test"
+            primary_domain = "algebra"
             field = "test"
             assurance_ceiling = "COMPUTED"
             answer_visibility = "hidden"

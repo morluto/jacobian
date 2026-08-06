@@ -35,6 +35,29 @@
     ],
     "tools/check_doc_commands.py": [
       "tests/unit/tooling/test_doc_commands.py"
+    ],
+    "tests/support/process_entrypoints.py": [
+      "tests/boundary/process/test_worker_error_protocol.py",
+      "tests/component/plugins/test_plugin_execution.py",
+      "tests/boundary/storage/recovery/test_enumeration_failures.py",
+      "tests/composition/runtime/test_capability_adapter_authority.py",
+      "tests/composition/runtime/test_capability_discovery.py"
+    ],
+    "tests/support/search_entrypoints.py": [
+      "tests/component/plugins/test_plugin_execution.py",
+      "tests/component/search/test_evaluation.py",
+      "tests/component/search/test_witness_search.py",
+      "tests/boundary/storage/recovery/test_enumeration_failures.py",
+      "tests/boundary/storage/recovery/test_search_lifecycle.py",
+      "tests/boundary/storage/recovery/test_search_plugin_fail_closed.py",
+      "tests/boundary/storage/recovery/test_search_recovery.py",
+      "tests/composition/runtime/test_conjecture_workflows.py"
+    ],
+    "tests/support/conjecture_entrypoints.py": [
+      "tests/composition/runtime/test_conjecture_workflows.py"
+    ],
+    "tests/support/shrinking_entrypoints.py": [
+      "tests/boundary/process/search/test_shrinking.py"
     ]
   }
 }

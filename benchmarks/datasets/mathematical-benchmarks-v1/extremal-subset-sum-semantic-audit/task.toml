@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/extremal-subset-sum-semantic-audit"
+version = "1.0.0"
+description = "Audit binder shadowing and subset-predicate drift in an extremal-set formalization."
+keywords = ["autoformalization", "semantic-alignment", "subset-sum", "binder-shadowing"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "combinatorics"
+field = "combinatorics"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-issue-derived-semantic-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["autoformalization", "proof-audit", "combinatorics", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-answer-visible"
+fixture_digest = "sha256:03b02ab9e3c8b8890b47a4b9b4d4d00f5a7583013e0e1649ad653664e7c66174"
+derivation = "Derived from google-deepmind/formal-conjectures issue 4440 at revision b2e608fc52d765510915a244bb69b1a2741acc3c."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

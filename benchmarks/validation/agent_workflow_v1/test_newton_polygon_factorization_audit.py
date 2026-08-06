@@ -35,6 +35,46 @@ def test_accepts_an_alternative_prime_family_member(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
+def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("Newton polygon witness supplied in submission.json.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
+def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    _rewrite(app, submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["assurance_calibration"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
+def test_rejects_witness_satisfying_corrected_left_conditions(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"].update(
+        {
+            "prime": 2,
+            "factor_left": ["2", "0", "1"],
+            "factor_right": ["2", "0", "0", "0", "1"],
+            "ell": 2,
+            "j": 6,
+        }
+    )
+    _rewrite(app, submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 @pytest.mark.parametrize(
     "corruption",
     ["composite", "tiny", "wrong_ell", "old_conclusion_true", "false_assurance"],
@@ -75,5 +115,6 @@ def test_rejects_visible_input_tampering(tmp_path: Path) -> None:
     support._write_json(app / "input.json", source)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected["input_binding"] == 0.0
+    assert rejected["correctness"] == 1.0
     assert rejected["reward"] == 0.0

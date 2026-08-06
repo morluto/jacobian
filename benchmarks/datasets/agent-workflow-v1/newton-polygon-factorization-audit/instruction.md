@@ -24,7 +24,7 @@ general Newton-polygon theorem.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit a prime, two canonical ascending integer coefficient arrays, and indices ell,j. The verifier derives the product, valuations, lower hull, old-hypothesis failure, and corrected-hypothesis boundary.
+Submit a prime, two canonical ascending integer coefficient arrays, and indices ell,j. Each coefficient string is limited to 30 characters. The verifier derives the product, valuations, lower hull, old-hypothesis failure, and corrected-hypothesis boundary. The limitations array must exactly state: Dumas's theorem and the corrected general lemma are not machine-formalized.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

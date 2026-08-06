@@ -1,6 +1,7 @@
 {
   "$defs": {
     "integer_string": {
+      "maxLength": 30,
       "pattern": "^-?(0|[1-9][0-9]*)$",
       "type": "string"
     }
@@ -45,9 +46,9 @@
       "type": "array"
     },
     "limitations": {
-      "items": {
-        "type": "string"
-      },
+      "const": [
+        "Dumas's theorem and the corrected general lemma are not machine-formalized."
+      ],
       "type": "array"
     },
     "result": {

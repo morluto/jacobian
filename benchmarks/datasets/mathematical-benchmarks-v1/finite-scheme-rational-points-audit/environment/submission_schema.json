@@ -87,9 +87,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "The verifier certifies one finite affine countermodel over F_5, not a general theorem about schemes or functors of points."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

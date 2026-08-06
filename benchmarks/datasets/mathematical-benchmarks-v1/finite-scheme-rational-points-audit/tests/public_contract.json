@@ -4,8 +4,8 @@
   "assurance_ceiling": "COMPUTED",
   "conclusion": {"const": "RATIONAL_POINT_BIJECTION_DOES_NOT_FORCE_SCHEME_ISOMORPHISM"},
   "evidence": {"allowed_paths": ["evidence/answer.txt"], "digest_pattern": "^sha256:[0-9a-f]{64}$", "max_items": 1, "media_types": ["text/plain"], "min_items": 1, "payload_shape": null},
-  "limitations": {"type": "array", "const": ["The verifier certifies one finite affine countermodel over F_5, not a general theorem about schemes or functors of points."]},
-  "public_notes": "Submit complete finite-algebra structure constants, exhaustive rational-point lists, the induced point bijection, and a reducedness-separating nilpotent certificate. The verifier reconstructs every operation over F_5. The limitations array must exactly state: The verifier certifies one finite affine countermodel over F_5, not a general theorem about schemes or functors of points.",
+  "limitations": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "string", "minLength": 1}},
+  "public_notes": "Submit complete finite-algebra structure constants, exhaustive rational-point lists, the induced point bijection, and a reducedness-separating nilpotent certificate. The verifier reconstructs every operation over F_5. In the solver's own words, the limitations array must disclose that this is one finite affine countermodel over F_5, not a general theorem about schemes or functors of points.",
   "required_artifact_filenames": ["evidence/answer.txt"],
   "schema_definitions": {
     "vec3": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": 0, "maximum": 4}},
@@ -52,7 +52,7 @@
       "completeness": {"const": "COMPLETE"},
       "conclusion": {"const": "RATIONAL_POINT_BIJECTION_DOES_NOT_FORCE_SCHEME_ISOMORPHISM"},
       "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-      "limitations": {"type": "array", "const": ["The verifier certifies one finite affine countermodel over F_5, not a general theorem about schemes or functors of points."]},
+      "limitations": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "string", "minLength": 1}},
       "result": {
         "type": "object", "additionalProperties": false,
         "properties": {

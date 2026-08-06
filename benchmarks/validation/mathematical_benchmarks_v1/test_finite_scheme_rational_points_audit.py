@@ -20,6 +20,19 @@ def _mutate(tmp_path: Path, mutation):
     return support._run_verifier(task, app, logs)
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    reward = _mutate(
+        tmp_path,
+        lambda submission: submission.update(
+            limitations=[
+                "This finite affine F5 countermodel concerns rational points only, not a general scheme theorem."
+            ]
+        ),
+    )
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_oracle_countermodel_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     reward = support._run_verifier(task, app, logs)

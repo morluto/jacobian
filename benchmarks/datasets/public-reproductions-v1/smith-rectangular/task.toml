@@ -8,6 +8,7 @@ keywords = ["smith-normal-form", "integer-matrix", "invariant-factors", "verific
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
+primary_domain = "linear-algebra"
 field = "linear-algebra"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

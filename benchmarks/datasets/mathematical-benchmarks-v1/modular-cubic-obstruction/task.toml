@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/modular-cubic-obstruction"
+version = "1.0.0"
+description = "Certify that a cubic Diophantine equation has no integer solutions using a complete modular obstruction."
+keywords = ["number-theory", "diophantine", "modular-arithmetic", "certificate"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "number-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-proof-obligation"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["number-theory", "proof", "finite-exhaustion", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-proof-obligation"
+fixture_digest = "sha256:371636e0fee754d9a3ffa7c0709728ff80ee01e187c5276155d0337f082f4d68"
+derivation = "Derived from Discover-and-Prove minif2f_hard row 195."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

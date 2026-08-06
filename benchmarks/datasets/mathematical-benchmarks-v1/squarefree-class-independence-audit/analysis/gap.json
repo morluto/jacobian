@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "squarefree-class-independence-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Partition positive integers by squarefree kernel and prove the product-square equivalence.",
+      "Translate an ordered-pair count into a sum of squared class sizes and select a transversal of distinct classes.",
+      "Use exhaustive modular residue enumeration to rule out a sum of at most three squares."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "modular.enumerate.quadratic_residues",
+        "availability": "AVAILABLE",
+        "boundary": "Enumerates quadratic residues for a bounded modulus; it does not establish the squarefree-kernel equivalence or compose the class-count argument."
+      }
+    ],
+    "gap_classes": [
+      "MISSING_OPERATION",
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "squarefree-kernel-classification-certificate"
+    ],
+    "disposition": "ACCEPT_CANDIDATE",
+    "next_action": "Use this as a second structurally distinct class-count and modular-obstruction episode before stabilizing a squarefree-kernel capability contract."
+  }
+}

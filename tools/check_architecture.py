@@ -21,10 +21,10 @@ runtime.  It enforces six PR10 invariants:
    environment (``dict(os.environ)``, ``os.environ.copy()``, ``**os.environ``)
    into child-process calls.  Selective ``os.environ.get`` access is fine.
 
-5. **public-contract-drift**: every canonical agent-workflow-v1 task must
-   have a ``public_contract.json`` and its projection must match the rendered
-   ``submission_schema.json`` and ``instruction.md``.  A missing contract is
-   a violation, not a skip.
+5. **public-contract-drift**: every canonical benchmark task in a dataset with
+   public contracts must have a ``public_contract.json`` and its projection must
+   match the rendered ``submission_schema.json`` and ``instruction.md``.  A
+   missing contract is a violation, not a skip.
 
 6. **unsupported-surface**: removed experimental memory/search identifiers must
    not appear in supported product source, tests, schemas, catalog, or docs.
@@ -124,7 +124,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),
         # Repository-command integration tests deliberately invoke CLI entrypoints.
         PurePosixPath(
-            "benchmarks/validation/agent_workflow_v1/"
+            "benchmarks/validation/mathematical_benchmarks_v1/"
             "test_multiplicative_grid_extremum.py"
         ),
         PurePosixPath("benchmarks/validation/test_benchmark_plan_validation.py"),
@@ -163,8 +163,11 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
 # os.environ spreading: product source only.
 _ENVIRON_SPREAD_ROOTS = (PurePosixPath("src"),)
 
-# Public-contract checks apply only to agent-workflow-v1 tasks.
-_DATASET_PREFIX = PurePosixPath("benchmarks/datasets/agent-workflow-v1")
+# Public-contract checks apply to datasets with agent-visible contract projections.
+_PUBLIC_CONTRACT_DATASET_PREFIXES = (
+    PurePosixPath("benchmarks/datasets/mathematical-benchmarks-v1"),
+    PurePosixPath("benchmarks/datasets/conjecture-probes-v1"),
+)
 
 # Unsupported surfaces: scan supported src, tests, schemas, catalog, and docs.
 # Tokens are built from fragments so the checker source does not self-trigger.
@@ -647,38 +650,39 @@ def _environ_spread_violations(
 def _public_contract_drift_violations(root: Path) -> tuple[Violation, ...]:
     from benchmarks.tooling.public_contract import check as check_public_contract
 
-    dataset_root = root / _DATASET_PREFIX
-    if not dataset_root.is_dir():
-        return ()
     violations: list[Violation] = []
-    for task_dir in sorted(dataset_root.iterdir()):
-        if not task_dir.is_dir():
+    for dataset_prefix in _PUBLIC_CONTRACT_DATASET_PREFIXES:
+        dataset_root = root / dataset_prefix
+        if not dataset_root.is_dir():
             continue
-        # Only canonical task directories (with task.toml) require a public contract.
-        if not (task_dir / "task.toml").is_file():
-            continue
-        contract_path = task_dir / "tests" / "public_contract.json"
-        contract_rel = str(PurePosixPath(contract_path.relative_to(root).as_posix()))
-        if not contract_path.is_file():
-            violations.append(
-                Violation(
-                    contract_rel,
-                    "public-contract-drift",
-                    "required public_contract.json is missing",
+        for task_dir in sorted(dataset_root.iterdir()):
+            if not task_dir.is_dir():
+                continue
+            # Only canonical task directories (with task.toml) require a public contract.
+            if not (task_dir / "task.toml").is_file():
+                continue
+            contract_path = task_dir / "tests" / "public_contract.json"
+            contract_rel = str(PurePosixPath(contract_path.relative_to(root).as_posix()))
+            if not contract_path.is_file():
+                violations.append(
+                    Violation(
+                        contract_rel,
+                        "public-contract-drift",
+                        "required public_contract.json is missing",
+                    )
                 )
-            )
-            continue
-        try:
-            drifts = check_public_contract(contract_path, task_dir)
-        except Exception as exc:
-            violations.append(
-                Violation(
-                    contract_rel, "public-contract-drift", f"contract error: {exc}"
+                continue
+            try:
+                drifts = check_public_contract(contract_path, task_dir)
+            except Exception as exc:
+                violations.append(
+                    Violation(
+                        contract_rel, "public-contract-drift", f"contract error: {exc}"
+                    )
                 )
-            )
-            continue
-        for drift in drifts:
-            violations.append(Violation(contract_rel, "public-contract-drift", drift))
+                continue
+            for drift in drifts:
+                violations.append(Violation(contract_rel, "public-contract-drift", drift))
     return tuple(violations)
 
 
@@ -834,9 +838,8 @@ def check_architecture(root: Path | str = ROOT) -> ArchitectureReport:
     run_bounded_process gateway confinement, shutil.which resolver
     confinement, os.environ spreading, and unsupported experimental
     surfaces.  Scans non-Python text files (docs, schemas, catalog) for
-    unsupported surfaces.  Additionally checks every agent-workflow-v1
-    task public-contract projection for drift (missing contracts are
-    violations).
+    unsupported surfaces.  Additionally checks every public-contract dataset's
+    task projection for drift (missing contracts are violations).
     """
     project_root = Path(root).resolve()
     py_files = _python_files(project_root)

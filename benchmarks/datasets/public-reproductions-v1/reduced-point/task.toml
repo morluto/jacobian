@@ -8,6 +8,7 @@ keywords = ["simplicial-homology", "reduced-homology", "boundary"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
 field = "algebraic-topology"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

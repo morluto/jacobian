@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/image-complement-commutation"
+version = "1.0.0"
+description = "Classify finite direct-image/complement commutation with exact witnesses."
+keywords = ["functions", "powersets", "bijection", "conformance"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
+field = "set-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-conformance"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "contract-conformance", "powerset", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-theorem-transformed-finite-cases"
+fixture_digest = "sha256:6e2959d0c1d084e980813784677037cfd03737bcc66919e2d8e59069cedd1620"
+derivation = "Finite conformance cases derived from wellecks/naturalproofs-gen train row 21 at revision bdf412319e160046fd966f7d72d776d3d7b866a0."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

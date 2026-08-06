@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "euler-fourth-power-scope-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Supply a primitive bounded fourth-power identity.",
+      "Use one exact witness to refute only the frozen universal claim."
+    ],
+    "current_capabilities": [],
+    "gap_classes": [
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep Diophantine witness discovery and assurance-scope calibration agent-owned."
+  }
+}

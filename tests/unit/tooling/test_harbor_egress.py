@@ -12,19 +12,19 @@ JOB = (
     ROOT
     / "benchmarks"
     / "datasets"
-    / "agent-workflow-v1"
+    / "mathematical-benchmarks-v1"
     / "jobs"
     / "jacobian-observation.json"
 )
-CONTROL_JOB = ROOT / "benchmarks" / "config" / "agent-workflow-v1-control.json"
+CONTROL_JOB = ROOT / "benchmarks" / "config" / "mathematical-benchmarks-v1-control.json"
 CONTROL_PROXY_JOB = (
-    ROOT / "benchmarks" / "config" / "agent-workflow-v1-control-proxy.json"
+    ROOT / "benchmarks" / "config" / "mathematical-benchmarks-v1-control-proxy.json"
 )
 OBSERVATION_PROXY_JOB = (
     ROOT
     / "benchmarks"
     / "datasets"
-    / "agent-workflow-v1"
+    / "mathematical-benchmarks-v1"
     / "jobs"
     / "jacobian-observation-proxy.json"
 )
@@ -36,7 +36,7 @@ OBSERVATION_COMPOSE = (
     ROOT
     / "benchmarks"
     / "datasets"
-    / "agent-workflow-v1"
+    / "mathematical-benchmarks-v1"
     / "jacobian-observation.compose.yaml"
 )
 
@@ -52,7 +52,7 @@ def test_observation_job_keeps_the_minimal_jacobian_treatment() -> None:
 
     assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
     assert job["environment"]["extra_docker_compose"] == [
-        "benchmarks/datasets/agent-workflow-v1/jacobian-observation.compose.yaml",
+        "benchmarks/datasets/mathematical-benchmarks-v1/jacobian-observation.compose.yaml",
     ]
 
 
@@ -78,7 +78,7 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
     assert "benchmarks.tooling.harbor_proxy" in makefile
     assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in makefile
     assert 'JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)"' in makefile
-    assert "agent-workflow-v1-control-proxy.json" in makefile
+    assert "mathematical-benchmarks-v1-control-proxy.json" in makefile
     assert "jacobian-observation-proxy.json" in makefile
     assert "jacobian-loopback.mcp.json" in makefile
 
@@ -90,7 +90,7 @@ def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> Non
     assert proxy_job["environment"]["extra_docker_compose"] == [
         "benchmarks/config/agent-eval-codex.compose.yaml",
         "benchmarks/config/agent-eval-egress-proxy.compose.yaml",
-        "benchmarks/datasets/agent-workflow-v1/jacobian-observation.compose.yaml",
+        "benchmarks/datasets/mathematical-benchmarks-v1/jacobian-observation.compose.yaml",
     ]
     assert "NO_PROXY" in proxy_overlay
     assert "127.0.0.1" in proxy_overlay
@@ -108,7 +108,7 @@ def test_jacobian_sidecar_keeps_its_project_network_under_egress_control() -> No
         ROOT
         / "benchmarks"
         / "datasets"
-        / "agent-workflow-v1"
+        / "mathematical-benchmarks-v1"
         / "jacobian-observation.compose.yaml"
     ).read_text(encoding="utf-8")
 
@@ -124,7 +124,7 @@ def test_proxy_control_job_is_valid_harbor_job_json() -> None:
     assert job["n_attempts"] == 3
     assert job["datasets"] == [
         {
-            "path": "benchmarks/datasets/agent-workflow-v1",
+            "path": "benchmarks/datasets/mathematical-benchmarks-v1",
             "task_names": ["graph-counterexample"],
         }
     ]

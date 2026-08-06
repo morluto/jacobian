@@ -46,6 +46,7 @@ TASK_SCHEMA_VERSION = "1.4"
 REQUIRED_METADATA = {
     "evaluation_kind",
     "domain",
+    "primary_domain",
     "field",
     "assurance_ceiling",
     "answer_visibility",
@@ -56,8 +57,11 @@ REQUIRED_METADATA = {
 REQUIRED_ENVIRONMENT = ("Dockerfile", "input.json", "submission_schema.json")
 REQUIRED_TESTS = ("Dockerfile", "test.sh", "verifier.py", "verifier_support.py")
 DATASET_SUPPORT_DIRS = frozenset({"jobs", "members"})
-MEMBER_SCHEMA_VERSION = "1"
+MEMBER_SCHEMA_VERSION = "2"
 VERIFIER_CONTRACT_VERSION = "1"
+PUBLIC_CONTRACT_DATASETS = frozenset(
+    {"mathematical-benchmarks-v1", "conjecture-probes-v1"}
+)
 NETWORK_MODES = frozenset({"public", "no-network", "allowlist"})
 FORBIDDEN_VISIBLE_NAMES = frozenset(
     {
@@ -88,6 +92,7 @@ class TaskRef:
     required_provider: str
     evaluation_kind: str
     domain: str
+    primary_domain: str
     field: str
     provenance_class: str
     provenance_ref: str
@@ -300,6 +305,9 @@ def _task_ref(
             member.get("evaluation_kind"), f"{label} evaluation_kind"
         ),
         domain=_require_string(member.get("domain"), f"{label} domain"),
+        primary_domain=_require_string(
+            member.get("primary_domain"), f"{label} primary_domain"
+        ),
         field=_require_string(member.get("field"), f"{label} field"),
         provenance_class=_require_string(
             member.get("provenance_class"), f"{label} provenance_class"
@@ -611,6 +619,7 @@ def _metadata_failures(
         for field, expected in {
             "evaluation_kind": ref.evaluation_kind,
             "domain": ref.domain,
+            "primary_domain": ref.primary_domain,
             "field": ref.field,
             "provenance_class": ref.provenance_class,
         }.items():
@@ -656,7 +665,7 @@ def _task_manifest_failures(suite: Suite, task_dir: Path, rel: str) -> list[str]
     )
     if structural_failures:
         return structural_failures
-    if suite.id == "agent-workflow-v1":
+    if suite.id in PUBLIC_CONTRACT_DATASETS:
         contract_path = task_dir / "tests" / "public_contract.json"
         if not contract_path.is_file():
             failures.append(f"{rel}/tests/public_contract.json: required file missing")
@@ -841,7 +850,7 @@ def _tests_dockerfile_failures(
         )
     if not _dockerfile_copies(docker_text, "verifier_support.py"):
         failures.append(f"{rel}/tests/Dockerfile: does not copy verifier_support.py")
-    if suite.id == "agent-workflow-v1" and not _dockerfile_copies(
+    if suite.id in PUBLIC_CONTRACT_DATASETS and not _dockerfile_copies(
         docker_text, "public_contract.json"
     ):
         failures.append(f"{rel}/tests/Dockerfile: does not copy public_contract.json")

@@ -69,7 +69,7 @@ def test_observation_normalization_binds_fields(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -78,7 +78,7 @@ def test_observation_normalization_binds_fields(
     result_path = _write_result(tmp_path)
 
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="control",
         job_path=job_path,
         jobs_dir=tmp_path,
@@ -124,7 +124,7 @@ def test_observation_binds_runtime_snapshot_fields(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -150,7 +150,7 @@ def test_observation_binds_runtime_snapshot_fields(
     }
 
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="treatment",
         job_path=job_path,
         jobs_dir=tmp_path,
@@ -182,7 +182,7 @@ def test_required_reasoning_protocol_fails_closed_when_trace_is_missing(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -199,7 +199,7 @@ def test_required_reasoning_protocol_fails_closed_when_trace_is_missing(
         },
     }
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="treatment",
         job_path=_write_observation_job(tmp_path, job),
         jobs_dir=tmp_path,
@@ -228,7 +228,7 @@ def test_unbound_reasoning_mode_with_jacobian_enabled_fails_closed(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -244,7 +244,7 @@ def test_unbound_reasoning_mode_with_jacobian_enabled_fails_closed(
         },
     }
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="treatment",
         job_path=_write_observation_job(tmp_path, job),
         jobs_dir=tmp_path,
@@ -319,7 +319,7 @@ def test_observation_rejects_missing_snapshot_id(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -330,7 +330,7 @@ def test_observation_rejects_missing_snapshot_id(
     result_path = _write_result(tmp_path)
 
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="control",
         job_path=job_path,
         jobs_dir=tmp_path,
@@ -355,7 +355,7 @@ def test_observation_rejects_mismatched_harbor_version(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -370,7 +370,7 @@ def test_observation_rejects_mismatched_harbor_version(
     }
 
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="control",
         job_path=job_path,
         jobs_dir=tmp_path,
@@ -401,7 +401,7 @@ def test_incomplete_execution_fails_closed(
         "agents": [{"name": "codex"}],
         "datasets": [
             {
-                "path": "benchmarks/datasets/agent-workflow-v1",
+                "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                 "task_names": ["graph-counterexample"],
             }
         ],
@@ -414,7 +414,7 @@ def test_incomplete_execution_fails_closed(
     result.write_text(json.dumps(payload), encoding="utf-8")
 
     evidence, failures = build_observation_evidence(
-        dataset="agent-workflow-v1",
+        dataset="mathematical-benchmarks-v1",
         condition="control",
         job_path=job_path,
         jobs_dir=tmp_path,

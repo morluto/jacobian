@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 from fractions import Fraction
 from pathlib import Path
 
@@ -52,6 +53,8 @@ evidence = {
     "limitations": limitations,
 }
 root = Path(os.environ.get("SOLUTION_ROOT", "/app"))
+if root == Path("/app"):
+    shutil.copyfile("/solution/input.json", root / "input.json")
 p = root / "evidence/gram-schmidt-audit.json"
 p.parent.mkdir(parents=True, exist_ok=True)
 p.write_text(json.dumps(evidence, separators=(",", ":")))

@@ -16,20 +16,42 @@ from verifier_support import (
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."
-# Published reward-bearing prose obligations for evidence/answer.txt.  The
-# verifier checks that the evidence text states all three facts, accepting
-# mathematically equivalent phrasing while rejecting unrelated or empty text.
-_EVIDENCE_OBLIGATIONS = (
-    (re.compile(r"birational", re.IGNORECASE),),
-    (
-        re.compile(r"\bnorm\b", re.IGNORECASE),
-        re.compile(r"\bQQ\b|\bQ\b|rationals?", re.IGNORECASE),
+# Published reward-bearing prose obligations for evidence/answer.txt.  Each
+# fact has several equivalent formulations, and the file is scanned in chunks
+# so evidence size is not itself a hidden validity condition.
+_EVIDENCE_FACTS = {
+    "coordinate_inverse": (
+        re.compile(r"\bbirational\b"),
+        re.compile(
+            r"(?:coordinate|change|substitution|map).{0,96}"
+            r"(?:rational.{0,32})?invers"
+        ),
     ),
-    (
-        re.compile(r"premise", re.IGNORECASE),
-        re.compile(r"trusted|independence", re.IGNORECASE),
+    "conjugate_norm": (
+        re.compile(r"\bconjugate\s+norm\b"),
+        re.compile(r"\bconjugate\s+product\b"),
+        re.compile(r"\bnorm\b"),
     ),
-)
+    "exact": (
+        re.compile(r"\bexact(?:ly)?\b"),
+        re.compile(r"\bcomputed?\s+without\s+approximation\b"),
+    ),
+    "rational_domain": (
+        re.compile(r"\bqq\b"),
+        re.compile(r"\brationals?\b"),
+        re.compile(r"\brational\s+(?:numbers?|coefficients?)\b"),
+    ),
+    "independence_theorem": (
+        re.compile(r"\balgebraic\s+independence\b"),
+        re.compile(r"\bmodular[- ]form\s+independence\b"),
+    ),
+    "trusted_premise": (
+        re.compile(r"\btrusted\b"),
+        re.compile(r"\bpremise\b"),
+        re.compile(r"\bassum(?:e|ed|ption)\b"),
+        re.compile(r"\bexternal\b"),
+    ),
+}
 
 
 def add(*polynomials):
@@ -132,20 +154,24 @@ def valid_result(result):
     )
 
 
-def evidence_text_is_valid(text):
-    """Check that evidence prose states all three published obligations.
+def evidence_text_is_valid(path: Path) -> bool:
+    """Stream evidence and require every published semantic fact."""
 
-    Accepts mathematically equivalent phrasing; rejects empty or unrelated
-    text that omits any required fact.
-    """
-
-    if not isinstance(text, str) or not text.strip():
+    matched = dict.fromkeys(_EVIDENCE_FACTS, False)
+    carry = ""
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                for name, alternatives in _EVIDENCE_FACTS.items():
+                    if not matched[name] and any(
+                        pattern.search(window) for pattern in alternatives
+                    ):
+                        matched[name] = True
+                carry = window[-256:]
+    except (OSError, UnicodeError, MemoryError):
         return False
-    lowered = text.lower()
-    return all(
-        all(pattern.search(lowered) for pattern in obligation)
-        for obligation in _EVIDENCE_OBLIGATIONS
-    )
+    return all(matched.values())
 
 
 def evidence_ok(evidence):
@@ -154,10 +180,7 @@ def evidence_ok(evidence):
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
-    try:
-        return evidence_text_is_valid(target.read_text())
-    except (OSError, UnicodeError, MemoryError):
-        return False
+    return evidence_text_is_valid(target)
 
 
 def raw_submission():

@@ -130,6 +130,22 @@ def test_equivalent_evidence_wording_is_accepted(tmp_path: Path) -> None:
     assert reward["reward"] == 1.0
 
 
+def test_rational_inverse_wording_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "The two coordinate maps have the displayed rational inverses. "
+        "Their conjugate product is evaluated exactly over the rationals. "
+        "The algebraic independence theorem is an external assumption.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
@@ -146,14 +162,15 @@ def test_large_evidence_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    header = (
+    explanation = (
         "The first and second coordinate changes are birational with the "
         "displayed inverse formulas. The conjugate norm is computed exactly "
         "over QQ. The modular-form independence theorem remains a trusted "
         "premise.\n"
     )
-    # Append a large derivation exceeding the former 65536-byte cap.
-    evidence.write_text(header + "x" * 70000 + "\n")
+    # Put the required facts beyond both the former 64 KiB cap and a tempting
+    # fixed-size prefix scan.
+    evidence.write_text("derivation filler\n" * 70_000 + explanation)
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)

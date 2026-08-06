@@ -1,17 +1,17 @@
-"""Canonical fail-closed protocol helpers vendored into Harbor verifiers.
-
-This module uses only the Python standard library. Each task receives an
-identical copy in its hidden ``tests`` directory so the verifier remains
-self-contained and independent from production Jacobian code.
-"""
+"""Fail-closed protocol helpers for one self-contained Harbor verifier."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import stat
 from pathlib import Path
 from typing import Any, Literal
+
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
+from referencing.exceptions import Unresolvable
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
@@ -32,7 +32,7 @@ SUBMISSION_FIELDS = frozenset(
 ASSURANCE_LEVELS = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"})
 
 
-def is_regular_bounded_file(path: Path, *, max_bytes: int) -> bool:
+def is_regular_bounded_file(path: Path, *, max_bytes: int | None) -> bool:
     """Reject symlinks, non-regular files, and oversized files before reading."""
 
     try:
@@ -41,7 +41,7 @@ def is_regular_bounded_file(path: Path, *, max_bytes: int) -> bool:
         return False
     if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
         return False
-    return status.st_size <= max_bytes
+    return max_bytes is None or status.st_size <= max_bytes
 
 
 def sha256_uri(path: Path) -> str:
@@ -54,25 +54,90 @@ def sha256_uri(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+MAX_PUBLIC_CONTRACT_BYTES = 4 * 1024 * 1024
+
+
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValueError(f"non-finite JSON number: {value}")
+
+
+def _finite_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"out-of-range JSON number: {value}")
+    return parsed
+
+
+def _load_public_contract(
+    path: Path = TESTS / "public_contract.json",
+) -> dict[str, Any] | None:
+    if not is_regular_bounded_file(path, max_bytes=MAX_PUBLIC_CONTRACT_BYTES):
+        return None
+    try:
+        contract = json.loads(
+            path.read_text(),
+            parse_constant=_reject_nonfinite_json,
+            parse_float=_finite_json_float,
+        )
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    if not isinstance(contract, dict) or contract.get("schema_version") != "1":
+        return None
+    schema = contract.get("submission_schema")
+    if not isinstance(schema, dict):
+        return None
+    try:
+        Draft202012Validator.check_schema(schema)
+    except SchemaError:
+        return None
+    return contract
+
+
 def load_submission(
     path: Path = WORKSPACE / "submission.json",
+    *,
+    require_input_binding: bool = True,
 ) -> dict[str, Any] | None:
-    """Parse a submission as one JSON object, rejecting malformed input.
+    """Parse and completely validate one bounded submission object."""
 
-    Rejects symlinks, non-regular files, and oversized submissions before
-    reading so a malformed or hostile submission cannot OOM or block the
-    bounded verifier; such input yields a deterministic ``None`` (zero reward).
-    """
-
-    if not workspace_input_is_bound():
+    if require_input_binding and not workspace_input_is_bound():
         return None
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
+    contract = _load_public_contract()
+    if contract is None:
         return None
-    return value if isinstance(value, dict) else None
+    try:
+        value = json.loads(
+            path.read_text(),
+            parse_constant=_reject_nonfinite_json,
+            parse_float=_finite_json_float,
+        )
+    except (OSError, ValueError, RecursionError, MemoryError, TypeError):
+        return None
+    return (
+        value
+        if isinstance(value, dict) and _public_submission_is_valid(value)
+        else None
+    )
+
+
+def _public_submission_is_valid(submission: object) -> bool:
+    contract = _load_public_contract()
+    if contract is None:
+        return False
+    schema = contract["submission_schema"]
+    try:
+        return Draft202012Validator(schema).is_valid(submission)
+    except (
+        SchemaError,
+        Unresolvable,
+        ValueError,
+        RecursionError,
+        MemoryError,
+        TypeError,
+    ):
+        return False
 
 
 def workspace_input_is_bound(
@@ -107,6 +172,7 @@ def strict_submission_contract(
     conclusion: str,
     completeness: str = "COMPLETE",
     evidence_count: int = 1,
+    min_limitations: int = 0,
     allowed_assurances: frozenset[str] = ASSURANCE_LEVELS,
     verification_record: Literal[
         "required_when_verified", "optional", "forbidden"
@@ -122,15 +188,18 @@ def strict_submission_contract(
         expected_fields = {frozenset(SUBMISSION_FIELDS | {"verification_record_uri"})}
     elif verification_record == "optional":
         expected_fields.add(frozenset(SUBMISSION_FIELDS | {"verification_record_uri"}))
+    limitations = submission.get("limitations", [])
     return bool(
-        frozenset(submission) in expected_fields
+        _public_submission_is_valid(submission)
+        and frozenset(submission) in expected_fields
         and submission.get("task_id") == task_id
         and submission.get("conclusion") == conclusion
         and submission.get("completeness") == completeness
         and isinstance(submission.get("result"), dict)
         and isinstance(submission.get("scope"), str)
-        and isinstance(submission.get("limitations"), list)
-        and all(type(item) is str for item in submission.get("limitations", []))
+        and isinstance(limitations, list)
+        and len(limitations) >= min_limitations
+        and all(type(item) is str for item in limitations)
         and isinstance(submission.get("evidence"), list)
         and len(submission.get("evidence", [])) == evidence_count
         and isinstance(submission.get("claimed_assurance"), str)
@@ -143,6 +212,7 @@ def resolve_evidence(
     *,
     expected_path: str,
     workspace: Path = WORKSPACE,
+    max_bytes: int | None = None,
 ) -> Path | None:
     """Resolve one digest-bound evidence file without escapes or symlinks."""
 
@@ -167,7 +237,9 @@ def resolve_evidence(
         target = unresolved.resolve(strict=True)
     except OSError:
         return None
-    if not target.is_relative_to(root) or not target.is_file():
+    if not target.is_relative_to(root) or not is_regular_bounded_file(
+        target, max_bytes=max_bytes
+    ):
         return None
     try:
         if descriptor["sha256"] != sha256_uri(target):
@@ -182,6 +254,7 @@ def read_evidence_json(
     *,
     expected_path: str,
     workspace: Path = WORKSPACE,
+    max_bytes: int | None = None,
 ) -> dict[str, Any] | None:
     """Resolve and parse a digest-bound evidence object."""
 
@@ -189,12 +262,13 @@ def read_evidence_json(
         descriptor,
         expected_path=expected_path,
         workspace=workspace,
+        max_bytes=max_bytes,
     )
     if target is None:
         return None
     try:
         value = json.loads(target.read_text())
-    except (OSError, ValueError, RecursionError):
+    except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -204,6 +278,7 @@ def evidence_list_is_bound(
     *,
     expected_path: str = "evidence/answer.txt",
     expected_count: int = 1,
+    max_bytes: int | None = None,
 ) -> bool:
     """Require an exact-size list binding the expected evidence file."""
 
@@ -211,7 +286,8 @@ def evidence_list_is_bound(
         isinstance(evidence, list)
         and len(evidence) == expected_count
         and all(
-            resolve_evidence(item, expected_path=expected_path) is not None
+            resolve_evidence(item, expected_path=expected_path, max_bytes=max_bytes)
+            is not None
             for item in evidence
         )
     )

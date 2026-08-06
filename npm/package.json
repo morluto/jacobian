@@ -16,10 +16,11 @@
     "jacobian": "bin/jacobian.cjs"
   },
   "scripts": {
-    "test": "node --test npm-packaging.test.mjs cli-e2e.test.mjs"
+    "test": "node --test npm-packaging.test.mjs cli-e2e.test.mjs installer.test.mjs"
   },
   "files": [
     "bin",
+    "install.sh",
     "README.md",
     "skills"
   ]

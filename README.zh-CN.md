@@ -41,7 +41,20 @@ Jacobian 为 AI 智能体提供小型、可组合的数学操作，而不是一�
 
 ## 快速开始
 
-npm 启动器会安装 Jacobian，并配置受支持的 MCP 客户端。若只想临时使用而不进行全局安装，可以运行：
+npm 启动器会安装 Jacobian，并配置受支持的 MCP 客户端。推荐使用用户态引导安装器：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | sh
+```
+
+安装器会先把 npm release 解析为精确版本，以禁用 lifecycle script 的方式安装小型启动器，配置选中的 MCP 客户端，再验证本地服务器。当前 Python 数学环境约为 160 MB；若本机尚无 Python 3.12，uv 管理的 Python 还会增加约 110 MB。若希望推迟到第一次使用时再安装，可以运行：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | \
+  sh -s -- --client codex --yes --defer-runtime
+```
+
+若只想临时使用而不持久安装启动器，可以运行：
 
 ```sh
 npx jacobian setup
@@ -62,7 +75,7 @@ Python 发行版可以直接安装稳定版本：
 python -m pip install jacobian
 ```
 
-启动器支持 Claude、Codex、Cursor、Gemini 和 OpenCode。它需要 Node.js 18 或更高版本、Python 3.12 以及 [`uv`](https://docs.astral.sh/uv/)。运行 `jacobian mcp` 可以直接启动服务器。
+启动器支持 Claude、Codex、Cursor、Gemini 和 OpenCode。它需要 Node.js 18 或更高版本，以及 Python 3.12 或 [`uv`](https://docs.astral.sh/uv/)；引导安装器可以在确认后安装仓库固定的 `uv` 版本。运行 `jacobian mcp` 可以直接启动服务器。这个不足 100 KB 的 npm 启动器没有 npm 运行时依赖；较大的下载来自本地 Python 数学运行时，而不是 JavaScript 依赖树。
 
 <details>
 <summary><strong>从源代码安装</strong></summary>

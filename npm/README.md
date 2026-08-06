@@ -15,10 +15,32 @@ installs, registers, and forwards.
 ## Requirements
 
 - Node.js >= 18
-- Python 3.12 and `uv` on `$PATH` (the launcher installs the matching stable
+- Python 3.12 or `uv` on `$PATH` (the launcher installs the exactly matching
   kernel from PyPI on first use)
 
 ## Install
+
+Guided user-local install:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | sh
+```
+
+The guided installer resolves `latest` or `alpha` to an exact npm version,
+installs the launcher under `~/.local/share/jacobian/npm-releases`, and
+atomically activates `~/.local/bin/jacobian`. It disables npm lifecycle
+scripts, refuses to replace an unmanaged command, and rolls activation back if
+setup fails. If `uv` is absent, the installer can download the repository-pinned
+official installer and verifies its SHA-256 digest before running it.
+
+By default, the final doctor check installs and verifies the local mathematical
+runtime. Its Python package environment is currently about 160 MB on Linux; a
+uv-managed Python 3.12 adds about 110 MB when the machine does not already have
+one. Pass `--defer-runtime` to leave those downloads until first use. Run
+`npm/install.sh --help` for non-interactive client, release, dry-run, and
+dependency options.
+
+Manual global install:
 
 ```sh
 npm install -g jacobian
@@ -61,6 +83,8 @@ state initialization, source doctor, and client configuration workflow.
 - `JACOBIAN_STATE_DIR` — state directory (default: `./.jacobian`)
 - `JACOBIAN_PACKAGE` — Python package spec override (default: the Python package
   version matching the installed npm launcher)
+- `JACOBIAN_DATA_DIR` — guided installer release data root
+- `JACOBIAN_BIN_DIR` — guided installer directory for the stable command
 
 ## Verification model
 

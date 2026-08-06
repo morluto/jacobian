@@ -57,7 +57,24 @@ same boundary in a runnable graph example.
 
 ## Quickstart
 
-For a one-off setup without a global install:
+For a guided user-local install:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | sh
+```
+
+The installer resolves an npm release to an exact version, installs the small
+launcher without lifecycle scripts, configures selected MCP clients, and
+verifies the local server. The Python package environment is approximately 160
+MB; if Python 3.12 is not already available, uv's managed Python adds about 110
+MB. Add `--defer-runtime` to postpone both until first use:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | \
+  sh -s -- --client codex --yes --defer-runtime
+```
+
+For a one-off setup without a persistent launcher:
 
 ```sh
 npx jacobian setup
@@ -79,12 +96,16 @@ python -m pip install jacobian
 ```
 
 The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
-Node.js 18 or newer, Python 3.12, and [`uv`](https://docs.astral.sh/uv/). Run
-`jacobian mcp` to start the server directly.
+Node.js 18 or newer plus Python 3.12 or
+[`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
+`uv` release after confirmation. Run `jacobian mcp` to start the server
+directly.
 
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
-The npm package is a thin launcher and MCP client installer for that same
-implementation; it is not a separate JavaScript API.
+The npm package is a sub-100 KB thin launcher and MCP client installer for that
+same implementation; it is not a separate JavaScript API. The npm tarball has
+no npm runtime dependencies. The larger download is the local Python
+mathematical runtime, not a JavaScript dependency tree.
 
 To run the exact code in a clone, follow
 [Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).

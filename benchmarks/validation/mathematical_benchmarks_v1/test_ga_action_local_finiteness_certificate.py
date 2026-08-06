@@ -83,6 +83,37 @@ def test_equivalent_explanatory_evidence_needs_no_private_marker(tmp_path: Path)
     assert accepted["reward"] == 1.0
 
 
+def test_accepts_composition_identity_wording(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "A finite coefficient expansion alone does not establish preservation. "
+        "The exact action matrix satisfies the composition identity, which "
+        "makes the submitted span invariant under every parameter.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
+def test_rejects_self_contradictory_explanation(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        VALID_EVIDENCE
+        + "However, the composition identity is false and the span is not invariant.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

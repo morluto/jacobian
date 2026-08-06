@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
-LABEL jacobian.checksum="d8845ffd42541130b0128e3760e6a8a2d48750e88b135f12dd5af8a5981aa204"
+LABEL jacobian.checksum="82d5edeeff83581c9b38ed958944e40ef3714ed134c80a7e333607e3770d9a35"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 WORKDIR /tests
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json verifier_contract.json /tests/

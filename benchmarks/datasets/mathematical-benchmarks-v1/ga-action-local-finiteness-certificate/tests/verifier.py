@@ -59,7 +59,12 @@ _EVIDENCE_FACTS = {
         re.compile(r"\bcoaction\b"),
         re.compile(r"\bgroup[- ]law\b"),
         re.compile(r"r\s*\(\s*s\s*\+\s*t\s*\)"),
-        re.compile(r"\bcomposition\s+law\b"),
+        re.compile(r"\bcomposition\b.{0,96}\b(?:law|identity)\b"),
+        re.compile(r"\b(?:law|identity)\b.{0,96}\bcomposition\b"),
+        re.compile(
+            r"\baction\b.{0,96}\b(?:composition|group)\b"
+            r".{0,32}\b(?:law|identity)\b"
+        ),
     ),
     "invariance": (
         re.compile(r"\binvarian"),
@@ -67,6 +72,15 @@ _EVIDENCE_FACTS = {
         re.compile(r"\bclosed\s+under\s+the\s+action\b"),
     ),
 }
+_EVIDENCE_CONTRADICTIONS = (
+    re.compile(
+        r"\bfinite\b.{0,64}\b(?:coefficient\s+)?expansion\b"
+        r".{0,64}\b(?:alone\s+(?:proves|establishes|implies)|"
+        r"by\s+itself\s+(?:proves|establishes|implies))\b"
+    ),
+    re.compile(r"\bcomposition\s+(?:law|identity)\b.{0,32}\b(?:fail|false)\b"),
+    re.compile(r"\b(?:subspace|span)\b.{0,32}\bnot\s+invariant\b"),
+)
 
 
 def _load_frozen_input() -> dict:
@@ -325,11 +339,15 @@ def _evidence_valid(evidence: object) -> bool:
     if target is None:
         return False
     matched = dict.fromkeys(_EVIDENCE_FACTS, False)
+    contradicted = False
     carry = ""
     try:
         with target.open("r", encoding="utf-8") as stream:
             while chunk := stream.read(65_536):
                 window = (carry + chunk).lower()
+                contradicted = contradicted or any(
+                    pattern.search(window) for pattern in _EVIDENCE_CONTRADICTIONS
+                )
                 for name, alternatives in _EVIDENCE_FACTS.items():
                     if not matched[name] and any(
                         pattern.search(window) for pattern in alternatives
@@ -338,7 +356,7 @@ def _evidence_valid(evidence: object) -> bool:
                 carry = window[-256:]
     except (OSError, UnicodeError, MemoryError):
         return False
-    return all(matched.values())
+    return not contradicted and all(matched.values())
 
 
 def _raw_submission() -> dict | None:

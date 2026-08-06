@@ -4,15 +4,19 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
+EVIDENCE_SENTENCE = "The lower density is positive, while the two endpoint subsequences have different limits, so the natural density does not exist. The finite levels replay instances of the general formula rather than proving every infinite case."
 
 
 def q(text):
@@ -83,7 +87,7 @@ def valid_result(result):
     )
     return (
         exact_integer_levels
-        and result.get("levels") == expected
+        and sorted(result.get("levels"), key=lambda row: row["level"]) == expected
         and q(result.get("lower_density")) == Fraction(1, b + 1)
         and q(result.get("upper_density")) == Fraction(b, b + 1)
         and result.get("lower_density_positive") is True
@@ -95,10 +99,32 @@ def valid_result(result):
 def evidence_ok(evidence):
     # The structured endpoint certificate is replayed independently.  Keep the
     # text artifact requirement to the public digest-binding contract.
-    return evidence_list_is_bound(evidence)
+    if not evidence_list_is_bound(evidence):
+        return False
+    path = resolve_evidence(
+        evidence[0], expected_path="evidence/answer.txt", max_bytes=65_536
+    )
+    if path is None:
+        return False
+    try:
+        return path.read_text().splitlines()[0] == EVIDENCE_SENTENCE
+    except (OSError, UnicodeError, IndexError):
+        return False
+
+
+def raw_submission():
+    path = W / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def main():
+    raw = raw_submission()
     e = json.loads((T / "expected.json").read_text())
     input_binding = workspace_input_is_bound()
     s = load_submission(W / "submission.json", require_input_binding=False)
@@ -109,18 +135,20 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    r = s.get("result") if isinstance(s, dict) else None
+    r = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(r)
-    ev = bool(isinstance(s, dict) and evidence_ok(s.get("evidence")))
+    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
     scope = bool(
-        isinstance(s, dict)
-        and s.get("scope")
+        isinstance(raw, dict)
+        and raw.get("scope")
         == "parameterized-geometric-block-family-with-eight-replayed-levels"
-        and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == [LIMITATION]
+        and raw.get("completeness") == "COMPLETE"
+        and raw.get("limitations") == [LIMITATION]
     )
-    assurance = bool(isinstance(s, dict) and s.get("claimed_assurance") == "COMPUTED")
-    false = false_verified_claim(s, verification_record_bound=False)
+    assurance = bool(
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
+    )
+    false = false_verified_claim(raw, verification_record_bound=False)
     correct = bool(
         contract and input_binding and math_ok and ev and scope and not false
     )

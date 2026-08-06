@@ -9,6 +9,18 @@ from benchmarks.validation.mathematical_benchmarks_v1 import support
 TASK = "elementwise-fixed-no-global-invariant"
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "This finite counterexample does not prove a general classification result."
+    ]
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["limitation_accuracy"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
 def test_oracle_certificate_is_accepted(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     accepted = support._run_verifier(task, app, logs)

@@ -65,14 +65,17 @@ def test_validate_all_catches_a_malformed_proxy_control_job(
 
     def patched_read_json(path: Path) -> object:
         if path.name == "mathematical-benchmarks-v1-control-proxy.json":
-            return {"n_attempts": "not-an-integer"}
+            malformed = original_read_json(path)
+            assert isinstance(malformed, dict)
+            malformed["artifacts"] = ["logs/agent/trajectory.json"]
+            return malformed
         return original_read_json(path)
 
     monkeypatch.setattr(benchmark_contracts, "_read_json", patched_read_json)
 
     failures = validate_all()
 
-    assert any("control-proxy" in f for f in failures), (
+    assert any("control-proxy" in f and "artifacts" in f for f in failures), (
         f"expected a contract failure for the malformed proxy control job, "
         f"got: {failures}"
     )
@@ -84,3 +87,11 @@ def test_paired_jobs_use_three_attempts_per_condition() -> None:
 
     assert treatment["n_attempts"] == 3
     assert control["n_attempts"] == 3
+
+
+def test_paired_jobs_collect_codex_atif_trajectory() -> None:
+    treatment = _read_json(JOB)
+    control = _read_json(CONTROL_JOB)
+
+    assert treatment["artifacts"] == ["/logs/agent/trajectory.json"]
+    assert control["artifacts"] == treatment["artifacts"]

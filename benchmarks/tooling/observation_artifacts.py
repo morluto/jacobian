@@ -11,12 +11,43 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.errors import HarborSuiteError
 from jacobian.eval.telemetry import parse_reasoning_protocol_trace
+
+_UNIFIED_EXEC_JACOBIAN_CALL = re.compile(
+    r"\btools\.(mcp__jacobian__(?:math_find|math_run|reasoning_write))\s*\("
+)
+
+
+def _canonical_tool_name(value: str) -> str:
+    aliases = {
+        "mcp__jacobian__math_find": "math.find",
+        "mcp__jacobian__math_run": "math.run",
+        "mcp__jacobian__reasoning_write": "reasoning.write",
+    }
+    return aliases.get(value, value)
+
+
+def _record_atif_tool_call(value: dict[str, Any], calls: Counter[str]) -> None:
+    function_name = value.get("function_name")
+    if not isinstance(function_name, str) or not isinstance(
+        value.get("tool_call_id"), str
+    ):
+        return
+    calls[_canonical_tool_name(function_name)] += 1
+    if function_name != "exec":
+        return
+    arguments = value.get("arguments")
+    source = arguments.get("input") if isinstance(arguments, dict) else None
+    if not isinstance(source, str):
+        return
+    for match in _UNIFIED_EXEC_JACOBIAN_CALL.finditer(source):
+        calls[_canonical_tool_name(match.group(1))] += 1
 
 
 def _read_json(path: Path) -> Any:
@@ -37,12 +68,17 @@ def _walk_trace(value: Any, calls: Counter[str]) -> int:
         return 0
     tool_name = value.get("tool_name")
     if isinstance(tool_name, str):
-        calls[tool_name] += 1
-    if value.get("type") in {"tool_call", "tool_use"} and isinstance(
+        calls[_canonical_tool_name(tool_name)] += 1
+    elif value.get("type") in {"tool_call", "tool_use"} and isinstance(
         value.get("name"), str
     ):
-        calls[str(value["name"])] += 1
-    own_error = int(value.get("error") not in {None, False, ""})
+        calls[_canonical_tool_name(str(value["name"]))] += 1
+    elif value.get("type") == "mcp_tool_call" and isinstance(value.get("tool"), str):
+        calls[_canonical_tool_name(str(value["tool"]))] += 1
+    _record_atif_tool_call(value, calls)
+    own_error = int(
+        value.get("error") not in {None, False, ""} or value.get("isError") is True
+    )
     return own_error + sum(_walk_trace(child, calls) for child in value.values())
 
 
@@ -67,6 +103,20 @@ _STEPS_DIR = "steps"
 _MANIFEST_STATUSES_OK = {"ok"}
 _MANIFEST_STATUSES_NON_CONCLUSION = {"failed", "empty", "skipped"}
 _MANIFEST_STATUSES = _MANIFEST_STATUSES_OK | _MANIFEST_STATUSES_NON_CONCLUSION
+_HARBOR_CONVENTION_SOURCE = "/logs/artifacts"
+_HARBOR_CONVENTION_DESTINATION = "artifacts/logs/artifacts"
+
+
+def _is_empty_harbor_convention(entry: dict[str, Any]) -> bool:
+    """Identify Harbor's implicit, optional agent artifact directory."""
+
+    return (
+        entry.get("source") == _HARBOR_CONVENTION_SOURCE
+        and entry.get("destination") == _HARBOR_CONVENTION_DESTINATION
+        and entry.get("type") == "directory"
+        and entry.get("status") == "empty"
+        and entry.get("service") is None
+    )
 
 
 def _artifact_path_failures(path: Path, trial_root: Path) -> list[str]:
@@ -249,6 +299,10 @@ def _manifest_entry_artifacts(
     if not isinstance(entry, dict):
         return [], failures
     status = entry.get("status")
+    # Harbor 0.20 always injects its conventional publish directory. Agents do
+    # not have to use it, so its exact `empty` record carries no failed claim.
+    if not failures and _is_empty_harbor_convention(entry):
+        return [], []
     if status in _MANIFEST_STATUSES_NON_CONCLUSION:
         failures.append(
             f"trial {trial_name}: artifact manifest entry {index} has "
@@ -313,9 +367,10 @@ def _manifest_artifacts_for_dir(
     Harbor 0.20 writes ``manifest.json`` as a JSON array of entries
     ``{source, destination, type, status, service}``.  ``destination`` is the
     artifact-relative path (``artifacts/<relative>``); ``source`` is the
-    canonical container source path.  Only ``ok`` entries have a collected
+    canonical container source path. Only ``ok`` entries have a collected
     file on disk; ``failed``/``empty``/``skipped`` are non-conclusion records
-    that are surfaced as failures because evidence is incomplete.
+    that are surfaced as failures because evidence is incomplete, except for
+    Harbor's implicit optional convention directory when it is unused.
     """
 
     failures: list[str] = []

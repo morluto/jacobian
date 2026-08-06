@@ -14,6 +14,13 @@
     "jobs_dir": {"type": "string", "minLength": 1},
     "n_attempts": {"type": "integer", "minimum": 1},
     "timeout_multiplier": {"type": "number", "exclusiveMinimum": 0},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^/.+$"},
+      "description": "Absolute container paths collected by Harbor for observation evidence."
+    },
     "orchestrator": {
       "type": "object",
       "additionalProperties": false,

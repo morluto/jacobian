@@ -4,6 +4,7 @@ UV_RUN := uv run --locked
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
 HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
+HARBOR_PROJECT_PYTHON ?= uv run --locked --with harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
 # Validation pytest is process-isolated under xdist; Path monkeypatches stay
 # worker-local. Oracle/adapter Make targets remain serial.
 HARBOR_VALIDATION_WORKERS ?= 2
@@ -447,7 +448,7 @@ endif
 
 CODEX_WEB_SEARCH ?= disabled
 JACOBIAN_EVAL_PROXY ?= 0
-JACOBIAN_EVAL_CODEX_BINARY ?= $(shell command -v codex 2>/dev/null | xargs -r readlink -f)
+JACOBIAN_EVAL_CODEX_BINARY ?= $(shell command -v codex 2>/dev/null)
 define _jacobian_eval_container_proxy
 $(subst localhost,host.docker.internal,$(subst 127.0.0.1,host.docker.internal,$1))
 endef
@@ -487,6 +488,7 @@ endif
 
 agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROXY=0|1, DATASET=mathematical-benchmarks-v1, EVAL_EXECUTE=1).
 	@set -e; \
+	CODEX_BINARY="$(JACOBIAN_EVAL_CODEX_BINARY)"; \
 	if [ "$(EVAL_EXECUTE)" != "1" ]; then \
 		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=mathematical-benchmarks-v1 EVAL_EXECUTE=1"; \
 		exit 0; \
@@ -496,10 +498,7 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 		exit 2; \
 	fi; \
 	if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then \
-		test -x "$(JACOBIAN_EVAL_CODEX_BINARY)" || { \
-			echo "JACOBIAN_EVAL_CODEX_BINARY must resolve to a Linux standalone Codex binary when JACOBIAN_EVAL_PROXY=1" >&2; \
-			exit 2; \
-		}; \
+		CODEX_BINARY="$$( $(UV_RUN) python -m benchmarks.tooling.codex_binary --candidate "$$CODEX_BINARY" )"; \
 		JACOBIAN_EVAL_UPSTREAM_PROXY="$(JACOBIAN_EVAL_UPSTREAM_PROXY)" \
 			$(UV_RUN) python -m benchmarks.tooling.harbor_proxy \
 			--output "$(JACOBIAN_EVAL_GOST_CONFIG)"; \
@@ -514,7 +513,7 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 	JACOBIAN_EVAL_HTTPS_PROXY="$(JACOBIAN_EVAL_HTTPS_PROXY)" \
 	JACOBIAN_EVAL_ALL_PROXY="$(JACOBIAN_EVAL_ALL_PROXY)" \
 	JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)" \
-	JACOBIAN_EVAL_CODEX_BINARY="$(JACOBIAN_EVAL_CODEX_BINARY)" \
+	JACOBIAN_EVAL_CODEX_BINARY="$$CODEX_BINARY" \
 	JACOBIAN_EVAL_GOST_CONFIG="$(JACOBIAN_EVAL_GOST_CONFIG)" \
 	$(HARBOR_RUNNER) run \
 		-c "$(EVAL_CONFIG)" \
@@ -527,7 +526,7 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 
 agent-eval-validate: ## Normalize one observation (RESULTS=..., JOB=..., CONDITION=..., OUTPUT=...).
 	@test -n "$(RESULTS)" -a -n "$(JOB)" -a -n "$(CONDITION)" -a -n "$(OUTPUT)" || { echo "RESULTS, JOB, CONDITION, and OUTPUT are required" >&2; exit 2; }
-	$(UV_RUN) python -m benchmarks.tooling.observation_results validate \
+	$(HARBOR_PROJECT_PYTHON) -m benchmarks.tooling.observation_results validate \
 		--dataset "$(or $(DATASET),mathematical-benchmarks-v1)" --condition "$(CONDITION)" \
 		--job "$(JOB)" --jobs-dir "$(RESULTS)" --output "$(OUTPUT)" \
 		$(if $(RESULT),--result "$(RESULT)",) \

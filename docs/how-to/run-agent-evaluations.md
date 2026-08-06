@@ -79,14 +79,20 @@ Linux, the host proxy must accept connections from Docker's bridge interface;
 a proxy listening only on `127.0.0.1` is not reachable from the container.
 
 This proxy profile is optional host integration, not part of a task contract.
-It renders a private runtime configuration that chains Harbor's transparent
-egress controller through the upstream proxy, so Harbor's task allowlist stays
-in force. Codex and Jacobian share Harbor's controlled network namespace, and
-MCP uses its loopback interface, so local tool traffic never enters the
-upstream chain. All jobs also mount the host's standalone Codex executable to
-avoid a trial-time package install; override its resolved path with
-`JACOBIAN_EVAL_CODEX_BINARY`. Keep machine-specific Clash addresses in local
-environment variables rather than committed configuration.
+It renders a private runtime configuration with both Harbor's transparent
+egress listener and a loopback HTTP proxy chained to the upstream proxy, so
+Harbor's task allowlist stays in force and upstream DNS resolution works for
+proxy-aware clients. Codex uses the loopback listener. Codex and Jacobian share
+Harbor's controlled network namespace, and MCP uses its loopback interface, so
+local tool traffic never enters the upstream chain.
+
+Proxy jobs also mount the host's standalone Codex executable to avoid a
+trial-time package install. When `codex` is installed through npm, the runner
+automatically resolves the bundled native Linux executable instead of mounting
+the JavaScript launcher without Node. Set `JACOBIAN_EVAL_CODEX_BINARY` only to
+override that candidate; the resolved file must be an executable Linux ELF.
+Keep machine-specific Clash addresses in local environment variables rather
+than committed configuration.
 
 ## Run with Jacobian
 
@@ -222,6 +228,12 @@ For Jacobian treatment runs, inspect Harbor ATIF together with Jacobian
 telemetry. Check capability discovery and descriptions, invocation and
 parameter errors, artifact and verification-record flow, repeated or
 irrelevant calls, shell/file activity, tokens, time, and completion.
+The committed observation jobs explicitly collect Codex's ATIF trajectory from
+`/logs/agent/trajectory.json`, allowing the normalizer to measure tool adoption
+from manifest-bound evidence. Harbor 0.20 also records its implicit
+`/logs/artifacts` publish directory; `empty` is expected there when the agent
+publishes no optional files. Failures for explicitly configured artifacts
+remain non-conclusions.
 
 For a paired control/treatment run, normalize each condition and then compare
 them so task digests, prompts, models, budgets, and job configuration are
@@ -229,9 +241,10 @@ checked for drift:
 
 ```sh
 make agent-eval-validate RESULTS=benchmarks/results/mathematical-benchmarks-v1 \
-  JOB=<job-name> CONDITION=control OUTPUT=benchmarks/results/normalized-control.json
+  JOB=<job-config.json> CONDITION=control \
+  OUTPUT=benchmarks/results/normalized-control.json
 make agent-eval-validate RESULTS=benchmarks/results/mathematical-benchmarks-v1 \
-  JOB=<job-name> CONDITION=treatment \
+  JOB=<job-config.json> CONDITION=treatment \
   RUNTIME_SNAPSHOT="$RUNTIME_SNAPSHOT" \
   OUTPUT=benchmarks/results/normalized-treatment.json
 make agent-eval-compare \

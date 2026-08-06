@@ -7,12 +7,19 @@ from benchmarks.tooling.harbor_proxy import render_config
 def test_render_config_chains_transparent_egress_through_http_proxy() -> None:
     config = render_config("http://docker-host:7890")
 
-    service = config["services"][0]
+    transparent_service = config["services"][0]
+    explicit_service = config["services"][1]
     hop = config["chains"][0]["hops"][0]
     node = hop["nodes"][0]
-    assert service["handler"]["chain"] == "upstream-proxy"
-    assert service["bypass"] == "allowlist"
-    assert service["sockopts"] == {"mark": 114514}
+    assert transparent_service["handler"]["chain"] == "upstream-proxy"
+    assert transparent_service["bypass"] == "allowlist"
+    assert transparent_service["sockopts"] == {"mark": 114514}
+    assert explicit_service == {
+        "name": "explicit-egress",
+        "addr": "127.0.0.1:12346",
+        "handler": {"type": "http", "chain": "upstream-proxy"},
+        "listener": {"type": "tcp"},
+    }
     assert hop["bypass"] == "direct-private"
     assert hop["sockopts"] == {"mark": 114514}
     assert node["addr"] == "docker-host:7890"

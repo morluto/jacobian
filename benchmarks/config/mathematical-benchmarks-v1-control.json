@@ -2,6 +2,9 @@
   "jobs_dir": "benchmarks/results/mathematical-benchmarks-v1-control",
   "n_attempts": 3,
   "timeout_multiplier": 1,
+  "artifacts": [
+    "/logs/agent/trajectory.json"
+  ],
   "orchestrator": {
     "type": "local",
     "n_concurrent_trials": 1,

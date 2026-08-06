@@ -74,6 +74,7 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
         in makefile
     )
     assert "JACOBIAN_EVAL_CODEX_BINARY" in makefile
+    assert "benchmarks.tooling.codex_binary" in makefile
     assert "JACOBIAN_EVAL_UPSTREAM_PROXY" in makefile
     assert "benchmarks.tooling.harbor_proxy" in makefile
     assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in makefile
@@ -81,10 +82,17 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
     assert "mathematical-benchmarks-v1-control-proxy.json" in makefile
     assert "jacobian-observation-proxy.json" in makefile
     assert "jacobian-loopback.mcp.json" in makefile
+    validate_recipe = makefile.split("agent-eval-validate:", maxsplit=1)[1].split(
+        "\n\n", maxsplit=1
+    )[0]
+    assert "$(HARBOR_PROJECT_PYTHON) -m benchmarks.tooling.observation_results" in (
+        validate_recipe
+    )
 
 
 def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> None:
     proxy_job = _read_json(OBSERVATION_PROXY_JOB)
+    proxy_control = _read_json(CONTROL_PROXY_JOB)
     proxy_overlay = EGRESS_PROXY_COMPOSE.read_text(encoding="utf-8")
     codex_overlay = CODEX_COMPOSE.read_text(encoding="utf-8")
     assert proxy_job["environment"]["extra_docker_compose"] == [
@@ -98,9 +106,11 @@ def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> Non
     assert "host.docker.internal:host-gateway" in proxy_overlay
     assert "harbor-docker-egress-control-sidecar:" in proxy_overlay
     assert "JACOBIAN_EVAL_GOST_CONFIG" in proxy_overlay
-    assert 'HTTPS_PROXY: ""' in proxy_overlay
+    assert "http://127.0.0.1:12346" in proxy_overlay
     assert "JACOBIAN_EVAL_CODEX_BINARY" in codex_overlay
     assert "target: /usr/local/bin/codex" in codex_overlay
+    assert proxy_job["artifacts"] == ["/logs/agent/trajectory.json"]
+    assert proxy_control["artifacts"] == proxy_job["artifacts"]
 
 
 def test_jacobian_sidecar_keeps_its_project_network_under_egress_control() -> None:
@@ -155,8 +165,19 @@ def test_proxy_compose_overlay_declares_proxy_environment() -> None:
 
     assert "environment" in main
     env = main["environment"]
-    for key in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
+    for key in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+    ):
         assert key in env, f"proxy compose missing {key}"
+    assert env["HTTP_PROXY"] == "http://127.0.0.1:12346"
+    assert env["HTTPS_PROXY"] == "http://127.0.0.1:12346"
+    assert env["http_proxy"] == "http://127.0.0.1:12346"
+    assert env["https_proxy"] == "http://127.0.0.1:12346"
 
     sidecar = parsed["services"]["harbor-docker-egress-control-sidecar"]
     assert "host.docker.internal:host-gateway" in sidecar["extra_hosts"]

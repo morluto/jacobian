@@ -60,7 +60,13 @@ def render_config(proxy_url: str) -> dict[str, object]:
                     },
                 },
                 "listener": {"type": "red"},
-            }
+            },
+            {
+                "name": "explicit-egress",
+                "addr": "127.0.0.1:12346",
+                "handler": {"type": "http", "chain": "upstream-proxy"},
+                "listener": {"type": "tcp"},
+            },
         ],
         "chains": [
             {

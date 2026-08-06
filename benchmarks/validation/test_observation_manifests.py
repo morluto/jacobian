@@ -252,6 +252,99 @@ def test_reasoning_protocol_is_extracted_without_summary_text(tmp_path: Path) ->
     assert "private" not in json.dumps(protocol)
 
 
+def test_atif_unified_exec_accounts_for_nested_jacobian_calls(
+    tmp_path: Path,
+) -> None:
+    trajectory = {
+        "schema_version": "ATIF-v1.7",
+        "steps": [
+            {
+                "tool_calls": [
+                    {
+                        "tool_call_id": "call-1",
+                        "function_name": "exec",
+                        "arguments": {
+                            "input": "\n".join(
+                                [
+                                    "const toolsText = 'math.run is available';",
+                                    "await tools.mcp__jacobian__math_find({});",
+                                    "await tools.mcp__jacobian__math_run({});",
+                                    "await tools.mcp__jacobian__math_run({});",
+                                ]
+                            )
+                        },
+                    }
+                ],
+                "observation": {"results": []},
+            }
+        ],
+    }
+    trial_dir = tmp_path / "job" / "attempt-0"
+    _write_trial_manifest(
+        trial_dir,
+        [
+            {
+                "source": "/logs/agent/trajectory.json",
+                "destination": "artifacts/logs/agent/trajectory.json",
+                "type": "file",
+                "status": "ok",
+                "service": None,
+                "_content": json.dumps(trajectory),
+            }
+        ],
+    )
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    _artifacts, calls, errors, failures = _trial_artifacts(
+        result_path, "attempt-0", "job.json"
+    )
+
+    assert calls == {"exec": 1, "math.find": 1, "math.run": 2}
+    assert errors == 0
+    assert failures == []
+
+
+def test_codex_mcp_events_account_for_canonical_tool_names_and_errors(
+    tmp_path: Path,
+) -> None:
+    events = [
+        _tool_event("mcp__jacobian__math_find", {}, {"matches": []}),
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "mcp_tool_call",
+                "tool": "mcp__jacobian__math_run",
+                "result": {"isError": True},
+            },
+        },
+    ]
+    trial_dir = tmp_path / "job" / "attempt-0"
+    _write_trial_manifest(
+        trial_dir,
+        [
+            {
+                "source": "/logs/agent/trajectory.jsonl",
+                "destination": "artifacts/logs/agent/trajectory.jsonl",
+                "type": "file",
+                "status": "ok",
+                "service": None,
+                "_content": "\n".join(json.dumps(event) for event in events) + "\n",
+            }
+        ],
+    )
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    _artifacts, calls, errors, failures = _trial_artifacts(
+        result_path, "attempt-0", "job.json"
+    )
+
+    assert calls == {"math.find": 1, "math.run": 1}
+    assert errors == 1
+    assert failures == []
+
+
 def test_heldout_artifact_source_paths_include_pair_and_condition(
     tmp_path: Path,
 ) -> None:
@@ -475,6 +568,58 @@ def test_directory_manifest_empty_ok_is_failure(tmp_path: Path) -> None:
 
     assert artifacts == []
     assert any("unexpectedly empty" in f for f in failures)
+
+
+def test_implicit_empty_harbor_convention_is_not_a_failure(tmp_path: Path) -> None:
+    trial_dir = tmp_path / "trial-0"
+    trial_dir.mkdir()
+    artifacts_dir = trial_dir / "artifacts"
+    artifacts_dir.mkdir()
+    manifest = [
+        {
+            "source": "/logs/artifacts",
+            "destination": "artifacts/logs/artifacts",
+            "type": "directory",
+            "status": "empty",
+            "service": None,
+        }
+    ]
+    (artifacts_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    artifacts, _calls, _errors, failures = _trial_artifacts(
+        result_path, "attempt-0", "job.json"
+    )
+
+    assert artifacts == []
+    assert failures == []
+
+
+def test_empty_non_convention_manifest_entry_is_a_failure(tmp_path: Path) -> None:
+    trial_dir = tmp_path / "trial-0"
+    trial_dir.mkdir()
+    _write_trial_manifest(
+        trial_dir,
+        [
+            {
+                "source": "/app/evidence",
+                "destination": "artifacts/app/evidence",
+                "type": "directory",
+                "status": "empty",
+                "service": None,
+            }
+        ],
+    )
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    artifacts, _calls, _errors, failures = _trial_artifacts(
+        result_path, "attempt-0", "job.json"
+    )
+
+    assert artifacts == []
+    assert any("non-conclusion status" in failure for failure in failures)
 
 
 def test_directory_manifest_missing_dir_is_failure(tmp_path: Path) -> None:

@@ -1,12 +1,12 @@
 services:
   main:
     environment:
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
+      HTTP_PROXY: http://127.0.0.1:12346
+      HTTPS_PROXY: http://127.0.0.1:12346
       ALL_PROXY: ""
       NO_PROXY: ${JACOBIAN_EVAL_NO_PROXY:-localhost,127.0.0.1,jacobian}
-      http_proxy: ""
-      https_proxy: ""
+      http_proxy: http://127.0.0.1:12346
+      https_proxy: http://127.0.0.1:12346
       all_proxy: ""
       no_proxy: ${JACOBIAN_EVAL_NO_PROXY:-localhost,127.0.0.1,jacobian}
   harbor-docker-egress-control-sidecar:

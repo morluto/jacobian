@@ -35,6 +35,41 @@ def test_oracle_passes(tmp_path: Path) -> None:
     assert _run(tmp_path)["reward"] == 1.0
 
 
+def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("Finite coupling certificate supplied in submission.json.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    (app / "input.json").write_text("{}")
+    result = support._run_verifier(task, app, logs)
+    assert result["input_binding"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_zero_mass_product_entries_are_normalized(tmp_path: Path) -> None:
+    def mutate(submission):
+        entries = submission["result"]["limit_product_distribution"]
+        present = {entry["value"] for entry in entries}
+        attainable = {
+            left * right for left in (-3, -1, 2, 5) for right in (-3, -1, 2, 5)
+        }
+        missing = min(attainable - present)
+        entries.append({"value": missing, "mass": "0"})
+        entries.sort(key=lambda entry: entry["value"])
+
+    assert _run(tmp_path, mutate)["reward"] == 1.0
+
+
 def test_accepts_alternative_nonproduct_coupling(tmp_path: Path) -> None:
     def mutate(submission):
         entries = json.loads(json.dumps(submission["result"]["prelimit_joint"]))

@@ -8,7 +8,6 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
-    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -81,35 +80,21 @@ def parse_product(entries):
             return None
         value = entry.get("value")
         mass = canonical_fraction(entry.get("mass"))
-        if type(value) is not int or mass is None or mass == 0:
+        if type(value) is not int or mass is None:
             return None
         if prior is not None and value <= prior:
             return None
         distribution[value] = mass
         prior = value
-    return distribution if sum(distribution.values()) == 1 else None
+    if sum(distribution.values()) != 1:
+        return None
+    return {value: mass for value, mass in distribution.items() if mass}
 
 
-def evidence_matches(evidence, result):
-    if not evidence_list_is_bound(evidence):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-        lines = [line for line in text.splitlines() if line.startswith("RESULT_JSON:")]
-        if (
-            len(lines) != 1
-            or json.loads(lines[0].removeprefix("RESULT_JSON:").strip()) != result
-        ):
-            return False
-        lowered = text.lower()
-        return all(
-            word in lowered for word in ("marginal", "joint", "independence", "product")
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
+def evidence_matches(evidence):
+    # The full finite laws and product pushforwards are independently replayed.
+    # The public evidence contract promises only one bound text artifact.
+    return evidence_list_is_bound(evidence)
 
 
 def result_is_valid(result):
@@ -161,7 +146,8 @@ def result_is_valid(result):
 
 def main():
     expected = json.loads((T / "expected.json").read_text())
-    submission = load_submission(W / "submission.json")
+    input_bound = workspace_input_is_bound()
+    submission = load_submission(W / "submission.json", require_input_binding=False)
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
@@ -170,11 +156,9 @@ def main():
         verification_record="forbidden",
     )
     result = submission.get("result") if isinstance(submission, dict) else None
-    input_bound = workspace_input_is_bound()
-    math_ok = bool(input_bound and result_is_valid(result))
+    math_ok = result_is_valid(result)
     evidence_ok = bool(
-        isinstance(submission, dict)
-        and evidence_matches(submission.get("evidence"), result)
+        isinstance(submission, dict) and evidence_matches(submission.get("evidence"))
     )
     scope_ok = bool(
         isinstance(submission, dict)
@@ -188,12 +172,20 @@ def main():
         and submission.get("claimed_assurance") == "COMPUTED"
     )
     false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and math_ok and evidence_ok and scope_ok and not false_cert)
+    correct = bool(
+        contract
+        and input_bound
+        and math_ok
+        and evidence_ok
+        and scope_ok
+        and not false_cert
+    )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(bool(contract)),
+                "input_binding": float(input_bound),
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
                 "scope_accuracy": float(scope_ok),

@@ -79,10 +79,9 @@
       "type": "array"
     },
     "limitations": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
+      "const": [
+        "This exact finite-law countermodel does not machine-verify a general weak-convergence theorem or disambiguate the original prose."
+      ],
       "type": "array"
     },
     "result": {

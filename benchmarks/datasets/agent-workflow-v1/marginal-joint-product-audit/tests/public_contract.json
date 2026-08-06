@@ -23,13 +23,12 @@
     "payload_shape": null
   },
   "limitations": {
-    "items": {
-      "type": "string"
-    },
-    "minItems": 1,
+    "const": [
+      "This exact finite-law countermodel does not machine-verify a general weak-convergence theorem or disambiguate the original prose."
+    ],
     "type": "array"
   },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. Product distributions may include ascending zero-mass entries, which are normalized away. The limitations array must exactly state: This exact finite-law countermodel does not machine-verify a general weak-convergence theorem or disambiguate the original prose.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -232,10 +231,9 @@
         "type": "array"
       },
       "limitations": {
-        "items": {
-          "type": "string"
-        },
-        "minItems": 1,
+        "const": [
+          "This exact finite-law countermodel does not machine-verify a general weak-convergence theorem or disambiguate the original prose."
+        ],
         "type": "array"
       },
       "result": {

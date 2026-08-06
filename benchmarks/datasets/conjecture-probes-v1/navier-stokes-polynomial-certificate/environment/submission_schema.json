@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "rat": {
+      "pattern": "^(?:0|-?[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "STEADY_INCOMPRESSIBLE_POLYNOMIAL_CERTIFICATE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_EXACT_2D_STEADY_POLYNOMIAL_FIELD",
+        "NO_GLOBAL_NAVIER_STOKES_REGULARITY_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "divergence": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        },
+        "momentum_x": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "momentum_y": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "pressure": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "type": "array"
+        },
+        "velocity": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/rat"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "vorticity": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "velocity",
+        "pressure",
+        "divergence",
+        "momentum_x",
+        "momentum_y",
+        "vorticity"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "steady-affine-2d-polynomial-fields-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/navier-stokes-polynomial-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

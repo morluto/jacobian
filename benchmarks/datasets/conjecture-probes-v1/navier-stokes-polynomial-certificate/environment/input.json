@@ -1,0 +1,1 @@
+{"task_id":"jacobian/navier-stokes-polynomial-certificate","conjecture_id":"C-006","coefficient_domain":"QQ","variables":["x","y"],"velocity_monomials":["1","x","y"],"pressure_monomials":["1","x","y","x^2","xy","y^2"],"coefficient_numerator_bound":50,"coefficient_denominator_bound":20,"required_vorticity":"NONZERO","scope":"steady-affine-2d-polynomial-fields-v1"}

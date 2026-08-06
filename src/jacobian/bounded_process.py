@@ -882,8 +882,6 @@ class BoundedInteractiveProcess:
             responses.put(exc)
 
     def _capture_stderr(self, process: subprocess.Popen[str]) -> None:
-        import select as _select
-
         stderr = process.stderr
         if stderr is None:
             return
@@ -893,15 +891,13 @@ class BoundedInteractiveProcess:
         try:
             os.set_blocking(fd, False)
             while True:
-                ready = self._stderr_select(_select, fd)
-                if ready is None:
-                    return
-                if not ready:
+                n = self._stderr_read_chunk(fd, limit, total)
+                if n == 0:
                     self._maybe_fire_checkpoint()
                     if process.poll() is not None:
                         return
+                    time.sleep(0.001)
                     continue
-                n = self._stderr_read_chunk(fd, limit, total)
                 if n == -1:
                     return
                 total += n
@@ -913,14 +909,6 @@ class BoundedInteractiveProcess:
         finally:
             with self._stderr_checkpoint_lock:
                 self._stderr_checkpoint_complete.set()
-
-    def _stderr_select(self, _select: Any, fd: int) -> bool | None:
-        """Return True if data is ready, False if timeout, None on error."""
-        try:
-            _ready = _select.select([fd], [], [], 0.01)[0]
-            return bool(_ready)
-        except (OSError, ValueError):
-            return None
 
     def _maybe_fire_checkpoint(self) -> None:
         if self._stderr_checkpoint_requested.is_set():

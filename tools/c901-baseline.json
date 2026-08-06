@@ -28,6 +28,11 @@
       "complexity": 11
     },
     {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/fiber-dimension-semicontinuity-repair/tests/verifier.py",
+      "symbol": "_fiber_checks",
+      "complexity": 12
+    },
+    {
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/finite-partition/tests/verifier.py",
       "symbol": "main",
       "complexity": 12

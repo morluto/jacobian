@@ -93,6 +93,69 @@ SINGLE_EVIDENCE_TASKS = tuple(
 )
 
 
+_TASK_CONTRACT_KEYS = frozenset(
+    {"schema_version", "input_binding_decoupled", "scope_independent_assurance"}
+)
+
+
+def load_task_contract_metadata(task_name: str) -> dict[str, object]:
+    """Load task-local verifier contract metadata from the task's tests/ dir.
+
+    Task-specific diagnostic behavior (input-binding decoupling, scope-assurance
+    independence) lives in ``tests/verifier_contract.json`` rather than global
+    name registries so renames or removals cannot leave stale entries.
+    """
+
+    path = TASKS / task_name / "tests" / "verifier_contract.json"
+    if not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{task_name}: invalid verifier_contract.json: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{task_name}: verifier_contract.json must be an object")
+    unknown = set(value) - _TASK_CONTRACT_KEYS
+    if unknown:
+        raise ValueError(
+            f"{task_name}: unknown verifier contract fields: {sorted(unknown)}"
+        )
+    if value.get("schema_version") != "1":
+        raise ValueError(f"{task_name}: verifier contract schema_version must be '1'")
+    for field in ("input_binding_decoupled", "scope_independent_assurance"):
+        if field in value and type(value[field]) is not bool:
+            raise ValueError(f"{task_name}: {field} must be a boolean")
+    return value
+
+
+def is_input_binding_decoupled(task_name: str) -> bool:
+    """Whether a task's verifier decouples correctness from workspace input binding.
+
+    Checks task-local contract metadata first; falls back to the legacy
+    ``INPUT_BINDING_DECOUPLED_TASKS`` registry for tasks that have not yet
+    migrated to per-task metadata.
+    """
+
+    metadata = load_task_contract_metadata(task_name)
+    if "input_binding_decoupled" in metadata:
+        return metadata["input_binding_decoupled"] is True
+    return task_name in INPUT_BINDING_DECOUPLED_TASKS
+
+
+def is_scope_independent_assurance(task_name: str) -> bool:
+    """Whether a task's verifier reports scope independently of assurance typing.
+
+    Checks task-local contract metadata first; falls back to the legacy
+    ``SCOPE_INDEPENDENT_ASSURANCE_TASKS`` registry for tasks that have not yet
+    migrated to per-task metadata.
+    """
+
+    metadata = load_task_contract_metadata(task_name)
+    if "scope_independent_assurance" in metadata:
+        return metadata["scope_independent_assurance"] is True
+    return task_name in SCOPE_INDEPENDENT_ASSURANCE_TASKS
+
+
 def _task_tree_snapshot() -> dict[str, str]:
     return {
         path.relative_to(TASKS).as_posix(): _digest(path)

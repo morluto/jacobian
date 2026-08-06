@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "checkpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "maximum": 30,
+          "minimum": 4,
+          "type": "integer"
+        },
+        "reciprocal_sum": {
+          "$ref": "#/$defs/rat"
+        },
+        "root": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "n",
+        "reciprocal_sum",
+        "root"
+      ],
+      "type": "object"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          },
+          "maxItems": 8,
+          "minItems": 3,
+          "type": "array"
+        },
+        "limit": {
+          "$ref": "#/$defs/rat"
+        },
+        "partial_fraction": {
+          "additionalProperties": false,
+          "properties": {
+            "left_coefficient": {
+              "maximum": 3,
+              "minimum": -3,
+              "type": "integer"
+            },
+            "right_coefficient": {
+              "maximum": 3,
+              "minimum": -3,
+              "type": "integer"
+            },
+            "scale": {
+              "$ref": "#/$defs/rat"
+            }
+          },
+          "required": [
+            "scale",
+            "left_coefficient",
+            "right_coefficient"
+          ],
+          "type": "object"
+        },
+        "rank_one_sign": {
+          "const": "DIAGONAL_MINUS_LAMBDA_ONES"
+        },
+        "root_formula": {
+          "const": "4*n*(n+1)/((n-1)*(n+2))"
+        }
+      },
+      "required": [
+        "rank_one_sign",
+        "partial_fraction",
+        "checkpoints",
+        "root_formula",
+        "limit"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "LIMIT_DERIVED_EXACTLY"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/spectral-certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "MATRIX_DETERMINANT_LEMMA_TRUSTED",
+        "RATIONAL_LIMIT_INFERENCE_NOT_PROOF_ASSISTANT_VERIFIED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "DECLARED_MATRIX_FAMILY",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/rank-one-spectral-limit-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

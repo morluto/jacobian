@@ -111,3 +111,75 @@ def test_rejects_visible_input_tampering(tmp_path: Path) -> None:
     assert rejected["input_binding"] == 0.0
     assert rejected["correctness"] == 1.0
     assert rejected["reward"] == 0.0
+
+
+def test_accepts_unreduced_rational_coordinates(tmp_path: Path) -> None:
+    """Coordinates are not sparse term lists; unreduced rationals are schema-valid."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    result = submission["result"]
+    original = Fraction(result["f_coordinates"][0])
+    # Replace the first coordinate with an unreduced equivalent, e.g. 7 -> 14/2.
+    unreduced = f"{original.numerator * 2}/{original.denominator * 2}"
+    assert str(Fraction(unreduced)) == str(original)
+    result["f_coordinates"][0] = unreduced
+    _rewrite(app, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_accepts_long_rational_coordinates(tmp_path: Path) -> None:
+    """No undisclosed byte cap on rational coordinate strings."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    result = submission["result"]
+    # Scale basis[0] by a large number so the coordinate string exceeds 80 chars.
+    big = Fraction(10) ** 80
+    scales = [big] + [Fraction(1)] * 4
+    original_coordinates = [Fraction(value) for value in result["f_coordinates"]]
+    for index, poly in enumerate(result["basis"]):
+        poly[0]["coefficient"] = _rational(
+            scales[index] * Fraction(poly[0]["coefficient"])
+        )
+    result["f_coordinates"] = [
+        _rational(value / scale)
+        for value, scale in zip(original_coordinates, scales, strict=True)
+    ]
+    assert len(result["f_coordinates"][0]) > 80
+    for row, entries in enumerate(result["action_matrix"]):
+        for column, poly in enumerate(entries):
+            for term in poly:
+                term["coefficient"] = _rational(
+                    Fraction(term["coefficient"]) * scales[column] / scales[row]
+                )
+    _rewrite(app, submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == pytest.approx(1.0)
+
+
+def test_rejects_noncanonical_basis_coefficient(tmp_path: Path) -> None:
+    """Sparse term lists must use canonical reduced rationals per the contract."""
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    result = submission["result"]
+    original = Fraction(result["basis"][0][0]["coefficient"])
+    result["basis"][0][0]["coefficient"] = (
+        f"{original.numerator * 2}/{original.denominator * 2}"
+    )
+    _rewrite(app, submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_task_metadata_declares_input_binding_decoupled() -> None:
+    """Input-binding decoupling is declared in task-local metadata, not a global registry."""
+    assert TASK not in support.INPUT_BINDING_DECOUPLED_TASKS
+    assert support.is_input_binding_decoupled(TASK) is True
+    metadata = support.load_task_contract_metadata(TASK)
+    assert metadata.get("input_binding_decoupled") is True

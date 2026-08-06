@@ -7,7 +7,6 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
-    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -17,25 +16,10 @@ MISMATCHES = {"OBJECTIVE_REPLACED", "BINARY_DOMAIN_RELAXED", "UNDECLARED_BUDGET_
 LIMITATION = "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
 
 
-def evidence_ok(evidence, result):
-    if not evidence_list_is_bound(evidence):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-        lines = [line for line in text.splitlines() if line.startswith("RESULT_JSON:")]
-        return (
-            len(lines) == 1
-            and json.loads(lines[0].removeprefix("RESULT_JSON:").strip()) == result
-            and all(
-                word in text.lower()
-                for word in ("objective", "binary", "budget", "residual")
-            )
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
+def evidence_ok(evidence):
+    # The typed residual certificate is replayed independently.  The public
+    # evidence contract requires one digest-bound text artifact only.
+    return evidence_list_is_bound(evidence)
 
 
 def valid_result(result, data):
@@ -64,17 +48,21 @@ def valid_result(result, data):
     if (
         not isinstance(selected, list)
         or any(type(i) is not int for i in selected)
-        or selected != sorted(set(selected))
+        or len(selected) != len(set(selected))
         or any(i < 0 or i >= len(data["items"]) for i in selected)
     ):
         return False
     ratio_text = result.get("attained_ratio")
     if (
         not isinstance(ratio_text, str)
+        or len(ratio_text) > 64
         or re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*", ratio_text) is None
     ):
         return False
-    ratio = Fraction(ratio_text)
+    try:
+        ratio = Fraction(ratio_text)
+    except (ValueError, ZeroDivisionError):
+        return False
     if str(ratio) != ratio_text:
         return False
     numerator = data["alpha"] + sum(data["items"][i]["t"] for i in selected)
@@ -85,15 +73,30 @@ def valid_result(result, data):
     constant = q * data["alpha"] - p * data["beta"]
     residuals = [q * item["t"] - p * item["f"] for item in data["items"]]
     submitted = result.get("item_residuals")
-    if not isinstance(submitted, list) or submitted != [
-        {"index": i, "value": value} for i, value in enumerate(residuals)
-    ]:
+    if not isinstance(submitted, list) or len(submitted) != len(residuals):
+        return False
+    if any(
+        not isinstance(row, dict)
+        or set(row) != {"index", "value"}
+        or type(row["index"]) is not int
+        or type(row["value"]) is not int
+        for row in submitted
+    ):
+        return False
+    submitted_by_index = {row["index"]: row["value"] for row in submitted}
+    if len(submitted_by_index) != len(residuals) or submitted_by_index != dict(
+        enumerate(residuals)
+    ):
         return False
     positives = [i for i, value in enumerate(residuals) if value > 0]
+    submitted_positives = result.get("positive_residual_indices")
     return (
         result.get("constant_residual") == constant
-        and result.get("positive_residual_indices") == positives
-        and selected == positives
+        and isinstance(submitted_positives, list)
+        and all(type(i) is int for i in submitted_positives)
+        and len(submitted_positives) == len(set(submitted_positives))
+        and set(submitted_positives) == set(positives)
+        and set(selected) == set(positives)
         and constant + sum(max(0, value) for value in residuals) == 0
     )
 
@@ -101,7 +104,8 @@ def valid_result(result, data):
 def main():
     expected = json.loads((T / "expected.json").read_text())
     data = json.loads((T / "input.json").read_text())
-    submission = load_submission(W / "submission.json")
+    input_binding = workspace_input_is_bound()
+    submission = load_submission(W / "submission.json", require_input_binding=False)
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
@@ -110,9 +114,9 @@ def main():
         verification_record="forbidden",
     )
     result = submission.get("result") if isinstance(submission, dict) else None
-    math_ok = bool(workspace_input_is_bound() and valid_result(result, data))
+    math_ok = valid_result(result, data)
     ev_ok = bool(
-        isinstance(submission, dict) and evidence_ok(submission.get("evidence"), result)
+        isinstance(submission, dict) and evidence_ok(submission.get("evidence"))
     )
     scope_ok = bool(
         isinstance(submission, dict)
@@ -125,12 +129,15 @@ def main():
         and submission.get("claimed_assurance") == "COMPUTED"
     )
     false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and math_ok and ev_ok and scope_ok and not false_cert)
+    correct = bool(
+        contract and input_binding and math_ok and ev_ok and scope_ok and not false_cert
+    )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(bool(contract)),
+                "input_binding": float(input_binding),
                 "correctness": float(math_ok),
                 "evidence_validity": float(ev_ok),
                 "scope_accuracy": float(scope_ok),

@@ -4,12 +4,12 @@ The frozen problem maximizes `(alpha + t·x)/(beta + f·x)` over binary vectors.
 
 Identify the three contract mismatches exactly. Then solve the frozen 24-item instance and submit an exact residual optimality certificate. If the attained reduced ratio is `p/q`, report every residual `q*t_i - p*f_i`, the affine constant `q*alpha - p*beta`, the indices with positive residual, and the maximum residual sum obtained by independently choosing each binary coordinate. A zero maximum residual proves no binary vector exceeds `p/q`; the submitted vector must attain equality.
 
-Write `/app/submission.json` and bind `/app/evidence/answer.txt` with exactly one `RESULT_JSON:` line equal to the submitted result. Explain both the proof mismatch and why the residual certificate repairs the frozen objective. Do not claim a general theorem is machine verified.
+Write `/app/submission.json` and bind one text explanation at `/app/evidence/answer.txt`. The independently replayed typed certificate belongs in `submission.json`; no duplicate private serialization is required in the prose. Explain both the proof mismatch and why the residual certificate repairs the frozen objective. Do not claim a general theorem is machine verified.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

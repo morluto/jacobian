@@ -59,16 +59,16 @@
       "type": "array"
     },
     "limitations": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
+      "const": [
+        "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
+      ],
       "type": "array"
     },
     "result": {
       "additionalProperties": false,
       "properties": {
         "attained_ratio": {
+          "maxLength": 64,
           "pattern": "^[1-9][0-9]*/[1-9][0-9]*$",
           "type": "string"
         },

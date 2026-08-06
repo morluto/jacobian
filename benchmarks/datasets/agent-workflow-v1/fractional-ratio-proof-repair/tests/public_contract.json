@@ -23,13 +23,12 @@
     "payload_shape": null
   },
   "limitations": {
-    "items": {
-      "type": "string"
-    },
-    "minItems": 1,
+    "const": [
+      "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
+    ],
     "type": "array"
   },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -89,6 +88,7 @@
       },
       "attained_ratio": {
         "type": "string",
+        "maxLength": 64,
         "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
       },
       "constant_residual": {
@@ -188,6 +188,7 @@
           },
           "attained_ratio": {
             "type": "string",
+            "maxLength": 64,
             "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
           },
           "constant_residual": {
@@ -266,11 +267,10 @@
         }
       },
       "limitations": {
-        "type": "array",
-        "minItems": 1,
-        "items": {
-          "type": "string"
-        }
+        "const": [
+          "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
+        ],
+        "type": "array"
       }
     },
     "required": [

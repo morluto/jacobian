@@ -8,7 +8,7 @@ keywords = ["formalization", "topology", "closed-sets", "semantic-audit"]
 [metadata]
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
-primary_domain = "topology"
+primary_domain = "geometry-topology"
 field = "metric-topology"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "hidden-at-runtime"
@@ -20,7 +20,7 @@ category = "mathematics"
 tags = ["difficulty-provisional", "assurance", "autoformalization", "offline"]
 case_version = "mathematical-benchmarks-v1"
 contamination_class = "public-dataset-derived-semantic-audit"
-fixture_digest = "sha256:32897cc9b17056e12c7e6b10c864acd4bcca039bb741b4ba301e0a15e6bfcd25"
+fixture_digest = "sha256:8263db706c29c12c297e08e7a817f782f87032ceefd37568521bfdcbc652a5ba"
 derivation = "Derived from PAug/ProofNetVerif test row 18 at revision 91183e5b12d64374827bf2782db629b5b0f8f319 (MIT)."
 [agent]
 timeout_sec = 600.0

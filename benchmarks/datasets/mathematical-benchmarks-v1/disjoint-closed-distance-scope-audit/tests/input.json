@@ -1,4 +1,5 @@
 {
+  "task_id": "jacobian/disjoint-closed-distance-scope-audit",
   "source_dataset": "PAug/ProofNetVerif",
   "source_revision": "91183e5b12d64374827bf2782db629b5b0f8f319",
   "source_split": "test",

@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 from fractions import Fraction
 from pathlib import Path
 
@@ -11,6 +12,9 @@ def q(x):
 
 def main():
     app = Path(os.environ.get("APP_DIR", "/app"))
+    frozen = Path("/solution/input.json")
+    if frozen.exists():
+        shutil.copyfile(frozen, app / "input.json")
     h, s, c = 3, 2, 5
     ns = list(range(1, 11))
     result = {

@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/well-total-domination-counterexample"
+version = "1.0.0"
+description = "Check a finite graph counterexample to a well-total-domination claim."
+keywords = ["graph", "total-domination", "counterexample", "mathematics"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "graph-theory"
+field = "graph-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-known-counterexample"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["graph", "total-domination", "counterexample", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-known-counterexample"
+fixture_digest = "sha256:0bbc49c4b35121b2ccf24d2e567dd38127329dc9cf49765afd994675818f75fa"
+derivation = "The public P5 counterexample is independently re-encoded as an offline finite witness."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -12,7 +12,7 @@ from benchmarks.tooling.harbor_suite import (
 
 
 def test_selected_task_gate_accepts_multiple_explicit_leaf_tasks() -> None:
-    suite = get_suite("agent-workflow-v1")
+    suite = get_suite("mathematical-benchmarks-v1")
 
     selected = select_task_refs(
         suite,
@@ -29,8 +29,8 @@ def test_selected_task_gate_accepts_multiple_explicit_leaf_tasks() -> None:
     ("dataset", "tasks"),
     [
         ("missing-dataset", ("graph-counterexample",)),
-        ("agent-workflow-v1", ("missing-task",)),
-        ("agent-workflow-v1", ()),
+        ("mathematical-benchmarks-v1", ("missing-task",)),
+        ("mathematical-benchmarks-v1", ()),
     ],
 )
 def test_selected_task_gate_rejects_missing_or_empty_selection(
@@ -45,7 +45,7 @@ def test_selected_task_gate_rejects_missing_or_empty_selection(
 def test_selected_task_gate_does_not_fall_back_to_all_tasks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    suite = get_suite("agent-workflow-v1")
+    suite = get_suite("mathematical-benchmarks-v1")
     validated: list[str] = []
 
     monkeypatch.setattr(

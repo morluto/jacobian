@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/symmetric-polynomial-divisibility"
+version = "1.0.0"
+description = "Certify a modular divisibility implication by exact polynomial ideal membership."
+keywords = ["symmetric-polynomial", "divisibility", "ideal-membership", "certificate"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "number-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-symbolic-proof"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "polynomial-identity", "modular-divisibility", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-symbolic-proof"
+fixture_digest = "sha256:a81623e3f0b7c2defddf66f005b45fb1d1fdb591aaf36043b624471a12a85266"
+derivation = "Derived from lm-provers/FineProofs-SFT default train row 323 at revision 73661e62811cf2940a0d3f82788a4f4332204c2f."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "provenance_status": "authored",
+  "historical_provenance_id": "jacobian.conjecture-probes-v1.vizing-domination-probe",
+  "task_id": "vizing-bounded-cartesian-products",
+  "analysis": {
+    "benchmark_family": "authored-conjecture-probe",
+    "primary_reasoning_objective": "bounded exact domination-number enumeration and Cartesian-product lower-bound checking",
+    "portfolio_contribution": "per-graph and per-pair domination certificate for the Vizing Cartesian-product bound",
+    "shortcut_audit": "The aggregate all_bounds_hold flag does not determine the factor domination numbers, product domination numbers, or per-pair bound checks.",
+    "quality_score": 80,
+    "difficulty": "Medium (provisional)",
+    "assurance_boundary": "Exact only for the eight frozen graphs and thirteen Cartesian pairs; not a proof of the open Vizing conjecture."
+  }
+}

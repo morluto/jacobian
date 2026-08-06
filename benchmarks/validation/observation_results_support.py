@@ -75,7 +75,7 @@ def _evidence(condition: str, correctness: list[float]) -> dict:
         "causal_claim_authorized": False,
         "status": "VALID",
         "source_sha": "a" * 40,
-        "dataset": "agent-workflow-v1",
+        "dataset": "mathematical-benchmarks-v1",
         "condition": condition,
         "snapshot_id": _SNAPSHOT_ID,
         "harbor_version": _HARBOR_VERSION,
@@ -83,7 +83,7 @@ def _evidence(condition: str, correctness: list[float]) -> dict:
             "selection_mode": "dataset-task-names",
             "datasets": [
                 {
-                    "path": "benchmarks/datasets/agent-workflow-v1",
+                    "path": "benchmarks/datasets/mathematical-benchmarks-v1",
                     "task_names": ["case"],
                 }
             ],

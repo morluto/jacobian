@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "convergence-mode-separation",
+  "analysis": {
+    "mathematical_moves": [
+      "Separate convergence in probability from almost-sure convergence using dyadic interval levels and a pointwise hit/miss argument."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep the infinite pointwise quantifier and assurance ceiling explicit in the certificate contract."
+  }
+}

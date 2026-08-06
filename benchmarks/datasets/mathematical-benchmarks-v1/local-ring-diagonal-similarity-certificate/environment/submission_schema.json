@@ -39,9 +39,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

@@ -9,7 +9,7 @@ The explanation must affirmatively state the certified relationships: that the m
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. The limitations array must exactly state: The verifier certifies only the frozen matrix certificate, not the general local-ring theorem.
+Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. In the solver's own words, the limitations array must disclose that the certificate covers only the frozen matrix instance, not the general local-ring theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

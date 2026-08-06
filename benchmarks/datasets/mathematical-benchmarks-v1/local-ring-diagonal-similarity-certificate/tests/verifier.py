@@ -16,6 +16,21 @@ from verifier_support import (
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
 
+
+def _limitations_valid(value: object) -> bool:
+    if not (
+        isinstance(value, list)
+        and len(value) == 1
+        and isinstance(value[0], str)
+    ):
+        return False
+    text = value[0].casefold()
+    return (
+        any(term in text for term in ("frozen", "six-dimensional", "6-dimensional", "matrix certificate"))
+        and any(term in text for term in ("local-ring", "local ring", "general theorem"))
+        and any(term in text for term in ("not general", "not the general", "only"))
+    )
+
 # The published prose obligation is structural, not verbatim: the explanation
 # must affirmatively relate the three certified facts, accept equivalent
 # phrasing, and reject contradictory or unrelated text.  Each concept group
@@ -225,7 +240,7 @@ def main():
         isinstance(s, dict)
         and s.get("scope") == "frozen-six-dimensional-Z-mod-125-certificate"
         and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == [LIMITATION]
+        and _limitations_valid(s.get("limitations"))
     )
     f = false_verified_claim(raw, verification_record_bound=False)
     ok = bool(c and input_binding and m and ev and sc and not f)

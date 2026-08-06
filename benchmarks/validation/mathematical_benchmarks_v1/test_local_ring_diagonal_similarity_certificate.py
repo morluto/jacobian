@@ -12,6 +12,18 @@ def _prepare(tmp_path: Path):
     return support._prepare_case(tmp_path, TASK, "computed")
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "This covers only the frozen six-dimensional instance, not the general local ring theorem."
+    ]
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_oracle_certificate_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     reward = support._run_verifier(task, app, logs)

@@ -22,6 +22,30 @@ LIMITATION = (
     "This exact finite-law countermodel does not machine-verify a general "
     "weak-convergence theorem or disambiguate the original prose."
 )
+
+
+def _limitations_valid(value: object) -> bool:
+    if not (
+        isinstance(value, list)
+        and len(value) == 1
+        and isinstance(value[0], str)
+    ):
+        return False
+    text = value[0].casefold()
+    return (
+        any(term in text for term in ("finite-law", "finite law", "countermodel", "four-point"))
+        and any(term in text for term in ("weak convergence", "original prose", "general theorem"))
+        and any(
+            term in text
+            for term in (
+                "not prove",
+                "does not prove",
+                "not verify",
+                "not machine",
+                "does not disambiguate",
+            )
+        )
+    )
 ATTAINABLE_PRODUCTS = frozenset(x * y for x in SUPPORT for y in SUPPORT)
 
 _EVIDENCE_FACTS = {
@@ -290,7 +314,7 @@ def main():
         isinstance(raw, dict)
         and raw.get("scope") == "frozen-four-point-marginal-and-submitted-couplings"
         and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == [LIMITATION]
+        and _limitations_valid(raw.get("limitations"))
     )
     assurance_ok = bool(
         isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"

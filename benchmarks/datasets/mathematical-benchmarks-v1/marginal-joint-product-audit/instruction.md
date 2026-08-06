@@ -11,7 +11,7 @@ Write `/app/submission.json` and bind a concise explanation at `/app/evidence/an
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence explanation must state why marginal convergence does not determine joint convergence or the product law; unrelated text does not earn evidence credit. Product distributions may include ascending zero-mass attainable entries, which the verifier normalizes away. The limitations array must exactly state: This exact finite-law countermodel does not machine-verify a general weak-convergence theorem or disambiguate the original prose.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence explanation must state why marginal convergence does not determine joint convergence or the product law; unrelated text does not earn evidence credit. Product distributions may include ascending zero-mass attainable entries, which the verifier normalizes away. In the solver's own words, the limitations array must disclose that this exact finite-law countermodel does not prove a general weak-convergence theorem or disambiguate the original prose.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

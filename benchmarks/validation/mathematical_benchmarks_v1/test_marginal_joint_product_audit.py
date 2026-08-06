@@ -20,6 +20,19 @@ def _run(tmp_path: Path, mutate=None):
     return support._run_verifier(task, app, logs)
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    result = _run(
+        tmp_path,
+        lambda submission: submission.update(
+            limitations=[
+                "This four-point countermodel does not prove a general weak convergence theorem."
+            ]
+        ),
+    )
+    assert result["scope_accuracy"] == 1.0
+    assert result["reward"] == 1.0
+
+
 def _product(entries):
     masses = defaultdict(Fraction)
     for entry in entries:

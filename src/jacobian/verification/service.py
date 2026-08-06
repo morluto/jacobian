@@ -799,6 +799,7 @@ class VerificationService:
         self,
         *,
         transformation_uri: str,
+        timeout_seconds: float | None = None,
     ) -> ResultEnvelope:
         """Replay a representation relation with an authorized checker."""
 
@@ -877,6 +878,7 @@ class VerificationService:
                 expected_digest=checker.executable_digest,
                 request=request,
                 provider_runtime=checker.provider_runtime,
+                timeout_seconds=timeout_seconds,
             )
             runtime_ms = int((time.monotonic() - started) * 1000)
             if not decision.accepted:
@@ -908,6 +910,7 @@ class VerificationService:
                 verification=Verification.VERIFIED,
                 checker_id=checker.checker_id,
                 checker_digest=checker.executable_digest,
+                scope_uri=transformation_uri,
             )
             record = TransformationVerificationRecord(
                 checker_id=checker.checker_id,

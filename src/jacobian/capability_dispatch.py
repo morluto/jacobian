@@ -173,6 +173,20 @@ class CapabilityDispatchMixin:
                 request=request,
                 diagnostic=exc.diagnostic,
             )
+        except CapabilityError as exc:
+            result = failed_result(
+                descriptor=descriptor,
+                request=request,
+                diagnostic=CapabilityDiagnostic(
+                    code="ADAPTER_CONFIGURATION_FAILED",
+                    stage="adapter_execution",
+                    message=str(exc),
+                    hint=(
+                        "The capability is misconfigured. Check the provider "
+                        "runtime identity and digest in the capability descriptor."
+                    ),
+                ),
+            )
         except Exception as exc:
             _LOGGER.warning(
                 "capability %s stopped during execution",
@@ -197,19 +211,48 @@ class CapabilityDispatchMixin:
             or result.capability_version != descriptor.version
             or result.mode is not request.mode
         ):
-            raise CapabilityError("adapter result identity differs from its request")
-        if result.provider is not None and result.provider != descriptor.provider:
-            raise CapabilityError(
-                "adapter result provider runtime differs from its descriptor"
+            result = failed_result(
+                descriptor=descriptor,
+                request=request,
+                diagnostic=CapabilityDiagnostic(
+                    code="ADAPTER_RESULT_INVALID",
+                    stage="adapter_execution",
+                    message="The adapter returned a result with a mismatched identity.",
+                    hint="The capability adapter produced a result for a different capability or mode.",
+                ),
             )
+            log_invocation(result, started)
+            return result
+        if result.provider is not None and result.provider != descriptor.provider:
+            result = failed_result(
+                descriptor=descriptor,
+                request=request,
+                diagnostic=CapabilityDiagnostic(
+                    code="ADAPTER_RESULT_INVALID",
+                    stage="adapter_execution",
+                    message="The adapter returned a result from a different provider runtime.",
+                    hint="The capability adapter produced a result from a provider that differs from its descriptor.",
+                ),
+            )
+            log_invocation(result, started)
+            return result
         provenance = provider_provenance(descriptor)
         if (
             result.provider_digest is not None
             and result.provider_digest != provenance["provider_digest"]
         ):
-            raise CapabilityError(
-                "adapter result provider runtime differs from its descriptor"
+            result = failed_result(
+                descriptor=descriptor,
+                request=request,
+                diagnostic=CapabilityDiagnostic(
+                    code="ADAPTER_RESULT_INVALID",
+                    stage="adapter_execution",
+                    message="The adapter returned a result with a mismatched provider digest.",
+                    hint="The capability adapter produced a result with a provider digest that differs from its descriptor.",
+                ),
             )
+            log_invocation(result, started)
+            return result
         result = result.model_copy(update=provenance)
         if result.execution.status is ExecutionStatus.COMPLETED:
             normalized_output = validate_payload(

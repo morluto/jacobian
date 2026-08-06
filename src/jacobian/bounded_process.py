@@ -80,9 +80,15 @@ def _read_proc_status(pid_dir: Path) -> tuple[int, int] | None:
     rss_kb = 0
     for line in status.splitlines():
         if line.startswith("PPid:"):
-            parent = int(line.split()[1])
+            try:
+                parent = int(line.split()[1])
+            except (IndexError, ValueError):
+                return None
         elif line.startswith("VmRSS:"):
-            rss_kb = int(line.split()[1])
+            try:
+                rss_kb = int(line.split()[1])
+            except (IndexError, ValueError):
+                return None
     return parent, rss_kb * 1024
 
 
@@ -448,11 +454,21 @@ def run_bounded_process(
             start_new_session=start_new_session,
             creationflags=creationflags,
         )
-        _apply_post_start_limits(
-            process, resource_limits, limits_applied_before_exec, platform_tools
-        )
-        assert process.stdout is not None
-        assert process.stderr is not None
+        try:
+            _apply_post_start_limits(
+                process, resource_limits, limits_applied_before_exec, platform_tools
+            )
+            assert process.stdout is not None
+            assert process.stderr is not None
+        except BaseException:
+            # _apply_post_start_limits already killed and waited the
+            # process on failure, but the pipes were never closed.  Close
+            # them to avoid leaking file descriptors.
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+            raise
 
         readers = (
             threading.Thread(
@@ -495,10 +511,13 @@ def run_bounded_process(
             # A clean worker may leave descendants holding inherited pipe
             # handles. Terminate the process group before draining so those
             # handles cannot turn successful completion into a false timeout.
-            if _drain_reader_threads(process, readers, platform_tools):
+            if _drain_reader_threads(process, readers, platform_tools) and not (
+                stdout_exceeded.is_set() or stderr_exceeded.is_set()
+            ):
                 # A descendant may have escaped the worker process group while
                 # retaining a pipe. Fail closed instead of returning partial
-                # output as a successful worker completion.
+                # output as a successful worker completion.  Do not override
+                # an existing output-limit-exceeded signal with timed_out.
                 timed_out = True
             process.stdout.close()
             process.stderr.close()
@@ -863,30 +882,29 @@ class BoundedInteractiveProcess:
             responses.put(exc)
 
     def _capture_stderr(self, process: subprocess.Popen[str]) -> None:
+        import select as _select
+
         stderr = process.stderr
         if stderr is None:
             return
         limit = self._request.stderr_limit_bytes
         total = 0
+        fd = stderr.fileno()
         try:
-            os.set_blocking(stderr.fileno(), False)
+            os.set_blocking(fd, False)
             while True:
-                try:
-                    chunk = os.read(stderr.fileno(), 65_536)
-                except BlockingIOError:
-                    if self._stderr_checkpoint_requested.is_set():
-                        with self._stderr_checkpoint_lock:
-                            self._stderr_checkpoint_complete.set()
+                ready = self._stderr_select(_select, fd)
+                if ready is None:
+                    return
+                if not ready:
+                    self._maybe_fire_checkpoint()
                     if process.poll() is not None:
                         return
-                    time.sleep(0.001)
                     continue
-                if not chunk:
+                n = self._stderr_read_chunk(fd, limit, total)
+                if n == -1:
                     return
-                total += len(chunk)
-                remaining = max(0, limit - len(self._stderr_captured))
-                if remaining > 0:
-                    self._stderr_captured.extend(chunk[:remaining])
+                total += n
                 if total > limit:
                     self._stderr_exceeded.set()
                     return
@@ -895,6 +913,32 @@ class BoundedInteractiveProcess:
         finally:
             with self._stderr_checkpoint_lock:
                 self._stderr_checkpoint_complete.set()
+
+    def _stderr_select(self, _select: Any, fd: int) -> bool | None:
+        """Return True if data is ready, False if timeout, None on error."""
+        try:
+            _ready = _select.select([fd], [], [], 0.01)[0]
+            return bool(_ready)
+        except (OSError, ValueError):
+            return None
+
+    def _maybe_fire_checkpoint(self) -> None:
+        if self._stderr_checkpoint_requested.is_set():
+            with self._stderr_checkpoint_lock:
+                self._stderr_checkpoint_complete.set()
+
+    def _stderr_read_chunk(self, fd: int, limit: int, total: int) -> int:
+        """Read one chunk from stderr, return its length (0 for retry, -1 for EOF)."""
+        try:
+            chunk = os.read(fd, 65_536)
+        except BlockingIOError:
+            return 0
+        if not chunk:
+            return -1
+        remaining = max(0, limit - len(self._stderr_captured))
+        if remaining > 0:
+            self._stderr_captured.extend(chunk[:remaining])
+        return len(chunk)
 
     def _terminate_child(self, process: subprocess.Popen[str]) -> None:
         """Send SIGTERM/terminate, then SIGKILL/kill if the deadline expires."""

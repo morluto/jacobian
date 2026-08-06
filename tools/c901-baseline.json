@@ -145,7 +145,7 @@
     {
       "path": "src/jacobian/capability_dispatch.py",
       "symbol": "invoke",
-      "complexity": 11
+      "complexity": 12
     },
     {
       "path": "src/jacobian/capability_verification.py",

@@ -512,7 +512,20 @@ def _validate_loaded_suite(suite: Suite, dataset: dict[str, Any]) -> None:
         )
 
 
+_load_registry_cache: dict[Path, tuple[Suite, ...]] = {}
+
+
 def load_registry(path: Path = REGISTRY_PATH) -> tuple[Suite, ...]:
+    """Parse and cache the benchmark registry.
+
+    The registry is immutable for the lifetime of a test session.  Caching
+    avoids re-parsing the registry and re-walking all task directories on
+    every call.
+    """
+    cached = _load_registry_cache.get(path)
+    if cached is not None:
+        return cached
+
     raw = _read_toml(path)
     if raw.get("schema_version") != "1":
         raise HarborSuiteError("registry schema_version must be '1'")
@@ -528,7 +541,9 @@ def load_registry(path: Path = REGISTRY_PATH) -> tuple[Suite, ...]:
         _validate_loaded_suite(suite, dataset)
         suites.append(suite)
     validate_global_task_ids(suites)
-    return tuple(suites)
+    result = tuple(suites)
+    _load_registry_cache[path] = result
+    return result
 
 
 def get_suite(dataset: str, *, path: Path = REGISTRY_PATH) -> Suite:

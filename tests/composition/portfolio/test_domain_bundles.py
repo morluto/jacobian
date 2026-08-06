@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from jacobian.artifacts import ArtifactService
@@ -227,7 +229,7 @@ def test_unique_domain_ids() -> None:
 
 
 @pytest.fixture(scope="module")
-def service(tmp_path_factory: pytest.TempPathFactory) -> CapabilityService:
+def service(tmp_path_factory: pytest.TempPathFactory) -> Iterator[CapabilityService]:
     store = ArtifactRepository(tmp_path_factory.mktemp("domain-bundles"))
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
@@ -236,7 +238,10 @@ def service(tmp_path_factory: pytest.TempPathFactory) -> CapabilityService:
     for bundle in ALL_BUNDLES:
         for adapter in installer.install(bundle).adapters:
             service.register(adapter)
-    return service
+    try:
+        yield service
+    finally:
+        store.close()
 
 
 def test_catalog_covers_all_operations(service: CapabilityService) -> None:

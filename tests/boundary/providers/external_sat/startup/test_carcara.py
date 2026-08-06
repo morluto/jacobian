@@ -43,7 +43,10 @@ def carcara_runtime(
         root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert installed.portfolio.carcara_runtime == runtime
-    return installed
+    try:
+        yield installed
+    finally:
+        installed.close()
 
 
 def _produce(runtime: JacobianRuntime, logic: str, fixture: str):

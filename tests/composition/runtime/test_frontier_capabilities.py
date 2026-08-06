@@ -21,7 +21,13 @@ def frontier_runtime(
 ) -> JacobianRuntime:
     root = tmp_path_factory.mktemp("frontier-capabilities")
     shutil.copytree(authorized_portfolio_template, root, dirs_exist_ok=True)
-    return create_runtime(root, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING)
+    runtime = create_runtime(
+        root, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
+    )
+    try:
+        yield runtime
+    finally:
+        runtime.close()
 
 
 def _q(value: int) -> dict[str, str]:

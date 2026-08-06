@@ -303,7 +303,6 @@ def _snapshot_contract_failures() -> list[str]:
 
 def validate_all() -> list[str]:
     """Return every benchmark contract failure without stopping at the first."""
-
     for schema_path in sorted(SCHEMAS.glob("*.schema.json")):
         _validator(schema_path.name)
     failures = _validate(

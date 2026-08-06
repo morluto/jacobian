@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
 
 import networkx as nx
@@ -24,7 +25,7 @@ from jacobian.runtime.model import JacobianRuntime
 def oracle_runtime(
     tmp_path_factory: pytest.TempPathFactory,
     complete_portfolio_template: Path,
-) -> JacobianRuntime:
+) -> Iterator[JacobianRuntime]:
     """Reuse the immutable core store snapshot for shared oracle invokes."""
 
     root = tmp_path_factory.mktemp("finite-graph-oracles")
@@ -33,7 +34,10 @@ def oracle_runtime(
     # Pay Z3/solver startup once in fixture setup instead of on the first case.
     warm = nx.relabel_nodes(nx.path_graph(3), lambda vertex: f"v{vertex}")
     _invoke(runtime, "graph.domination.minimum.compute", warm)
-    return runtime
+    try:
+        yield runtime
+    finally:
+        runtime.close()
 
 
 def _payload(graph: nx.Graph[str], **budget: int) -> dict[str, object]:

@@ -3,12 +3,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    _public_submission_is_valid,
     false_verified_claim,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
-    workspace_input_is_bound,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -133,19 +131,6 @@ def main():
         conclusion="FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS",
         allowed_assurances=frozenset({"COMPUTED"}),
         verification_record="forbidden",
-    )
-    print(
-        json.dumps(
-            {
-                "submission_loaded": submission is not None,
-                "input_bound": workspace_input_is_bound(),
-                "public_schema_valid": _public_submission_is_valid(submission),
-                "strict_contract": contract,
-                "app_input_exists": (W / "input.json").exists(),
-                "app_input_symlink": (W / "input.json").is_symlink(),
-                "tests_inputs": sorted(path.name for path in E.glob("*input*.json")),
-            }
-        )
     )
     result = submission.get("result") if contract else None
     math_ok = bool(result_ok(result) and frozen_ok())

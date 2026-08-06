@@ -23,6 +23,11 @@
       "complexity": 11
     },
     {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/disjoint-closed-distance-scope-audit/tests/verifier.py",
+      "symbol": "result_ok",
+      "complexity": 11
+    },
+    {
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/finite-partition/tests/verifier.py",
       "symbol": "main",
       "complexity": 12
@@ -76,6 +81,11 @@
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/propositional-rewrite-trace-replay/tests/verifier.py",
       "symbol": "_rewrite",
       "complexity": 14
+    },
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1/rank-one-spectral-limit-certificate/tests/verifier.py",
+      "symbol": "certificate_valid",
+      "complexity": 11
     },
     {
       "path": "benchmarks/datasets/mathematical-benchmarks-v1/subset-incidence-determinant/tests/verifier.py",

@@ -18,18 +18,18 @@ LIMITATION = "Eight exact levels replay the general formula but do not machine-p
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
     return (
         any(term in text for term in ("eight", "8", "finite", "exact levels"))
         and any(term in text for term in ("infinite limit", "erdős", "erdos"))
-        and any(term in text for term in ("not prove", "do not prove", "does not prove", "not machine"))
+        and any(
+            term in text
+            for term in ("not prove", "do not prove", "does not prove", "not machine")
+        )
     )
+
 
 # The published prose obligation is structural, not verbatim: the explanation
 # must affirmatively state the separation and its limitation, accept equivalent
@@ -89,6 +89,8 @@ _NEGATIONS = (
     "machine-proves the infinite",
     "proves the general limit",
 )
+
+
 def q(text):
     if (
         not isinstance(text, str)
@@ -180,9 +182,7 @@ def _explanation_is_valid(path: Path) -> bool:
                     negation in window for negation in _NEGATIONS
                 )
                 for index, group in enumerate(_CONCEPT_GROUPS):
-                    if not matched[index] and any(
-                        phrase in window for phrase in group
-                    ):
+                    if not matched[index] and any(phrase in window for phrase in group):
                         matched[index] = True
                 carry = window[-256:]
     except (OSError, UnicodeError, MemoryError):

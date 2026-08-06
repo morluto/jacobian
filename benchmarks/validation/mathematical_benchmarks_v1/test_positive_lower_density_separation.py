@@ -180,7 +180,8 @@ def test_large_valid_evidence_has_no_arbitrary_byte_cap(tmp_path: Path) -> None:
     _set_evidence(
         app,
         submission,
-        "derivation filler\n" * 70_000
+        "derivation filler\n"
+        * 70_000
         + "The lower density is positive, while the two endpoint subsequences have "
         "different limits, so the natural density does not exist. The finite levels "
         "replay instances of the general formula rather than proving every infinite "

@@ -7,8 +7,6 @@
     "COMPLETE"
   ],
   "assurance_ceiling": "COMPUTED",
-  "input_binding_decoupled": true,
-  "scope_independent_assurance": true,
   "conclusion": {
     "const": "PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED"
   },

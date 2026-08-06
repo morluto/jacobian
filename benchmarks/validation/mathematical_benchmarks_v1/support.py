@@ -52,8 +52,6 @@ RESOURCE_DERIVED_TASKS = (
     "well-total-domination-counterexample",
 )
 # Tasks whose verifier reports scope independently of assurance typing.
-# Migrated tasks declare this in their tests/public_contract.json instead;
-# this registry remains a fallback for unmigrated tasks.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
@@ -64,9 +62,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
-# and gating only aggregate reward on both.  Migrated tasks declare this in
-# their tests/public_contract.json instead; this registry remains a fallback
-# for unmigrated tasks.
+# and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",

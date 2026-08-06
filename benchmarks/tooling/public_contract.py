@@ -188,11 +188,6 @@ class PublicContract(BaseModel):
     limitations: dict[str, Any] | None = None
     schema_definitions: dict[str, Any] = Field(default_factory=dict)
     submission_schema: dict[str, Any] = Field(default_factory=dict)
-    # Task-local verifier contract flags.  When true, the verifier reports
-    # the corresponding diagnostic independently and gates only aggregate
-    # reward on it.  These replace per-task name registries in shared support.
-    input_binding_decoupled: bool = Field(default=False)
-    scope_independent_assurance: bool = Field(default=False)
 
     # -- field validators --------------------------------------------------
 

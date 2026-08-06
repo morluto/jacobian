@@ -8,6 +8,11 @@ import pytest
 from benchmarks.validation.mathematical_benchmarks_v1 import support
 
 TASK = "ga-action-local-finiteness-certificate"
+VALID_EVIDENCE = (
+    "A finite coefficient expansion alone does not prove preservation. "
+    "The coaction and group law establish that the submitted subspace is "
+    "invariant under the action.\n"
+)
 
 
 def _case(tmp_path: Path):
@@ -15,7 +20,9 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    support._bind_result_evidence(app, submission)
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(VALID_EVIDENCE)
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
 
 
@@ -48,16 +55,33 @@ def test_accepts_an_alternative_scaled_basis(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
-def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+def test_equivalent_explanatory_evidence_needs_no_private_marker(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    evidence.write_text("Action certificate supplied in submission.json.\n")
+    evidence.write_text(
+        "A finite coefficient expansion by itself does not establish that the "
+        "span is preserved. The coaction identity, equivalently the group law, "
+        "shows that the submitted subspace is invariant under the action.\n"
+    )
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
     assert accepted["evidence_validity"] == 1.0
     assert accepted["reward"] == 1.0
+
+
+def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("The certificate has many exact polynomial entries.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
 
 
 def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
@@ -110,6 +134,21 @@ def test_rejects_visible_input_tampering(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["input_binding"] == 0.0
     assert rejected["correctness"] == 1.0
+    assert rejected["reward"] == 0.0
+
+
+def test_envelope_failure_preserves_independent_diagnostics(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["path"] = "../answer.txt"
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["protocol_compliance"] == 0.0
+    assert rejected["correctness"] == 1.0
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["assurance_calibration"] == 1.0
+    assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] == 0.0
 
 

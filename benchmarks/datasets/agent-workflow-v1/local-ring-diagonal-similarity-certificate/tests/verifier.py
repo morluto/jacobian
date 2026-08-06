@@ -7,12 +7,14 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
+EVIDENCE_SENTENCE = "The modular products agree. The determinant is a unit, and the displayed determinant permutation selects only unit entries, forcing each matched diagonal pair to agree."
 
 
 def sign(p):
@@ -92,7 +94,15 @@ def valid(r, d):
 def evidence_ok(e):
     # The typed matrix certificate is replayed independently.  The public
     # evidence contract requires only one digest-bound text artifact.
-    return evidence_list_is_bound(e)
+    if not evidence_list_is_bound(e):
+        return False
+    path = resolve_evidence(e[0], expected_path="evidence/answer.txt", max_bytes=65_536)
+    if path is None:
+        return False
+    try:
+        return path.read_text().splitlines()[0] == EVIDENCE_SENTENCE
+    except (OSError, UnicodeError, IndexError):
+        return False
 
 
 def main():

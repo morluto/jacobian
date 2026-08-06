@@ -219,13 +219,18 @@ def test_verifiers_reject_unhashable_assurance(
     assert rejected["false_certification"] is False
 
 
-@pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        name
+        for name in support.VERIFIER_TASKS
+        if support.is_scope_independent_assurance(name)
+    ],
+)
 def test_scope_independent_verifiers_preserve_scope_for_unsupported_assurance(
     tmp_path: Path,
     task_name: str,
 ) -> None:
-    if not support.is_scope_independent_assurance(task_name):
-        pytest.skip(f"{task_name} does not declare scope-assurance independence")
     task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
@@ -236,6 +241,29 @@ def test_scope_independent_verifiers_preserve_scope_for_unsupported_assurance(
     assert rejected["scope_accuracy"] == 1.0
     assert rejected["assurance_calibration"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"schema_version": "1", "input_binding_decoupled": "yes"}, "boolean"),
+        ({"schema_version": "2"}, "schema_version"),
+        ({"schema_version": "1", "unknown": True}, "unknown"),
+    ],
+)
+def test_task_contract_metadata_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: object,
+    message: str,
+) -> None:
+    tests = tmp_path / "sample" / "tests"
+    tests.mkdir(parents=True)
+    support._write_json(tests / "verifier_contract.json", payload)
+    monkeypatch.setattr(support, "TASKS", tmp_path)
+
+    with pytest.raises(ValueError, match=message):
+        support.load_task_contract_metadata("sample")
 
 
 @pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)

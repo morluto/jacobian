@@ -93,6 +93,11 @@ SINGLE_EVIDENCE_TASKS = tuple(
 )
 
 
+_TASK_CONTRACT_KEYS = frozenset(
+    {"schema_version", "input_binding_decoupled", "scope_independent_assurance"}
+)
+
+
 def load_task_contract_metadata(task_name: str) -> dict[str, object]:
     """Load task-local verifier contract metadata from the task's tests/ dir.
 
@@ -105,10 +110,22 @@ def load_task_contract_metadata(task_name: str) -> dict[str, object]:
     if not path.is_file():
         return {}
     try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
-    return value if isinstance(value, dict) else {}
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{task_name}: invalid verifier_contract.json: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{task_name}: verifier_contract.json must be an object")
+    unknown = set(value) - _TASK_CONTRACT_KEYS
+    if unknown:
+        raise ValueError(
+            f"{task_name}: unknown verifier contract fields: {sorted(unknown)}"
+        )
+    if value.get("schema_version") != "1":
+        raise ValueError(f"{task_name}: verifier contract schema_version must be '1'")
+    for field in ("input_binding_decoupled", "scope_independent_assurance"):
+        if field in value and type(value[field]) is not bool:
+            raise ValueError(f"{task_name}: {field} must be a boolean")
+    return value
 
 
 def is_input_binding_decoupled(task_name: str) -> bool:
@@ -121,7 +138,7 @@ def is_input_binding_decoupled(task_name: str) -> bool:
 
     metadata = load_task_contract_metadata(task_name)
     if "input_binding_decoupled" in metadata:
-        return bool(metadata["input_binding_decoupled"])
+        return metadata["input_binding_decoupled"] is True
     return task_name in INPUT_BINDING_DECOUPLED_TASKS
 
 
@@ -135,7 +152,7 @@ def is_scope_independent_assurance(task_name: str) -> bool:
 
     metadata = load_task_contract_metadata(task_name)
     if "scope_independent_assurance" in metadata:
-        return bool(metadata["scope_independent_assurance"])
+        return metadata["scope_independent_assurance"] is True
     return task_name in SCOPE_INDEPENDENT_ASSURANCE_TASKS
 
 

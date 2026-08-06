@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/bsd-infinite-order-certificate"
+version="1.0.0"
+description="Construct and replay an exact Lutz-Nagell infinite-order certificate without overclaiming Birch-Swinnerton-Dyer."
+keywords=["elliptic-curves","lutz-nagell","rational-points","assurance"]
+[metadata]
+evaluation_kind="conjecture-probe"
+domain="mathematical-sciences"
+primary_domain="number-theory"
+field="elliptic-curves"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:ca5dad80447684201a59abf33ed96aa2243c215f22a9141b1299f1181327ef30"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","elliptic-curves","exact-rationals","scope-audit","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-finite-conjecture-probe"
+derivation="Derived from retained spreadsheet row C-038 and the Clay Birch-Swinnerton-Dyer problem statement; all finite curve data are authored."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

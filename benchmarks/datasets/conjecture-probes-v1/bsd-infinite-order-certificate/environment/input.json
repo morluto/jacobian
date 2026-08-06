@@ -1,0 +1,1 @@
+{"task_id":"jacobian/bsd-infinite-order-certificate","conjecture_id":"C-038","curve_form":"y^2=x^3+A*x+B","coefficient_bound":20,"point_coordinate_bound":100,"required_multiples":[2,3],"scope":"integral-lutz-nagell-witness-v1"}

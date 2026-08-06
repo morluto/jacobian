@@ -24,39 +24,100 @@ LIMITATION = (
 )
 ATTAINABLE_PRODUCTS = frozenset(x * y for x in SUPPORT for y in SUPPORT)
 
-# Semantic clause obligations for the evidence explanation.  The public
-# instruction requires explaining why marginal convergence does not determine
-# joint convergence or the product law.  Each clause requires at least one
-# term stem from the set; this accepts equivalent phrasing while rejecting
-# unrelated text.
-_EVIDENCE_CLAUSES = (
-    {"marginal"},
-    {"joint", "product", "coupl"},
-    {"not", "determin", "insuffici", "imply", "fail", "lack", "without"},
+_EVIDENCE_FACTS = {
+    "marginal_convergence": (
+        re.compile(r"\bmarginal\s+convergence\b"),
+        re.compile(r"\bmarginal\s+limits?\b"),
+        re.compile(r"\bconvergent\s+marginals?\b"),
+    ),
+    "joint_law": (
+        re.compile(r"\bjoint\s+(?:convergence|distribution|law|coupling)\b"),
+        re.compile(r"\bcouplings?\b"),
+    ),
+    "product_law": (
+        re.compile(r"\bproduct\s+(?:law|distribution|pushforward)\b"),
+        re.compile(r"\blaw\s+of\s+the\s+product\b"),
+    ),
+    "insufficiency": (
+        re.compile(r"\bdoes\s+not\s+(?:determine|imply|fix|supply)\b"),
+        re.compile(r"\binsufficient\b.{0,48}\b(?:determine|pin\s+down|imply)\b"),
+        re.compile(r"\bmarginals?\s+alone\b.{0,48}\b(?:cannot|do\s+not|fail)\b"),
+        re.compile(r"\bwithout\s+joint\s+convergence\b"),
+    ),
+}
+_EVIDENCE_CONTRADICTIONS = (
+    re.compile(
+        r"\bmarginal\s+convergence\b.{0,48}"
+        r"(?<!not )(?<!n't )\bdetermines?\b.{0,32}\bjoint\b"
+    ),
+    re.compile(r"\bproduct\s+(?:law|distribution)\b.{0,48}\bfollows?\b.{0,32}\bmarginals?\b"),
+    re.compile(r"\bjoint\s+(?:law|distribution)\b.{0,48}\buniquely\s+(?:fixed|determined)\b"),
 )
-# Read at most this many bytes for the prose semantic check.  This is not an
-# evidence validity cap — the file itself has no byte limit — but a parsing
-# bound so a huge valid artifact cannot exhaust verifier memory.
-_PROSE_READ_BYTES = 1_048_576
 
 
-def _has_term(words: set[str], term: str) -> bool:
-    """Check if any word starts with the given term stem."""
+def _evidence_explains_clauses(path: Path) -> bool:
+    """Stream prose while ignoring private RESULT_JSON marker lines."""
 
-    return any(word.startswith(term) for word in words)
+    matched = dict.fromkeys(_EVIDENCE_FACTS, False)
+    contradicted = False
+    carry = ""
+    prose: list[str] = []
+    line_prefix = ""
+    at_line_start = True
+    skip_line = False
 
+    def scan() -> None:
+        nonlocal carry, contradicted
+        if not prose:
+            return
+        window = (carry + "".join(prose)).lower()
+        prose.clear()
+        contradicted = contradicted or any(
+            pattern.search(window) for pattern in _EVIDENCE_CONTRADICTIONS
+        )
+        for name, alternatives in _EVIDENCE_FACTS.items():
+            if not matched[name] and any(
+                pattern.search(window) for pattern in alternatives
+            ):
+                matched[name] = True
+        carry = window[-256:]
 
-def _evidence_explains_clauses(text: str) -> bool:
-    """Check that prose addresses every documented semantic obligation."""
-
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    prose = " ".join(lines).lower()
-    words = set(re.findall(r"[a-z]+", prose))
-    if len(words) < 8:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            while chunk := stream.read(65_536):
+                for character in chunk:
+                    if character == "\n":
+                        if not skip_line:
+                            if at_line_start:
+                                prose.extend(line_prefix)
+                            prose.append(character)
+                        line_prefix = ""
+                        at_line_start = True
+                        skip_line = False
+                    elif skip_line:
+                        continue
+                    elif at_line_start:
+                        line_prefix += character
+                        marker = "RESULT_JSON:"
+                        if marker.startswith(line_prefix):
+                            if line_prefix == marker:
+                                skip_line = True
+                                at_line_start = False
+                                line_prefix = ""
+                        else:
+                            prose.extend(line_prefix)
+                            line_prefix = ""
+                            at_line_start = False
+                    else:
+                        prose.append(character)
+                    if len(prose) >= 65_536:
+                        scan()
+            if not skip_line and at_line_start:
+                prose.extend(line_prefix)
+            scan()
+    except (OSError, UnicodeError, MemoryError):
         return False
-    return all(
-        any(_has_term(words, term) for term in clause) for clause in _EVIDENCE_CLAUSES
-    )
+    return not contradicted and all(matched.values())
 
 
 def canonical_fraction(value):
@@ -144,12 +205,7 @@ def evidence_matches(evidence):
     path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
-    try:
-        with path.open("r", encoding="utf-8") as stream:
-            head = stream.read(_PROSE_READ_BYTES)
-    except (OSError, UnicodeError, RecursionError, MemoryError):
-        return False
-    return _evidence_explains_clauses(head)
+    return _evidence_explains_clauses(path)
 
 
 def raw_submission():

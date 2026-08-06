@@ -24,7 +24,7 @@ def _load() -> ModuleType:
 
 def _patch_plan(module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     suite = SimpleNamespace(
-        id="agent-workflow-v1",
+        id="mathematical-benchmarks-v1",
         tasks=(SimpleNamespace(path=Path("autoformalization-semantic-audit")),),
     )
     monkeypatch.setattr(
@@ -47,7 +47,7 @@ def test_task_documentation_does_not_select_oracle(
 
     plan = module.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "autoformalization-semantic-audit/README.md"
         ],
         base="a" * 40,
@@ -85,7 +85,7 @@ def test_task_environment_selects_exact_task_oracle(
 
     plan = module.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "autoformalization-semantic-audit/environment/input.json"
         ],
         base="a" * 40,

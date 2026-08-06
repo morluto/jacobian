@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "putnam-2adic-induction-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Factor the nonlinear recurrence difference and expose the translation congruence.",
+      "Propagate three simultaneous affine 2-adic valuations through doubling.",
+      "Separate a universal induction certificate from finite recurrence testing."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "polynomial.identity.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Can replay individual algebraic identities but does not propagate symbolic 2-adic valuations or establish an induction invariant."
+      }
+    ],
+    "gap_classes": [
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep the simultaneous valuation induction as agent-owned composition; do not add a Putnam-specific recurrence solver."
+  }
+}

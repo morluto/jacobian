@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/monotone-inverse-continuity-audit"
+version = "1.0.0"
+description = "Audit the missing continuity hypothesis in a strict-monotonicity inverse theorem."
+keywords = ["real-analysis", "semantic-audit", "monotonicity", "inverse"]
+
+[metadata]
+evaluation_kind = "assurance"
+domain = "mathematical-sciences"
+primary_domain = "analysis"
+field = "analysis"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-semantic-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["real-analysis", "missing-hypothesis", "countermodel", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-semantic-audit"
+fixture_digest = "sha256:c685d4e77db8438144d9601dd20efd5aee9f1adb3365391ec1aa1b9ac926bda6"
+derivation = "Derived from TaoAnalysisBench taobench_000453_textbook at revision 339937d75342072a31903739b1bbbe72e1b40c21 (CC-BY-4.0)."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

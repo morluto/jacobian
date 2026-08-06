@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/local-ring-diagonal-similarity-certificate"
+version = "1.0.0"
+description = "Extract a unit determinant term certifying diagonal-entry matching over Z/(p^k)."
+keywords = ["algebra", "local-ring", "determinant", "similarity"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "algebra"
+field = "algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-conversation-derived-regression"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["regression", "local-rings", "matrix-similarity", "exact-certificate", "offline", "difficulty-provisional"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-proof-derived-transformed-instance"
+fixture_digest = "sha256:5a68805cb218fbb3ddfeff1f03c16f7a761a28687563d054df6362c820863cdf"
+derivation = "Derived from Jiahao004/DeepTheorem train row 10040 (source id 87376) at revision f5935720f176cedff4ecd8ebf83d1696e31cfac8."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

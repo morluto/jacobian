@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "source_sha", "source_dirty", "registry_digest", "dataset_count", "task_count", "datasets"],
   "properties": {
-    "schema_version": {"const": "1"},
+    "schema_version": {"const": "2"},
     "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "source_dirty": {"type": "boolean"},
     "registry_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -31,10 +31,12 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "name", "digest", "verifier", "verifier_digest", "verifier_support_digest", "submission_schema_digest"],
+              "required": ["id", "name", "primary_domain", "field", "digest", "verifier", "verifier_digest", "verifier_support_digest", "submission_schema_digest"],
               "properties": {
                 "id": {"type": "string", "minLength": 1},
                 "name": {"type": "string", "pattern": "^jacobian/"},
+                "primary_domain": {"type": "string", "minLength": 1},
+                "field": {"type": "string", "minLength": 1},
                 "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
                 "verifier": {"type": "string", "minLength": 1},
                 "verifier_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},

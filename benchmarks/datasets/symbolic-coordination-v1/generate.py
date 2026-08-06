@@ -1249,6 +1249,7 @@ keywords = ["polynomial", "map", "symbolic-coordination", "exact-certificate"]
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
 field = "algebra"
+primary_domain = "algebra"
 assurance_ceiling = "CHECKED"
 answer_visibility = "hidden-at-runtime"
 provenance_class = "deterministic-hand-auditable-pilot"
@@ -1349,12 +1350,13 @@ cp /solution/submission.json /app/submission.json
 cp /solution/certificate.json /app/evidence/certificate.json
 cp /solution/answer.txt /app/answer.txt
 """
-    member = f'''schema_version = "1"
+    member = f'''schema_version = "2"
 task_id = "{slug}"
 task_name = "jacobian/{slug}"
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
 field = "algebra"
+primary_domain = "algebra"
 provenance_class = "deterministic-hand-auditable-pilot"
 provenance_ref = "authored:symbolic-coordination-v1/{CASE_VERSION}#{slug}"
 assurance_ceiling = "CHECKED"

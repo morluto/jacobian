@@ -5,7 +5,7 @@
 ## Workflow observations
 
 Jacobian's fixed workflow observation surface is the Harbor
-[`agent-workflow-v1`](../../../benchmarks/datasets/agent-workflow-v1/README.md)
+[`mathematical-benchmarks-v1`](../../../benchmarks/datasets/mathematical-benchmarks-v1/README.md)
 dataset. Its self-contained mathematical tasks cover graph, algebra,
 linear-algebra, number-theory, geometry, combinatorics, probability, and
 formal-mathematics workflows, including the original graph, partition, SAT,
@@ -33,11 +33,11 @@ troubleshooting.
 
 ### Running workflow observations
 
-Use the fixed `agent-workflow-v1` tasks for explicit operator-run Jacobian
+Use the fixed `mathematical-benchmarks-v1` tasks for explicit operator-run Jacobian
 workflow observations:
 
 ```sh
-make agent-eval DATASET=agent-workflow-v1 TASKS=graph-counterexample EVAL_EXECUTE=1
+make agent-eval DATASET=mathematical-benchmarks-v1 TASKS=graph-counterexample EVAL_EXECUTE=1
 ```
 
 Model execution with `make agent-eval ... EVAL_EXECUTE=1` is an explicit
@@ -56,6 +56,15 @@ The comparator rejects unmatched task repetitions or drift in task digests,
 prompts, models, budgets, and job configuration. It reports correctness and
 assurance separately and marks small samples as descriptive. Public suite
 comparisons remain workflow observations.
+
+## Conjecture probes
+
+`conjecture-probes-v1` is a public, scored contract for bounded mathematical
+progress, not a held-out or causal benchmark. Its Vizing pilot freezes a finite
+set of labelled graphs and Cartesian-product pairs. A clean-room verifier
+reconstructs those products and recomputes domination numbers from the visible
+input. A passing certificate establishes only the declared finite scope; the
+required limitations explicitly rule out a global conclusion.
 
 ### Held-out runs
 

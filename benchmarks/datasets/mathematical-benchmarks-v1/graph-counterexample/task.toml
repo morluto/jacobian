@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/graph-counterexample"
+version = "1.0.0"
+description = "Find and document a counterexample to a finite graph claim."
+keywords = ["graph", "counterexample", "verification", "mathematics"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "graph-theory"
+field = "graph-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "hand-designed-structural-variant"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["graph", "counterexample", "offline", "verification"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "hand-designed-structural-variant"
+fixture_digest = "sha256:aa2446be51c59a31bf8f8f29bc69006abacbb5b745fcf6d918ed5472515294fb"
+derivation = "A fixed six-vertex triangle-free graph with an odd cycle and minimum degree two."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "public"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -11,6 +11,7 @@ keywords = ["polynomial", "map", "symbolic-coordination", "exact-certificate"]
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
 field = "algebra"
+primary_domain = "algebra"
 assurance_ceiling = "CHECKED"
 answer_visibility = "hidden-at-runtime"
 provenance_class = "deterministic-hand-auditable-pilot"

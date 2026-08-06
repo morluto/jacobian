@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "random-function-expectation-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Enumerate dependent random-mapping events and compute an exact expectation."
+    ],
+    "current_capabilities": [],
+    "gap_classes": [
+      "MISSING_OPERATION",
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "dependent-random-mapping-expectation"
+    ],
+    "disposition": "DEFER_RESEARCH",
+    "next_action": "Collect another independent dependent finite-probability workflow before selecting an atomic distribution artifact."
+  }
+}

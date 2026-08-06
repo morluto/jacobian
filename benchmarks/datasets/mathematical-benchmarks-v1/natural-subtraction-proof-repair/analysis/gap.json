@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "natural-subtraction-proof-repair",
+  "analysis": {
+    "mathematical_moves": [
+      "Inspect an expression subtree and replay an exact rational linear combination under a side condition."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "lean.statement.compare",
+        "availability": "UNAVAILABLE",
+        "boundary": "Formal statement tooling exists but its runtime provider is absent."
+      },
+      {
+        "capability_id": "linear.rational_solution.find",
+        "availability": "AVAILABLE",
+        "boundary": "Can solve the coefficient system but does not interpret the Lean proof branch."
+      }
+    ],
+    "gap_classes": [
+      "PROVIDER_UNAVAILABLE",
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "RUNTIME_FIX",
+    "next_action": "Restore Lean availability and retain exact linear arithmetic as a composable operation; do not add proof-repair policy."
+  }
+}

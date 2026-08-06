@@ -200,6 +200,23 @@ def test_evidence_contradiction_negating_elementwise_is_rejected(
     assert rejected["reward"] == 0.0
 
 
+def test_equivalent_wording_with_not_every_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        "Not every element fixes the same vector, but every group element "
+        "does preserve some nonzero vector. There is no shared nonzero fixed "
+        "vector. Thus the quantifier order is separated and the first claim "
+        "does not imply the second.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
 def test_boolean_common_fixed_dimension_preserves_correctness_diagnostic(
     tmp_path: Path,
 ) -> None:

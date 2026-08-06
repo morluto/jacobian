@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from verifier_support import (
@@ -154,82 +155,64 @@ def certificate_valid(result, frozen):
 
 
 ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
+_EXPLANATION_FACTS = {
+    "elementwise_nonzero": (
+        re.compile(
+            r"\b(?:each|every)\s+(?:group\s+)?element\b.{0,128}"
+            r"\b(?:fix|preserv|stabil|invarian).{0,64}"
+            r"\b(?:non[- ]?zero|nontrivial)\b",
+            re.DOTALL,
+        ),
+        re.compile(
+            r"\b(?:non[- ]?zero|nontrivial)\b.{0,64}"
+            r"\b(?:fixed|invariant)\b.{0,96}\b(?:each|every)\b",
+            re.DOTALL,
+        ),
+        re.compile(
+            r"\b(?:each|every)\s+(?:group\s+)?element\b.{0,128}"
+            r"\b(?:non[- ]?zero|nontrivial)\b.{0,32}\b(?:fixed|invariant)\b",
+            re.DOTALL,
+        ),
+    ),
+    "no_common_nonzero": (
+        re.compile(
+            r"\b(?:no|without)\b.{0,64}\b(?:common|global|shared)\b"
+            r".{0,96}\b(?:fixed|invariant|vector|subspace)\b",
+            re.DOTALL,
+        ),
+        re.compile(
+            r"\b(?:common|global|shared)\b.{0,96}"
+            r"\b(?:zero|trivial|absent|empty|does\s+not\s+exist)\b",
+            re.DOTALL,
+        ),
+    ),
+    "quantifier_separation": (
+        re.compile(r"\bquantifier\b.{0,96}\b(?:order|swap|separat)"),
+        re.compile(r"\b(?:does\s+not|doesn't|fails?\s+to|cannot)\s+imply\b"),
+        re.compile(r"\b(?:counterexample|refut)"),
+        re.compile(r"\bseparat"),
+    ),
+}
 
 
-def _quantifier_explanation_valid(text):
-    """Validate the documented quantifier-failure explanation obligation.
+def _quantifier_explanation_valid(path: Path) -> bool:
+    """Stream evidence and require the three documented mathematical facts."""
 
-    The instruction requires the agent to explain the quantifier failure:
-    each element fixes a nonzero vector, yet no common nonzero vector is
-    fixed by all elements, and the quantifier-order separation makes the
-    universal-existential statement fail to imply the existential-universal
-    one.  Accept mathematically equivalent phrasings while rejecting
-    unrelated text and contradictions that negate the elementwise property.
-    """
-    if not isinstance(text, str) or len(text.strip()) < 20:
+    matched = dict.fromkeys(_EXPLANATION_FACTS, False)
+    carry = ""
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                for name, alternatives in _EXPLANATION_FACTS.items():
+                    if not matched[name] and any(
+                        pattern.search(window) for pattern in alternatives
+                    ):
+                        matched[name] = True
+                carry = window[-384:]
+    except (OSError, UnicodeError, MemoryError):
         return False
-    lower = text.lower()
-    has_fix = any(
-        w in lower for w in ("fix", "fixed", "invariant", "preserve", "stabil")
-    )
-    has_elementwise = any(
-        w in lower for w in ("each", "every", "all", "element", "elementwise")
-    )
-    has_common = any(
-        w in lower for w in ("common", "global", "shared", "joint", "intersection")
-    )
-    has_absence = any(
-        w in lower
-        for w in (
-            "no",
-            "not",
-            "zero",
-            "trivial",
-            "none",
-            "absent",
-            "empty",
-            "without",
-            "vanish",
-        )
-    )
-    has_failure = any(
-        w in lower
-        for w in (
-            "quantifier",
-            "counterexample",
-            "refut",
-            "fail",
-            "not imply",
-            "does not imply",
-            "separat",
-            "swap",
-            "order matters",
-        )
-    )
-    if not (has_fix and has_elementwise and has_common and has_absence and has_failure):
-        return False
-    # Reject contradictions that negate the elementwise fixing property.
-    # The elementwise property must be affirmed; only the common/global
-    # property may be negated.
-    contradiction_patterns = (
-        "false that every element",
-        "false that each element",
-        "false that all elements",
-        "not every element",
-        "not each element",
-        "not all elements",
-        "no element fixes",
-        "no element is fixed",
-        "no element has a fixed",
-        "no element possesses",
-        "never fixes",
-        "doesn't fix",
-        "does not fix",
-        "cannot fix",
-        "elements do not fix",
-        "elements don't fix",
-    )
-    return not any(pattern in lower for pattern in contradiction_patterns)
+    return all(matched.values())
 
 
 def raw_submission():
@@ -254,11 +237,7 @@ def evidence_valid(descriptors):
     )
     if target is None:
         return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeDecodeError, MemoryError, RecursionError):
-        return False
-    return _quantifier_explanation_valid(text)
+    return _quantifier_explanation_valid(target)
 
 
 def main():

@@ -51,8 +51,12 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 "math.find",
                 {"limit": 20},
             )
-            index = json.loads(listed.content[0].text)
+            assert isinstance(listed.structured_content, dict)
+            index = listed.structured_content
             assert len(listed.content[0].text.encode("utf-8")) <= 16 * 1024
+            assert len(listed.content[0].text) < len(
+                json.dumps(index, separators=(",", ":"))
+            )
             assert index["catalog_digest"].startswith("sha256:")
             assert index["policy_digest"].startswith("sha256:")
             assert index["response_byte_limit"] == 16 * 1024
@@ -69,7 +73,8 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                     "math.find",
                     {"cursor": cursor, "limit": 20},
                 )
-                page = json.loads(next_page.content[0].text)
+                assert isinstance(next_page.structured_content, dict)
+                page = next_page.structured_content
                 assert len(next_page.content[0].text.encode("utf-8")) <= 16 * 1024
                 assert page["catalog_digest"] == index["catalog_digest"]
                 indexed_ids.update(
@@ -85,7 +90,8 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                     "input_kind": "STRUCTURED_REQUEST",
                 },
             )
-            search_index = json.loads(searched.content[0].text)
+            assert isinstance(searched.structured_content, dict)
+            search_index = searched.structured_content
             search_ids = {
                 descriptor["capability_id"] for descriptor in search_index["matches"]
             }
@@ -106,9 +112,10 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                     "limit": 20,
                 },
             )
+            assert isinstance(coloring_search.structured_content, dict)
             coloring_ids = {
                 descriptor["capability_id"]
-                for descriptor in json.loads(coloring_search.content[0].text)["matches"]
+                for descriptor in coloring_search.structured_content["matches"]
             }
             assert expected_sat_ids.issubset(coloring_ids)
 
@@ -119,7 +126,8 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                     "view": "CONTRACT",
                 },
             )
-            materialize = json.loads(materialize_description.content[0].text)
+            assert isinstance(materialize_description.structured_content, dict)
+            materialize = materialize_description.structured_content
             assert materialize["invocations"][0]["name"] == "finite-coloring-cnf"
             assert (
                 materialize["synchronous_execution"]["remote_safe_wall_seconds_max"]
@@ -133,14 +141,16 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 "math.find",
                 {"limit": 20},
             )
-            first = json.loads(first_page.content[0].text)
+            assert isinstance(first_page.structured_content, dict)
+            first = first_page.structured_content
             assert len(first["matches"]) <= 20
             assert first["next_cursor"] is not None
             second_page = await client.call_tool(
                 "math.find",
                 {"cursor": first["next_cursor"], "limit": 20},
             )
-            second = json.loads(second_page.content[0].text)
+            assert isinstance(second_page.structured_content, dict)
+            second = second_page.structured_content
             assert {
                 descriptor["capability_id"] for descriptor in first["matches"]
             }.isdisjoint(

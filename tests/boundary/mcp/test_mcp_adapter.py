@@ -29,7 +29,7 @@ def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> Non
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
             assert set(tools) == {"math.find", "math.run"}
-            assert tools["math.find"].title == "Find or inspect mathematical operations"
+            assert tools["math.find"].title == "Find an exact mathematical operation"
             assert tools["math.run"].title == "Run a mathematical operation"
             assert "math.find" in (tools["math.run"].description or "")
 
@@ -68,6 +68,73 @@ def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> Non
                 if "tool" in item
             }
             assert recovery_tools == {"math.find"}
+
+    asyncio.run(scenario())
+
+
+def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            discovered = await client.call_tool(
+                "math.find",
+                {
+                    "query": "compute an exact matrix determinant",
+                    "domain": "matrix",
+                    "mode": "EXPLORE",
+                    "limit": 3,
+                },
+            )
+            assert isinstance(discovered.structured_content, dict)
+            compute = next(
+                match
+                for match in discovered.structured_content["matches"]
+                if match["capability_id"] == "matrix.determinant.compute"
+            )
+            example = compute["invocation_example"]
+            assert len(json.dumps(example).encode("utf-8")) <= 2 * 1024
+            discovery_text = json.loads(discovered.content[0].text)
+            compute_text = next(
+                match
+                for match in discovery_text["matches"]
+                if match["capability_id"] == "matrix.determinant.compute"
+            )
+            for decision_field in (
+                "description",
+                "accepted_input_kinds",
+                "output_schema_summary",
+                "scope",
+                "assurance_ceiling",
+                "related_capabilities",
+                "invocation_example",
+            ):
+                assert compute_text[decision_field] == compute[decision_field]
+
+            compute_contract = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "matrix.determinant.compute",
+                    "view": "CONTRACT",
+                },
+            )
+            assert isinstance(compute_contract.structured_content, dict)
+            schema = compute_contract.structured_content["capability"]["input_schema"]
+            assert Draft202012Validator(schema).is_valid(example["payload"])
+
+            verify_contract = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "matrix.determinant.verify",
+                    "view": "CONTRACT",
+                },
+            )
+            verify_text = json.loads(verify_contract.content[0].text)
+            assert verify_text["capability"]["input_schema"]["required"] == [
+                "determinant_uri"
+            ]
 
     asyncio.run(scenario())
 
@@ -218,7 +285,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "math.find",
                 {"query": "search mathematical knowledge", "limit": 3},
             )
-            discovery = json.loads(discovery_result.content[0].text)
+            assert isinstance(discovery_result.structured_content, dict)
+            discovery = discovery_result.structured_content
             assert discovery["kind"] == "discovery"
             assert 0 < len(discovery["matches"]) <= 3
             assert "input_schema" not in discovery["matches"][0]
@@ -236,7 +304,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "math.find",
                 {"query": "quuxonium frobnicator", "domain": "polynomial"},
             )
-            absent = json.loads(absent_result.content[0].text)
+            assert isinstance(absent_result.structured_content, dict)
+            absent = absent_result.structured_content
             assert absent["portfolio_fit"] == "NO_LEXICAL_MATCHES"
             assert absent["matches"] == []
             recovery_actions = {
@@ -273,7 +342,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                     "math.find",
                     {"capability_id": "lean.check", "view": "FULL"},
                 )
-                lean_contract = json.loads(lean_result.content[0].text)
+                assert isinstance(lean_result.structured_content, dict)
+                lean_contract = lean_result.structured_content
                 assert lean_contract["view"] == "FULL"
                 lean_runtime = lean_contract["capability"]["provider_runtime"]
                 assert lean_runtime["install_tier"] == "T3"
@@ -301,7 +371,8 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                 "math.find",
                 {"capability_id": "integer.compute.gcd", "view": "CONTRACT"},
             )
-            contract = json.loads(described.content[0].text)
+            assert isinstance(described.structured_content, dict)
+            contract = described.structured_content
             assert contract["view"] == "CONTRACT"
             assert contract["capability"]["capability_id"] == "integer.compute.gcd"
             assert contract["capability"]["provider_runtime"]["digest"].startswith(
@@ -327,9 +398,23 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
+            for semantic_field in (
+                "scope",
+                "completeness",
+                "relationships",
+                "obligations",
+                "assurance",
+            ):
+                assert (
+                    response[semantic_field]
+                    == result.structured_content[semantic_field]
+                )
             runtime = contract["capability"]["provider_runtime"]
-            assert response["provider"] == contract["capability"]["provider"]
-            assert response["provider_digest"] == runtime["digest"]
+            assert (
+                result.structured_content["provider"]
+                == contract["capability"]["provider"]
+            )
+            assert result.structured_content["provider_digest"] == runtime["digest"]
 
             matching_description = await client.call_tool(
                 "math.find",
@@ -338,7 +423,8 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                     "view": "CONTRACT",
                 },
             )
-            matching_contract = json.loads(matching_description.content[0].text)
+            assert isinstance(matching_description.structured_content, dict)
+            matching_contract = matching_description.structured_content
             assert matching_contract["capability"]["version"] == "2"
             assert matching_contract["invocations"][0]["name"] == ("triangle_with_tail")
             assert matching_contract["related_capabilities"] == [
@@ -416,9 +502,12 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
                     "view": "FULL",
                 },
             )
-            summary = json.loads(summary_result.content[0].text)
-            contract = json.loads(contract_result.content[0].text)
-            full = json.loads(full_result.content[0].text)
+            assert isinstance(summary_result.structured_content, dict)
+            assert isinstance(contract_result.structured_content, dict)
+            assert isinstance(full_result.structured_content, dict)
+            summary = summary_result.structured_content
+            contract = contract_result.structured_content
+            full = full_result.structured_content
 
             assert summary["view"] == "SUMMARY"
             assert "input_schema" not in summary["capability"]
@@ -451,11 +540,17 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
             assert full_validator.is_valid(payload)
             assert not contract_validator.is_valid({})
             assert not full_validator.is_valid({})
-            assert len(summary_result.content[0].text) * 100 < (
-                len(contract_result.content[0].text) * 40
+            summary_text = json.loads(summary_result.content[0].text)
+            contract_text = json.loads(contract_result.content[0].text)
+            full_text = json.loads(full_result.content[0].text)
+            assert "input_schema" not in summary_text["capability"]
+            assert (
+                contract_text["capability"]["input_schema"]
+                == contract["capability"]["input_schema"]
             )
-            assert len(contract_result.content[0].text) * 100 < (
-                len(full_result.content[0].text) * 55
+            assert "output_schema" not in full_text["capability"]
+            assert len(full_result.content[0].text) < len(
+                json.dumps(full, separators=(",", ":"))
             )
 
     asyncio.run(scenario())

@@ -120,7 +120,7 @@ class JacobianCoreExtension(Extension):
                 _safe_tool_handler("math.find", capability_describe),
                 kwargs={
                     "name": "math.find",
-                    "title": "Find or inspect mathematical operations",
+                    "title": "Find an exact mathematical operation",
                     "description": MATH_FIND_DESCRIPTION,
                     "annotations": _tool_annotations(read_only=True, idempotent=True),
                     "structured_output": True,

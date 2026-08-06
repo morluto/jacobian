@@ -38,7 +38,8 @@ def _polynomial(*coefficients_ascending: int) -> dict[str, object]:
 async def _tool(client: Client, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     result = await client.call_tool(name, arguments)
     assert result.is_error is False
-    return json.loads(result.content[0].text)
+    assert isinstance(result.structured_content, dict)
+    return result.structured_content
 
 
 async def _catalog(client: Client) -> set[str]:

@@ -154,8 +154,13 @@ async def inspect(
         if not isinstance(discovery_content, TextContent):
             raise RuntimeError("deployed capability discovery is not text")
         discovery_text = discovery_content.text
-        discovery = json.loads(discovery_text)
-        discovery_bytes = len(discovery_text.encode("utf-8"))
+        if not isinstance(discovery_result.structured_content, dict):
+            raise RuntimeError("deployed capability discovery is not structured")
+        discovery = discovery_result.structured_content
+        discovery_bytes = len(
+            json.dumps(discovery, ensure_ascii=False, indent=2).encode("utf-8")
+        )
+        discovery_model_visible_bytes = len(discovery_text.encode("utf-8"))
         if discovery["response_byte_limit"] != DISCOVERY_RESPONSE_BYTE_LIMIT:
             failures.append("deployed discovery byte limit does not match the contract")
         if discovery_bytes > DISCOVERY_RESPONSE_BYTE_LIMIT:
@@ -178,6 +183,7 @@ async def inspect(
             },
             "discovery": {
                 "bytes": discovery_bytes,
+                "model_visible_bytes": discovery_model_visible_bytes,
                 "matches": [match["capability_id"] for match in discovery["matches"]],
             },
         }

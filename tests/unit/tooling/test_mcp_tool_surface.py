@@ -40,3 +40,12 @@ def test_model_visible_guidance_exposes_affordances_without_research_order() -> 
     assert "strongest one or two" not in combined
     assert "before searching for a checker" not in combined
     assert "partition larger searches" not in combined
+
+
+def test_server_instructions_front_load_implicit_activation_signal() -> None:
+    prefix = SERVER_INSTRUCTIONS[:512].lower()
+
+    assert "specialized exact mathematical operation" in prefix
+    assert "matrix or polynomial" in prefix
+    assert "even when the user does not name jacobian" in prefix
+    assert "math.find" in prefix

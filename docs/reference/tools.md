@@ -92,7 +92,7 @@ browse retrieves compact installed outcomes without loading every schema:
   "query": "find a counterexample to associativity",
   "domain": "universal_algebra",
   "mode": "EXPLORE",
-  "limit": 5
+  "limit": 3
 }
 ```
 
@@ -114,9 +114,10 @@ treated as capability fit.
 
 Each match is an operation card containing accepted input and artifact kinds,
 an output-schema summary, provider availability, exact-input scope, assurance
-ceiling, and factual relationships to installed compatible operations. These
-fields support the agent's decision; they do not recommend what it should do
-next.
+ceiling, factual relationships to installed compatible operations, and one
+size-bounded validated invocation example when the descriptor supplies one.
+These fields support the agent's decision; examples illustrate valid payloads
+and do not recommend what it should do next.
 
 Discovery can also be constrained by `input_kind`. Installed descriptors
 declare whether they accept a structured request, formal proposition, or typed
@@ -164,11 +165,16 @@ and other audit metadata:
 }
 ```
 
-`math.run` returns the Pydantic `CapabilityResult`. MCP Python SDK 2.0
-derives its output schema, validates the returned value, serializes
-model-visible `content`, and supplies the same typed value in
-`structured_content`. Small, bounded mathematical outputs remain inline in the
-result. An empty `artifact_uris` means the value was not retained.
+`math.run` returns the complete Pydantic `CapabilityResult` in
+`structured_content`. MCP Python SDK 2.0 derives the output schema and validates
+that typed value. Its text `content` is a deliberate compact projection of the
+same result's execution, output, completeness, assurance, diagnostics, and
+artifact references rather than a second full serialization. Scope,
+relationships, and obligations remain visible in that projection. `math.find`
+uses the same pattern; a `CONTRACT` text projection retains the complete input
+schema so text-oriented clients can construct a valid request. Small, bounded
+mathematical outputs remain inline in the result. An empty `artifact_uris`
+means the value was not retained.
 An agent that already has an exact operation contract may invoke it directly;
 search, browse, and inspection are composable access paths, not a required
 sequence.

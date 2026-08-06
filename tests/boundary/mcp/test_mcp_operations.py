@@ -102,6 +102,11 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
             response = json.loads(unknown_capability.content[0].text)
             assert response["error"]["code"] == "UNKNOWN_CAPABILITY"
             assert "search installed capabilities" in response["error"]["hint"]
+            assert "available_capability_ids" not in response["error"]
+            assert isinstance(unknown_capability.structured_content, dict)
+            assert unknown_capability.structured_content["error"][
+                "available_capability_ids"
+            ]
 
     asyncio.run(scenario())
 

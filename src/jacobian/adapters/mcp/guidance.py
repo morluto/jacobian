@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 SERVER_DESCRIPTION = (
-    "Discover and execute installed mathematical operations with explicit scope, "
+    "Use specialized exact and symbolic mathematics with explicit scope, "
     "completeness, assurance, and optional independent verification."
 )
 
 SERVER_INSTRUCTIONS = (
-    "Use Jacobian's math.find when mathematical work calls for exact computation, "
-    "transformation, structure discovery, examples or counterexamples, bounded search, "
-    "formal-environment inspection, or independent checking. A capability ID is not "
-    "required: math.find accepts a plain-language description of the desired local "
-    "mathematical outcome. Do not report that no specialized mathematical operation is "
-    "available without checking math.find. When independent checking is requested, "
-    "multiple calculations or programs authored by the same model are not independent "
-    "checker evidence. "
-    "math.run executes a selected operation using its typed input contract. "
+    "Use Jacobian whenever a task may benefit from a specialized exact mathematical "
+    "operation, including matrix or polynomial computation, symbolic transformation, "
+    "structural analysis, examples or counterexamples, bounded search, formal-environment "
+    "inspection, or requested independent verification. This applies even when the "
+    "user does not name Jacobian and shell code could also calculate the result. Call "
+    "math.find with a plain-language desired local mathematical outcome; no capability "
+    "ID is required. math.run executes a selected operation using its typed input "
+    "contract. "
+    "Do not report that no specialized mathematical operation is available without "
+    "checking math.find. When independent checking is requested, multiple calculations "
+    "or programs authored by the same model are not independent checker evidence. "
     "Search or browse again whenever the objective or available evidence changes. "
     "The model owns representation, decomposition, composition, iteration, verification "
     "timing, and stopping. Results keep execution status, scope, completeness, "
@@ -27,24 +29,21 @@ SERVER_INSTRUCTIONS = (
 )
 
 MATH_FIND_DESCRIPTION = """\
-Search Jacobian for an installed mathematical operation by desired outcome, or inspect
-one exact operation contract.
-
-Use this for mathematical work that calls for exact computation, structural analysis,
-transformation, examples or counterexamples, bounded search, formal-environment
-inspection, or independent checking when the useful installed operation is not yet
-known. Do not claim that no specialized mathematical operation is available without
-checking this tool. When a user requests independent checking, calculations or programs
-authored by the same model are not independent checker evidence; use this tool to learn
-whether an operator-authorized checker is installed. A capability ID is not required
-for search or browse.
+Use this when a task may benefit from a specialized exact mathematical operation, even
+if shell code could also calculate the answer. Relevant outcomes include matrix
+determinants, polynomial or symbolic computation, structural analysis, examples or
+counterexamples, bounded search, formal-environment inspection, and requested
+independent verification. Search Jacobian by desired local mathematical outcome, or
+inspect one exact operation contract. A capability ID is not required for search or
+browse.
 
 Available forms:
 - Pass `query` as a plain-language description of the desired local mathematical
   outcome. The response contains compact operation cards with accepted inputs, output
-  summary, availability, scope, assurance ceiling, and factual relationships.
-- Optionally filter with `domain` and `mode`; `limit` is between 1 and 20 and
-  defaults to 5.
+  summary, availability, scope, assurance ceiling, factual relationships, and one
+  size-bounded validated invocation example when available.
+- Optionally filter with `domain` and `mode`. `limit` is between 1 and 20 and defaults
+  to 5; a smaller requested limit returns less model context.
 - Omit all arguments to browse a compact installed catalog.
 - When `next_cursor` is present, pass it back with the same filters and limit to
   continue without loading the complete catalog.
@@ -54,13 +53,13 @@ Available forms:
   adds the validation-equivalent input schema and validated invocation examples, and
   FULL adds complete provider and audit metadata.
 
-Weak and empty search results do not imply that an operation or mathematical outcome
-is impossible or absent in principle. They include unranked recovery paths for query
-reformulation, filter removal, browsing, and complete catalog inspection. Every exact
+Weak or empty results do not imply impossibility. They include unranked recovery paths
+for query reformulation, filter removal, browsing, and catalog inspection. Every exact
 response states the operation's scope rule.
 
 Examples:
-- `{"query":"find a counterexample to associativity","domain":"universal_algebra","mode":"EXPLORE","limit":5}`
+- `{"query":"compute an exact matrix determinant","domain":"matrix","mode":"EXPLORE","limit":3}`
+- `{"query":"find a counterexample to associativity","domain":"universal_algebra","mode":"EXPLORE","limit":3}`
 - `{"query":"eliminate this denominator using the defining relations"}`
 - `{}`
 - `{"capability_id":"polynomial.compute.gcd"}`
@@ -68,15 +67,13 @@ Examples:
 """
 
 MATH_RUN_DESCRIPTION = """\
-Run one installed mathematical operation and return its typed result, scope,
-completeness, assurance, diagnostics, intermediates, relationships, and artifacts.
+Use this to run one selected Jacobian operation with its typed payload. If the payload
+shape is unfamiliar, math.find can return the exact CONTRACT. EXPLORE returns proposed,
+heuristic, or computed evidence; VERIFY is valid only for an installed checker-backed
+contract.
 
-Use the selected operation's exact input contract; math.find can inspect an
-unfamiliar contract without making inspection a required research step. EXPLORE
-returns proposed, heuristic, or computed evidence. VERIFY is valid only for an
-installed checker-backed contract. The canonical `CapabilityResult` keeps execution,
-scope, completeness, mathematical conclusion, assurance, open obligations,
-diagnostics, intermediates, relationships, and artifact URIs distinct.
+The typed `CapabilityResult` keeps execution, scope, completeness, mathematical
+conclusion, assurance, obligations, diagnostics, relationships, and artifacts distinct.
 
 COMPLETED does not by itself establish a mathematical conclusion. One invocation
 covers only its exact supplied input or claim, and repeated finite or bounded calls do
@@ -87,7 +84,7 @@ Examples:
 - `{"capability_id":"integer.compute.gcd","mode":"EXPLORE","payload":{"left":"84","right":"30"}}`
 - `{"capability_id":"polynomial.identity.verify","mode":"VERIFY","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
 
-These are valid envelopes, not a required sequence or research strategy.
+These are valid envelopes, not a required research strategy.
 """
 
 OPERATING_GUIDE = """\

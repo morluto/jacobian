@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import shutil
 import threading
 from pathlib import Path
@@ -307,7 +306,8 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
                 "math.find",
                 {"capability_id": "lean.check", "view": "CONTRACT"},
             )
-            descriptor = json.loads(described.content[0].text)
+            assert isinstance(described.structured_content, dict)
+            descriptor = described.structured_content
             assert descriptor["invocations"][0]["name"] == "finite-witness-let"
             assert descriptor["cache"]["mathlib_warmup"]["status"] == "NOT_STARTED"
 
@@ -328,7 +328,8 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
                 },
             )
             assert response.is_error is False
-            payload = json.loads(response.content[0].text)
+            assert isinstance(response.structured_content, dict)
+            payload = response.structured_content
             assert payload["output"]["conclusion"] == "TRUE"
             assert payload["assurance"]["level"] == "VERIFIED"
 

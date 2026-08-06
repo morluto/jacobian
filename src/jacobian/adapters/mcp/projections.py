@@ -23,6 +23,7 @@ from jacobian.contracts.capabilities import (
 
 _LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
+_DISCOVERY_INVOCATION_EXAMPLE_BYTE_LIMIT = 2 * 1024
 
 if TYPE_CHECKING:
     from jacobian.runtime.model import JacobianRuntime
@@ -213,6 +214,18 @@ def _discovery_operation_card(
         )
         if related_id in descriptors
     ]
+    invocation_example = None
+    if descriptor.invocation_examples:
+        example = descriptor.invocation_examples[0]
+        candidate = {
+            "mode": example.mode.value,
+            "payload": example.input,
+        }
+        if (
+            len(canonicalize_json(candidate))
+            <= _DISCOVERY_INVOCATION_EXAMPLE_BYTE_LIMIT
+        ):
+            invocation_example = candidate
     return {
         **match,
         "accepted_input_kinds": [
@@ -228,6 +241,11 @@ def _discovery_operation_card(
             runtime.availability.value if runtime is not None else "UNKNOWN"
         ),
         "related_capabilities": related,
+        **(
+            {"invocation_example": invocation_example}
+            if invocation_example is not None
+            else {}
+        ),
     }
 
 

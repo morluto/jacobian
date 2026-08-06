@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context
+from mcp_types import CallToolResult, TextContent
 from pydantic import Field, StrictInt
 
 from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE, ReasoningLogMode
@@ -39,6 +41,124 @@ from jacobian.contracts.results import ExecutionStatus
 
 _LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
+CapabilityDiscoveryToolResult = Annotated[CallToolResult, dict[str, Any]]
+CapabilityRunToolResult = Annotated[CallToolResult, CapabilityResult]
+
+
+def _text_result(
+    structured_content: dict[str, Any],
+    text_projection: dict[str, Any],
+) -> CallToolResult:
+    """Keep one typed wire result plus a small agent-facing text view."""
+
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    text_projection,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            )
+        ],
+        structured_content=structured_content,
+    )
+
+
+def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
+    if "error" in response:
+        error = response["error"]
+        return {
+            "error": {
+                key: error[key]
+                for key in ("code", "stage", "message", "hint")
+                if key in error
+            }
+        }
+    if response.get("kind") == "discovery":
+        return {
+            "kind": "discovery",
+            "matches": [
+                {
+                    key: match[key]
+                    for key in (
+                        "capability_id",
+                        "title",
+                        "description",
+                        "modes",
+                        "accepted_input_kinds",
+                        "accepted_artifact_types",
+                        "output_schema_summary",
+                        "scope",
+                        "assurance_ceiling",
+                        "provider_availability",
+                        "related_capabilities",
+                        "invocation_example",
+                        "lexical_fit",
+                    )
+                    if key in match
+                }
+                for match in response.get("matches", [])
+            ],
+            "portfolio_fit": response.get("portfolio_fit"),
+            "portfolio_fit_basis": response.get("portfolio_fit_basis"),
+            "routing_status": response.get("routing_status"),
+            "routing_basis": response.get("routing_basis"),
+            "total_matches": response.get("total_matches"),
+            "truncated": response.get("truncated"),
+            "next_cursor": response.get("next_cursor"),
+            "available_recovery_paths": response.get("available_recovery_paths"),
+        }
+    capability = response.get("capability", {})
+    capability_projection: dict[str, Any] = {
+        key: capability[key]
+        for key in (
+            "capability_id",
+            "title",
+            "description",
+            "modes",
+            "accepted_input_kinds",
+            "accepted_artifact_types",
+            "input_schema_summary",
+            "output_schema_summary",
+        )
+        if key in capability
+    }
+    if response.get("view") == "CONTRACT" and "input_schema" in capability:
+        capability_projection["input_schema"] = capability["input_schema"]
+    projection: dict[str, Any] = {
+        "kind": response.get("kind"),
+        "view": response.get("view"),
+        "capability": capability_projection,
+        "scope_rule": response.get("scope_rule"),
+    }
+    if response.get("invocations"):
+        projection["invocations"] = response["invocations"]
+    if response.get("related_capabilities"):
+        projection["related_capabilities"] = response["related_capabilities"]
+    return projection
+
+
+def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
+    payload = result.model_dump(mode="json")
+    return {
+        key: payload[key]
+        for key in (
+            "capability_id",
+            "mode",
+            "execution",
+            "output",
+            "scope",
+            "completeness",
+            "relationships",
+            "obligations",
+            "assurance",
+            "diagnostics",
+            "artifact_uris",
+        )
+    }
 
 
 async def capability_describe(
@@ -55,7 +175,10 @@ async def capability_describe(
         Field(
             min_length=1,
             max_length=512,
-            description=("Mathematical outcome to find; no capability ID is required."),
+            description=(
+                "Plain-language mathematical outcome to find, such as computing an "
+                "exact matrix determinant; no capability ID is required."
+            ),
         ),
     ] = None,
     domain: Annotated[
@@ -92,8 +215,8 @@ async def capability_describe(
             ge=1,
             le=20,
             description=(
-                "Maximum compact discovery matches; defaults to 5. This bounds "
-                "the result and does not rank the agent's research choices."
+                "Maximum compact discovery matches; defaults to 5. Lower values "
+                "reduce returned model context without changing match order."
             ),
         ),
     ] = None,
@@ -112,17 +235,14 @@ async def capability_describe(
         CapabilityDescriptionView,
         Field(
             description=(
-                "Exact-lookup projection. SUMMARY is the small agent-facing "
-                "default for judging fit. CONTRACT adds the validation-equivalent "
-                "input schema, runtime identity, related operations, and validated "
-                "invocation examples for constructing an unfamiliar request. FULL "
-                "returns the complete installed descriptor for audit or client "
-                "generation. Omit for discovery."
+                "Exact lookup only: SUMMARY judges fit; CONTRACT adds the validated "
+                "input schema and invocation examples; FULL adds audit metadata. "
+                "Omit for discovery."
             )
         ),
     ] = "SUMMARY",
     ctx: Context[AppState, Any] | None = None,
-) -> dict[str, Any]:
+) -> CapabilityDiscoveryToolResult:
     active_runtime = _runtime(ctx)
     search_arguments = (
         query,
@@ -142,7 +262,7 @@ async def capability_describe(
             "discovery arguments or one exact capability_id in this call."
         )
     if capability_id is None:
-        return _capability_discovery_response(
+        discovery_response = _capability_discovery_response(
             active_runtime,
             query=query,
             domain=domain,
@@ -152,6 +272,10 @@ async def capability_describe(
             limit=limit,
             cursor=cursor,
         )
+        return _text_result(
+            discovery_response,
+            _find_text_projection(discovery_response),
+        )
     capability_catalog = active_runtime.core.capabilities.catalog()
     descriptors = {item.capability_id: item for item in capability_catalog.capabilities}
     try:
@@ -160,7 +284,7 @@ async def capability_describe(
         hint = (
             "Call math.find with a mathematical query to search installed capabilities."
         )
-        return {
+        error_response = {
             "error": {
                 "code": "UNKNOWN_CAPABILITY",
                 "stage": "capability_resolution",
@@ -169,6 +293,7 @@ async def capability_describe(
                 "available_capability_ids": sorted(descriptors),
             }
         }
+        return _text_result(error_response, _find_text_projection(error_response))
     response: dict[str, Any] = {
         "kind": "capability",
         "view": view,
@@ -235,7 +360,7 @@ async def capability_describe(
                 else {"status": "UNAVAILABLE", "detail": None}
             ),
         }
-    return response
+    return _text_result(response, _find_text_projection(response))
 
 
 async def capability_invoke(
@@ -243,15 +368,16 @@ async def capability_invoke(
     payload: dict[str, Any],
     mode: CapabilityMode = CapabilityMode.EXPLORE,
     ctx: Context[AppState, Any] | None = None,
-) -> CapabilityResult:
+) -> CapabilityRunToolResult:
     active_runtime = _runtime(ctx)
-    return await _invoke_capability_attempt(
+    result = await _invoke_capability_attempt(
         active_runtime,
         capability_id=capability_id,
         payload=payload,
         mode=mode,
         ctx=ctx,
     )
+    return _text_result(result.model_dump(mode="json"), _run_text_projection(result))
 
 
 async def capability_invoke_reasoned(
@@ -261,9 +387,9 @@ async def capability_invoke_reasoned(
     reasoning_call_id: ReasoningCallId,
     mode: CapabilityMode = CapabilityMode.EXPLORE,
     ctx: Context[AppState, Any] | None = None,
-) -> CapabilityResult:
+) -> CapabilityRunToolResult:
     active_runtime = _runtime(ctx)
-    return await _invoke_capability_attempt(
+    result = await _invoke_capability_attempt(
         active_runtime,
         capability_id=capability_id,
         payload=payload,
@@ -273,6 +399,7 @@ async def capability_invoke_reasoned(
         reasoning_call_id=reasoning_call_id,
         reasoning_required=True,
     )
+    return _text_result(result.model_dump(mode="json"), _run_text_projection(result))
 
 
 async def capability_invoke_audit(
@@ -282,9 +409,9 @@ async def capability_invoke_audit(
     reasoning_call_id: ReasoningCallId | None = None,
     mode: CapabilityMode = CapabilityMode.EXPLORE,
     ctx: Context[AppState, Any] | None = None,
-) -> CapabilityResult:
+) -> CapabilityRunToolResult:
     active_runtime = _runtime(ctx)
-    return await _invoke_capability_attempt(
+    result = await _invoke_capability_attempt(
         active_runtime,
         capability_id=capability_id,
         payload=payload,
@@ -295,6 +422,7 @@ async def capability_invoke_audit(
         reasoning_required=False,
         reasoning_audit=True,
     )
+    return _text_result(result.model_dump(mode="json"), _run_text_projection(result))
 
 
 async def reasoning_write(

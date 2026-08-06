@@ -1,0 +1,150 @@
+{
+  "$defs": {
+    "rat": {
+      "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
+      "type": "string"
+    },
+    "record": {
+      "additionalProperties": false,
+      "properties": {
+        "floors": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "lower": {
+          "$ref": "#/$defs/rat"
+        },
+        "n": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "nearest": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "upper": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "n",
+        "floors",
+        "nearest",
+        "lower",
+        "upper"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "LITTLEWOOD_FINITE_MINIMUM_CERTIFICATE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_FIXED_QUADRATIC_IRRATIONAL_PAIR",
+        "N_AT_MOST_2000",
+        "NO_LIMINF_OR_LITTLEWOOD_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "argmin_n": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "comparison_status": {
+          "const": "STRICTLY_SEPARATED_INTERVALS"
+        },
+        "minimum_lower": {
+          "$ref": "#/$defs/rat"
+        },
+        "minimum_upper": {
+          "$ref": "#/$defs/rat"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/record"
+          },
+          "maxItems": 100,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "records",
+        "argmin_n",
+        "minimum_lower",
+        "minimum_upper",
+        "comparison_status"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "sqrt2-sqrt3-n-up-to-2000-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/littlewood-certified-finite-search"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -3,9 +3,9 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -145,9 +145,91 @@ def certificate_valid(result, frozen):
             for i in range(3)
         ]
         common_dimension = 3 - rank(fixed_equations, q)
-        return result["common_fixed_dimension"] == common_dimension == 0
+        return (
+            type(result["common_fixed_dimension"]) is int
+            and result["common_fixed_dimension"] == common_dimension == 0
+        )
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         return False
+
+
+ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
+
+
+def _quantifier_explanation_valid(text):
+    """Validate the documented quantifier-failure explanation obligation.
+
+    The instruction requires the agent to explain the quantifier failure:
+    each element fixes a nonzero vector, yet no common nonzero vector is
+    fixed by all elements, and the quantifier-order separation makes the
+    universal-existential statement fail to imply the existential-universal
+    one.  Accept mathematically equivalent phrasings while rejecting
+    unrelated text and contradictions that negate the elementwise property.
+    """
+    if not isinstance(text, str) or len(text.strip()) < 20:
+        return False
+    lower = text.lower()
+    has_fix = any(
+        w in lower for w in ("fix", "fixed", "invariant", "preserve", "stabil")
+    )
+    has_elementwise = any(
+        w in lower for w in ("each", "every", "all", "element", "elementwise")
+    )
+    has_common = any(
+        w in lower for w in ("common", "global", "shared", "joint", "intersection")
+    )
+    has_absence = any(
+        w in lower
+        for w in (
+            "no",
+            "not",
+            "zero",
+            "trivial",
+            "none",
+            "absent",
+            "empty",
+            "without",
+            "vanish",
+        )
+    )
+    has_failure = any(
+        w in lower
+        for w in (
+            "quantifier",
+            "counterexample",
+            "refut",
+            "fail",
+            "not imply",
+            "does not imply",
+            "separat",
+            "swap",
+            "order matters",
+        )
+    )
+    if not (has_fix and has_elementwise and has_common and has_absence and has_failure):
+        return False
+    # Reject contradictions that negate the elementwise fixing property.
+    # The elementwise property must be affirmed; only the common/global
+    # property may be negated.
+    contradiction_patterns = (
+        "false that every element",
+        "false that each element",
+        "false that all elements",
+        "not every element",
+        "not each element",
+        "not all elements",
+        "no element fixes",
+        "no element is fixed",
+        "no element has a fixed",
+        "no element possesses",
+        "never fixes",
+        "doesn't fix",
+        "does not fix",
+        "cannot fix",
+        "elements do not fix",
+        "elements don't fix",
+    )
+    return not any(pattern in lower for pattern in contradiction_patterns)
 
 
 def raw_submission():
@@ -163,8 +245,20 @@ def raw_submission():
 
 def evidence_valid(descriptors):
     # The finite group/action certificate is replayed from the typed result.
-    # The public evidence contract promises only one bound text artifact.
-    return evidence_list_is_bound(descriptors)
+    # The public evidence contract promises one bound text artifact that
+    # must contain a meaningful quantifier-failure explanation.
+    if not isinstance(descriptors, list) or len(descriptors) != 1:
+        return False
+    target = resolve_evidence(
+        descriptors[0], expected_path="evidence/answer.txt", max_bytes=None
+    )
+    if target is None:
+        return False
+    try:
+        text = target.read_text()
+    except (OSError, UnicodeDecodeError, MemoryError, RecursionError):
+        return False
+    return _quantifier_explanation_valid(text)
 
 
 def main():
@@ -201,7 +295,9 @@ def main():
         isinstance(raw, dict) and raw.get("scope") == expected["required_scope"]
     )
     assurance = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
+        isinstance(raw, dict)
+        and isinstance(raw.get("claimed_assurance"), str)
+        and raw.get("claimed_assurance") in ALLOWED_ASSURANCES
     )
     limitation = bool(isinstance(raw, dict) and raw.get("limitations") == [LIMITATION])
     false_certification = bool(

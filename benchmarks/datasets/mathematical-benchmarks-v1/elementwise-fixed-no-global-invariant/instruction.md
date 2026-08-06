@@ -13,13 +13,16 @@ common fixed space must be zero.
 
 This is not a request to reproduce the public example. Alternative generators,
 fields, conjugates, and fixed vectors are accepted whenever they satisfy the
-contract. Explain the quantifier failure in `evidence/answer.txt` and bind that
-file by SHA-256.
+contract. Explain the quantifier failure in `evidence/answer.txt`: the
+explanation must cover the elementwise fixed vectors (each element fixes a
+nonzero vector), the absence of a common fixed vector (no single nonzero
+vector is fixed by all elements), and the quantifier-order separation that
+makes the implication fail. Bind that file by SHA-256.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection. The limitations array must exactly state: The verifier checks one finite linear action and does not machine-prove a general classification theorem.
+The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection. The evidence file must contain a mathematical explanation covering the elementwise fixed vectors, the absence of a common fixed vector, and the quantifier-order separation; unrelated or empty text does not earn evidence credit. The limitations array must exactly state: The verifier checks one finite linear action and does not machine-prove a general classification theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

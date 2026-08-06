@@ -20,7 +20,13 @@ def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> 
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    evidence.write_text("Finite action certificate supplied in submission.json.\n")
+    evidence.write_text(
+        "Each element of the constructed group fixes a nonzero vector, "
+        "but no common nonzero vector is fixed by all elements. "
+        "This counterexample shows the quantifier order matters: "
+        "the universal-existential statement does not imply the "
+        "existential-universal one.\n"
+    )
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
@@ -104,3 +110,135 @@ def test_rejects_incomplete_group_closure(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 0.0
     assert rejected["reward"] == 0.0
+
+
+def _write_valid_prose_evidence(app: Path, submission: dict) -> None:
+    """Write a valid quantifier-failure explanation and rebind the digest."""
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        "Each element of the group fixes a nonzero vector, "
+        "yet no common nonzero vector is fixed by all elements. "
+        "This counterexample refutes the quantifier implication: "
+        "the universal-existential order does not imply the "
+        "existential-universal order.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+
+
+def test_empty_evidence_text_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text("")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        "Lorem ipsum dolor sit amet consectetur adipiscing elit "
+        "sed do eiusmod tempor incididunt ut labore et dolore magna.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_evidence_missing_common_concept_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        "Each element of the group fixes a nonzero vector. "
+        "This is a counterexample to the quantifier implication.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_evidence_missing_failure_concept_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        "Each element fixes a nonzero vector, "
+        "but no common nonzero vector is fixed by all elements.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_evidence_contradiction_negating_elementwise_is_rejected(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        "It is false that every element fixes a vector; "
+        "the common fixed claim is not verified. "
+        "This is a counterexample to the quantifier implication.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["evidence_validity"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_boolean_common_fixed_dimension_preserves_correctness_diagnostic(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["common_fixed_dimension"] = False
+    support._bind_result_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "UNVERIFIED"
+    _write_valid_prose_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["assurance_calibration"] == 1.0
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
+def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    base = (
+        "Each element of the group fixes a nonzero vector, "
+        "yet no common nonzero vector is fixed by all elements. "
+        "This counterexample refutes the quantifier implication: "
+        "the universal-existential order does not imply the "
+        "existential-universal order.\n"
+    )
+    evidence.write_text(base * 500)
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == 1.0

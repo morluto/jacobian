@@ -1,0 +1,11 @@
+{
+  "task_id": "jacobian/disjoint-closed-distance-scope-audit",
+  "source_dataset": "PAug/ProofNetVerif",
+  "source_revision": "91183e5b12d64374827bf2782db629b5b0f8f319",
+  "source_split": "test",
+  "source_row": 18,
+  "source_id": "Rudin|exercise_2_19a",
+  "informal_statement": "If A and B are disjoint closed sets in a metric space X, prove that they are separated.",
+  "predicted_claim": "There exists epsilon > 0 such that every x in A and y in B satisfy dist(x,y) >= epsilon.",
+  "ambient_space": "R^2 with Euclidean distance"
+}

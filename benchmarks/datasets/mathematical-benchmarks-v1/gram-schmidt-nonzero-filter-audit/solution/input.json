@@ -1,0 +1,1 @@
+{"task_id":"jacobian/gram-schmidt-nonzero-filter-audit","source":{"dataset":"LARK-Lab/FormalRx-Test","revision":"4b7c6b883e0859e9bd38620a539bdcef408f91b4","split":"test","row":17,"source_id":"formalrx_0018","license":"Apache-2.0"},"informal_filter":"remove vectors whose Gram-Schmidt residual is zero","formal_filter":"norm(residual) >= 0","ambient_dimension":5,"sequence_length":6}

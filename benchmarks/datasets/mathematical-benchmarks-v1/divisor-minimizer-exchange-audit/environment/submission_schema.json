@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "partition": {
+          "items": {
+            "maximum": 13,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 13,
+          "minItems": 1,
+          "type": "array"
+        },
+        "value": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "partition",
+        "value"
+      ],
+      "type": "object"
+    },
+    "factor": {
+      "additionalProperties": false,
+      "properties": {
+        "exponent": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "prime": {
+          "minimum": 2,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prime",
+        "exponent"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "current_candidates": {
+          "items": {
+            "$ref": "#/$defs/candidate"
+          },
+          "maxItems": 77,
+          "minItems": 77,
+          "type": "array"
+        },
+        "current_divisor_count": {
+          "const": 4096
+        },
+        "current_factors": {
+          "items": {
+            "$ref": "#/$defs/factor"
+          },
+          "maxItems": 13,
+          "minItems": 1,
+          "type": "array"
+        },
+        "current_minimizer": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "k": {
+          "const": 12
+        },
+        "next_candidates": {
+          "items": {
+            "$ref": "#/$defs/candidate"
+          },
+          "maxItems": 101,
+          "minItems": 101,
+          "type": "array"
+        },
+        "next_divisor_count": {
+          "const": 8192
+        },
+        "next_factors": {
+          "items": {
+            "$ref": "#/$defs/factor"
+          },
+          "maxItems": 14,
+          "minItems": 1,
+          "type": "array"
+        },
+        "next_minimizer": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "quotient": {
+          "minimum": 2,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "k",
+        "current_minimizer",
+        "current_factors",
+        "current_divisor_count",
+        "current_candidates",
+        "next_minimizer",
+        "next_factors",
+        "next_divisor_count",
+        "next_candidates",
+        "quotient"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "CONSECUTIVE_MINIMIZERS_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "k=12 and k+1 complete exponent-partition audit",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/divisor-minimizer-exchange-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

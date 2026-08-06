@@ -1,0 +1,16 @@
+{
+  "task_id": "jacobian/topology-generation-order-audit",
+  "source": {
+    "dataset": "PAug/ProofNetVerif",
+    "revision": "91183e5c11ad63a6a207b8193c1e42378151a3f5",
+    "split": "valid",
+    "row": 0,
+    "id": "Munkres|exercise_13_4b1",
+    "license": "MIT"
+  },
+  "informal_objective": "there is a unique smallest topology containing every topology in a supplied family",
+  "proposed_contract": "there exists a topology T that is a common order bound for every topology in the family",
+  "finite_semantics": "topologies are families of subset bitmasks; containment means ordinary inclusion of open-set families",
+  "allowed_universe_sizes": [3, 4],
+  "assurance_ceiling": "COMPUTED"
+}

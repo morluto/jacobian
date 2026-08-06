@@ -30,6 +30,14 @@ const { stdin, stdout, stderr } = require("node:process");
 
 const SERVER_NAME = "jacobian";
 const TOML_SERVER_ENTRY = /^jacobian\s*=/;
+const CODEX_SKILL_MARKER = "<!-- Managed by Jacobian's Codex integration. -->";
+const CODEX_SKILL_SOURCE = join(
+  __dirname,
+  "..",
+  "skills",
+  "jacobian-math",
+  "SKILL.md",
+);
 
 /**
  * @typedef {"claude" | "cursor" | "opencode" | "codex" | "gemini"} ClientId
@@ -517,6 +525,81 @@ function resolveClientEdit(operation, def, launcher) {
   };
 }
 
+/** Resolve the Codex visibility skill managed alongside its MCP entry. */
+function resolveCodexSkillEdit(operation, def) {
+  const path = join(homedir(), ".codex", "skills", "jacobian-math", "SKILL.md");
+  rejectSymlink(path);
+  const original = readOptional(path);
+  const expected = readFileSync(CODEX_SKILL_SOURCE, "utf8");
+  if (!expected.includes(CODEX_SKILL_MARKER)) {
+    throw new Error("packaged Codex visibility skill is missing its managed marker");
+  }
+  if (operation === "remove") {
+    if (original === null) {
+      return {
+        client: def,
+        kind: "visibility_skill",
+        action: "not_configured",
+        detected: isClientDetected(homedir(), def.id),
+        path,
+        original,
+        updated: null,
+        deleteTarget: false,
+      };
+    }
+    if (original !== expected) {
+      return {
+        client: def,
+        kind: "visibility_skill",
+        action: "preserve_modified",
+        detected: isClientDetected(homedir(), def.id),
+        path,
+        original,
+        updated: null,
+        deleteTarget: false,
+      };
+    }
+    return {
+      client: def,
+      kind: "visibility_skill",
+      action: "remove",
+      detected: isClientDetected(homedir(), def.id),
+      path,
+      original,
+      updated: null,
+      deleteTarget: true,
+    };
+  }
+  if (original === expected) {
+    return {
+      client: def,
+      kind: "visibility_skill",
+      action: "already_current",
+      detected: isClientDetected(homedir(), def.id),
+      path,
+      original,
+      updated: null,
+      deleteTarget: false,
+    };
+  }
+  if (original !== null) {
+    throw new Error(
+      `${path} differs from the managed Jacobian skill. Move or rename ` +
+        "that skill, then retry.",
+    );
+  }
+  return {
+    client: def,
+    kind: "visibility_skill",
+    action: "create",
+    detected: isClientDetected(homedir(), def.id),
+    path,
+    original,
+    updated: expected,
+    deleteTarget: false,
+  };
+}
+
 /**
  * Apply one client edit to disk.
  *
@@ -524,16 +607,21 @@ function resolveClientEdit(operation, def, launcher) {
  * @returns {boolean} Whether this edit changed disk.
  */
 function applyEdit(edit) {
-  if (edit.updated === null) return false;
+  if (edit.updated === null && !edit.deleteTarget) return false;
   if (readOptional(edit.path) !== edit.original) {
     throw new Error(`${edit.path} changed after setup preflight; no write was made`);
+  }
+  if (edit.deleteTarget) {
+    rmSync(edit.path, { force: true });
+    return true;
   }
   return writeIfChanged(edit.path, edit.updated);
 }
 
 /** Restore a config file to the content observed during preflight. */
 function restoreEdit(edit) {
-  if (readOptional(edit.path) !== edit.updated) {
+  const expectedCurrent = edit.deleteTarget ? null : edit.updated;
+  if (readOptional(edit.path) !== expectedCurrent) {
     throw new Error(
       "the config changed after Jacobian wrote it; the concurrent value was left untouched",
     );
@@ -588,7 +676,10 @@ function printPlan(plan) {
   stderr.write(`\n  Planned changes:\n`);
   for (const edit of plan.edits) {
     const det = edit.detected ? " [detected]" : "";
-    stderr.write(`    ${edit.client.displayName}${det}: ${edit.action} → ${edit.path}\n`);
+    const label = edit.kind === "visibility_skill" ? " visibility skill" : "";
+    stderr.write(
+      `    ${edit.client.displayName}${label}${det}: ${edit.action} → ${edit.path}\n`,
+    );
   }
   stderr.write("\n");
 }
@@ -705,7 +796,13 @@ async function run(options) {
     return { operation, cancelled: true, dryRun: false, results: [] };
   }
 
-  const edits = selected.map((def) => resolveClientEdit(operation, def, launcher));
+  const configEdits = selected.map((def) =>
+    resolveClientEdit(operation, def, launcher),
+  );
+  const skillEdits = selected
+    .filter((def) => def.id === "codex")
+    .map((def) => resolveCodexSkillEdit(operation, def));
+  const edits = [...configEdits, ...skillEdits];
   const plan = { operation, launcher, edits };
 
   if (options.dryRun) {
@@ -730,10 +827,18 @@ async function run(options) {
 
   // Apply all client edits as one transaction.
   applyEdits(edits);
-  const results = edits.map((edit) => ({
+  const results = configEdits.map((edit) => ({
     client: edit.client.id,
     path: edit.path,
     status: edit.action,
+    ...(edit.client.id === "codex"
+      ? {
+          visibilitySkill: {
+            path: skillEdits[0].path,
+            status: skillEdits[0].action,
+          },
+        }
+      : {}),
     error: null,
   }));
 
@@ -767,6 +872,7 @@ module.exports = {
   buildLauncher,
   buildSourceLauncher,
   applyEdits,
+  resolveCodexSkillEdit,
   resolveClientEdit,
   run,
 };

@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "checkpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "maximum": 100,
+          "minimum": -100,
+          "type": "integer"
+        },
+        "value": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "t",
+        "value"
+      ],
+      "type": "object"
+    },
+    "poly2": {
+      "items": {
+        "$ref": "#/$defs/rat"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "poly3": {
+      "items": {
+        "$ref": "#/$defs/rat"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 1000000000,
+          "minimum": -1000000000,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "formal_coefficients": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 7,
+          "minItems": 3,
+          "type": "array"
+        },
+        "formal_status": {
+          "const": "UNBOUNDED_BELOW"
+        },
+        "x_coefficients": {
+          "$ref": "#/$defs/poly3"
+        },
+        "y_coefficients": {
+          "$ref": "#/$defs/poly2"
+        }
+      },
+      "required": [
+        "x_coefficients",
+        "y_coefficients",
+        "formal_coefficients",
+        "checkpoints",
+        "formal_status"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "enum": [
+        "FORMALIZATION_CHANGES_SEMANTICS"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/precedence-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "LEAN_ELABORATION_NOT_ASSESSED",
+        "INFORMAL_MINIMUM_NOT_REPROVED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "EXACT_RATIONAL_PARAMETRIC_COUNTERMODEL_TO_FORMAL_EXPRESSION",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/polynomial-precedence-unboundedness-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

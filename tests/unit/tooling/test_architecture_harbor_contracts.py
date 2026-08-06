@@ -14,8 +14,7 @@ _REAL_TASK = (
     / "benchmarks/datasets/mathematical-benchmarks-v1/finite-field-irreducibility-repair"
 )
 _REAL_CONJECTURE_TASK = (
-    _ROOT
-    / "benchmarks/datasets/conjecture-probes-v1/vizing-bounded-cartesian-products"
+    _ROOT / "benchmarks/datasets/conjecture-probes-v1/vizing-bounded-cartesian-products"
 )
 
 

@@ -53,6 +53,7 @@ RESOURCE_DERIVED_TASKS = (
 )
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
+    "positive-lower-density-separation",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
     "emerald-path-family-audit",

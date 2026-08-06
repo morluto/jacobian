@@ -1,0 +1,179 @@
+{
+  "$defs": {
+    "polynomial": {
+      "additionalProperties": false,
+      "properties": {
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/term"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "terms"
+      ],
+      "type": "object"
+    },
+    "rational": {
+      "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
+      "type": "string"
+    },
+    "term": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/rational"
+        },
+        "exponents": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "coefficient",
+        "exponents"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "SEMICONTINUITY_PROOF_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "The verifier checks the frozen affine presentation and the two identified proof obligations; it does not formalize the full scheme-theoretic semicontinuity theorem."
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "fiber_checks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cokernel_dimension": {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "matrix_rank": {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "point": {
+                "additionalProperties": false,
+                "properties": {
+                  "x": {
+                    "$ref": "#/$defs/rational"
+                  },
+                  "y": {
+                    "$ref": "#/$defs/rational"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "point",
+              "matrix_rank",
+              "cokernel_dimension"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "global_repair": {
+          "const": "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"
+        },
+        "ideal_generators": {
+          "items": {
+            "$ref": "#/$defs/polynomial"
+          },
+          "maxItems": 6,
+          "minItems": 2,
+          "type": "array"
+        },
+        "tensor_repair": {
+          "const": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
+        }
+      },
+      "required": [
+        "tensor_repair",
+        "global_repair",
+        "ideal_generators",
+        "fiber_checks"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "FROZEN_AFFINE_PRESENTATION_AND_IDENTIFIED_PROOF_GAPS",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/fiber-dimension-semicontinuity-repair"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

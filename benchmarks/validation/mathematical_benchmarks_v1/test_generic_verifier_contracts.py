@@ -141,7 +141,7 @@ def test_verifiers_reject_replaced_workspace_inputs(
     support._write_json(input_path, input_data)
 
     rejected = support._run_verifier(task, app, logs)
-    if task_name in support.INPUT_BINDING_DECOUPLED_TASKS:
+    if support.is_input_binding_decoupled(task_name):
         assert rejected["correctness"] == 1.0
         assert rejected["input_binding"] == 0.0
     else:
@@ -162,7 +162,7 @@ def test_verifiers_fail_closed_on_malformed_workspace_inputs(
     (app / "input.json").write_text(replacement)
 
     rejected = support._run_verifier(task, app, logs)
-    if task_name in support.INPUT_BINDING_DECOUPLED_TASKS:
+    if support.is_input_binding_decoupled(task_name):
         # Mathematical correctness is reported independently of input binding;
         # the result is still canonical, so correctness stays 1.0 while the
         # separate input_binding diagnostic captures the tamper.
@@ -213,15 +213,20 @@ def test_verifiers_reject_unhashable_assurance(
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    expected_scope = (
-        1.0 if task_name in support.SCOPE_INDEPENDENT_ASSURANCE_TASKS else 0.0
-    )
+    expected_scope = 1.0 if support.is_scope_independent_assurance(task_name) else 0.0
     assert rejected["scope_accuracy"] == expected_scope
     assert rejected["reward"] == 0.0
     assert rejected["false_certification"] is False
 
 
-@pytest.mark.parametrize("task_name", support.SCOPE_INDEPENDENT_ASSURANCE_TASKS)
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        name
+        for name in support.VERIFIER_TASKS
+        if support.is_scope_independent_assurance(name)
+    ],
+)
 def test_scope_independent_verifiers_preserve_scope_for_unsupported_assurance(
     tmp_path: Path,
     task_name: str,

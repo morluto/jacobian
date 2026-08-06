@@ -17,7 +17,47 @@ from verifier_support import (
 W, T = Path("/app"), Path("/tests")
 MISMATCHES = {"OBJECTIVE_REPLACED", "BINARY_DOMAIN_RELAXED", "UNDECLARED_BUDGET_ADDED"}
 LIMITATION = "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
-EVIDENCE_SENTENCE = "The public proof replaces the ratio objective, relaxes the binary domain, and adds an undeclared budget. The exact residual certificate repairs the frozen objective: every coordinate is chosen by its signed residual and the maximum transformed residual is zero."
+
+# Semantic clause obligations for the evidence explanation.  The public
+# instruction requires explaining the three contract mismatches and why the
+# residual certificate repairs the frozen objective.  Each clause is a pair
+# (required_terms, alternative_terms): every required term must appear, and at
+# least one alternative term must also appear.  This accepts equivalent
+# phrasing while rejecting unrelated text.
+_EVIDENCE_CLAUSES = (
+    ({"objective", "ratio"}, {"replace", "substitut", "instead", "swap", "relax"}),
+    ({"binary"}, {"domain", "relax", "fractional", "continuous", "integer"}),
+    ({"budget"}, {"add", "undeclared", "unannounced", "introduce", "constraint"}),
+    ({"residual"}, {"repair", "certificate", "fix", "correct", "restore", "chosen"}),
+    ({"zero"}, {"maximum", "sum", "transformed"}),
+)
+# Read at most this many bytes for the prose semantic check.  This is not an
+# evidence validity cap — the file itself has no byte limit — but a parsing
+# bound so a huge valid artifact cannot exhaust verifier memory before
+# reward.json is written.
+_PROSE_READ_BYTES = 1_048_576
+
+
+def _has_term(words: set[str], term: str) -> bool:
+    """Check if any word starts with the given term stem."""
+
+    return any(word.startswith(term) for word in words)
+
+
+def _evidence_explains_clauses(text: str) -> bool:
+    """Check that prose addresses every documented semantic obligation."""
+
+    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
+    prose = " ".join(lines).lower()
+    words = set(re.findall(r"[a-z]+", prose))
+    if len(words) < 10:
+        return False
+    for required, alternatives in _EVIDENCE_CLAUSES:
+        if not all(_has_term(words, term) for term in required):
+            return False
+        if alternatives and not any(_has_term(words, alt) for alt in alternatives):
+            return False
+    return True
 
 
 def evidence_ok(evidence):
@@ -25,15 +65,15 @@ def evidence_ok(evidence):
     # evidence contract requires one digest-bound text artifact only.
     if not evidence_list_is_bound(evidence):
         return False
-    path = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=65_536
-    )
+    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
-        return path.read_text().splitlines()[0] == EVIDENCE_SENTENCE
-    except (OSError, UnicodeError, IndexError):
+        with path.open("r", encoding="utf-8") as stream:
+            head = stream.read(_PROSE_READ_BYTES)
+    except (OSError, UnicodeError, RecursionError, MemoryError):
         return False
+    return _evidence_explains_clauses(head)
 
 
 def valid_result(result, data):
@@ -48,13 +88,17 @@ def valid_result(result, data):
         "repair_method",
     }:
         return False
+    mismatches = result.get("contract_mismatches")
     if (
-        set(result.get("contract_mismatches", [])) != MISMATCHES
-        or len(result["contract_mismatches"]) != 3
+        not isinstance(mismatches, list)
+        or len(mismatches) != 3
+        or not all(type(m) is str for m in mismatches)
+        or set(mismatches) != MISMATCHES
     ):
         return False
     if (
         result.get("repair_method") != "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
+        or type(result.get("maximum_residual_sum")) is not int
         or result.get("maximum_residual_sum") != 0
     ):
         return False
@@ -127,12 +171,31 @@ def raw_submission():
     return value if isinstance(value, dict) else None
 
 
+def _array_preflight(raw):
+    """Reject oversized index arrays before expensive schema validation."""
+
+    if not isinstance(raw, dict):
+        return True
+    result = raw.get("result")
+    if not isinstance(result, dict):
+        return True
+    for key in ("selected_indices", "positive_residual_indices", "item_residuals"):
+        value = result.get(key)
+        if isinstance(value, list) and len(value) > 24:
+            return False
+    return True
+
+
 def main():
     raw = raw_submission()
     expected = json.loads((T / "expected.json").read_text())
     data = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
-    submission = load_submission(W / "submission.json", require_input_binding=False)
+    submission = (
+        load_submission(W / "submission.json", require_input_binding=False)
+        if _array_preflight(raw)
+        else None
+    )
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],

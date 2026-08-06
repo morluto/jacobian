@@ -8,7 +8,7 @@ keywords = ["matrix-determinant-lemma", "rank-one", "telescoping", "spectral-lim
 [metadata]
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
-primary_domain = "linear algebra"
+primary_domain = "linear-algebra"
 field = "linear-algebra"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "hidden-at-runtime"

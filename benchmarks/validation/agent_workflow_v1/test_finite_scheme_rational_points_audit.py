@@ -27,6 +27,27 @@ def test_oracle_countermodel_is_accepted(tmp_path: Path) -> None:
     assert reward["reward"] == 1.0
 
 
+def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("Finite algebra certificate supplied in submission.json.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
+def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    (app / "input.json").write_text("{}")
+    reward = support._run_verifier(task, app, logs)
+    assert reward["input_binding"] == 0.0
+    assert reward["correctness"] == 1.0
+    assert reward["reward"] == 0.0
+
+
 def test_corrupted_multiplication_table_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(
         tmp_path, lambda s: s["result"]["a_multiplication"][3][3].__setitem__(4, 0)

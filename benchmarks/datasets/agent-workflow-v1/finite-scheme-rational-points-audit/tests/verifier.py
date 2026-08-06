@@ -6,7 +6,6 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
-    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -153,30 +152,18 @@ def valid_result(result):
     return result["b_reduced"] is True and not b_has_nilpotent
 
 
-def evidence_ok(evidence, result):
-    if not evidence_list_is_bound(evidence):
-        return False
-    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-        lines = [line for line in text.splitlines() if line.startswith("RESULT_JSON:")]
-        return (
-            len(lines) == 1
-            and json.loads(lines[0][12:]) == result
-            and all(
-                word in text.lower()
-                for word in ("rational", "nilpotent", "reduced", "nonempty")
-            )
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
+def evidence_ok(evidence):
+    # The finite-algebra certificate is independently replayed from the typed
+    # result.  The public evidence contract requires only one bound text file.
+    return evidence_list_is_bound(evidence)
 
 
 def main():
     expected = json.loads((TESTS / "expected.json").read_text())
-    submission = load_submission(WORKSPACE / "submission.json")
+    input_binding = workspace_input_is_bound()
+    submission = load_submission(
+        WORKSPACE / "submission.json", require_input_binding=False
+    )
     contract = strict_submission_contract(
         submission,
         task_id=expected["task_id"],
@@ -185,9 +172,9 @@ def main():
         verification_record="forbidden",
     )
     result = submission.get("result") if isinstance(submission, dict) else None
-    mathematical = bool(workspace_input_is_bound() and valid_result(result))
+    mathematical = valid_result(result)
     evidence = bool(
-        isinstance(submission, dict) and evidence_ok(submission.get("evidence"), result)
+        isinstance(submission, dict) and evidence_ok(submission.get("evidence"))
     )
     scope = bool(
         isinstance(submission, dict)
@@ -203,13 +190,19 @@ def main():
         submission, verification_record_bound=False
     )
     accepted = bool(
-        contract and mathematical and evidence and scope and not false_certification
+        contract
+        and input_binding
+        and mathematical
+        and evidence
+        and scope
+        and not false_certification
     )
     (Path("/logs/verifier")).mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "protocol_compliance": float(bool(contract)),
+                "input_binding": float(input_binding),
                 "correctness": float(mathematical),
                 "evidence_validity": float(evidence),
                 "scope_accuracy": float(scope),

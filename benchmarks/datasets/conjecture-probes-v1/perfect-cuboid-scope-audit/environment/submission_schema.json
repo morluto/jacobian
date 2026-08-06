@@ -1,0 +1,193 @@
+{
+  "$defs": {
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "PERFECT_CUBOID",
+            "EULER_BRICK_ONLY",
+            "SPACE_AND_TWO_FACES",
+            "OTHER"
+          ]
+        },
+        "edges": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "face_radicands": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "face_roots": {
+          "items": {
+            "$ref": "#/$defs/root_or_null"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^PC(?:0[1-9]|1[0-2])$",
+          "type": "string"
+        },
+        "space_radicand": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "space_root": {
+          "$ref": "#/$defs/root_or_null"
+        }
+      },
+      "required": [
+        "id",
+        "edges",
+        "face_radicands",
+        "face_roots",
+        "space_radicand",
+        "space_root",
+        "class"
+      ],
+      "type": "object"
+    },
+    "root_or_null": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "PERFECT_CUBOID_FINITE_SCOPE_AUDIT"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "TWELVE_FROZEN_INTEGER_CUBOIDS",
+        "NO_GLOBAL_PERFECT_CUBOID_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "case_counts": {
+          "additionalProperties": false,
+          "properties": {
+            "EULER_BRICK_ONLY": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "OTHER": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "PERFECT_CUBOID": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "SPACE_AND_TWO_FACES": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "PERFECT_CUBOID",
+            "EULER_BRICK_ONLY",
+            "SPACE_AND_TWO_FACES",
+            "OTHER"
+          ],
+          "type": "object"
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/case"
+          },
+          "maxItems": 12,
+          "minItems": 12,
+          "type": "array"
+        },
+        "contains_perfect_cuboid": {
+          "type": "boolean"
+        },
+        "scope_identity": {
+          "const": "perfect-cuboid-scope-audit:case-set-v1"
+        }
+      },
+      "required": [
+        "cases",
+        "case_counts",
+        "contains_perfect_cuboid",
+        "scope_identity"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "perfect-cuboid-scope-audit:case-set-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/perfect-cuboid-scope-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/perfect-cuboid-scope-audit"
+version = "1.0.0"
+description = "Classify twelve exact cuboid cases without promoting bounded evidence to a global perfect-cuboid conclusion."
+keywords = ["number-theory", "diophantine-equations", "perfect-cuboid", "assurance", "conjecture-probe"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "diophantine-equations"
+assurance_ceiling = "CHECKED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "authored-conjecture-probe"
+fixture_digest = "sha256:2fa0cd8e53f753b88b94f9093eab84b264fe26718688d1653afecfec4b7e32f9"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "number-theory", "exact-arithmetic", "scope-audit", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "authored-finite-conjecture-probe"
+derivation = "Authored finite semantic-scope probe derived from retained conjecture row C-012."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

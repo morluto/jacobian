@@ -1,0 +1,19 @@
+{
+  "task_id": "jacobian/perfect-cuboid-scope-audit",
+  "conjecture_id": "C-012",
+  "scope_identity": "perfect-cuboid-scope-audit:case-set-v1",
+  "cases": [
+    {"id": "PC01", "edges": [44, 117, 240]},
+    {"id": "PC02", "edges": [85, 132, 720]},
+    {"id": "PC03", "edges": [140, 480, 693]},
+    {"id": "PC04", "edges": [160, 231, 792]},
+    {"id": "PC05", "edges": [240, 252, 275]},
+    {"id": "PC06", "edges": [104, 153, 672]},
+    {"id": "PC07", "edges": [3, 4, 12]},
+    {"id": "PC08", "edges": [6, 8, 24]},
+    {"id": "PC09", "edges": [1, 2, 2]},
+    {"id": "PC10", "edges": [7, 24, 25]},
+    {"id": "PC11", "edges": [9, 40, 41]},
+    {"id": "PC12", "edges": [20, 21, 29]}
+  ]
+}

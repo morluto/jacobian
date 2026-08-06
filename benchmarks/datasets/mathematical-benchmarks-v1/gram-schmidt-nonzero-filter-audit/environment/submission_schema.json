@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "ivec": {
+      "items": {
+        "maximum": 20,
+        "minimum": -20,
+        "type": "integer"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 1000000000,
+          "minimum": -1000000000,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "formal_selected_indices": {
+          "const": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "intended_selected_indices": {
+          "const": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "rank": {
+          "const": 4
+        },
+        "residuals": {
+          "items": {
+            "$ref": "#/$defs/rvec"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "type": "array"
+        },
+        "vectors": {
+          "items": {
+            "$ref": "#/$defs/ivec"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "type": "array"
+        },
+        "zero_residual_indices": {
+          "items": {
+            "maximum": 5,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "vectors",
+        "residuals",
+        "rank",
+        "zero_residual_indices",
+        "formal_selected_indices",
+        "intended_selected_indices"
+      ],
+      "type": "object"
+    },
+    "rvec": {
+      "items": {
+        "$ref": "#/$defs/rat"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/gram-schmidt-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "LEAN_ELABORATION_NOT_ASSESSED",
+        "NORMALIZATION_OF_NONZERO_RESIDUALS_NOT_REQUIRED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "EXACT_RATIONAL_GRAM_SCHMIDT_COUNTERMODEL",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/gram-schmidt-nonzero-filter-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

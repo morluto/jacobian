@@ -1,0 +1,1 @@
+{"task_id":"jacobian/rational-pole-vieta-audit","source":{"dataset":"openai/prm800k","revision":"32ba2267b92a5ad62ecbe0a454d742f713dd6958","split":"phase2_test","row":15,"license":"MIT"},"equation":{"summands":[[1,1],[2,2],[3,3],[4,4]],"right_side":[-4,2010]},"flagged_step":"the poles are x=1,2,3,4","coefficient_order":"low-to-high","assurance_ceiling":"COMPUTED"}

@@ -1,0 +1,201 @@
+{
+  "$defs": {
+    "epsilon": {
+      "additionalProperties": false,
+      "properties": {
+        "distance_squared": {
+          "$ref": "#/$defs/rat"
+        },
+        "epsilon": {
+          "$ref": "#/$defs/rat"
+        },
+        "index": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "epsilon",
+        "index",
+        "distance_squared"
+      ],
+      "type": "object"
+    },
+    "rat": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 1000000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 1000000000,
+          "minimum": -1000000000,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "corrected_conclusion": {
+          "const": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
+        },
+        "distance_squared": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "type": "array"
+        },
+        "epsilon_witnesses": {
+          "items": {
+            "$ref": "#/$defs/epsilon"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "formal_conclusion": {
+          "const": "POSITIVE_DISTANCE"
+        },
+        "horizontal_step": {
+          "maximum": 20,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "offset": {
+          "maximum": 20,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "sample_indices": {
+          "items": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "separation_certificate": {
+          "$ref": "#/$defs/separation"
+        },
+        "vertical_scale": {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "horizontal_step",
+        "vertical_scale",
+        "offset",
+        "sample_indices",
+        "distance_squared",
+        "epsilon_witnesses",
+        "separation_certificate",
+        "formal_conclusion",
+        "corrected_conclusion"
+      ],
+      "type": "object"
+    },
+    "separation": {
+      "additionalProperties": false,
+      "properties": {
+        "closedness_reason": {
+          "const": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+        },
+        "cross_family_vertical_nonzero": {
+          "const": true
+        },
+        "same_family_lower_bound_squared": {
+          "$ref": "#/$defs/rat"
+        }
+      },
+      "required": [
+        "same_family_lower_bound_squared",
+        "cross_family_vertical_nonzero",
+        "closedness_reason"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/disjoint-closed-distance-audit.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
+        "LEAN_ELABORATION_NOT_ASSESSED"
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "scope": {
+      "const": "EXACT_PARAMETRIC_METRIC_COUNTERMODEL",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/disjoint-closed-distance-scope-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

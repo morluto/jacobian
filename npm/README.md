@@ -44,6 +44,13 @@ jacobian <command> [args...]
 
 Supported clients: `claude`, `cursor`, `opencode`, `codex`, `gemini`.
 
+Codex setup also installs a small `jacobian-math` skill under
+`~/.codex/skills`. Codex does not guarantee that MCP server instructions are
+always visible before tool selection; the skill makes relevant mathematical
+requests surface Jacobian without prescribing a mathematical workflow. Setup
+refuses to overwrite a same-named unmanaged or modified skill, and removal
+deletes only the exact managed content.
+
 `--source` writes a launcher bound to an absolute Jacobian checkout and uses
 `uv run --project <checkout> --locked --no-sync jacobian-mcp`. Run the
 checkout's `scripts/setup-agent` command for the complete locked dependency,

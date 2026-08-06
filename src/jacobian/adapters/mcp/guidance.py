@@ -8,11 +8,14 @@ SERVER_DESCRIPTION = (
 )
 
 SERVER_INSTRUCTIONS = (
-    "Jacobian provides searchable and executable mathematical operations for exact "
-    "computation, transformation, structure discovery, examples and counterexamples, "
-    "bounded search, formal-environment inspection, and independent checking. "
-    "math.find searches, browses, or inspects installed operations using a "
-    "plain-language description of the desired local mathematical outcome. "
+    "Use Jacobian's math.find when mathematical work calls for exact computation, "
+    "transformation, structure discovery, examples or counterexamples, bounded search, "
+    "formal-environment inspection, or independent checking. A capability ID is not "
+    "required: math.find accepts a plain-language description of the desired local "
+    "mathematical outcome. Do not report that no specialized mathematical operation is "
+    "available without checking math.find. When independent checking is requested, "
+    "multiple calculations or programs authored by the same model are not independent "
+    "checker evidence. "
     "math.run executes a selected operation using its typed input contract. "
     "Search or browse again whenever the objective or available evidence changes. "
     "The model owns representation, decomposition, composition, iteration, verification "
@@ -24,12 +27,17 @@ SERVER_INSTRUCTIONS = (
 )
 
 MATH_FIND_DESCRIPTION = """\
-Find or inspect an installed mathematical operation that can produce a desired outcome.
+Search Jacobian for an installed mathematical operation by desired outcome, or inspect
+one exact operation contract.
 
-Choose this when mathematical work may benefit from exact computation, structural
-analysis, transformation, examples or counterexamples, bounded search,
-formal-environment inspection, or independent checking and the useful installed
-operation is not yet known. A capability ID is not required for search or browse.
+Use this for mathematical work that calls for exact computation, structural analysis,
+transformation, examples or counterexamples, bounded search, formal-environment
+inspection, or independent checking when the useful installed operation is not yet
+known. Do not claim that no specialized mathematical operation is available without
+checking this tool. When a user requests independent checking, calculations or programs
+authored by the same model are not independent checker evidence; use this tool to learn
+whether an operator-authorized checker is installed. A capability ID is not required
+for search or browse.
 
 Available forms:
 - Pass `query` as a plain-language description of the desired local mathematical

@@ -1,0 +1,1 @@
+Finite topology countermodel generated; see submission.json.

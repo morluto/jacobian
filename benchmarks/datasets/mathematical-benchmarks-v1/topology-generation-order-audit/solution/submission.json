@@ -1,0 +1,10 @@
+{
+  "task_id": "jacobian/topology-generation-order-audit",
+  "conclusion": "PROPOSED_CONTRACT_TOO_WEAK",
+  "result": {"universe_size": 3, "input_topologies": [[0, 1, 6, 7], [0, 2, 5, 7]], "generated_topology": [0, 1, 2, 3, 4, 5, 6, 7], "common_subtopology": [0, 7], "witness_open_set": 1, "diagnosis": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"},
+  "claimed_assurance": "COMPUTED",
+  "scope": "topology-generation-order-audit finite semantic countermodel",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:5a8c51f79a674fd988b4242402f7dbb39c00d90be6654e592f85af4990a8e65d"}],
+  "limitations": ["Finite set-family semantics only; Lean topology order and elaboration are not machine-checked."]
+}

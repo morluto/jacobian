@@ -270,8 +270,15 @@ claim.
 
 ## Non-goals
 
+- A universal mathematical ontology
+- A natural-language-to-formal-mathematics translator
+- Distributed search infrastructure
+- An opaque generic solver in the kernel
 - A universal `solve_conjecture` endpoint
+- Reimplementing theorem provers or SAT/MIP solvers
 - Reimplementing Lean, Alloy, SAT/SMT, CAS, or optimization engines
+- Accepting arbitrary model-supplied executable bundles
+- Treating floating-point scores, timeouts, and solver labels as proofs
 - Treating a caller's self-review as independent verification
 - Requiring verification for every computation or retrieval
 - Letting a database entry become true because it is popular or highly ranked

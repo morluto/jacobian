@@ -1,0 +1,42 @@
+{
+  "allowed_assurance": ["UNVERIFIED", "COMPUTED"],
+  "allowed_completeness": ["COMPLETE"],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {"const": "FLAGGED_POLE_STEP_INVALID_REPAIRED_SUM"},
+  "evidence": {"allowed_paths": ["evidence/answer.txt"], "digest_pattern": "^sha256:[0-9a-f]{64}$", "max_items": 1, "media_types": ["text/plain"], "min_items": 1, "payload_shape": null},
+  "limitations": {"type": "array", "items": {"type": "string"}},
+  "public_notes": "The verifier independently reconstructs and checks the exact polynomial and pole-domain certificate.",
+  "required_artifact_filenames": ["evidence/answer.txt"],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "scope": {"type": "string", "const": "rational-pole-vieta-audit exact symbolic elimination"},
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "type": "object", "additionalProperties": false,
+    "required": ["denominator_coefficients", "combined_numerator_coefficients", "cleared_polynomial_coefficients", "pole_square_residuals", "root_sum", "diagnosis"],
+    "properties": {
+      "denominator_coefficients": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"type": "integer"}},
+      "combined_numerator_coefficients": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "integer"}},
+      "cleared_polynomial_coefficients": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "integer"}},
+      "pole_square_residuals": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "object", "additionalProperties": false, "required": ["k", "residual"], "properties": {"k": {"type": "integer", "minimum": 1, "maximum": 4}, "residual": {"type": "integer"}}}},
+      "root_sum": {"type": "string", "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$"},
+      "diagnosis": {"const": "POLES_ARE_PLUS_MINUS_SQUARE_ROOTS_NOT_DENOMINATOR_PARAMETERS"}
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+    "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
+    "properties": {
+      "task_id": {"const": "jacobian/rational-pole-vieta-audit"},
+      "conclusion": {"const": "FLAGGED_POLE_STEP_INVALID_REPAIRED_SUM"},
+      "result": {"type": "object", "additionalProperties": false, "required": ["denominator_coefficients", "combined_numerator_coefficients", "cleared_polynomial_coefficients", "pole_square_residuals", "root_sum", "diagnosis"], "properties": {"denominator_coefficients": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"type": "integer"}}, "combined_numerator_coefficients": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "integer"}}, "cleared_polynomial_coefficients": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "integer"}}, "pole_square_residuals": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "object", "additionalProperties": false, "required": ["k", "residual"], "properties": {"k": {"type": "integer", "minimum": 1, "maximum": 4}, "residual": {"type": "integer"}}}}, "root_sum": {"type": "string", "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$"}, "diagnosis": {"const": "POLES_ARE_PLUS_MINUS_SQUARE_ROOTS_NOT_DENOMINATOR_PARAMETERS"}}},
+      "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+      "scope": {"type": "string", "const": "rational-pole-vieta-audit exact symbolic elimination"},
+      "completeness": {"const": "COMPLETE"},
+      "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+      "limitations": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "task_id": "jacobian/rational-pole-vieta-audit",
+  "verification_record": null
+}

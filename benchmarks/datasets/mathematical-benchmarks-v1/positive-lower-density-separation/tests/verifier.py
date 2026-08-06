@@ -27,11 +27,9 @@ _LOWER_DENSITY_POSITIVE = (
 _DIFFERENT_LIMITS = (
     "different limits",
     "limits differ",
-    "two endpoint subsequences",
     "endpoint subsequences have different",
     "subsequential limits differ",
     "different subsequential limits",
-    "two subsequential limits",
 )
 _NATURAL_DENSITY_ABSENT = (
     "natural density does not exist",
@@ -41,10 +39,13 @@ _NATURAL_DENSITY_ABSENT = (
     "natural density is absent",
     "natural density doesn't exist",
 )
-_FINITE_REPLAY_LIMITATION = (
+_FINITE_REPLAY = (
     "finite levels replay",
     "replay instances",
     "instances of the general formula",
+    "eight finite cases",
+)
+_NOT_GENERAL_PROOF = (
     "rather than proving",
     "not a proof",
     "not proving every",
@@ -56,7 +57,8 @@ _CONCEPT_GROUPS = (
     _LOWER_DENSITY_POSITIVE,
     _DIFFERENT_LIMITS,
     _NATURAL_DENSITY_ABSENT,
-    _FINITE_REPLAY_LIMITATION,
+    _FINITE_REPLAY,
+    _NOT_GENERAL_PROOF,
 )
 # Direct contradictions of the certified claims; the opposite affirmative
 # phrasing also fails the concept-group presence check.
@@ -72,11 +74,6 @@ _NEGATIONS = (
     "machine-proves the infinite",
     "proves the general limit",
 )
-# Bounded prose-parsing buffer.  Evidence size itself is uncapped; only the
-# text scanned for the explanation obligation is bounded to avoid OOM.
-_PROSE_PARSE_BYTES = 1 << 20
-
-
 def q(text):
     if (
         not isinstance(text, str)
@@ -154,14 +151,28 @@ def valid_result(result):
     )
 
 
-def _explanation_is_valid(text):
-    """Structural check: affirmative concepts present, no direct contradiction."""
-    if not isinstance(text, str) or not text.strip():
+def _explanation_is_valid(path: Path) -> bool:
+    """Stream the explanation, requiring each fact and no contradiction."""
+
+    matched = [False] * len(_CONCEPT_GROUPS)
+    contradicted = False
+    carry = ""
+    try:
+        with path.open("r", encoding="utf-8", errors="strict") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                contradicted = contradicted or any(
+                    negation in window for negation in _NEGATIONS
+                )
+                for index, group in enumerate(_CONCEPT_GROUPS):
+                    if not matched[index] and any(
+                        phrase in window for phrase in group
+                    ):
+                        matched[index] = True
+                carry = window[-256:]
+    except (OSError, UnicodeError, MemoryError):
         return False
-    lower = text.lower()
-    if any(neg in lower for neg in _NEGATIONS):
-        return False
-    return all(any(phrase in lower for phrase in group) for group in _CONCEPT_GROUPS)
+    return not contradicted and all(matched)
 
 
 def evidence_ok(evidence):
@@ -169,19 +180,13 @@ def evidence_ok(evidence):
     # public evidence contract requires one digest-bound text explanation
     # whose content affirmatively states the separation and its limitation;
     # equivalent phrasing is accepted and contradictory or unrelated text is
-    # rejected.  Evidence size is uncapped; only the prose-parsing buffer is
-    # bounded, and the digest is resolved once.
+    # rejected.  The digest and prose are streamed without a hidden size cap.
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
     path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
-    try:
-        with path.open("r", encoding="utf-8", errors="strict") as stream:
-            head = stream.read(_PROSE_PARSE_BYTES)
-    except (OSError, UnicodeError):
-        return False
-    return _explanation_is_valid(head)
+    return _explanation_is_valid(path)
 
 
 def raw_submission():

@@ -167,10 +167,11 @@ def test_large_valid_evidence_has_no_arbitrary_byte_cap(tmp_path: Path) -> None:
     _set_evidence(
         app,
         submission,
-        "The lower density is positive, while the two endpoint subsequences have "
+        "derivation filler\n" * 70_000
+        + "The lower density is positive, while the two endpoint subsequences have "
         "different limits, so the natural density does not exist. The finite levels "
         "replay instances of the general formula rather than proving every infinite "
-        "case.\n" + "x" * 70_000,
+        "case.\n",
     )
     result = support._run_verifier(task, app, logs)
     assert result["evidence_validity"] == 1.0
@@ -202,6 +203,23 @@ def test_contradictory_explanation_is_rejected(tmp_path: Path) -> None:
         submission,
         "The natural density exists and the limits agree; the finite levels prove "
         "every infinite case.\n",
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_late_contradiction_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(
+        app,
+        submission,
+        "The lower density is positive and the subsequential limits differ, so "
+        "the natural density does not exist. The finite levels replay instances "
+        "of the general formula and are not a proof of the infinite claim.\n"
+        + "derivation filler\n" * 70_000
+        + "Contrary conclusion: the limits agree.\n",
     )
     result = support._run_verifier(task, app, logs)
     assert result["evidence_validity"] == 0.0

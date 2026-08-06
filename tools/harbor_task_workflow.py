@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
 from benchmarks.tooling.command_runner import (  # noqa: E402
     ToolCommandRequest,
     ToolCommandStatus,
+    ToolResolver,
     operator_environment,
     run_tool_command,
 )
@@ -44,6 +45,7 @@ OPERATOR_ENVIRONMENT = (
     "XDG_CACHE_HOME",
     "XDG_CONFIG_HOME",
 )
+TOOL_RESOLVER = ToolResolver()
 
 
 class TaskWorkflowError(RuntimeError):
@@ -195,7 +197,7 @@ def _run_checked(
 
 
 def _uv_executable() -> str:
-    uv = shutil.which("uv")
+    uv = TOOL_RESOLVER.resolve("uv")
     if uv is None:
         raise TaskWorkflowError("uv is required to run repository validation")
     return uv
@@ -298,8 +300,26 @@ def prepare(selection: TaskSelection) -> tuple[str, ...]:
     return changed
 
 
+def _oracle_evidence_snapshot(
+    selection: TaskSelection,
+) -> dict[Path, tuple[int, int, str]]:
+    evidence_root = ROOT / "benchmarks" / "results" / f"{selection.dataset}-oracle"
+    snapshot: dict[Path, tuple[int, int, str]] = {}
+    for path in evidence_root.glob("*/oracle-evidence.json"):
+        try:
+            stat = path.stat()
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        snapshot[path] = (stat.st_mtime_ns, stat.st_size, digest)
+    return snapshot
+
+
 def _fresh_oracle_evidence(
-    selection: TaskSelection, task: str, *, started_ns: int
+    selection: TaskSelection,
+    task: str,
+    *,
+    previous: dict[Path, tuple[int, int, str]],
 ) -> tuple[str, str]:
     evidence_root = ROOT / "benchmarks" / "results" / f"{selection.dataset}-oracle"
     candidates = sorted(
@@ -308,11 +328,17 @@ def _fresh_oracle_evidence(
         reverse=True,
     )
     for path in candidates:
-        if path.stat().st_mtime_ns < started_ns:
+        try:
+            stat = path.stat()
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        fingerprint = (stat.st_mtime_ns, stat.st_size, hashlib.sha256(raw).hexdigest())
+        if previous.get(path) == fingerprint:
             continue
         try:
-            payload: Any = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+            payload: Any = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError):
             continue
         if not isinstance(payload, dict) or payload.get("dataset") != selection.dataset:
             continue
@@ -384,8 +410,8 @@ def validate(selection: TaskSelection) -> tuple[tuple[str, str, str], ...]:
                 executable=_uv_executable(),
             )
         for task in selection.tasks:
-            started_ns = time.time_ns()
-            make = shutil.which("make")
+            previous_evidence = _oracle_evidence_snapshot(selection)
+            make = TOOL_RESOLVER.resolve("make")
             if make is None:
                 raise TaskWorkflowError("make is required to run the exact Oracle")
             _run_checked(
@@ -401,7 +427,7 @@ def validate(selection: TaskSelection) -> tuple[tuple[str, str, str], ...]:
                 executable=make,
             )
             digest, evidence_path = _fresh_oracle_evidence(
-                selection, task, started_ns=started_ns
+                selection, task, previous=previous_evidence
             )
             oracle_evidence.append((task, digest, evidence_path))
     finally:

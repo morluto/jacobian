@@ -211,3 +211,40 @@ def test_validate_fails_fast_after_static_failure(
         workflow.validate(selection)
 
     assert calls == ["static-quality"]
+
+
+def test_oracle_evidence_freshness_rejects_unchanged_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    selection = workflow.TaskSelection("dataset-one", ("task-a",), (tmp_path,), ())
+    evidence = (
+        tmp_path / "benchmarks/results/dataset-one-oracle/job/oracle-evidence.json"
+    )
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text(
+        json.dumps(
+            {
+                "dataset": "dataset-one",
+                "tasks": [{"task": "task-a", "digest": "sha256:old"}],
+            }
+        )
+    )
+    monkeypatch.setattr(workflow, "ROOT", tmp_path)
+    previous = workflow._oracle_evidence_snapshot(selection)
+
+    with pytest.raises(workflow.TaskWorkflowError, match="no fresh evidence"):
+        workflow._fresh_oracle_evidence(selection, "task-a", previous=previous)
+
+    evidence.write_text(
+        json.dumps(
+            {
+                "dataset": "dataset-one",
+                "tasks": [{"task": "task-a", "digest": "sha256:new"}],
+            }
+        )
+    )
+
+    assert workflow._fresh_oracle_evidence(selection, "task-a", previous=previous) == (
+        "sha256:new",
+        "benchmarks/results/dataset-one-oracle/job/oracle-evidence.json",
+    )

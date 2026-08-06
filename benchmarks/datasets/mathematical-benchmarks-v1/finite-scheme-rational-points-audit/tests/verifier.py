@@ -21,18 +21,19 @@ LIMITATION = "The verifier certifies one finite affine countermodel over F_5, no
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
     return (
         any(term in text for term in ("f_5", "f5", "finite affine", "countermodel"))
         and any(term in text for term in ("scheme", "functor", "rational point"))
-        and any(term in text for term in ("not general", "not a general", "only", "one finite"))
+        and any(
+            term in text
+            for term in ("not general", "not a general", "only", "one finite")
+        )
     )
+
+
 # Published reward-bearing prose obligations for evidence/answer.txt.  The
 # verifier checks that the evidence text states all three facts, accepting
 # mathematically equivalent phrasing while rejecting unrelated or empty text.

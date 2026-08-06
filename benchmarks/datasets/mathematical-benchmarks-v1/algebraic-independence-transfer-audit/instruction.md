@@ -12,7 +12,7 @@ Submit the exact rational definitions
 
 Finally compute the frozen conjugate norm `F(P,Q,R)F(P,Q,-R)` as a polynomial in `(P,Q,S)` with `S=R^2`. This certifies only the displayed coordinate identities and this one exact norm calculation. It does **not** certify the universal nonzero-norm argument for an arbitrary polynomial relation, repair the general algebraic-independence proof, or prove the external transcendence premise.
 
-The first line of `evidence/answer.txt` must be exactly: `The first and second coordinate changes are birational with the displayed inverse formulas. The conjugate norm is computed exactly over QQ. The modular-form independence theorem remains a trusted premise.` The evidence file is bounded to 65536 bytes. Additional lines are ignored and need not duplicate the typed result.
+The evidence file `evidence/answer.txt` must state the following three facts in the solver's own words: (1) the first and second coordinate changes are birational (with the displayed inverse formulas); (2) the conjugate norm is computed exactly over the rationals (QQ); (3) the modular-form independence theorem remains a trusted premise. Additional derivation content is allowed and ignored.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

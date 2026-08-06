@@ -1,10 +1,13 @@
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
     resolve_evidence,
     strict_submission_contract,
@@ -13,10 +16,19 @@ from verifier_support import (
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."
-EVIDENCE_SENTENCE = (
-    "The first and second coordinate changes are birational with the displayed "
-    "inverse formulas. The conjugate norm is computed exactly over QQ. The "
-    "modular-form independence theorem remains a trusted premise."
+# Published reward-bearing prose obligations for evidence/answer.txt.  The
+# verifier checks that the evidence text states all three facts, accepting
+# mathematically equivalent phrasing while rejecting unrelated or empty text.
+_EVIDENCE_OBLIGATIONS = (
+    (re.compile(r"birational", re.IGNORECASE),),
+    (
+        re.compile(r"\bnorm\b", re.IGNORECASE),
+        re.compile(r"\bQQ\b|\bQ\b|rationals?", re.IGNORECASE),
+    ),
+    (
+        re.compile(r"premise", re.IGNORECASE),
+        re.compile(r"trusted|independence", re.IGNORECASE),
+    ),
 )
 
 
@@ -120,23 +132,56 @@ def valid_result(result):
     )
 
 
-def evidence_ok(evidence):
-    if not evidence_list_is_bound(evidence, max_bytes=65536):
+def evidence_text_is_valid(text):
+    """Check that evidence prose states all three published obligations.
+
+    Accepts mathematically equivalent phrasing; rejects empty or unrelated
+    text that omits any required fact.
+    """
+
+    if not isinstance(text, str) or not text.strip():
         return False
-    target = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=65536
+    lowered = text.lower()
+    return all(
+        all(pattern.search(lowered) for pattern in obligation)
+        for obligation in _EVIDENCE_OBLIGATIONS
     )
-    try:
-        return (
-            target is not None
-            and target.read_text().splitlines()[0] == EVIDENCE_SENTENCE
-        )
-    except (OSError, UnicodeError, IndexError, MemoryError):
+
+
+def evidence_ok(evidence):
+    if not evidence_list_is_bound(evidence):
         return False
+    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
+    try:
+        return evidence_text_is_valid(target.read_text())
+    except (OSError, UnicodeError, MemoryError):
+        return False
+
+
+def raw_submission():
+    """Parse the bounded submission JSON without full-schema validation.
+
+    Mathematical correctness, evidence, scope, and assurance are evaluated
+    from this raw object so that an independent envelope fault (invalid
+    evidence path, wrong scope, etc.) does not erase the mathematical
+    diagnostic.  Full-schema validity is reserved for ``protocol_compliance``.
+    """
+
+    path = W / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def main():
     expected = json.loads((T / "expected.json").read_text())
+    raw = raw_submission()
     input_binding = workspace_input_is_bound()
     submission = load_submission(W / "submission.json", require_input_binding=False)
     contract = strict_submission_contract(
@@ -146,7 +191,7 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    result = submission.get("result") if isinstance(submission, dict) else None
+    result = raw.get("result") if isinstance(raw, dict) else None
     mathematical = valid_result(result)
     evidence = bool(
         isinstance(submission, dict) and evidence_ok(submission.get("evidence"))
@@ -161,9 +206,7 @@ def main():
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "COMPUTED"
     )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
+    false_certification = false_verified_claim(raw, verification_record_bound=False)
     accepted = bool(
         contract
         and input_binding

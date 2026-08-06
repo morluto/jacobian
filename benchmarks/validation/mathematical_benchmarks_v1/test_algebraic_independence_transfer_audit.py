@@ -110,3 +110,77 @@ def test_false_verified_claim_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(tmp_path, lambda s: s.__setitem__("claimed_assurance", "VERIFIED"))
     assert reward["false_certification"] is True
     assert reward["reward"] == 0.0
+
+
+def test_equivalent_evidence_wording_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "Both coordinate substitutions are birational maps, as shown by the "
+        "explicit inverse formulas. The conjugate norm F(P,Q,R)F(P,Q,-R) is "
+        "evaluated exactly over the rational numbers QQ. The algebraic "
+        "independence of delta and its derivatives is taken as a trusted "
+        "premise and is not proved here.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
+def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("The quick brown fox jumps over the lazy dog.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_large_evidence_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    header = (
+        "The first and second coordinate changes are birational with the "
+        "displayed inverse formulas. The conjugate norm is computed exactly "
+        "over QQ. The modular-form independence theorem remains a trusted "
+        "premise.\n"
+    )
+    # Append a large derivation exceeding the former 65536-byte cap.
+    evidence.write_text(header + "x" * 70000 + "\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
+def test_envelope_failure_preserves_correctness(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    # Break the evidence descriptor with an escaped path while keeping the
+    # mathematical result canonical.
+    submission["evidence"] = [
+        {"path": "../answer.txt", "sha256": submission["evidence"][0]["sha256"]}
+    ]
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 1.0
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_malformed_result_does_not_crash(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"] = "not-a-dict"
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 0.0
+    assert reward["reward"] == 0.0

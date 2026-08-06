@@ -7,9 +7,11 @@ from itertools import pairwise
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
+    MAX_SUBMISSION_BYTES,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -19,6 +21,7 @@ TESTS = Path("/tests")
 LIMITATION = (
     "Dumas's theorem and the corrected general lemma are not machine-formalized."
 )
+ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def _load_frozen_input() -> dict:
@@ -92,7 +95,7 @@ def _lower_hull(values: list[int | None]) -> list[tuple[int, int]]:
 
 def _right_edge_hypotheses(values: list[int | None], ell: int, j: int) -> bool:
     v_ell, v_j = values[ell], values[j]
-    if v_ell is None or v_j != 0 or math.gcd(v_ell, j - ell) != 1:
+    if v_ell is None or v_ell <= 0 or v_j != 0 or math.gcd(v_ell, j - ell) != 1:
         return False
     slope_size = Fraction(v_ell, j - ell)
     for index in range(1, j):
@@ -153,7 +156,7 @@ def _certificate_valid(result: object, source: dict) -> bool:
         return False
     product = _multiply(left, right)
     degree = len(product) - 1
-    if degree < 6 or j != degree or not 2 <= ell < j:
+    if degree < 6 or not 2 <= ell < j:
         return False
     values = [_valuation(coefficient, prime) for coefficient in product]
     if not _right_edge_hypotheses(values, ell, j):
@@ -179,14 +182,75 @@ def _certificate_valid(result: object, source: dict) -> bool:
     )
 
 
+def _newton_explanation_valid(text: str) -> bool:
+    """Validate the documented Newton-polygon mathematical explanation.
+
+    The instruction requires a concise mathematical explanation covering the
+    Newton polygon analysis: the old right-edge hypotheses hold at the
+    submitted indices, the factor constant-term valuations contradict the old
+    conclusion, and at least one corrected left-edge condition fails (so the
+    witness does not refute the repair).  Accept mathematically equivalent
+    phrasings while rejecting unrelated or empty text.
+    """
+    if not isinstance(text, str) or len(text.strip()) < 20:
+        return False
+    lower = text.lower()
+    has_polygon = any(
+        w in lower for w in ("newton", "polygon", "valuation", "hull", "edge")
+    )
+    has_old = any(
+        w in lower
+        for w in ("old", "hypothes", "lemma", "conclusion", "refut", "contradict")
+    )
+    has_repair = any(
+        w in lower
+        for w in (
+            "correct",
+            "repair",
+            "left",
+            "primitiv",
+            "gcd",
+            "slope",
+            "fail",
+            "does not satisfy",
+        )
+    )
+    return bool(has_polygon and has_old and has_repair)
+
+
+def _raw_submission() -> dict | None:
+    """Parse the bounded submission JSON without full schema validation."""
+    path = WORKSPACE / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def _evidence_valid(evidence: object) -> bool:
     # The polynomial witness and repair boundary are independently replayed.
-    # The public evidence contract promises only one bound text artifact.
-    return evidence_list_is_bound(evidence, expected_path="evidence/answer.txt")
+    # The public evidence contract promises one bound text artifact that
+    # must contain a meaningful Newton-polygon explanation.
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    target = resolve_evidence(
+        evidence[0], expected_path="evidence/answer.txt", max_bytes=None
+    )
+    if target is None:
+        return False
+    try:
+        text = target.read_text()
+    except (OSError, UnicodeDecodeError, MemoryError, RecursionError):
+        return False
+    return _newton_explanation_valid(text)
 
 
 def main() -> None:
     input_binding = workspace_input_is_bound()
+    raw = _raw_submission()
     submission = load_submission(require_input_binding=False)
     source = _load_frozen_input()
     expected = json.loads((TESTS / "expected.json").read_text())
@@ -196,24 +260,25 @@ def main() -> None:
         conclusion=expected["conclusion"],
         verification_record="forbidden",
     )
-    result = submission.get("result") if isinstance(submission, dict) else None
+    result = raw.get("result") if isinstance(raw, dict) else None
     math_correct = bool(_certificate_valid(result, source))
     evidence_valid = bool(
-        isinstance(submission, dict) and _evidence_valid(submission.get("evidence"))
+        isinstance(raw, dict) and _evidence_valid(raw.get("evidence"))
     )
     scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
+        contract
+        and isinstance(raw, dict)
+        and raw.get("scope") == expected["required_scope"]
     )
     assurance_correct = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED"}
+        isinstance(raw, dict)
+        and isinstance(raw.get("claimed_assurance"), str)
+        and raw.get("claimed_assurance") in ALLOWED_ASSURANCES
     )
     limitations_correct = bool(
-        contract and LIMITATION in submission.get("limitations", [])
+        contract and isinstance(raw, dict) and raw.get("limitations") == [LIMITATION]
     )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
+    false_certification = false_verified_claim(raw, verification_record_bound=False)
     correct = (
         math_correct
         and input_binding

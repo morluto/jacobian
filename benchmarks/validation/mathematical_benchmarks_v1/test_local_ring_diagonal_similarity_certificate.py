@@ -157,9 +157,10 @@ def test_large_valid_evidence_has_no_arbitrary_byte_cap(tmp_path: Path) -> None:
     _set_evidence(
         app,
         submission,
-        "The modular products agree. The determinant is a unit, and the displayed "
+        "derivation filler\n" * 70_000
+        + "The modular products agree. The determinant is a unit, and the displayed "
         "determinant permutation selects only unit entries, forcing each matched "
-        "diagonal pair to agree.\n" + "x" * 70_000,
+        "diagonal pair to agree.\n",
     )
     reward = support._run_verifier(task, app, logs)
     assert reward["evidence_validity"] == 1.0

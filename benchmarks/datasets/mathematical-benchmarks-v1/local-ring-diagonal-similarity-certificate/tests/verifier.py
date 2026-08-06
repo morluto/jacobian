@@ -29,6 +29,9 @@ _PRODUCTS_AGREE = (
     "pa equals bp",
     "pa and bp match",
     "pa and bp are equal",
+    "modular products coincide",
+    "modular products are equal",
+    "matrix products coincide",
 )
 _DETERMINANT_UNIT = (
     "determinant is a unit",
@@ -37,6 +40,9 @@ _DETERMINANT_UNIT = (
     "is invertible",
     "det is a unit",
     "det is invertible",
+    "det(p) is a unit",
+    "det(p) is invertible",
+    "determinant belongs to the units",
 )
 _DIAGONAL_MATCH = (
     "unit entries",
@@ -63,11 +69,6 @@ _NEGATIONS = (
     "do not coincide",
     "does not coincide",
 )
-# Bounded prose-parsing buffer.  Evidence size itself is uncapped; only the
-# text scanned for the explanation obligation is bounded to avoid OOM.
-_PROSE_PARSE_BYTES = 1 << 20
-
-
 def sign(p):
     return -1 if sum(p[i] > p[j] for i in range(6) for j in range(i + 1, 6)) % 2 else 1
 
@@ -142,14 +143,28 @@ def valid(r, d):
     )
 
 
-def _explanation_is_valid(text):
-    """Structural check: affirmative concepts present, no direct contradiction."""
-    if not isinstance(text, str) or not text.strip():
+def _explanation_is_valid(path: Path) -> bool:
+    """Stream the explanation, requiring each fact and no contradiction."""
+
+    matched = [False] * len(_CONCEPT_GROUPS)
+    contradicted = False
+    carry = ""
+    try:
+        with path.open("r", encoding="utf-8", errors="strict") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                contradicted = contradicted or any(
+                    negation in window for negation in _NEGATIONS
+                )
+                for index, group in enumerate(_CONCEPT_GROUPS):
+                    if not matched[index] and any(
+                        phrase in window for phrase in group
+                    ):
+                        matched[index] = True
+                carry = window[-256:]
+    except (OSError, UnicodeError, MemoryError):
         return False
-    lower = text.lower()
-    if any(neg in lower for neg in _NEGATIONS):
-        return False
-    return all(any(phrase in lower for phrase in group) for group in _CONCEPT_GROUPS)
+    return not contradicted and all(matched)
 
 
 def evidence_ok(e):
@@ -162,12 +177,7 @@ def evidence_ok(e):
     path = resolve_evidence(e[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
-    try:
-        with path.open("r", encoding="utf-8", errors="strict") as stream:
-            head = stream.read(_PROSE_PARSE_BYTES)
-    except (OSError, UnicodeError):
-        return False
-    return _explanation_is_valid(head)
+    return _explanation_is_valid(path)
 
 
 def _reject_nonfinite(token):

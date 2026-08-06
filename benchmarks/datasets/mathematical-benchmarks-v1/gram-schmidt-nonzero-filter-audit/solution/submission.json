@@ -1,0 +1,216 @@
+{
+  "task_id": "jacobian/gram-schmidt-nonzero-filter-audit",
+  "conclusion": "FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS",
+  "result": {
+    "vectors": [
+      [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        -1,
+        1,
+        -1,
+        1
+      ],
+      [
+        1,
+        1,
+        -1,
+        -1,
+        1
+      ],
+      [
+        1,
+        -1,
+        -1,
+        1,
+        1
+      ],
+      [
+        4,
+        0,
+        0,
+        0,
+        4
+      ],
+      [
+        2,
+        -2,
+        4,
+        0,
+        2
+      ]
+    ],
+    "residuals": [
+      [
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
+      ],
+      [
+        {
+          "numerator": 4,
+          "denominator": 5
+        },
+        {
+          "numerator": -6,
+          "denominator": 5
+        },
+        {
+          "numerator": 4,
+          "denominator": 5
+        },
+        {
+          "numerator": -6,
+          "denominator": 5
+        },
+        {
+          "numerator": 4,
+          "denominator": 5
+        }
+      ],
+      [
+        {
+          "numerator": 2,
+          "denominator": 3
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": -4,
+          "denominator": 3
+        },
+        {
+          "numerator": -1,
+          "denominator": 1
+        },
+        {
+          "numerator": 2,
+          "denominator": 3
+        }
+      ],
+      [
+        {
+          "numerator": 4,
+          "denominator": 7
+        },
+        {
+          "numerator": -8,
+          "denominator": 7
+        },
+        {
+          "numerator": -8,
+          "denominator": 7
+        },
+        {
+          "numerator": 8,
+          "denominator": 7
+        },
+        {
+          "numerator": 4,
+          "denominator": 7
+        }
+      ],
+      [
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
+      ],
+      [
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
+      ]
+    ],
+    "rank": 4,
+    "zero_residual_indices": [
+      4,
+      5
+    ],
+    "formal_selected_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "intended_selected_indices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "EXACT_RATIONAL_GRAM_SCHMIDT_COUNTERMODEL",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/gram-schmidt-audit.json",
+      "sha256": "sha256:26b6ff8abac03f8e91c917d68af5015b04ea627e57ab5000891f7a1980c231c4"
+    }
+  ],
+  "limitations": [
+    "LEAN_ELABORATION_NOT_ASSESSED",
+    "NORMALIZATION_OF_NONZERO_RESIDUALS_NOT_REQUIRED"
+  ]
+}

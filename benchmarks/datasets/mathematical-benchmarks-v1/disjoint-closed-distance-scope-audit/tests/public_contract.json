@@ -1,0 +1,380 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/disjoint-closed-distance-scope-audit",
+  "submission_path": "/app/submission.json",
+  "assurance_ceiling": "COMPUTED",
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "verification_record": null,
+  "conclusion": {
+    "const": "DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE"
+  },
+  "scope": {
+    "type": "string",
+    "const": "EXACT_PARAMETRIC_METRIC_COUNTERMODEL",
+    "enum": null,
+    "pattern": null
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/disjoint-closed-distance-audit.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "required_artifact_filenames": [
+    "evidence/disjoint-closed-distance-audit.json"
+  ],
+  "public_notes": "Exact parametric metric replay; Lean elaboration and foundational topology remain outside scope.",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "limitations": {
+    "const": [
+      "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
+      "LEAN_ELABORATION_NOT_ASSESSED"
+    ]
+  },
+  "schema_definitions": {
+    "rat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "properties": {
+        "numerator": {
+          "type": "integer",
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        },
+        "denominator": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "epsilon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "epsilon",
+        "index",
+        "distance_squared"
+      ],
+      "properties": {
+        "epsilon": {
+          "$ref": "#/$defs/rat"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "distance_squared": {
+          "$ref": "#/$defs/rat"
+        }
+      }
+    },
+    "separation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_family_lower_bound_squared",
+        "cross_family_vertical_nonzero",
+        "closedness_reason"
+      ],
+      "properties": {
+        "same_family_lower_bound_squared": {
+          "$ref": "#/$defs/rat"
+        },
+        "cross_family_vertical_nonzero": {
+          "const": true
+        },
+        "closedness_reason": {
+          "const": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "horizontal_step",
+        "vertical_scale",
+        "offset",
+        "sample_indices",
+        "distance_squared",
+        "epsilon_witnesses",
+        "separation_certificate",
+        "formal_conclusion",
+        "corrected_conclusion"
+      ],
+      "properties": {
+        "horizontal_step": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 20
+        },
+        "vertical_scale": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 20
+        },
+        "sample_indices": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          }
+        },
+        "distance_squared": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/rat"
+          }
+        },
+        "epsilon_witnesses": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/epsilon"
+          }
+        },
+        "separation_certificate": {
+          "$ref": "#/$defs/separation"
+        },
+        "formal_conclusion": {
+          "const": "POSITIVE_DISTANCE"
+        },
+        "corrected_conclusion": {
+          "const": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
+        }
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/disjoint-closed-distance-scope-audit"
+      },
+      "conclusion": {
+        "const": "DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE"
+      },
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "EXACT_PARAMETRIC_METRIC_COUNTERMODEL"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/disjoint-closed-distance-audit.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
+          "LEAN_ELABORATION_NOT_ASSESSED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      }
+    },
+    "$defs": {
+      "rat": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "properties": {
+          "numerator": {
+            "type": "integer",
+            "minimum": -1000000000,
+            "maximum": 1000000000
+          },
+          "denominator": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          }
+        }
+      },
+      "epsilon": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "epsilon",
+          "index",
+          "distance_squared"
+        ],
+        "properties": {
+          "epsilon": {
+            "$ref": "#/$defs/rat"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "distance_squared": {
+            "$ref": "#/$defs/rat"
+          }
+        }
+      },
+      "separation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "same_family_lower_bound_squared",
+          "cross_family_vertical_nonzero",
+          "closedness_reason"
+        ],
+        "properties": {
+          "same_family_lower_bound_squared": {
+            "$ref": "#/$defs/rat"
+          },
+          "cross_family_vertical_nonzero": {
+            "const": true
+          },
+          "closedness_reason": {
+            "const": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+          }
+        }
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "horizontal_step",
+          "vertical_scale",
+          "offset",
+          "sample_indices",
+          "distance_squared",
+          "epsilon_witnesses",
+          "separation_certificate",
+          "formal_conclusion",
+          "corrected_conclusion"
+        ],
+        "properties": {
+          "horizontal_step": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 20
+          },
+          "vertical_scale": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 20
+          },
+          "sample_indices": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          "distance_squared": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/$defs/rat"
+            }
+          },
+          "epsilon_witnesses": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/$defs/epsilon"
+            }
+          },
+          "separation_certificate": {
+            "$ref": "#/$defs/separation"
+          },
+          "formal_conclusion": {
+            "const": "POSITIVE_DISTANCE"
+          },
+          "corrected_conclusion": {
+            "const": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "suite_id": "codex-jacobian-visibility-v1",
+  "cases": [
+    {
+      "case_id": "explicit-determinant-canary",
+      "cue_level": "EXPLICIT",
+      "prompt": "Use available Jacobian mathematical tools to compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return the determinant and the capability ID used.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "affordance-determinant",
+      "cue_level": "AFFORDANCE",
+      "prompt": "Compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Use any available specialized mathematical tool when it provides a relevant exact operation. Return only the determinant and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-determinant",
+      "cue_level": "LATENT",
+      "prompt": "Compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return only the determinant and a one-sentence method summary.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute"
+      ],
+      "require_verified": false
+    },
+    {
+      "case_id": "latent-independent-verification",
+      "cue_level": "LATENT",
+      "prompt": "Compute and independently verify the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. State the determinant and the assurance level supported by the evidence.",
+      "expected_capability_ids": [
+        "matrix.determinant.compute",
+        "matrix.determinant.verify"
+      ],
+      "require_verified": true
+    }
+  ]
+}

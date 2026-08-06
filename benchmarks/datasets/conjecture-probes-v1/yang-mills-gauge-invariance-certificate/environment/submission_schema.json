@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "quat": {
+      "items": {
+        "$ref": "#/$defs/rat"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "quats4": {
+      "items": {
+        "$ref": "#/$defs/quat"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "rat": {
+      "pattern": "^(?:0|-?[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FINITE_SU2_PLAQUETTE_GAUGE_INVARIANCE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_FINITE_RATIONAL_SU2_PLAQUETTE",
+        "NO_CONTINUUM_YANG_MILLS_CONSTRUCTION",
+        "NO_MASS_GAP_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "conjugated_plaquette": {
+          "$ref": "#/$defs/quat"
+        },
+        "gauges": {
+          "$ref": "#/$defs/quats4"
+        },
+        "links": {
+          "$ref": "#/$defs/quats4"
+        },
+        "plaquette": {
+          "$ref": "#/$defs/quat"
+        },
+        "scalar_trace_invariant": {
+          "const": true
+        },
+        "transformed_links": {
+          "$ref": "#/$defs/quats4"
+        },
+        "transformed_plaquette": {
+          "$ref": "#/$defs/quat"
+        }
+      },
+      "required": [
+        "links",
+        "gauges",
+        "transformed_links",
+        "plaquette",
+        "transformed_plaquette",
+        "conjugated_plaquette",
+        "scalar_trace_invariant"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "one-rational-su2-plaquette-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/yang-mills-gauge-invariance-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

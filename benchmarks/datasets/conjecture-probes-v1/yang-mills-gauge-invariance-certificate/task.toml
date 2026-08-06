@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/yang-mills-gauge-invariance-certificate"
+version="1.0.0"
+description="Construct and replay one exact rational SU(2) plaquette gauge transformation."
+keywords=["yang-mills","su2","quaternions","gauge-invariance"]
+[metadata]
+evaluation_kind="conjecture-probe"
+domain="mathematical-sciences"
+primary_domain="mathematical-physics"
+field="gauge-theory"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:0a463664f04926239181db2bae2525ddf9efb2cb4e242f7f058686ba9eb56a7c"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","gauge-theory","exact-rationals","quaternions","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-finite-conjecture-probe"
+derivation="Derived from retained spreadsheet row C-040 and the Clay Yang-Mills problem statement; the finite rational plaquette is authored."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

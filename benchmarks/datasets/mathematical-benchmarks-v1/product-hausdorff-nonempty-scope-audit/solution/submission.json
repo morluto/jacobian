@@ -1,0 +1,51 @@
+{
+  "task_id": "jacobian/product-hausdorff-nonempty-scope-audit",
+  "conclusion": "EMPTY_FACTOR_MASKS_NON_HAUSDORFF_FACTOR",
+  "scope": "FINITE_TOPOLOGICAL_PRODUCT_SCOPE_COUNTERMODEL",
+  "claimed_assurance": "COMPUTED",
+  "completeness": "COMPLETE",
+  "result": {
+    "factor_cardinalities": [
+      4,
+      0,
+      3
+    ],
+    "bad_factor_topology": [
+      [],
+      [
+        3
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "empty_factor_index": 1,
+    "product_cardinality": 0,
+    "product_is_hausdorff": true,
+    "bad_factor_is_t0": true,
+    "bad_factor_is_hausdorff": false,
+    "missing_assumption": "ALL_FACTORS_NONEMPTY"
+  },
+  "limitations": [
+    "FINITE_TOPOLOGIES_ONLY",
+    "LEAN_ELABORATION_NOT_ASSESSED"
+  ],
+  "evidence": [
+    {
+      "path": "evidence/product-hausdorff-audit.json",
+      "sha256": "sha256:433c64f677ed868fd9e1f5321dbdcdf02347b3018a86c85f07c2b6679368bc5a"
+    }
+  ]
+}

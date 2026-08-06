@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence", "/app/input.json"]
+[task]
+name = "jacobian/gram-schmidt-nonzero-filter-audit"
+version = "1.0.0"
+description = "Audit a nonzero-filter mistranslation with an exact dependent Gram-Schmidt certificate."
+keywords = ["formalization", "gram-schmidt", "orthonormal", "semantic-audit"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "linear-algebra"
+field = "linear-algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-semantic-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "assurance", "autoformalization", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-semantic-audit"
+fixture_digest = "sha256:62ff3f0162989e310d093d12e6e590a45c3ba49ec3e82c34f4a2f4cebbdb3594"
+derivation = "Derived from LARK-Lab/FormalRx-Test test row 17 at revision 4b7c6b883e0859e9bd38620a539bdcef408f91b4 (Apache-2.0)."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

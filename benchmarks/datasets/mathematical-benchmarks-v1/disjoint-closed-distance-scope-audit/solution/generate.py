@@ -1,0 +1,77 @@
+import hashlib
+import json
+import os
+import shutil
+from fractions import Fraction
+from pathlib import Path
+
+
+def q(x):
+    return {"numerator": x.numerator, "denominator": x.denominator}
+
+
+def main():
+    app = Path(os.environ.get("APP_DIR", "/app"))
+    frozen = Path("/solution/input.json")
+    if frozen.exists():
+        shutil.copyfile(frozen, app / "input.json")
+    h, s, c = 3, 2, 5
+    ns = list(range(1, 11))
+    result = {
+        "horizontal_step": h,
+        "vertical_scale": s,
+        "offset": c,
+        "sample_indices": ns,
+        "distance_squared": [q(Fraction(s * s, (n + c) ** 2)) for n in ns],
+        "epsilon_witnesses": [
+            {
+                "epsilon": q(Fraction(1, k)),
+                "index": k * s + c,
+                "distance_squared": q(Fraction(s * s, (k * s + 2 * c) ** 2)),
+            }
+            for k in range(2, 10)
+        ],
+        "separation_certificate": {
+            "same_family_lower_bound_squared": q(Fraction(h * h)),
+            "cross_family_vertical_nonzero": True,
+            "closedness_reason": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP",
+        },
+        "formal_conclusion": "POSITIVE_DISTANCE",
+        "corrected_conclusion": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO",
+    }
+    limits = [
+        "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
+        "LEAN_ELABORATION_NOT_ASSESSED",
+    ]
+    evidence = {
+        "schema_version": "1",
+        "task_id": "jacobian/disjoint-closed-distance-scope-audit",
+        "result": result,
+        "limitations": limits,
+    }
+    ep = app / "evidence/disjoint-closed-distance-audit.json"
+    ep.parent.mkdir(parents=True, exist_ok=True)
+    ep.write_text(json.dumps(evidence, separators=(",", ":")))
+    submission = {
+        "task_id": evidence["task_id"],
+        "conclusion": "DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE",
+        "scope": "EXACT_PARAMETRIC_METRIC_COUNTERMODEL",
+        "claimed_assurance": "COMPUTED",
+        "completeness": "COMPLETE",
+        "result": result,
+        "limitations": limits,
+        "evidence": [
+            {
+                "path": "evidence/disjoint-closed-distance-audit.json",
+                "sha256": "sha256:" + hashlib.sha256(ep.read_bytes()).hexdigest(),
+            }
+        ],
+    }
+    (app / "submission.json").write_text(json.dumps(submission, indent=2))
+    (app / "answer.txt").write_text(
+        "Exact countermodel certificate generated; see submission.json.\n"
+    )
+
+
+if __name__ == "__main__":
+    main()

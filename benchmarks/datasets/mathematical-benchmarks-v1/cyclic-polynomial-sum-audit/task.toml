@@ -8,7 +8,7 @@ keywords = ["regression", "proof-audit", "polynomial-elimination", "adversarial-
 [metadata]
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
-primary_domain = "algebra-symbolic-reasoning"
+primary_domain = "algebra"
 field = "algebra"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "hidden-at-runtime"

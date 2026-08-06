@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/fractional-ratio-proof-repair"
+version = "1.0.0"
+description = "Diagnose a fractional-knapsack substitution and repair a binary ratio optimum with an exact residual certificate."
+keywords = ["proof-repair", "fractional-programming", "binary-optimization"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "optimization"
+field = "optimization-and-proof-audit"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-conversation-derived-proof-repair"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["regression", "proof-repair", "fractional-programming", "exact-rationals", "offline", "difficulty-provisional"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-answer-visible-transformed-repair"
+fixture_digest = "sha256:3c0cc1ade87457b737a29b53a9e213268d0c64fb70a4c0c4b78a255fa2f9e596"
+derivation = "Derived from Jiahao004/DeepTheorem train row 10007 (source id 86829) at revision f5935720f176cedff4ecd8ebf83d1696e31cfac8."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

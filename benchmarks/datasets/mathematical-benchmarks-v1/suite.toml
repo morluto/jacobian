@@ -1,0 +1,17 @@
+schema_version = "2"
+
+[dataset]
+id = "jacobian/mathematical-benchmarks-v1"
+title = "Jacobian mathematical benchmarks"
+purpose = "Fixed hidden-runtime mathematical tasks for independently checked benchmark evaluation and optional workflow observation."
+claim_class = "mathematical-task-correctness"
+answer_visibility = "hidden-at-runtime"
+default_execution_profile = "oracle-and-observation"
+keywords = [
+    "mathematics",
+    "jacobian",
+    "mathematical-benchmarks",
+]
+authors = [
+    { name = "Jacobian contributors", email = "maintainers@jacobian.invalid" },
+]

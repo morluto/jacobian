@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/natural-subtraction-proof-repair"
+version = "1.0.0"
+description = "Diagnose a failed Lean rewrite and certify the mathematical repair exactly."
+keywords = ["proof-repair", "compiler-feedback", "natural-subtraction", "exact-certificate"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
+field = "formal-mathematics"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-proof-repair"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["proof-repair", "lean-diagnostic", "linear-combination", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-proof-repair"
+fixture_digest = "sha256:471ddd45bf178e2b792e67afe9236a5d066ae1cd8b38417d48e775690a28ef60"
+derivation = "Derived from APRIL lme_test row 0, Nat.sub_le_of_le_add.lean."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

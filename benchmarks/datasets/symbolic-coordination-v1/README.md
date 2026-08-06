@@ -42,7 +42,7 @@ uv run --locked python benchmarks/datasets/symbolic-coordination-v1/generate.py 
 
 An immutable evaluation snapshot is intentionally deferred until an operator
 freezes the later comparison design; repository policy does not create a
-snapshot merely for task authoring. Existing `agent-workflow-v1` snapshots are
+snapshot merely for task authoring. Existing `mathematical-benchmarks-v1` snapshots are
 unchanged.
 
 ## Validation

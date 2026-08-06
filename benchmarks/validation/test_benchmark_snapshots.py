@@ -75,12 +75,13 @@ def _member_toml(
     assurance_ceiling: str = "VERIFIED",
 ) -> str:
     return f"""
-schema_version = "1"
+schema_version = "2"
 task_id = "{task_id}"
 task_name = "jacobian/{task_id}"
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
 field = "logic-satisfiability"
+primary_domain = "logic-formal-mathematics"
 provenance_class = "hand-designed-structural-variant"
 provenance_ref = "Fixed fixture task."
 assurance_ceiling = "{assurance_ceiling}"

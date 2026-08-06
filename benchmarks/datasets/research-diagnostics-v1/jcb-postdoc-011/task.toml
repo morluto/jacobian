@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "percolation theo
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "probability-statistics"
 field = "percolation-theory"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

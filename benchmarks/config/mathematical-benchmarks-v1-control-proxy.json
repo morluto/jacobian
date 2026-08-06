@@ -1,0 +1,45 @@
+{
+  "jobs_dir": "benchmarks/results/mathematical-benchmarks-v1-control-proxy",
+  "n_attempts": 3,
+  "timeout_multiplier": 1,
+  "orchestrator": {
+    "type": "local",
+    "n_concurrent_trials": 1,
+    "quiet": false
+  },
+  "environment": {
+    "type": "docker",
+    "force_build": true,
+    "delete": true,
+    "extra_docker_compose": [
+      "benchmarks/config/agent-eval-codex.compose.yaml",
+      "benchmarks/config/agent-eval-egress-proxy.compose.yaml"
+    ],
+    "extra_allowed_hosts": [
+      "api.openai.com",
+      "auth.openai.com",
+      "chatgpt.com",
+      "deb.debian.org",
+      "nodejs.org",
+      "npmjs.org",
+      "registry.npmjs.org",
+      "raw.githubusercontent.com"
+    ]
+  },
+  "agents": [
+    {
+      "name": "codex",
+      "kwargs": {
+        "web_search": "disabled"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "path": "benchmarks/datasets/mathematical-benchmarks-v1",
+      "task_names": [
+        "graph-counterexample"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,7 @@ keywords = ["research", "diagnostic", "mathematical-sciences", "analytic number 
 [metadata]
 evaluation_kind = "research-diagnostic"
 domain = "mathematical-sciences"
+primary_domain = "number-theory"
 field = "analytic-number-theory"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

@@ -325,6 +325,7 @@ def test_interactive_response_cannot_hide_stderr_overflow(tmp_path: Path) -> Non
             (
                 "import sys, time; sys.stdin.readline(); sys.stdin.readline(); "
                 "sys.stderr.write('x' * 1024); sys.stderr.flush(); "
+                "time.sleep(0.2); "
                 "print('{}\\n', flush=True)"
             ),
         ),

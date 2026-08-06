@@ -35,7 +35,7 @@ def test_inventory_covers_every_registered_task(
     inventory = benchmark_inventory.build_inventory()
     suites = load_registry()
 
-    assert inventory["schema_version"] == "1"
+    assert inventory["schema_version"] == "2"
     assert inventory["dataset_count"] == len(suites)
     assert inventory["task_count"] == sum(len(suite.tasks) for suite in suites)
     rendered = json.dumps(inventory)
@@ -74,9 +74,11 @@ def test_visible_submission_contracts_match_evidence_and_assurance_limits() -> N
 
 def test_task_gap_records_preserve_only_historical_provenance() -> None:
     paths = sorted(
-        Path("benchmarks/datasets/agent-workflow-v1").glob("*/analysis/gap.json")
+        Path("benchmarks/datasets/mathematical-benchmarks-v1").glob(
+            "*/analysis/gap.json"
+        )
     )
-    assert paths, "expected historical gap records under agent-workflow-v1"
+    assert paths, "expected historical gap records under mathematical-benchmarks-v1"
     for path in paths:
         record = json.loads(path.read_text(encoding="utf-8"))
         assert record["provenance_status"] == "historical"

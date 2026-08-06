@@ -1,0 +1,44 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "metric-tsp-proof-repair",
+  "analysis": {
+    "mathematical_moves": [
+      "Compute a weighted minimum spanning tree and double-tree trace.",
+      "Distinguish a generic approximation guarantee from exact tour optimality."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "graph.invariant.spanning_tree_count.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Counts spanning trees; it does not optimize a weighted tree or return one."
+      },
+      {
+        "capability_id": "graph.hamiltonian_path.decide",
+        "availability": "AVAILABLE",
+        "boundary": "Decides Hamiltonian path existence, not weighted tour optimality."
+      },
+      {
+        "capability_id": "graph.spanning_tree.minimum.compute",
+        "availability": "AVAILABLE",
+        "boundary": "Returns one deterministic exact rational minimum-weight spanning tree, its total weight, connected components, and complete fundamental-cycle optimality checks."
+      },
+      {
+        "capability_id": "graph.spanning_tree.minimum.verify",
+        "availability": "AVAILABLE",
+        "boundary": "Independently replays connectivity, tree feasibility, total weight, and the cycle-property certificate without NetworkX or producer imports."
+      }
+    ],
+    "gap_classes": [
+      "EXISTING_WORKS"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [
+      "weighted-minimum-spanning-tree",
+      "bounded-metric-tsp-optimum"
+    ],
+    "disposition": "USE_EXISTING",
+    "next_action": "Evaluate the installed MST producer/checker on held-out weighted graph families; keep exact bounded TSP deferred until independent recurrence is observed."
+  }
+}

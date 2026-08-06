@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/autoformalization-semantic-audit"
+version = "1.0.0"
+description = "Audit whether a proposed Lean theorem faithfully formalizes an informal orthogonality claim."
+keywords = ["autoformalization", "semantic-alignment", "linear-algebra", "proof-audit"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "linear-algebra"
+field = "linear-algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-autoformalization-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["autoformalization", "proof-audit", "linear-algebra", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-autoformalization-audit"
+fixture_digest = "sha256:c4044e82007acc1929cff5d6c66e2f72279ea91f2e3317e7f631b918ce18cc43"
+derivation = "Derived from ProofNetVerif valid row 2."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

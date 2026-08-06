@@ -80,7 +80,7 @@ def test_accepts_fenced_command_with_required_variable(tmp_path: Path) -> None:
     )
     root, document = _write_fixture(
         tmp_path,
-        "```sh\nmake deploy DATASET=agent-workflow-v1\n```\n",
+        "```sh\nmake deploy DATASET=mathematical-benchmarks-v1\n```\n",
         makefile=makefile,
     )
 

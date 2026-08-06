@@ -140,17 +140,33 @@ def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
     assert reward["reward"] == 0.0
 
 
+def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "The induced map is a bijection on the same three rational points. "
+        "A has a nonzero order-three nilpotent. B is not reduced and the "
+        "schemes are isomorphic.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
 def test_large_evidence_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    header = (
+    explanation = (
         "Both affine schemes are nonempty and have the same three rational "
         "points under the induced map. A has a nonzero order-three nilpotent "
         "while B is reduced, so they are not isomorphic.\n"
     )
-    # Append a large derivation exceeding the former 65536-byte cap.
-    evidence.write_text(header + "x" * 70000 + "\n")
+    # Put the required facts beyond both the old cap and a fixed prefix scan.
+    evidence.write_text("derivation filler\n" * 70_000 + explanation)
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)

@@ -21,14 +21,37 @@ LIMITATION = "The verifier certifies one finite affine countermodel over F_5, no
 # Published reward-bearing prose obligations for evidence/answer.txt.  The
 # verifier checks that the evidence text states all three facts, accepting
 # mathematically equivalent phrasing while rejecting unrelated or empty text.
-_EVIDENCE_OBLIGATIONS = (
-    (
-        re.compile(r"rational\s+points?", re.IGNORECASE),
-        re.compile(r"\bsame\b|\bthree\b|\bbijection\b|\bbijective\b", re.IGNORECASE),
+_EVIDENCE_FACTS = {
+    "rational_points": (re.compile(r"\brational\s+points?\b"),),
+    "same_nonempty_set": (
+        re.compile(r"\b(?:same|equal)\b.{0,64}\brational\s+points?\b"),
+        re.compile(r"\b(?:bijection|bijective)\b"),
+        re.compile(r"\beach\b.{0,32}\bthree\s+rational\s+points?\b"),
     ),
-    (re.compile(r"\bnilpotent\b", re.IGNORECASE),),
-    (re.compile(r"\breduced\b|\bisomorphic\b", re.IGNORECASE),),
-)
+    "induced_map": (
+        re.compile(r"\binduced\s+map\b"),
+        re.compile(r"\bpullback\b"),
+    ),
+    "nonzero_nilpotent": (
+        re.compile(r"\bnon[- ]?zero\b.{0,64}\bnilpotent\b"),
+        re.compile(r"\bnilpotent\b.{0,64}\bnon[- ]?zero\b"),
+    ),
+    "order_three": (
+        re.compile(r"\border[- ](?:three|3)\b"),
+        re.compile(r"\bcube\b.{0,32}\bzero\b"),
+        re.compile(r"\bthird\s+power\b.{0,32}\bzero\b"),
+    ),
+    "b_reduced": (
+        re.compile(r"\bb\b.{0,32}\breduced\b"),
+        re.compile(r"\bsecond\s+(?:algebra|scheme)\b.{0,32}\breduced\b"),
+    ),
+    "not_isomorphic": (
+        re.compile(r"\bnot\s+isomorphic\b"),
+        re.compile(r"\bnon[- ]?isomorphic\b"),
+        re.compile(r"\b(?:cannot|can't)\s+be\s+isomorphic\b"),
+        re.compile(r"\bno\s+isomorphism\b"),
+    ),
+}
 EXPECTED_COLUMNS = [[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]]
 
 
@@ -90,20 +113,24 @@ def _is_int_vector(value, length, lo, hi):
     )
 
 
-def evidence_text_is_valid(text):
-    """Check that evidence prose states all three published obligations.
+def evidence_text_is_valid(path: Path) -> bool:
+    """Stream evidence and require every published mathematical fact."""
 
-    Accepts mathematically equivalent phrasing; rejects empty or unrelated
-    text that omits any required fact.
-    """
-
-    if not isinstance(text, str) or not text.strip():
+    matched = dict.fromkeys(_EVIDENCE_FACTS, False)
+    carry = ""
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                for name, alternatives in _EVIDENCE_FACTS.items():
+                    if not matched[name] and any(
+                        pattern.search(window) for pattern in alternatives
+                    ):
+                        matched[name] = True
+                carry = window[-256:]
+    except (OSError, UnicodeError, MemoryError):
         return False
-    lowered = text.lower()
-    return all(
-        all(pattern.search(lowered) for pattern in obligation)
-        for obligation in _EVIDENCE_OBLIGATIONS
-    )
+    return all(matched.values())
 
 
 def valid_morphism(columns, a_table, b_table, a_unit, b_unit):
@@ -212,10 +239,7 @@ def evidence_ok(evidence):
     resolved = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if resolved is None:
         return False
-    try:
-        return evidence_text_is_valid(resolved.read_text())
-    except (OSError, UnicodeError, MemoryError):
-        return False
+    return evidence_text_is_valid(resolved)
 
 
 def raw_submission():

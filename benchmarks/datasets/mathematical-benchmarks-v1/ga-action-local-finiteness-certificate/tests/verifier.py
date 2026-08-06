@@ -351,9 +351,10 @@ def main() -> None:
     scope_correct = bool(
         isinstance(raw, dict) and raw.get("scope") == expected["required_scope"]
     )
+    claimed_assurance = raw.get("claimed_assurance") if isinstance(raw, dict) else None
     assurance_correct = bool(
-        isinstance(raw, dict)
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED"}
+        isinstance(claimed_assurance, str)
+        and claimed_assurance in {"UNVERIFIED", "COMPUTED"}
     )
     limitations_correct = bool(
         isinstance(raw, dict) and raw.get("limitations") == [LIMITATION]

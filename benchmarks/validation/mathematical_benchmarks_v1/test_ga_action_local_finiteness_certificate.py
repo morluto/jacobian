@@ -152,6 +152,19 @@ def test_envelope_failure_preserves_independent_diagnostics(tmp_path: Path) -> N
     assert rejected["reward"] == 0.0
 
 
+def test_unhashable_assurance_preserves_scope_diagnostic(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = []
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["assurance_calibration"] == 0.0
+    assert rejected["false_certification"] is False
+    assert rejected["reward"] == 0.0
+
+
 def test_accepts_unreduced_rational_coordinates(tmp_path: Path) -> None:
     """Coordinates are not sparse term lists; unreduced rationals are schema-valid."""
     task, app, logs = _case(tmp_path)

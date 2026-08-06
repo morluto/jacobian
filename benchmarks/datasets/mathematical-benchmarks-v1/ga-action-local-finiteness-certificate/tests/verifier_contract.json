@@ -1,4 +1,5 @@
 {
   "schema_version": "1",
-  "input_binding_decoupled": true
+  "input_binding_decoupled": true,
+  "scope_independent_assurance": true
 }

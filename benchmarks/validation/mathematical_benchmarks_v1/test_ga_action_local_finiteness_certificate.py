@@ -67,7 +67,9 @@ def test_accepts_an_alternative_scaled_basis(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
-def test_equivalent_explanatory_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+def test_equivalent_explanatory_evidence_needs_no_private_marker(
+    tmp_path: Path,
+) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"

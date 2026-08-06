@@ -26,17 +26,17 @@ ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
-    return (
-        any(term in text for term in ("dumas", "corrected lemma", "newton polygon"))
-        and any(term in text for term in ("not formal", "not machine", "not verified", "without formal"))
+    return any(
+        term in text for term in ("dumas", "corrected lemma", "newton polygon")
+    ) and any(
+        term in text
+        for term in ("not formal", "not machine", "not verified", "without formal")
     )
+
+
 _EXPLANATION_FACTS = {
     "newton_polygon": (
         re.compile(r"\bnewton\s+polygon\b"),
@@ -53,12 +53,8 @@ _EXPLANATION_FACTS = {
         ),
     ),
     "factor_constant_valuations": (
-        re.compile(
-            r"\bfactor\b.{0,96}\bconstant[- ]terms?\b.{0,64}\bvaluation"
-        ),
-        re.compile(
-            r"\bconstant[- ]term\s+valuations?\b.{0,96}\b(?:factor|both)\b"
-        ),
+        re.compile(r"\bfactor\b.{0,96}\bconstant[- ]terms?\b.{0,64}\bvaluation"),
+        re.compile(r"\bconstant[- ]term\s+valuations?\b.{0,96}\b(?:factor|both)\b"),
         re.compile(
             r"\bfactor\s+constants?\b.{0,128}\bvaluations?\b"
             r".{0,128}\b(?:non[- ]?zero|neither\b.{0,32}\bzero|not\b.{0,32}\bzero)\b"
@@ -87,9 +83,7 @@ _EXPLANATION_CONTRADICTIONS = (
         r"\b(?:one\b.{0,16}\bzero|includes?\s+zero)\b"
     ),
     re.compile(r"\bcorrected?\s+left[- ]edge\b.{0,32}\bconditions?\s+hold\b"),
-    re.compile(
-        r"(?<!not )(?<!n't )\brefutes?\b.{0,32}\b(?:repair|correction)\b"
-    ),
+    re.compile(r"(?<!not )(?<!n't )\brefutes?\b.{0,32}\b(?:repair|correction)\b"),
 )
 
 

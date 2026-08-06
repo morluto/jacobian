@@ -19,6 +19,18 @@ def _rewrite(app: Path, submission: dict) -> None:
     support._write_json(app / "submission.json", submission)
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = [
+        "The corrected Newton polygon lemma remains without formal verification."
+    ]
+    _rewrite(app, submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["scope_accuracy"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
 def test_accepts_an_alternative_prime_family_member(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

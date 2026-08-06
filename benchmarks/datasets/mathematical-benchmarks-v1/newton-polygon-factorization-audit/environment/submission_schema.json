@@ -46,9 +46,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "Dumas's theorem and the corrected general lemma are not machine-formalized."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

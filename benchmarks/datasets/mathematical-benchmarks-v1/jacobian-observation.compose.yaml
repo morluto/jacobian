@@ -5,7 +5,14 @@ services:
         condition: service_healthy
   jacobian:
     image: ${JACOBIAN_IMAGE:-jacobian:local}
+    entrypoint:
+      - /bin/sh
+      - -c
     command:
+      - |
+        mkdir -p /logs/jacobian
+        exec uv run --no-sync jacobian-mcp "$@" > /logs/jacobian/mcp.log 2>&1
+      - jacobian-mcp
       - --transport
       - streamable-http
       - --host

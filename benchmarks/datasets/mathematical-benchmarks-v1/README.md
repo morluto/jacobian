@@ -92,6 +92,13 @@ Jacobian affordance, so include negative controls and tasks that discriminate
 tool adoption. Public-suite observations remain directional workflow evidence,
 not a causal performance claim.
 
+Jacobian-enabled jobs collect both Codex ATIF and the Jacobian sidecar's MCP
+runtime log. The runtime log is authoritative for `math.find`, `math.run`, and
+`reasoning.write` counts and failed capability attempts; the normalizer does
+not infer executions from JavaScript source text. A missing configured trace or
+sidecar log makes the observation incomplete. Control jobs collect ATIF only
+because they do not start the Jacobian sidecar.
+
 Five tasks have an operator-authorized verification record and may accept
 `VERIFIED`; the remaining tasks are capped at `COMPUTED`. A wrong result or an
 unsupported certification claim forces reward to zero. These are workflow

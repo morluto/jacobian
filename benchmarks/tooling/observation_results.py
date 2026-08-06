@@ -143,6 +143,13 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
 
     normalized: dict[str, Any] = json.loads(json.dumps(job))
     normalized.pop("jobs_dir", None)
+    artifacts = normalized.get("artifacts")
+    if isinstance(artifacts, list):
+        normalized["artifacts"] = [
+            entry
+            for entry in artifacts
+            if not (isinstance(entry, dict) and entry.get("service") == "jacobian")
+        ]
     environment = normalized.get("environment")
     if isinstance(environment, dict):
         compose = environment.get("extra_docker_compose")
@@ -222,6 +229,7 @@ def _normalize_trial(
     job_label: str,
     runtime: dict[str, Any] | None,
     source_prefix: str | None = None,
+    configured_artifacts: set[tuple[str, str | None]] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     agent_result = _object(trial.get("agent_result"))
     agent_info = _object(trial.get("agent_info"))
@@ -240,6 +248,7 @@ def _normalize_trial(
             str(trial.get("trial_name", "")),
             job_label,
             source_prefix=source_prefix,
+            configured_artifacts=configured_artifacts,
         )
     )
     reasoning_protocol = observation_artifacts.trial_reasoning_protocol(
@@ -332,6 +341,22 @@ def _artifact_source_prefix(runtime: dict[str, Any] | None) -> str | None:
     if isinstance(pair_id, str) and isinstance(condition_id, str):
         return f"{pair_id}/{condition_id}"
     return None
+
+
+def _configured_artifacts(job: dict[str, Any]) -> set[tuple[str, str | None]]:
+    configured: set[tuple[str, str | None]] = set()
+    artifacts = job.get("artifacts")
+    if not isinstance(artifacts, list):
+        return configured
+    for artifact in artifacts:
+        if isinstance(artifact, str):
+            configured.add((artifact, None))
+        elif isinstance(artifact, dict) and isinstance(artifact.get("source"), str):
+            service = artifact.get("service")
+            configured.add(
+                (artifact["source"], None if service in {None, "main"} else service)
+            )
+    return configured
 
 
 def _observation_failures(
@@ -560,6 +585,7 @@ def build_observation_evidence(
     artifact_failures: list[str] = []
     job_label = _display_path(job_path)
     source_prefix = _artifact_source_prefix(runtime_snapshot)
+    configured_artifacts = _configured_artifacts(job)
     for path, raw in raw_trials:
         task = _task_id(raw.get("task_name"))
         repetition = counters[task]
@@ -575,6 +601,7 @@ def build_observation_evidence(
             job_label=job_label,
             runtime=runtime_snapshot,
             source_prefix=source_prefix,
+            configured_artifacts=configured_artifacts,
         )
         artifact_failures.extend(trial_artifact_failures)
         trials.append(normalized)

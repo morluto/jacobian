@@ -252,7 +252,7 @@ def test_reasoning_protocol_is_extracted_without_summary_text(tmp_path: Path) ->
     assert "private" not in json.dumps(protocol)
 
 
-def test_atif_unified_exec_accounts_for_nested_jacobian_calls(
+def test_server_runtime_log_accounts_for_nested_jacobian_calls(
     tmp_path: Path,
 ) -> None:
     trajectory = {
@@ -266,10 +266,9 @@ def test_atif_unified_exec_accounts_for_nested_jacobian_calls(
                         "arguments": {
                             "input": "\n".join(
                                 [
-                                    "const toolsText = 'math.run is available';",
-                                    "await tools.mcp__jacobian__math_find({});",
-                                    "await tools.mcp__jacobian__math_run({});",
-                                    "await tools.mcp__jacobian__math_run({});",
+                                    "if (false) await tools.mcp__jacobian__math_find({});",
+                                    "for (let i = 0; i < 3; i++)",
+                                    "  await tools.mcp__jacobian__math_run({});",
                                 ]
                             )
                         },
@@ -290,7 +289,25 @@ def test_atif_unified_exec_accounts_for_nested_jacobian_calls(
                 "status": "ok",
                 "service": None,
                 "_content": json.dumps(trajectory),
-            }
+            },
+            {
+                "source": "/logs/jacobian/mcp.log",
+                "destination": "artifacts/logs/jacobian/mcp.log",
+                "type": "file",
+                "status": "ok",
+                "service": "jacobian",
+                "_content": "\n".join(
+                    [
+                        "INFO MCP capability attempt execution_status=COMPLETED",
+                        "INFO MCP tool call tool=math.run          server.py:314",
+                        "     status=success duration_ms=1.0",
+                        "INFO MCP capability attempt execution_status=ERROR",
+                        "INFO MCP tool call tool=math.run status=success",
+                        "INFO MCP capability attempt execution_status=COMPLETED",
+                        "INFO MCP tool call tool=math.run status=success",
+                    ]
+                ),
+            },
         ],
     )
     result_path = trial_dir / "result.json"
@@ -300,8 +317,8 @@ def test_atif_unified_exec_accounts_for_nested_jacobian_calls(
         result_path, "attempt-0", "job.json"
     )
 
-    assert calls == {"exec": 1, "math.find": 1, "math.run": 2}
-    assert errors == 0
+    assert calls == {"exec": 1, "math.run": 3}
+    assert errors == 1
     assert failures == []
 
 
@@ -594,6 +611,70 @@ def test_implicit_empty_harbor_convention_is_not_a_failure(tmp_path: Path) -> No
 
     assert artifacts == []
     assert failures == []
+
+
+def test_explicit_empty_harbor_convention_is_a_failure(tmp_path: Path) -> None:
+    trial_dir = tmp_path / "trial-0"
+    trial_dir.mkdir()
+    artifacts_dir = trial_dir / "artifacts"
+    artifacts_dir.mkdir()
+    manifest = [
+        {
+            "source": "/logs/artifacts",
+            "destination": "artifacts/logs/artifacts",
+            "type": "directory",
+            "status": "empty",
+            "service": None,
+        }
+    ]
+    (artifacts_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    artifacts, _calls, _errors, failures = _trial_artifacts(
+        result_path,
+        "attempt-0",
+        "job.json",
+        configured_artifacts={("/logs/artifacts", None)},
+    )
+
+    assert artifacts == []
+    assert any("non-conclusion status" in failure for failure in failures)
+
+
+def test_missing_configured_sidecar_artifact_is_a_failure(tmp_path: Path) -> None:
+    trial_dir = tmp_path / "trial-0"
+    trial_dir.mkdir()
+    _write_trial_manifest(
+        trial_dir,
+        [
+            {
+                "source": "/logs/agent/trajectory.json",
+                "destination": "artifacts/logs/agent/trajectory.json",
+                "type": "file",
+                "status": "ok",
+                "service": None,
+                "_content": '{"steps": []}',
+            }
+        ],
+    )
+    result_path = trial_dir / "result.json"
+    result_path.write_text("{}", encoding="utf-8")
+
+    _artifacts, _calls, _errors, failures = _trial_artifacts(
+        result_path,
+        "attempt-0",
+        "job.json",
+        configured_artifacts={
+            ("/logs/agent/trajectory.json", None),
+            ("/logs/jacobian/mcp.log", "jacobian"),
+        },
+    )
+
+    assert any(
+        "configured artifact is missing" in failure and "service='jacobian'" in failure
+        for failure in failures
+    )
 
 
 def test_empty_non_convention_manifest_entry_is_a_failure(tmp_path: Path) -> None:

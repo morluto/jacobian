@@ -3,7 +3,11 @@
   "n_attempts": 3,
   "timeout_multiplier": 1,
   "artifacts": [
-    "/logs/agent/trajectory.json"
+    "/logs/agent/trajectory.json",
+    {
+      "source": "/logs/jacobian/mcp.log",
+      "service": "jacobian"
+    }
   ],
   "orchestrator": {
     "type": "local",

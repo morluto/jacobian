@@ -89,9 +89,12 @@ def test_paired_jobs_use_three_attempts_per_condition() -> None:
     assert control["n_attempts"] == 3
 
 
-def test_paired_jobs_collect_codex_atif_trajectory() -> None:
+def test_paired_jobs_collect_runtime_evidence_available_in_each_condition() -> None:
     treatment = _read_json(JOB)
     control = _read_json(CONTROL_JOB)
 
-    assert treatment["artifacts"] == ["/logs/agent/trajectory.json"]
-    assert control["artifacts"] == treatment["artifacts"]
+    assert treatment["artifacts"] == [
+        "/logs/agent/trajectory.json",
+        {"source": "/logs/jacobian/mcp.log", "service": "jacobian"},
+    ]
+    assert control["artifacts"] == ["/logs/agent/trajectory.json"]

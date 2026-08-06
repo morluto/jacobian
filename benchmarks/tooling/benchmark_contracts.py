@@ -228,6 +228,13 @@ def _observation_pair_failures() -> list[str]:
     def normalized(value: dict[str, Any]) -> dict[str, Any]:
         copy: dict[str, Any] = json.loads(json.dumps(value))
         copy.pop("jobs_dir", None)
+        artifacts = copy.get("artifacts")
+        if isinstance(artifacts, list):
+            copy["artifacts"] = [
+                entry
+                for entry in artifacts
+                if not (isinstance(entry, dict) and entry.get("service") == "jacobian")
+            ]
         environment = copy.get("environment")
         if isinstance(environment, dict):
             compose = environment.get("extra_docker_compose")
@@ -242,7 +249,7 @@ def _observation_pair_failures() -> list[str]:
     if normalized(treatment) != normalized(control):
         return [
             "agent workflow control/treatment jobs differ outside the allowed "
-            "jobs_dir and Jacobian sidecar composition"
+            "jobs_dir, Jacobian sidecar composition, and sidecar telemetry artifact"
         ]
     return []
 

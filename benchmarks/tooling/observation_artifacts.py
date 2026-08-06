@@ -19,8 +19,15 @@ from typing import Any
 from benchmarks.tooling.errors import HarborSuiteError
 from jacobian.eval.telemetry import parse_reasoning_protocol_trace
 
-_UNIFIED_EXEC_JACOBIAN_CALL = re.compile(
-    r"\btools\.(mcp__jacobian__(?:math_find|math_run|reasoning_write))\s*\("
+_MCP_TOOL_CALL = re.compile(
+    r"\bMCP tool call tool=(math\.(?:find|run)|reasoning\.write)\b"
+    r".{0,512}?\bstatus=(success|error)\b",
+    re.DOTALL,
+)
+_MCP_CAPABILITY_ATTEMPT = re.compile(
+    r"\bMCP capability attempt\b.{0,2048}?"
+    r"\bexecution_status=([A-Z_]+)\b",
+    re.DOTALL,
 )
 
 
@@ -33,21 +40,33 @@ def _canonical_tool_name(value: str) -> str:
     return aliases.get(value, value)
 
 
-def _record_atif_tool_call(value: dict[str, Any], calls: Counter[str]) -> None:
-    function_name = value.get("function_name")
-    if not isinstance(function_name, str) or not isinstance(
-        value.get("tool_call_id"), str
-    ):
-        return
-    calls[_canonical_tool_name(function_name)] += 1
-    if function_name != "exec":
-        return
-    arguments = value.get("arguments")
-    source = arguments.get("input") if isinstance(arguments, dict) else None
-    if not isinstance(source, str):
-        return
-    for match in _UNIFIED_EXEC_JACOBIAN_CALL.finditer(source):
-        calls[_canonical_tool_name(match.group(1))] += 1
+def _read_mcp_runtime_log(path: Path, calls: Counter[str]) -> int:
+    """Count server-observed MCP calls and failed mathematical attempts."""
+
+    errors = 0
+    pending_run_failures = 0
+    text = path.read_text(encoding="utf-8")
+    events = sorted(
+        [
+            (match.start(), "attempt", match)
+            for match in _MCP_CAPABILITY_ATTEMPT.finditer(text)
+        ]
+        + [(match.start(), "tool", match) for match in _MCP_TOOL_CALL.finditer(text)],
+        key=lambda item: item[0],
+    )
+    for _position, event_type, match in events:
+        if event_type == "attempt":
+            if match.group(1) != "COMPLETED":
+                pending_run_failures += 1
+            continue
+        tool, status = match.groups()
+        calls[tool] += 1
+        if tool == "math.run" and pending_run_failures:
+            errors += 1
+            pending_run_failures -= 1
+        elif status == "error":
+            errors += 1
+    return errors + pending_run_failures
 
 
 def _read_json(path: Path) -> Any:
@@ -61,37 +80,61 @@ def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _walk_trace(value: Any, calls: Counter[str]) -> int:
+def _walk_trace(
+    value: Any,
+    calls: Counter[str],
+    *,
+    ignored_tools: frozenset[str] = frozenset(),
+) -> int:
     if isinstance(value, list):
-        return sum(_walk_trace(child, calls) for child in value)
+        return sum(
+            _walk_trace(child, calls, ignored_tools=ignored_tools) for child in value
+        )
     if not isinstance(value, dict):
         return 0
+    observed_tool: str | None = None
     tool_name = value.get("tool_name")
     if isinstance(tool_name, str):
-        calls[_canonical_tool_name(tool_name)] += 1
+        observed_tool = _canonical_tool_name(tool_name)
     elif value.get("type") in {"tool_call", "tool_use"} and isinstance(
         value.get("name"), str
     ):
-        calls[_canonical_tool_name(str(value["name"]))] += 1
+        observed_tool = _canonical_tool_name(str(value["name"]))
     elif value.get("type") == "mcp_tool_call" and isinstance(value.get("tool"), str):
-        calls[_canonical_tool_name(str(value["tool"]))] += 1
-    _record_atif_tool_call(value, calls)
+        observed_tool = _canonical_tool_name(str(value["tool"]))
+    function_name = value.get("function_name")
+    if isinstance(function_name, str) and isinstance(value.get("tool_call_id"), str):
+        observed_tool = _canonical_tool_name(function_name)
+    if observed_tool in ignored_tools:
+        return 0
+    if observed_tool is not None:
+        calls[observed_tool] += 1
     own_error = int(
         value.get("error") not in {None, False, ""} or value.get("isError") is True
     )
-    return own_error + sum(_walk_trace(child, calls) for child in value.values())
+    return own_error + sum(
+        _walk_trace(child, calls, ignored_tools=ignored_tools)
+        for child in value.values()
+    )
 
 
-def _read_trace(path: Path, calls: Counter[str]) -> int:
+def _read_trace(
+    path: Path,
+    calls: Counter[str],
+    *,
+    ignored_tools: frozenset[str] = frozenset(),
+) -> int:
     try:
+        if path.suffix == ".log":
+            return _read_mcp_runtime_log(path, calls)
         if path.suffix == ".jsonl":
             return sum(
-                _walk_trace(json.loads(line), calls)
+                _walk_trace(json.loads(line), calls, ignored_tools=ignored_tools)
                 for line in path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             )
         if path.suffix == ".json":
-            return _walk_trace(_read_json(path), calls)
+            return _walk_trace(_read_json(path), calls, ignored_tools=ignored_tools)
     except (OSError, json.JSONDecodeError, HarborSuiteError):
         return 1
     return 0
@@ -107,7 +150,9 @@ _HARBOR_CONVENTION_SOURCE = "/logs/artifacts"
 _HARBOR_CONVENTION_DESTINATION = "artifacts/logs/artifacts"
 
 
-def _is_empty_harbor_convention(entry: dict[str, Any]) -> bool:
+def _is_empty_harbor_convention(
+    entry: dict[str, Any], configured_artifacts: set[tuple[str, str | None]]
+) -> bool:
     """Identify Harbor's implicit, optional agent artifact directory."""
 
     return (
@@ -116,6 +161,7 @@ def _is_empty_harbor_convention(entry: dict[str, Any]) -> bool:
         and entry.get("type") == "directory"
         and entry.get("status") == "empty"
         and entry.get("service") is None
+        and (_HARBOR_CONVENTION_SOURCE, None) not in configured_artifacts
     )
 
 
@@ -293,6 +339,7 @@ def _manifest_entry_artifacts(
     step_index: int,
     step_name: str | None,
     source_prefix: str | None = None,
+    configured_artifacts: set[tuple[str, str | None]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     location = f"trial {trial_name} manifest[{index}]"
     failures = _validate_manifest_entry(entry, location=location)
@@ -301,7 +348,9 @@ def _manifest_entry_artifacts(
     status = entry.get("status")
     # Harbor 0.20 always injects its conventional publish directory. Agents do
     # not have to use it, so its exact `empty` record carries no failed claim.
-    if not failures and _is_empty_harbor_convention(entry):
+    if not failures and _is_empty_harbor_convention(
+        entry, configured_artifacts or set()
+    ):
         return [], []
     if status in _MANIFEST_STATUSES_NON_CONCLUSION:
         failures.append(
@@ -361,6 +410,7 @@ def _manifest_artifacts_for_dir(
     step_index: int,
     step_name: str | None,
     source_prefix: str | None = None,
+    configured_artifacts: set[tuple[str, str | None]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Read one ``artifacts/manifest.json`` and bind every ``ok`` entry.
 
@@ -398,6 +448,24 @@ def _manifest_artifacts_for_dir(
     if not raw:
         failures.append(f"trial {trial_name}: artifact manifest is empty")
         return [], failures
+    configured = configured_artifacts or set()
+    observed = {
+        (
+            entry.get("source"),
+            None if entry.get("service") in {None, "main"} else entry.get("service"),
+        )
+        for entry in raw
+        if isinstance(entry, dict)
+        and isinstance(entry.get("source"), str)
+        and (entry.get("service") is None or isinstance(entry.get("service"), str))
+    }
+    for source, service in sorted(
+        configured - observed, key=lambda item: (item[0], item[1] or "")
+    ):
+        failures.append(
+            f"trial {trial_name}: configured artifact is missing from manifest "
+            f"(source={source!r}, service={service!r})"
+        )
     artifacts: list[dict[str, Any]] = []
     for index, entry in enumerate(raw):
         entry_artifacts, entry_failures = _manifest_entry_artifacts(
@@ -410,6 +478,7 @@ def _manifest_artifacts_for_dir(
             step_index=step_index,
             step_name=step_name,
             source_prefix=source_prefix,
+            configured_artifacts=configured_artifacts,
         )
         artifacts.extend(entry_artifacts)
         failures.extend(entry_failures)
@@ -467,6 +536,7 @@ def trial_artifacts(
     job_label: str,
     *,
     source_prefix: str | None = None,
+    configured_artifacts: set[tuple[str, str | None]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int], int, list[str]]:
     """Collect manifest-driven artifacts for one trial.
 
@@ -501,6 +571,7 @@ def trial_artifacts(
                 step_index=step_index,
                 step_name=step_dir.name,
                 source_prefix=source_prefix,
+                configured_artifacts=configured_artifacts,
             )
             artifacts.extend(step_artifacts)
             failures.extend(step_failures)
@@ -513,6 +584,7 @@ def trial_artifacts(
             step_index=0,
             step_name=None,
             source_prefix=source_prefix,
+            configured_artifacts=configured_artifacts,
         )
         artifacts.extend(step_artifacts)
         failures.extend(step_failures)
@@ -520,15 +592,30 @@ def trial_artifacts(
     # source_path (which includes the artifacts/ or steps/<step>/artifacts/
     # prefix); it never introduces artifacts on its own.
     calls: Counter[str] = Counter()
-    trace_paths = [
+    runtime_logs = [
         _artifact_host_path(root, artifact)
         for artifact in artifacts
-        if any(
+        if artifact.get("service") == "jacobian"
+        and Path(artifact["artifact_path"]).suffix == ".log"
+    ]
+    agent_traces = [
+        _artifact_host_path(root, artifact)
+        for artifact in artifacts
+        if artifact.get("service") != "jacobian"
+        and any(
             marker in Path(artifact["artifact_path"]).name.lower()
             for marker in ("trajectory", "atif", "telemetry")
         )
     ]
-    errors = sum(_read_trace(path, calls) for path in trace_paths)
+    ignored_tools = (
+        frozenset({"math.find", "math.run", "reasoning.write"})
+        if runtime_logs
+        else frozenset()
+    )
+    errors = sum(
+        _read_trace(path, calls, ignored_tools=ignored_tools) for path in agent_traces
+    )
+    errors += sum(_read_trace(path, calls) for path in runtime_logs)
     return artifacts, dict(sorted(calls.items())), errors, failures
 
 

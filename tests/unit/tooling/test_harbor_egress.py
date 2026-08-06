@@ -109,8 +109,11 @@ def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> Non
     assert "http://127.0.0.1:12346" in proxy_overlay
     assert "JACOBIAN_EVAL_CODEX_BINARY" in codex_overlay
     assert "target: /usr/local/bin/codex" in codex_overlay
-    assert proxy_job["artifacts"] == ["/logs/agent/trajectory.json"]
-    assert proxy_control["artifacts"] == proxy_job["artifacts"]
+    assert proxy_job["artifacts"] == [
+        "/logs/agent/trajectory.json",
+        {"source": "/logs/jacobian/mcp.log", "service": "jacobian"},
+    ]
+    assert proxy_control["artifacts"] == ["/logs/agent/trajectory.json"]
 
 
 def test_jacobian_sidecar_keeps_its_project_network_under_egress_control() -> None:

@@ -64,6 +64,7 @@ def render_config(proxy_url: str) -> dict[str, object]:
             {
                 "name": "explicit-egress",
                 "addr": "127.0.0.1:12346",
+                "bypass": "allowlist",
                 "handler": {"type": "http", "chain": "upstream-proxy"},
                 "listener": {"type": "tcp"},
             },

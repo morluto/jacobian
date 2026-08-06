@@ -17,6 +17,7 @@ def test_render_config_chains_transparent_egress_through_http_proxy() -> None:
     assert explicit_service == {
         "name": "explicit-egress",
         "addr": "127.0.0.1:12346",
+        "bypass": "allowlist",
         "handler": {"type": "http", "chain": "upstream-proxy"},
         "listener": {"type": "tcp"},
     }

@@ -18,8 +18,26 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^/.+$"},
-      "description": "Absolute container paths collected by Harbor for observation evidence."
+      "items": {
+        "oneOf": [
+          {"type": "string", "pattern": "^/.+$"},
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "service"],
+            "properties": {
+              "source": {"type": "string", "pattern": "^/.+$"},
+              "destination": {"type": "string", "minLength": 1},
+              "exclude": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1}
+              },
+              "service": {"type": "string", "minLength": 1}
+            }
+          }
+        ]
+      },
+      "description": "Absolute container paths collected by Harbor for observation evidence, optionally from a named Compose sidecar."
     },
     "orchestrator": {
       "type": "object",

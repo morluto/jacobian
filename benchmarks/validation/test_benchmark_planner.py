@@ -45,6 +45,10 @@ def _matrix_tasks(result: dict[str, str]) -> set[str]:
     return {str(task) for item in _matrix(result) for task in item["tasks"]}
 
 
+def _host_matrix(result: dict[str, str]) -> list[dict[str, object]]:
+    return json.loads(result["benchmark-host-validation-matrix"])
+
+
 def _assert_plan_valid(result: dict[str, str]) -> None:
     payload = "\n".join(f"{key}={value}" for key, value in result.items()) + "\n"
     proc = subprocess.run(
@@ -64,7 +68,7 @@ def _lane(result: dict[str, str], key: str) -> bool:
 def test_product_only_changes_skip_benchmark_work() -> None:
     result = planner.plan(["src/jacobian/math.py"], event="pull_request")
 
-    assert result["benchmark-plan-version"] == "1"
+    assert result["benchmark-plan-version"] == "2"
     assert result["benchmark-plan-event"] == "pull_request"
     assert result["benchmark-plan-mode"] == "none"
     assert result["benchmark-topology-digest"] == ""
@@ -83,7 +87,7 @@ def test_plan_is_versioned_and_bound_to_event_base_head_sha() -> None:
     head = "1" * 40
     result = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "parameterized-sharp-bound-audit/tests/verifier.py"
         ],
         event="pull_request",
@@ -91,7 +95,7 @@ def test_plan_is_versioned_and_bound_to_event_base_head_sha() -> None:
         head=head,
     )
 
-    assert result["benchmark-plan-version"] == "1"
+    assert result["benchmark-plan-version"] == "2"
     assert result["benchmark-plan-event"] == "pull_request"
     assert result["benchmark-plan-base-sha"] == base
     assert result["benchmark-plan-head-sha"] == head
@@ -110,7 +114,7 @@ def test_planner_digest_binds_to_planner_and_path_policy_sources() -> None:
     expected = "sha256:" + hashlib.sha256(payload).hexdigest()
     result = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "parameterized-sharp-bound-audit/tests/verifier.py"
         ],
         event="pull_request",
@@ -185,7 +189,7 @@ def test_shared_tooling_change_defers_oracle_and_runs_digests_on_pull_request() 
 def test_task_readme_change_runs_record_schema_without_oracle_or_digests() -> None:
     result = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "parameterized-sharp-bound-audit/README.md"
         ],
         event="pull_request",
@@ -208,9 +212,9 @@ def test_new_task_directory_and_member_resolve_directly_without_version_bump() -
     # select that task's Oracle on an ordinary pull request.
     result = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "parameterized-sharp-bound-audit/tests/verifier.py",
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "members/parameterized-sharp-bound-audit.toml",
         ],
         event="pull_request",
@@ -224,7 +228,7 @@ def test_new_task_directory_and_member_resolve_directly_without_version_bump() -
     assert result["benchmark-plan-mode"] == "changed"
     matrix = _matrix(result)
     assert len(matrix) == 1
-    assert matrix[0]["dataset"] == "agent-workflow-v1"
+    assert matrix[0]["dataset"] == "mathematical-benchmarks-v1"
     assert matrix[0]["tasks"] == ["parameterized-sharp-bound-audit"]
     digests = matrix[0]["task_digests"]
     assert isinstance(digests, list)
@@ -235,7 +239,7 @@ def test_new_task_directory_and_member_resolve_directly_without_version_bump() -
 def test_executable_task_change_selects_exact_task_without_version_bump() -> None:
     result = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "parameterized-sharp-bound-audit/tests/verifier.py",
         ],
         event="pull_request",
@@ -246,14 +250,106 @@ def test_executable_task_change_selects_exact_task_without_version_bump() -> Non
     assert result["benchmark-plan-mode"] == "changed"
     matrix = _matrix(result)
     assert len(matrix) == 1
-    assert matrix[0]["dataset"] == "agent-workflow-v1"
+    assert matrix[0]["dataset"] == "mathematical-benchmarks-v1"
     assert matrix[0]["tasks"] == ["parameterized-sharp-bound-audit"]
+    host_matrix = _host_matrix(result)
+    assert result["run-benchmark-host-validation"] == "true"
+    assert {(entry["selector"], entry["keyword"]) for entry in host_matrix} == {
+        (
+            "benchmarks/validation/mathematical_benchmarks_v1/"
+            "test_parameterized_sharp_bound_audit.py",
+            "",
+        ),
+        (
+            "benchmarks/validation/mathematical_benchmarks_v1/"
+            "test_generic_verifier_contracts.py",
+            "parameterized-sharp-bound-audit",
+        ),
+    }
+    _assert_plan_valid(result)
+
+
+def test_dataset_owned_task_selects_shared_host_regression() -> None:
+    result = planner.plan(
+        [
+            "benchmarks/datasets/symbolic-coordination-v1/"
+            "symbolic-coordination-valid-inverse-01/tests/verifier.py"
+        ],
+        event="pull_request",
+    )
+
+    assert _host_matrix(result) == [
+        {
+            "name": "symbolic-coordination-v1-1",
+            "selector": (
+                "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py"
+            ),
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
+def test_conjecture_probe_task_selects_owned_host_regression() -> None:
+    result = planner.plan(
+        [
+            "benchmarks/datasets/conjecture-probes-v1/"
+            "vizing-bounded-cartesian-products/tests/verifier.py"
+        ],
+        event="pull_request",
+    )
+    assert _host_matrix(result) == [
+        {
+            "name": "conjecture-probes-v1-1",
+            "selector": (
+                "benchmarks/validation/conjecture_probes_v1/"
+                "test_vizing_bounded_cartesian_products.py"
+            ),
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
+def test_changed_validation_test_selects_itself() -> None:
+    path = "benchmarks/validation/test_benchmark_timings.py"
+    result = planner.plan([path], event="pull_request")
+
+    assert _host_matrix(result) == [
+        {
+            "name": "test_benchmark_timings",
+            "selector": path,
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
+def test_shared_benchmark_support_falls_back_to_full_host_validation() -> None:
+    result = planner.plan(["benchmarks/tooling/harbor_suite.py"], event="pull_request")
+
+    assert _host_matrix(result) == [
+        {
+            "name": f"full-{group}-of-4",
+            "selector": "benchmarks/validation",
+            "keyword": "",
+            "splits": 4,
+            "group": group,
+        }
+        for group in range(1, 5)
+    ]
     _assert_plan_valid(result)
 
 
 def test_membership_change_defers_dataset_oracle_until_merge_queue() -> None:
     result = planner.plan(
-        ["benchmarks/datasets/agent-workflow-v1/members/new-task.toml"],
+        ["benchmarks/datasets/mathematical-benchmarks-v1/members/new-task.toml"],
         event="pull_request",
     )
 
@@ -268,7 +364,7 @@ def test_membership_change_defers_dataset_oracle_until_merge_queue() -> None:
 
 def test_membership_change_runs_affected_dataset_in_merge_queue() -> None:
     result = planner.plan(
-        ["benchmarks/datasets/agent-workflow-v1/members/new-task.toml"],
+        ["benchmarks/datasets/mathematical-benchmarks-v1/members/new-task.toml"],
         event="merge_group",
     )
 
@@ -277,7 +373,9 @@ def test_membership_change_runs_affected_dataset_in_merge_queue() -> None:
     assert result["benchmark-plan-mode"] == "integration"
     assert result["run-benchmark-inventory"] == "true"
     assert _matrix(result)
-    assert {item["dataset"] for item in _matrix(result)} == {"agent-workflow-v1"}
+    assert {item["dataset"] for item in _matrix(result)} == {
+        "mathematical-benchmarks-v1"
+    }
     _assert_plan_valid(result)
 
 
@@ -285,7 +383,7 @@ def test_merge_group_keeps_widest_oracle_scope_for_mixed_changes() -> None:
     result = planner.plan(
         [
             "benchmarks/config/jacobian.mcp.json",
-            "benchmarks/datasets/agent-workflow-v1/members/new-task.toml",
+            "benchmarks/datasets/mathematical-benchmarks-v1/members/new-task.toml",
         ],
         event="merge_group",
     )
@@ -305,7 +403,7 @@ def test_existing_task_member_change_selects_changed_task_oracle_on_pull_request
     # resolves to that exact task's Oracle on an ordinary pull request.
     result = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "members/parameterized-sharp-bound-audit.toml"
         ],
         event="pull_request",
@@ -318,7 +416,7 @@ def test_existing_task_member_change_selects_changed_task_oracle_on_pull_request
     assert result["benchmark-plan-mode"] == "changed"
     matrix = _matrix(result)
     assert len(matrix) == 1
-    assert matrix[0]["dataset"] == "agent-workflow-v1"
+    assert matrix[0]["dataset"] == "mathematical-benchmarks-v1"
     assert matrix[0]["tasks"] == ["parameterized-sharp-bound-audit"]
     _assert_plan_valid(result)
 
@@ -329,17 +427,17 @@ def test_deleted_task_is_deferred_to_merge_queue_on_pull_request() -> None:
     # integration changes, deferred to the merge queue on an ordinary PR.
     pull_request = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "deleted-former-task/tests/verifier.py",
-            "benchmarks/datasets/agent-workflow-v1/members/deleted-former-task.toml",
+            "benchmarks/datasets/mathematical-benchmarks-v1/members/deleted-former-task.toml",
         ],
         event="pull_request",
     )
     merge_group = planner.plan(
         [
-            "benchmarks/datasets/agent-workflow-v1/"
+            "benchmarks/datasets/mathematical-benchmarks-v1/"
             "deleted-former-task/tests/verifier.py",
-            "benchmarks/datasets/agent-workflow-v1/members/deleted-former-task.toml",
+            "benchmarks/datasets/mathematical-benchmarks-v1/members/deleted-former-task.toml",
         ],
         event="merge_group",
     )
@@ -353,7 +451,9 @@ def test_deleted_task_is_deferred_to_merge_queue_on_pull_request() -> None:
     assert _matrix(pull_request) == []
     assert merge_group["run-benchmark-oracle"] == "true"
     assert merge_group["benchmark-oracle-scope"] == "affected-datasets"
-    assert {item["dataset"] for item in _matrix(merge_group)} == {"agent-workflow-v1"}
+    assert {item["dataset"] for item in _matrix(merge_group)} == {
+        "mathematical-benchmarks-v1"
+    }
     _assert_plan_valid(pull_request)
     _assert_plan_valid(merge_group)
 
@@ -473,7 +573,7 @@ def test_adapter_documentation_change_never_runs_oracle() -> None:
 
 def test_snapshot_change_runs_contracts_without_oracle() -> None:
     result = planner.plan(
-        ["benchmarks/snapshots/agent-workflow-v1/digest.lock.json"],
+        ["benchmarks/snapshots/mathematical-benchmarks-v1/digest.lock.json"],
         event="pull_request",
     )
 
@@ -518,7 +618,7 @@ def test_unknown_benchmark_path_fails_closed_to_full_portfolio() -> None:
 def test_force_full_includes_each_dataset_task_pair() -> None:
     result = planner.plan([], event="workflow_dispatch", force_full=True)
 
-    assert result["benchmark-plan-version"] == "1"
+    assert result["benchmark-plan-version"] == "2"
     assert result["benchmark-oracle-scope"] == "all"
     assert result["benchmark-plan-mode"] == "full"
     assert result["run-benchmark-check"] == "true"

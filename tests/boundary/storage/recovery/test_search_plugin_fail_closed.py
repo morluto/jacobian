@@ -22,7 +22,7 @@ from jacobian.storage.models import StorageLimits
 def test_proposer_timeout_fails_closed(fresh_complete_runtime) -> None:
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
-        proposer_entrypoint=("tests.support.plugin_entrypoints:propose_search_forever"),
+        proposer_entrypoint=("tests.support.search_entrypoints:propose_search_forever"),
     )
     handle = fresh_complete_runtime.services.search.start(
         _request(
@@ -59,7 +59,7 @@ def test_malformed_proposal_fails_without_evidence_promotion(
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
         proposer_entrypoint=(
-            "tests.support.plugin_entrypoints:propose_malformed_search"
+            "tests.support.search_entrypoints:propose_malformed_search"
         ),
     )
     handle = fresh_complete_runtime.services.search.start(
@@ -88,7 +88,7 @@ def test_partial_iteration_accounting_survives_malformed_candidate(
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
         proposer_entrypoint=(
-            "tests.support.plugin_entrypoints:propose_partially_invalid_search"
+            "tests.support.search_entrypoints:propose_partially_invalid_search"
         ),
     )
     handle = fresh_complete_runtime.services.search.start(
@@ -114,7 +114,7 @@ def test_partial_iteration_accounting_survives_malformed_candidate(
     ("entrypoint", "detail", "case_id"),
     [
         (
-            "tests.support.plugin_entrypoints:propose_declared_failure",
+            "tests.support.search_entrypoints:propose_declared_failure",
             (
                 "The plugin stopped before returning a result. Retry once; "
                 "if it happens again, inspect the local plugin log."
@@ -122,7 +122,7 @@ def test_partial_iteration_accounting_survives_malformed_candidate(
             "declared",
         ),
         (
-            "tests.support.plugin_entrypoints:propose_large_search_output",
+            "tests.support.search_entrypoints:propose_large_search_output",
             "The plugin returned too much data. Retry with a smaller request.",
             "output",
         ),
@@ -199,7 +199,7 @@ def test_plugin_cannot_widen_operator_batch_policy(fresh_complete_runtime) -> No
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
         proposer_entrypoint=(
-            "tests.support.plugin_entrypoints:propose_beyond_authority"
+            "tests.support.search_entrypoints:propose_beyond_authority"
         ),
     )
     handle = fresh_complete_runtime.services.search.start(
@@ -274,7 +274,7 @@ def test_refiner_cannot_claim_verification(fresh_complete_runtime) -> None:
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
         refiner_entrypoint=(
-            "tests.support.plugin_entrypoints:refine_with_verification_claim"
+            "tests.support.search_entrypoints:refine_with_verification_claim"
         ),
     )
     handle = fresh_complete_runtime.services.search.start(
@@ -303,7 +303,7 @@ def test_verified_counterexample_feedback_reaches_refiner(
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,
         refiner_entrypoint=(
-            "tests.support.plugin_entrypoints:refine_from_verified_counterexample"
+            "tests.support.search_entrypoints:refine_from_verified_counterexample"
         ),
         include_witness_oracle=True,
     )

@@ -1,0 +1,42 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/inseparable-minimal-polynomial-audit"
+version = "1.0.0"
+description = "Repair the missing minimal-polynomial argument in a purely inseparable extension proof."
+keywords = ["proof-audit", "field-theory", "inseparability", "irreducibility"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "algebra"
+field = "abstract-algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-proof-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["proof-diagnosis", "minimal-polynomial", "valuation", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-proof-audit"
+fixture_digest = "sha256:005c88b43f50a33d46ddf311b1c229eb82cf0dd907a2fef30769d689f0db28b2"
+derivation = "Derived from DeepTheorem train row 2 (source id 843) with an independent irreducibility-repair contract."
+
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

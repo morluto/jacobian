@@ -5,8 +5,9 @@ The planner emits a versioned plan bound to the triggering event and the
 base/head (or merge-group) SHA, a digest of the planner, and a digest of the
 benchmark topology.  This validator enforces the full fail-closed contract:
 every expected key is present, SHA bindings are well formed, the record/schema,
-prospective-digest, inventory, and Oracle evidence roles are mutually
-consistent, and an unselected role is never confused with a failed one.
+host-verifier, prospective-digest, inventory, and Oracle evidence roles are
+mutually consistent, and an unselected role is never confused with a failed
+one.
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ import re
 import sys
 from typing import Any
 
-PLAN_VERSION = "1"
+PLAN_VERSION = "2"
 EVENTS = ("pull_request", "merge_group", "push", "schedule", "workflow_dispatch")
 MODES = ("none", "changed", "integration", "full")
 SCOPES = {"none", "changed-tasks", "affected-datasets", "all"}
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 SHA = re.compile(r"[0-9a-f]{40,64}\Z")
+HOST_NAME = re.compile(r"[A-Za-z0-9_.-]+\Z")
+HOST_SELECTOR = re.compile(r"benchmarks/validation(?:/[A-Za-z0-9_./-]+)?\Z")
+HOST_KEYWORD = re.compile(r"[A-Za-z0-9_.-]*\Z")
 MAX_MATRIX_JOBS = 256
 
 KEYS = {
@@ -36,6 +40,8 @@ KEYS = {
     "run-benchmark-record-schema",
     "run-benchmark-prospective-digest",
     "run-benchmark-inventory",
+    "run-benchmark-host-validation",
+    "benchmark-host-validation-matrix",
     "run-benchmark-oracle",
     "benchmark-oracle-scope",
     "benchmark-oracle-matrix",
@@ -125,6 +131,80 @@ def _validate_matrix(matrix: list[Any]) -> None:
         fail(f"benchmark Oracle matrix exceeds {MAX_MATRIX_JOBS} jobs")
 
 
+def _validate_host_matrix(matrix: list[Any]) -> None:
+    names: set[str] = set()
+    shard_groups: dict[tuple[str, str], tuple[int, set[int]]] = {}
+    for index, entry in enumerate(matrix):
+        if not isinstance(entry, dict) or set(entry) != {
+            "name",
+            "selector",
+            "keyword",
+            "splits",
+            "group",
+        }:
+            fail(f"benchmark host validation matrix entry {index} has an invalid shape")
+        name = entry["name"]
+        selector = entry["selector"]
+        keyword = entry["keyword"]
+        splits = entry["splits"]
+        group = entry["group"]
+        if not isinstance(name, str) or HOST_NAME.fullmatch(name) is None:
+            fail(f"benchmark host validation matrix entry {index} has an invalid name")
+        if name in names:
+            fail(f"duplicate benchmark host validation matrix name: {name}")
+        names.add(name)
+        if (
+            not isinstance(selector, str)
+            or HOST_SELECTOR.fullmatch(selector) is None
+            or ".." in selector.split("/")
+        ):
+            fail(
+                f"benchmark host validation matrix entry {index} has an invalid selector"
+            )
+        if not isinstance(keyword, str) or HOST_KEYWORD.fullmatch(keyword) is None:
+            fail(
+                f"benchmark host validation matrix entry {index} has an invalid keyword"
+            )
+        if (
+            not isinstance(splits, int)
+            or isinstance(splits, bool)
+            or not isinstance(group, int)
+            or isinstance(group, bool)
+            or (splits == 0 and group != 0)
+            or (splits > 0 and not 1 <= group <= splits)
+            or splits < 0
+            or splits > MAX_MATRIX_JOBS
+        ):
+            fail(f"benchmark host validation matrix entry {index} has invalid sharding")
+        key = (selector, keyword)
+        expected_splits, groups = shard_groups.setdefault(key, (splits, set()))
+        if expected_splits != splits:
+            fail(f"inconsistent benchmark host validation sharding: {selector}")
+        if group in groups:
+            fail(f"duplicate benchmark host validation matrix entry: {selector}")
+        groups.add(group)
+    if len(matrix) > MAX_MATRIX_JOBS:
+        fail(f"benchmark host validation matrix exceeds {MAX_MATRIX_JOBS} jobs")
+    for (selector, _keyword), (splits, groups) in shard_groups.items():
+        expected_groups = {0} if splits == 0 else set(range(1, splits + 1))
+        if groups != expected_groups:
+            fail(f"incomplete benchmark host validation sharding: {selector}")
+
+
+def _host_validation_selection(plan: dict[str, str], *, run_check: bool) -> bool:
+    selected = _bool(plan, "run-benchmark-host-validation")
+    matrix = _json_array(
+        plan["benchmark-host-validation-matrix"],
+        "benchmark host validation matrix",
+    )
+    if selected and not run_check:
+        fail("benchmark host validation requires benchmark checks")
+    if selected != bool(matrix):
+        fail("benchmark host validation flag and matrix disagree")
+    _validate_host_matrix(matrix)
+    return selected
+
+
 def main() -> None:
     plan: dict[str, str] = {}
     for raw_line in sys.stdin:
@@ -155,6 +235,7 @@ def main() -> None:
     prospective_digest = _bool(plan, "run-benchmark-prospective-digest")
     inventory = _bool(plan, "run-benchmark-inventory")
     run_oracle = _bool(plan, "run-benchmark-oracle")
+    host_validation = _host_validation_selection(plan, run_check=run_check)
 
     scope = plan["benchmark-oracle-scope"]
     if scope not in SCOPES:
@@ -204,7 +285,12 @@ def main() -> None:
             fail("disabled benchmark Oracle work must have none scope and empty matrix")
 
     if not run_check and (
-        record_schema or prospective_digest or inventory or run_oracle or reasons
+        record_schema
+        or prospective_digest
+        or inventory
+        or host_validation
+        or run_oracle
+        or reasons
     ):
         fail("a skipped benchmark plan cannot contain work or reasons")
 

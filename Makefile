@@ -15,7 +15,7 @@ ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
-PUBLIC_COMMANDS := help setup check check-changed ci-plan test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e docs-command-check docs-linkcheck harbor-plan harbor-check-task harbor-oracle-task npm-test test-all-ci check-static deploy-check
+PUBLIC_COMMANDS := help setup check check-changed ci-plan test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e docs-command-check docs-linkcheck harbor-plan harbor-execution-check harbor-check-task harbor-oracle-task npm-test test-all-ci check-static deploy-check
 
 ifneq ($(strip $(PATHS)),)
 PATHS_FILE := $(shell mktemp)
@@ -26,7 +26,7 @@ endif
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help help-all uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-command-check docs-linkcheck deploy-check
+.PHONY: help help-all uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare provider-eval clean docs-command-check docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian common developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / && ($$1 in wanted) {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -160,8 +160,9 @@ check-changed: ## Run format, types, and exact changed-path tests.
 	$(MAKE) test-changed BASE="$(or $(BASE),origin/main)"
 
 define run_topology_lane
-	PYTEST_ADDOPTS="$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
-		$(TOPOLOGY_RUNNER) $(1) $(if $(TESTS),$(TESTS))
+	$(TOPOLOGY_RUNNER) $(1) \
+		--pytest-args "$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
+		$(if $(TESTS),$(TESTS))
 endef
 
 test-unit: ## Run pure contracts and models (10s lane, sequential).
@@ -314,6 +315,10 @@ harbor-contracts: ## Check Harbor sync, task topology, schemas, and generated re
 	$(HARBOR_PYTHON) tools/check_harbor_dataset.py --check
 	$(HARBOR_PYTHON) tools/check_benchmark_contracts.py
 
+harbor-execution-check: harbor-contracts ## Check Harbor jobs, MCP config, Compose, and execution helpers.
+	$(UV_RUN) pytest -n 0 tests/unit/tooling/test_harbor*.py \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
 harbor-adapter-checks: ## Check every repository-owned Harbor adapter.
 	@set -eu; for adapter_dir in benchmarks/adapters/*; do \
 		test -d "$$adapter_dir" || continue; \
@@ -323,7 +328,7 @@ harbor-adapter-checks: ## Check every repository-owned Harbor adapter.
 
 harbor-validation-tests: ## Run Harbor's host-side validation test suite.
 	$(UV_RUN) pytest -n $(HARBOR_VALIDATION_WORKERS) \
-		$(PYTEST_DIAGNOSTIC_ARGS) benchmarks/validation $(PYTEST_ARGS)
+		$(PYTEST_DIAGNOSTIC_ARGS) $(if $(TESTS),$(TESTS),benchmarks/validation) $(PYTEST_ARGS)
 
 harbor-validate: harbor-contracts harbor-adapter-checks harbor-validation-tests ## Run all repository-owned Harbor checks under the pinned Harbor runtime.
 
@@ -400,7 +405,7 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 		$(if $(TASKS),--tasks $(TASKS),)
 
 harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with tasks.
-	@set -e; for dataset in agent-workflow-v1 symbolic-coordination-v1 public-reproductions-v1 research-diagnostics-v1 provider-feasibility-v1; do \
+	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1 research-diagnostics-v1 provider-feasibility-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done
 
@@ -453,25 +458,25 @@ endif
 
 ifeq ($(JACOBIAN_ENABLED),0)
 ifeq ($(JACOBIAN_EVAL_PROXY),1)
-EVAL_CONFIG ?= benchmarks/config/agent-workflow-v1-control-proxy.json
+EVAL_CONFIG ?= benchmarks/config/mathematical-benchmarks-v1-control-proxy.json
 else
-EVAL_CONFIG ?= benchmarks/config/agent-workflow-v1-control.json
+EVAL_CONFIG ?= benchmarks/config/mathematical-benchmarks-v1-control.json
 endif
 override MCP_CONFIG :=
 else
 ifeq ($(JACOBIAN_EVAL_PROXY),1)
-EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation-proxy.json
+EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)/jobs/jacobian-observation-proxy.json
 MCP_CONFIG ?= benchmarks/config/jacobian-loopback.mcp.json
 else
-EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)/jobs/jacobian-observation.json
+EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)/jobs/jacobian-observation.json
 MCP_CONFIG ?= benchmarks/config/jacobian.mcp.json
 endif
 endif
 
-agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROXY=0|1, DATASET=agent-workflow-v1, EVAL_EXECUTE=1).
+agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROXY=0|1, DATASET=mathematical-benchmarks-v1, EVAL_EXECUTE=1).
 	@set -e; \
 	if [ "$(EVAL_EXECUTE)" != "1" ]; then \
-		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=agent-workflow-v1 EVAL_EXECUTE=1"; \
+		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=mathematical-benchmarks-v1 EVAL_EXECUTE=1"; \
 		exit 0; \
 	fi; \
 	if [ -z "$${JACOBIAN_MODEL:-}" ]; then \
@@ -505,13 +510,13 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 		-m "$${JACOBIAN_MODEL}" \
 		--ak "web_search=$(CODEX_WEB_SEARCH)" \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
-		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),agent-workflow-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
+		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS)
 
 agent-eval-validate: ## Normalize one observation (RESULTS=..., JOB=..., CONDITION=..., OUTPUT=...).
 	@test -n "$(RESULTS)" -a -n "$(JOB)" -a -n "$(CONDITION)" -a -n "$(OUTPUT)" || { echo "RESULTS, JOB, CONDITION, and OUTPUT are required" >&2; exit 2; }
 	$(UV_RUN) python -m benchmarks.tooling.observation_results validate \
-		--dataset "$(or $(DATASET),agent-workflow-v1)" --condition "$(CONDITION)" \
+		--dataset "$(or $(DATASET),mathematical-benchmarks-v1)" --condition "$(CONDITION)" \
 		--job "$(JOB)" --jobs-dir "$(RESULTS)" --output "$(OUTPUT)" \
 		$(if $(RESULT),--result "$(RESULT)",) \
 		$(if $(RUNTIME_SNAPSHOT),--runtime-snapshot "$(RUNTIME_SNAPSHOT)",) \

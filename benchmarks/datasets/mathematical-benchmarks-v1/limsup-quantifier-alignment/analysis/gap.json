@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "limsup-quantifier-alignment",
+  "analysis": {
+    "mathematical_moves": [
+      "Separate existential and universal limsup quantifiers with explicit finite models and preserve the open-problem limitation."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Bind evidence to the submitted models and keep finite incomparability distinct from theorem resolution."
+  }
+}

@@ -140,8 +140,12 @@ def test_oracle_artifact_preserves_augmented_task_digest_manifest() -> None:
 def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 
-    assert workflow.count("run: make harbor-validate") == 1
+    assert "run: make harbor-validate" not in workflow
+    assert workflow.count("run: make harbor-contracts harbor-adapter-checks") == 1
     assert "  contracts:" in workflow
+    assert "  host_validation:" in workflow
+    assert "make harbor-validation-tests TESTS=" in workflow
+    assert 'pytest_args+=(--splits "$SPLITS" --group "$GROUP")' in workflow
     assert "  prospective-digest:" not in workflow
     assert "python .github/scripts/emit-plan-receipt" in workflow
     assert "benchmark-plan-receipt" in workflow

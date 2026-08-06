@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import tomllib
@@ -34,6 +35,7 @@ def _suite_inventory(suite: Suite) -> dict[str, Any]:
         key: Counter()
         for key in (
             "domain",
+            "primary_domain",
             "field",
             "assurance_ceiling",
             "answer_visibility",
@@ -51,6 +53,8 @@ def _suite_inventory(suite: Suite) -> dict[str, Any]:
             {
                 "id": ref.path.name,
                 "name": ref.name,
+                "primary_domain": ref.primary_domain,
+                "field": ref.field,
                 "digest": "sha256:" + task_digest(ref.path).removeprefix("sha256:"),
                 "verifier": (ref.path / "tests" / "verifier.py")
                 .relative_to(ROOT)
@@ -81,11 +85,46 @@ def _suite_inventory(suite: Suite) -> dict[str, Any]:
     }
 
 
-def build_inventory() -> dict[str, Any]:
+def build_inventory(
+    *,
+    dataset: str | None = None,
+    primary_domain: str | None = None,
+    field: str | None = None,
+) -> dict[str, Any]:
     suites = load_registry()
+    if dataset is not None:
+        short_dataset = dataset.removeprefix("jacobian/")
+        matches = [suite for suite in suites if suite.id == short_dataset]
+        if not matches:
+            raise ValueError(f"unknown dataset filter: {dataset}")
+        suites = tuple(matches)
+    if primary_domain is not None:
+        known = {ref.primary_domain for suite in suites for ref in suite.tasks}
+        if primary_domain not in known:
+            raise ValueError(f"unknown primary_domain filter: {primary_domain}")
+    if field is not None:
+        known = {ref.field for suite in suites for ref in suite.tasks}
+        if field not in known:
+            raise ValueError(f"unknown field filter: {field}")
+    if primary_domain is not None or field is not None:
+        filtered = []
+        for suite in suites:
+            refs = tuple(
+                ref
+                for ref in suite.tasks
+                if (primary_domain is None or ref.primary_domain == primary_domain)
+                and (field is None or ref.field == field)
+            )
+            if refs:
+                filtered.append(dataclasses.replace(suite, tasks=refs))
+        suites = tuple(filtered)
+        if not suites:
+            raise ValueError(
+                "primary_domain/field filters select no tasks; check the combination"
+            )
     datasets = [_suite_inventory(suite) for suite in suites]
     inventory = {
-        "schema_version": "1",
+        "schema_version": "2",
         "source_sha": _git(["rev-parse", "HEAD"]),
         "source_dirty": bool(_git(["status", "--porcelain"])),
         "registry_digest": _sha256(ROOT / "benchmarks" / "registry.toml"),
@@ -105,8 +144,19 @@ def build_inventory() -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--dataset")
+    parser.add_argument("--primary-domain")
+    parser.add_argument("--field")
     args = parser.parse_args()
-    rendered = json.dumps(build_inventory(), indent=2, sort_keys=True) + "\n"
+    try:
+        inventory = build_inventory(
+            dataset=args.dataset,
+            primary_domain=args.primary_domain,
+            field=args.field,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    rendered = json.dumps(inventory, indent=2, sort_keys=True) + "\n"
     if args.output is None:
         print(rendered, end="")
     else:

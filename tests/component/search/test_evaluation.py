@@ -76,7 +76,7 @@ def _evaluation_fixture(
     )
     plugins = PluginRegistry(store)
     implementation = plugins.register_implementation(
-        "tests.support.plugin_entrypoints:evaluate_candidate"
+        "tests.support.search_entrypoints:evaluate_candidate"
     )
     manifest = artifacts.put(
         schema_uri=manifest_schema,
@@ -94,7 +94,7 @@ def _evaluation_fixture(
                 "Evaluator": {
                     "implementation_uri": implementation,
                     "entrypoint": (
-                        "tests.support.plugin_entrypoints:evaluate_candidate"
+                        "tests.support.search_entrypoints:evaluate_candidate"
                     ),
                     "version": "1",
                 }

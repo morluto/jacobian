@@ -10,7 +10,7 @@ from benchmarks.tooling.harbor_suite import get_suite
 
 
 def test_timing_collector_uses_median_completed_trial_duration(tmp_path: Path) -> None:
-    task = get_suite("agent-workflow-v1").tasks[0].path.name
+    task = get_suite("mathematical-benchmarks-v1").tasks[0].path.name
     for index, minute in enumerate((1, 3, 2)):
         path = tmp_path / str(index) / "result.json"
         path.parent.mkdir()
@@ -27,7 +27,7 @@ def test_timing_collector_uses_median_completed_trial_duration(tmp_path: Path) -
 
     timings = collect(tmp_path)
 
-    assert timings[f"agent-workflow-v1/{task}"] == 120.0
+    assert timings[f"mathematical-benchmarks-v1/{task}"] == 120.0
 
 
 def test_timing_collector_fails_closed_without_trials(tmp_path: Path) -> None:

@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/metamath-syllogism-repair"
+version = "1.0.0"
+description = "Repair and replay a corrupted Metamath-style substitution proof."
+keywords = ["metamath", "proof-repair", "substitution", "stack-replay"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
+field = "logic"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-formal-library-derived-structural-variant"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "regression", "formal-proof-repair", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-formal-library-derived-structural-variant"
+fixture_digest = "sha256:0ef56d47a02e7e7e725846b7300e5e1bef8a3d8e76f1dd6420d53775fa34b431"
+derivation = "Alpha-renamed structural repair variant of Metamath set.mm theorem syl at revision 044c9e9f138dd05c518880800245ebe059c35c7e."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

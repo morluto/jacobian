@@ -21,14 +21,27 @@ fails fast; the separate `make harbor-check-task` below is an optional
 cheaper preview that avoids Harbor runtime startup:
 
 ```sh
-make harbor-check-task DATASET=agent-workflow-v1 TASKS="graph-counterexample"
-make harbor-oracle-task DATASET=agent-workflow-v1 TASKS="graph-counterexample"
+make harbor-check-task DATASET=mathematical-benchmarks-v1 TASKS="graph-counterexample"
+make harbor-oracle-task DATASET=mathematical-benchmarks-v1 TASKS="graph-counterexample"
 ```
 
 Use the full `make harbor-check` and explicitly scoped `make harbor-oracle`
 paths only for shared Harbor tooling, schemas, registry, suite policy, or
 other control-plane changes. Pass `TASKS="..."` for a bounded dataset Oracle;
 pass `FULL=1` only when a complete dataset sweep is intentional.
+
+For changes limited to Harbor job JSON, MCP configuration, job-level Compose
+overlays, or their execution helpers, use the focused local handoff instead:
+
+```sh
+make harbor-execution-check
+```
+
+This checks repository Harbor contracts and the execution-configuration unit
+tests without running the task-specific verifier regression corpus, an Oracle,
+Docker, or a model. Task `environment/docker-compose.yaml` files are
+executable benchmark input, not job overlays; they remain gated by
+`make harbor-check-task` and `make harbor-oracle-task`.
 
 Task README and `benchmarks/validation/` changes do not require an Oracle;
 they affect documentation or deterministic host-side validation. Changes to a
@@ -105,7 +118,7 @@ or non-digest-pinned image remains useful for development, but normalization
 fails closed rather than calling it reproducible evidence.
 
 ```sh
-export SNAPSHOT_LOCK='benchmarks/snapshots/agent-workflow-v1/6c6d41612502da5486bc23843e027a30cf91398ecf7c749cb8a017c56490707d.lock.json'
+export SNAPSHOT_LOCK='benchmarks/snapshots/mathematical-benchmarks-v1/26e558abcfda80f944ff1659f73b3c89b22ed4ddd2700d8340c067dc4ed7b323.lock.json'
 export RUNTIME_SNAPSHOT='benchmarks/results/my-run/runtime.json'
 mkdir -p "$(dirname "$RUNTIME_SNAPSHOT")"
 jq --arg model "$JACOBIAN_MODEL" \
@@ -114,7 +127,7 @@ jq --arg model "$JACOBIAN_MODEL" \
                 jacobian_enabled: true, reasoning_log_mode: "OFF"}}' \
   "$SNAPSHOT_LOCK" > "$RUNTIME_SNAPSHOT"
 
-make agent-eval DATASET=agent-workflow-v1 \
+make agent-eval DATASET=mathematical-benchmarks-v1 \
   JACOBIAN_ENABLED=1 EVAL_EXECUTE=1 \
   RUNTIME_SNAPSHOT="$RUNTIME_SNAPSHOT"
 ```
@@ -130,7 +143,7 @@ condition so evidence from distinct runs cannot overwrite each other:
 
 ```sh
 make agent-eval \
-  DATASET=agent-workflow-v1 JACOBIAN_ENABLED=1 \
+  DATASET=mathematical-benchmarks-v1 JACOBIAN_ENABLED=1 \
   TASKS=graph-counterexample EVAL_EXECUTE=1 \
   RUNTIME_SNAPSHOT=benchmarks/results/adoption/runtime.json \
   EVAL_ARGS="--job-name adoption --jobs-dir benchmarks/results/adoption"
@@ -165,7 +178,7 @@ not an unavailable service.
 Use the same shared run conditions:
 
 ```sh
-make agent-eval DATASET=agent-workflow-v1 \
+make agent-eval DATASET=mathematical-benchmarks-v1 \
   JACOBIAN_ENABLED=0 \
   TASKS=graph-counterexample EVAL_EXECUTE=1
 ```
@@ -202,7 +215,7 @@ Harbor writes results under `benchmarks/results/`. Inspect the summary with:
 
 ```sh
 uvx --from harbor==0.20.0 harbor view \
-  benchmarks/results/agent-workflow-v1
+  benchmarks/results/mathematical-benchmarks-v1
 ```
 
 For Jacobian treatment runs, inspect Harbor ATIF together with Jacobian
@@ -215,9 +228,9 @@ them so task digests, prompts, models, budgets, and job configuration are
 checked for drift:
 
 ```sh
-make agent-eval-validate RESULTS=benchmarks/results/agent-workflow-v1 \
+make agent-eval-validate RESULTS=benchmarks/results/mathematical-benchmarks-v1 \
   JOB=<job-name> CONDITION=control OUTPUT=benchmarks/results/normalized-control.json
-make agent-eval-validate RESULTS=benchmarks/results/agent-workflow-v1 \
+make agent-eval-validate RESULTS=benchmarks/results/mathematical-benchmarks-v1 \
   JOB=<job-name> CONDITION=treatment \
   RUNTIME_SNAPSHOT="$RUNTIME_SNAPSHOT" \
   OUTPUT=benchmarks/results/normalized-treatment.json

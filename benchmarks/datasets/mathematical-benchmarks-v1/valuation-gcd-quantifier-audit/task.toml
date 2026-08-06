@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/valuation-gcd-quantifier-audit"
+version = "1.0.0"
+description = "Audit and repair a cross-prime quantifier error in a valuation argument."
+keywords = ["valuation", "gcd", "quantifier", "proof-audit"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "number-theory"
+field = "number-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-proof-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "regression", "proof-diagnosis", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-proof-audit"
+fixture_digest = "sha256:6388ad625d2be71e146d862f4f2a00c3c1b9ee78440faa611d93843bad7c9141"
+derivation = "Derived from Xerv-AI/GRAD train row 83 at revision 71595210590450202b7b69225bc07e9e01b13c5c (MIT)."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

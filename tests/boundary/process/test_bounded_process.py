@@ -11,6 +11,7 @@ import time
 import pytest
 
 from jacobian.bounded_process import (
+    ProcessPlatformTools,
     ProcessResourceLimits,
     bounded_process_cancellation,
     run_bounded_process,
@@ -37,6 +38,8 @@ def test_nonfinite_timeout_is_rejected_before_process_launch(
     reason="pre-exec resource limits require util-linux prlimit",
 )
 def test_target_observes_resource_limits_at_startup() -> None:
+    prlimit = shutil.which("prlimit")
+    assert prlimit is not None
     address_space = 512 * 1024 * 1024
     completed = run_bounded_process(
         [
@@ -59,6 +62,7 @@ def test_target_observes_resource_limits_at_startup() -> None:
             address_space_bytes=address_space,
             file_size_bytes=1024 * 1024,
         ),
+        platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
     )
 
     assert completed.returncode == 0

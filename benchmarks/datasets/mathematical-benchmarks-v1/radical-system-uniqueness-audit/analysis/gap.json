@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "radical-system-uniqueness-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Eliminate a radical system to a univariate polynomial, classify roots against principal-domain constraints, and reconstruct exact surviving solutions."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep root-domain rejection and exact substitution as separate certificate obligations."
+  }
+}

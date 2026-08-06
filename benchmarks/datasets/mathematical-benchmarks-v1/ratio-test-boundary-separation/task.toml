@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/ratio-test-boundary-separation"
+version = "1.0.0"
+description = "Certify convergent and divergent positive series with the same ratio-test boundary limit."
+keywords = ["assurance", "analysis", "series", "ratio-test"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "analysis"
+field = "real-analysis"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-assurance"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["assurance", "series", "limit-criteria", "exact-rational", "difficulty-provisional"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-theorem-visible-answer-transformed"
+fixture_digest = "sha256:32e209d43bd793454e44061bc732cfd724bb48e866592da7868607d0546f778f"
+derivation = "Derived from TaoAnalysisBench rows 1066 and 1069 at revision 339937d75342072a31903739b1bbbe72e1b40c21."
+
+[agent]
+timeout_sec = 900.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "well-total-domination-counterexample",
+  "analysis": {
+    "mathematical_moves": [
+      "Replay connectivity, exact average degree, and pendant-vertex hypotheses on a finite graph.",
+      "Check two minimal total-dominating sets of different sizes as a counterexample witness."
+    ],
+    "current_capabilities": [
+      {
+        "capability_id": "graph.compute.properties",
+        "availability": "AVAILABLE",
+        "boundary": "Computes elementary graph properties and degrees but does not enumerate or certify minimal total-dominating sets."
+      }
+    ],
+    "gap_classes": [
+      "EXISTING_WORKS",
+      "MISSING_OPERATION",
+      "MODEL_REASONING"
+    ],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "DEFER_RESEARCH",
+    "next_action": "Retain the public finite counterexample regression and mine independent domination workflows before proposing a reusable domination-set outcome."
+  }
+}

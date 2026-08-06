@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/nonclosed-projection-image"
+version = "1.0.0"
+description = "Construct a closed Hilbert subspace with nonclosed projected image."
+keywords = ["functional-analysis", "closed-graph", "orthogonal-projection", "counterexample"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "analysis"
+field = "functional-analysis"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-construction"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["ell2", "operator-graph", "nonclosed-range", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-answer-visible-dataset"
+fixture_digest = "sha256:f80f464adbb355063b54fe185eabd539832364cf0a91e3ceb6b1a5e100f03968"
+derivation = "Derived from CounterMath test row 201 at revision d4e9f8ca877552f4491a9c2d52e0d230c0fca620."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

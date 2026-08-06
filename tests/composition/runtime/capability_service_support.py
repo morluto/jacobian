@@ -48,7 +48,7 @@ NOT_READY_RUNTIME = CapabilityProviderRuntime(
     install_tier=CapabilityInstallTier.T0,
     license_id="MIT",
     configuration={"distribution": "tests-fixture"},
-    distribution_import_name="tests.support.plugin_entrypoints",
+    distribution_import_name="tests.support.process_entrypoints",
     distribution_required_attributes=("missing_first_use_attribute",),
 )
 

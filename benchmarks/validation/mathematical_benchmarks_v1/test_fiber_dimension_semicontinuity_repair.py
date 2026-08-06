@@ -145,3 +145,29 @@ def test_evidence_must_bind_submitted_generator_count(tmp_path: Path) -> None:
     assert reward["correctness"] == 1.0
     assert reward["evidence_validity"] == 0.0
     assert reward["reward"] == 0.0
+
+
+def test_oversized_fiber_list_rejected_without_crash(tmp_path: Path) -> None:
+    """An oversized fiber_checks list must fail closed without excessive work."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    # Replace fiber_checks with a far larger list to exercise the cardinality guard.
+    base = submission["result"]["fiber_checks"][0]
+    submission["result"]["fiber_checks"] = [base] * 10000
+    _bind_evidence(app, submission)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["correctness"] == 0.0
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_task_metadata_declares_diagnostics() -> None:
+    """Diagnostics are declared in task-local metadata, not global registries."""
+    assert TASK not in support.INPUT_BINDING_DECOUPLED_TASKS
+    assert TASK not in support.SCOPE_INDEPENDENT_ASSURANCE_TASKS
+    assert support.is_input_binding_decoupled(TASK) is True
+    assert support.is_scope_independent_assurance(TASK) is True
+    metadata = support.load_task_contract_metadata(TASK)
+    assert metadata.get("input_binding_decoupled") is True
+    assert metadata.get("scope_independent_assurance") is True

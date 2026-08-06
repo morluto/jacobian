@@ -53,7 +53,6 @@ RESOURCE_DERIVED_TASKS = (
 )
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
-    "fiber-dimension-semicontinuity-repair",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
     "emerald-path-family-audit",
@@ -65,7 +64,6 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
-    "fiber-dimension-semicontinuity-repair",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
     "emerald-path-family-audit",
@@ -93,6 +91,52 @@ SINGLE_EVIDENCE_TASKS = tuple(
     )["properties"]["evidence"].get("maxItems")
     == 1
 )
+
+
+def load_task_contract_metadata(task_name: str) -> dict[str, object]:
+    """Load task-local verifier contract metadata from the task's tests/ dir.
+
+    Task-specific diagnostic behavior (input-binding decoupling, scope-assurance
+    independence) lives in ``tests/verifier_contract.json`` rather than global
+    name registries so renames or removals cannot leave stale entries.
+    """
+
+    path = TASKS / task_name / "tests" / "verifier_contract.json"
+    if not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def is_input_binding_decoupled(task_name: str) -> bool:
+    """Whether a task's verifier decouples correctness from workspace input binding.
+
+    Checks task-local contract metadata first; falls back to the legacy
+    ``INPUT_BINDING_DECOUPLED_TASKS`` registry for tasks that have not yet
+    migrated to per-task metadata.
+    """
+
+    metadata = load_task_contract_metadata(task_name)
+    if "input_binding_decoupled" in metadata:
+        return bool(metadata["input_binding_decoupled"])
+    return task_name in INPUT_BINDING_DECOUPLED_TASKS
+
+
+def is_scope_independent_assurance(task_name: str) -> bool:
+    """Whether a task's verifier reports scope independently of assurance typing.
+
+    Checks task-local contract metadata first; falls back to the legacy
+    ``SCOPE_INDEPENDENT_ASSURANCE_TASKS`` registry for tasks that have not yet
+    migrated to per-task metadata.
+    """
+
+    metadata = load_task_contract_metadata(task_name)
+    if "scope_independent_assurance" in metadata:
+        return bool(metadata["scope_independent_assurance"])
+    return task_name in SCOPE_INDEPENDENT_ASSURANCE_TASKS
 
 
 def _task_tree_snapshot() -> dict[str, str]:

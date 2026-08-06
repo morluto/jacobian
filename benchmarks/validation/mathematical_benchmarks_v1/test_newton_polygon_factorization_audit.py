@@ -14,6 +14,7 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
+    _write_valid_newton_prose(app, submission)
     support._bind_result_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
 
@@ -269,6 +270,17 @@ def test_malformed_envelope_preserves_correctness(tmp_path: Path) -> None:
     assert rejected["reward"] == 0.0
 
 
+def test_index_beyond_product_degree_fails_closed(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["j"] = 24
+    _write_valid_newton_prose(app, submission)
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["correctness"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
@@ -280,7 +292,7 @@ def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
         "The corrected left-edge primitivity condition fails (gcd > 1), "
         "so this witness does not refute the repair.\n"
     )
-    evidence.write_text(base * 500)
+    evidence.write_text("derivation filler\n" * 70_000 + base)
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)

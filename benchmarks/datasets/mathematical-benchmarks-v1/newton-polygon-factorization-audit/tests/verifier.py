@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from fractions import Fraction
 from itertools import pairwise
 from pathlib import Path
@@ -22,6 +23,60 @@ LIMITATION = (
     "Dumas's theorem and the corrected general lemma are not machine-formalized."
 )
 ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
+_EXPLANATION_FACTS = {
+    "newton_polygon": (
+        re.compile(r"\bnewton\s+polygon\b"),
+        re.compile(r"\blower\s+hull\b"),
+    ),
+    "old_right_edge_holds": (
+        re.compile(
+            r"\bold\b.{0,64}\b(?:right[- ]edge\s+)?hypotheses?\b"
+            r".{0,48}\b(?:hold|satisf)"
+        ),
+        re.compile(
+            r"\bright[- ]edge\b.{0,64}\b(?:old\s+)?hypotheses?\b"
+            r".{0,48}\b(?:hold|satisf)"
+        ),
+    ),
+    "factor_constant_valuations": (
+        re.compile(
+            r"\bfactor\b.{0,96}\bconstant[- ]terms?\b.{0,64}\bvaluation"
+        ),
+        re.compile(
+            r"\bconstant[- ]term\s+valuations?\b.{0,96}\b(?:factor|both)\b"
+        ),
+    ),
+    "old_conclusion_contradicted": (
+        re.compile(
+            r"\b(?:contradict|refut|violat).{0,64}\bold\s+conclusion\b"
+        ),
+        re.compile(
+            r"\bold\s+conclusion\b.{0,64}\b(?:contradict|refut|violat)"
+        ),
+    ),
+    "corrected_left_edge_fails": (
+        re.compile(
+            r"\bcorrect(?:ed|ion)?\b.{0,96}\bleft[- ]edge\b"
+            r".{0,96}\b(?:fail|does\s+not\s+hold|not\s+satisf)"
+        ),
+        re.compile(
+            r"\bleft[- ]edge\b.{0,96}\b(?:primitiv|gcd|condition)\b"
+            r".{0,64}\b(?:fail|greater\s+than\s+one|>\s*1)"
+        ),
+    ),
+    "repair_not_refuted": (
+        re.compile(r"\bdoes\s+not\s+refute\b.{0,48}\b(?:repair|correction)\b"),
+        re.compile(r"\b(?:repair|correction)\b.{0,48}\bnot\s+refuted\b"),
+    ),
+}
+_EXPLANATION_CONTRADICTIONS = (
+    re.compile(r"\bold\s+hypotheses?\b.{0,32}\b(?:fail|do\s+not\s+hold)\b"),
+    re.compile(r"\bconstant[- ]term\s+valuations?\b.{0,32}\b(?:zero|nonpositive)\b"),
+    re.compile(r"\bcorrected?\s+left[- ]edge\b.{0,32}\bconditions?\s+hold\b"),
+    re.compile(
+        r"(?<!not )(?<!n't )\brefutes?\b.{0,32}\b(?:repair|correction)\b"
+    ),
+)
 
 
 def _load_frozen_input() -> dict:
@@ -156,7 +211,7 @@ def _certificate_valid(result: object, source: dict) -> bool:
         return False
     product = _multiply(left, right)
     degree = len(product) - 1
-    if degree < 6 or not 2 <= ell < j:
+    if degree < 6 or not 2 <= ell < j <= degree:
         return False
     values = [_valuation(coefficient, prime) for coefficient in product]
     if not _right_edge_hypotheses(values, ell, j):
@@ -182,40 +237,28 @@ def _certificate_valid(result: object, source: dict) -> bool:
     )
 
 
-def _newton_explanation_valid(text: str) -> bool:
-    """Validate the documented Newton-polygon mathematical explanation.
+def _newton_explanation_valid(path: Path) -> bool:
+    """Stream evidence and require every documented Newton-polygon fact."""
 
-    The instruction requires a concise mathematical explanation covering the
-    Newton polygon analysis: the old right-edge hypotheses hold at the
-    submitted indices, the factor constant-term valuations contradict the old
-    conclusion, and at least one corrected left-edge condition fails (so the
-    witness does not refute the repair).  Accept mathematically equivalent
-    phrasings while rejecting unrelated or empty text.
-    """
-    if not isinstance(text, str) or len(text.strip()) < 20:
+    matched = dict.fromkeys(_EXPLANATION_FACTS, False)
+    contradicted = False
+    carry = ""
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                contradicted = contradicted or any(
+                    pattern.search(window) for pattern in _EXPLANATION_CONTRADICTIONS
+                )
+                for name, alternatives in _EXPLANATION_FACTS.items():
+                    if not matched[name] and any(
+                        pattern.search(window) for pattern in alternatives
+                    ):
+                        matched[name] = True
+                carry = window[-384:]
+    except (OSError, UnicodeError, MemoryError):
         return False
-    lower = text.lower()
-    has_polygon = any(
-        w in lower for w in ("newton", "polygon", "valuation", "hull", "edge")
-    )
-    has_old = any(
-        w in lower
-        for w in ("old", "hypothes", "lemma", "conclusion", "refut", "contradict")
-    )
-    has_repair = any(
-        w in lower
-        for w in (
-            "correct",
-            "repair",
-            "left",
-            "primitiv",
-            "gcd",
-            "slope",
-            "fail",
-            "does not satisfy",
-        )
-    )
-    return bool(has_polygon and has_old and has_repair)
+    return not contradicted and all(matched.values())
 
 
 def _raw_submission() -> dict | None:
@@ -241,11 +284,7 @@ def _evidence_valid(evidence: object) -> bool:
     )
     if target is None:
         return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeDecodeError, MemoryError, RecursionError):
-        return False
-    return _newton_explanation_valid(text)
+    return _newton_explanation_valid(target)
 
 
 def main() -> None:

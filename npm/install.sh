@@ -125,6 +125,7 @@ add_client() {
     esac
 }
 
+main() {
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --client)
@@ -397,3 +398,6 @@ if [ "$defer_runtime" -eq 1 ]; then
     printf 'Run %s doctor when you are ready to install and verify the math runtime.\n' \
         "$command_path"
 fi
+}
+
+main "$@"

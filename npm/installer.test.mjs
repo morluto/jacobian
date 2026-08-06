@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -102,6 +102,53 @@ function runInstaller(args, env) {
   });
 }
 
+function runStreamedInstaller(args, env, source, splitAt) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("sh", ["-s", "--", ...args], {
+      cwd: repositoryRoot,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let closed = false;
+    let earlyExit = false;
+    let inputError;
+    let status;
+    let sentRemainder = false;
+    const finish = () => {
+      if (closed && sentRemainder) {
+        resolve({ earlyExit, inputError, status, stderr, stdout });
+      }
+    };
+    child.stdout.setEncoding("utf8").on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding("utf8").on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.stdin.on("error", (error) => {
+      inputError = error;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      closed = true;
+      earlyExit = !sentRemainder;
+      status = code;
+      finish();
+    });
+
+    child.stdin.write(source.slice(0, splitAt));
+    setTimeout(() => {
+      sentRemainder = true;
+      if (!closed) {
+        child.stdin.end(source.slice(splitAt));
+      }
+      finish();
+    }, 50);
+  });
+}
+
 test("installer dry-run is mutation-free and describes the runtime cost", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-installer-dry-"));
   const home = join(base, "home");
@@ -122,6 +169,24 @@ test("installer dry-run is mutation-free and describes the runtime cost", async 
   assert.match(result.stdout, /changes:\s+none \(dry-run\)/);
   await assert.rejects(lstat(dataDir), { code: "ENOENT" });
   await assert.rejects(lstat(binDir), { code: "ENOENT" });
+});
+
+test("streamed dry-run consumes the complete installer before exiting", async () => {
+  const source = await readFile(installer, "utf8");
+  const splitAt = source.indexOf('\n[ -n "${HOME:-}" ]');
+  assert.notEqual(splitAt, -1);
+
+  const result = await runStreamedInstaller(
+    ["--client", "codex", "--yes", "--dry-run", "--plain"],
+    process.env,
+    source,
+    splitAt,
+  );
+
+  assert.equal(result.earlyExit, false, "installer exited before curl could finish writing");
+  assert.equal(result.inputError, undefined, result.inputError?.message);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /changes:\s+none \(dry-run\)/);
 });
 
 test("installer pins npm resolution, activates the launcher, configures Codex, and verifies", async () => {

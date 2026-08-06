@@ -50,6 +50,7 @@ complete a specific task.
 - [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
 - [Install optional backends](how-to/install-optional-backends.md)
 - [Troubleshoot Z3 installation on macOS](how-to/troubleshoot-z3-macos.md)
+- [Run the Codex visibility evaluation](how-to/run-codex-visibility-evaluation.md)
 - [Deploy the remote MCP server](how-to/deploy-remote-mcp.md)
 - [Author a Harbor benchmark task](how-to/author-harbor-benchmark-task.md)
 - [Migrate the benchmark portfolio](how-to/migrate-agent-workflow-benchmark.md)

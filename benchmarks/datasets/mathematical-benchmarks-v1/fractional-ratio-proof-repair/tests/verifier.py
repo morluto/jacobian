@@ -31,31 +31,99 @@ _EVIDENCE_CLAUSES = (
     ({"residual"}, {"repair", "certificate", "fix", "correct", "restore", "chosen"}),
     ({"zero"}, {"maximum", "sum", "transformed"}),
 )
-# Read at most this many bytes for the prose semantic check.  This is not an
-# evidence validity cap — the file itself has no byte limit — but a parsing
-# bound so a huge valid artifact cannot exhaust verifier memory before
-# reward.json is written.
-_PROSE_READ_BYTES = 1_048_576
+_EVIDENCE_STEMS = frozenset(
+    term
+    for required, alternatives in _EVIDENCE_CLAUSES
+    for term in required | alternatives
+)
+_EVIDENCE_CONTRADICTIONS = (
+    re.compile(r"\bratio\s+objective\b.{0,32}\b(?:unchanged|not\s+replaced)\b"),
+    re.compile(r"\bbinary\s+domain\b.{0,32}\b(?:not\s+relaxed|unchanged)\b"),
+    re.compile(r"\b(?:no|without)\b.{0,24}\bbudget\b.{0,24}\b(?:added|introduced)\b"),
+    re.compile(r"\bresidual\s+certificate\b.{0,32}\bdoes\s+not\s+repair\b"),
+    re.compile(r"\bmaximum\b.{0,32}\bresidual\b.{0,24}\bnon[- ]?zero\b"),
+)
 
 
-def _has_term(words: set[str], term: str) -> bool:
-    """Check if any word starts with the given term stem."""
+def _evidence_explains_clauses(path: Path) -> bool:
+    """Stream prose, ignoring private result markers, with bounded parser state."""
 
-    return any(word.startswith(term) for word in words)
+    matched_stems: set[str] = set()
+    sample_words: set[str] = set()
+    token = ""
+    line_prefix = ""
+    at_line_start = True
+    skip_line = False
+    contradicted = False
+    carry = ""
 
+    def finish_token() -> None:
+        nonlocal token
+        if not token:
+            return
+        if len(sample_words) < 10:
+            sample_words.add(token)
+        matched_stems.update(stem for stem in _EVIDENCE_STEMS if token.startswith(stem))
+        token = ""
 
-def _evidence_explains_clauses(text: str) -> bool:
-    """Check that prose addresses every documented semantic obligation."""
+    def consume(character: str) -> None:
+        nonlocal token
+        if "a" <= character <= "z":
+            if len(token) < 32:
+                token += character
+        else:
+            finish_token()
 
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    prose = " ".join(lines).lower()
-    words = set(re.findall(r"[a-z]+", prose))
-    if len(words) < 10:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            while chunk := stream.read(65_536):
+                window = (carry + chunk).lower()
+                contradicted = contradicted or any(
+                    pattern.search(window) for pattern in _EVIDENCE_CONTRADICTIONS
+                )
+                carry = window[-256:]
+                for character in chunk.lower():
+                    if character == "\n":
+                        if not skip_line:
+                            if at_line_start:
+                                for prefix_character in line_prefix:
+                                    consume(prefix_character)
+                            finish_token()
+                        line_prefix = ""
+                        at_line_start = True
+                        skip_line = False
+                        continue
+                    if skip_line:
+                        continue
+                    if at_line_start:
+                        line_prefix += character
+                        marker = "result_json:"
+                        if marker.startswith(line_prefix):
+                            if line_prefix == marker:
+                                skip_line = True
+                                at_line_start = False
+                                line_prefix = ""
+                            continue
+                        for prefix_character in line_prefix:
+                            consume(prefix_character)
+                        line_prefix = ""
+                        at_line_start = False
+                        continue
+                    consume(character)
+            if not skip_line:
+                if at_line_start:
+                    for prefix_character in line_prefix:
+                        consume(prefix_character)
+                finish_token()
+    except (OSError, UnicodeError, MemoryError):
+        return False
+
+    if contradicted or len(sample_words) < 10:
         return False
     for required, alternatives in _EVIDENCE_CLAUSES:
-        if not all(_has_term(words, term) for term in required):
+        if not required <= matched_stems:
             return False
-        if alternatives and not any(_has_term(words, alt) for alt in alternatives):
+        if alternatives and not (alternatives & matched_stems):
             return False
     return True
 
@@ -68,12 +136,7 @@ def evidence_ok(evidence):
     path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
-    try:
-        with path.open("r", encoding="utf-8") as stream:
-            head = stream.read(_PROSE_READ_BYTES)
-    except (OSError, UnicodeError, RecursionError, MemoryError):
-        return False
-    return _evidence_explains_clauses(head)
+    return _evidence_explains_clauses(path)
 
 
 def valid_result(result, data):

@@ -171,6 +171,22 @@ def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
     assert result["reward"] == 0.0
 
 
+def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "The ratio objective is unchanged, the binary domain is not relaxed, "
+        "and no budget is added. Residual certificate repair words appear here, "
+        "with maximum transformed residual sum zero.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
 def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
@@ -181,9 +197,9 @@ def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
         "repairs the frozen objective: every coordinate is chosen by its signed "
         "residual and the maximum transformed residual is zero.\n"
     )
-    # Write a file well above the former 65536-byte cap.
+    # Put the explanation beyond both the former cap and a fixed prefix scan.
     padding = "This line is additional commentary that is allowed and ignored.\n"
-    evidence.write_text(base + padding * 5000)
+    evidence.write_text(padding * 20_000 + base)
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)

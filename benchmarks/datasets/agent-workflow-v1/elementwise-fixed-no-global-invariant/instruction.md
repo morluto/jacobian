@@ -19,7 +19,7 @@ file by SHA-256.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection.
+The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection. The limitations array must exactly state: The verifier checks one finite linear action and does not machine-prove a general classification theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

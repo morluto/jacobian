@@ -2,13 +2,20 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
+    evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
-    resolve_evidence,
     strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
+LIMITATION = (
+    "The verifier checks one finite linear action and does not machine-prove "
+    "a general classification theorem."
+)
 
 
 def matrix(value, q):
@@ -143,31 +150,27 @@ def certificate_valid(result, frozen):
         return False
 
 
-def evidence_valid(descriptors, result):
-    if not isinstance(descriptors, list) or len(descriptors) != 1:
-        return False
-    target = resolve_evidence(descriptors[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
+def raw_submission():
+    path = W / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
     try:
-        text = target.read_text(encoding="utf-8")
-        markers = [
-            line[12:] for line in text.splitlines() if line.startswith("RESULT_JSON:")
-        ]
-        if len(markers) != 1:
-            return False
-        return (
-            json.loads(markers[0]) == result
-            and "every element" in text.lower()
-            and "common fixed" in text.lower()
-            and "not verified" in text.lower()
-        )
-    except (OSError, ValueError, UnicodeError, RecursionError):
-        return False
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def evidence_valid(descriptors):
+    # The finite group/action certificate is replayed from the typed result.
+    # The public evidence contract promises only one bound text artifact.
+    return evidence_list_is_bound(descriptors)
 
 
 def main():
-    submission = load_submission()
+    raw = raw_submission()
+    input_binding = workspace_input_is_bound()
+    submission = load_submission(require_input_binding=False)
     frozen = json.loads((E / "input.json").read_text())
     expected = json.loads((E / "expected.json").read_text())
     math_contract = strict_submission_contract(
@@ -191,35 +194,41 @@ def main():
         == "sha256:8be03d5c7464658a27833f65a0d8b8198ea5d2d0658d088f667bb30754dd36da"
         and source.get("license") == "MIT"
     )
-    result = submission.get("result") if isinstance(submission, dict) else None
-    mathematical = bool(
-        math_contract and source_bound and certificate_valid(result, frozen)
-    )
-    evidence = bool(
-        math_contract and evidence_valid(submission.get("evidence"), result)
-    )
+    result = raw.get("result") if isinstance(raw, dict) else None
+    mathematical = bool(source_bound and certificate_valid(result, frozen))
+    evidence = bool(isinstance(raw, dict) and evidence_valid(raw.get("evidence")))
     scope = bool(
-        math_contract and submission.get("scope") == expected["required_scope"]
+        isinstance(raw, dict) and raw.get("scope") == expected["required_scope"]
     )
     assurance = bool(
-        math_contract and submission.get("claimed_assurance") == "COMPUTED"
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
     )
+    limitation = bool(isinstance(raw, dict) and raw.get("limitations") == [LIMITATION])
     false_certification = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
     )
-    correct = bool(accepted_contract and mathematical and not false_certification)
-    reward = (
-        0.0 if not correct else 0.7 + 0.1 * evidence + 0.1 * scope + 0.1 * assurance
+    correct = bool(
+        accepted_contract
+        and input_binding
+        and mathematical
+        and evidence
+        and scope
+        and assurance
+        and limitation
+        and not false_certification
     )
+    reward = 1.0 if correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
+                "protocol_compliance": float(bool(math_contract)),
+                "input_binding": float(input_binding),
                 "correctness": float(mathematical),
                 "evidence_validity": float(evidence),
                 "scope_accuracy": float(scope),
                 "assurance_calibration": float(assurance),
+                "limitation_accuracy": float(limitation),
                 "reward": reward,
                 "false_certification": false_certification,
             }

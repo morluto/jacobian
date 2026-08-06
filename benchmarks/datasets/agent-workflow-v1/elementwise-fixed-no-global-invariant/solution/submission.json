@@ -6,5 +6,5 @@
   "scope": "finite subgroups of SL_3 over one declared allowed prime field",
   "completeness": "COMPLETE",
   "evidence": [{"path":"evidence/answer.txt","sha256":"sha256:471cecd18ea2cfcac72130ad2e68bb3c591dea69a00c4f8b013ab4069f8278d7"}],
-  "limitations": ["Exact finite-field replay only; no classification theorem or proof-assistant verification."]
+  "limitations": ["The verifier checks one finite linear action and does not machine-prove a general classification theorem."]
 }

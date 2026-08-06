@@ -111,10 +111,9 @@
       "type": "array"
     },
     "limitations": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
+      "const": [
+        "The verifier checks one finite linear action and does not machine-prove a general classification theorem."
+      ],
       "type": "array"
     },
     "result": {

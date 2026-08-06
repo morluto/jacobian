@@ -9,6 +9,58 @@ from benchmarks.validation.agent_workflow_v1 import support
 TASK = "elementwise-fixed-no-global-invariant"
 
 
+def test_oracle_certificate_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["correctness"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
+def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("Finite action certificate supplied in submission.json.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted["evidence_validity"] == 1.0
+    assert accepted["reward"] == 1.0
+
+
+def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    (app / "input.json").write_text("{}")
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["input_binding"] == 0.0
+    assert rejected["correctness"] == 1.0
+    assert rejected["reward"] == 0.0
+
+
+def test_malformed_assurance_preserves_other_diagnostics(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = []
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["protocol_compliance"] == 0.0
+    assert rejected["correctness"] == 1.0
+    assert rejected["evidence_validity"] == 1.0
+    assert rejected["scope_accuracy"] == 1.0
+    assert rejected["assurance_calibration"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
+def test_false_limitation_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["limitations"] = ["Proof-assistant verified complete classification."]
+    support._write_json(app / "submission.json", submission)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected["reward"] == 0.0
+
+
 def test_accepts_alternative_prime_field(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())

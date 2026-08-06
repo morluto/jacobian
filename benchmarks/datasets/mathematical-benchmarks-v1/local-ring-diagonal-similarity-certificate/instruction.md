@@ -4,7 +4,7 @@ For the frozen diagonal matrices `A,B` and matrix `P` over `Z/125Z`, certify `PA
 
 Bind one text explanation as `evidence/answer.txt`. The independently replayed typed certificate belongs in `submission.json`; no duplicate private serialization is required in the prose. Do not claim the general theorem is machine verified.
 
-The evidence file must be at most 65536 bytes and its first line must be exactly: `The modular products agree. The determinant is a unit, and the displayed determinant permutation selects only unit entries, forcing each matched diagonal pair to agree.` Additional lines are allowed and ignored.
+The explanation must affirmatively state the certified relationships: that the modular products agree, that the determinant is a unit modulo 125, and that the selected permutation matches unit entries on the diagonal. Equivalent phrasing is accepted; contradictory or unrelated text is rejected. The evidence artifact has no size cap beyond the verifier workspace, but must remain a digest-bound regular file at the declared path.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

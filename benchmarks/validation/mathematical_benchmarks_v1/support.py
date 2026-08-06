@@ -62,9 +62,10 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
-# and gating only aggregate reward on both.
+# and gating only aggregate reward on both.  New tasks declare this behavior
+# via ``tests/verifier_behavior.json`` (see ``input_binding_is_decoupled``);
+# this legacy tuple is retained only for previously-migrated tasks.
 INPUT_BINDING_DECOUPLED_TASKS = (
-    "local-ring-diagonal-similarity-certificate",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
     "emerald-path-family-audit",
@@ -92,6 +93,41 @@ SINGLE_EVIDENCE_TASKS = tuple(
     )["properties"]["evidence"].get("maxItems")
     == 1
 )
+
+
+def _task_behavior(task_name: str) -> dict:
+    """Load task-local verifier behavior metadata from ``tests/``.
+
+    Returns an empty dict when no metadata file is present.  Malformed
+    metadata fails closed so the generic matrix surfaces the drift rather
+    than silently misclassifying a task.
+    """
+    path = TASKS / task_name / "tests" / "verifier_behavior.json"
+    if not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(
+            f"{task_name}: malformed verifier_behavior.json: {exc}"
+        ) from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{task_name}: verifier_behavior.json must be an object")
+    return value
+
+
+def input_binding_is_decoupled(task_name: str) -> bool:
+    """Whether a verifier reports correctness independent of input binding.
+
+    Task-local ``tests/verifier_behavior.json`` with
+    ``input_binding_decoupled`` is authoritative; the legacy
+    ``INPUT_BINDING_DECOUPLED_TASKS`` tuple is a fallback for tasks that have
+    not yet been migrated to metadata.
+    """
+    behavior = _task_behavior(task_name)
+    if "input_binding_decoupled" in behavior:
+        return bool(behavior["input_binding_decoupled"])
+    return task_name in INPUT_BINDING_DECOUPLED_TASKS
 
 
 def _task_tree_snapshot() -> dict[str, str]:

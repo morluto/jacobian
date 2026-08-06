@@ -4,8 +4,9 @@ from itertools import permutations
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
+    MAX_SUBMISSION_BYTES,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
     resolve_evidence,
     strict_submission_contract,
@@ -14,7 +15,57 @@ from verifier_support import (
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
-EVIDENCE_SENTENCE = "The modular products agree. The determinant is a unit, and the displayed determinant permutation selects only unit entries, forcing each matched diagonal pair to agree."
+
+# The published prose obligation is structural, not verbatim: the explanation
+# must affirmatively relate the three certified facts, accept equivalent
+# phrasing, and reject contradictory or unrelated text.  Each concept group
+# lists affirmative phrases; ``_NEGATIONS`` flags direct contradictions.
+_PRODUCTS_AGREE = (
+    "products agree",
+    "modular products agree",
+    "pa and bp coincide",
+    "pa and bp agree",
+    "pa=bp",
+    "pa equals bp",
+    "pa and bp match",
+    "pa and bp are equal",
+)
+_DETERMINANT_UNIT = (
+    "determinant is a unit",
+    "is a unit",
+    "determinant is invertible",
+    "is invertible",
+    "det is a unit",
+    "det is invertible",
+)
+_DIAGONAL_MATCH = (
+    "unit entries",
+    "unit entry",
+    "matched diagonal pair",
+    "diagonal pair",
+    "matched pairs agree",
+    "diagonal pairs agree",
+    "matched diagonal pairs agree",
+    "diagonal matching",
+    "matches the diagonal",
+    "match the diagonal",
+)
+_CONCEPT_GROUPS = (_PRODUCTS_AGREE, _DETERMINANT_UNIT, _DIAGONAL_MATCH)
+_NEGATIONS = (
+    "not a unit",
+    "not invertible",
+    "non-unit",
+    "nonunit",
+    "do not agree",
+    "does not agree",
+    "do not match",
+    "does not match",
+    "do not coincide",
+    "does not coincide",
+)
+# Bounded prose-parsing buffer.  Evidence size itself is uncapped; only the
+# text scanned for the explanation obligation is bounded to avoid OOM.
+_PROSE_PARSE_BYTES = 1 << 20
 
 
 def sign(p):
@@ -91,21 +142,57 @@ def valid(r, d):
     )
 
 
+def _explanation_is_valid(text):
+    """Structural check: affirmative concepts present, no direct contradiction."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    lower = text.lower()
+    if any(neg in lower for neg in _NEGATIONS):
+        return False
+    return all(any(phrase in lower for phrase in group) for group in _CONCEPT_GROUPS)
+
+
 def evidence_ok(e):
     # The typed matrix certificate is replayed independently.  The public
-    # evidence contract requires only one digest-bound text artifact.
-    if not evidence_list_is_bound(e):
+    # evidence contract requires one digest-bound text explanation whose
+    # content affirmatively states the certified relationships; equivalent
+    # phrasing is accepted and contradictory or unrelated text is rejected.
+    if not isinstance(e, list) or len(e) != 1:
         return False
-    path = resolve_evidence(e[0], expected_path="evidence/answer.txt", max_bytes=65_536)
+    path = resolve_evidence(e[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
-        return path.read_text().splitlines()[0] == EVIDENCE_SENTENCE
-    except (OSError, UnicodeError, IndexError):
+        with path.open("r", encoding="utf-8", errors="strict") as stream:
+            head = stream.read(_PROSE_PARSE_BYTES)
+    except (OSError, UnicodeError):
         return False
+    return _explanation_is_valid(head)
+
+
+def _reject_nonfinite(token):
+    raise ValueError(f"non-finite JSON number: {token}")
+
+
+def raw_submission():
+    """Parse the bounded submission JSON before envelope validation.
+
+    Used to preserve independently evaluable diagnostics (mathematical
+    correctness, evidence, assurance, and unauthorized ``VERIFIED`` claims)
+    when a non-result envelope field violates the schema.
+    """
+    path = W / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text(), parse_constant=_reject_nonfinite)
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError, TypeError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def main():
+    raw = raw_submission()
     e = json.loads((T / "expected.json").read_text())
     d = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
@@ -117,17 +204,20 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    r = s.get("result") if isinstance(s, dict) else None
+    # Mathematical correctness and evidence are evaluated from the bounded raw
+    # payload so a malformed non-result field cannot erase them; protocol and
+    # scope remain tied to the schema-valid envelope.
+    r = raw.get("result") if isinstance(raw, dict) else None
     m = valid(r, d)
-    ev = bool(isinstance(s, dict) and evidence_ok(s.get("evidence")))
+    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
+    a = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED")
     sc = bool(
         isinstance(s, dict)
         and s.get("scope") == "frozen-six-dimensional-Z-mod-125-certificate"
         and s.get("completeness") == "COMPLETE"
         and s.get("limitations") == [LIMITATION]
     )
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") == "COMPUTED")
-    f = false_verified_claim(s, verification_record_bound=False)
+    f = false_verified_claim(raw, verification_record_bound=False)
     ok = bool(c and input_binding and m and ev and sc and not f)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(

@@ -248,8 +248,8 @@ def test_empty_explanation_is_rejected(tmp_path: Path) -> None:
 
 def test_input_binding_decoupled_is_declared_in_task_metadata() -> None:
     """The verifier decouples correctness from input binding via task metadata."""
-    assert support.input_binding_is_decoupled(TASK) is True
-    metadata = json.loads(
-        (support._task(TASK) / "tests" / "verifier_behavior.json").read_text()
-    )
+    assert support.is_input_binding_decoupled(TASK) is True
+    assert support.is_scope_independent_assurance(TASK) is True
+    metadata = support.load_task_contract_metadata(TASK)
     assert metadata["input_binding_decoupled"] is True
+    assert metadata["scope_independent_assurance"] is True

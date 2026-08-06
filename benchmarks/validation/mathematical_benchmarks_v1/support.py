@@ -53,7 +53,6 @@ RESOURCE_DERIVED_TASKS = (
 )
 # Tasks whose verifier reports scope independently of assurance typing.
 SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
-    "positive-lower-density-separation",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
     "emerald-path-family-audit",
@@ -63,9 +62,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
-# and gating only aggregate reward on both.  New tasks declare this behavior
-# via ``tests/verifier_behavior.json`` (see ``input_binding_is_decoupled``);
-# this legacy tuple is retained only for previously-migrated tasks.
+# and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",

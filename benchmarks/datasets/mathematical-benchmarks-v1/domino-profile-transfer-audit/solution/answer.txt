@@ -1,0 +1,12 @@
+Use an eight-state profile dynamic program, where a mask records cells already
+occupied from the preceding column.  Enumerating vertical placements within a
+column and horizontal dominoes crossing its right boundary gives the submitted
+transition matrix.  A missing top-left cell is therefore initial mask 001.
+
+Rather than assuming an unproved period, binary exponentiation computes the
+2021st matrix power modulo 19.  The certificate records the accumulator before
+and after every set bit of 2021, namely bits 0, 2, 5, 6, 7, 8, 9, and 10.  The
+empty outgoing profile has coefficient 1, so the requested remainder is 1,
+not 4.  The proposed decomposition is invalid because its listed families do
+not partition every legal tiling; the exact profile transition includes the
+missing interactions automatically.

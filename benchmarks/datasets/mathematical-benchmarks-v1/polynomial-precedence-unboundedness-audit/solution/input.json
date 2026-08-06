@@ -1,0 +1,1 @@
+{"task_id":"jacobian/polynomial-precedence-unboundedness-audit","source":{"dataset":"LARK-Lab/FormalRx-Test","revision":"4b7c6b883e0859e9bd38620a539bdcef408f91b4","split":"test","row":2,"source_id":"formalrx_0003","license":"Apache-2.0"},"informal_expression":"(x*y)^2 + (x+7)^2 + (2*y+7)^2","formal_expression":"x*y^2 + (x+7)^2 + (2*y+7)^2","claimed_least":45}

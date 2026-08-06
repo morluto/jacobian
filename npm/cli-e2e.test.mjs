@@ -118,6 +118,81 @@ test("npx jacobian setup writes and reapplies a client configuration", async () 
   }
 });
 
+test("npx jacobian setup manages the Codex visibility skill safely", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-npx-codex-skill-"));
+  try {
+    await mkdir(join(base, "home", ".codex"), { recursive: true });
+    const tarball = await packNpmPackage(base);
+    const env = { XDG_CONFIG_HOME: join(base, "config") };
+    const skillPath = join(
+      base,
+      "home",
+      ".codex",
+      "skills",
+      "jacobian-math",
+      "SKILL.md",
+    );
+
+    const setup = await runNpx(
+      tarball,
+      ["setup", "--client", "codex", "--yes", "--json"],
+      base,
+      env,
+    );
+    assert.equal(setup.status, 0, setup.stderr);
+    const setupReport = JSON.parse(setup.stdout);
+    assert.equal(setupReport.results[0].visibilitySkill.status, "create");
+    const managedSkill = await readFile(skillPath, "utf8");
+    assert.match(managedSkill, /name: jacobian-math/);
+    assert.match(managedSkill, /Trigger even when the user does not name Jacobian/);
+
+    const remove = await runNpx(
+      tarball,
+      ["remove", "--client", "codex", "--yes", "--json"],
+      base,
+      env,
+    );
+    assert.equal(remove.status, 0, remove.stderr);
+    assert.equal(existsSync(skillPath), false);
+
+    const reinstall = await runNpx(
+      tarball,
+      ["setup", "--client", "codex", "--yes", "--json"],
+      base,
+      env,
+    );
+    assert.equal(reinstall.status, 0, reinstall.stderr);
+    const modifiedSkill = `${await readFile(skillPath, "utf8")}\nUser note.\n`;
+    await writeFile(skillPath, modifiedSkill, "utf8");
+
+    const refuseOverwrite = await runNpx(
+      tarball,
+      ["setup", "--client", "codex", "--yes", "--json"],
+      base,
+      env,
+    );
+    assert.equal(refuseOverwrite.status, 1);
+    assert.match(refuseOverwrite.stderr, /differs from the managed Jacobian skill/);
+    assert.equal(await readFile(skillPath, "utf8"), modifiedSkill);
+
+    const preserve = await runNpx(
+      tarball,
+      ["remove", "--client", "codex", "--yes", "--json"],
+      base,
+      env,
+    );
+    assert.equal(preserve.status, 0, preserve.stderr);
+    const preserveReport = JSON.parse(preserve.stdout);
+    assert.equal(
+      preserveReport.results[0].visibilitySkill.status,
+      "preserve_modified",
+    );
+    assert.equal(await readFile(skillPath, "utf8"), modifiedSkill);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test(
   "npx jacobian upgrade refreshes the launcher-managed Python package",
   { skip: process.platform === "win32" },

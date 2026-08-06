@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence", "/app/input.json"]
+[task]
+name = "jacobian/product-hausdorff-nonempty-scope-audit"
+version = "1.0.0"
+description = "Audit a missing nonempty-factor hypothesis with a finite topology countermodel."
+keywords = ["formalization", "topology", "hausdorff", "semantic-audit"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
+field = "metric-topology"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-semantic-audit"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "assurance", "autoformalization", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-dataset-derived-semantic-audit"
+fixture_digest = "sha256:daf05d1bb8960033f783393020fbc432b167dd33abe7ecdee8c8713c995e77a8"
+derivation = "Derived from PAug/ProofNetVerif test row 59 at revision 91183e5b12d64374827bf2782db629b5b0f8f319 (MIT)."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

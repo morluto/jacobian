@@ -1,0 +1,26 @@
+{
+  "task_id": "jacobian/domino-profile-transfer-audit",
+  "conclusion": "PROPOSED_REMAINDER_INCORRECT_REPAIRED",
+  "result": {
+    "removed_row": 0,
+    "transition_matrix": [[0,1,0,0,1,0,0,1],[1,0,0,0,0,0,1,0],[0,0,0,0,0,1,0,0],[0,0,0,0,1,0,0,0],[1,0,0,1,0,0,0,0],[0,0,1,0,0,0,0,0],[0,1,0,0,0,0,0,0],[1,0,0,0,0,0,0,0]],
+    "initial_vector": [0,1,0,0,0,0,0,0],
+    "exponentiation_trace": [
+      {"bit":0,"before":[0,1,0,0,0,0,0,0],"after":[1,0,0,0,0,0,1,0]},
+      {"bit":2,"before":[1,0,0,0,0,0,1,0],"after":[15,0,0,5,0,0,6,0]},
+      {"bit":5,"before":[15,0,0,5,0,0,6,0],"after":[18,0,0,1,0,0,2,0]},
+      {"bit":6,"before":[18,0,0,1,0,0,2,0],"after":[1,0,0,0,0,0,1,0]},
+      {"bit":7,"before":[1,0,0,0,0,0,1,0],"after":[0,0,0,0,0,0,1,0]},
+      {"bit":8,"before":[0,0,0,0,0,0,1,0],"after":[15,0,0,5,0,0,6,0]},
+      {"bit":9,"before":[15,0,0,5,0,0,6,0],"after":[18,0,0,1,0,0,2,0]},
+      {"bit":10,"before":[18,0,0,1,0,0,2,0],"after":[1,0,0,0,0,0,1,0]}
+    ],
+    "remainder": 1,
+    "diagnosis": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "domino-profile-transfer-audit exact modulo-19 certificate",
+  "completeness": "COMPLETE",
+  "evidence": [{"path":"evidence/answer.txt","sha256":"sha256:c18c4201d7e1fcab18b6f78c428f548479786a4b77fa56d40e0c493eb8457322"}],
+  "limitations": ["The verifier proves the exact finite-state modulo-19 computation; it does not formalize the source narrative in a proof assistant."]
+}

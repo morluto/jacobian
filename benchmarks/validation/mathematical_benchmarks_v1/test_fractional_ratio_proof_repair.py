@@ -18,6 +18,19 @@ def _run(tmp_path: Path, mutate=None):
     return support._run_verifier(task, app, logs)
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    result = _run(
+        tmp_path,
+        lambda submission: submission.update(
+            limitations=[
+                "This exact 24-item binary instance does not prove a general greedy theorem."
+            ]
+        ),
+    )
+    assert result["scope_accuracy"] == 1.0
+    assert result["reward"] == 1.0
+
+
 def test_oracle_passes(tmp_path: Path) -> None:
     assert _run(tmp_path)["reward"] == 1.0
 

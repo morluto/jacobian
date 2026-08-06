@@ -19,7 +19,7 @@ Additional lines are allowed and ignored. There is no byte limit on the evidence
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. In the solver's own words, the limitations array must disclose that the certificate covers only the frozen exact instance and does not prove a general greedy theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

@@ -18,6 +18,21 @@ W, T = Path("/app"), Path("/tests")
 MISMATCHES = {"OBJECTIVE_REPLACED", "BINARY_DOMAIN_RELAXED", "UNDECLARED_BUDGET_ADDED"}
 LIMITATION = "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
 
+
+def _limitations_valid(value: object) -> bool:
+    if not (
+        isinstance(value, list)
+        and len(value) == 1
+        and isinstance(value[0], str)
+    ):
+        return False
+    text = value[0].casefold()
+    return (
+        any(term in text for term in ("frozen", "exact instance", "24-item", "binary instance"))
+        and any(term in text for term in ("greedy theorem", "general theorem"))
+        and any(term in text for term in ("not prove", "does not prove", "not machine", "only"))
+    )
+
 # Semantic clause obligations for the evidence explanation.  The public
 # instruction requires explaining the three contract mismatches and why the
 # residual certificate repairs the frozen objective.  Each clause is a pair
@@ -273,7 +288,7 @@ def main():
         isinstance(raw, dict)
         and raw.get("scope") == "frozen-24-item-binary-fractional-ratio-instance"
         and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == [LIMITATION]
+        and _limitations_valid(raw.get("limitations"))
     )
     assurance_ok = bool(
         isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"

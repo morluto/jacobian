@@ -23,12 +23,12 @@
     "payload_shape": null
   },
   "limitations": {
-    "const": [
-      "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
-    ],
+    "items": {"minLength": 1, "type": "string"},
+    "maxItems": 1,
+    "minItems": 1,
     "type": "array"
   },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem.",
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. In the solver's own words, the limitations array must disclose that the certificate covers only the frozen exact instance and does not prove a general greedy theorem.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -271,9 +271,9 @@
         }
       },
       "limitations": {
-        "const": [
-          "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
-        ],
+        "items": {"minLength": 1, "type": "string"},
+        "maxItems": 1,
+        "minItems": 1,
         "type": "array"
       }
     },

@@ -59,9 +59,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

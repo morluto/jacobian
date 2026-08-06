@@ -25,16 +25,18 @@ LIMITATION = (
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
     return (
-        any(term in text for term in ("finite-law", "finite law", "countermodel", "four-point"))
-        and any(term in text for term in ("weak convergence", "original prose", "general theorem"))
+        any(
+            term in text
+            for term in ("finite-law", "finite law", "countermodel", "four-point")
+        )
+        and any(
+            term in text
+            for term in ("weak convergence", "original prose", "general theorem")
+        )
         and any(
             term in text
             for term in (
@@ -46,6 +48,8 @@ def _limitations_valid(value: object) -> bool:
             )
         )
     )
+
+
 ATTAINABLE_PRODUCTS = frozenset(x * y for x in SUPPORT for y in SUPPORT)
 
 _EVIDENCE_FACTS = {
@@ -74,8 +78,12 @@ _EVIDENCE_CONTRADICTIONS = (
         r"\bmarginal\s+convergence\b.{0,48}"
         r"(?<!not )(?<!n't )\bdetermines?\b.{0,32}\bjoint\b"
     ),
-    re.compile(r"\bproduct\s+(?:law|distribution)\b.{0,48}\bfollows?\b.{0,32}\bmarginals?\b"),
-    re.compile(r"\bjoint\s+(?:law|distribution)\b.{0,48}\buniquely\s+(?:fixed|determined)\b"),
+    re.compile(
+        r"\bproduct\s+(?:law|distribution)\b.{0,48}\bfollows?\b.{0,32}\bmarginals?\b"
+    ),
+    re.compile(
+        r"\bjoint\s+(?:law|distribution)\b.{0,48}\buniquely\s+(?:fixed|determined)\b"
+    ),
 )
 
 

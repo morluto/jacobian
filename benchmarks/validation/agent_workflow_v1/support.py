@@ -65,6 +65,7 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
 # and gating only aggregate reward on both.
 INPUT_BINDING_DECOUPLED_TASKS = (
+    "newton-polygon-factorization-audit",
     "closed-set-distance-strengthening-audit",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",

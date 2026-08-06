@@ -56,6 +56,16 @@ def test_oracle_and_reordered_cases_receive_full_reward(tmp_path: Path) -> None:
     assert reward["mathematics"] == 1.0
 
 
+def test_reordered_aligned_face_pairs_receive_full_reward(tmp_path: Path) -> None:
+    app, logs, submission = _case(tmp_path)
+    row = submission["result"]["cases"][0]
+    order = (2, 0, 1)
+    row["face_radicands"] = [row["face_radicands"][index] for index in order]
+    row["face_roots"] = [row["face_roots"][index] for index in order]
+    _write(app, submission)
+    assert _run(app, logs)["aggregate_reward"] == 1.0
+
+
 def test_euler_brick_cannot_be_promoted_to_perfect_cuboid(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["result"]["cases"][0]["class"] = "PERFECT_CUBOID"
@@ -103,11 +113,27 @@ def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
     frozen["cases"][0]["edges"][0] += 1
     (app / "input.json").write_text(json.dumps(frozen))
     _write(app, submission)
-    assert _run(app, logs)["input_binding"] == 0.0
+    reward = _run(app, logs)
+    assert reward["input_binding"] == 0.0
+    assert reward["mathematics"] == 1.0
+    assert reward["aggregate_reward"] == 0.0
 
     app, logs, submission = _case(tmp_path / "evidence")
     _write(app, submission)
     (app / "evidence/answer.txt").write_text("{}\n")
+    reward = _run(app, logs)
+    assert reward["evidence"] == 0.0
+    assert reward["aggregate_reward"] == 0.0
+
+
+def test_oversized_evidence_fails_closed(tmp_path: Path) -> None:
+    app, logs, submission = _case(tmp_path)
+    evidence = app / "evidence/answer.txt"
+    evidence.write_bytes(b" " * (2 * 1024 * 1024 + 1))
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
     reward = _run(app, logs)
     assert reward["evidence"] == 0.0
     assert reward["aggregate_reward"] == 0.0

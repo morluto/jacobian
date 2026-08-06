@@ -13,6 +13,14 @@ classify the cuboid as exactly one of:
 Submit all twelve cases exactly once, but their order is irrelevant. Report the
 counts of all four classes and whether the frozen family contains a perfect
 cuboid. The verifier recomputes every square predicate from the frozen edges.
+The three `face_radicands` entries and their aligned `face_roots` entries may
+be reported in any common order; the verifier compares the three aligned
+radicand/root pairs as an unordered set.
+
+`evidence/answer.txt` must be a JSON object with exactly `schema_version`,
+`task_id`, `result`, and `limitations`. Use schema version `1`, the task ID and
+limitations from the submission contract, and the same `result` object as in
+`submission.json`. The file must be no larger than 2 MiB.
 
 This is a finite semantic-scope audit. An Euler brick is not a perfect cuboid,
 and finding no perfect cuboid in these twelve cases is not evidence of global

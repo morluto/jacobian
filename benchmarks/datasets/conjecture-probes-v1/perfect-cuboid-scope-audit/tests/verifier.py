@@ -20,6 +20,7 @@ TASK_ID = "jacobian/perfect-cuboid-scope-audit"
 SCOPE = "perfect-cuboid-scope-audit:case-set-v1"
 LIMITATIONS = ["TWELVE_FROZEN_INTEGER_CUBOIDS", "NO_GLOBAL_PERFECT_CUBOID_CONCLUSION"]
 CLASSES = {"PERFECT_CUBOID", "EULER_BRICK_ONLY", "SPACE_AND_TWO_FACES", "OTHER"}
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 
 
 def _root(value: int) -> int | None:
@@ -89,7 +90,7 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
         submitted[row.get("id")] = row
     if set(submitted) != set(expected):
         return False
-    if any(submitted[key] != expected[key] for key in expected):
+    if any(not _row_matches(submitted[key], expected[key]) for key in expected):
         return False
     counts = Counter(row["class"] for row in expected.values())
     if set(result["case_counts"]) != CLASSES:
@@ -102,6 +103,30 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
     )
 
 
+def _row_matches(submitted: dict[str, Any], expected: dict[str, Any]) -> bool:
+    """Compare a case while treating aligned face-diagonal pairs as unordered."""
+
+    if not isinstance(submitted, dict) or set(submitted) != set(expected):
+        return False
+    fixed = set(expected) - {"face_radicands", "face_roots"}
+    if any(submitted.get(key) != expected[key] for key in fixed):
+        return False
+    radicands = submitted.get("face_radicands")
+    roots = submitted.get("face_roots")
+    if not isinstance(radicands, list) or not isinstance(roots, list):
+        return False
+    if len(radicands) != 3 or len(roots) != 3:
+        return False
+    submitted_pairs = sorted(
+        zip(radicands, roots, strict=True), key=lambda pair: pair[0]
+    )
+    expected_pairs = sorted(
+        zip(expected["face_radicands"], expected["face_roots"], strict=True),
+        key=lambda pair: pair[0],
+    )
+    return submitted_pairs == expected_pairs
+
+
 def _reward(value: dict[str, Any]) -> None:
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
@@ -110,8 +135,8 @@ def _reward(value: dict[str, Any]) -> None:
 
 def main() -> None:
     input_bound = workspace_input_is_bound()
-    frozen = _frozen() if input_bound else None
-    submission = load_submission()
+    frozen = _frozen()
+    submission = load_submission(require_input_binding=False)
     contract = strict_submission_contract(
         submission,
         task_id=TASK_ID,
@@ -122,10 +147,15 @@ def main() -> None:
     mathematics = bool(
         contract and frozen and _mathematics(submission["result"], frozen)
     )
-    evidence = bool(contract and evidence_list_is_bound(submission["evidence"]))
+    evidence = bool(
+        contract
+        and evidence_list_is_bound(submission["evidence"], max_bytes=MAX_EVIDENCE_BYTES)
+    )
     payload = (
         read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/answer.txt"
+            submission["evidence"][0],
+            expected_path="evidence/answer.txt",
+            max_bytes=MAX_EVIDENCE_BYTES,
         )
         if evidence
         else None

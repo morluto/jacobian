@@ -20,18 +20,21 @@ LIMITATION = "The verifier certifies only the frozen exact instance; it does not
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
     return (
-        any(term in text for term in ("frozen", "exact instance", "24-item", "binary instance"))
+        any(
+            term in text
+            for term in ("frozen", "exact instance", "24-item", "binary instance")
+        )
         and any(term in text for term in ("greedy theorem", "general theorem"))
-        and any(term in text for term in ("not prove", "does not prove", "not machine", "only"))
+        and any(
+            term in text
+            for term in ("not prove", "does not prove", "not machine", "only")
+        )
     )
+
 
 # Semantic clause obligations for the evidence explanation.  The public
 # instruction requires explaining the three contract mismatches and why the

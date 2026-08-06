@@ -103,9 +103,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "The general local-finiteness theorem is not machine-formalized."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

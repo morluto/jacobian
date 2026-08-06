@@ -31,7 +31,7 @@ certificate.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit one non-singular degree-four basis, exact coordinates, and its full additive-group action matrix. Sparse terms use canonical reduced rationals and unique ascending exponents. The limitations array must exactly state: The general local-finiteness theorem is not machine-formalized.
+Submit one non-singular degree-four basis, exact coordinates, and its full additive-group action matrix. Sparse terms use canonical reduced rationals and unique ascending exponents. In the solver's own words, the limitations array must disclose that the frozen degree-four certificate does not prove the general local-finiteness theorem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

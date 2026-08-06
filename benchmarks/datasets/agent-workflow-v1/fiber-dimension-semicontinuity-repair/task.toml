@@ -3,8 +3,8 @@ artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/fiber-dimension-semicontinuity-repair"
 version = "1.0.0"
-description = "Repair a flawed semicontinuity proof with an exact Fitting-ideal certificate."
-keywords = ["proof-repair", "commutative-algebra", "fitting-ideal", "semicontinuity"]
+description = "Construct an exact Fitting-ideal certificate for disclosed semicontinuity proof gaps."
+keywords = ["certificate", "commutative-algebra", "fitting-ideal", "semicontinuity"]
 [metadata]
 evaluation_kind = "workflow"
 domain = "mathematical-sciences"
@@ -16,7 +16,7 @@ required_provider = "core"
 author_name = "Jacobian contributors"
 difficulty = "hard"
 category = "mathematics"
-tags = ["proof-diagnosis", "symbolic-ideal", "alternative-generators", "offline"]
+tags = ["certificate-generation", "symbolic-ideal", "alternative-generators", "offline"]
 case_version = "agent-workflow-v1"
 contamination_class = "public-proof-transformed-certificate"
 fixture_digest = "sha256:706e368e4fc127878427e590d9b87efba54b3336bcd3799db0f38f40d5b5e906"

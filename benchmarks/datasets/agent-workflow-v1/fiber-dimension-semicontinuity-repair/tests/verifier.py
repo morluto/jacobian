@@ -84,22 +84,44 @@ def _poly(value: object) -> Poly | None:
     return polynomial if not polynomial.is_zero else None
 
 
-def _expected_minors() -> list[Poly]:
-    matrix = Matrix([[X, Y, 0], [0, X, Y]])
+def _frozen_matrix(frozen: dict[str, Any]) -> Matrix | None:
+    presentation = frozen.get("frozen_affine_presentation")
+    rows = presentation.get("map_matrix") if isinstance(presentation, dict) else None
+    if (
+        not isinstance(rows, list)
+        or len(rows) != 2
+        or any(not isinstance(row, list) or len(row) != 3 for row in rows)
+    ):
+        return None
+    entries = []
+    try:
+        for row in rows:
+            entries.append([Poly(entry, X, Y, domain=QQ).as_expr() for entry in row])
+    except (ValueError, TypeError, KeyError):
+        return None
+    return Matrix(entries)
+
+
+def _expected_minors(frozen: dict[str, Any]) -> list[Poly] | None:
+    matrix = _frozen_matrix(frozen)
+    if matrix is None:
+        return None
     return [
         Poly(matrix[:, [left, right]].det(), X, Y, domain=QQ)
         for left, right in ((0, 1), (0, 2), (1, 2))
     ]
 
 
-def _same_ideal(generators: object) -> bool:
+def _same_ideal(generators: object, frozen: dict[str, Any]) -> bool:
     if not isinstance(generators, list) or not 2 <= len(generators) <= 6:
         return False
     submitted = [_poly(item) for item in generators]
     if any(item is None for item in submitted):
         return False
     try:
-        expected = _expected_minors()
+        expected = _expected_minors(frozen)
+        if expected is None:
+            return False
         submitted_basis = groebner(
             [item.as_expr() for item in submitted], X, Y, domain=QQ
         )
@@ -115,7 +137,20 @@ def _same_ideal(generators: object) -> bool:
 
 def _fiber_checks(value: object, frozen: dict[str, Any]) -> bool:
     points = frozen.get("fiber_points")
-    if not isinstance(value, list) or len(value) != 4 or not isinstance(points, list):
+    matrix = _frozen_matrix(frozen)
+    presentation = frozen.get("frozen_affine_presentation")
+    target_rank = (
+        presentation.get("cokernel_target_rank")
+        if isinstance(presentation, dict)
+        else None
+    )
+    if (
+        not isinstance(value, list)
+        or not isinstance(points, list)
+        or len(value) != len(points)
+        or matrix is None
+        or type(target_rank) is not int
+    ):
         return False
     expected_points: set[tuple[Fraction, Fraction]] = set()
     for point in points:
@@ -143,18 +178,13 @@ def _fiber_checks(value: object, frozen: dict[str, Any]) -> bool:
         if key in seen or key not in expected_points:
             return False
         seen.add(key)
-        specialized = Matrix(
-            [
-                [x_value, y_value, Fraction(0)],
-                [Fraction(0), x_value, y_value],
-            ]
-        )
+        specialized = matrix.subs({X: x_value, Y: y_value})
         rank = specialized.rank()
         if type(check.get("matrix_rank")) is not int or check["matrix_rank"] != rank:
             return False
         if (
             type(check.get("cokernel_dimension")) is not int
-            or check["cokernel_dimension"] != 2 - rank
+            or check["cokernel_dimension"] != target_rank - rank
         ):
             return False
     return seen == expected_points
@@ -165,7 +195,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         isinstance(value, dict)
         and value.get("tensor_repair") == TENSOR_REPAIR
         and value.get("global_repair") == GLOBAL_REPAIR
-        and _same_ideal(value.get("ideal_generators"))
+        and _same_ideal(value.get("ideal_generators"), frozen)
         and _fiber_checks(value.get("fiber_checks"), frozen)
     )
 
@@ -204,7 +234,12 @@ def _result_protocol(value: object) -> bool:
 def _evidence_lines(result: dict[str, Any]) -> list[str] | None:
     checks = result.get("fiber_checks")
     generators = result.get("ideal_generators")
-    if not isinstance(checks, list) or not isinstance(generators, list):
+    if (
+        not isinstance(checks, list)
+        or len(checks) != 4
+        or not isinstance(generators, list)
+        or not 2 <= len(generators) <= 6
+    ):
         return None
     rows: list[tuple[Fraction, Fraction, int]] = []
     for check in checks:
@@ -264,12 +299,9 @@ def main() -> None:
         and _public_submission_is_valid(submission)
         and _result_protocol(result)
     )
-    math_correct = bool(input_bound and _result(result, frozen))
+    math_correct = bool(_result(result, frozen))
     evidence_valid = _evidence(data.get("evidence"), result)
-    scope_correct = bool(
-        data.get("scope") == expected.get("required_scope")
-        and isinstance(data.get("claimed_assurance"), str)
-    )
+    scope_correct = bool(data.get("scope") == expected.get("required_scope"))
     assurance_correct = data.get("claimed_assurance") == "COMPUTED"
     completeness_correct = data.get("completeness") == "COMPLETE"
     limitations_correct = data.get("limitations") == [LIMITATION]

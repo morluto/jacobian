@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 sympy==1.14.0 typing-extensions==4.16.0
-LABEL jacobian.checksum="7ec8343889a790e53a8a4f59a30c15e0a3f8db318ef0876ee1606b2fc8408292"
+LABEL jacobian.checksum="56c8441310b048310cb7c6580e73c30333a15245fa4df21fc1046a8de959163e"
 LABEL jacobian.task="jacobian/fiber-dimension-semicontinuity-repair"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

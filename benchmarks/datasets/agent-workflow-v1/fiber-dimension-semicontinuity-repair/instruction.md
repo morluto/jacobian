@@ -1,8 +1,10 @@
 # Repair a fiber-dimension semicontinuity proof
 
-The frozen input contains a generated proof of upper semicontinuity with two
-invalid steps. Diagnose both steps and repair them on the supplied affine
-presentation.
+The frozen input summarizes two known invalid steps from a generated proof of
+upper semicontinuity. Apply the supplied repair obligations to the affine
+presentation and construct the exact determinantal certificate. This task
+checks certificate construction from disclosed diagnoses; it does not measure
+blind diagnosis of the unavailable source proof.
 
 For a presentation `A^3 -> A^2 -> F -> 0`, tensoring with a residue field only
 needs right exactness to identify the fiber as the cokernel. A residue field is

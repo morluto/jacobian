@@ -104,7 +104,18 @@ def test_visible_input_tamper_fails_closed(tmp_path: Path) -> None:
     (app / "input.json").write_text("{}")
     reward = support._run_verifier(task, app, logs)
     assert reward["input_binding"] == 0.0
-    assert reward["correctness"] == 0.0
+    assert reward["correctness"] == 1.0
+    assert reward["reward"] == 0.0
+
+
+def test_scope_diagnostic_is_independent_of_assurance_type(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = _load(app)
+    submission["claimed_assurance"] = []
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["assurance_calibration"] == 0.0
     assert reward["reward"] == 0.0
 
 

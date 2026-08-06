@@ -11,8 +11,8 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {"items": {"type": "string"}, "type": "array"},
-  "public_notes": "Submit one non-singular degree-four basis, exact coordinates, and its full additive-group action matrix. Sparse terms use canonical reduced rationals and unique ascending exponents.",
+  "limitations": {"const": ["The general local-finiteness theorem is not machine-formalized."], "type": "array"},
+  "public_notes": "Submit one non-singular degree-four basis, exact coordinates, and its full additive-group action matrix. Sparse terms use canonical reduced rationals and unique ascending exponents. The limitations array must exactly state: The general local-finiteness theorem is not machine-formalized.",
   "required_artifact_filenames": ["evidence/answer.txt"],
   "schema_definitions": {
     "rational": {"pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$", "type": "string"},
@@ -101,7 +101,7 @@
         "minItems": 1,
         "type": "array"
       },
-      "limitations": {"items": {"type": "string"}, "type": "array"},
+      "limitations": {"const": ["The general local-finiteness theorem is not machine-formalized."], "type": "array"},
       "result": {
         "additionalProperties": false,
         "properties": {

@@ -7,6 +7,8 @@
     "COMPLETE"
   ],
   "assurance_ceiling": "COMPUTED",
+  "input_binding_decoupled": true,
+  "scope_independent_assurance": true,
   "conclusion": {
     "const": "MARGINAL_CONVERGENCE_INSUFFICIENT"
   },

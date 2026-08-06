@@ -62,9 +62,10 @@ SCOPE_INDEPENDENT_ASSURANCE_TASKS = (
 )
 # Tasks whose verifier reports mathematical correctness independently of
 # workspace input binding, emitting a separate ``input_binding`` diagnostic
-# and gating only aggregate reward on both.
+# and gating only aggregate reward on both.  Migrated tasks declare this in
+# their tests/public_contract.json instead; this registry remains a fallback
+# for unmigrated tasks.
 INPUT_BINDING_DECOUPLED_TASKS = (
-    "marginal-joint-product-audit",
     "apollonius-gap-repair",
     "c4-characteristic-invariant-audit",
     "emerald-path-family-audit",
@@ -92,6 +93,46 @@ SINGLE_EVIDENCE_TASKS = tuple(
     )["properties"]["evidence"].get("maxItems")
     == 1
 )
+
+
+def task_contract_flags(task_name: str) -> dict[str, bool]:
+    """Load task-local verifier contract flags from the task's public contract.
+
+    Migrated tasks declare ``input_binding_decoupled`` and
+    ``scope_independent_assurance`` in ``tests/public_contract.json`` instead
+    of relying on global name registries.  Unmigrated tasks return an empty
+    dict and fall back to the registry tuples.
+    """
+
+    path = TASKS / task_name / "tests" / "public_contract.json"
+    try:
+        contract = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(contract, dict):
+        return {}
+    flags: dict[str, bool] = {}
+    if "input_binding_decoupled" in contract:
+        flags["input_binding_decoupled"] = bool(contract["input_binding_decoupled"])
+    if "scope_independent_assurance" in contract:
+        flags["scope_independent_assurance"] = bool(
+            contract["scope_independent_assurance"]
+        )
+    return flags
+
+
+def is_input_binding_decoupled(task_name: str) -> bool:
+    flags = task_contract_flags(task_name)
+    if "input_binding_decoupled" in flags:
+        return flags["input_binding_decoupled"]
+    return task_name in INPUT_BINDING_DECOUPLED_TASKS
+
+
+def is_scope_independent_assurance(task_name: str) -> bool:
+    flags = task_contract_flags(task_name)
+    if "scope_independent_assurance" in flags:
+        return flags["scope_independent_assurance"]
+    return task_name in SCOPE_INDEPENDENT_ASSURANCE_TASKS
 
 
 def _task_tree_snapshot() -> dict[str, str]:

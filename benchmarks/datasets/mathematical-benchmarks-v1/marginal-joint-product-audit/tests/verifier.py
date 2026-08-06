@@ -5,9 +5,12 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     false_verified_claim,
+    is_regular_bounded_file,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -19,6 +22,41 @@ LIMITATION = (
     "This exact finite-law countermodel does not machine-verify a general "
     "weak-convergence theorem or disambiguate the original prose."
 )
+ATTAINABLE_PRODUCTS = frozenset(x * y for x in SUPPORT for y in SUPPORT)
+
+# Semantic clause obligations for the evidence explanation.  The public
+# instruction requires explaining why marginal convergence does not determine
+# joint convergence or the product law.  Each clause requires at least one
+# term stem from the set; this accepts equivalent phrasing while rejecting
+# unrelated text.
+_EVIDENCE_CLAUSES = (
+    {"marginal"},
+    {"joint", "product", "coupl"},
+    {"not", "determin", "insuffici", "imply", "fail", "lack", "without"},
+)
+# Read at most this many bytes for the prose semantic check.  This is not an
+# evidence validity cap — the file itself has no byte limit — but a parsing
+# bound so a huge valid artifact cannot exhaust verifier memory.
+_PROSE_READ_BYTES = 1_048_576
+
+
+def _has_term(words: set[str], term: str) -> bool:
+    """Check if any word starts with the given term stem."""
+
+    return any(word.startswith(term) for word in words)
+
+
+def _evidence_explains_clauses(text: str) -> bool:
+    """Check that prose addresses every documented semantic obligation."""
+
+    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
+    prose = " ".join(lines).lower()
+    words = set(re.findall(r"[a-z]+", prose))
+    if len(words) < 8:
+        return False
+    return all(
+        any(_has_term(words, term) for term in clause) for clause in _EVIDENCE_CLAUSES
+    )
 
 
 def canonical_fraction(value):
@@ -84,6 +122,11 @@ def parse_product(entries):
             return None
         if prior is not None and value <= prior:
             return None
+        # Zero-mass entries are allowed only for attainable product values
+        # (values in {x * y for x, y in SUPPORT}); unattainable zero entries
+        # are rejected as malformed.
+        if mass == 0 and value not in ATTAINABLE_PRODUCTS:
+            return None
         distribution[value] = mass
         prior = value
     if sum(distribution.values()) != 1:
@@ -93,8 +136,33 @@ def parse_product(entries):
 
 def evidence_matches(evidence):
     # The full finite laws and product pushforwards are independently replayed.
-    # The public evidence contract promises only one bound text artifact.
-    return evidence_list_is_bound(evidence)
+    # The public evidence contract promises one bound text artifact that
+    # explains why marginal convergence does not determine joint convergence
+    # or the product law.
+    if not evidence_list_is_bound(evidence):
+        return False
+    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    if path is None:
+        return False
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            head = stream.read(_PROSE_READ_BYTES)
+    except (OSError, UnicodeError, RecursionError, MemoryError):
+        return False
+    return _evidence_explains_clauses(head)
+
+
+def raw_submission():
+    """Parse the bounded submission without schema validation for math checks."""
+
+    path = W / "submission.json"
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def result_is_valid(result):
@@ -147,6 +215,7 @@ def result_is_valid(result):
 def main():
     expected = json.loads((T / "expected.json").read_text())
     input_bound = workspace_input_is_bound()
+    raw = raw_submission()
     submission = load_submission(W / "submission.json", require_input_binding=False)
     contract = strict_submission_contract(
         submission,
@@ -155,23 +224,22 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
         verification_record="forbidden",
     )
-    result = submission.get("result") if isinstance(submission, dict) else None
+    # Use the raw (non-schema-validated) submission for math and evidence
+    # checks so that a scope or limitation failure does not erase the
+    # mathematical correctness diagnostic.
+    result = raw.get("result") if isinstance(raw, dict) else None
     math_ok = result_is_valid(result)
-    evidence_ok = bool(
-        isinstance(submission, dict) and evidence_matches(submission.get("evidence"))
-    )
+    evidence_ok = bool(isinstance(raw, dict) and evidence_matches(raw.get("evidence")))
     scope_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("scope")
-        == "frozen-four-point-marginal-and-submitted-couplings"
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == [LIMITATION]
+        isinstance(raw, dict)
+        and raw.get("scope") == "frozen-four-point-marginal-and-submitted-couplings"
+        and raw.get("completeness") == "COMPLETE"
+        and raw.get("limitations") == [LIMITATION]
     )
     assurance_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "COMPUTED"
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
     )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
+    false_cert = false_verified_claim(raw, verification_record_bound=False)
     correct = bool(
         contract
         and input_bound

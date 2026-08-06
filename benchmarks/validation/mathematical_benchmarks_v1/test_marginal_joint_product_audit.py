@@ -39,7 +39,12 @@ def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> 
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    evidence.write_text("Finite coupling certificate supplied in submission.json.\n")
+    evidence.write_text(
+        "Marginal convergence does not determine the joint distribution or "
+        "the product law. The prelimit and limit couplings share the same "
+        "marginals but differ in their joint dependence, producing different "
+        "product pushforward distributions.\n"
+    )
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
@@ -132,3 +137,70 @@ def test_rejects_false_verified_claim(tmp_path: Path) -> None:
     result = _run(tmp_path, mutate)
     assert result["false_certification"] is True
     assert result["reward"] == 0.0
+
+
+def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "The marginal and joint distributions are independent under the "
+        "product measure. This is a well-known result in probability theory "
+        "and the certificate is supplied in the typed result.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_equivalent_evidence_phrasing_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "Knowing the marginal limits alone is insufficient to pin down the "
+        "joint coupling or the product distribution. Two couplings with "
+        "identical marginals can yield different product pushforward laws.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    base = (
+        "Marginal convergence does not determine the joint distribution or "
+        "the product law. The prelimit and limit couplings share the same "
+        "marginals but differ in their joint dependence, producing different "
+        "product pushforward distributions.\n"
+    )
+    padding = "This line is additional commentary that is allowed and ignored.\n"
+    evidence.write_text(base + padding * 5000)
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def test_bad_scope_preserves_math_diagnostic(tmp_path: Path) -> None:
+    result = _run(tmp_path, lambda s: s.__setitem__("scope", "wrong"))
+    assert result["correctness"] == 1.0
+    assert result["scope_accuracy"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unattainable_zero_mass_product_value_is_rejected(tmp_path: Path) -> None:
+    def mutate(submission):
+        entries = submission["result"]["limit_product_distribution"]
+        entries.append({"value": 26, "mass": "0"})
+        entries.sort(key=lambda entry: entry["value"])
+
+    assert _run(tmp_path, mutate)["reward"] == 0.0

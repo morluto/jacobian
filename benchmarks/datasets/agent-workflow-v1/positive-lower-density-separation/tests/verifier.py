@@ -7,7 +7,6 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
-    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
@@ -64,8 +63,27 @@ def valid_result(result):
                 "excluded_density": str(Fraction(count, low)),
             }
         )
+    levels = result.get("levels")
+    exact_integer_levels = bool(
+        isinstance(levels, list)
+        and len(levels) == 8
+        and all(
+            isinstance(row, dict)
+            and all(
+                type(row.get(field)) is int
+                for field in (
+                    "level",
+                    "included_endpoint",
+                    "excluded_endpoint",
+                    "cumulative_count",
+                )
+            )
+            for row in levels
+        )
+    )
     return (
-        result.get("levels") == expected
+        exact_integer_levels
+        and result.get("levels") == expected
         and q(result.get("lower_density")) == Fraction(1, b + 1)
         and q(result.get("upper_density")) == Fraction(b, b + 1)
         and result.get("lower_density_positive") is True
@@ -74,30 +92,16 @@ def valid_result(result):
     )
 
 
-def evidence_ok(evidence, result):
-    if not evidence_list_is_bound(evidence):
-        return False
-    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-        lines = [x for x in text.splitlines() if x.startswith("RESULT_JSON:")]
-        return (
-            len(lines) == 1
-            and json.loads(lines[0].removeprefix("RESULT_JSON:").strip()) == result
-            and all(
-                w in text.lower()
-                for w in ("lower density", "natural density", "subsequence", "finite")
-            )
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
+def evidence_ok(evidence):
+    # The structured endpoint certificate is replayed independently.  Keep the
+    # text artifact requirement to the public digest-binding contract.
+    return evidence_list_is_bound(evidence)
 
 
 def main():
     e = json.loads((T / "expected.json").read_text())
-    s = load_submission(W / "submission.json")
+    input_binding = workspace_input_is_bound()
+    s = load_submission(W / "submission.json", require_input_binding=False)
     contract = strict_submission_contract(
         s,
         task_id=e["task_id"],
@@ -106,8 +110,8 @@ def main():
         verification_record="forbidden",
     )
     r = s.get("result") if isinstance(s, dict) else None
-    math_ok = bool(workspace_input_is_bound() and valid_result(r))
-    ev = bool(isinstance(s, dict) and evidence_ok(s.get("evidence"), r))
+    math_ok = valid_result(r)
+    ev = bool(isinstance(s, dict) and evidence_ok(s.get("evidence")))
     scope = bool(
         isinstance(s, dict)
         and s.get("scope")
@@ -117,12 +121,15 @@ def main():
     )
     assurance = bool(isinstance(s, dict) and s.get("claimed_assurance") == "COMPUTED")
     false = false_verified_claim(s, verification_record_bound=False)
-    correct = bool(contract and math_ok and ev and scope and not false)
+    correct = bool(
+        contract and input_binding and math_ok and ev and scope and not false
+    )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(bool(contract)),
+                "input_binding": float(input_binding),
                 "correctness": float(math_ok),
                 "evidence_validity": float(ev),
                 "scope_accuracy": float(scope),

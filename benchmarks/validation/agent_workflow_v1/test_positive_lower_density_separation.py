@@ -49,6 +49,40 @@ def test_oracle_and_alternative_base_pass(tmp_path: Path) -> None:
     assert _run(tmp_path / "alternative", lambda s: _set_base(s, 7))["reward"] == 1.0
 
 
+def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("Endpoint certificate supplied in submission.json.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    (app / "input.json").write_text("{}")
+    result = support._run_verifier(task, app, logs)
+    assert result["input_binding"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_integral_float_level_fields_are_rejected(tmp_path: Path) -> None:
+    def mutate(s):
+        for row in s["result"]["levels"]:
+            row["level"] = float(row["level"])
+            row["included_endpoint"] = float(row["included_endpoint"])
+            row["excluded_endpoint"] = float(row["excluded_endpoint"])
+            row["cumulative_count"] = float(row["cumulative_count"])
+
+    result = _run(tmp_path, mutate)
+    assert result["correctness"] == 0.0
+    assert result["reward"] == 0.0
+
+
 def test_rejects_corrupted_endpoint_count(tmp_path: Path) -> None:
     def mutate(s):
         s["result"]["levels"][4]["cumulative_count"] += 1

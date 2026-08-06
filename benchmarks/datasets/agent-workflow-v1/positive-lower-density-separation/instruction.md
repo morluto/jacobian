@@ -9,7 +9,7 @@ The verifier recomputes all finite arithmetic and checks the general closed-form
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

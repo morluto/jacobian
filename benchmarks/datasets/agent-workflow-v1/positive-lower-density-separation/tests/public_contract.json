@@ -23,13 +23,12 @@
     "payload_shape": null
   },
   "limitations": {
-    "items": {
-      "type": "string"
-    },
-    "minItems": 1,
+    "const": [
+      "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
+    ],
     "type": "array"
   },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The limitations array must exactly state: Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -264,11 +263,10 @@
         }
       },
       "limitations": {
-        "type": "array",
-        "minItems": 1,
-        "items": {
-          "type": "string"
-        }
+        "const": [
+          "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
+        ],
+        "type": "array"
       }
     },
     "required": [

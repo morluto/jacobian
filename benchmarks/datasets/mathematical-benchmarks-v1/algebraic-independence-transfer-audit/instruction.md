@@ -17,7 +17,7 @@ The evidence file `evidence/answer.txt` must state the following three facts in 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently. The limitations array must exactly state: The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here.
+Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently. In the solver's own words, the limitations array must disclose that the external algebraic-independence theorem is a trusted premise not verified here.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

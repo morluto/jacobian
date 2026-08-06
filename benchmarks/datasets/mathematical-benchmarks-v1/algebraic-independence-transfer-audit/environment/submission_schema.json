@@ -73,9 +73,12 @@
       "type": "array"
     },
     "limitations": {
-      "const": [
-        "The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."
-      ],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
       "type": "array"
     },
     "result": {

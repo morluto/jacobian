@@ -20,6 +20,19 @@ def _mutate(tmp_path: Path, mutation):
     return support._run_verifier(task, app, logs)
 
 
+def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
+    reward = _mutate(
+        tmp_path,
+        lambda submission: submission.update(
+            limitations=[
+                "The transcendence theorem is an assumed premise and is not checked here."
+            ]
+        ),
+    )
+    assert reward["scope_accuracy"] == 1.0
+    assert reward["reward"] == 1.0
+
+
 def test_oracle_transfer_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     reward = support._run_verifier(task, app, logs)

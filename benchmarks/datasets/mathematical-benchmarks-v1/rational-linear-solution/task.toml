@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/rational-linear-solution"
+version = "1.0.0"
+description = "Solve an exact rational linear system."
+keywords = ["linear", "rational", "equations", "verification"]
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "linear-algebra"
+field = "linear-algebra"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "hand-designed-structural-variant"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["linear", "rational", "exact", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "hand-designed-structural-variant"
+fixture_digest = "sha256:6eb49232dab44bc29a4b27e13ffc50ceb24eda25577b76da5b16f73154f72f5d"
+derivation = "Fixed two-variable system with a non-integral unique solution."
+[agent]
+timeout_sec = 600.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

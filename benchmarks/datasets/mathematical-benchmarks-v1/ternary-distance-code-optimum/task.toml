@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/ternary-distance-code-optimum"
+version = "1.0.0"
+description = "Construct an optimal ternary distance code and certify its Delsarte bound."
+keywords = ["coding-theory", "delsarte", "krawtchouk", "construction"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "combinatorics"
+field = "coding-theory"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-snapshot"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["ternary-code", "linear-programming-bound", "exact-certificate", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-answer-known-certificate-required"
+fixture_digest = "sha256:b3ea4de58d0ad2340d38a8ddb61198786444713142216b624ac7e580a3953afc"
+derivation = "Derived from ByteDance-Seed/BeyondAIME train row 8 at revision c705198ae1043810b1e1693bd879250b51a7a523."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

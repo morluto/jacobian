@@ -50,6 +50,7 @@ complete a specific task.
 - [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
 - [Deploy the remote MCP server](how-to/deploy-remote-mcp.md)
 - [Author a Harbor benchmark task](how-to/author-harbor-benchmark-task.md)
+- [Migrate the benchmark portfolio](how-to/migrate-agent-workflow-benchmark.md)
 - [Run agent evaluations](how-to/run-agent-evaluations.md)
 
 ## Reference

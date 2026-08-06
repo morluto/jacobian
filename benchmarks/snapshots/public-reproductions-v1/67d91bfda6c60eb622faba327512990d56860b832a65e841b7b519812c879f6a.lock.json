@@ -1,0 +1,567 @@
+{
+  "environment": {
+    "profiles": [
+      "core-python",
+      "core-python-minimal-verifier"
+    ],
+    "summary_digest": "sha256:9983df0a6e5547a8eed97b054c00b2d96e93c880c11c5d855b7beea37a46efd3"
+  },
+  "evaluation": {
+    "oracle_job_digest": "sha256:abea685583d4f8b7919c76814981b8be89ca4c8ccfe341313fb66608d46268e5",
+    "oracle_jobs_dir": "benchmarks/results/public-reproductions-v1-oracle",
+    "task_ids": [
+      "balanced-row-permutation",
+      "closed-set-distance-strengthening-audit",
+      "coin-process-potential",
+      "cyclic-vector-inequality",
+      "gaussian-complex-cancellation",
+      "gaussian-sixth-moment",
+      "gaussian-two-sum-fourth-moment",
+      "integral-circle",
+      "integral-projective-plane",
+      "jacobian-inverse-obstruction",
+      "jacobian-keller",
+      "jacobian-negative-control",
+      "lean-retrieval",
+      "lean-transition",
+      "recurrence-fibonacci",
+      "recurrence-linear-eval",
+      "recurrence-lucas",
+      "recurrence-rational-series",
+      "reduced-point",
+      "reliability-series-path",
+      "reliability-single-edge",
+      "reliability-triangle-fair",
+      "sat-bool-mus",
+      "sat-erdos-schur-f4",
+      "sat-pigeonhole",
+      "sat-small",
+      "smith-rank-deficient",
+      "smith-rectangular",
+      "superposition-proof-replay",
+      "symmetry-colored-reflection",
+      "symmetry-cycle-rotation",
+      "symmetry-identity-subgroup"
+    ]
+  },
+  "harbor_version": "0.20.0",
+  "lock_digest": "sha256:67d91bfda6c60eb622faba327512990d56860b832a65e841b7b519812c879f6a",
+  "schema_version": "1",
+  "snapshot_id": "sha256:67d91bfda6c60eb622faba327512990d56860b832a65e841b7b519812c879f6a",
+  "source": {
+    "dirty": false,
+    "environment_profiles_digest": "sha256:46d82dd49f5f940fbff375c7aaa6c29c364ac2f5a55bc31aca9e90502d836056",
+    "registry_digest": "sha256:058f2dcf145478e1ecc1ed683211d02d2ebd73355d908d75fe41c269efcec710",
+    "tree_sha": "632532b96bddbb113f7b85ebfd9590b23f34158d"
+  },
+  "suite": {
+    "answer_visibility": "public",
+    "authors": [
+      {
+        "email": "maintainers@jacobian.invalid",
+        "name": "Jacobian contributors"
+      }
+    ],
+    "claim_class": "public-case-correctness",
+    "default_execution_profile": "oracle-only",
+    "evaluation_kind": "public-reproduction",
+    "id": "public-reproductions-v1",
+    "keywords": [
+      "mathematics",
+      "jacobian",
+      "public-reproductions",
+      "verification",
+      "offline"
+    ],
+    "name": "jacobian/public-reproductions-v1",
+    "publication_status": "local",
+    "purpose": "Replay known public mathematical cases with deterministic, independently checked outcomes.",
+    "required_provider": "core",
+    "runtime_profile": "core",
+    "scored": true,
+    "suite_header_digest": "sha256:e7e9fb797004a4d3e1df68f4aa5199e50ee3c8a15eec42ad9bdf83e213acfc36",
+    "title": "Jacobian public mathematical reproductions"
+  },
+  "tasks": [
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:0a05b410cfc104c8511bdb16ba531f289ddd90b5773ddbd4f7e15e0b40a1a46c",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "balanced-row-permutation",
+      "member_digest": "sha256:72e5685a223a72218c770057c2dd30461584e581ad02d896d1bed5bf74443e16",
+      "name": "jacobian/balanced-row-permutation",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:767c8b4bff4d7df0e299bbe7950670960bd6c6e57f9eae84bfb260f7ffea3832",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python-minimal-verifier",
+        "verifier_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
+      },
+      "environment_profile": "core-python-minimal-verifier",
+      "id": "closed-set-distance-strengthening-audit",
+      "member_digest": "sha256:6dad91464a450c657921ed23ebdaaeac8d067dfafa22a172e30237eb4f1181e3",
+      "name": "jacobian/closed-set-distance-strengthening-audit",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:900dbaf96a06fa5664137a0f57378830dfb3eb42e903ca22892e68e8f0b6043b",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "coin-process-potential",
+      "member_digest": "sha256:12c75e9d55f36c037d9eee91abc3042998734cdc14972cd7c74c711cd11b55ec",
+      "name": "jacobian/coin-process-potential",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:785797b4475c2fcaf68b44c9cce23f25cf3a224a3060b25703ec74e42e5e8e54",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "cyclic-vector-inequality",
+      "member_digest": "sha256:2556f2807cef9b49b613800d4b02b6eb49519d602ac48c61145232c3f9142d1f",
+      "name": "jacobian/cyclic-vector-inequality",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:db2113fcc1b9b7c71797e19021779106355ff0b1c07259b658a81fd375fefffe",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "gaussian-complex-cancellation",
+      "member_digest": "sha256:d4b99548c520459bb8d6fb6f5e41732024f358e45e696b0debaa79da04251c00",
+      "name": "jacobian/gaussian-complex-cancellation",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:11f5b245f6fe3d1a0a92b6d5e3f47bd62428fe82845d0cd081ac48d1e1c5cc5e",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "gaussian-sixth-moment",
+      "member_digest": "sha256:f1bad3fc2aee0510bff98886e864b27deb4edaac04161aa840193bfcb32c1424",
+      "name": "jacobian/gaussian-sixth-moment",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:1ad929b267772c48369cb109450c7f24ab28868dd7caf88968bbc4b6decbb3c3",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "gaussian-two-sum-fourth-moment",
+      "member_digest": "sha256:77fc9c0a9fd6e55f378abdf98163d37f7fce0126dab0cafe2ce2e8f3d2dea185",
+      "name": "jacobian/gaussian-two-sum-fourth-moment",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:63e21c321d4a6123ef89814dce92813a9d603f509730aa69a5620a31133b2b03",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "integral-circle",
+      "member_digest": "sha256:d5e0f104d44ef778b0bf7c604bd5870fb03af92c28183d2325a96ed8f8f247b3",
+      "name": "jacobian/integral-circle",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:4a60fabd839fa90bf47f2a1120224f4c2ad37a3f6054320f1e75cd81c62848b8",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "integral-projective-plane",
+      "member_digest": "sha256:9266aea78ac447a7d1d985dfc54921335260264f9dd187f041468c5ca31c21aa",
+      "name": "jacobian/integral-projective-plane",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:9f64a16190d4c6826b441e11e3664e981911c52e269edaf261243ea8313aee24",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "jacobian-inverse-obstruction",
+      "member_digest": "sha256:f12eaaac6ae377c29f2e4b6cbf7711d253bcfb04d4a1f4f7194401bd826fd2b9",
+      "name": "jacobian/jacobian-inverse-obstruction",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:42d0c1a510b077bc67028e75aa4cd7d3b58531b2845ee17e8d55d5f65b95bf6c",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "jacobian-keller",
+      "member_digest": "sha256:84d5ee397fd3ecbd94da23c3ccebdf0a2d1c426b75556195dec35fca9ce4f4e1",
+      "name": "jacobian/jacobian-keller",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:966c5e97cf80fd590b4cc1cab745f34b5e1dad2a7c2ba7d06f49ee539bbe20f4",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "jacobian-negative-control",
+      "member_digest": "sha256:12f407c51655085d75486a39c07aeb7244be6361cb1f9fa4468753d720c305d1",
+      "name": "jacobian/jacobian-negative-control",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:65be0a159d1f60e320e04e92a52b03ed55e0dd83211c1a880c0a9434e337982f",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "lean-retrieval",
+      "member_digest": "sha256:97cd2bdf10c60ac49e67384de05454c9d820b58df780a8d8ef0ea1e98ded63c9",
+      "name": "jacobian/lean-retrieval",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:67acd71c27b95efa6a9b86fee2add3906873fb865133ca0e7aa172a6b88e3128",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "lean-transition",
+      "member_digest": "sha256:0b68f57449caf2026f6de862016d043b9ff579dc8456db7608d288af6cc8eeda",
+      "name": "jacobian/lean-transition",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:8ca114036ccb2498c95a473a976034cb666a9a31fa3d33b1d0cdc9fa1483a63e",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "recurrence-fibonacci",
+      "member_digest": "sha256:b5aa0ec0dd176ef6d01c837d3043759ec1b16cd4f57421be1f7f47b053d21cf5",
+      "name": "jacobian/recurrence-fibonacci",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:96fa0a634bdbe6bbdfa686f3bdfa65159886b948e5188732c61d345f5ffb70bc",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "recurrence-linear-eval",
+      "member_digest": "sha256:35de57be2c07e3f67a730aa8759616ec7803c4583c3fefa0d617caedfe9fc7d5",
+      "name": "jacobian/recurrence-linear-eval",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:3875697e26a1440dc2445ccd7a97e8e407fde4df42037712094d80dd6f71b41a",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "recurrence-lucas",
+      "member_digest": "sha256:4dda94f4d2b26d5c2edc603a43bdb9bb6e41d71480cf6f709b449f40120f556f",
+      "name": "jacobian/recurrence-lucas",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:7b872c3611fb7f9741d12a531e19b3f91b1aa9de7478cfba8197a94ba6608bbf",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "recurrence-rational-series",
+      "member_digest": "sha256:b7bad677bf7dee50dbbec72489b148f32aa7bffecc0b0a59d788619012f938c3",
+      "name": "jacobian/recurrence-rational-series",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:44d93194cada581ca434c91b185c0cfbb075df0a6866b3ebba7d609a7562dc0a",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "reduced-point",
+      "member_digest": "sha256:2d62a91de3d046e8548f3daef469484e049ed6dfc61d5dfa8a7f02c100fac767",
+      "name": "jacobian/reduced-point",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:fd37cbc423618c5e8f5454677f6232ff9693e4f002fb10bad0f5e8c3755d0a2b",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "reliability-series-path",
+      "member_digest": "sha256:d83eca9417ebb97e87be633748527c8d51b3afee93d3f12dc36ccee9476177a3",
+      "name": "jacobian/reliability-series-path",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:05aa276fb231002990ec7bc9a7588b5279f11b662a98a774ff3590ed3887f810",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "reliability-single-edge",
+      "member_digest": "sha256:1821ab3987b3b1510d21a76840c6ea56b167b894f7812cff19da019cfde6f9dd",
+      "name": "jacobian/reliability-single-edge",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:943d06f7ded0cb7393352701eee328b1e4019f85818770df4e66477ce89905eb",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "reliability-triangle-fair",
+      "member_digest": "sha256:e107c78c99718151a05a59ccf59b2cb501945a1fe318647eaf6e041b6b336b20",
+      "name": "jacobian/reliability-triangle-fair",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:7be32215f4bb312c889f5576862abdb7b42647196ba1fdc28e80167269ed25d1",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "sat-bool-mus",
+      "member_digest": "sha256:cc67a9c1819f8da13288271405bef9999cec489a64eb3081446b34a83cce5572",
+      "name": "jacobian/sat-bool-mus",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:d89fca2e83944721505cee5b5ac36e242a80fcc7fa2d65a3eec984c6b261fa43",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "sat-erdos-schur-f4",
+      "member_digest": "sha256:6dceb92963159700af8fa3d257d22ee0ce9eadfdec0a47677aa865d1a7184180",
+      "name": "jacobian/sat-erdos-schur-f4",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:1a51d49155e76d912c33773bf2289849c92acc5543e27d3bb7f3a862ba5058c0",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "sat-pigeonhole",
+      "member_digest": "sha256:d9a09b5bfc2b616b7dcf46f73f7d09281a2358d546e13e0f76f8da02f1266836",
+      "name": "jacobian/sat-pigeonhole",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:7fb52297830b8e1986141235046c9d225050b568503f47cb00c3496fa33936aa",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "sat-small",
+      "member_digest": "sha256:04a950987cbbd972e825b7ee810f65f31881bd50c111e5df4a7f108615821ad9",
+      "name": "jacobian/sat-small",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:e9cdbc134b36a57beea1b1fb02c0ee069e29e6e2f55d6e3019e1e296b73d585b",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "smith-rank-deficient",
+      "member_digest": "sha256:7f1e067d47806252b43e2c83c36b66161a1c3eaed1a0a0e1696b57367a7f5897",
+      "name": "jacobian/smith-rank-deficient",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:93503a18f40b1d0cccc10de95ab488a4d5c49ee0dd245e1abb1a5af38a81e67e",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "smith-rectangular",
+      "member_digest": "sha256:9a008ff915697712d2ce108d2af908742b733e0f89f4154a4f285eaa8de5800b",
+      "name": "jacobian/smith-rectangular",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:a46c6dc7120cacd3850c6c109b23a27435b720a3373477a44856ef1d57099a71",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "superposition-proof-replay",
+      "member_digest": "sha256:e5d0a53d118ce0397583871f88e76557f8c272d64b0d713f6899352ffa1b8228",
+      "name": "jacobian/superposition-proof-replay",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:382b05b226ecbeb90c703eb80b25e2da9548d48c8aa68cb24720e8ec8528d894",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "symmetry-colored-reflection",
+      "member_digest": "sha256:f469a5103a01779a132bb390ef7fcffe45ae23c8a2b0ec3ee20ac26d6c1e2ed1",
+      "name": "jacobian/symmetry-colored-reflection",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:707b116977514b1fefe27ed901f1c3cd86af003510e2b518832e8d12adaa91f2",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "symmetry-cycle-rotation",
+      "member_digest": "sha256:2dd6090d53a92636317de25afa272d20527c862ebd74cfbd4bb5723d787bf219",
+      "name": "jacobian/symmetry-cycle-rotation",
+      "required_provider": "core"
+    },
+    {
+      "assurance_ceiling": "COMPUTED",
+      "digest": "sha256:d8db395192c7bbdb02799f41d2ea55716f57a156db23a08be47544d539abbcc3",
+      "environment": {
+        "agent_image": "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+        "allow_apt": false,
+        "profile": "core-python",
+        "verifier_image": "ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e"
+      },
+      "environment_profile": "core-python",
+      "id": "symmetry-identity-subgroup",
+      "member_digest": "sha256:555032694a9186543098419b05938013ec22f81b33e78ef6e94c60a8df5e993f",
+      "name": "jacobian/symmetry-identity-subgroup",
+      "required_provider": "core"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "provenance_status": "historical",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "task_id": "rsa-exponent-domain-audit",
+  "analysis": {
+    "mathematical_moves": [
+      "Split modular exponentiation into unit and nonunit branches and expose the domain obligation for negative exponents."
+    ],
+    "current_capabilities": [],
+    "gap_classes": ["MODEL_REASONING"],
+    "contamination": "PUBLIC_ANSWER_VISIBLE",
+    "candidate_ids": [],
+    "disposition": "NO_NEW_CAPABILITY",
+    "next_action": "Keep the finite residue suite as sanity evidence only and preserve the branch/domain split."
+  }
+}

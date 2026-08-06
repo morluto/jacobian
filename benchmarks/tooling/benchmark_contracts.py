@@ -215,11 +215,11 @@ def _observation_pair_failures() -> list[str]:
     treatment_path = (
         BENCHMARKS
         / "datasets"
-        / "agent-workflow-v1"
+        / "mathematical-benchmarks-v1"
         / "jobs"
         / "jacobian-observation.json"
     )
-    control_path = BENCHMARKS / "config" / "agent-workflow-v1-control.json"
+    control_path = BENCHMARKS / "config" / "mathematical-benchmarks-v1-control.json"
     treatment = _read_json(treatment_path)
     control = _read_json(control_path)
     if not isinstance(treatment, dict) or not isinstance(control, dict):
@@ -315,12 +315,12 @@ def validate_all() -> list[str]:
     failures.extend(_suite_contract_failures(suites))
     failures.extend(
         _validate_job(
-            BENCHMARKS / "config" / "agent-workflow-v1-control.json", suites[0]
+            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control.json", suites[0]
         )
     )
     failures.extend(
         _validate_job(
-            BENCHMARKS / "config" / "agent-workflow-v1-control-proxy.json",
+            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control-proxy.json",
             suites[0],
         )
     )
@@ -328,7 +328,7 @@ def validate_all() -> list[str]:
         _validate_job(
             BENCHMARKS
             / "datasets"
-            / "agent-workflow-v1"
+            / "mathematical-benchmarks-v1"
             / "jobs"
             / "jacobian-observation-proxy.json",
             suites[0],

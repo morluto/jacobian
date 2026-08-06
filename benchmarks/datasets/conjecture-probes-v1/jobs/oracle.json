@@ -1,0 +1,25 @@
+{
+  "jobs_dir": "benchmarks/results/conjecture-probes-v1-oracle",
+  "n_attempts": 1,
+  "timeout_multiplier": 1,
+  "orchestrator": {
+    "type": "local",
+    "n_concurrent_trials": 1,
+    "quiet": false
+  },
+  "environment": {
+    "type": "docker",
+    "force_build": true,
+    "delete": true
+  },
+  "agents": [
+    {
+      "name": "oracle"
+    }
+  ],
+  "datasets": [
+    {
+      "path": "benchmarks/datasets/conjecture-probes-v1"
+    }
+  ]
+}

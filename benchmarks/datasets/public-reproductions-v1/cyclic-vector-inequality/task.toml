@@ -1,0 +1,39 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+[task]
+name = "jacobian/cyclic-vector-inequality"
+version = "1.0.0"
+description = "Certify the sharp universal constant in a cyclic Euclidean-norm inequality."
+keywords = ["inequality", "symbolic", "sharp-constant", "minkowski"]
+[metadata]
+evaluation_kind = "public-reproduction"
+domain = "mathematical-sciences"
+primary_domain = "analysis"
+field = "inequalities"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-dataset-derived-regression"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["regression", "symbolic-inequality", "sharpness", "difficulty-provisional"]
+case_version = "public-reproductions-v1"
+contamination_class = "public-answer-visible-proof-transformed"
+fixture_digest = "sha256:1f009dd9d6afcc8599261d755b876d1e7e88e68bf4d0184c515941b6dcb9d78c"
+derivation = "Derived from AI4Math/IneqMath dev row 12 at revision 3c7c32c786eb77117f3476d7f6d9af8419fa6ecc."
+[agent]
+timeout_sec = 900.0
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

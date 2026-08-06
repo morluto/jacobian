@@ -8,6 +8,7 @@ keywords = ["jacobian-conjecture", "polynomial-map", "collision", "non-invertibi
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
+primary_domain = "algebra"
 field = "algebra"
 assurance_ceiling = "COMPUTED"
 answer_visibility = "public"

@@ -1,0 +1,176 @@
+{
+  "task_id": "jacobian/disjoint-closed-distance-scope-audit",
+  "conclusion": "DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE",
+  "scope": "EXACT_PARAMETRIC_METRIC_COUNTERMODEL",
+  "claimed_assurance": "COMPUTED",
+  "completeness": "COMPLETE",
+  "result": {
+    "horizontal_step": 3,
+    "vertical_scale": 2,
+    "offset": 5,
+    "sample_indices": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "distance_squared": [
+      {
+        "numerator": 1,
+        "denominator": 9
+      },
+      {
+        "numerator": 4,
+        "denominator": 49
+      },
+      {
+        "numerator": 1,
+        "denominator": 16
+      },
+      {
+        "numerator": 4,
+        "denominator": 81
+      },
+      {
+        "numerator": 1,
+        "denominator": 25
+      },
+      {
+        "numerator": 4,
+        "denominator": 121
+      },
+      {
+        "numerator": 1,
+        "denominator": 36
+      },
+      {
+        "numerator": 4,
+        "denominator": 169
+      },
+      {
+        "numerator": 1,
+        "denominator": 49
+      },
+      {
+        "numerator": 4,
+        "denominator": 225
+      }
+    ],
+    "epsilon_witnesses": [
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 2
+        },
+        "index": 9,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 49
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 3
+        },
+        "index": 11,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 64
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 4
+        },
+        "index": 13,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 81
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 5
+        },
+        "index": 15,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 100
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 6
+        },
+        "index": 17,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 121
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 7
+        },
+        "index": 19,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 144
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 8
+        },
+        "index": 21,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 169
+        }
+      },
+      {
+        "epsilon": {
+          "numerator": 1,
+          "denominator": 9
+        },
+        "index": 23,
+        "distance_squared": {
+          "numerator": 1,
+          "denominator": 196
+        }
+      }
+    ],
+    "separation_certificate": {
+      "same_family_lower_bound_squared": {
+        "numerator": 9,
+        "denominator": 1
+      },
+      "cross_family_vertical_nonzero": true,
+      "closedness_reason": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+    },
+    "formal_conclusion": "POSITIVE_DISTANCE",
+    "corrected_conclusion": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
+  },
+  "limitations": [
+    "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
+    "LEAN_ELABORATION_NOT_ASSESSED"
+  ],
+  "evidence": [
+    {
+      "path": "evidence/disjoint-closed-distance-audit.json",
+      "sha256": "sha256:fc153631987c03b041d421a524255b04a698ce504c763edb23c3c564df1d80c5"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"task_id":"jacobian/rational-pole-vieta-audit","conclusion":"FLAGGED_POLE_STEP_INVALID_REPAIRED_SUM","maximum_assurance":"COMPUTED","required_scope":"rational-pole-vieta-audit exact symbolic elimination"}

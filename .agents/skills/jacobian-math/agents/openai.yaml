@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jacobian Math"
+  short_description: "Discover and run exact mathematical operations"
+  default_prompt: "Use Jacobian when its installed mathematical operations are relevant."

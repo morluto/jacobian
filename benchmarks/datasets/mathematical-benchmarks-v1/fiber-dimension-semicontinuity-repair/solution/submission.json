@@ -1,0 +1,24 @@
+{
+  "task_id": "jacobian/fiber-dimension-semicontinuity-repair",
+  "conclusion": "SEMICONTINUITY_PROOF_REPAIRED",
+  "result": {
+    "tensor_repair": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL",
+    "global_repair": "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION",
+    "ideal_generators": [
+      {"terms": [{"coefficient": "1", "exponents": [2, 0]}]},
+      {"terms": [{"coefficient": "1", "exponents": [1, 1]}]},
+      {"terms": [{"coefficient": "1", "exponents": [0, 2]}]}
+    ],
+    "fiber_checks": [
+      {"point": {"x": "0", "y": "0"}, "matrix_rank": 0, "cokernel_dimension": 2},
+      {"point": {"x": "1", "y": "0"}, "matrix_rank": 2, "cokernel_dimension": 0},
+      {"point": {"x": "0", "y": "1"}, "matrix_rank": 2, "cokernel_dimension": 0},
+      {"point": {"x": "1", "y": "1"}, "matrix_rank": 2, "cokernel_dimension": 0}
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "FROZEN_AFFINE_PRESENTATION_AND_IDENTIFIED_PROOF_GAPS",
+  "completeness": "COMPLETE",
+  "evidence": [{"path": "evidence/answer.txt", "sha256": "sha256:5f7735940037b755c2281f16383c9403da69fbb40c7d922559d27f6b3a8777fb"}],
+  "limitations": ["The verifier checks the frozen affine presentation and the two identified proof obligations; it does not formalize the full scheme-theoretic semicontinuity theorem."]
+}

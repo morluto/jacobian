@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "topology": {
+      "items": {
+        "maximum": 15,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 16,
+      "minItems": 2,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "PROPOSED_CONTRACT_TOO_WEAK"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "common_subtopology": {
+          "$ref": "#/$defs/topology"
+        },
+        "diagnosis": {
+          "const": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"
+        },
+        "generated_topology": {
+          "$ref": "#/$defs/topology"
+        },
+        "input_topologies": {
+          "items": {
+            "$ref": "#/$defs/topology"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "type": "array"
+        },
+        "universe_size": {
+          "enum": [
+            3,
+            4
+          ],
+          "type": "integer"
+        },
+        "witness_open_set": {
+          "maximum": 15,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "universe_size",
+        "input_topologies",
+        "generated_topology",
+        "common_subtopology",
+        "witness_open_set",
+        "diagnosis"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "topology-generation-order-audit finite semantic countermodel",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/topology-generation-order-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

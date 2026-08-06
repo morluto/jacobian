@@ -19,17 +19,17 @@ LIMITATION = "The external algebraic-independence theorem for delta and its deri
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
     return (
         any(
             term in text
-            for term in ("algebraic independence", "algebraic-independence", "transcendence")
+            for term in (
+                "algebraic independence",
+                "algebraic-independence",
+                "transcendence",
+            )
         )
         and any(term in text for term in ("trusted", "assum", "external", "premise"))
         and any(
@@ -37,6 +37,8 @@ def _limitations_valid(value: object) -> bool:
             for term in ("not verified", "not proved", "not checked", "unverified")
         )
     )
+
+
 # Published reward-bearing prose obligations for evidence/answer.txt.  Each
 # fact has several equivalent formulations, and the file is scanned in chunks
 # so evidence size is not itself a hidden validity condition.

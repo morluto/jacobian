@@ -109,3 +109,77 @@ def test_false_verified_claim_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(tmp_path, lambda s: s.__setitem__("claimed_assurance", "VERIFIED"))
     assert reward["false_certification"] is True
     assert reward["reward"] == 0.0
+
+
+def test_equivalent_evidence_wording_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "The two affine schemes each have three rational points, and the "
+        "induced map gives a bijection between them. The algebra A contains "
+        "a nonzero nilpotent element of order three. Since B is reduced, "
+        "the two schemes cannot be isomorphic.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
+def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text("The quick brown fox jumps over the lazy dog.\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_large_evidence_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    header = (
+        "Both affine schemes are nonempty and have the same three rational "
+        "points under the induced map. A has a nonzero order-three nilpotent "
+        "while B is reduced, so they are not isomorphic.\n"
+    )
+    # Append a large derivation exceeding the former 65536-byte cap.
+    evidence.write_text(header + "x" * 70000 + "\n")
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward["evidence_validity"] == 1.0
+    assert reward["reward"] == 1.0
+
+
+def test_malformed_point_entries_do_not_crash(tmp_path: Path) -> None:
+    reward = _mutate(
+        tmp_path,
+        lambda s: s["result"].__setitem__("a_points", [{}, {}, {}]),
+    )
+    assert reward["correctness"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_wrong_length_nilpotent_vector_does_not_crash(tmp_path: Path) -> None:
+    reward = _mutate(
+        tmp_path,
+        lambda s: s["result"]["nilpotent"].__setitem__("vector", [0, 0, 0, 0, 0, 0]),
+    )
+    assert reward["correctness"] == 0.0
+    assert reward["reward"] == 0.0
+
+
+def test_nonnumeric_nilpotent_vector_does_not_crash(tmp_path: Path) -> None:
+    reward = _mutate(
+        tmp_path,
+        lambda s: s["result"]["nilpotent"].__setitem__("vector", [0, 0, 0, 0, "x"]),
+    )
+    assert reward["correctness"] == 0.0
+    assert reward["reward"] == 0.0

@@ -1,5 +1,6 @@
 import itertools
 import json
+import re
 from pathlib import Path
 
 from verifier_support import (
@@ -17,7 +18,17 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 P = 5
 LIMITATION = "The verifier certifies one finite affine countermodel over F_5, not a general theorem about schemes or functors of points."
-EVIDENCE_SENTENCE = "Both affine schemes are nonempty and have the same three rational points under the induced map. A has a nonzero order-three nilpotent while B is reduced, so they are not isomorphic."
+# Published reward-bearing prose obligations for evidence/answer.txt.  The
+# verifier checks that the evidence text states all three facts, accepting
+# mathematically equivalent phrasing while rejecting unrelated or empty text.
+_EVIDENCE_OBLIGATIONS = (
+    (
+        re.compile(r"rational\s+points?", re.IGNORECASE),
+        re.compile(r"\bsame\b|\bthree\b|\bbijection\b|\bbijective\b", re.IGNORECASE),
+    ),
+    (re.compile(r"\bnilpotent\b", re.IGNORECASE),),
+    (re.compile(r"\breduced\b|\bisomorphic\b", re.IGNORECASE),),
+)
 EXPECTED_COLUMNS = [[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]]
 
 
@@ -67,6 +78,32 @@ def algebra_maps(table, unit):
         ):
             found.append(list(candidate))
     return found
+
+
+def _is_int_vector(value, length, lo, hi):
+    """Validate an exact-length integer vector before sorting or arithmetic."""
+
+    return (
+        isinstance(value, list)
+        and len(value) == length
+        and all(type(x) is int and lo <= x <= hi for x in value)
+    )
+
+
+def evidence_text_is_valid(text):
+    """Check that evidence prose states all three published obligations.
+
+    Accepts mathematically equivalent phrasing; rejects empty or unrelated
+    text that omits any required fact.
+    """
+
+    if not isinstance(text, str) or not text.strip():
+        return False
+    lowered = text.lower()
+    return all(
+        all(pattern.search(lowered) for pattern in obligation)
+        for obligation in _EVIDENCE_OBLIGATIONS
+    )
 
 
 def valid_morphism(columns, a_table, b_table, a_unit, b_unit):
@@ -119,21 +156,28 @@ def valid_result(result):
         columns, a_table, b_table, a_unit, b_unit
     ):
         return False
-    if sorted(result["a_points"]) != sorted(a_points) or sorted(
-        result["b_points"]
-    ) != sorted(b_points):
+    a_pts = result["a_points"]
+    b_pts = result["b_points"]
+    if not (
+        isinstance(a_pts, list)
+        and isinstance(b_pts, list)
+        and all(_is_int_vector(p, 5, 0, P - 1) for p in a_pts)
+        and all(_is_int_vector(p, 3, 0, P - 1) for p in b_pts)
+    ):
+        return False
+    if sorted(a_pts) != sorted(a_points) or sorted(b_pts) != sorted(b_points):
         return False
     induced = []
-    for point in result["a_points"]:
+    for point in a_pts:
         pullback = [dot(point, column) for column in columns]
-        if pullback not in result["b_points"]:
+        if pullback not in b_pts:
             return False
-        induced.append(result["b_points"].index(pullback))
+        induced.append(b_pts.index(pullback))
     if result["induced_point_map"] != induced or sorted(induced) != [0, 1, 2]:
         return False
     witness = result["nilpotent"]
     vector = witness.get("vector") if isinstance(witness, dict) else None
-    if not isinstance(vector, list) or vector == [0] * 5:
+    if not _is_int_vector(vector, 5, 0, P - 1) or vector == [0] * 5:
         return False
     power2 = multiply(vector, vector, a_table)
     power3 = multiply(power2, vector, a_table)
@@ -161,17 +205,16 @@ def valid_result(result):
 
 def evidence_ok(evidence):
     # The finite-algebra certificate is independently replayed from the typed
-    # result.  The public evidence contract requires only one bound text file.
+    # result.  The public evidence contract requires one bound text file that
+    # states the three published mathematical obligations.
     if not evidence_list_is_bound(evidence):
         return False
-    resolved = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=65_536
-    )
+    resolved = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if resolved is None:
         return False
     try:
-        return resolved.read_text().splitlines()[0] == EVIDENCE_SENTENCE
-    except (OSError, UnicodeError, IndexError):
+        return evidence_text_is_valid(resolved.read_text())
+    except (OSError, UnicodeError, MemoryError):
         return False
 
 

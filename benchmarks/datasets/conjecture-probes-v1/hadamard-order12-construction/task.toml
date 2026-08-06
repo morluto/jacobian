@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/hadamard-order12-construction"
+version = "1.0.0"
+description = "Construct and exactly certify a normalized Hadamard matrix of order 12."
+keywords = ["combinatorics", "hadamard-matrix", "exact-linear-algebra", "construction", "conjecture-probe"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "combinatorics"
+field = "design-theory"
+assurance_ceiling = "CHECKED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "authored-conjecture-probe"
+fixture_digest = "sha256:e6342e43bac8fb5814706966e2d84877864467d347ac1ccdf8bdabcbf50d0e61"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "combinatorics", "matrix-construction", "exact-arithmetic", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "authored-finite-conjecture-probe"
+derivation = "Authored order-12 construction probe derived from retained conjecture row C-007."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

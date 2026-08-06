@@ -1,0 +1,8 @@
+{
+  "task_id": "jacobian/hadamard-order12-construction",
+  "conjecture_id": "C-007",
+  "order": 12,
+  "entry_domain": [-1, 1],
+  "normalization": "FIRST_ROW_AND_COLUMN_POSITIVE",
+  "scope_identity": "hadamard-order12-construction:normalized-v1"
+}

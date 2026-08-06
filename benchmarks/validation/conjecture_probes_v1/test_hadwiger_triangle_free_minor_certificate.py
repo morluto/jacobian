@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from benchmarks.validation._verifier_child import run_verifier_in_child
+
+ROOT = Path(__file__).parents[3]
+TASK = (
+    ROOT
+    / "benchmarks/datasets/conjecture-probes-v1/hadwiger-triangle-free-minor-certificate"
+)
+
+
+def case(tmp_path):
+    app, logs = tmp_path / "app", tmp_path / "logs"
+    app.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "environment/input.json", app / "input.json")
+    subprocess.run(
+        [sys.executable, str(TASK / "solution/solve.py"), "--root", str(app)],
+        check=True,
+    )
+    return app, logs, json.loads((app / "submission.json").read_text())
+
+
+def write(app, s):
+    payload = {
+        "schema_version": "1",
+        "task_id": s["task_id"],
+        "result": s["result"],
+        "limitations": s["limitations"],
+    }
+    e = app / "evidence/answer.txt"
+    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+
+
+def run(app, logs):
+    return run_verifier_in_child(task=TASK, app=app, logs=logs)
+
+
+def test_oracle_and_relabeling_pass(tmp_path):
+    app, logs, _ = case(tmp_path)
+    assert run(app, logs)["aggregate_reward"] == 1.0
+    app, logs, s = case(tmp_path / "perm")
+    perm = list(reversed(range(11)))
+    s["result"]["edges"] = sorted(
+        [sorted([perm[a], perm[b]]) for a, b in s["result"]["edges"]]
+    )
+    colors = [0] * 11
+    for old, c in enumerate(s["result"]["four_coloring"]):
+        colors[perm[old]] = c
+    s["result"]["four_coloring"] = colors
+    s["result"]["branch_sets"] = [
+        [perm[v] for v in branch] for branch in s["result"]["branch_sets"]
+    ]
+    write(app, s)
+    assert run(app, logs)["aggregate_reward"] == 1.0
+
+
+def test_bad_coloring_and_disconnected_branch_fail(tmp_path):
+    app, logs, s = case(tmp_path)
+    s["result"]["four_coloring"][1] = s["result"]["four_coloring"][0]
+    write(app, s)
+    assert run(app, logs)["mathematics"] == 0.0
+    app, logs, s = case(tmp_path / "branch")
+    s["result"]["branch_sets"][2] = [2, 5]
+    write(app, s)
+    assert run(app, logs)["aggregate_reward"] == 0.0
+
+
+def test_triangle_and_duplicate_edge_fail(tmp_path):
+    app, logs, s = case(tmp_path)
+    s["result"]["edges"][0] = [0, 2]
+    write(app, s)
+    assert run(app, logs)["aggregate_reward"] == 0.0
+    app, logs, s = case(tmp_path / "dup")
+    s["result"]["edges"][-1] = s["result"]["edges"][0]
+    write(app, s)
+    assert run(app, logs)["aggregate_reward"] == 0.0
+
+
+def test_false_verified_and_tampered_input_fail(tmp_path):
+    app, logs, s = case(tmp_path)
+    s["claimed_assurance"] = "VERIFIED"
+    write(app, s)
+    assert run(app, logs)["false_certification"] is True
+    app, logs, _ = case(tmp_path / "input")
+    (app / "input.json").write_text("{}\n")
+    r = run(app, logs)
+    assert (
+        r["input_binding"] == 0.0
+        and r["mathematics"] == 1.0
+        and r["aggregate_reward"] == 0.0
+    )

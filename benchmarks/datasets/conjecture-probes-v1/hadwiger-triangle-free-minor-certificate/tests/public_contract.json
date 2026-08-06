@@ -1,0 +1,250 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "conclusion": {
+    "const": "FINITE_HADWIGER_K4_CERTIFICATE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "ONE_TRIANGLE_FREE_11_VERTEX_GRAPH",
+      "EXHAUSTIVE_THREE_COLOR_REJECTION",
+      "NO_GLOBAL_HADWIGER_CONCLUSION"
+    ]
+  },
+  "public_notes": "Exact finite coloring and minor replay only; no global Hadwiger conclusion.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "branch": {
+      "items": {
+        "maximum": 10,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "edge": {
+      "items": {
+        "maximum": 10,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "triangle-free-11-vertex-hadwiger-instance-v1",
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "branch_sets": {
+        "items": {
+          "$ref": "#/$defs/branch"
+        },
+        "maxItems": 4,
+        "minItems": 4,
+        "type": "array"
+      },
+      "chromatic_number": {
+        "const": 4
+      },
+      "edges": {
+        "items": {
+          "$ref": "#/$defs/edge"
+        },
+        "maxItems": 20,
+        "minItems": 20,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "four_coloring": {
+        "items": {
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 11,
+        "minItems": 11,
+        "type": "array"
+      },
+      "minor_order": {
+        "const": 4
+      }
+    },
+    "required": [
+      "edges",
+      "four_coloring",
+      "branch_sets",
+      "chromatic_number",
+      "minor_order"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "branch": {
+        "items": {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 8,
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "edge": {
+        "items": {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "FINITE_HADWIGER_K4_CERTIFICATE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "ONE_TRIANGLE_FREE_11_VERTEX_GRAPH",
+          "EXHAUSTIVE_THREE_COLOR_REJECTION",
+          "NO_GLOBAL_HADWIGER_CONCLUSION"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "branch_sets": {
+            "items": {
+              "$ref": "#/$defs/branch"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "chromatic_number": {
+            "const": 4
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/$defs/edge"
+            },
+            "maxItems": 20,
+            "minItems": 20,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "four_coloring": {
+            "items": {
+              "maximum": 3,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 11,
+            "minItems": 11,
+            "type": "array"
+          },
+          "minor_order": {
+            "const": 4
+          }
+        },
+        "required": [
+          "edges",
+          "four_coloring",
+          "branch_sets",
+          "chromatic_number",
+          "minor_order"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "triangle-free-11-vertex-hadwiger-instance-v1",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/hadwiger-triangle-free-minor-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/hadwiger-triangle-free-minor-certificate",
+  "verification_record": null
+}

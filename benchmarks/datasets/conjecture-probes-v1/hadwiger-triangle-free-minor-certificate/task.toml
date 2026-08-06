@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/hadwiger-triangle-free-minor-certificate"
+version="1.0.0"
+description="Construct a triangle-free 4-chromatic graph with an exact K4 minor certificate."
+keywords=["hadwiger","graph-coloring","clique-minor","triangle-free"]
+[metadata]
+evaluation_kind="conjecture-probe"
+domain="mathematical-sciences"
+primary_domain="graph-theory"
+field="graph-minors"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:fc4ba259102fdf0f361c0393e7b540738ef18969631ebfb44a499c70b41ba0a5"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","graph-coloring","clique-minor","exhaustive-verification","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-finite-conjecture-probe"
+derivation="Derived from retained spreadsheet row C-008; the finite graph contract is authored and independently checked."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

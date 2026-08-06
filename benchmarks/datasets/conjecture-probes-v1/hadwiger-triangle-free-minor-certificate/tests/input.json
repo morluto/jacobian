@@ -1,0 +1,1 @@
+{"task_id":"jacobian/hadwiger-triangle-free-minor-certificate","conjecture_id":"C-008","vertex_count":11,"edge_count":20,"required_chromatic_number":4,"required_minor_order":4,"require_triangle_free":true,"scope":"triangle-free-11-vertex-hadwiger-instance-v1"}

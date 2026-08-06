@@ -174,16 +174,19 @@ def test_adapter_cannot_forge_provider_provenance(
     core = capability_core_services.core
     capability_core_services.installation.register_capability(ForgedProviderAdapter())
 
-    with pytest.raises(
-        CapabilityError,
-        match="provider runtime differs from its descriptor",
-    ):
-        core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="example.forged-provider",
-                input={},
-            )
+    result = core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="example.forged-provider",
+            input={},
         )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
+    assert result.diagnostics[0].stage == "adapter_execution"
+    assert result.diagnostics[0].message == (
+        "The adapter returned a result from a different provider runtime."
+    )
 
 
 def test_external_adapter_loads_from_an_operator_entrypoint(

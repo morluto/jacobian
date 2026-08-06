@@ -7,6 +7,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from functools import lru_cache
+
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
@@ -48,6 +50,7 @@ def _read_toml(path: Path) -> dict[str, Any]:
     return value
 
 
+@lru_cache(maxsize=16)
 def _validator(schema_name: str) -> Draft202012Validator:
     path = SCHEMAS / schema_name
     schema = _read_json(path)

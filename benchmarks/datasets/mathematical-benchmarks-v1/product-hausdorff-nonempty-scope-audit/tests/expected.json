@@ -1,1 +1,1 @@
-{"task_id":"jacobian/product-hausdorff-nonempty-scope-audit","conclusion":"FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS"}
+{"task_id":"jacobian/product-hausdorff-nonempty-scope-audit","conclusion":"EMPTY_FACTOR_MASKS_NON_HAUSDORFF_FACTOR"}

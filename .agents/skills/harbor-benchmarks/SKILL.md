@@ -111,17 +111,26 @@ Use the pinned Harbor runner from the repository:
 ```sh
 uvx --from harbor==0.20.0 harbor --version
 make harbor-plan BASE=origin/main
-make harbor-sync
-make harbor-check-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
-make harbor-oracle-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
+make harbor-prepare-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
+make harbor-validate-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
 ```
 
-The selected-task commands are the normal leaf-task gates and require an
-explicit task selection. Use the full `make harbor-check` and explicitly
+`harbor-prepare-task` is the explicitly mutating authoring step. It formats only
+the selected task Python and dedicated validation leaf, performs scoped public
+contract and verifier checksum synchronization, and reports exactly which
+generated files changed. `harbor-validate-task` is the complete source-read-only
+leaf gate: it resolves membership and planner-owned host selectors once, runs
+static quality before contracts, executes the selected leaf and generic tests
+with an isolated worktree-local pytest directory, then runs exact task Oracles
+serially and reports timings, digests, and evidence paths.
+
+Both commands require an explicit task selection. The lower-level
+`harbor-sync`, `harbor-check-task`, and `harbor-oracle-task` targets remain
+available for a narrow edit loop. Use the full `make harbor-check` and explicitly
 scoped `make harbor-oracle` paths for shared tooling, schemas, registry, suite
-policy, or other control-plane changes. A full dataset Oracle requires
-`FULL=1`; ordinary Oracle runs require `TASKS` and never expand an omitted
-selection implicitly.
+policy, or other control-plane changes. A full dataset Oracle requires `FULL=1`;
+ordinary Oracle runs require `TASKS` and never expand an omitted selection
+implicitly.
 
 After any input, instruction, metadata, verifier, dependency, image, or task
 contract change:
@@ -157,9 +166,11 @@ formatting applies to the entire `benchmarks/` tree, including task verifier
 code under `benchmarks/datasets/<dataset>/<task-id>/tests/verifier.py`.
 
 After any verifier Python (`tests/verifier.py`) or Dockerfile change, run
-`make harbor-sync` to update the verifier checksum label embedded in each
-task's `tests/Dockerfile`. The `harbor-contracts` gate rejects stale checksum
-labels; `harbor-sync` recomputes them from the current verifier source.
+`make harbor-prepare-task DATASET=... TASKS="..."` to update the verifier
+checksum label embedded in each task's `tests/Dockerfile`. The
+`harbor-contracts` gate rejects stale checksum labels; the preparation command
+uses the scoped `harbor-sync` operations to recompute them from current verifier
+source.
 
 ### Validation regression layout
 

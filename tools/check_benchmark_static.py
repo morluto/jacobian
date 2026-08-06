@@ -24,11 +24,16 @@ from benchmarks.tooling.command_runner import (  # noqa: E402
     run_tool_command,
 )
 
-RUFF_TARGETS = ("benchmarks", "tools/check_benchmark_static.py")
+RUFF_TARGETS = (
+    "benchmarks",
+    "tools/check_benchmark_static.py",
+    "tools/harbor_task_workflow.py",
+)
 MYPY_TARGETS = (
     "tools/check_benchmark_adapters.py",
     "tools/check_benchmark_contracts.py",
     "tools/check_benchmark_static.py",
+    "tools/harbor_task_workflow.py",
 )
 
 

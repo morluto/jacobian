@@ -23,6 +23,15 @@ the Harbor skill owns dataset layout and repository commands.
    solution, hidden verifier logic, private authorization records, or Oracle
    fixtures merely to explain the format.
 
+   Use `tests/verifier_contract.json` as the sole task-local declaration of
+   behavior consumed by generic verifier tests. Keep it versioned and validate
+   it against a closed schema: boolean fields must be exact JSON booleans,
+   unknown keys and unsupported versions fail closed, and missing metadata must
+   not silently opt a task into exceptional behavior. Do not add parallel
+   metadata files, fields on unrelated public-contract models, or global
+   task-name registries for input-binding, scope, assurance, or diagnostic
+   exceptions.
+
 2. Trace every acceptance path:
 
    `input file → envelope → typed structure → semantic claim → evidence/scope → metrics → reward`
@@ -63,6 +72,15 @@ the Harbor skill owns dataset layout and repository commands.
    documented in the visible contract, reject unrelated text, and accept
    mathematically equivalent phrasing.
 
+   Minimize the semantic obligations before implementing prose checks. Require
+   only logically independent facts that the evidence must contribute. If the
+   typed certificate plus one checked fact already entails a conclusion, do
+   not also require a rhetorical sentence restating that conclusion. For
+   example, a verifier that proves the submitted corrected condition fails
+   must not additionally require the solver to say “therefore this does not
+   refute the repair.” Keep such implications in verifier-owned mathematics,
+   not in preferred wording.
+
    For streamed prose verifiers, preserve the local relationship between the
    claim, its scope, and any negation; independent lexical matches are not a
    sufficient semantic parser. Add regressions for scope-before-claim and
@@ -86,6 +104,13 @@ the Harbor skill owns dataset layout and repository commands.
    verifier still emits `reward.json` without crashing. Include a large valid
    evidence artifact to prove that no undocumented byte cap is present.
 
+   Include at least one terse numeric or structural explanation fixture built
+   independently from the public contract. It must express the required facts
+   without reusing the canonical answer's labels, rhetorical conclusions, or
+   sentence fragments. Do not inspect hidden solution text solely to construct
+   this fixture; the point is to prove semantic acceptance rather than encode a
+   second preferred answer.
+
 7. Validate the final tree and handoff. Run focused tests, deliberate negative
    cases, the selected Oracle, and the repository's planned gate. If shared
    verifier support changes, migrate only deliberately selected task-local
@@ -96,6 +121,15 @@ the Harbor skill owns dataset layout and repository commands.
    task-local Dockerfile checksum label (e.g. `make harbor-sync`) and verify
    it matches `sha256sum` of the final `verifier.py`; a stale label fails
    `validate_task_topology` and blocks the task.
+
+   If an Oracle run earns full mathematical correctness but zero evidence
+   validity, diagnose the prose recognizer without reading or copying hidden
+   answer text. Instrument or invoke the matcher to report only a boolean map
+   of documented semantic clauses and contradiction checks. Do not print,
+   tokenize, quote, or mine n-grams from the Oracle artifact. Repair the public
+   semantic rule, write a fresh regression from the visible contract, and then
+   rerun every check invalidated by the verifier change, including the exact
+   Oracle.
 
 Read [references/verifier-contract.md](references/verifier-contract.md) for the
 detailed checklist and anti-pattern catalogue.

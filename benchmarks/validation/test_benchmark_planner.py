@@ -129,6 +129,7 @@ def test_planner_digest_binds_to_planner_and_path_policy_sources() -> None:
         ".github/scripts/validate-benchmark-plan",
         ".github/workflows/benchmarks.yml",
         "Makefile",
+        "tools/harbor_task_workflow.py",
     ],
 )
 def test_benchmark_control_plane_changes_run_contract_checks(path: str) -> None:

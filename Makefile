@@ -15,7 +15,7 @@ ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
-PUBLIC_COMMANDS := help setup check check-changed ci-plan test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e docs-command-check docs-linkcheck harbor-plan harbor-execution-check harbor-check-task harbor-oracle-task npm-test test-all-ci check-static deploy-check
+PUBLIC_COMMANDS := help setup check check-changed ci-plan test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e docs-command-check docs-linkcheck harbor-plan harbor-prepare-task harbor-validate-task harbor-execution-check harbor-check-task harbor-oracle-task npm-test test-all-ci check-static deploy-check
 
 ifneq ($(strip $(PATHS)),)
 PATHS_FILE := $(shell mktemp)
@@ -26,7 +26,7 @@ endif
 # in pyproject.toml: direct pytest invocations must not silently inherit a
 # signal-based deadline that cannot interrupt a native solver.  Process and
 # provider lanes run risky work in killable children and set their own deadline.
-.PHONY: help help-all uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare codex-visibility provider-eval clean docs-command-check docs-linkcheck deploy-check
+.PHONY: help help-all uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture ci-plan test-plan test-changed check-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e test-affected test-all-ci test-compatibility test-stress test-ordering duplicate-code npm-test todo-check coverage build check precommit check-static harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke agent-eval agent-eval-validate agent-eval-compare codex-visibility provider-eval clean docs-command-check docs-linkcheck deploy-check
 
 help: ## Show available developer commands.
 	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian common developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / && ($$1 in wanted) {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -302,6 +302,18 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	cat "$$tmp_dir/plan.txt"; \
 	echo "Plan receipt:"; \
 	cat "$$tmp_dir/receipt.json"
+
+harbor-prepare-task: ## Format and sync selected Harbor tasks (DATASET=..., TASKS="...").
+	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
+	@test -n "$(TASKS)" || { echo "TASKS is required; refusing an unscoped preparation" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/harbor_task_workflow.py prepare \
+		--dataset "$(DATASET)" --tasks $(TASKS)
+
+harbor-validate-task: ## Run the complete selected-task static, host, and Oracle gate.
+	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
+	@test -n "$(TASKS)" || { echo "TASKS is required; refusing an implicit full-dataset validation" >&2; exit 2; }
+	$(HARBOR_PYTHON) tools/harbor_task_workflow.py validate \
+		--dataset "$(DATASET)" --tasks $(TASKS)
 
 harbor-sync: ## Update verifier checksum labels for selected tasks (DATASET=... TASKS="...").
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }

@@ -21,7 +21,7 @@ capability membership.
 | Documentation, benchmark README, or `benchmarks/validation/` | `make docs-linkcheck` | None |
 | Focused Python behavior | `make test-plan BASE=<revision>`, the selected lane, then `make check` | None |
 | Harbor job JSON, MCP config, job-level Compose overlay, or execution helper | `make harbor-execution-check` | None |
-| Benchmark task input or verifier | `make harbor-check-task DATASET=... TASKS=...`, then `make harbor-oracle-task DATASET=... TASKS=...` | Exact selected-task Oracle |
+| Benchmark task input or verifier | `make harbor-prepare-task DATASET=... TASKS="..."`, then `make harbor-validate-task DATASET=... TASKS="..."` | Exact selected-task Oracle |
 | Deployment entrypoint | `make deploy-check` | None |
 | CI, dependencies, or unknown paths | `make check-static` plus affected tests | As required by the selected plan |
 
@@ -77,6 +77,18 @@ modules for focused changes, the changed validation file itself, and the full
 `benchmarks/validation` suite, sharded in hosted CI, for shared or unclassified
 infrastructure. To reproduce one selected host check locally, run
 `make harbor-validation-tests TESTS=<pytest-file-or-directory>`.
+
+For task authoring, `make harbor-prepare-task DATASET=... TASKS="..."` is the
+explicitly mutating preparation step. It formats only Python owned by the
+selected task and its dedicated validation leaf, runs scoped public-contract
+and verifier-checksum synchronization, and reports every generated file that
+changed. Follow it with `make harbor-validate-task DATASET=... TASKS="..."` for
+the complete source-read-only leaf gate. That command resolves membership and
+planner selectors once, fails fast through static quality and contracts, runs
+the selected host tests serially in a worktree-local temporary pytest directory,
+then runs each exact Oracle serially. Its summary includes per-stage timings and
+the resulting task digest and Oracle evidence path.
+
 Tests can be narrowed without learning another wrapper:
 
 ```sh
@@ -151,7 +163,7 @@ aid; `make check` and CI remain the handoff gates.
 | --- | --- | --- |
 | Docs only | `make docs-linkcheck` | Documentation |
 | Focused Python | affected target, then `make check` | Planned Python/static/package lanes |
-| Benchmark task or verifier | `make harbor-check-task DATASET=... TASKS=...` and `make harbor-oracle-task DATASET=... TASKS=...` | Exact task contract and Oracle |
+| Benchmark task or verifier | `make harbor-prepare-task DATASET=... TASKS="..."`, then `make harbor-validate-task DATASET=... TASKS="..."` | Exact task contract, planner-selected host tests, and Oracle |
 | Benchmark README or validation regression | focused Harbor checks | Contract checks; no Oracle |
 | Lean runtime | focused `make test-lean`, then `make check` | Lean plus affected lanes |
 | CI, dependencies, or unknown paths | `make check-static` plus affected tests | Fail-closed functional lanes |

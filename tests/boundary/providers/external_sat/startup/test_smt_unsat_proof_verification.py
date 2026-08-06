@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -283,7 +282,7 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
     ("exception", "expected_status", "expected_output_status"),
     [
         (
-            subprocess.TimeoutExpired(cmd=("carcara",), timeout=1),
+            TimeoutError("checker execution timed out"),
             ExecutionStatus.TIMEOUT,
             "TIMEOUT",
         ),

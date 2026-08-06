@@ -27,11 +27,15 @@ def test_oracle_transfer_is_accepted(tmp_path: Path) -> None:
     assert reward["reward"] == 1.0
 
 
-def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
+def test_published_evidence_sentence_needs_no_private_marker(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     evidence = app / "evidence/answer.txt"
-    evidence.write_text("Exact frozen calculation supplied in submission.json.\n")
+    evidence.write_text(
+        "The first and second coordinate changes are birational with the displayed "
+        "inverse formulas. The conjugate norm is computed exactly over QQ. The "
+        "modular-form independence theorem remains a trusted premise.\n"
+    )
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)

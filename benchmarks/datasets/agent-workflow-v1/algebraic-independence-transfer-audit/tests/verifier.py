@@ -6,12 +6,18 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."
+EVIDENCE_SENTENCE = (
+    "The first and second coordinate changes are birational with the displayed "
+    "inverse formulas. The conjugate norm is computed exactly over QQ. The "
+    "modular-form independence theorem remains a trusted premise."
+)
 
 
 def add(*polynomials):
@@ -115,10 +121,18 @@ def valid_result(result):
 
 
 def evidence_ok(evidence):
-    # The typed result is independently replayed below.  The public evidence
-    # contract promises only one digest-bound text artifact, not a second
-    # private serialization or particular prose wording.
-    return evidence_list_is_bound(evidence)
+    if not evidence_list_is_bound(evidence, max_bytes=65536):
+        return False
+    target = resolve_evidence(
+        evidence[0], expected_path="evidence/answer.txt", max_bytes=65536
+    )
+    try:
+        return (
+            target is not None
+            and target.read_text().splitlines()[0] == EVIDENCE_SENTENCE
+        )
+    except (OSError, UnicodeError, IndexError, MemoryError):
+        return False
 
 
 def main():

@@ -6,17 +6,21 @@
 ### Features
 
 * **benchmarks:** normalize reasoning protocol evidence ([4e0abb2](https://github.com/morluto/jacobian/commit/4e0abb28f20f34900a61b456a94bbfa2a17af186))
+* **codex:** make Jacobian math affordances visible and reduce tool context cost ([#563](https://github.com/morluto/jacobian/issues/563)) ([#564](https://github.com/morluto/jacobian/issues/564))
+* **codex:** improve direct math invocation efficiency ([#567](https://github.com/morluto/jacobian/issues/567))
 * **combinatorics:** add verified difference-set decisions ([#436](https://github.com/morluto/jacobian/issues/436)) ([757667d](https://github.com/morluto/jacobian/commit/757667d209b9be7417f2d89a0653ca1898df2b89))
 * **evaluations:** publish digest-bound Jacobian images ([b8424f8](https://github.com/morluto/jacobian/commit/b8424f8ac0ed554c07f4c4c767d699c139ca2d0a))
 * **mcp:** add experimental math tool surface ([1e2a82f](https://github.com/morluto/jacobian/commit/1e2a82f1968e13a9b20efc0e0ace249e6c4c2fd9))
 * **mcp:** make math tool names canonical ([98a3213](https://github.com/morluto/jacobian/commit/98a32134e26fcb2ac2166e10ab7c02f55b85a1e2))
 * **mcp:** require bounded reasoning logs ([8f04639](https://github.com/morluto/jacobian/commit/8f04639a2fa0aac79e96f9480cd30e0ef238ffa9))
+* **npm:** add a guided one-line installer ([#568](https://github.com/morluto/jacobian/issues/568))
 
 
 ### Bug Fixes
 
 * align generated contracts and evaluation evidence ([15b4746](https://github.com/morluto/jacobian/commit/15b474620b220a369d62fb29b96c90b1acee8da5))
 * align symbolic coordination evidence diagnostics ([baba112](https://github.com/morluto/jacobian/commit/baba112883caf30c77be6fab9820e312795356df))
+* **npm:** consume streamed installers before early exits ([#569](https://github.com/morluto/jacobian/issues/569))
 * **benchmark:** close bounded-variation verifier review gaps ([1508b06](https://github.com/morluto/jacobian/commit/1508b06b933202ac8049cd6ef2eddabc811574da))
 * **benchmarks:** accept EOF-terminated Steiner certificates ([d8cf7cf](https://github.com/morluto/jacobian/commit/d8cf7cf685cf79e58f3b14ff65402ef744b453e0))
 * **benchmarks:** accept rational finite-support evidence ([1d19b05](https://github.com/morluto/jacobian/commit/1d19b0521e126c2362c52801bf8750c8dc2d7816))

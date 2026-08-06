@@ -4,8 +4,8 @@
   "assurance_ceiling": "COMPUTED",
   "conclusion": {"const": "EXPLICIT_TRANSFER_CHAIN_REPAIRS_COMPRESSED_PROOF"},
   "evidence": {"allowed_paths": ["evidence/answer.txt"], "digest_pattern": "^sha256:[0-9a-f]{64}$", "max_items": 1, "media_types": ["text/plain"], "min_items": 1, "payload_shape": null},
-  "limitations": {"type": "array", "items": {"type": "string"}},
-  "public_notes": "Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently.",
+  "limitations": {"type": "array", "const": ["The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."]},
+  "public_notes": "Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently. The limitations array must exactly state: The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here.",
   "required_artifact_filenames": ["evidence/answer.txt"],
   "schema_definitions": {
     "term": {"type": "object", "additionalProperties": false, "properties": {"coefficient": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"}, "exponents": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": 0, "maximum": 8}}}, "required": ["coefficient", "exponents"]},
@@ -37,7 +37,7 @@
       "completeness": {"const": "COMPLETE"},
       "conclusion": {"const": "EXPLICIT_TRANSFER_CHAIN_REPAIRS_COMPRESSED_PROOF"},
       "evidence": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "evidence/answer.txt"}, "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
-      "limitations": {"type": "array", "items": {"type": "string"}},
+      "limitations": {"type": "array", "const": ["The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."]},
       "result": {
         "type": "object", "additionalProperties": false,
         "properties": {

@@ -10,12 +10,12 @@ Submit the exact rational definitions
 - the inverse formulas `Ddelta=delta*P` and `D2delta=delta*(13P^2-Q)/12` in order `(delta,P,Q)`;
 - `S=Q^3-delta` in order `(delta,P,Q)` and its inverse `delta=Q^3-S` in order `(P,Q,S)`.
 
-Finally compute the conjugate norm `F(P,Q,R)F(P,Q,-R)` as a polynomial in `(P,Q,S)` with `S=R^2`. This certifies the exact norm calculation used when transferring from `R` to `R^2`; it does not ask you to prove the external transcendence premise.
+Finally compute the frozen conjugate norm `F(P,Q,R)F(P,Q,-R)` as a polynomial in `(P,Q,S)` with `S=R^2`. This certifies only the displayed coordinate identities and this one exact norm calculation. It does **not** certify the universal nonzero-norm argument for an arbitrary polynomial relation, repair the general algebraic-independence proof, or prove the external transcendence premise.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently.
+Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently. The limitations array must exactly state: The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
 

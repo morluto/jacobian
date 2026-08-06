@@ -18,18 +18,25 @@ LIMITATION = "The verifier certifies only the frozen matrix certificate, not the
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], str)
-    ):
+    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
         return False
     text = value[0].casefold()
     return (
-        any(term in text for term in ("frozen", "six-dimensional", "6-dimensional", "matrix certificate"))
-        and any(term in text for term in ("local-ring", "local ring", "general theorem"))
+        any(
+            term in text
+            for term in (
+                "frozen",
+                "six-dimensional",
+                "6-dimensional",
+                "matrix certificate",
+            )
+        )
+        and any(
+            term in text for term in ("local-ring", "local ring", "general theorem")
+        )
         and any(term in text for term in ("not general", "not the general", "only"))
     )
+
 
 # The published prose obligation is structural, not verbatim: the explanation
 # must affirmatively relate the three certified facts, accept equivalent
@@ -84,6 +91,8 @@ _NEGATIONS = (
     "do not coincide",
     "does not coincide",
 )
+
+
 def sign(p):
     return -1 if sum(p[i] > p[j] for i in range(6) for j in range(i + 1, 6)) % 2 else 1
 
@@ -172,9 +181,7 @@ def _explanation_is_valid(path: Path) -> bool:
                     negation in window for negation in _NEGATIONS
                 )
                 for index, group in enumerate(_CONCEPT_GROUPS):
-                    if not matched[index] and any(
-                        phrase in window for phrase in group
-                    ):
+                    if not matched[index] and any(phrase in window for phrase in group):
                         matched[index] = True
                 carry = window[-256:]
     except (OSError, UnicodeError, MemoryError):

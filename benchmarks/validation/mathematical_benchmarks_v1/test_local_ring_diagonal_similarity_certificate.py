@@ -169,7 +169,8 @@ def test_large_valid_evidence_has_no_arbitrary_byte_cap(tmp_path: Path) -> None:
     _set_evidence(
         app,
         submission,
-        "derivation filler\n" * 70_000
+        "derivation filler\n"
+        * 70_000
         + "The modular products agree. The determinant is a unit, and the displayed "
         "determinant permutation selects only unit entries, forcing each matched "
         "diagonal pair to agree.\n",

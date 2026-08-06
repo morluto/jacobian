@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 # Exact positive-lower-density separation verifier.
 LABEL jacobian.task="jacobian/positive-lower-density-separation" \
-      jacobian.checksum="64f6eb984fafed1fa0c8b81abc7ed77339f1c57d232f117e44aede041d9e25d1"
+      jacobian.checksum="1b5010def9683d4dee9455b00021b12636d5cc590e6e02f6efeb1f17fa703ac4"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

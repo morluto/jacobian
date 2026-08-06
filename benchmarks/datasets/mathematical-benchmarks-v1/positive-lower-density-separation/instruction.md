@@ -4,9 +4,9 @@ Audit the reported formalization mismatch: “positive lower density” does not
 
 Choose an integer base from 2 through 9 and consider the set formed by the alternating geometric blocks `[b^(2m), b^(2m+1))` for all `m >= 0`. Submit the exact endpoint certificate for levels 0 through 7: the included-block endpoint, the following excluded-block endpoint, the cumulative count below each endpoint, and both reduced density fractions. State the two closed-form subsequential limits and the resulting semantic separation.
 
-The verifier recomputes all finite arithmetic and checks the general closed-form fields. The finite levels are instances of the general argument, not a machine proof of the infinite limit. Bind the published explanation sentence described below, and do not claim the Erdős problem or a general density theorem is verified. The eight level rows may appear in any order.
+The verifier recomputes all finite arithmetic and checks the general closed-form fields. The finite levels are instances of the general argument, not a machine proof of the infinite limit. Bind a text explanation as `evidence/answer.txt` and do not claim the Erdős problem or a general density theorem is verified. The eight level rows may appear in any order.
 
-The evidence file must be at most 65536 bytes and its first line must be exactly: `The lower density is positive, while the two endpoint subsequences have different limits, so the natural density does not exist. The finite levels replay instances of the general formula rather than proving every infinite case.` Additional lines are allowed and ignored.
+The explanation must affirmatively state the certified separation: that the lower density is positive, that the two endpoint subsequences have different limits, that the natural density does not exist, and that the finite levels replay instances of the general formula rather than proving every infinite case. Equivalent phrasing is accepted; contradictory or unrelated text is rejected. The evidence artifact has no size cap beyond the verifier workspace, but must remain a digest-bound regular file at the declared path.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

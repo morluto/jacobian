@@ -125,3 +125,113 @@ def test_rejects_false_verified_claim(tmp_path: Path) -> None:
     result = _run(tmp_path, mutate)
     assert result["false_certification"] is True
     assert result["reward"] == 0.0
+
+
+def _set_evidence(app: Path, submission: dict, text: str) -> None:
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(text)
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+
+
+def test_malformed_envelope_preserves_math_correctness(tmp_path: Path) -> None:
+    """A schema-invalid non-result field must not erase mathematical correctness."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["extra_field"] = "schema-invalid"
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["protocol_compliance"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["reward"] == 0.0
+
+
+def test_evidence_descriptor_missing_sha256_preserves_correctness(
+    tmp_path: Path,
+) -> None:
+    """A bad evidence descriptor fails evidence but preserves correctness."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0] = {"path": "evidence/answer.txt"}
+    support._write_json(app / "submission.json", submission)
+    result = support._run_verifier(task, app, logs)
+    assert result["correctness"] == 1.0
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_large_valid_evidence_has_no_arbitrary_byte_cap(tmp_path: Path) -> None:
+    """An otherwise valid explanation larger than 65536 bytes is accepted."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(
+        app,
+        submission,
+        "The lower density is positive, while the two endpoint subsequences have "
+        "different limits, so the natural density does not exist. The finite levels "
+        "replay instances of the general formula rather than proving every infinite "
+        "case.\n" + "x" * 70_000,
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def test_equivalent_explanation_paraphrase_is_accepted(tmp_path: Path) -> None:
+    """Equivalent phrasing of the certified separation is accepted."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(
+        app,
+        submission,
+        "The lower density is positive, but the two subsequential limits differ, so "
+        "no natural density exists. The eight finite cases are instances of the "
+        "general formula, not a proof of the infinite limit.\n",
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 1.0
+    assert result["reward"] == 1.0
+
+
+def test_contradictory_explanation_is_rejected(tmp_path: Path) -> None:
+    """Text that asserts the opposite of the certified separation is rejected."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(
+        app,
+        submission,
+        "The natural density exists and the limits agree; the finite levels prove "
+        "every infinite case.\n",
+    )
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_unrelated_explanation_is_rejected(tmp_path: Path) -> None:
+    """Nonempty but unrelated text is rejected."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(app, submission, "The weather is sunny today.\n")
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_empty_explanation_is_rejected(tmp_path: Path) -> None:
+    """An empty digest-bound explanation is rejected."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(app, submission, "\n")
+    result = support._run_verifier(task, app, logs)
+    assert result["evidence_validity"] == 0.0
+    assert result["reward"] == 0.0
+
+
+def test_input_binding_decoupled_is_declared_in_task_metadata() -> None:
+    """The verifier decouples correctness from input binding via task metadata."""
+    assert support.input_binding_is_decoupled(TASK) is True
+    metadata = json.loads(
+        (support._task(TASK) / "tests" / "verifier_behavior.json").read_text()
+    )
+    assert metadata["input_binding_decoupled"] is True

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     false_verified_claim,
     is_regular_bounded_file,
     load_submission,
@@ -16,7 +15,66 @@ from verifier_support import (
 
 W, T = Path("/app"), Path("/tests")
 LIMITATION = "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
-EVIDENCE_SENTENCE = "The lower density is positive, while the two endpoint subsequences have different limits, so the natural density does not exist. The finite levels replay instances of the general formula rather than proving every infinite case."
+
+# The published prose obligation is structural, not verbatim: the explanation
+# must affirmatively state the separation and its limitation, accept equivalent
+# phrasing, and reject contradictory or unrelated text.
+_LOWER_DENSITY_POSITIVE = (
+    "lower density is positive",
+    "lower density positive",
+    "positive lower density",
+)
+_DIFFERENT_LIMITS = (
+    "different limits",
+    "limits differ",
+    "two endpoint subsequences",
+    "endpoint subsequences have different",
+    "subsequential limits differ",
+    "different subsequential limits",
+    "two subsequential limits",
+)
+_NATURAL_DENSITY_ABSENT = (
+    "natural density does not exist",
+    "natural density does not",
+    "density does not exist",
+    "no natural density",
+    "natural density is absent",
+    "natural density doesn't exist",
+)
+_FINITE_REPLAY_LIMITATION = (
+    "finite levels replay",
+    "replay instances",
+    "instances of the general formula",
+    "rather than proving",
+    "not a proof",
+    "not proving every",
+    "not machine-prove",
+    "do not prove",
+    "not prove every",
+)
+_CONCEPT_GROUPS = (
+    _LOWER_DENSITY_POSITIVE,
+    _DIFFERENT_LIMITS,
+    _NATURAL_DENSITY_ABSENT,
+    _FINITE_REPLAY_LIMITATION,
+)
+# Direct contradictions of the certified claims; the opposite affirmative
+# phrasing also fails the concept-group presence check.
+_NEGATIONS = (
+    "limits agree",
+    "limits are equal",
+    "limits coincide",
+    "same limit",
+    "lower density is zero",
+    "lower density vanishes",
+    "lower density is not positive",
+    "proves every infinite",
+    "machine-proves the infinite",
+    "proves the general limit",
+)
+# Bounded prose-parsing buffer.  Evidence size itself is uncapped; only the
+# text scanned for the explanation obligation is bounded to avoid OOM.
+_PROSE_PARSE_BYTES = 1 << 20
 
 
 def q(text):
@@ -96,20 +154,34 @@ def valid_result(result):
     )
 
 
-def evidence_ok(evidence):
-    # The structured endpoint certificate is replayed independently.  Keep the
-    # text artifact requirement to the public digest-binding contract.
-    if not evidence_list_is_bound(evidence):
+def _explanation_is_valid(text):
+    """Structural check: affirmative concepts present, no direct contradiction."""
+    if not isinstance(text, str) or not text.strip():
         return False
-    path = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=65_536
-    )
+    lower = text.lower()
+    if any(neg in lower for neg in _NEGATIONS):
+        return False
+    return all(any(phrase in lower for phrase in group) for group in _CONCEPT_GROUPS)
+
+
+def evidence_ok(evidence):
+    # The structured endpoint certificate is replayed independently.  The
+    # public evidence contract requires one digest-bound text explanation
+    # whose content affirmatively states the separation and its limitation;
+    # equivalent phrasing is accepted and contradictory or unrelated text is
+    # rejected.  Evidence size is uncapped; only the prose-parsing buffer is
+    # bounded, and the digest is resolved once.
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
-        return path.read_text().splitlines()[0] == EVIDENCE_SENTENCE
-    except (OSError, UnicodeError, IndexError):
+        with path.open("r", encoding="utf-8", errors="strict") as stream:
+            head = stream.read(_PROSE_PARSE_BYTES)
+    except (OSError, UnicodeError):
         return False
+    return _explanation_is_valid(head)
 
 
 def raw_submission():

@@ -9,7 +9,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import ValidationError
 
@@ -537,7 +537,7 @@ def _parse_worker_output(
         or hole_count > 1_000_000
     ):
         raise ValueError("invalid Alethe hole count")
-    return status, proof_written, hole_count
+    return cast(_SolverStatus, status), proof_written, hole_count
 
 
 def _read_proof_file(path: Path) -> bytes:

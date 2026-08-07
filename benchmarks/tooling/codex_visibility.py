@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
@@ -392,6 +393,7 @@ def _run_case(
     transcript_path = output / f"{stem}.jsonl"
     stderr_path = output / f"{stem}.stderr"
     environment = operator_environment(include=_CODEX_ENVIRONMENT)
+    started = time.monotonic()
     result = run_operator_command(
         "codex",
         _codex_arguments(
@@ -408,6 +410,7 @@ def _run_case(
         stderr_limit_bytes=2 * 1024 * 1024,
         environment=environment,
     )
+    elapsed_seconds = max(0.0, time.monotonic() - started)
     transcript_path.write_bytes(result.stdout)
     stderr_path.write_bytes(result.stderr)
     telemetry = parse_agent_transcript(transcript_path)
@@ -426,6 +429,7 @@ def _run_case(
             "diagnostic": result.diagnostic,
             "stdout_exceeded": result.stdout_exceeded,
             "stderr_exceeded": result.stderr_exceeded,
+            "elapsed_seconds": round(elapsed_seconds, 6),
         },
         "classification": {
             **classification,
@@ -617,6 +621,10 @@ def main() -> None:
                 ),
                 "mcp_model_visible_bytes": sum(
                     run["classification"]["mcp_model_visible_bytes"] for run in runs
+                ),
+                "elapsed_seconds": round(
+                    sum(run["command"]["elapsed_seconds"] for run in runs),
+                    6,
                 ),
             },
         },

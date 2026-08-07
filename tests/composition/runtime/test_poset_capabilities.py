@@ -85,6 +85,20 @@ def test_antichain_chain_decomposition_intent_finds_width(
     assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
 
 
+def test_partially_ordered_set_intent_finds_width(
+    fresh_complete_runtime,
+) -> None:
+    discovered = fresh_complete_runtime.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="compute the width of a finite partially ordered set",
+            limit=5,
+        )
+    )
+
+    assert discovered.matches[0].capability_id == "poset.width.compute"
+    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+
+
 def test_materialization_is_canonical_complete_and_artifact_backed(
     fresh_complete_runtime,
 ) -> None:

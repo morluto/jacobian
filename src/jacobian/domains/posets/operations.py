@@ -356,6 +356,8 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
         relation_id="poset.width.dilworth.relation",
         tags=(
             "poset",
+            "partial-order",
+            "partially-ordered-set",
             "width",
             "maximum-antichain",
             "minimum-chain-cover",

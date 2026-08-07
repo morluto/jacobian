@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from pydantic import ValidationError
 
@@ -32,30 +33,33 @@ from jacobian.contracts.capabilities import (
     CapabilityScope,
 )
 from jacobian.contracts.lean import LeanEnvironment
-from jacobian.contracts.lean_exploration import LeanProofStateArtifact
 from jacobian.contracts.lean_proof_state_inspect import (
     LeanProofStateInspectOutput,
     LeanProofStateInspectRequest,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
-from jacobian.lean_frontend.artifacts import (
-    _environment_digest,
-    _environment_imports,
-    _source_digest,
-    _state_digest_payload,
+from jacobian.lean_frontend._state_validation import (
+    _load_validated_proof_state,
+    _StoredProofStateResources,
 )
-from jacobian.lean_frontend.exploration import _Resources, _runtime_ms
-from jacobian.lean_frontend.repl import LeanExplorationReplRuntime
+from jacobian.lean_frontend.artifacts import _environment_digest
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
-from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
+
+
+@dataclass(frozen=True, slots=True)
+class _InspectionResources:
+    store: ArtifactRepository
+    semantics_uri: str
+    state_schema_uri: str
+    installations: Mapping[LeanEnvironment, LeanCheckerInstallation]
 
 
 class LeanProofStateInspectAdapter:
     def __init__(
         self,
-        resources: _Resources,
+        resources: _StoredProofStateResources,
         provider_runtime: CapabilityProviderRuntime,
     ) -> None:
         self.resources = resources
@@ -107,10 +111,14 @@ class LeanProofStateInspectAdapter:
             validated.environment,
             installation,
         )
-        state = self._load_state(
+        state = _load_validated_proof_state(
+            self.resources,
             validated.state_uri,
             expected_environment=validated.environment,
             expected_environment_digest=environment_digest,
+            invalid_state_hint=(
+                "Use a state URI returned by a proof-state capability."
+            ),
         )
         output = LeanProofStateInspectOutput(
             state_uri=validated.state_uri,
@@ -134,7 +142,7 @@ class LeanProofStateInspectAdapter:
             mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
-                runtime_ms=_runtime_ms(started),
+                runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
                 detail="read-only inspection; no Lean process was started",
             ),
             output=output.model_dump(mode="json"),
@@ -164,59 +172,9 @@ class LeanProofStateInspectAdapter:
             artifact_uris=(validated.state_uri,),
         )
 
-    def _load_state(
-        self,
-        state_uri: str,
-        *,
-        expected_environment: LeanEnvironment,
-        expected_environment_digest: str,
-    ) -> LeanProofStateArtifact:
-        try:
-            stored = self.resources.store.get(state_uri)
-            if (
-                stored.manifest.schema_uri != self.resources.state_schema_uri
-                or stored.manifest.semantics_uri != self.resources.semantics_uri
-            ):
-                raise ValueError("artifact is not a Lean proof state")
-            state = LeanProofStateArtifact.model_validate(stored.payload)
-        except (StorageError, ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="INVALID_LEAN_PROOF_STATE",
-                    stage="state_loading",
-                    message="The supplied state artifact is unavailable or invalid.",
-                    hint="Use a state URI returned by a proof-state capability.",
-                )
-            ) from exc
-        installation = self.resources.installations[expected_environment]
-        expected_imports = _environment_imports(expected_environment)
-        if (
-            state.environment is not expected_environment
-            or state.environment_digest != expected_environment_digest
-            or state.imports != expected_imports
-            or state.lean_version != installation.lean_version
-            or state.lean_commit != installation.lean_commit
-            or state.mathlib_commit != installation.mathlib_commit
-            or state.source_digest
-            != _source_digest(state.statement, state.tactic_prefix)
-            or state.state_digest != _state_digest_payload(state)
-        ):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="STALE_LEAN_PROOF_STATE",
-                    stage="state_validation",
-                    message=(
-                        "The proof state no longer matches its source or the "
-                        "current pinned Lean environment."
-                    ),
-                    hint="Recreate the proof state under the current environment.",
-                )
-            )
-        return state
-
 
 def install_lean_proof_state_inspect_capability(
-    resources: _Resources,
+    resources: _StoredProofStateResources,
     provider_runtime: CapabilityProviderRuntime,
 ) -> LeanProofStateInspectAdapter:
     return LeanProofStateInspectAdapter(resources, provider_runtime)
@@ -237,9 +195,9 @@ def install_lean_proof_state_inspect_only(
     full exploration installer when the runtime is available.
     """
 
-    from pathlib import Path
-
     from jacobian.contracts.lean_exploration import LeanProofStateArtifact
+
+    del artifacts
 
     core = installations[LeanEnvironment.CORE]
     mathlib = installations[LeanEnvironment.MATHLIB]
@@ -264,19 +222,11 @@ def install_lean_proof_state_inspect_only(
         version="1",
         schema=LeanProofStateArtifact.model_json_schema(),
     )
-    runtime = Path(__file__).resolve().parents[3] / "lean"
-    repl = LeanExplorationReplRuntime(runtime, installations)
-    resources = _Resources(
+    resources = _InspectionResources(
         store=store,
-        artifacts=artifacts,
         semantics_uri=semantics_uri,
         state_schema_uri=state_schema_uri,
-        transition_schema_uri="",
-        retrieval_schema_uri="",
         installations=installations,
-        runtime=runtime,
-        provider_runtime=provider_runtime,
-        repl=repl,
     )
     return LeanProofStateInspectAdapter(resources, provider_runtime)
 

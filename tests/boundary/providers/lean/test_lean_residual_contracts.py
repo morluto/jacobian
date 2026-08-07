@@ -202,6 +202,62 @@ def _stub_metavariable_runtime(
     )
 
 
+def _stored_input_state_uri(
+    monkeypatch: pytest.MonkeyPatch,
+    proof_state: LeanProofStateAdapter,
+    environment: LeanEnvironment,
+) -> str:
+    _stub_apply_runtime(
+        monkeypatch,
+        proof_state,
+        lambda: _responses(before=["⊢ True"], after=["⊢ True"]),
+    )
+    opened = proof_state.invoke(
+        CapabilityRequest(
+            capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
+            input={
+                "environment": environment.value,
+                "statement": "True",
+                "tactic": "skip",
+            },
+        )
+    )
+    return str(opened.output["input_state_uri"])
+
+
+def _invoke_stored_state_consumer(
+    consumer: str,
+    *,
+    proof_state: LeanProofStateAdapter,
+    inspect: LeanProofStateInspectAdapter,
+    metavariable: LeanMetavariableFieldsAdapter,
+    environment: LeanEnvironment,
+    state_uri: str,
+) -> None:
+    request_input: dict[str, object] = {
+        "environment": environment.value,
+        "state_uri": state_uri,
+    }
+    if consumer == "apply_tactic":
+        adapter = proof_state
+        capability_id = "lean.proof_state.apply_tactic"
+        request_input["tactic"] = "skip"
+    elif consumer == "inspect":
+        adapter = inspect
+        capability_id = "lean.proof_state.inspect"
+    else:
+        adapter = metavariable
+        capability_id = "lean.proof_state.metavariable_fields"
+    adapter.invoke(
+        CapabilityRequest(
+            capability_id=capability_id,
+            mode=CapabilityMode.EXPLORE,
+            input=request_input,
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # lean.term.apply
 # ---------------------------------------------------------------------------
@@ -744,11 +800,26 @@ def test_helper_result_envelope_still_parses_normally() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_inspect_adapter_available_without_lean_runtime(tmp_path: Path) -> None:
+def test_inspect_adapter_available_without_lean_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.lean_frontend.proof_state_inspect as inspect_module
     from jacobian.lean_frontend.proof_state_inspect import (
         install_lean_proof_state_inspect_only,
     )
     from jacobian.provider_runtime import jacobian_provider_runtime
+
+    def _unexpected_runtime(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise AssertionError("read-only inspection constructed a Lean runtime")
+
+    monkeypatch.setattr(
+        inspect_module,
+        "LeanExplorationReplRuntime",
+        _unexpected_runtime,
+        raising=False,
+    )
 
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
@@ -766,8 +837,174 @@ def test_inspect_adapter_available_without_lean_runtime(tmp_path: Path) -> None:
             features=("immutable-proof-state",),
         ),
     )
+
+    from jacobian.lean_frontend.artifacts import (
+        _environment_digest,
+        _state_payload,
+    )
+
+    installation = installations[LeanEnvironment.CORE]
+    state = artifacts.put(
+        schema_uri=adapter.resources.state_schema_uri,
+        semantics_uri=adapter.resources.semantics_uri,
+        payload=_state_payload(
+            environment=LeanEnvironment.CORE,
+            environment_digest=_environment_digest(
+                LeanEnvironment.CORE,
+                installation,
+            ),
+            statement="True",
+            tactic_prefix=(),
+            normalized_goals=("⊢ True",),
+            installation=installation,
+        ).model_dump(mode="json"),
+        summary="stored CORE proof state",
+    )
+    result = adapter.invoke(
+        CapabilityRequest(
+            capability_id="lean.proof_state.inspect",
+            mode=CapabilityMode.EXPLORE,
+            input={
+                "environment": "CORE",
+                "state_uri": state.artifact_uri,
+            },
+        )
+    )
+
     assert adapter.descriptor.capability_id == "lean.proof_state.inspect"
     assert adapter.descriptor.read_only is True
+    assert result.output["normalized_goals"] == ["⊢ True"]
+    assert (
+        result.execution.detail == "read-only inspection; no Lean process was started"
+    )
+
+
+@pytest.mark.parametrize(
+    ("stored_environment", "requested_environment"),
+    (
+        (LeanEnvironment.CORE, LeanEnvironment.MATHLIB),
+        (LeanEnvironment.MATHLIB, LeanEnvironment.CORE),
+    ),
+)
+@pytest.mark.parametrize(
+    "consumer",
+    ("apply_tactic", "inspect", "metavariable_fields"),
+)
+def test_stored_state_consumers_reject_cross_profile_artifacts_before_replay(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stored_environment: LeanEnvironment,
+    requested_environment: LeanEnvironment,
+    consumer: str,
+) -> None:
+    proof_state, _, inspect, metavariable, resources = _adapters(tmp_path)
+    state_uri = _stored_input_state_uri(
+        monkeypatch,
+        proof_state,
+        stored_environment,
+    )
+
+    def _unexpected_replay(**kwargs: object) -> None:
+        del kwargs
+        raise AssertionError("cross-profile state reached the Lean runtime")
+
+    monkeypatch.setattr(resources.repl, "execute_clean", _unexpected_replay)
+    with pytest.raises(CapabilityInvocationError) as raised:
+        _invoke_stored_state_consumer(
+            consumer,
+            proof_state=proof_state,
+            inspect=inspect,
+            metavariable=metavariable,
+            environment=requested_environment,
+            state_uri=state_uri,
+        )
+
+    assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
+    assert raised.value.diagnostic.stage == "state_validation"
+
+
+@pytest.mark.parametrize(
+    ("consumer", "expected_hint"),
+    (
+        ("apply_tactic", "Use a state URI returned by this capability."),
+        (
+            "inspect",
+            "Use a state URI returned by a proof-state capability.",
+        ),
+        (
+            "metavariable_fields",
+            "Use a state URI returned by a proof-state capability.",
+        ),
+    ),
+)
+def test_invalid_state_diagnostics_keep_consumer_specific_hints(
+    tmp_path: Path,
+    consumer: str,
+    expected_hint: str,
+) -> None:
+    proof_state, _, inspect, metavariable, _ = _adapters(tmp_path)
+    missing_uri = "artifact://sha256/" + "d" * 64
+    with pytest.raises(CapabilityInvocationError) as raised:
+        _invoke_stored_state_consumer(
+            consumer,
+            proof_state=proof_state,
+            inspect=inspect,
+            metavariable=metavariable,
+            environment=LeanEnvironment.CORE,
+            state_uri=missing_uri,
+        )
+
+    assert raised.value.diagnostic.code == "INVALID_LEAN_PROOF_STATE"
+    assert raised.value.diagnostic.hint == expected_hint
+
+
+@pytest.mark.parametrize("stale_binding", ("source_digest", "state_digest"))
+def test_metavariable_fields_rejects_stale_state_before_replay(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stale_binding: str,
+) -> None:
+    proof_state, _, _, metavariable, resources = _adapters(tmp_path)
+    state_uri = _stored_input_state_uri(
+        monkeypatch,
+        proof_state,
+        LeanEnvironment.CORE,
+    )
+    stored = resources.store.get(state_uri)
+    stale_payload = dict(stored.payload)
+    stale_payload[stale_binding] = "sha256:" + "f" * 64
+    if stale_binding == "source_digest":
+        from jacobian.contracts.lean_exploration import LeanProofStateArtifact
+        from jacobian.lean_frontend.artifacts import _state_digest_payload
+
+        stale_payload["state_digest"] = _state_digest_payload(
+            LeanProofStateArtifact.model_validate(stale_payload)
+        )
+    stale = resources.artifacts.put(
+        schema_uri=resources.state_schema_uri,
+        semantics_uri=resources.semantics_uri,
+        payload=stale_payload,
+        summary=f"fixture with stale {stale_binding}",
+    )
+
+    def _unexpected_replay(**kwargs: object) -> None:
+        del kwargs
+        raise AssertionError("stale state reached the Lean runtime")
+
+    monkeypatch.setattr(resources.repl, "execute_clean", _unexpected_replay)
+    with pytest.raises(CapabilityInvocationError) as raised:
+        metavariable.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.metavariable_fields",
+                mode=CapabilityMode.EXPLORE,
+                input={
+                    "environment": "CORE",
+                    "state_uri": stale.artifact_uri,
+                },
+            )
+        )
+
+    assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
 
 
 # ---------------------------------------------------------------------------
@@ -775,26 +1012,32 @@ def test_inspect_adapter_available_without_lean_runtime(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    ("environment", "field", "forged_value"),
+    (
+        (LeanEnvironment.CORE, "imports", ["Mathlib"]),
+        (LeanEnvironment.MATHLIB, "imports", ["Init"]),
+        (LeanEnvironment.CORE, "lean_version", "9.9.9"),
+        (LeanEnvironment.CORE, "lean_commit", "forged-lean-commit"),
+        (LeanEnvironment.MATHLIB, "mathlib_commit", "forged-mathlib-commit"),
+    ),
+)
 def test_inspect_rejects_forged_environment_metadata(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    environment: LeanEnvironment,
+    field: str,
+    forged_value: object,
 ) -> None:
     proof_state, _, inspect, _, resources = _adapters(tmp_path)
-    _stub_apply_runtime(
+    state_uri = _stored_input_state_uri(
         monkeypatch,
         proof_state,
-        lambda: _responses(before=["⊢ True"], after=["⊢ True"]),
+        environment,
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
-            input={"environment": "CORE", "statement": "True", "tactic": "skip"},
-        )
-    )
-    state = resources.store.get(opened.output["input_state_uri"])
+    state = resources.store.get(state_uri)
     forged_payload = dict(state.payload)
-    forged_payload["lean_version"] = "9.9.9"
+    forged_payload[field] = forged_value
     # Recompute state_digest so the digest check alone would pass.
     from jacobian.contracts.lean_exploration import LeanProofStateArtifact
     from jacobian.lean_frontend.artifacts import _state_digest_payload
@@ -813,7 +1056,7 @@ def test_inspect_rejects_forged_environment_metadata(
                 capability_id="lean.proof_state.inspect",
                 mode=CapabilityMode.EXPLORE,
                 input={
-                    "environment": "CORE",
+                    "environment": environment.value,
                     "state_uri": forged.artifact_uri,
                 },
             )

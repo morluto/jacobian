@@ -157,6 +157,34 @@ def test_materialized_poset_is_directly_consumable_by_width(
     )
 
 
+def test_materialized_poset_is_directly_consumable_by_linear_extension_count(
+    fresh_complete_runtime,
+) -> None:
+    materialized = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.finite.materialize",
+            input=_DIAMOND,
+        )
+    )
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.linear_extensions.count",
+            input={"poset_artifact_uri": materialized.output["result_uri"]},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert _result_payload(fresh_complete_runtime, result)["count"] == 2
+    assert materialized.output["result_uri"] in result.artifact_uris
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+    }
+    assert descriptors["poset.finite.materialize"].produced_artifact_types == (
+        descriptors["poset.linear_extensions.count"].accepted_artifact_types
+    )
+
+
 def test_width_rejects_an_incompatible_artifact_before_writes(
     fresh_complete_runtime,
 ) -> None:

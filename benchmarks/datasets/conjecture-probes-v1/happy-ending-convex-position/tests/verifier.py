@@ -10,8 +10,8 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -21,7 +21,7 @@ from verifier_support import (
 TASK_ID = "jacobian/happy-ending-convex-position"
 SCOPE = "happy-ending-convex-position:points-v1"
 LIMITATIONS = ["THIRTEEN_FROZEN_POINTS", "NO_GENERAL_ERDOS_SZEKERES_CONCLUSION"]
-SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def _cross(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> int:
@@ -140,7 +140,9 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
 
 
 def _raw_submission() -> dict[str, Any] | None:
-    if not is_regular_bounded_file(Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES):
+    if not is_regular_bounded_file(
+        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
+    ):
         return None
     try:
         value = json.loads(Path("/app/submission.json").read_text())
@@ -199,7 +201,7 @@ def main() -> None:
     )
     assurance = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+        and submission.get("claimed_assurance") in scoreable_assurances
     )
     raw_submission = _raw_submission()
     false_certification = bool(

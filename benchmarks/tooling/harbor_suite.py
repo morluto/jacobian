@@ -905,7 +905,7 @@ def _tests_dockerfile_copy_source_failures(
         if len(parts) < 2:
             continue
         for part in parts[:-1]:
-            if part.startswith("--") or part.startswith("/"):
+            if part.startswith(("--", "/")):
                 continue
             candidate = tests / part
             if not _is_regular_file(candidate):

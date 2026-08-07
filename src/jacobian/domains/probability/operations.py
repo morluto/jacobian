@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.probability import (
@@ -43,7 +44,10 @@ from jacobian.operations import (
 
 
 def _wire(value: Any) -> CanonicalRational:
-    return CanonicalRational(num=str(value.p), den=str(value.q))
+    return CanonicalRational(
+        num=format_canonical_integer(int(value.p)),
+        den=format_canonical_integer(int(value.q)),
+    )
 
 
 def _fmpq(value: CanonicalRational) -> Any:
@@ -80,8 +84,8 @@ def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
         atoms=tuple(
             FiniteDistributionAtom(
                 value=CanonicalRational(
-                    num=str(value.numerator),
-                    den=str(value.denominator),
+                    num=format_canonical_integer(value.numerator),
+                    den=format_canonical_integer(value.denominator),
                 ),
                 probability=_wire(probability),
             )
@@ -237,8 +241,8 @@ def _convolution(
                     left_value=left.value,
                     right_value=right.value,
                     sum_value=CanonicalRational(
-                        num=str(sum_value.numerator),
-                        den=str(sum_value.denominator),
+                        num=format_canonical_integer(sum_value.numerator),
+                        den=format_canonical_integer(sum_value.denominator),
                     ),
                     probability=_wire(probability),
                 )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.polynomial_operations import (
     PolynomialBezoutIdentity,
@@ -58,7 +59,10 @@ def _poly(polynomial: RationalPolynomial) -> Any:
 
 def _rational(value: Any) -> CanonicalRational:
     fraction = Fraction(value)
-    return CanonicalRational(num=str(fraction.numerator), den=str(fraction.denominator))
+    return CanonicalRational(
+        num=format_canonical_integer(fraction.numerator),
+        den=format_canonical_integer(fraction.denominator),
+    )
 
 
 def _wire(poly: Any, variables: tuple[str, ...]) -> RationalPolynomial:

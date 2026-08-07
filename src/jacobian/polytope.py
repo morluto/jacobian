@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
@@ -58,7 +58,10 @@ def _z3() -> Any:
 
 
 def _wire_rational(value: Fraction) -> dict[str, str]:
-    return {"num": str(value.numerator), "den": str(value.denominator)}
+    return {
+        "num": format_canonical_integer(value.numerator),
+        "den": format_canonical_integer(value.denominator),
+    }
 
 
 def _require_schema_version(

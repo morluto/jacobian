@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -728,7 +728,10 @@ def _bernstein_coefficients(
 
 
 def _rational(value: Fraction) -> CanonicalRational:
-    return CanonicalRational(num=str(value.numerator), den=str(value.denominator))
+    return CanonicalRational(
+        num=format_canonical_integer(value.numerator),
+        den=format_canonical_integer(value.denominator),
+    )
 
 
 def _computed_result(

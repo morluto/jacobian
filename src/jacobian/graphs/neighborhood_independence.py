@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -156,8 +156,8 @@ class GraphNeighborhoodIndependenceAdapter:
         total = sum(record.independence_number for record in records)
         average = Fraction(total, len(records)) if records else Fraction(0)
         average_wire = CanonicalRational(
-            num=str(average.numerator),
-            den=str(average.denominator),
+            num=format_canonical_integer(average.numerator),
+            den=format_canonical_integer(average.denominator),
         )
         invariant = GraphNeighborhoodIndependenceArtifact(
             graph_uri=validated.graph_uri,

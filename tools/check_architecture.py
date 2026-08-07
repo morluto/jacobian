@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces six PR10 invariants:
+runtime.  It enforces seven PR10 invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -28,6 +28,9 @@ runtime.  It enforces six PR10 invariants:
 
 6. **unsupported-surface**: removed experimental memory/search identifiers must
    not appear in supported product source, tests, schemas, catalog, or docs.
+
+7. **unsafe-canonical-rational-output**: rational result components must use the
+   digit-limit-safe canonical formatter rather than direct ``str()`` conversion.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -801,6 +804,106 @@ def _unsupported_surface_ast_violations(
     return tuple(violations)
 
 
+_RATIONAL_COMPONENT_ATTRIBUTES = frozenset({"numerator", "denominator", "p", "q"})
+_DESCRIPTIVE_RATIONAL_COMPONENT_ATTRIBUTES = frozenset({"numerator", "denominator"})
+
+
+def _contains_rational_component(
+    node: ast.AST, *, attributes: frozenset[str] = _RATIONAL_COMPONENT_ATTRIBUTES
+) -> bool:
+    return any(
+        isinstance(descendant, ast.Attribute) and descendant.attr in attributes
+        for descendant in ast.walk(node)
+    )
+
+
+def _is_canonical_integer_format(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "format_canonical_integer"
+    )
+
+
+def _unsafe_rational_render_nodes(
+    node: ast.AST,
+    *,
+    attributes: frozenset[str] = _RATIONAL_COMPONENT_ATTRIBUTES,
+) -> tuple[ast.AST, ...]:
+    if isinstance(node, ast.JoinedStr):
+        return tuple(
+            value
+            for value in node.values
+            if isinstance(value, ast.FormattedValue)
+            and _contains_rational_component(value.value, attributes=attributes)
+            and not _is_canonical_integer_format(value.value)
+        )
+    if not isinstance(node, ast.Call):
+        return ()
+    if isinstance(node.func, ast.Name) and node.func.id in {"str", "format"}:
+        return (
+            (node,)
+            if any(
+                _contains_rational_component(argument, attributes=attributes)
+                and not _is_canonical_integer_format(argument)
+                for argument in node.args
+            )
+            else ()
+        )
+    if isinstance(node.func, ast.Attribute) and node.func.attr == "format":
+        arguments = (*node.args, *(keyword.value for keyword in node.keywords))
+        return (
+            (node,)
+            if any(
+                _contains_rational_component(argument, attributes=attributes)
+                and not _is_canonical_integer_format(argument)
+                for argument in arguments
+            )
+            else ()
+        )
+    return ()
+
+
+def _unsafe_canonical_rational_output_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+
+    unsafe_values: dict[int, ast.AST] = {}
+    for node in ast.walk(tree):
+        assigned_or_returned: ast.AST | None = None
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.Return)):
+            assigned_or_returned = node.value
+        if assigned_or_returned is not None:
+            for value in _unsafe_rational_render_nodes(
+                assigned_or_returned,
+                attributes=_DESCRIPTIVE_RATIONAL_COMPONENT_ATTRIBUTES,
+            ):
+                unsafe_values[id(value)] = value
+        if isinstance(node, ast.Call):
+            for keyword in node.keywords:
+                if keyword.arg in {"num", "den"}:
+                    for value in _unsafe_rational_render_nodes(keyword.value):
+                        unsafe_values[id(value)] = value
+        elif isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=True):
+                if isinstance(key, ast.Constant) and key.value in {"num", "den"}:
+                    for unsafe_value in _unsafe_rational_render_nodes(value):
+                        unsafe_values[id(unsafe_value)] = unsafe_value
+
+    return tuple(
+        Violation(
+            str(relative),
+            "unsafe-canonical-rational-output",
+            "canonical rational results must format integer components "
+            "with format_canonical_integer",
+            value.lineno,
+        )
+        for value in unsafe_values.values()
+    )
+
+
 def _unsupported_surface_text_violations(
     root: Path, relative: PurePosixPath, path: Path
 ) -> tuple[Violation, ...]:
@@ -873,6 +976,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))
     violations.extend(_environ_spread_violations(relative, tree))
+    violations.extend(_unsafe_canonical_rational_output_violations(relative, tree))
     violations.extend(_unsupported_surface_ast_violations(relative, tree))
     return tuple(violations)
 

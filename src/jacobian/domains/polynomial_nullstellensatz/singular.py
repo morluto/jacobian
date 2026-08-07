@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -125,7 +125,10 @@ def _parse_coefficient(value: str) -> CanonicalRational:
     if _INTEGER_OR_RATIONAL.fullmatch(value) is None:
         raise ValueError("Singular returned a non-rational coefficient")
     parsed = Fraction(value)
-    return CanonicalRational(num=str(parsed.numerator), den=str(parsed.denominator))
+    return CanonicalRational(
+        num=format_canonical_integer(parsed.numerator),
+        den=format_canonical_integer(parsed.denominator),
+    )
 
 
 class _TaggedOutputParser:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.matrix_operations import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
@@ -32,8 +33,8 @@ from jacobian.math import matrices as native_matrices
 def _rational(value: Any) -> OutputRational:
     fraction = Fraction(value)
     return OutputRational(
-        num=str(fraction.numerator),
-        den=str(fraction.denominator),
+        num=format_canonical_integer(fraction.numerator),
+        den=format_canonical_integer(fraction.denominator),
     )
 
 

@@ -49,3 +49,22 @@ def test_arithmetic_capabilities_return_exact_results(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == expected
+
+
+def test_rational_product_formats_results_above_python_digit_limit(
+    domain_services: DomainTestServices,
+) -> None:
+    factor = "1" + "0" * 2500
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="rational.compute.product",
+            input={
+                "left": {"num": factor, "den": "1"},
+                "right": {"num": factor, "den": "1"},
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == {"value": {"num": "1" + "0" * 5000, "den": "1"}}

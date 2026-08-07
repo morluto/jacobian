@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.claims import ClaimValidationService
 from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.checkers import EvidenceKind
@@ -634,6 +635,9 @@ def _objective_value(value: Any) -> Fraction:
             and _INTEGER_OBJECTIVE.fullmatch(denominator)
         ):
             result = Fraction(int(numerator), int(denominator))
-            if value == {"num": str(result.numerator), "den": str(result.denominator)}:
+            if value == {
+                "num": format_canonical_integer(result.numerator),
+                "den": format_canonical_integer(result.denominator),
+            }:
                 return result
     raise ValueError("objective values must be canonical exact numbers")

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -326,7 +327,10 @@ def _havel_hakimi_trace(graph: nx_type.Graph[Any]) -> list[list[int]]:
 
 
 def _rational_payload(value: Fraction) -> dict[str, str]:
-    return {"num": str(value.numerator), "den": str(value.denominator)}
+    return {
+        "num": format_canonical_integer(value.numerator),
+        "den": format_canonical_integer(value.denominator),
+    }
 
 
 def _property_backend(name: str) -> str:

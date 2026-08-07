@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInvocationExample,
@@ -43,7 +44,10 @@ _INVALID_REQUEST = CapabilityDiagnostic(
 
 
 def _rational(value: Fraction) -> CanonicalRational:
-    return CanonicalRational(num=str(value.numerator), den=str(value.denominator))
+    return CanonicalRational(
+        num=format_canonical_integer(value.numerator),
+        den=format_canonical_integer(value.denominator),
+    )
 
 
 def _canonical_endpoints(left: str, right: str) -> tuple[str, str]:

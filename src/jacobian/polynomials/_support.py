@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -530,7 +531,10 @@ def _wire_polynomial(polynomial: Poly) -> SparseRationalPolynomial:
 
 def _wire_rational(value: object) -> CanonicalRational:
     rational = _sympy.get().Rational(value)
-    return CanonicalRational(num=str(rational.p), den=str(rational.q))
+    return CanonicalRational(
+        num=format_canonical_integer(int(rational.p)),
+        den=format_canonical_integer(int(rational.q)),
+    )
 
 
 def _evaluate(

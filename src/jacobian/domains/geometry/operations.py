@@ -6,6 +6,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from typing import Any, cast
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.geometry import (
     ClosedSegment2D,
@@ -46,8 +47,8 @@ def _fraction(value: Any) -> Fraction:
 def _wire_rational(value: Any) -> CanonicalRational:
     fraction = _fraction(value)
     return CanonicalRational(
-        num=str(fraction.numerator),
-        den=str(fraction.denominator),
+        num=format_canonical_integer(fraction.numerator),
+        den=format_canonical_integer(fraction.denominator),
     )
 
 

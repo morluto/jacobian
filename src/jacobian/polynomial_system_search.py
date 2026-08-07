@@ -8,6 +8,7 @@ from itertools import product
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
+from jacobian.canonical import format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -100,7 +101,10 @@ class PolynomialSystemRationalSearchAdapter:
             ) from exc
         started = time.monotonic()
         values = tuple(
-            CanonicalRational(num=str(value.numerator), den=str(value.denominator))
+            CanonicalRational(
+                num=format_canonical_integer(value.numerator),
+                den=format_canonical_integer(value.denominator),
+            )
             for value in bounded_rational_scalars(
                 validated.max_abs_numerator, validated.max_denominator
             )

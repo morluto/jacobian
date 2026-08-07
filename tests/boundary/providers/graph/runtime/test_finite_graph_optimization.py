@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import itertools
-import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
 import networkx as nx
 import pytest
 import z3
+from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -17,27 +17,20 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.runtime import create_runtime
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.domains.graph_optimization.bundle import (
+    build_graph_optimization_bundle,
+)
 
 
-@pytest.fixture(scope="module")
-def oracle_runtime(
-    tmp_path_factory: pytest.TempPathFactory,
-    complete_portfolio_template: Path,
-) -> Iterator[JacobianRuntime]:
-    """Reuse the immutable core store snapshot for shared oracle invokes."""
-
-    root = tmp_path_factory.mktemp("finite-graph-oracles")
-    shutil.copytree(complete_portfolio_template, root, dirs_exist_ok=True)
-    runtime = create_runtime(root)
-    # Pay Z3/solver startup once in fixture setup instead of on the first case.
-    warm = nx.relabel_nodes(nx.path_graph(3), lambda vertex: f"v{vertex}")
-    _invoke(runtime, "graph.domination.minimum.compute", warm)
-    try:
-        yield runtime
-    finally:
-        runtime.close()
+@pytest.fixture
+def graph_optimization_services(
+    tmp_path: Path,
+) -> Iterator[DomainTestServices]:
+    with open_domain_services(
+        tmp_path / "state",
+        build_graph_optimization_bundle(),
+    ) as services:
+        yield services
 
 
 def _payload(graph: nx.Graph[str], **budget: int) -> dict[str, object]:
@@ -56,7 +49,7 @@ def _payload(graph: nx.Graph[str], **budget: int) -> dict[str, object]:
 
 
 def _invoke(
-    runtime: JacobianRuntime,
+    runtime: DomainTestServices,
     capability_id: str,
     graph: nx.Graph[str],
     **budget: int,
@@ -144,13 +137,13 @@ _ORACLE_CAPABILITIES = (
     ids=("path", "odd-cycle", "complete", "disconnected"),
 )
 def test_graph_optimizer_matches_independent_small_brute_force_oracle(
-    oracle_runtime: JacobianRuntime,
+    graph_optimization_services: DomainTestServices,
     capability_id: str,
     graph: nx.Graph[int],
 ) -> None:
     relabeled: nx.Graph[str] = nx.relabel_nodes(graph, lambda vertex: f"v{vertex}")
 
-    result = _invoke(oracle_runtime, capability_id, relabeled)
+    result = _invoke(graph_optimization_services, capability_id, relabeled)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "EXACT"
@@ -200,7 +193,7 @@ def test_graph_optimizer_matches_independent_small_brute_force_oracle(
     ),
 )
 def test_graph_optimizer_returns_exact_witness_and_open_obligation(
-    tmp_path: Path,
+    graph_optimization_services: DomainTestServices,
     capability_id: str,
     graph: nx.Graph[int],
     optimum: int,
@@ -208,7 +201,7 @@ def test_graph_optimizer_returns_exact_witness_and_open_obligation(
     predicate: str,
 ) -> None:
     relabeled = nx.relabel_nodes(graph, lambda vertex: f"v{vertex}")
-    runtime = create_runtime(tmp_path)
+    runtime = graph_optimization_services
 
     result = _invoke(runtime, capability_id, relabeled)
 
@@ -243,9 +236,9 @@ def test_graph_optimizer_returns_exact_witness_and_open_obligation(
 
 
 def test_solver_call_budget_preserves_incumbent_without_claiming_optimum(
-    tmp_path: Path,
+    graph_optimization_services: DomainTestServices,
 ) -> None:
-    runtime = create_runtime(tmp_path)
+    runtime = graph_optimization_services
     graph = nx.relabel_nodes(nx.complete_graph(5), lambda vertex: f"v{vertex}")
 
     result = _invoke(
@@ -267,10 +260,10 @@ def test_solver_call_budget_preserves_incumbent_without_claiming_optimum(
 
 
 def test_solver_timeout_preserves_partial_witness_as_non_conclusion(
-    tmp_path: Path,
+    graph_optimization_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_runtime(tmp_path)
+    runtime = graph_optimization_services
     graph = nx.path_graph(["a", "b", "c", "d"])
     monkeypatch.setattr(z3.Solver, "check", lambda _solver: z3.unknown)
 
@@ -315,7 +308,7 @@ def test_solver_timeout_preserves_partial_witness_as_non_conclusion(
     ),
 )
 def test_invalid_solver_witness_fails_closed_before_artifact_writes(
-    tmp_path: Path,
+    graph_optimization_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
     solver_name: str,
     capability_id: str,
@@ -330,7 +323,7 @@ def test_invalid_solver_witness_fails_closed_before_artifact_writes(
         return result.model_copy(update=update)
 
     monkeypatch.setattr(finite_optimization, solver_name, invalid_witness)
-    runtime = create_runtime(tmp_path)
+    runtime = graph_optimization_services
     result = _invoke(
         runtime,
         capability_id,
@@ -353,10 +346,10 @@ def test_invalid_solver_witness_fails_closed_before_artifact_writes(
     ),
 )
 def test_empty_graph_boundary_is_exact_zero(
-    tmp_path: Path,
+    graph_optimization_services: DomainTestServices,
     capability_id: str,
 ) -> None:
-    runtime = create_runtime(tmp_path)
+    runtime = graph_optimization_services
     result = _invoke(runtime, capability_id, nx.Graph())
 
     assert result.output["status"] == "EXACT"
@@ -365,8 +358,10 @@ def test_empty_graph_boundary_is_exact_zero(
     assert result.output["termination_reason"] == "SPECIAL_CASE"
 
 
-def test_order_budget_fails_before_artifact_writes(tmp_path: Path) -> None:
-    runtime = create_runtime(tmp_path)
+def test_order_budget_fails_before_artifact_writes(
+    graph_optimization_services: DomainTestServices,
+) -> None:
+    runtime = graph_optimization_services
     graph = nx.relabel_nodes(nx.path_graph(3), lambda vertex: f"v{vertex}")
 
     result = _invoke(

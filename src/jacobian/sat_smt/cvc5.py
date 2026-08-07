@@ -522,7 +522,14 @@ def _parse_worker_output(
     status = payload["solver_status"]
     proof_written = payload["proof_written"]
     hole_count = payload["alethe_hole_count"]
-    if status not in {"SATISFIABLE", "UNSATISFIABLE", "UNKNOWN"}:
+    solver_status: _SolverStatus | None = None
+    if status == "SATISFIABLE":
+        solver_status = "SATISFIABLE"
+    elif status == "UNSATISFIABLE":
+        solver_status = "UNSATISFIABLE"
+    elif status == "UNKNOWN":
+        solver_status = "UNKNOWN"
+    if solver_status is None:
         raise ValueError("invalid worker status")
     if not isinstance(proof_written, bool):
         raise ValueError("invalid proof-written flag")
@@ -533,7 +540,7 @@ def _parse_worker_output(
         or hole_count > 1_000_000
     ):
         raise ValueError("invalid Alethe hole count")
-    return status, proof_written, hole_count
+    return solver_status, proof_written, hole_count
 
 
 def _read_proof_file(path: Path) -> bytes:

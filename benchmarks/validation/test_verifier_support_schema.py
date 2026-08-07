@@ -6,6 +6,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -18,16 +19,45 @@ _TEMPLATE = (
 )
 
 
-def _load_module():
-    spec = importlib.util.spec_from_file_location("_vs_under_test", _TEMPLATE)
+def _load_module(module_name: str, path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    sys.modules["_vs_under_test"] = module
-    spec.loader.exec_module(module)
+    with pytest.MonkeyPatch.context() as module_state:
+        module_state.setitem(sys.modules, module_name, module)
+        spec.loader.exec_module(module)
     return module
 
 
-_VS = _load_module()
+_VS = _load_module("_vs_under_test", _TEMPLATE)
+
+
+@pytest.mark.parametrize("preserve_existing", [False, True])
+def test_load_module_scopes_sys_modules_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    preserve_existing: bool,
+) -> None:
+    module_name = "_verifier_support_schema_module_probe"
+    source = tmp_path / "module_probe.py"
+    source.write_text(
+        "import sys\nregistered_while_loading = sys.modules[__name__]\n",
+        encoding="utf-8",
+    )
+    sentinel = ModuleType("sentinel")
+    if preserve_existing:
+        monkeypatch.setitem(sys.modules, module_name, sentinel)
+    else:
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    loaded = _load_module(module_name, source)
+
+    assert vars(loaded)["registered_while_loading"] is loaded
+    if preserve_existing:
+        assert sys.modules[module_name] is sentinel
+    else:
+        assert module_name not in sys.modules
 
 
 @pytest.fixture

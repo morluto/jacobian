@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
 
 from jacobian.adapters.mcp.remote import (
     TenantRuntimeLease,
-    TenantRuntimeLimitError,
     TenantRuntimeRouter,
     TenantRuntimeRouterClosedError,
 )
@@ -63,11 +63,12 @@ class _FakeRuntime:
 
     def close(self) -> None:
         self.close_calls += 1
+        should_fail = self.fail_close
         if self.close_started is not None:
             self.close_started.set()
         if self.close_release is not None:
             self.close_release.wait(timeout=2)
-        if self.fail_close:
+        if should_fail:
             raise RuntimeError("injected close failure")
 
 
@@ -157,16 +158,14 @@ def test_tenant_router_uses_idle_ttl_lru_and_never_evicts_an_active_lease(
     active.release()
 
 
-def test_tenant_router_restores_failed_eviction_and_shutdown_waits_for_leases(
+def test_tenant_router_quarantines_failed_eviction_until_shutdown_retry(
     tmp_path: Path,
 ) -> None:
     first = _FakeRuntime(tmp_path / "first", fail_close=True)
-    created = [first]
+    created: list[_FakeRuntime] = []
 
     def factory(path: Path, **_kwargs: object) -> _FakeRuntime:
-        if len(created) == 1:
-            return first
-        runtime = _FakeRuntime(path)
+        runtime = first if not created else _FakeRuntime(path)
         created.append(runtime)
         return runtime
 
@@ -178,34 +177,25 @@ def test_tenant_router_restores_failed_eviction_and_shutdown_waits_for_leases(
     assert router.runtime_for("alpha") is first
     with pytest.raises(RuntimeError, match="injected close failure"):
         router.runtime_for("beta")
-    assert router.runtime_for("alpha") is first
 
-    lease = router.lease_for("alpha")
-    with pytest.raises(TenantRuntimeLimitError, match="tenant limit"):
-        router.lease_for("beta")
+    assert first.close_calls == 1
+    assert created == [first]
+    with pytest.raises(RuntimeError, match="injected close failure"):
+        router.runtime_for("gamma")
+    assert first.close_calls == 2
+    assert created == [first]
+
     first.fail_close = False
-    close_entered = threading.Event()
-    original_close = router.close
+    router.close()
 
-    def close_after_signaling() -> None:
-        close_entered.set()
-        original_close()
-
-    router.close = close_after_signaling  # type: ignore[method-assign]
-    closed = threading.Event()
-    closer = threading.Thread(target=lambda: (router.close(), closed.set()))
-    closer.start()
-    assert close_entered.wait(timeout=2)
-    assert not closed.is_set()
+    assert first.close_calls == 3
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
         router.lease_for("beta")
-    lease.release()
-    closer.join(timeout=2)
-    assert closed.is_set()
 
 
 def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     close_started = threading.Event()
     close_release = threading.Event()
@@ -215,10 +205,17 @@ def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
         close_started=close_started,
         close_release=close_release,
     )
+    created: list[_FakeRuntime] = []
+
+    def factory(path: Path, **_kwargs: object) -> _FakeRuntime:
+        runtime = first if not created else _FakeRuntime(path)
+        created.append(runtime)
+        return runtime
+
     router = TenantRuntimeRouter(
         tmp_path,
         max_tenant_runtimes=1,
-        runtime_factory=lambda _path, **_kwargs: first,  # type: ignore[arg-type]
+        runtime_factory=factory,  # type: ignore[arg-type]
     )
     router.runtime_for("alpha")
 
@@ -235,22 +232,33 @@ def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
     assert close_started.wait(timeout=2)
 
     acquired: list[TenantRuntimeLease] = []
+    reacquirer_waiting = threading.Event()
+    original_wait = router._condition.wait
+
+    def observed_wait(timeout: float | None = None) -> bool:
+        reacquirer_waiting.set()
+        return original_wait(timeout)
+
+    monkeypatch.setattr(router._condition, "wait", observed_wait)
 
     def reacquire() -> None:
         acquired.append(router.lease_for("alpha"))
 
     reacquirer = threading.Thread(target=reacquire)
     reacquirer.start()
-    reacquirer.join(timeout=0.1)
-    assert reacquirer.is_alive()
+    assert reacquirer_waiting.wait(timeout=2)
+    assert acquired == []
 
+    first.fail_close = False
     close_release.set()
     evictor.join(timeout=2)
     reacquirer.join(timeout=2)
 
     assert len(eviction_error) == 1
     assert len(acquired) == 1
-    assert acquired[0].runtime is first
+    assert acquired[0].runtime is not first
+    assert first.close_calls == 2
+    assert created == [first, acquired[0].runtime]
     acquired[0].release()
 
 
@@ -281,6 +289,149 @@ def test_tenant_router_retries_only_failed_runtime_shutdowns(tmp_path: Path) -> 
     router.close()
 
     assert [runtime.close_calls for runtime in created] == [2, 1]
+
+
+def test_tenant_router_shutdown_is_retryable_after_base_exception(
+    tmp_path: Path,
+) -> None:
+    class InterruptOnceRuntime(_FakeRuntime):
+        def close(self) -> None:
+            self.close_calls += 1
+            if self.close_calls == 1:
+                raise KeyboardInterrupt
+
+    runtime = InterruptOnceRuntime(tmp_path / "runtime")
+    router = TenantRuntimeRouter(
+        tmp_path,
+        runtime_factory=lambda _path, **_kwargs: runtime,  # type: ignore[arg-type]
+    )
+    router.runtime_for("alpha")
+
+    with pytest.raises(KeyboardInterrupt):
+        router.close()
+
+    with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
+        router.lease_for("alpha")
+    router.close()
+    router.close()
+
+    assert runtime.close_calls == 2
+    with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
+        router.lease_for("alpha")
+
+
+def test_tenant_router_releases_shutdown_claim_when_condition_exit_is_interrupted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _FakeRuntime(tmp_path / "runtime")
+    router = TenantRuntimeRouter(
+        tmp_path,
+        runtime_factory=lambda _path, **_kwargs: runtime,  # type: ignore[arg-type]
+    )
+    router.runtime_for("alpha")
+    condition_type = type(router._condition)
+    original_exit = condition_type.__exit__
+    interrupt_exit = True
+
+    def interrupted_exit(
+        condition: threading.Condition,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: object,
+    ) -> bool | None:
+        nonlocal interrupt_exit
+        result = original_exit(condition, exc_type, exc_value, traceback)
+        if condition is router._condition and interrupt_exit:
+            interrupt_exit = False
+            raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(condition_type, "__exit__", interrupted_exit)
+    with pytest.raises(KeyboardInterrupt):
+        router.close()
+    monkeypatch.setattr(condition_type, "__exit__", original_exit)
+
+    retry_completed = threading.Event()
+    retry_failures: list[BaseException] = []
+
+    def retry_close() -> None:
+        try:
+            router.close()
+        except BaseException as exc:
+            retry_failures.append(exc)
+        finally:
+            retry_completed.set()
+
+    retry = threading.Thread(target=retry_close, daemon=True)
+    retry.start()
+    completed_without_repair = retry_completed.wait(timeout=2)
+    if not completed_without_repair:
+        # Unblock a defective implementation so the failed regression leaves no thread.
+        with router._condition:
+            router._shutdown_in_flight = False
+            router._condition.notify_all()
+    retry.join(timeout=2)
+
+    assert completed_without_repair
+    assert retry_failures == []
+    assert runtime.close_calls == 1
+
+
+def test_concurrent_shutdown_callers_close_each_runtime_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ConcurrentCloseRuntime(_FakeRuntime):
+        def __init__(self, identity: Path) -> None:
+            super().__init__(identity)
+            self.close_barrier = threading.Barrier(2)
+
+        def close(self) -> None:
+            self.close_calls += 1
+            with suppress(threading.BrokenBarrierError):
+                self.close_barrier.wait(timeout=0.5)
+
+    runtime = ConcurrentCloseRuntime(tmp_path / "runtime")
+    router = TenantRuntimeRouter(
+        tmp_path,
+        runtime_factory=lambda _path, **_kwargs: runtime,  # type: ignore[arg-type]
+    )
+    lease = router.lease_for("alpha")
+    waiting_threads: set[int] = set()
+    waiters_lock = threading.Lock()
+    both_waiting = threading.Event()
+    original_wait = router._condition.wait
+
+    def observed_wait(timeout: float | None = None) -> bool:
+        with waiters_lock:
+            waiting_threads.add(threading.get_ident())
+            if len(waiting_threads) == 2:
+                both_waiting.set()
+        return original_wait(timeout)
+
+    monkeypatch.setattr(router._condition, "wait", observed_wait)
+    failures: list[BaseException] = []
+
+    def close_router() -> None:
+        try:
+            router.close()
+        except BaseException as exc:
+            failures.append(exc)
+
+    closers = [threading.Thread(target=close_router) for _ in range(2)]
+    for closer in closers:
+        closer.start()
+    assert both_waiting.wait(timeout=2)
+    assert runtime.close_calls == 0
+
+    lease.release()
+    for closer in closers:
+        closer.join(timeout=2)
+        assert not closer.is_alive()
+
+    assert failures == []
+    assert runtime.close_calls == 1
 
 
 def test_anonymous_tenant_namespace_is_fixed_by_the_operator(tmp_path: Path) -> None:

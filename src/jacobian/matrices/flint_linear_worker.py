@@ -175,12 +175,11 @@ def _solve(
 
 def _run(request: dict[str, Any]) -> dict[str, object]:
     protocol = request.get("protocol")
-    if protocol not in {
+    if not isinstance(protocol, str) or protocol not in {
         FLINT_LINEAR_WORKER_PROTOCOL,
         FLINT_LINEAR_INCONSISTENCY_WORKER_PROTOCOL,
     }:
         raise FlintLinearWorkerError("FLINT_LINEAR_INPUT_INVALID")
-    assert isinstance(protocol, str)
     coefficients, rhs = _validate_system(request, protocol=protocol)
     try:
         flint: Any = importlib.import_module("flint")

@@ -627,11 +627,12 @@ class ExperimentService:
                     )
                     return
 
+                fixed_page_parents = 1 if not page_uris else 2
                 page_size = min(
                     request.budget.page_size,
                     remaining_candidates,
                     self.evaluation.max_batch_size,
-                    self.store.limits.max_parents - 2,
+                    self.store.limits.max_parents - fixed_page_parents,
                 )
                 execution = self.executor.run(
                     entrypoint=enumerator.descriptor.entrypoint,

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 
+import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.constants import ReasoningLogMode
 from jacobian.adapters.mcp.server import JacobianCoreExtension, create_server
 from jacobian.contracts.capabilities import CapabilityResult
@@ -38,12 +39,17 @@ def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
 
 def test_mcp_v2_static_validation_context_errors_and_structured_resources(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delattr(server_module, "Context", raising=False)
+
     async def scenario() -> None:
         from mcp import Client
         from mcp.shared.exceptions import MCPError
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        server = create_server(tmp_path)
+        assert not hasattr(server_module, "Context")
+        async with Client(server, raise_exceptions=True) as client:
             listed = await client.list_tools()
             assert all(
                 tool.input_schema.get("additionalProperties") is False

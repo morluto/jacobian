@@ -286,6 +286,25 @@ def test_python_provider_readiness_checks_required_attributes(
     assert raised.value.code is ProviderRuntimeErrorCode.READINESS_FAILED
 
 
+def test_z3_version_mismatch_reports_smt_solver_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mismatched = _runtime(provider="jacobian.z3", version="0.0.0")
+    monkeypatch.setattr(
+        provider_runtime,
+        "python_distribution_provider_runtime",
+        lambda *_args, **_kwargs: mismatched,
+    )
+
+    runtime = provider_runtime.known_provider_runtime("jacobian.z3")
+
+    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.diagnostic == (
+        "Z3 is installed but does not match the pinned "
+        f"{provider_runtime.Z3_SOLVER_VERSION} SMT solver profile."
+    )
+
+
 def test_disappeared_executable_is_unavailable(tmp_path: Path) -> None:
     runtime = _runtime(
         digest_kind=CapabilityProviderDigestKind.EXECUTABLE,

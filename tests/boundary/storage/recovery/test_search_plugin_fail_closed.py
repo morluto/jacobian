@@ -270,6 +270,87 @@ def test_search_batch_respects_archive_parent_limit(fresh_complete_runtime) -> N
         )
 
 
+def test_refiner_can_fit_previous_nominations_to_archive_parent_limit(
+    fresh_complete_runtime,
+) -> None:
+    claim_uri, plugin_id = _install_search_plugin(
+        fresh_complete_runtime,
+        proposer_entrypoint=(
+            "tests.support.search_entrypoints:"
+            "propose_fixture_values_with_strategy_state"
+        ),
+        refiner_entrypoint=(
+            "tests.support.search_entrypoints:"
+            "refine_with_bounded_previous_batch_nominations"
+        ),
+    )
+    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=6)
+    handle = fresh_complete_runtime.services.search.start(
+        _request(
+            claim_uri,
+            plugin_id,
+            idempotency_key="search-nomination-parent-policy-001",
+            batch_size=4,
+        )
+    )
+
+    snapshot = fresh_complete_runtime.services.search.wait(
+        handle.experiment_uri, timeout_seconds=30
+    )
+
+    assert snapshot.state is ExperimentState.COMPLETED
+    assert snapshot.effective_budget.batch_size == 3
+    assert snapshot.accounting.iterations == 2
+    assert snapshot.accounting.nominations == 2
+    assert snapshot.checkpoint_uri is not None
+    checkpoint = SearchCheckpoint.model_validate(
+        fresh_complete_runtime.core.store.get(snapshot.checkpoint_uri).payload
+    )
+    assert checkpoint.state["observed_lineage_parent_limit"] == 2
+    for page_uri in snapshot.archive_page_uris:
+        assert (
+            len(fresh_complete_runtime.core.store.get(page_uri).manifest.parents) <= 6
+        )
+
+
+def test_refiner_cannot_exceed_archive_nomination_parent_limit(
+    fresh_complete_runtime,
+) -> None:
+    claim_uri, plugin_id = _install_search_plugin(
+        fresh_complete_runtime,
+        proposer_entrypoint=(
+            "tests.support.search_entrypoints:"
+            "propose_fixture_values_with_strategy_state"
+        ),
+        refiner_entrypoint=(
+            "tests.support.search_entrypoints:"
+            "refine_ignoring_previous_batch_nomination_limit"
+        ),
+    )
+    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=6)
+    handle = fresh_complete_runtime.services.search.start(
+        _request(
+            claim_uri,
+            plugin_id,
+            idempotency_key="search-nomination-parent-policy-002",
+            batch_size=4,
+        )
+    )
+
+    snapshot = fresh_complete_runtime.services.search.wait(
+        handle.experiment_uri, timeout_seconds=30
+    )
+
+    assert snapshot.state is ExperimentState.ERROR
+    assert snapshot.stop_reason is SearchStopReason.ERROR
+    assert snapshot.accounting.nominations == 0
+    assert len(snapshot.archive_page_uris) == 1
+    assert (
+        snapshot.detail
+        == "refiner returned more nomination lineage than the archive can preserve"
+    )
+
+
 def test_refiner_cannot_claim_verification(fresh_complete_runtime) -> None:
     claim_uri, plugin_id = _install_search_plugin(
         fresh_complete_runtime,

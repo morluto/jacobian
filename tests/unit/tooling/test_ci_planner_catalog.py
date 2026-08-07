@@ -36,13 +36,10 @@ def _load_script(name: str) -> ModuleType:
 def _ci_plan(*args: str) -> dict[str, str]:
     classifier = _load_script("classify-ci-paths")
     output = io.StringIO()
-    original_argv = sys.argv
-    try:
-        sys.argv = ["classify-ci-paths", *args]
+    with pytest.MonkeyPatch.context() as process_state:
+        process_state.setattr(sys, "argv", ["classify-ci-paths", *args])
         with contextlib.redirect_stdout(output):
             classifier.main()
-    finally:
-        sys.argv = original_argv
     return dict(line.split("=", 1) for line in output.getvalue().splitlines())
 
 

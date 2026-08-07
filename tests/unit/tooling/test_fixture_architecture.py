@@ -4,12 +4,67 @@ from __future__ import annotations
 
 import ast
 import runpy
+from functools import cache
 from pathlib import Path
 
 import pytest
 from tests.support.state import copy_template, publish_template
 
 ROOT = Path(__file__).parents[2]
+REPOSITORY_ROOT = ROOT.parent
+
+
+def _call_name(call: ast.Call) -> str | None:
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return None
+
+
+def _fixture_scope(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> str | None:
+    for decorator in node.decorator_list:
+        call = decorator if isinstance(decorator, ast.Call) else None
+        target = call.func if call is not None else decorator
+        is_fixture = (isinstance(target, ast.Name) and target.id == "fixture") or (
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == "pytest"
+            and target.attr == "fixture"
+        )
+        if not is_fixture:
+            continue
+        if call is None:
+            return "function"
+        for keyword in call.keywords:
+            if (
+                keyword.arg == "scope"
+                and isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str)
+            ):
+                return keyword.value.value
+        return "function"
+    return None
+
+
+@cache
+def _fixture_functions() -> tuple[
+    tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef], ...
+]:
+    fixtures: list[tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]] = []
+    roots = (ROOT, REPOSITORY_ROOT / "benchmarks" / "validation")
+    for fixture_root in roots:
+        for path in sorted(fixture_root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            fixtures.extend(
+                (path, node)
+                for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and _fixture_scope(node) is not None
+            )
+    return tuple(fixtures)
 
 
 def _imports(path: Path) -> set[str]:
@@ -99,3 +154,80 @@ def test_template_isolation_gives_each_test_mutable_state(tmp_path: Path) -> Non
 
     assert (template / "metadata.txt").read_text(encoding="utf-8") == "immutable"
     assert (second / "metadata.txt").read_text(encoding="utf-8") == "immutable"
+
+
+def test_broad_fixtures_do_not_share_mutable_test_services() -> None:
+    """Service graphs and repositories stay local unless frozen as templates."""
+
+    mutable_constructors = {
+        "ArtifactRepository",
+        "CapabilityService",
+        "create_runtime",
+        "open_domain_services",
+    }
+    violations: list[tuple[str, str, str | None, tuple[str, ...]]] = []
+    for path, node in _fixture_functions():
+        scope = _fixture_scope(node)
+        if scope == "function":
+            continue
+        called_names = {
+            name
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call) and (name := _call_name(call)) is not None
+        }
+        mutable_calls = tuple(sorted(called_names & mutable_constructors))
+        if mutable_calls and "publish_template" not in called_names:
+            violations.append(
+                (
+                    path.relative_to(REPOSITORY_ROOT).as_posix(),
+                    node.name,
+                    scope,
+                    mutable_calls,
+                )
+            )
+
+    assert violations == []
+
+
+def test_resource_owning_fixtures_close_the_resource_they_construct() -> None:
+    """A fixture-owned runtime or repository must have deterministic teardown."""
+
+    resource_constructors = {"ArtifactRepository", "create_runtime"}
+    leaks: list[tuple[str, str, str]] = []
+    for path, node in _fixture_functions():
+        owned: set[str] = set()
+        for assignment in ast.walk(node):
+            if isinstance(assignment, ast.Assign):
+                value = assignment.value
+                targets = assignment.targets
+            elif isinstance(assignment, ast.AnnAssign):
+                value = assignment.value
+                targets = (assignment.target,)
+            else:
+                continue
+            if (
+                not isinstance(value, ast.Call)
+                or _call_name(value) not in resource_constructors
+            ):
+                continue
+            owned.update(
+                target.id for target in targets if isinstance(target, ast.Name)
+            )
+        closed = {
+            call.func.value.id
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "close"
+            and isinstance(call.func.value, ast.Name)
+        }
+        leaks.extend(
+            (
+                path.relative_to(REPOSITORY_ROOT).as_posix(),
+                node.name,
+                resource,
+            )
+            for resource in sorted(owned - closed)
+        )
+
+    assert leaks == []

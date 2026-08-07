@@ -213,7 +213,9 @@ def _mcp_resource_link_uris(item: Mapping[str, Any]) -> tuple[str, ...]:
 def _mcp_resource_read_uri(item: Mapping[str, Any]) -> str | None:
     item_type = item.get("type")
     tool = item.get("tool")
-    if item_type != "mcp_resource_read" and tool not in _RESOURCE_READ_TOOL_NAMES:
+    if item_type != "mcp_resource_read" and (
+        not isinstance(tool, str) or tool not in _RESOURCE_READ_TOOL_NAMES
+    ):
         return None
     for key in ("arguments", "params", "input"):
         value = item.get(key)
@@ -227,8 +229,12 @@ def _mcp_resource_read_uri(item: Mapping[str, Any]) -> str | None:
 
 def _mcp_resource_read_failed(item: Mapping[str, Any]) -> bool:
     result = item.get("result")
+    status = item.get("status")
     return bool(
-        item.get("status") in {"error", "failed", "CANCELLED", "ERROR", "TIMEOUT"}
+        (
+            isinstance(status, str)
+            and status in {"error", "failed", "CANCELLED", "ERROR", "TIMEOUT"}
+        )
         or item.get("error")
         or (
             isinstance(result, Mapping)
@@ -539,8 +545,9 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
                 capability_attempt_ids.append(arguments["capability_id"])
             result = item.get("result")
             response = structured_response or text_response
+            status = item.get("status")
             failed = bool(
-                item.get("status") in {"error", "failed"}
+                (isinstance(status, str) and status in {"error", "failed"})
                 or item.get("error")
                 or (
                     isinstance(result, Mapping)

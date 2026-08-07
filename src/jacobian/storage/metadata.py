@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
@@ -23,12 +24,18 @@ from jacobian.storage.identity import (
     BOOTSTRAP_SEMANTICS_URI,
     CANONICALIZER_DIGEST,
     OBJECT_FORMAT_VERSION,
-    artifact_identity,
+    _ArtifactIdentity,
+    _prepare_artifact_identity,
     digest_from_uri,
     framed_digest,
-    sha256_digest,
 )
 from jacobian.storage.models import StoredArtifact
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedArtifact:
+    canonical_bytes: bytes
+    identity: _ArtifactIdentity
 
 
 class ArtifactMetadata:
@@ -52,28 +59,29 @@ class ArtifactMetadata:
     ) -> str:
         """Register an operator-owned infrastructure descriptor."""
 
-        if kind not in {
-            "schema",
-            "semantics",
-            "canonicalizer",
-            "implementation",
-        }:
-            raise ValueError(f"unsupported descriptor kind: {kind!r}")
-        result = self._put(
+        summary = self._descriptor_summary(kind=kind, name=name, version=version)
+        self._validate_put_request(
             schema_uri=BOOTSTRAP_SCHEMA_URI,
             semantics_uri=BOOTSTRAP_SEMANTICS_URI,
-            payload={
-                "descriptor_version": "1",
-                "kind": kind,
-                "name": name,
-                "version": version,
-                "definition": definition,
-            },
             parents=(),
-            summary=f"{kind}: {name}@{version}",
+            summary=summary,
             allow_bootstrap_references=True,
         )
-        return result.artifact_uri
+        canonical_bytes = self._canonicalize_descriptor(
+            kind=kind,
+            name=name,
+            version=version,
+            definition=definition,
+        )
+        self._validate_artifact_size(canonical_bytes)
+        prepared = self._prepare_identity(
+            schema_uri=BOOTSTRAP_SCHEMA_URI,
+            semantics_uri=BOOTSTRAP_SEMANTICS_URI,
+            canonical_bytes=canonical_bytes,
+            parents=(),
+            summary=summary,
+        )
+        return self._commit_prepared(prepared).artifact_uri
 
     def descriptor_uri(
         self,
@@ -85,30 +93,50 @@ class ArtifactMetadata:
     ) -> str:
         """Return the deterministic URI for an infrastructure descriptor.
 
-        This is a read-only identity calculation.  Schema registration uses it
-        to distinguish an already validated descriptor from a new definition
-        before doing expensive Draft 2020-12 meta-validation.
+        This read-only calculation shares canonical preparation with descriptor
+        registration but does not apply repository commit limits.
         """
 
-        if kind not in {"schema", "semantics", "canonicalizer", "implementation"}:
-            raise ValueError(f"unsupported descriptor kind: {kind!r}")
-        payload = {
-            "descriptor_version": "1",
-            "kind": kind,
-            "name": name,
-            "version": version,
-            "definition": definition,
-        }
-        canonical_bytes = canonicalize_json(payload, limits=self.canonical_limits)
-        artifact_uri, _object_digest, _manifest_digest = artifact_identity(
-            canonical_limits=self.canonical_limits,
+        summary = self._descriptor_summary(kind=kind, name=name, version=version)
+        canonical_bytes = self._canonicalize_descriptor(
+            kind=kind,
+            name=name,
+            version=version,
+            definition=definition,
+        )
+        prepared = self._prepare_identity(
             schema_uri=BOOTSTRAP_SCHEMA_URI,
             semantics_uri=BOOTSTRAP_SEMANTICS_URI,
             canonical_bytes=canonical_bytes,
             parents=(),
-            summary=f"{kind}: {name}@{version}",
+            summary=summary,
         )
-        return artifact_uri
+        return prepared.identity.artifact_uri
+
+    @staticmethod
+    def _descriptor_summary(*, kind: str, name: str, version: str) -> str:
+        if kind not in {"schema", "semantics", "canonicalizer", "implementation"}:
+            raise ValueError(f"unsupported descriptor kind: {kind!r}")
+        return f"{kind}: {name}@{version}"
+
+    def _canonicalize_descriptor(
+        self,
+        *,
+        kind: str,
+        name: str,
+        version: str,
+        definition: Any,
+    ) -> bytes:
+        return canonicalize_json(
+            {
+                "descriptor_version": "1",
+                "kind": kind,
+                "name": name,
+                "version": version,
+                "definition": definition,
+            },
+            limits=self.canonical_limits,
+        )
 
     def get_descriptor(
         self,
@@ -163,6 +191,33 @@ class ArtifactMetadata:
         summary: str,
         allow_bootstrap_references: bool,
     ) -> ArtifactPutResult:
+        self._validate_put_request(
+            schema_uri=schema_uri,
+            semantics_uri=semantics_uri,
+            parents=parents,
+            summary=summary,
+            allow_bootstrap_references=allow_bootstrap_references,
+        )
+        canonical_bytes = canonicalize_json(payload, limits=self.canonical_limits)
+        self._validate_artifact_size(canonical_bytes)
+        prepared = self._prepare_identity(
+            schema_uri=schema_uri,
+            semantics_uri=semantics_uri,
+            canonical_bytes=canonical_bytes,
+            parents=parents,
+            summary=summary,
+        )
+        return self._commit_prepared(prepared)
+
+    def _validate_put_request(
+        self,
+        *,
+        schema_uri: str,
+        semantics_uri: str,
+        parents: tuple[str, ...],
+        summary: str,
+        allow_bootstrap_references: bool,
+    ) -> None:
         if len(summary) > self.limits.max_summary_chars:
             raise StorageLimitError("artifact summary exceeds the configured limit")
         if len(parents) > self.limits.max_parents:
@@ -179,56 +234,55 @@ class ArtifactMetadata:
                         f"referenced artifact is not committed: {reference}"
                     )
 
-        canonical_bytes = canonicalize_json(payload, limits=self.canonical_limits)
+    def _validate_artifact_size(self, canonical_bytes: bytes) -> None:
         if len(canonical_bytes) > self.limits.max_artifact_bytes:
             raise StorageLimitError("artifact exceeds the configured size limit")
 
-        artifact_uri, object_digest, manifest_digest = artifact_identity(
-            canonical_limits=self.canonical_limits,
-            schema_uri=schema_uri,
-            semantics_uri=semantics_uri,
+    def _prepare_identity(
+        self,
+        *,
+        schema_uri: str,
+        semantics_uri: str,
+        canonical_bytes: bytes,
+        parents: tuple[str, ...],
+        summary: str,
+    ) -> _PreparedArtifact:
+        """Calculate an identity from already canonical artifact bytes."""
+
+        return _PreparedArtifact(
             canonical_bytes=canonical_bytes,
-            parents=parents,
-            summary=summary,
-        )
-        normalized_parents = tuple(sorted(parents))
-        manifest = ArtifactManifest(
-            object_digest=object_digest,
-            payload_digest=sha256_digest(canonical_bytes),
-            schema_uri=schema_uri,
-            semantics_uri=semantics_uri,
-            canonicalizer_digest=CANONICALIZER_DIGEST,
-            parents=normalized_parents,
-            summary=summary,
-        )
-        manifest_bytes = canonicalize_json(
-            manifest.model_dump(mode="json"),
-            limits=self.canonical_limits,
+            identity=_prepare_artifact_identity(
+                canonical_limits=self.canonical_limits,
+                schema_uri=schema_uri,
+                semantics_uri=semantics_uri,
+                canonical_bytes=canonical_bytes,
+                parents=parents,
+                summary=summary,
+            ),
         )
 
-        # The identity helper computes the same manifest digest.  Keep this
-        # assertion close to construction so future changes cannot make the
-        # read-only descriptor identity drift from normal puts.
-        if manifest_digest != sha256_digest(
-            manifest_bytes
-        ):  # pragma: no cover - invariant
-            raise AssertionError("artifact identity and manifest digest diverged")
+    def _commit_prepared(self, prepared: _PreparedArtifact) -> ArtifactPutResult:
+        """Persist one fully validated artifact without recomputing its identity."""
+
+        canonical_bytes = prepared.canonical_bytes
+        identity = prepared.identity
+        manifest = identity.manifest
 
         # Re-registering identical content is common while assembling built-in
         # portfolios. Validate the committed artifact before returning so the
         # idempotent path avoids both blob publication and metadata writes
         # without allowing missing or corrupted content to be silently healed.
-        if self._artifact_exists(artifact_uri):
-            self.get(artifact_uri)
+        if self._artifact_exists(identity.artifact_uri):
+            self.get(identity.artifact_uri)
             return ArtifactPutResult(
-                artifact_uri=artifact_uri,
-                object_digest=object_digest,
-                manifest_digest=manifest_digest,
+                artifact_uri=identity.artifact_uri,
+                object_digest=identity.object_digest,
+                manifest_digest=identity.manifest_digest,
                 canonicalizer_digest=CANONICALIZER_DIGEST,
             )
 
         self._write_blob(canonical_bytes)
-        self._write_blob(manifest_bytes)
+        self._write_blob(identity.manifest_bytes)
 
         with self.connection() as connection:
             connection.execute(
@@ -245,30 +299,30 @@ class ArtifactMetadata:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    artifact_uri,
-                    manifest_digest,
-                    object_digest,
-                    sha256_digest(canonical_bytes),
-                    schema_uri,
-                    semantics_uri,
+                    identity.artifact_uri,
+                    identity.manifest_digest,
+                    identity.object_digest,
+                    manifest.payload_digest,
+                    manifest.schema_uri,
+                    manifest.semantics_uri,
                     CANONICALIZER_DIGEST,
-                    summary,
+                    manifest.summary,
                 ),
             )
-            for position, parent_uri in enumerate(normalized_parents):
+            for position, parent_uri in enumerate(manifest.parents):
                 connection.execute(
                     """
                     INSERT OR IGNORE INTO artifact_parents (
                         artifact_uri, position, parent_uri
                     ) VALUES (?, ?, ?)
                     """,
-                    (artifact_uri, position, parent_uri),
+                    (identity.artifact_uri, position, parent_uri),
                 )
 
         return ArtifactPutResult(
-            artifact_uri=artifact_uri,
-            object_digest=object_digest,
-            manifest_digest=manifest_digest,
+            artifact_uri=identity.artifact_uri,
+            object_digest=identity.object_digest,
+            manifest_digest=identity.manifest_digest,
             canonicalizer_digest=CANONICALIZER_DIGEST,
         )
 

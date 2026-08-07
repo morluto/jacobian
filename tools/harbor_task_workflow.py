@@ -254,6 +254,50 @@ def _oracle_evidence_snapshot(
     return snapshot
 
 
+def _oracle_evidence_candidates(evidence_root: Path) -> list[Path]:
+    candidates: list[tuple[int, Path]] = []
+    for path in evidence_root.glob("*/oracle-evidence.json"):
+        try:
+            modified_ns = path.stat().st_mtime_ns
+        except OSError:
+            continue
+        candidates.append((modified_ns, path))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return [path for _modified_ns, path in candidates]
+
+
+def _task_digest_from_evidence(
+    path: Path,
+    *,
+    dataset: str,
+    task: str,
+    previous: dict[Path, tuple[int, int, str]],
+) -> str | None:
+    try:
+        stat = path.stat()
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    fingerprint = (stat.st_mtime_ns, stat.st_size, hashlib.sha256(raw).hexdigest())
+    if previous.get(path) == fingerprint:
+        return None
+    try:
+        payload: Any = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("dataset") != dataset:
+        return None
+    task_entries = payload.get("tasks")
+    if not isinstance(task_entries, list):
+        return None
+    for entry in task_entries:
+        if isinstance(entry, dict) and entry.get("task") == task:
+            digest = entry.get("digest")
+            if isinstance(digest, str):
+                return digest
+    return None
+
+
 def _fresh_oracle_evidence(
     selection: TaskSelection,
     task: str,
@@ -261,34 +305,15 @@ def _fresh_oracle_evidence(
     previous: dict[Path, tuple[int, int, str]],
 ) -> tuple[str, str]:
     evidence_root = ROOT / "benchmarks" / "results" / f"{selection.dataset}-oracle"
-    candidates = sorted(
-        evidence_root.glob("*/oracle-evidence.json"),
-        key=lambda path: path.stat().st_mtime_ns,
-        reverse=True,
-    )
-    for path in candidates:
-        try:
-            stat = path.stat()
-            raw = path.read_bytes()
-        except OSError:
-            continue
-        fingerprint = (stat.st_mtime_ns, stat.st_size, hashlib.sha256(raw).hexdigest())
-        if previous.get(path) == fingerprint:
-            continue
-        try:
-            payload: Any = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict) or payload.get("dataset") != selection.dataset:
-            continue
-        task_entries = payload.get("tasks")
-        if not isinstance(task_entries, list):
-            continue
-        for entry in task_entries:
-            if isinstance(entry, dict) and entry.get("task") == task:
-                digest = entry.get("digest")
-                if isinstance(digest, str):
-                    return digest, path.relative_to(ROOT).as_posix()
+    for path in _oracle_evidence_candidates(evidence_root):
+        digest = _task_digest_from_evidence(
+            path,
+            dataset=selection.dataset,
+            task=task,
+            previous=previous,
+        )
+        if digest is not None:
+            return digest, path.relative_to(ROOT).as_posix()
     raise TaskWorkflowError(
         f"Oracle produced no fresh evidence for {selection.dataset}/{task}"
     )

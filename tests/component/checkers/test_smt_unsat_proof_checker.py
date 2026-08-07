@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+import sys
+from collections.abc import Callable, Iterator
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -68,11 +69,11 @@ def _checker_artifact(artifact: StoredArtifact) -> dict[str, Any]:
     }
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def proof_request_factory(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> ProofRequestFactory:
-    store = ArtifactRepository(tmp_path_factory.mktemp("smt-proof-checker-store"))
+    tmp_path: Path,
+) -> Iterator[ProofRequestFactory]:
+    store = ArtifactRepository(tmp_path / "store")
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     smt = install_smt_artifacts(store, schemas, artifacts)
@@ -136,7 +137,10 @@ def proof_request_factory(
             "expected_bindings": bindings.model_dump(mode="json"),
         }
 
-    return build
+    try:
+        yield build
+    finally:
+        store.close()
 
 
 def _fake_checker(tmp_path: Path, body: str) -> tuple[Path, Path]:
@@ -145,7 +149,7 @@ def _fake_checker(tmp_path: Path, body: str) -> tuple[Path, Path]:
     executable = tmp_path / "carcara"
     executable.write_text(
         (
-            "#!/usr/bin/python3\n"
+            f"#!{sys.executable}\n"
             "import pathlib\n"
             "import sys\n"
             f"marker = pathlib.Path({str(marker)!r})\n"

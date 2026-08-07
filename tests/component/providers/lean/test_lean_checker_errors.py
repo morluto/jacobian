@@ -178,13 +178,15 @@ def test_elan_toolchain_resolution_rejects_elan_proxy_path(
 
 
 def test_system_elan_uses_the_original_user_toolchain_home(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("ELAN_HOME", raising=False)
-    monkeypatch.setenv("HOME", "/tmp/jacobian-test-home")
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
 
     assert _elan_home(("/usr/bin/elan", "run", LEAN_TOOLCHAIN, "lean")) == (
-        "/tmp/jacobian-test-home/.elan"
+        str(home / ".elan")
     )
 
 

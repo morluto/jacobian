@@ -626,7 +626,10 @@ class VerificationService:
             }
             if supporting_artifacts:
                 request["supporting_artifacts"] = [
-                    self._checker_artifact(artifact)
+                    self._checker_artifact(
+                        artifact,
+                        include_storage_metadata=include_artifact_metadata,
+                    )
                     for artifact in supporting_artifacts
                 ]
             request_digest = _digest_bytes(canonicalize_json(request))

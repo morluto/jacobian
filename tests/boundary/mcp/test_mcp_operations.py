@@ -240,28 +240,30 @@ def test_mcp_entrypoint_reports_distribution_version() -> None:
 
 
 def test_cancelled_mcp_blocking_work_drains_before_request_task_finishes() -> None:
-    started = threading.Event()
     release = threading.Event()
     finished = threading.Event()
-    cancellation_signalled = threading.Event()
-
-    def blocking_operation() -> str:
-        started.set()
-        release.wait(timeout=2)
-        finished.set()
-        return "finished"
 
     async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+        cancellation_signalled = asyncio.Event()
+
+        def blocking_operation() -> str:
+            loop.call_soon_threadsafe(started.set)
+            if not release.wait(timeout=2):
+                raise AssertionError("test did not release blocking MCP work")
+            finished.set()
+            return "finished"
+
         task = asyncio.create_task(
             _run_blocking(
                 blocking_operation,
                 on_cancel=cancellation_signalled.set,
             )
         )
-        while not started.is_set():
-            await asyncio.sleep(0)
+        await asyncio.wait_for(started.wait(), timeout=1)
         task.cancel()
-        await asyncio.sleep(0.05)
+        await asyncio.wait_for(cancellation_signalled.wait(), timeout=1)
         assert cancellation_signalled.is_set()
         assert not task.done()
         assert not finished.is_set()
@@ -274,24 +276,31 @@ def test_cancelled_mcp_blocking_work_drains_before_request_task_finishes() -> No
 
 
 def test_repeated_cancellation_keeps_draining_blocking_work() -> None:
-    started = threading.Event()
     release = threading.Event()
     finished = threading.Event()
 
-    def blocking_operation() -> str:
-        started.set()
-        release.wait(timeout=2)
-        finished.set()
-        return "finished"
-
     async def scenario() -> None:
-        task = asyncio.create_task(_run_blocking(blocking_operation))
-        while not started.is_set():
-            await asyncio.sleep(0)
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+        first_cancellation = asyncio.Event()
+        second_cancellation_dispatched = asyncio.Event()
+
+        def blocking_operation() -> str:
+            loop.call_soon_threadsafe(started.set)
+            if not release.wait(timeout=2):
+                raise AssertionError("test did not release blocking MCP work")
+            finished.set()
+            return "finished"
+
+        task = asyncio.create_task(
+            _run_blocking(blocking_operation, on_cancel=first_cancellation.set)
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
         task.cancel()
-        await asyncio.sleep(0.05)
+        await asyncio.wait_for(first_cancellation.wait(), timeout=1)
         task.cancel()
-        await asyncio.sleep(0.05)
+        loop.call_soon(second_cancellation_dispatched.set)
+        await asyncio.wait_for(second_cancellation_dispatched.wait(), timeout=1)
         assert not task.done()
         release.set()
         with pytest.raises(asyncio.CancelledError):

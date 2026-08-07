@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from math import isfinite
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.polynomials import _support as polynomial_support
 
 
 def _term(coefficient: int, exponents: list[int]) -> dict[str, Any]:
@@ -146,6 +149,79 @@ def test_zero_timeout_and_unknown_budget_are_explicit(
     assert timeout.execution.status is ExecutionStatus.TIMEOUT
     assert timeout.output["status"] == "TIMEOUT"
     assert exhausted.output["status"] == "BUDGET_EXHAUSTED"
+
+
+class _StubbornProcess:
+    def __init__(self) -> None:
+        self.alive = True
+        self.events: list[str] = []
+        self.join_timeouts: list[float] = []
+
+    def start(self) -> None:
+        self.events.append("start")
+
+    def join(self, timeout: float | None = None) -> None:
+        if timeout is None:
+            raise AssertionError("polynomial solver join must remain bounded")
+        self.events.append("join")
+        self.join_timeouts.append(timeout)
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+    def terminate(self) -> None:
+        self.events.append("terminate")
+
+    def kill(self) -> None:
+        self.events.append("kill")
+        self.alive = False
+
+
+def _install_stubborn_solver(
+    monkeypatch: pytest.MonkeyPatch, process: _StubbornProcess
+) -> None:
+    def make_queue(*, maxsize: int) -> object:
+        assert maxsize == 1
+        return object()
+
+    def make_process(*, target: Any, args: tuple[Any, ...]) -> _StubbornProcess:
+        assert callable(target)
+        assert args
+        return process
+
+    context = SimpleNamespace(Queue=make_queue, Process=make_process)
+
+    def get_context(method: str) -> SimpleNamespace:
+        assert method == "spawn"
+        return context
+
+    monkeypatch.setattr(polynomial_support.multiprocessing, "get_context", get_context)
+
+
+def test_timeout_kills_stubborn_solver_without_unbounded_wait(
+    authorized_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _StubbornProcess()
+    _install_stubborn_solver(monkeypatch, process)
+
+    result = authorized_complete_runtime.core.capabilities.invoke(_request(degree=2))
+
+    assert result.execution.status is ExecutionStatus.TIMEOUT
+    assert result.output["status"] == "TIMEOUT"
+    assert result.output["candidate_inverse_map"] is None
+    assert result.output["noninvertibility_proved"] is False
+    assert process.events == [
+        "start",
+        "join",
+        "terminate",
+        "join",
+        "kill",
+        "join",
+    ]
+    assert 0 < process.join_timeouts[0] <= 10.0
+    assert process.join_timeouts[1:] == [1.0, 1.0]
+    assert all(timeout > 0 and isfinite(timeout) for timeout in process.join_timeouts)
 
 
 def test_unknown_solver_is_unsupported_without_truth_claim(

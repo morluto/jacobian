@@ -37,13 +37,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: jacobian-harbor-verifier-support
-        name: Jacobian Harbor verifier-support generation check
-        entry: uv run --locked python tools/sync_harbor_verifier_support.py --check
-        language: system
-        pass_filenames: false
-        files: ^(benchmarks/tooling/verifier_support\.py|benchmarks/datasets/.*/tests/verifier_support\.py)$
-        stages: [pre-commit]
       - id: jacobian-pre-push
         name: Jacobian pre-push static checks
         # Keep the push hook below the interactive feedback budget.  The

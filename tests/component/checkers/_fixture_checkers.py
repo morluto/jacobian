@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from typing import Any
 
@@ -100,5 +101,33 @@ def check_parameter_region_certificate(request: dict[str, Any]) -> dict[str, Any
             "certificate proves the exact parameter-region subject"
             if accepted
             else "certificate does not prove the bound parameter region"
+        ),
+    }
+
+
+def check_supporting_artifact_metadata(request: dict[str, Any]) -> dict[str, Any]:
+    supporting_artifacts = request.get("supporting_artifacts")
+    support = (
+        supporting_artifacts[0]
+        if isinstance(supporting_artifacts, list) and len(supporting_artifacts) == 1
+        else None
+    )
+    accepted = (
+        request.get("request_version") == "1"
+        and isinstance(support, dict)
+        and support.get("payload_digest")
+        == "sha256:" + hashlib.sha256(b'{"kind":"supporting-evidence"}').hexdigest()
+        and support.get("parents") == []
+    )
+    return {
+        "accepted": accepted,
+        "conclusion": "FALSE" if accepted else "UNKNOWN",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "CHECKED_CERTIFICATE",
+        "coverage": "EXHAUSTIVE",
+        "detail": (
+            "supporting artifact includes its requested storage metadata"
+            if accepted
+            else "supporting artifact storage metadata is missing or incomplete"
         ),
     }

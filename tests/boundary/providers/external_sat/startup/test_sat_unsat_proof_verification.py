@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +33,7 @@ def _fake_drat_trim(tmp_path: Path, body: str) -> Path:
     executable = tmp_path / "drat-trim"
     executable.write_text(
         (
-            "#!/usr/bin/python3\n"
+            f"#!{sys.executable}\n"
             "import sys\n"
             "if '-h' in sys.argv:\n"
             "    print('usage: drat-trim [INPUT] [<PROOF>] [<option> ...]')\n"
@@ -76,6 +79,7 @@ def _runtime_with_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     executable: Path,
+    resources: ExitStack,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> JacobianRuntime:
@@ -85,10 +89,18 @@ def _runtime_with_runtime(
         "jacobian.portfolio.provider_resolution.drat_trim_provider_runtime",
         lambda *_args, **_kwargs: runtime,
     )
-    return create_runtime(
-        tmp_path / "store",
-        checker_authority=checker_authority,
+    return resources.enter_context(
+        create_runtime(
+            tmp_path / "store",
+            checker_authority=checker_authority,
+        )
     )
+
+
+@pytest.fixture
+def runtime_resources() -> Iterator[ExitStack]:
+    with ExitStack() as resources:
+        yield resources
 
 
 @pytest.mark.parametrize(
@@ -153,12 +165,15 @@ def _verify(runtime: JacobianRuntime, proof_uri: str):
 def test_unsat_proof_is_verified_by_authorized_external_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     cnf_uri, proof_uri = _proof(runtime)
     monkeypatch.setattr(
         jacobian_checkers.sat,
@@ -214,12 +229,15 @@ def test_unsat_proof_is_verified_by_authorized_external_runtime(
 def test_rejected_proof_never_establishes_sat_or_unsat(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_drat_trim(
         tmp_path,
         "print('s NOT VERIFIED')\nraise SystemExit(1)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     _cnf_uri, proof_uri = _proof(runtime)
 
     result = _verify(runtime, proof_uri)
@@ -235,6 +253,7 @@ def test_rejected_proof_never_establishes_sat_or_unsat(
 def test_proof_verify_requires_runtime_and_operator_authorization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_drat_trim(
         tmp_path,
@@ -244,6 +263,7 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         tmp_path / "without-references",
         monkeypatch,
         executable,
+        runtime_resources,
         checker_authority=CheckerAuthorityMode.NONE,
     )
     unavailable = drat_trim_provider_runtime(tmp_path / "missing")
@@ -251,9 +271,11 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         "jacobian.portfolio.provider_resolution.drat_trim_provider_runtime",
         lambda *_args, **_kwargs: unavailable,
     )
-    without_runtime = create_runtime(
-        tmp_path / "without-runtime",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    without_runtime = runtime_resources.enter_context(
+        create_runtime(
+            tmp_path / "without-runtime",
+            checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        )
     )
 
     assert without_references.portfolio.sat_unsat_proof_checker.checker_id is None
@@ -283,6 +305,7 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
 def test_checker_operational_failure_never_creates_a_conclusion(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
     exception: Exception,
     expected_status: ExecutionStatus,
     expected_output_status: str,
@@ -291,7 +314,9 @@ def test_checker_operational_failure_never_creates_a_conclusion(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     _cnf_uri, proof_uri = _proof(runtime)
 
     def fail(**_kwargs: Any):
@@ -310,12 +335,15 @@ def test_checker_operational_failure_never_creates_a_conclusion(
 def test_runtime_replacement_after_authorization_fails_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     _cnf_uri, proof_uri = _proof(runtime)
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o755)

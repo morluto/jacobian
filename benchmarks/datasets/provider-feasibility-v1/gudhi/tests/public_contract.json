@@ -57,7 +57,7 @@
             "const": "jacobian.gudhi-persistence-spike/v1"
           },
           "pin_sha256": {
-            "const": "sha256:1463f2cc07f189d7e12daa010b2bebd838756a7ec90a791901a62bdec9bcd552"
+            "const": "sha256:329e57f50ad88ddbf2f6a3fe7cbbb0b5121be7c92a01d3a0b57db9241b1e6813"
           },
           "provider": {
             "const": "gudhi"

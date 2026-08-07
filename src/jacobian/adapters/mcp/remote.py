@@ -158,6 +158,7 @@ class TenantRuntimeRouter:
         self._clock = clock
         self._runtime_factory = runtime_factory
         self._runtimes: dict[str, _TenantRuntimeEntry] = {}
+        self._quarantined: dict[str, _TenantRuntimeEntry] = {}
         self._creating: set[str] = set()
         self._evicting: set[str] = set()
         self._evictions_in_flight = 0
@@ -247,18 +248,28 @@ class TenantRuntimeRouter:
             entry.last_used = now
             return TenantRuntimeLease(self, tenant_key, entry.runtime)
         if entry is not None:
-            eviction = (tenant_key, self._runtimes.pop(tenant_key))
-            self._evicting.add(tenant_key)
-            self._evictions_in_flight += 1
-            return eviction
+            return self._begin_eviction(tenant_key, self._runtimes.pop(tenant_key))
+        quarantined = self._quarantined.pop(tenant_key, None)
+        if quarantined is not None:
+            return self._begin_eviction(tenant_key, quarantined)
         if tenant_key in self._creating:
             return "WAIT"
         if (
-            len(self._runtimes) + len(self._creating) + self._evictions_in_flight
+            len(self._runtimes)
+            + len(self._quarantined)
+            + len(self._creating)
+            + self._evictions_in_flight
             < self.max_tenant_runtimes
         ):
             self._creating.add(tenant_key)
             return "CREATE"
+        if self._quarantined:
+            eviction = min(
+                self._quarantined.items(),
+                key=lambda item: (item[1].last_used, item[0]),
+            )
+            del self._quarantined[eviction[0]]
+            return self._begin_eviction(*eviction)
         inactive = tuple(
             (key, candidate)
             for key, candidate in self._runtimes.items()
@@ -270,9 +281,14 @@ class TenantRuntimeRouter:
             )
         eviction = min(inactive, key=lambda item: (item[1].last_used, item[0]))
         del self._runtimes[eviction[0]]
-        self._evicting.add(eviction[0])
+        return self._begin_eviction(*eviction)
+
+    def _begin_eviction(
+        self, tenant_key: str, entry: _TenantRuntimeEntry
+    ) -> tuple[str, _TenantRuntimeEntry]:
+        self._evicting.add(tenant_key)
         self._evictions_in_flight += 1
-        return eviction
+        return tenant_key, entry
 
     def _close_evicted(self, eviction: tuple[str, _TenantRuntimeEntry]) -> None:
         tenant_key, entry = eviction
@@ -282,7 +298,7 @@ class TenantRuntimeRouter:
             with self._condition:
                 self._evictions_in_flight -= 1
                 self._evicting.remove(tenant_key)
-                self._runtimes[tenant_key] = entry
+                self._quarantined[tenant_key] = entry
                 self._condition.notify_all()
             raise
         with self._condition:
@@ -299,25 +315,21 @@ class TenantRuntimeRouter:
             entry.last_used = self._clock()
             self._condition.notify_all()
 
-    def close(self) -> None:
-        """Close every tenant runtime owned by this router."""
-
+    def _collect_shutdown_runtimes(
+        self,
+    ) -> tuple[tuple[str, _TenantRuntimeEntry], ...]:
         with self._condition:
-            if self._closed:
-                return
-            while self._shutdown_in_flight:
-                self._condition.wait()
-                if self._closed:
-                    return
-            self._closing = True
             while (
                 self._creating
                 or self._evictions_in_flight
                 or any(entry.active_leases for entry in self._runtimes.values())
             ):
                 self._condition.wait()
-            self._shutdown_in_flight = True
-            runtimes = tuple(self._runtimes.items())
+            return tuple(self._runtimes.items()) + tuple(self._quarantined.items())
+
+    def _close_runtime_entries(
+        self, runtimes: tuple[tuple[str, _TenantRuntimeEntry], ...]
+    ) -> None:
         failures: list[Exception] = []
         for tenant_key, entry in runtimes:
             try:
@@ -327,18 +339,45 @@ class TenantRuntimeRouter:
             else:
                 with self._condition:
                     self._runtimes.pop(tenant_key, None)
+                    self._quarantined.pop(tenant_key, None)
         if failures:
-            with self._condition:
-                self._shutdown_in_flight = False
-                self._condition.notify_all()
             raise ExceptionGroup(
                 "one or more tenant runtimes failed to close", failures
             )
+
+    def _finish_shutdown(self) -> None:
         with self._condition:
             self._shutdown_in_flight = False
             self._closed = True
             self._closing = False
             self._condition.notify_all()
+
+    def _abort_shutdown(self) -> None:
+        with self._condition:
+            self._shutdown_in_flight = False
+            self._condition.notify_all()
+
+    def close(self) -> None:
+        """Close every tenant runtime owned by this router."""
+
+        owns_shutdown = False
+        try:
+            with self._condition:
+                if self._closed:
+                    return
+                while self._shutdown_in_flight:
+                    self._condition.wait()
+                    if self._closed:
+                        return
+                self._closing = True
+                owns_shutdown = True
+                self._shutdown_in_flight = True
+            self._close_runtime_entries(self._collect_shutdown_runtimes())
+            self._finish_shutdown()
+        except BaseException:
+            if owns_shutdown:
+                self._abort_shutdown()
+            raise
 
 
 def load_static_token_file(path: str | Path) -> tuple[StaticTokenGrant, ...]:

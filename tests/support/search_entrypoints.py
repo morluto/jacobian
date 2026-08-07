@@ -59,6 +59,14 @@ def propose_fixture_values(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def propose_fixture_values_with_strategy_state(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    response = propose_fixture_values(request)
+    response["state"] = {**request["state"], **response["state"]}
+    return response
+
+
 def refine_fixture_search(request: dict[str, Any]) -> dict[str, Any]:
     feedback = request["feedback"]
     nominations = (
@@ -76,6 +84,49 @@ def refine_fixture_search(request: dict[str, Any]) -> dict[str, Any]:
         "state": request["state"],
         "nominations": nominations,
         "detail": "fixture refinement",
+    }
+
+
+def refine_with_bounded_previous_batch_nominations(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    limit = int(request["max_additional_lineage_parents"])
+    previous = request["state"].get("previous_candidate_uris", [])
+    current = [item["candidate_uri"] for item in request["feedback"]]
+    return {
+        "response_version": "1",
+        "state": {
+            **request["state"],
+            "previous_candidate_uris": current,
+            "observed_lineage_parent_limit": limit,
+        },
+        "nominations": [
+            {
+                "candidate_uri": candidate_uri,
+                "reason": "previously evaluated candidate",
+            }
+            for candidate_uri in previous[:limit]
+        ],
+        "detail": "nominated within the advertised lineage capacity",
+    }
+
+
+def refine_ignoring_previous_batch_nomination_limit(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    previous = request["state"].get("previous_candidate_uris", [])
+    current = [item["candidate_uri"] for item in request["feedback"]]
+    return {
+        "response_version": "1",
+        "state": {**request["state"], "previous_candidate_uris": current},
+        "nominations": [
+            {
+                "candidate_uri": candidate_uri,
+                "reason": "previously evaluated candidate",
+            }
+            for candidate_uri in previous
+        ],
+        "detail": "ignored the advertised lineage capacity",
     }
 
 

@@ -12,6 +12,7 @@ from jacobian.contracts.discovery import (
     SearchEnumerateRequest,
 )
 from jacobian.experiments import ExperimentError, ExperimentNotFoundError
+from jacobian.storage.models import StorageLimits
 
 
 def test_unknown_experiment_error_explains_recovery(
@@ -245,6 +246,53 @@ def test_enumeration_pages_respect_evaluator_batch_limit(
         snapshot.archive_page_uris[-1]
     )
     assert snapshot.archive_page_uris[0] in second_page.manifest.parents
+
+
+def test_enumeration_uses_available_parent_capacity_per_page(
+    authorized_complete_runtime,
+) -> None:
+    authorized_complete_runtime.core.store.limits = StorageLimits(max_parents=3)
+    claim_uri, plugin_id = _claim(
+        authorized_complete_runtime,
+        reference_name="matrices",
+        predicate="is_nonsingular",
+        parameters={},
+    )
+    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+        SearchEnumerateRequest(
+            claim_uri=claim_uri,
+            plugin_id=plugin_id,
+            bounds={"rows": 1, "cols": 1, "entries": [0, 1, 2, 3]},
+            budget=EnumerationBudget(
+                candidates_max=4,
+                wall_seconds=30,
+                page_size=2,
+            ),
+        )
+    )
+
+    snapshot = authorized_complete_runtime.services.experiments.wait(
+        handle.experiment_uri, timeout_seconds=30
+    )
+
+    assert snapshot.state is ExperimentState.COMPLETED
+    assert snapshot.stop_reason is EnumerationStopReason.COMPLETE
+    first_page_uri = snapshot.archive_page_uris[0]
+    first_page = authorized_complete_runtime.core.store.get(first_page_uri)
+    assert len(first_page.payload["candidate_uris"]) == 2
+    assert set(first_page.manifest.parents) == {
+        first_page.payload["evaluation_uris"][0],
+        *first_page.payload["candidate_uris"],
+    }
+    assert len(snapshot.archive_page_uris) == 3
+    for index, page_uri in enumerate(snapshot.archive_page_uris[1:], start=1):
+        page = authorized_complete_runtime.core.store.get(page_uri)
+        assert len(page.payload["candidate_uris"]) == 1
+        assert set(page.manifest.parents) == {
+            page.payload["evaluation_uris"][0],
+            *page.payload["candidate_uris"],
+            snapshot.archive_page_uris[index - 1],
+        }
 
 
 def test_cancellation_never_becomes_an_exhaustive_conclusion(

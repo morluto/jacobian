@@ -16,20 +16,25 @@ from tests.composition.runtime.capability_service_support import (
     ForgedProviderAdapter,
     ForgedRelationshipVerificationAdapter,
     ForgedVerifiedAdapter,
+    InvalidEvidenceValue,
+    InvalidOutputAdapter,
     NotReadyProviderAdapter,
     OmittedRelationshipArtifactAdapter,
 )
 from tests.support.services import DomainTestServices
 
+from jacobian.atomic_capabilities import AtomicServiceAdapter
 from jacobian.capability_service import CapabilityError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.conjectures import ParameterRegion
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.schema_registry import model_schema
 
 
 def test_external_adapter_invocation_is_recorded_and_retrievable(
@@ -168,6 +173,57 @@ def test_adapter_failure_does_not_expose_internal_exception_text(
     )
     assert "fixture" not in result.execution.detail
     assert "RuntimeError" not in result.execution.detail
+
+
+def test_schema_invalid_adapter_output_returns_a_typed_failure(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(InvalidOutputAdapter())
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="example.invalid-output",
+            input={"value": 21},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
+    assert result.diagnostics[0].stage == "adapter_execution"
+    assert result.diagnostics[0].path == "value"
+    assert result.diagnostics[0].actual_type == "string"
+    assert result.diagnostics[0].expected == "JSON type integer"
+
+
+def test_atomic_adapter_with_invalid_evidence_returns_a_typed_failure(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    adapter = AtomicServiceAdapter(
+        capability_id="example.invalid-evidence",
+        title="Return invalid evidence",
+        description="Exercise malformed atomic service evidence.",
+        modes=(CapabilityMode.EXPLORE,),
+        input_schema={"type": "object", "additionalProperties": False},
+        output_schema=model_schema(ParameterRegion),
+        invoke=lambda _payload: InvalidEvidenceValue(evidence=[]),
+        store=core.store,
+    )
+    capability_core_services.installation.register_capability(adapter)
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="example.invalid-evidence",
+            input={},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
+    assert result.diagnostics[0].stage == "adapter_execution"
+    assert result.diagnostics[0].path == "evidence"
+    assert result.diagnostics[0].actual_type == "array"
 
 
 def test_adapter_cannot_forge_provider_provenance(

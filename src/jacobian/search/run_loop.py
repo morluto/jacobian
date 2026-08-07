@@ -220,10 +220,26 @@ def _run_iteration(state: _SearchIterationState) -> bool:
     if proposal is None:
         return False
     evaluation = _evaluate_candidates(state, proposal, budget)
-    refinement = _run_refiner(state, proposal, evaluation.records, budget)
+    max_additional_lineage_parents = _max_additional_nomination_parents(
+        state, evaluation.records
+    )
+    refinement = _run_refiner(
+        state,
+        proposal,
+        evaluation.records,
+        budget,
+        max_additional_lineage_parents=max_additional_lineage_parents,
+    )
     if refinement is None:
         return False
-    return _persist_iteration(state, proposal, refinement, evaluation, budget)
+    return _persist_iteration(
+        state,
+        proposal,
+        refinement,
+        evaluation,
+        budget,
+        max_additional_lineage_parents=max_additional_lineage_parents,
+    )
 
 
 def _run_proposer(
@@ -510,6 +526,8 @@ def _run_refiner(
     proposal: PluginProposalResponse,
     records: tuple[SearchCandidateRecord, ...],
     budget: SearchBudget,
+    *,
+    max_additional_lineage_parents: int,
 ) -> PluginRefinementResponse | None:
     request = {
         "request_version": "1",
@@ -518,6 +536,7 @@ def _run_refiner(
         "feedback": [record.model_dump(mode="json") for record in records],
         "strategy_reported_complete": proposal.complete,
         "seed": state.request.seed,
+        "max_additional_lineage_parents": max_additional_lineage_parents,
         "bindings": {
             "claim_digest": state.claim.manifest.object_digest,
             "semantics_digest": state.semantics.manifest.object_digest,
@@ -573,18 +592,40 @@ def _run_refiner(
     return refinement
 
 
+def _max_additional_nomination_parents(
+    state: _SearchIterationState,
+    records: tuple[SearchCandidateRecord, ...],
+) -> int:
+    required_parents = {
+        state.request.claim_uri,
+        state.request.plugin_id,
+        *_record_parents(list(records), ()),
+    }
+    return max(0, state.service.store.limits.max_parents - len(required_parents))
+
+
 def _persist_iteration(
     state: _SearchIterationState,
     proposal: PluginProposalResponse,
     refinement: PluginRefinementResponse,
     evaluation: _CandidateEvaluation,
     budget: SearchBudget,
+    *,
+    max_additional_lineage_parents: int,
 ) -> bool:
     nominations = tuple(
         nomination
         for nomination in _deduplicate_nominations(refinement.nominations)
         if nomination.candidate_uri not in state.nominated_uris
     )
+    record_parents = set(_record_parents(list(evaluation.records), ()))
+    additional_nomination_parents = {
+        nomination.candidate_uri for nomination in nominations
+    } - record_parents
+    if len(additional_nomination_parents) > max_additional_lineage_parents:
+        raise SearchError(
+            "refiner returned more nomination lineage than the archive can preserve"
+        )
     state.nominated_uris.update(nomination.candidate_uri for nomination in nominations)
     next_accounting = SearchAccounting(
         proposed_candidates=evaluation.proposed,

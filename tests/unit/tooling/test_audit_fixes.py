@@ -44,6 +44,7 @@ def test_observation_pair_failures_fails_closed_on_non_dict(
 def test_usage_rejects_non_dict_stats() -> None:
     """Formally prove that non-dict stats is rejected."""
     from benchmarks.tooling import heldout_runner
+    from benchmarks.tooling.errors import HarborSuiteError
 
     # Create a temporary result file with stats as null
     with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
@@ -51,9 +52,8 @@ def test_usage_rejects_non_dict_stats() -> None:
         path = Path(f.name)
 
     try:
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(HarborSuiteError, match="stats must be an object"):
             heldout_runner._usage(path)
-        assert "stats" in str(exc_info.value).lower()
     finally:
         path.unlink(missing_ok=True)
 

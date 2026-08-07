@@ -149,6 +149,47 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
     assert telemetry["mcp_logical_payload_observed_calls"] == 3
 
 
+def test_agent_telemetry_ignores_non_string_mcp_status(tmp_path: Path) -> None:
+    uri = "artifact://sha256/" + ("a" * 64)
+    event = {
+        "type": "item.completed",
+        "item": {
+            "type": "mcp_tool_call",
+            "tool": "resources/read",
+            "arguments": {"uri": uri},
+            "status": [],
+            "result": {},
+        },
+    }
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["tool_error_count"] == 0
+    assert telemetry["successful_tool_calls"] == ["resources/read"]
+    assert telemetry["mcp_resource_read_attempts"] == 1
+    assert telemetry["mcp_resource_read_successes"] == 1
+
+
+def test_agent_telemetry_ignores_non_string_mcp_tool(tmp_path: Path) -> None:
+    event = {
+        "type": "item.completed",
+        "item": {
+            "type": "not_resource_read",
+            "tool": [],
+            "arguments": {"uri": "artifact://sha256/" + ("a" * 64)},
+        },
+    }
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["mcp_calls"] == []
+    assert telemetry["mcp_resource_read_attempts"] == 0
+
+
 def test_agent_telemetry_reports_reasoning_protocol_without_summary_text(
     tmp_path: Path,
 ) -> None:

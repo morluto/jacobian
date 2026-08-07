@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
-from jacobian.cli import _public_error, app
+from jacobian.cli import CliState, JacobianGroup, _public_error, app
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.storage.errors import StorageLimitError, UnsupportedStateVersionError
 
@@ -167,6 +168,85 @@ def test_cli_invalid_json_returns_an_actionable_json_error(tmp_path: Path) -> No
     }
     assert "NaN" not in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_cli_cleanup_failure_does_not_replace_translated_command_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = tmp_path / "payload.json"
+    payload.write_text('{"value": NaN}', encoding="utf-8")
+
+    def failing_close(_state: CliState) -> None:
+        raise RuntimeError("state close failure")
+
+    monkeypatch.setattr(CliState, "close", failing_close)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--state-dir",
+            str(tmp_path / "state"),
+            "artifact-put",
+            "schema://missing",
+            "semantics://missing",
+            str(payload),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "error": {
+            "code": "INVALID_INPUT",
+            "message": "Jacobian could not use the supplied input.",
+            "hint": (
+                "Check the command arguments and JSON payload against the "
+                "documented schema, then retry."
+            ),
+        }
+    }
+    assert result.exception is not None
+    translated_exit = result.exception.__context__
+    assert translated_exit is not None
+    assert translated_exit.__notes__ == ["CLI cleanup also failed: state close failure"]
+
+
+def test_cli_cleanup_failure_propagates_after_successful_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_app = typer.Typer(cls=JacobianGroup)
+
+    @test_app.callback()
+    def configure_test_state(context: typer.Context) -> None:
+        context.obj = CliState(
+            tmp_path,
+            checker_authority=CheckerAuthorityMode.NONE,
+        )
+
+    @test_app.command("succeed")
+    def succeed() -> None:
+        typer.echo("command completed")
+
+    cleanup_error = RuntimeError("state close failure")
+    original_close = CliState.close
+
+    def close_then_fail(state: CliState) -> None:
+        original_close(state)
+        raise cleanup_error
+
+    monkeypatch.setattr(CliState, "close", close_then_fail)
+
+    result = CliRunner().invoke(
+        test_app,
+        ["succeed"],
+    )
+
+    assert result.exit_code == 1
+    assert result.exception is cleanup_error
+    assert result.stdout == "command completed\n"
+    assert result.stderr == ""
 
 
 @pytest.mark.parametrize(

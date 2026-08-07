@@ -50,6 +50,8 @@ from jacobian.storage.models import StoredArtifact
 if TYPE_CHECKING:
     from sympy import Poly
 
+_INVERSE_SOLVER_SHUTDOWN_TIMEOUT_SECONDS = 1.0
+
 
 def _materialize_map(
     resources: PolynomialResources,
@@ -376,7 +378,10 @@ def _solve_inverse_system(
     process.join(timeout_ms / 1000)
     if process.is_alive():
         process.terminate()
-        process.join()
+        process.join(timeout=_INVERSE_SOLVER_SHUTDOWN_TIMEOUT_SECONDS)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=_INVERSE_SOLVER_SHUTDOWN_TIMEOUT_SECONDS)
         return "TIMEOUT", None
     try:
         status, raw = result_queue.get_nowait()

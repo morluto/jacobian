@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Iterator
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -9,17 +10,33 @@ from types import ModuleType, SimpleNamespace
 import pytest
 from tests.boundary.process.tooling.ci import ROOT
 
+_MISSING = object()
 
-def _load() -> ModuleType:
+
+def _load(module_state: pytest.MonkeyPatch) -> ModuleType:
     path = ROOT / ".github/scripts/plan-benchmarks"
     loader = SourceFileLoader("plan_benchmarks", str(path))
     spec = importlib.util.spec_from_loader("plan_benchmarks", loader)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    sys.modules["plan_benchmarks"] = module
+    module_state.setitem(sys.modules, "plan_benchmarks", module)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture
+def isolated_plan_benchmarks_module() -> Iterator[ModuleType]:
+    previous = sys.modules.get("plan_benchmarks", _MISSING)
+    with pytest.MonkeyPatch.context() as module_state:
+        yield _load(module_state)
+    assert sys.modules.get("plan_benchmarks", _MISSING) is previous
+
+
+def test_loaded_planner_restores_module_state(
+    isolated_plan_benchmarks_module: ModuleType,
+) -> None:
+    assert sys.modules["plan_benchmarks"] is isolated_plan_benchmarks_module
 
 
 def _patch_plan(module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -42,7 +59,7 @@ def _patch_plan(module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
 def test_task_documentation_does_not_select_oracle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load()
+    module = _load(monkeypatch)
     _patch_plan(module, monkeypatch)
 
     plan = module.plan(
@@ -67,7 +84,7 @@ def test_benchmark_control_tools_run_contract_gate_without_oracle(
     path: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load()
+    module = _load(monkeypatch)
     _patch_plan(module, monkeypatch)
 
     plan = module.plan([path], base="a" * 40, head="b" * 40)
@@ -80,7 +97,7 @@ def test_benchmark_control_tools_run_contract_gate_without_oracle(
 def test_task_environment_selects_exact_task_oracle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load()
+    module = _load(monkeypatch)
     _patch_plan(module, monkeypatch)
 
     plan = module.plan(
@@ -100,7 +117,7 @@ def test_task_environment_selects_exact_task_oracle(
 def test_shared_environment_profile_escalates_only_on_integration_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load()
+    module = _load(monkeypatch)
     _patch_plan(module, monkeypatch)
 
     pull_request = module.plan(
@@ -124,7 +141,7 @@ def test_shared_environment_profile_escalates_only_on_integration_event(
 def test_main_push_is_an_integration_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load()
+    module = _load(monkeypatch)
     _patch_plan(module, monkeypatch)
 
     push = module.plan(

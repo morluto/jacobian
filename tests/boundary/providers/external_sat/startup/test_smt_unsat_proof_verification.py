@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -25,14 +28,7 @@ from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
 
-_FIXTURES = (
-    Path(__file__).resolve().parents[5]
-    / "tests"
-    / "boundary"
-    / "providers"
-    / "external_sat"
-    / "fixtures"
-)
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _PROBLEM = (_FIXTURES / "qf_uf_equality_unsat.smt2").read_text(encoding="ascii")
 _PROOF = (_FIXTURES / "qf_uf_equality_unsat.alethe").read_bytes()
 
@@ -41,7 +37,7 @@ def _fake_carcara(tmp_path: Path, body: str) -> Path:
     executable = tmp_path / "carcara"
     executable.write_text(
         (
-            "#!/usr/bin/python3\n"
+            f"#!{sys.executable}\n"
             "import sys\n"
             "if '--version' in sys.argv:\n"
             "    print('carcara 1.1.0 [git master 394edbb]')\n"
@@ -96,6 +92,7 @@ def _runtime_with_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     executable: Path,
+    resources: ExitStack,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> JacobianRuntime:
@@ -105,10 +102,18 @@ def _runtime_with_runtime(
         "jacobian.portfolio.provider_resolution.carcara_provider_runtime",
         lambda *_args, **_kwargs: runtime,
     )
-    return create_runtime(
-        tmp_path / "store",
-        checker_authority=checker_authority,
+    return resources.enter_context(
+        create_runtime(
+            tmp_path / "store",
+            checker_authority=checker_authority,
+        )
     )
+
+
+@pytest.fixture
+def runtime_resources() -> Iterator[ExitStack]:
+    with ExitStack() as resources:
+        yield resources
 
 
 @pytest.mark.parametrize(
@@ -170,12 +175,15 @@ def _verify(runtime: JacobianRuntime, proof_uri: str):
 def test_invalid_proof_diagnostic_routes_through_public_capabilities(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
 
     result = _verify(runtime, "artifact://sha256/" + "0" * 64)
 
@@ -191,12 +199,15 @@ def test_invalid_proof_diagnostic_routes_through_public_capabilities(
 def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     problem_uri, proof_uri = _proof(runtime)
     monkeypatch.setattr(
         jacobian_checkers.smt,
@@ -249,12 +260,15 @@ def test_unsat_proof_is_verified_by_authorized_strict_carcara(
 def test_holey_checker_report_never_establishes_sat_or_unsat(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('holey')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     _problem_uri, proof_uri = _proof(runtime)
 
     result = _verify(runtime, proof_uri)
@@ -269,6 +283,7 @@ def test_holey_checker_report_never_establishes_sat_or_unsat(
 def test_proof_verify_requires_runtime_and_operator_authorization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
@@ -278,6 +293,7 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         tmp_path / "without-references",
         monkeypatch,
         executable,
+        runtime_resources,
         checker_authority=CheckerAuthorityMode.NONE,
     )
     unavailable = carcara_provider_runtime(tmp_path / "missing")
@@ -285,9 +301,11 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         "jacobian.portfolio.provider_resolution.carcara_provider_runtime",
         lambda *_args, **_kwargs: unavailable,
     )
-    without_runtime = create_runtime(
-        tmp_path / "without-runtime",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    without_runtime = runtime_resources.enter_context(
+        create_runtime(
+            tmp_path / "without-runtime",
+            checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        )
     )
 
     assert without_references.portfolio.smt_unsat_proof_checker.checker_id is None
@@ -317,6 +335,7 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
 def test_checker_operational_failure_never_creates_a_conclusion(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
     exception: Exception,
     expected_status: ExecutionStatus,
     expected_output_status: str,
@@ -325,7 +344,9 @@ def test_checker_operational_failure_never_creates_a_conclusion(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     _problem_uri, proof_uri = _proof(runtime)
 
     def fail(**_kwargs: Any):
@@ -344,12 +365,15 @@ def test_checker_operational_failure_never_creates_a_conclusion(
 def test_runtime_replacement_after_authorization_fails_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+    runtime = _runtime_with_runtime(
+        tmp_path, monkeypatch, executable, runtime_resources
+    )
     _problem_uri, proof_uri = _proof(runtime)
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o755)

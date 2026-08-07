@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -228,9 +229,9 @@ def test_unique_domain_ids() -> None:
     assert len(domain_ids) == len(set(domain_ids)), f"duplicates: {domain_ids}"
 
 
-@pytest.fixture(scope="module")
-def service(tmp_path_factory: pytest.TempPathFactory) -> Iterator[CapabilityService]:
-    store = ArtifactRepository(tmp_path_factory.mktemp("domain-bundles"))
+@pytest.fixture
+def service(tmp_path: Path) -> Iterator[CapabilityService]:
+    store = ArtifactRepository(tmp_path / "state")
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     service = CapabilityService(store)

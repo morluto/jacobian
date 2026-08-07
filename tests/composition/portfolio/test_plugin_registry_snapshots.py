@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-import shutil
 import sqlite3
 import sys
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.state import copy_template
 
 import jacobian.plugins.registry as registry_module
 from jacobian.contracts.claims import ClaimSpec
@@ -35,8 +35,7 @@ def plugin_runtime(
 ) -> Iterator[JacobianRuntime]:
     """Runtime rooted at ``tmp_path/state`` so plugin packages can live beside it."""
 
-    state = tmp_path / "state"
-    shutil.copytree(complete_portfolio_template, state)
+    state = copy_template(complete_portfolio_template, tmp_path / "state")
     runtime = create_runtime(state)
     try:
         yield runtime

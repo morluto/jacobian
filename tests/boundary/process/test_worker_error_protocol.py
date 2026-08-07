@@ -128,6 +128,28 @@ def test_checker_worker_classifies_malformed_provider_runtime() -> None:
     assert response == {"error_code": "MALFORMED_RUNTIME"}
 
 
+def test_flint_linear_worker_classifies_non_string_protocol_as_invalid_input() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-m",
+            "jacobian.matrices.flint_linear_worker",
+        ],
+        input=canonicalize_json({"protocol": [], "system": {}}),
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stderr == b""
+    assert loads_strict_json(completed.stdout) == {
+        "protocol": "jacobian.flint-linear-worker/v1",
+        "error_code": "FLINT_LINEAR_INPUT_INVALID",
+    }
+
+
 def _lean_runtime_encoded(
     lean: Path,
     lake: Path | None,

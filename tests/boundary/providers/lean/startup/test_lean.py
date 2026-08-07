@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 import threading
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +10,7 @@ from tests.support.provider_lean import (
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
     pinned_mathlib_runtime_available,
 )
+from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import (
@@ -65,8 +65,8 @@ def test_core_declaration_catalog_matches_a_fresh_scan_and_detects_tampering(
 ) -> None:
     indexed_root = tmp_path / "indexed"
     fresh_root = tmp_path / "fresh"
-    shutil.copytree(authorized_portfolio_template, indexed_root)
-    shutil.copytree(authorized_portfolio_template, fresh_root)
+    copy_template(authorized_portfolio_template, indexed_root)
+    copy_template(authorized_portfolio_template, fresh_root)
     indexed_runtime = create_runtime(
         indexed_root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )

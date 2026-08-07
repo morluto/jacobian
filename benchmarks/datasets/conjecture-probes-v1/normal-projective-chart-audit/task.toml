@@ -8,7 +8,7 @@ keywords=["ellipse","normal-lines","projective-parametrization","elimination-aud
 [metadata]
 evaluation_kind="assurance"
 domain="mathematical-sciences"
-primary_domain="geometry"
+primary_domain="geometry-topology"
 field="algebraic-geometry"
 assurance_ceiling="CHECKED"
 answer_visibility="public"

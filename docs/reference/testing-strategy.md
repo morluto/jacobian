@@ -686,6 +686,22 @@ The checked-in JSON Schemas should be exercised both through Pydantic and a
 standards-oriented JSON Schema validator. A Pydantic model successfully reading
 its own generated schema is not independent contract evidence.
 
+### Pytest antipatterns
+
+- Use `monkeypatch` for process-global state such as `sys.modules`, `sys.argv`,
+  and environment variables. When restoration is the behavior under test,
+  assert that the original object or missing state is restored.
+- Name the expected exception type and a stable diagnostic instead of using
+  bare `pytest.raises(Exception)`.
+- Assert the observable outcome or independently parsed wire contract; a model
+  successfully validating its own output is not sufficient evidence.
+- Name source-shape checks honestly and reserve them for supported text or
+  architecture contracts. Do not disguise source substrings as behavior tests.
+- Do not add an empty `pytestmark`; markers exist only for execution-affecting
+  traits owned by the test topology.
+- Keep Harbor regressions in their owning dataset and task leaf. Shared
+  validation modules should contain only suite-wide contracts.
+
 Use the standard library's `tempfile`, `subprocess`, and process primitives for
 artifact and replay tests. Do not use an in-memory filesystem or `pyfakefs` to
 claim evidence about atomic rename, SQLite WAL recovery, symlink handling, or

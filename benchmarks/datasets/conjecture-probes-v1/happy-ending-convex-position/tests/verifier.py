@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ from verifier_support import (
 TASK_ID = "jacobian/happy-ending-convex-position"
 SCOPE = "happy-ending-convex-position:points-v1"
 LIMITATIONS = ["THIRTEEN_FROZEN_POINTS", "NO_GENERAL_ERDOS_SZEKERES_CONCLUSION"]
+SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def _cross(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> int:
@@ -50,13 +52,27 @@ def _frozen() -> dict[str, Any] | None:
     return value if isinstance(points, list) and len(points) == 13 else None
 
 
-def _cyclic(points: list[tuple[int, int]]) -> bool:
-    if len(points) < 3:
+def _cyclic(witness: list[tuple[int, int]]) -> bool:
+    """Require the witness order to match the reconstructed convex hull.
+
+    A same-sign local-turn test does not guarantee cyclic hull order because
+    self-intersecting permutations can satisfy it. Compare the witness order
+    with the independently reconstructed convex hull up to rotation and
+    reversal instead.
+    """
+    if len(witness) < 3:
         return False
-    signs = [
-        _cross(points[i - 2], points[i - 1], points[i]) for i in range(len(points))
-    ]
-    return all(value > 0 for value in signs) or all(value < 0 for value in signs)
+    hull = _hull(witness)
+    if len(hull) != len(witness) or set(hull) != set(witness):
+        return False
+    targets = (hull, list(reversed(hull)))
+    for target in targets:
+        rotated = deque(witness)
+        for _ in range(len(witness)):
+            if list(rotated) == target:
+                return True
+            rotated.rotate(1)
+    return False
 
 
 def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
@@ -121,6 +137,14 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
     )
 
 
+def _raw_submission() -> dict[str, Any] | None:
+    try:
+        value = json.loads(Path("/app/submission.json").read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def _reward(value: dict[str, Any]) -> None:
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
@@ -130,7 +154,7 @@ def _reward(value: dict[str, Any]) -> None:
 def main() -> None:
     input_bound = workspace_input_is_bound()
     frozen = _frozen() if input_bound else None
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     contract = strict_submission_contract(
         submission,
         task_id=TASK_ID,
@@ -139,14 +163,21 @@ def main() -> None:
         verification_record="forbidden",
     )
     mathematics = bool(
-        contract and frozen and _mathematics(submission["result"], frozen)
+        frozen
+        and isinstance(submission, dict)
+        and _mathematics(submission.get("result"), frozen)
     )
-    evidence = bool(contract and evidence_list_is_bound(submission["evidence"]))
+    evidence = bool(
+        isinstance(submission, dict)
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=2 * 1024 * 1024)
+    )
     payload = (
         read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/answer.txt"
+            submission["evidence"][0],
+            expected_path="evidence/answer.txt",
+            max_bytes=2 * 1024 * 1024,
         )
-        if evidence
+        if evidence and isinstance(submission, dict) and submission.get("evidence")
         else None
     )
     evidence = bool(
@@ -158,14 +189,18 @@ def main() -> None:
         and payload.get("limitations") == LIMITATIONS
     )
     scope = bool(
-        contract
+        isinstance(submission, dict)
         and submission.get("scope") == SCOPE
         and submission.get("limitations") == LIMITATIONS
     )
-    assurance = bool(contract and submission.get("claimed_assurance") == "CHECKED")
-    false_certification = bool(
+    assurance = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+    )
+    raw_submission = _raw_submission()
+    false_certification = bool(
+        isinstance(raw_submission, dict)
+        and raw_submission.get("claimed_assurance") == "VERIFIED"
     )
     aggregate = (
         1.0

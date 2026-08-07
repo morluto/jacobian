@@ -244,6 +244,47 @@ def test_extracts_typed_state_without_treating_boundaries_as_progress(
     assert extraction.assurance_authority is False
 
 
+def test_volatile_output_metadata_does_not_create_a_new_typed_object(
+    tmp_path: Path,
+) -> None:
+    capability_id = "integer.compute.gcd"
+    base_output = {"result": {"value": "6"}, "backend_version": "sympy-v1"}
+    events = [_reasoning("PLAN", "Compute the same result twice with volatile metadata.")]
+    events.extend(
+        _cycle(
+            CALL_IDS[0],
+            capability_id,
+            _result(capability_id, output=base_output),
+            after="The first computation produced a typed object.",
+        )
+    )
+    warmer_output = {
+        "result": {"value": "6"},
+        "backend_version": "sympy-v1",
+        "cache_hit": True,
+    }
+    events.extend(
+        _cycle(
+            CALL_IDS[1],
+            capability_id,
+            _result(capability_id, output=warmer_output),
+            after="A cache hit changes only volatile metadata, not identity.",
+        )
+    )
+    tool_states = [
+        state
+        for state in extract_codex_trajectory(
+            _write(tmp_path, events), task_family="exact-arithmetic"
+        ).states
+        if state.boundary is StateBoundary.TOOL_RESULT
+    ]
+
+    assert tool_states[0].milestone_eligible is True
+    assert MilestoneKind.OBJECT_ADDED in tool_states[0].milestone_kinds
+    assert tool_states[1].milestone_eligible is False
+    assert MilestoneKind.OBJECT_ADDED not in tool_states[1].milestone_kinds
+
+
 def test_repeated_call_and_rewritten_prose_cannot_create_fake_progress(
     tmp_path: Path,
 ) -> None:

@@ -42,6 +42,15 @@ _CONTROL_OUTPUT_FIELDS = frozenset(
         "verified",
     }
 )
+_VOLATILE_OUTPUT_FIELDS = frozenset(
+    {
+        "backend_version",
+        "cache_hit",
+        "cache_key",
+        "provider_runtime_version",
+        "runtime_ms",
+    }
+)
 _CANDIDATE_FIELD_PARTS = frozenset(
     {"candidate", "certificate", "counterexample", "witness"}
 )
@@ -610,6 +619,14 @@ def _record_diagnostics(
     return kinds
 
 
+def _strip_volatile_fields(output: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in output.items()
+        if key not in _VOLATILE_OUTPUT_FIELDS
+    }
+
+
 def _record_objects(
     state: _MutableState,
     capability_id: str,
@@ -617,9 +634,12 @@ def _record_objects(
 ) -> set[MilestoneKind]:
     kinds: set[MilestoneKind] = set()
     if _meaningful_output(output):
+        stable_output = (
+            _strip_volatile_fields(output) if isinstance(output, dict) else output
+        )
         ref = TypedObjectRef(
             object_type=f"{capability_id}.output",
-            content_digest=_digest(output),
+            content_digest=_digest(stable_output),
             source_capability_id=capability_id,
         )
         key = (ref.object_type, ref.content_digest, ref.source_capability_id)

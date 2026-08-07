@@ -33,12 +33,17 @@
     "codex.jsonl": "sha256:da3bb5c8d268ffa3c09f52ca18b7148eac2010f658960ac04cf8c241aa121196",
     "codex.stderr": "sha256:1aa26269eb1cc57f86b235a03cda53c004edb5b1e9fc99d4da4f00843293d721",
     "reasoning-log.jsonl": "sha256:d72e43988963c46d2bc7f109545fed87404993e65d76910e6b91fde7fb126c7b",
-    "extracted.json": "sha256:9b0135be628c822b53e74ff989f5bcccaef56446a84f3aa2838d18e752b4238d"
+    "extracted.json": "sha256:5098b5c909744de49c3d40fd007d4dfba61e2bc2ffd4edcfe6099e224317e43f"
   },
   "manual_observation": {
     "state_count": 4,
     "eligible_milestone_count": 1,
-    "boundaries": ["PLAN", "TOOL_RESULT", "AFTER_TOOL", "FINAL"],
+    "boundaries": [
+      "PLAN",
+      "TOOL_RESULT",
+      "AFTER_TOOL",
+      "FINAL"
+    ],
     "eligible_transition": [
       "COMPLETENESS_CHANGED",
       "OBJECT_ADDED",

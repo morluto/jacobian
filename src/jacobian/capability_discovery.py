@@ -121,6 +121,11 @@ class CapabilityDiscoveryMixin:
             request.query,
             lexical_candidates,
         )
+        routing_status, routing_basis = discovery_routing_status(
+            resolved_input_kind,
+            request.artifact_type,
+            contract_route_count,
+        )
         if domain_filter_status == "UNKNOWN":
             portfolio_fit = "UNFILTERED"
             portfolio_fit_basis = (
@@ -133,12 +138,6 @@ class CapabilityDiscoveryMixin:
                 f"The routing status was not assessed because the requested "
                 f"domain filter {normalized_domain!r} matched no installed "
                 "capability."
-            )
-        else:
-            routing_status, routing_basis = discovery_routing_status(
-                resolved_input_kind,
-                request.artifact_type,
-                contract_route_count,
             )
         return CapabilityDiscoveryResult(
             query=request.query,

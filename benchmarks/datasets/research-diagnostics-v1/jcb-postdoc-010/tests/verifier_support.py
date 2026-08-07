@@ -115,7 +115,11 @@ def load_submission(
         )
     except (OSError, ValueError, RecursionError, MemoryError, TypeError):
         return None
-    return value if isinstance(value, dict) else None
+    return (
+        value
+        if isinstance(value, dict) and _public_submission_is_valid(value)
+        else None
+    )
 
 
 def _public_submission_is_valid(submission: object) -> bool:

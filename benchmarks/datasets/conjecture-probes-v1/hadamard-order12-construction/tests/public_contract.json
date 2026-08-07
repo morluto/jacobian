@@ -21,32 +21,7 @@
       "application/json"
     ],
     "min_items": 1,
-    "payload_shape": {
-      "properties": {
-        "limitations": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "result": {
-          "type": "object"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/hadamard-order12-construction"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    }
+    "payload_shape": null
   },
   "limitations": {
     "const": [

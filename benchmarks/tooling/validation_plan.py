@@ -15,6 +15,8 @@ HOST_VALIDATION_DATASET_FILES = {
         "test_vizing_bounded_cartesian_products.py",
         "benchmarks/validation/conjecture_probes_v1/"
         "test_yang_mills_gauge_invariance_certificate.py",
+        "benchmarks/validation/conjecture_probes_v1/"
+        "test_hadamard_order12_construction.py",
     ),
     "symbolic-coordination-v1": (
         "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py",

@@ -17,7 +17,6 @@ from verifier_support import (
 TASK_ID = "jacobian/hadamard-order12-construction"
 SCOPE = "hadamard-order12-construction:normalized-v1"
 LIMITATIONS = ["ORDER_12_ONLY", "NO_GENERAL_HADAMARD_CONJECTURE_CONCLUSION"]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -89,7 +88,19 @@ def _mathematics(result: Any) -> bool:
         for i in range(12)
     ]
     expected_gram = [[12 if i == j else 0 for j in range(12)] for i in range(12)]
-    if gram != expected_gram or result.get("gram") != gram:
+    submitted_gram = result.get("gram")
+    if (
+        not isinstance(submitted_gram, list)
+        or len(submitted_gram) != 12
+        or any(
+            not isinstance(row, list)
+            or len(row) != 12
+            or any(type(value) is not int for value in row)
+            for row in submitted_gram
+        )
+    ):
+        return False
+    if gram != expected_gram or submitted_gram != gram:
         return False
     determinant = _determinant(matrix)
     return (
@@ -125,14 +136,13 @@ def main() -> None:
     evidence = bool(
         isinstance(submission, dict)
         and evidence_list_is_bound(
-            submission.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES
+            submission.get("evidence")
         )
     )
     payload = (
         read_evidence_json(
             submission["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
         )
         if evidence
         else None

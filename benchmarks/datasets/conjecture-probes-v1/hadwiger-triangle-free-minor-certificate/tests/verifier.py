@@ -21,6 +21,8 @@ LIMITATIONS = [
     "EXHAUSTIVE_THREE_COLOR_REJECTION",
     "NO_GLOBAL_HADWIGER_CONCLUSION",
 ]
+
+
 def three_colorable(adj):
     colors = [-1] * 11
 
@@ -144,7 +146,10 @@ def main():
         verification_record="forbidden",
     )
     m = bool(isinstance(s, dict) and mathematics(s.get("result")))
-    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=None))
+    e = bool(
+        isinstance(s, dict)
+        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
+    )
     payload = (
         read_evidence_json(
             s["evidence"][0],
@@ -164,9 +169,13 @@ def main():
             "limitations": LIMITATIONS,
         }
     )
-    sc = bool(isinstance(s, dict) and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
-    SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in SCOREABLE_ASSURANCES)
+    sc = bool(
+        isinstance(s, dict)
+        and s.get("scope") == SCOPE
+        and s.get("limitations") == LIMITATIONS
+    )
+    scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
     f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

@@ -559,14 +559,19 @@ def _execution(value: Any) -> Execution:
     return Execution(status=ExecutionStatus.COMPLETED)
 
 
+def _has_verified_parameter_region_evidence(value: Any) -> bool:
+    evidence = getattr(value, "evidence", None)
+    return isinstance(evidence, str) and evidence in {
+        ParameterRegionEvidence.VERIFIED_SUFFICIENT,
+        ParameterRegionEvidence.VERIFIED_NECESSARY,
+    }
+
+
 def _verified_record_uri(value: Any) -> str | None:
     envelope = _result_envelope(value)
     if envelope is not None:
         return envelope.verification_record_uri
-    if getattr(value, "evidence", None) in {
-        ParameterRegionEvidence.VERIFIED_SUFFICIENT,
-        ParameterRegionEvidence.VERIFIED_NECESSARY,
-    }:
+    if _has_verified_parameter_region_evidence(value):
         return getattr(value, "verification_record_uri", None)
     return None
 
@@ -575,10 +580,7 @@ def _is_verified(value: Any) -> bool:
     envelope = _result_envelope(value)
     if isinstance(envelope, ResultEnvelope):
         return envelope.assurance.verification is Verification.VERIFIED
-    return getattr(value, "evidence", None) in {
-        ParameterRegionEvidence.VERIFIED_SUFFICIENT,
-        ParameterRegionEvidence.VERIFIED_NECESSARY,
-    }
+    return _has_verified_parameter_region_evidence(value)
 
 
 def _artifact_uris(value: Any) -> tuple[str, ...]:

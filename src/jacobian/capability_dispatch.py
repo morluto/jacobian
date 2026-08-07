@@ -261,9 +261,33 @@ class CapabilityDispatchMixin:
             return result
         result = result.model_copy(update=provenance)
         if result.execution.status is ExecutionStatus.COMPLETED:
-            normalized_output = validate_payload(
-                descriptor.output_schema, result.output
-            )
+            try:
+                normalized_output = validate_payload(
+                    descriptor.output_schema, result.output
+                )
+            except PayloadValidationError as exc:
+                result = failed_result(
+                    descriptor=descriptor,
+                    request=request,
+                    diagnostic=CapabilityDiagnostic(
+                        code="ADAPTER_RESULT_INVALID",
+                        stage="adapter_execution",
+                        message=(
+                            "The adapter output does not match its advertised "
+                            f"schema at {exc.path}."
+                        ),
+                        path=exc.path,
+                        expected=exc.expected,
+                        actual_type=exc.actual_type,
+                        hint=(
+                            "Fix the capability adapter to return output matching "
+                            "its descriptor schema."
+                        ),
+                        details=exc.details,
+                    ),
+                )
+                log_invocation(result, started)
+                return result
             result = result.model_copy(update={"output": normalized_output})
         self._validate_artifact_references(result)
         self._validate_verified_result(result)

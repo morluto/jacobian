@@ -54,6 +54,24 @@ NOT_READY_RUNTIME = CapabilityProviderRuntime(
 
 
 @dataclass(frozen=True)
+class InvalidEvidenceValue:
+    evidence: object
+    verification_record_uri: str | None = None
+
+    def model_dump(self, *, mode: str) -> dict[str, object]:
+        if mode != "json":
+            raise ValueError("fixture supports only JSON projection")
+        return {
+            "kind": "SUFFICIENT",
+            "conditions": {},
+            "evidence": self.evidence,
+            "sample_uris": [],
+            "subject_uri": None,
+            "verification_record_uri": self.verification_record_uri,
+        }
+
+
+@dataclass(frozen=True)
 class ComputedAdapter:
     descriptor = CapabilityDescriptor(
         capability_id="example.double",
@@ -88,6 +106,30 @@ class ComputedAdapter:
             assurance=CapabilityAssurance(
                 level=CapabilityAssuranceLevel.COMPUTED,
                 basis="deterministic integer arithmetic",
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class InvalidOutputAdapter:
+    descriptor = ComputedAdapter.descriptor.model_copy(
+        update={
+            "capability_id": "example.invalid-output",
+            "title": "Return schema-invalid output",
+            "description": "Fixture for the adapter result validation boundary.",
+        }
+    )
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        return CapabilityResult(
+            capability_id=self.descriptor.capability_id,
+            capability_version=self.descriptor.version,
+            mode=request.mode,
+            execution=Execution(status=ExecutionStatus.COMPLETED),
+            output={"value": "not-an-integer"},
+            assurance=CapabilityAssurance(
+                level=CapabilityAssuranceLevel.COMPUTED,
+                basis="fixture malformed output",
             ),
         )
 

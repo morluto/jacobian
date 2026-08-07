@@ -8,8 +8,9 @@ must include `n`, the two floor values, the two nearest integers, and canonical
 rational lower/upper bounds for the product. Identify the final finite argmin.
 
 The verifier independently reconstructs all 2000 enclosures and the complete
-record sequence. Evidence is a matching JSON object with exactly
-`schema_version`, `task_id`, `result`, and `limitations`, at most 2 MiB.
+record sequence. Evidence is a matching JSON object (`application/json`) with
+exactly `schema_version` (the string `"1"`), `task_id`, `result`, and
+`limitations`.
 
 This certifies only the frozen finite range for `(sqrt(2),sqrt(3))`; it does not
 establish a liminf or any case of Littlewood's conjecture.
@@ -26,6 +27,7 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Scope:** the exact value declared in `submission_schema.json`
 - **Completeness:** `COMPLETE`.
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
+- **Evidence media types:** `application/json`.
+- **Evidence payload:** JSON object with exactly `schema_version` (string `"1"`), `task_id`, `result`, and `limitations`.
 - **Required artifact filenames:** `evidence/answer.txt`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

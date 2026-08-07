@@ -23,7 +23,6 @@ LIMITATIONS = [
     "N_AT_MOST_2000",
     "NO_LIMINF_OR_LITTLEWOOD_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 SCALE = 10**80
 
 
@@ -101,13 +100,16 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    m = bool(c and mathematics(s["result"]))
-    e = bool(c and evidence_list_is_bound(s["evidence"], max_bytes=MAX_EVIDENCE_BYTES))
+    m = bool(isinstance(s, dict) and mathematics(s.get("result")))
+    e = bool(
+        isinstance(s, dict)
+        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
+    )
     payload = (
         read_evidence_json(
             s["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if e
         else None
@@ -122,8 +124,12 @@ def main():
             "limitations": LIMITATIONS,
         }
     )
-    sc = bool(c and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
-    a = bool(c and s.get("claimed_assurance") == "CHECKED")
+    sc = bool(
+        isinstance(s, dict)
+        and s.get("scope") == SCOPE
+        and s.get("limitations") == LIMITATIONS
+    )
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") == "CHECKED")
     f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

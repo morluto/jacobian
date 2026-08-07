@@ -45,6 +45,36 @@ def run(app, logs):
     return run_verifier_in_child(task=TASK, app=app, logs=logs)
 
 
+def _write_evidence(app, s, result):
+    payload = {
+        "schema_version": "1",
+        "task_id": s["task_id"],
+        "result": result,
+        "limitations": s["limitations"],
+    }
+    e = app / "evidence/answer.txt"
+    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+
+
+def test_evidence_result_requires_exact_json_types(tmp_path):
+    app, logs, s = case(tmp_path)
+    # JSON booleans in place of integers must not compare equal to 0/1.
+    coloring = list(s["result"]["four_coloring"])
+    coloring[0] = True
+    _write_evidence(app, s, {**s["result"], "four_coloring": coloring})
+    r = run(app, logs)
+    assert r["mathematics"] == 1.0 and r["evidence"] == 0.0
+    assert r["aggregate_reward"] == 0.0
+    # An integral float must not compare equal to the integer invariant.
+    app, logs, s = case(tmp_path / "float")
+    _write_evidence(app, s, {**s["result"], "chromatic_number": 4.0})
+    r = run(app, logs)
+    assert r["mathematics"] == 1.0 and r["evidence"] == 0.0
+    assert r["aggregate_reward"] == 0.0
+
+
 def test_oracle_and_relabeling_pass(tmp_path):
     app, logs, _ = case(tmp_path)
     assert run(app, logs)["aggregate_reward"] == 1.0

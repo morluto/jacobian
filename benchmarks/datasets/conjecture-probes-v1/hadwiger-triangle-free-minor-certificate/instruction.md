@@ -11,8 +11,10 @@ minor model. Complete graphs, triangles, isolated padding, and label-only
 chromatic claims are rejected.
 
 Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
-and `limitations`. This checks one finite graph only and does not
-prove Hadwiger's conjecture.
+and `limitations`: `schema_version` must be the string `"1"`, `task_id` must
+equal the task id, `result` must exactly copy the submitted `result` object
+(including JSON types), and `limitations` must equal the declared limitations.
+This checks one finite graph only and does not prove Hadwiger's conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

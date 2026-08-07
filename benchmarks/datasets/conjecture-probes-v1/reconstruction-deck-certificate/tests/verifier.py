@@ -90,9 +90,7 @@ def mathematics(result: Any, data) -> bool:
             or d in deleted
             or not isinstance(mapping, list)
             or len(mapping) != 8
-            or not all(
-                type(x) is int and 0 <= x < 9 for x in mapping
-            )
+            or not all(type(x) is int and 0 <= x < 9 for x in mapping)
             or set(mapping) != set(range(9)) - {d}
         ):
             return False
@@ -183,8 +181,11 @@ def main():
         and raw.get("scope") == SCOPE
         and raw.get("limitations") == LIMITATIONS
     )
-    a = bool(isinstance(raw, dict) and raw.get("claimed_assurance") in scoreable_assurances)
-    f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
+    claimed_assurance = raw.get("claimed_assurance") if isinstance(raw, dict) else None
+    a = bool(
+        isinstance(claimed_assurance, str) and claimed_assurance in scoreable_assurances
+    )
+    f = bool(isinstance(claimed_assurance, str) and claimed_assurance == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
         {

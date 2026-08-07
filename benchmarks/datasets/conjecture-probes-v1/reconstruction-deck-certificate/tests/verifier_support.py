@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import json
 import math
@@ -17,10 +18,6 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
-# Memory-safety ceiling for a single streamed evidence JSON object. Legitimate
-# fixed-shape evidence is tiny; this bound only rejects adversarial padding that
-# could OOM the container before a deterministic reward.json is written.
-MAX_EVIDENCE_JSON_BYTES = 64 * 1024 * 1024
 SUBMISSION_FIELDS = frozenset(
     {
         "task_id",
@@ -253,46 +250,51 @@ def resolve_evidence(
     return target
 
 
-class _BoundedTextReader:
-    """Stream a binary file as text for ``json.load`` with a byte cap.
+_JSON_WHITESPACE = frozenset(" \t\n\r")
 
-    Decoding is incremental so a digest-correct but oversized evidence
-    file is never materialized in full before the JSON parser rejects it;
-    exceeding ``max_bytes`` raises ``ValueError`` so the caller can fail
-    closed without an OOM kill.
+
+def _read_streaming_json_value(stream) -> Any:
+    """Parse the first JSON value from a binary stream without a byte cap.
+
+    ``json.JSONDecoder.raw_decode`` is fed incrementally in bounded chunks,
+    so parsing stops as soon as the top-level value is complete; leading and
+    trailing JSON whitespace are handled exactly like ``json.load``, and any
+    non-whitespace content after the value is rejected chunk by chunk instead
+    of being read into memory. Memory therefore grows only with the size of
+    the JSON value itself, never with arbitrary legal whitespace padding.
     """
 
-    def __init__(self, stream, max_bytes: int) -> None:
-        self._stream = stream
-        self._max_bytes = max_bytes
-        self._total = 0
-
-    def read(self, size: int = -1) -> str:
-        if size is None or size < 0:
-            # Read and enforce the cap in bounded chunks so an oversized
-            # file never loads all at once.
-            chunks: list[str] = []
-            total = 0
-            while True:
-                block = self._stream.read(65_536)
-                if not block:
-                    break
-                total += len(block)
-                if total > self._max_bytes:
-                    raise ValueError(
-                        f"evidence JSON exceeds {self._max_bytes} bytes"
-                    )
-                chunks.append(block.decode("utf-8"))
-            return "".join(chunks)
-        if size == 0:
-            return ""
-        block = self._stream.read(size)
-        self._total += len(block)
-        if self._total > self._max_bytes:
-            raise ValueError(
-                f"evidence JSON exceeds {self._max_bytes} bytes"
-            )
-        return block.decode("utf-8")
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    parser = json.JSONDecoder()
+    buffer = ""
+    start = 0
+    while True:
+        block = stream.read(65_536)
+        if block:
+            buffer += decoder.decode(block)
+        # ``raw_decode`` does not skip leading whitespace; track the prefix
+        # once so each whitespace character is visited only a single time.
+        while start < len(buffer) and buffer[start] in _JSON_WHITESPACE:
+            start += 1
+        try:
+            value, end = parser.raw_decode(buffer, idx=start)
+        except json.JSONDecodeError:
+            if not block:
+                raise
+            continue
+        if not all(character in _JSON_WHITESPACE for character in buffer[end:]):
+            raise ValueError("non-whitespace after evidence JSON value")
+        while True:
+            block = stream.read(65_536)
+            if not block:
+                break
+            tail = decoder.decode(block)
+            if tail and not all(character in _JSON_WHITESPACE for character in tail):
+                raise ValueError("non-whitespace after evidence JSON value")
+        tail = decoder.decode(b"", final=True)
+        if tail and not all(character in _JSON_WHITESPACE for character in tail):
+            raise ValueError("non-whitespace after evidence JSON value")
+        return value
 
 
 def read_evidence_json(
@@ -304,13 +306,11 @@ def read_evidence_json(
 ) -> dict[str, Any] | None:
     """Resolve and parse a digest-bound evidence object.
 
-    The file is read through a bounded incremental stream instead of
-    ``read_text()`` so a digest-correct but oversized evidence file cannot
-    exhaust container memory before a deterministic ``reward.json`` is
-    written. The ``max_bytes`` argument bounds the digest-resolution size;
-    ``MAX_EVIDENCE_JSON_BYTES`` independently caps the streamed parse so an
-    uncapped (``max_bytes=None``) contract still parses fixed-shape JSON
-    using bounded memory rather than loading the whole file at once.
+    The file is parsed with a genuinely streaming decoder instead of
+    ``read_text()``, so a digest-correct evidence file with arbitrary legal
+    JSON whitespace is never materialized in full and no internal byte
+    ceiling is imposed: the evidence is already bound by path, digest, and
+    schema. The ``max_bytes`` argument only bounds digest resolution.
     """
 
     target = resolve_evidence(
@@ -323,9 +323,7 @@ def read_evidence_json(
         return None
     try:
         with target.open("rb") as stream:
-            value = json.load(
-                _BoundedTextReader(stream, MAX_EVIDENCE_JSON_BYTES)
-            )
+            value = _read_streaming_json_value(stream)
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
@@ -461,7 +459,6 @@ def aggregate_reward(
 
 __all__ = [
     "ASSURANCE_LEVELS",
-    "MAX_EVIDENCE_JSON_BYTES",
     "MAX_INPUT_BYTES",
     "MAX_SUBMISSION_BYTES",
     "SUBMISSION_FIELDS",

@@ -84,3 +84,69 @@ def test_false_verified_and_tampered_input_fail(tmp_path):
         and r["mathematics"] == 1.0
         and r["aggregate_reward"] == 0.0
     )
+
+
+def test_unhashable_claimed_assurance_keeps_other_diagnostics(tmp_path):
+    """A JSON array/object assurance must not crash the membership test."""
+    for value in (["CHECKED", "COMPUTED"], {"level": "CHECKED"}):
+        app, logs, s = case(tmp_path / type(value).__name__)
+        s["claimed_assurance"] = value
+        write(app, s)
+        r = run(app, logs)
+        assert (
+            r["assurance"] == 0.0
+            and r["input_binding"] == 1.0
+            and r["mathematics"] == 1.0
+            and r["evidence"] == 1.0
+            and r["scope"] == 1.0
+            and r["aggregate_reward"] == 0.0
+        )
+
+
+def test_evidence_with_oversized_whitespace_padding_passes(tmp_path):
+    """Legal trailing whitespace beyond any internal ceiling must parse."""
+    app, logs, s = case(tmp_path)
+    e = app / "evidence/answer.txt"
+    answer = (
+        json.dumps(
+            {
+                "schema_version": "1",
+                "task_id": s["task_id"],
+                "result": s["result"],
+                "limitations": s["limitations"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+        + " " * (64 * 1024 * 1024 + 424242)
+    )
+    e.write_text(answer)
+    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    r = run(app, logs)
+    assert r["evidence"] == 1.0 and r["aggregate_reward"] == 1.0
+
+
+def test_evidence_trailing_garbage_still_rejected(tmp_path):
+    """Non-whitespace after the JSON value fails evidence like json.load."""
+    app, logs, s = case(tmp_path)
+    e = app / "evidence/answer.txt"
+    e.write_text(
+        json.dumps(
+            {
+                "schema_version": "1",
+                "task_id": s["task_id"],
+                "result": s["result"],
+                "limitations": s["limitations"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+        + "garbage"
+    )
+    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    r = run(app, logs)
+    assert r["evidence"] == 0.0 and r["aggregate_reward"] == 0.0

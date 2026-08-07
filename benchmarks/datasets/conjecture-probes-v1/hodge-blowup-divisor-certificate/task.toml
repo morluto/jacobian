@@ -8,7 +8,7 @@ keywords=["hodge","divisors","blowup","intersection-theory","adjunction"]
 [metadata]
 evaluation_kind="conjecture-probe"
 domain="mathematical-sciences"
-primary_domain="algebraic-geometry"
+primary_domain="geometry-topology"
 field="algebraic-cycles"
 assurance_ceiling="CHECKED"
 answer_visibility="public"

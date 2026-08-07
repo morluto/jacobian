@@ -221,7 +221,9 @@ def task_host_validation(
                     timings=timings,
                 )
             )
-        return tuple(conjecture_entries) or dataset_host_validation(dataset, timings=timings)
+        return tuple(conjecture_entries) or dataset_host_validation(
+            dataset, timings=timings
+        )
     return dataset_host_validation(dataset, timings=timings)
 
 

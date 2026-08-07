@@ -317,6 +317,8 @@ class CapabilityDescriptor(ContractModel):
         CapabilityInputKind.STRUCTURED_REQUEST,
     )
     accepted_artifact_types: tuple[ArtifactUri, ...] = ()
+    produced_artifact_types: tuple[ArtifactUri, ...] = ()
+    discovery_visible: bool = True
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
 
     @model_validator(mode="after")
@@ -329,6 +331,10 @@ class CapabilityDescriptor(ContractModel):
             self.accepted_input_kinds,
             self.accepted_artifact_types,
         )
+        if len(set(self.produced_artifact_types)) != len(
+            self.produced_artifact_types
+        ):
+            raise ValueError("produced artifact types must be unique")
         if len({example.name for example in self.invocation_examples}) != len(
             self.invocation_examples
         ):

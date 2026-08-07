@@ -94,6 +94,24 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
     assert "fixture_graph" in first.available_domains
 
 
+def test_storage_primitive_is_catalogued_but_not_discovered(
+    authorized_complete_runtime: JacobianRuntime,
+) -> None:
+    capabilities = authorized_complete_runtime.core.capabilities
+    catalog_ids = {
+        descriptor.capability_id for descriptor in capabilities.catalog().capabilities
+    }
+    discovered_ids = {
+        match.capability_id
+        for match in capabilities.discover(
+            CapabilityDiscoveryRequest(limit=20)
+        ).matches
+    }
+
+    assert "artifact.put" in catalog_ids
+    assert "artifact.put" not in discovered_ids
+
+
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:

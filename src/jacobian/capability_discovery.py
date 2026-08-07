@@ -32,7 +32,11 @@ class CapabilityDiscoveryMixin:
         self: DiscoveryOwner,
         request: CapabilityDiscoveryRequest,
     ) -> CapabilityDiscoveryResult:
-        descriptors = self.catalog().capabilities
+        descriptors = tuple(
+            descriptor
+            for descriptor in self.catalog().capabilities
+            if descriptor.discovery_visible
+        )
         available_domains = tuple(
             sorted({capability_domain(descriptor) for descriptor in descriptors})
         )

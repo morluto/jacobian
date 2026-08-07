@@ -32,6 +32,7 @@ from jacobian.contracts.posets import (
 )
 from jacobian.domains._examples import example
 from jacobian.operations import ComputedSuccess, MaterializedOperation
+from jacobian.storage.repository import ArtifactRepository
 
 
 def _presentation_graph(request: FinitePosetRequest) -> nx.DiGraph[str]:
@@ -108,6 +109,8 @@ def _materialize(
 
 
 def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
+    if request.poset is None:
+        raise ValueError("poset input was not resolved")
     poset = request.poset
     elements = poset.elements
     left_nodes = tuple(("L", element) for element in elements)
@@ -167,6 +170,22 @@ def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
             matching_size=len(matching),
         )
     )
+
+
+def _resolve_poset_request(
+    request: PosetRequest,
+    store: ArtifactRepository,
+    accepted_artifact_types: tuple[str, ...],
+) -> tuple[PosetRequest, tuple[str, ...]]:
+    if request.poset is not None:
+        return request, ()
+    if request.poset_artifact_uri is None:
+        raise ValueError("poset artifact URI is required")
+    artifact = store.get(request.poset_artifact_uri)
+    if artifact.manifest.schema_uri not in accepted_artifact_types:
+        raise ValueError("artifact schema is not a compatible finite poset")
+    materialized = FinitePosetMaterializationResult.model_validate(artifact.payload)
+    return PosetRequest(poset=materialized.poset), (request.poset_artifact_uri,)
 
 
 def _linear_extensions(
@@ -354,6 +373,8 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
         result_model=PosetWidthResult,
         implementation=_width,
         relation_id="poset.width.dilworth.relation",
+        accepted_result_capability_ids=("poset.finite.materialize",),
+        input_resolver=_resolve_poset_request,
         tags=(
             "poset",
             "width",

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from jacobian.checker_operations import ExactReplayCheckerDeclaration
     from jacobian.installation.context import InstallationContext
     from jacobian.operation_installation import InstalledDomainBundle
+    from jacobian.storage.repository import ArtifactRepository
 
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
@@ -95,11 +96,24 @@ class MaterializedOperation[
     preview_model: type[PreviewT] | None = None
     preview: Callable[[ArtifactT], PreviewT] | None = None
     preview_complete: bool = False
+    accepted_result_capability_ids: tuple[str, ...] = ()
+    input_resolver: (
+        Callable[
+            [RequestT, ArtifactRepository, tuple[str, ...]],
+            tuple[RequestT, tuple[str, ...]],
+        ]
+        | None
+    ) = None
     version: str = "2"
 
     def __post_init__(self) -> None:
         if self.preview_complete and self.preview is None:
             raise ValueError("a complete materialized preview requires a preview")
+        if bool(self.accepted_result_capability_ids) != bool(self.input_resolver):
+            raise ValueError(
+                "accepted result capabilities and an input resolver must be "
+                "declared together"
+            )
 
 
 @dataclass(frozen=True, slots=True)

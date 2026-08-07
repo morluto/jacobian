@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
@@ -43,6 +44,7 @@ from jacobian.operations import (
 )
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.storage.errors import StorageError
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,6 +292,10 @@ class MaterializedOperationAdapter:
         self.resources = resources
         self.preview_model = operation.preview_model or operation.result_model
         self.output_model = MaterializedOperationOutput[self.preview_model]  # type: ignore[name-defined]
+        accepted_artifact_types = tuple(
+            resources.result_schema_uris[capability_id]
+            for capability_id in operation.accepted_result_capability_ids
+        )
         self._descriptor = CapabilityDescriptor(
             capability_id=operation.capability_id,
             version=operation.version,
@@ -301,6 +307,18 @@ class MaterializedOperationAdapter:
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             tags=operation.tags,
+            accepted_input_kinds=(
+                (
+                    CapabilityInputKind.STRUCTURED_REQUEST,
+                    CapabilityInputKind.TYPED_ARTIFACT,
+                )
+                if accepted_artifact_types
+                else (CapabilityInputKind.STRUCTURED_REQUEST,)
+            ),
+            accepted_artifact_types=accepted_artifact_types,
+            produced_artifact_types=(
+                resources.result_schema_uris[operation.capability_id],
+            ),
             invocation_examples=operation.invocation_examples,
         )
 
@@ -313,7 +331,16 @@ class MaterializedOperationAdapter:
             validated_request = self.operation.request_model.model_validate(
                 request.input
             )
-        except ValidationError as exc:
+            source_artifact_uris: tuple[str, ...] = ()
+            if self.operation.input_resolver is not None:
+                validated_request, source_artifact_uris = (
+                    self.operation.input_resolver(
+                        validated_request,
+                        self.resources.artifacts.store,
+                        self._descriptor.accepted_artifact_types,
+                    )
+                )
+        except (StorageError, ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
                 self.operation.invalid_request
                 or self.bundle.diagnostics.invalid_request
@@ -336,6 +363,7 @@ class MaterializedOperationAdapter:
             schema_uri=self.resources.input_schema_uris[self.operation.request_model],
             semantics_uri=self.resources.semantics_uri,
             payload=validated_request.model_dump(mode="json"),
+            parents=source_artifact_uris,
             summary=f"{self.operation.capability_id} materialized input",
         ).artifact_uri
         result_uri = self.resources.artifacts.put(
@@ -389,7 +417,7 @@ class MaterializedOperationAdapter:
                 level=CapabilityAssuranceLevel.COMPUTED,
                 basis=self.bundle.assurance_basis,
             ),
-            artifact_uris=(input_uri, result_uri),
+            artifact_uris=(*source_artifact_uris, input_uri, result_uri),
         )
 
 

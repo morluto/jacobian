@@ -90,6 +90,9 @@ def mathematics(result: Any, data) -> bool:
             or d in deleted
             or not isinstance(mapping, list)
             or len(mapping) != 8
+            or not all(
+                type(x) is int and 0 <= x < 9 for x in mapping
+            )
             or set(mapping) != set(range(9)) - {d}
         ):
             return False
@@ -153,12 +156,12 @@ def main():
         and mathematics(raw.get("result"), data)
     )
     e = bool(
-        isinstance(s, dict)
-        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
+        isinstance(raw, dict)
+        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            s["evidence"][0],
+            raw["evidence"][0],
             expected_path="evidence/answer.txt",
             max_bytes=None,
         )
@@ -171,16 +174,16 @@ def main():
         == {
             "schema_version": "1",
             "task_id": TASK_ID,
-            "result": s.get("result"),
+            "result": raw.get("result"),
             "limitations": LIMITATIONS,
         }
     )
     sc = bool(
-        isinstance(s, dict)
-        and s.get("scope") == SCOPE
-        and s.get("limitations") == LIMITATIONS
+        isinstance(raw, dict)
+        and raw.get("scope") == SCOPE
+        and raw.get("limitations") == LIMITATIONS
     )
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
+    a = bool(isinstance(raw, dict) and raw.get("claimed_assurance") in scoreable_assurances)
     f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

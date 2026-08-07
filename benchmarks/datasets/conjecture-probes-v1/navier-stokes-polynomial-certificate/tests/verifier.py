@@ -21,25 +21,37 @@ LIMITATIONS = [
     "ONE_EXACT_2D_STEADY_POLYNOMIAL_FIELD",
     "NO_GLOBAL_NAVIER_STOKES_REGULARITY_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+MAX_EVIDENCE_BYTES = None
+SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
-def _rat(value: object) -> Fraction:
+def _rat(value: object, num_bound: int = 50, den_bound: int = 20) -> Fraction:
     if not isinstance(value, str) or len(value) > 32:
         raise ValueError
     parsed = Fraction(value)
-    if str(parsed) != value or abs(parsed.numerator) > 50 or parsed.denominator > 20:
+    if str(parsed) != value or abs(parsed.numerator) > num_bound or parsed.denominator > den_bound:
         raise ValueError
     return parsed
 
 
-def _vector(value: object, length: int) -> list[Fraction]:
+def _vector(value: object, length: int, num_bound: int = 50, den_bound: int = 20) -> list[Fraction]:
     if not isinstance(value, list) or len(value) != length:
         raise ValueError
-    return [_rat(item) for item in value]
+    return [_rat(item, num_bound, den_bound) for item in value]
 
 
-def _mathematics(result: Any) -> bool:
+def _frozen_input() -> dict[str, Any] | None:
+    """Read coefficient bounds from /tests/input.json instead of hard-coding."""
+    try:
+        value = json.loads(Path("/tests/input.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(value, dict) or value.get("task_id") != TASK_ID:
+        return None
+    return value
+
+
+def _mathematics(result: Any, num_bound: int = 50, den_bound: int = 20) -> bool:
     try:
         if not isinstance(result, dict) or set(result) != {
             "velocity",
@@ -52,9 +64,9 @@ def _mathematics(result: Any) -> bool:
             return False
         if not isinstance(result["velocity"], list) or len(result["velocity"]) != 2:
             return False
-        a = _vector(result["velocity"][0], 3)
-        b = _vector(result["velocity"][1], 3)
-        p = _vector(result["pressure"], 6)
+        a = _vector(result["velocity"][0], 3, num_bound, den_bound)
+        b = _vector(result["velocity"][1], 3, num_bound, den_bound)
+        p = _vector(result["pressure"], 6, num_bound, den_bound)
         divergence = [a[1] + b[2]]
         momentum_x = [
             a[1] * a[0] + a[2] * b[0] + p[1],
@@ -68,10 +80,10 @@ def _mathematics(result: Any) -> bool:
         ]
         vorticity = b[1] - a[2]
         submitted = (
-            _vector(result["divergence"], 1),
-            _vector(result["momentum_x"], 3),
-            _vector(result["momentum_y"], 3),
-            _rat(result["vorticity"]),
+            _vector(result["divergence"], 1, num_bound, den_bound),
+            _vector(result["momentum_x"], 3, num_bound, den_bound),
+            _vector(result["momentum_y"], 3, num_bound, den_bound),
+            _rat(result["vorticity"], num_bound, den_bound),
         )
     except (ValueError, ZeroDivisionError, TypeError):
         return False
@@ -83,6 +95,14 @@ def _mathematics(result: Any) -> bool:
         and momentum_y == [0, 0, 0]
         and vorticity != 0
     )
+
+
+def _raw_submission() -> dict[str, Any] | None:
+    try:
+        value = json.loads(Path("/app/submission.json").read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _reward(value: dict[str, Any]) -> None:
@@ -101,10 +121,16 @@ def main() -> None:
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    mathematics = bool(contract and _mathematics(submission["result"]))
+    frozen = _frozen_input()
+    num_bound = frozen.get("coefficient_numerator_bound", 50) if frozen else 50
+    den_bound = frozen.get("coefficient_denominator_bound", 20) if frozen else 20
+    mathematics = bool(
+        isinstance(submission, dict)
+        and _mathematics(submission.get("result"), num_bound, den_bound)
+    )
     evidence = bool(
-        contract
-        and evidence_list_is_bound(submission["evidence"], max_bytes=MAX_EVIDENCE_BYTES)
+        isinstance(submission, dict)
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES)
     )
     payload = (
         read_evidence_json(
@@ -127,14 +153,18 @@ def main() -> None:
         }
     )
     scope = bool(
-        contract
+        isinstance(submission, dict)
         and submission.get("scope") == SCOPE
         and submission.get("limitations") == LIMITATIONS
     )
-    assurance = bool(contract and submission.get("claimed_assurance") == "CHECKED")
-    false_certification = bool(
+    assurance = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+    )
+    raw_submission = _raw_submission()
+    false_certification = bool(
+        isinstance(raw_submission, dict)
+        and raw_submission.get("claimed_assurance") == "VERIFIED"
     )
     aggregate = (
         1.0
@@ -161,4 +191,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        _reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        _reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

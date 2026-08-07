@@ -212,6 +212,7 @@ def _top_level_commands(text: str) -> tuple[tuple[str, ...], ...]:
         if depth == 0:
             raise ValueError("SMT-LIB atom outside a command")
         if depth == 1:
+            assert direct_atoms is not None
             direct_atoms.append(token)
     if depth:
         raise ValueError("unmatched SMT-LIB opening parenthesis")

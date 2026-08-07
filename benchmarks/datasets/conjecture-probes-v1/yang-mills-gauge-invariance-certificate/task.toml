@@ -28,12 +28,12 @@ timeout_sec=600.0
 timeout_sec=120.0
 environment_mode="separate"
 [environment]
-network_mode="no-network"
+network_mode = "no-network"
 cpus=1
 memory_mb=1024
 storage_mb=4096
 [verifier.environment]
-network_mode="no-network"
+network_mode = "no-network"
 cpus=1
 memory_mb=1024
 storage_mb=4096

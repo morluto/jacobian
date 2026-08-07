@@ -41,7 +41,7 @@ def test_network_policy_is_independent_of_image_profile() -> None:
     for suite in load_registry():
         for task in suite.tasks:
             task_toml = (task.path / "task.toml").read_text()
-            modes = set(re.findall(r'network_mode = "([^"]+)"', task_toml))
+            modes = set(re.findall(r'network_mode\s*=\s*"([^"]+)"', task_toml))
             assert modes  # every task pins both agent and verifier network modes
             assert modes <= NETWORK_MODES
 

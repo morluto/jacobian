@@ -251,6 +251,7 @@ def resolve_evidence(
 
 
 _JSON_WHITESPACE = frozenset(" \t\n\r")
+_JSON_WHITESPACE_CHARS = " \t\n\r"
 
 
 def _read_streaming_json_value(stream) -> Any:
@@ -261,23 +262,26 @@ def _read_streaming_json_value(stream) -> Any:
     trailing JSON whitespace are handled exactly like ``json.load``, and any
     non-whitespace content after the value is rejected chunk by chunk instead
     of being read into memory. Memory therefore grows only with the size of
-    the JSON value itself, never with arbitrary legal whitespace padding.
+    the JSON value itself, never with arbitrary legal whitespace padding: the
+    consumed leading-whitespace prefix is discarded as it is skipped.
     """
 
     decoder = codecs.getincrementaldecoder("utf-8")()
     parser = json.JSONDecoder()
     buffer = ""
-    start = 0
     while True:
         block = stream.read(65_536)
         if block:
             buffer += decoder.decode(block)
-        # ``raw_decode`` does not skip leading whitespace; track the prefix
-        # once so each whitespace character is visited only a single time.
-        while start < len(buffer) and buffer[start] in _JSON_WHITESPACE:
-            start += 1
+        # ``raw_decode`` does not skip leading whitespace; discard the
+        # consumed leading-whitespace prefix as it arrives so a large legal
+        # whitespace prefix before the value is never retained in (or
+        # repeatedly copied through) ``buffer``. The guard keeps the JSON
+        # value itself untouched once its first non-whitespace byte arrives.
+        if buffer[:1] in _JSON_WHITESPACE:
+            buffer = buffer.lstrip(_JSON_WHITESPACE_CHARS)
         try:
-            value, end = parser.raw_decode(buffer, idx=start)
+            value, end = parser.raw_decode(buffer)
         except json.JSONDecodeError:
             if not block:
                 raise

@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from benchmarks.validation._verifier_child import run_verifier_in_child
@@ -126,6 +127,72 @@ def test_evidence_with_oversized_whitespace_padding_passes(tmp_path):
     (app / "submission.json").write_text(json.dumps(s) + "\n")
     r = run(app, logs)
     assert r["evidence"] == 1.0 and r["aggregate_reward"] == 1.0
+
+
+def test_evidence_with_large_whitespace_prefix_passes_quickly(tmp_path):
+    """A large legal whitespace prefix before the value must not be retained.
+
+    The streaming parser discards the consumed leading-whitespace prefix.
+    Without that, a digest-correct file would retain (and repeatedly copy)
+    the whole prefix, turning the linear parse into a quadratic one that can
+    exhaust the 1 GiB verifier memory limit or the 120-second verifier
+    timeout for storage-scale padding. 64 MiB of leading whitespace is fast
+    (<1 s of parsing) only when the prefix is discarded, and stays well
+    inside the 30-second child harness timeout.
+    """
+    app, logs, s = case(tmp_path)
+    e = app / "evidence/answer.txt"
+    answer = (
+        " \n" * (32 * 1024 * 1024)
+        + json.dumps(
+            {
+                "schema_version": "1",
+                "task_id": s["task_id"],
+                "result": s["result"],
+                "limitations": s["limitations"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    e.write_text(answer)
+    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    started = time.monotonic()
+    r = run(app, logs)
+    elapsed = time.monotonic() - started
+    assert r["evidence"] == 1.0 and r["aggregate_reward"] == 1.0
+    # Retaining the prefix makes parsing quadratic: 64 MiB of padding takes
+    # ~15 s in-process before the fix, vs well under 1 s after. 15 seconds
+    # cleanly separates streaming discard from unbounded buffer accumulation
+    # with generous headroom for slow runners.
+    assert elapsed < 15.0
+
+
+def test_evidence_leading_garbage_still_rejected(tmp_path):
+    """Non-whitespace before the JSON value fails evidence like json.load."""
+    app, logs, s = case(tmp_path)
+    e = app / "evidence/answer.txt"
+    e.write_text(
+        " \n" * 1024
+        + "garbage"
+        + json.dumps(
+            {
+                "schema_version": "1",
+                "task_id": s["task_id"],
+                "result": s["result"],
+                "limitations": s["limitations"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    r = run(app, logs)
+    assert r["evidence"] == 0.0 and r["aggregate_reward"] == 0.0
 
 
 def test_evidence_trailing_garbage_still_rejected(tmp_path):

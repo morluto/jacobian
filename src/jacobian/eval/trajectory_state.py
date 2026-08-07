@@ -25,6 +25,7 @@ _ARTIFACT_PATTERN = r"^artifact://sha256/[0-9a-f]{64}$"
 _CONTROL_OUTPUT_FIELDS = frozenset(
     {
         "accepted",
+        "cache_hit",
         "conclusion",
         "detail",
         "diagnostics",
@@ -41,13 +42,13 @@ _CONTROL_OUTPUT_FIELDS = frozenset(
 _CANDIDATE_FIELD_PARTS = frozenset(
     {"candidate", "certificate", "counterexample", "witness"}
 )
+# Field-name parts that mark metadata (URIs, flags, records, digests) rather
+# than the actual candidate value.  _candidate_values skips these so that
+# e.g. candidate_uri or certificate_available do not shadow the real value.
+_CANDIDATE_METADATA_PARTS = frozenset(
+    {"available", "digest", "id", "record", "records", "ref", "uri"}
+)
 _CHECKER_ID_PARTS = frozenset({"audit", "check", "checker", "verify"})
-_ACCEPTED_CHECKER_STATUSES = frozenset(
-    {"ACCEPTED", "HOLDS", "PASS", "PASSED", "VALID", "VERIFIED"}
-)
-_REJECTED_CHECKER_STATUSES = frozenset(
-    {"FAIL", "FAILED", "INVALID", "NOT_VERIFIED", "REJECTED"}
-)
 _NONCONCLUSIVE_EXECUTION = frozenset({"CANCELLED", "ERROR", "TIMEOUT"})
 ArtifactRole = Literal[
     "MATHEMATICAL_RESULT",
@@ -211,6 +212,16 @@ class CleanRoomTerminalEvidence(ContractModel):
     clean_room: Literal[True]
     verifier_execution_status: Literal["COMPLETED", "TIMEOUT", "CANCELLED", "ERROR"]
     acceptance: TerminalAcceptance
+    # Immutable binding identities: the accepted label must carry and validate
+    # exact input/trajectory bindings so it cannot be attached to an unrelated
+    # transcript.
+    source_digest: str = Field(pattern=_DIGEST_PATTERN)
+    claim_digest: str | None = Field(default=None, pattern=_DIGEST_PATTERN)
+    candidate_digest: str | None = Field(default=None, pattern=_DIGEST_PATTERN)
+    artifact_uris: tuple[str, ...] = ()
+    verification_record_uri: str | None = Field(
+        default=None, pattern=_ARTIFACT_PATTERN
+    )
     input_binding_valid: bool | None = None
     artifact_binding_valid: bool | None = None
 
@@ -226,6 +237,8 @@ class CleanRoomTerminalEvidence(ContractModel):
             self.artifact_binding_valid,
         ):
             raise ValueError("accepted terminal evidence cannot have invalid bindings")
+        if self.acceptance is TerminalAcceptance.ACCEPTED and not self.source_digest:
+            raise ValueError("accepted terminal evidence must bind a source digest")
         return self
 
 
@@ -255,6 +268,15 @@ class TrajectoryExtraction(ContractModel):
             range(len(self.states))
         ):
             raise ValueError("state indices must be contiguous")
+        return self
+
+    @model_validator(mode="after")
+    def verify_hard_state_digests(self) -> Self:
+        """Recompute digests when loading from persistence."""
+        for state in self.states:
+            expected = _digest(state.hard_state.model_dump(mode="json"))
+            if state.hard_state_digest != expected:
+                raise ValueError("hard_state_digest does not match hard_state")
         return self
 
 
@@ -326,7 +348,11 @@ def _candidate_values(value: object, prefix: str = "output") -> list[tuple[str, 
         for key, item in value.items():
             path = f"{prefix}.{key}"
             key_parts = set(key.lower().replace("-", "_").split("_"))
-            if key_parts & _CANDIDATE_FIELD_PARTS and item not in (None, {}, []):
+            if (
+                key_parts & _CANDIDATE_FIELD_PARTS
+                and not (key_parts & _CANDIDATE_METADATA_PARTS)
+                and item not in (None, {}, [])
+            ):
                 found.append((path, item))
             else:
                 found.extend(_candidate_values(item, path))
@@ -342,39 +368,60 @@ def _is_checker(capability_id: str) -> bool:
     )
 
 
-def _status(value: object) -> str | None:
-    if isinstance(value, str):
-        return value.upper()
-    if value is True:
-        return "ACCEPTED"
-    if value is False:
-        return "REJECTED"
-    return None
+def _checker_outcome(
+    capability_id: str,
+    output: object,
+    assurance: object,
+    mode: str | None = None,
+) -> CheckerState | None:
+    """Derive a checker outcome from the authorized assurance contract.
 
+    Installed verifiers report domain-specific status fields such as
+    ``VERIFIED_UNSAT``, ``inverse_verified``, or ``is_isomorphism``, which are
+    impossible to enumerate reliably.  The authoritative signal for a built-in
+    checker is the validated ``CapabilityResult`` assurance contract: when the
+    capability is a checker (its ID contains verify/check/checker/audit),
+    with ``assurance.level == VERIFIED`` and a verification-record URI, the
+    checker accepted.  When the checker did not achieve verified assurance,
+    it rejected.
 
-def _checker_outcome(capability_id: str, output: object) -> CheckerState | None:
-    if not _is_checker(capability_id) or not isinstance(output, dict):
+    Foreign output fields such as ``status="REJECTED"`` are not consulted
+    because they are not a closed vocabulary.
+    """
+    if not _is_checker(capability_id) or not isinstance(assurance, dict):
         return None
-    candidates = (
-        output.get("status"),
-        output.get("verdict"),
-        output.get("accepted"),
-        output.get("valid"),
-        output.get("verified"),
-    )
-    statuses = {_status(value) for value in candidates}
-    if statuses & _REJECTED_CHECKER_STATUSES:
-        return CheckerState.REJECTED
-    if statuses & _ACCEPTED_CHECKER_STATUSES:
+    record_uri = assurance.get("verification_record_uri")
+    level = assurance.get("level")
+    if level == "VERIFIED" and isinstance(record_uri, str) and mode == "VERIFY":
         return CheckerState.ACCEPTED
+    if level not in (None, "VERIFIED"):
+        # A completed checker call that did not achieve VERIFIED assurance
+        # was a rejection.
+        return CheckerState.REJECTED
     return None
+
+
+def _mathematical_output(output: object) -> dict[str, Any] | None:
+    """Extract the mathematical payload from a capability output.
+
+    Control fields such as ``detail``, ``status``, ``message``, and
+    ``cache_hit`` are excluded so that object identity is derived from the
+    normalized mathematical fields only.  Repeating the same mathematical
+    result with only a changed diagnostic message therefore cannot create a
+    new ``TypedObjectRef`` or an ``OBJECT_ADDED`` milestone.
+    """
+    if not isinstance(output, dict):
+        return None
+    meaningful = {
+        key: value
+        for key, value in output.items()
+        if key not in _CONTROL_OUTPUT_FIELDS and value not in (None, {}, [])
+    }
+    return meaningful or None
 
 
 def _meaningful_output(output: object) -> bool:
-    return isinstance(output, dict) and any(
-        key not in _CONTROL_OUTPUT_FIELDS and value not in (None, {}, [])
-        for key, value in output.items()
-    )
+    return _mathematical_output(output) is not None
 
 
 def _changed_fields(
@@ -604,10 +651,11 @@ def _record_objects(
     output: object,
 ) -> set[MilestoneKind]:
     kinds: set[MilestoneKind] = set()
-    if _meaningful_output(output):
+    math_output = _mathematical_output(output)
+    if math_output is not None:
         ref = TypedObjectRef(
             object_type=f"{capability_id}.output",
-            content_digest=_digest(output),
+            content_digest=_digest(math_output),
             source_capability_id=capability_id,
         )
         key = (ref.object_type, ref.content_digest, ref.source_capability_id)
@@ -684,7 +732,10 @@ def _record_obligations(
                 state.open_obligations.discard(uri)
                 state.discharged_obligations.add(uri)
                 kinds.add(MilestoneKind.OBLIGATION_DISCHARGED)
-        elif uri not in state.open_obligations:
+        elif uri not in state.discharged_obligations and uri not in state.open_obligations:
+            # Discharge is terminal for a URI: replaying the original OPEN
+            # producer result must not re-open an already-discharged
+            # obligation.
             state.open_obligations.add(uri)
             kinds.add(MilestoneKind.OBLIGATION_OPENED)
     return kinds
@@ -740,25 +791,33 @@ def _record_checker(
     capability_id: str,
     output: object,
     assurance: object,
+    mode: str | None = None,
 ) -> set[MilestoneKind]:
     kinds: set[MilestoneKind] = set()
-    checker = _checker_outcome(capability_id, output)
+    checker = _checker_outcome(capability_id, output, assurance, mode)
+    if checker is None:
+        return kinds
     if checker is CheckerState.REJECTED and state.checker_state is not checker:
         state.checker_state = checker
         if state.candidate_digest is not None:
             state.candidate_state = CandidateState.REJECTED
         kinds.add(MilestoneKind.CHECKER_REJECTED)
     elif checker is CheckerState.ACCEPTED and state.checker_state is not checker:
+        record_uri = (
+            assurance.get("verification_record_uri")
+            if isinstance(assurance, dict)
+            else None
+        )
+        # Bind checker decisions to the candidate they checked.  When a
+        # verifier succeeds for candidate B, only promote the candidate that
+        # was actually present at the time of the check.
+        checked_candidate = state.candidate_digest
         state.checker_state = checker
-        if state.candidate_digest is not None:
-            record_uri = (
-                assurance.get("verification_record_uri")
-                if isinstance(assurance, dict)
-                else None
-            )
+        if checked_candidate is not None:
             state.candidate_state = (
                 CandidateState.VERIFIED
-                if state.assurance_level == "VERIFIED" and isinstance(record_uri, str)
+                if state.assurance_level == "VERIFIED"
+                and isinstance(record_uri, str)
                 else CandidateState.CHECKED
             )
             if (
@@ -789,7 +848,9 @@ def _record_math_result(
         validated = CapabilityResult.model_validate(response)
     except ValidationError:
         state.execution_status = "ERROR"
-        kinds.update(_record_diagnostics(state, response))
+        # Do not scan raw responses for diagnostic codes: a failed-validation
+        # response can include diagnostic codes that would manufacture
+        # eligible binding/scope milestones without a typed capability result.
         return tuple(sorted(kinds, key=str))
     response = validated.model_dump(mode="json")
     if validated.capability_id != capability_id:
@@ -809,8 +870,15 @@ def _record_math_result(
     kinds.update(_record_artifacts(state, capability_id, response))
     kinds.update(_record_obligations(state, response))
     kinds.update(_record_scope_completeness_assurance(state, response))
+    mode_value = response.get("mode")
     kinds.update(
-        _record_checker(state, capability_id, output, response.get("assurance"))
+        _record_checker(
+            state,
+            capability_id,
+            output,
+            response.get("assurance"),
+            mode_value if isinstance(mode_value, str) else None,
+        )
     )
     return tuple(sorted(kinds, key=str))
 

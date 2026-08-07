@@ -505,6 +505,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
         clean_room=True,
         verifier_execution_status="COMPLETED",
         acceptance=TerminalAcceptance.ACCEPTED,
+        source_digest="sha256:" + "a" * 64,
         input_binding_valid=True,
         artifact_binding_valid=True,
     )
@@ -525,6 +526,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
             clean_room=True,
             verifier_execution_status="TIMEOUT",
             acceptance=TerminalAcceptance.ACCEPTED,
+            source_digest="sha256:" + "b" * 64,
         )
     with pytest.raises(ValidationError, match="invalid bindings"):
         CleanRoomTerminalEvidence(
@@ -532,6 +534,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
             clean_room=True,
             verifier_execution_status="COMPLETED",
             acceptance=TerminalAcceptance.ACCEPTED,
+            source_digest="sha256:" + "b" * 64,
             input_binding_valid=False,
         )
 

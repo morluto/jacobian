@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 import tomllib
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
-
-from functools import lru_cache
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError

@@ -299,6 +299,7 @@ def _close_declaration_sessions(
     for environment, entry in list(sessions.items()):
         with session_locks[environment]:
             entry.session.close()
+    sessions.clear()
 
 
 class LeanSubprocessDeclarationBackend:

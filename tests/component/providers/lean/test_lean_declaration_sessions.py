@@ -75,6 +75,8 @@ class RecordingSession:
                 self.active -= 1
 
     def close(self) -> None:
+        if self.closed:
+            return
         self.closed = True
 
 
@@ -160,6 +162,7 @@ def test_subprocess_backend_finalizer_closes_sessions_after_garbage_collection(
     session = RecordingSession(responses=[{"operation": "search", "declarations": []}])
     backend, _ = _recording_backend(tmp_path, [session])
     backend.query(LeanEnvironment.CORE, {"operation": "search"})
+    sessions = backend._sessions
     reference = weakref.ref(backend)
 
     del backend
@@ -167,6 +170,7 @@ def test_subprocess_backend_finalizer_closes_sessions_after_garbage_collection(
 
     assert reference() is None
     assert session.closed
+    assert not sessions
 
 
 def test_subprocess_backend_close_detaches_finalizer(tmp_path: Path) -> None:

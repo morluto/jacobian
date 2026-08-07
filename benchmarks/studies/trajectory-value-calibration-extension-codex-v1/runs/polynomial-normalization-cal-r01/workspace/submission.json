@@ -1,0 +1,26 @@
+{
+  "task_id": "jacobian/polynomial-normalization",
+  "conclusion": "TRUE",
+  "result": {
+    "terms": [
+      {
+        "coefficient": "3",
+        "exponents": [1, 2]
+      },
+      {
+        "coefficient": "5",
+        "exponents": [0, 0]
+      }
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "jacobian/polynomial-normalization complete finite input",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:33e03962e285821c278bb42c4b144cfc35abe1ae91f7ff7c60d2fbe205c81f5c"
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,1 @@
+{"task_id":"jacobian/hermite-normal-form","matrix":[[2,4],[6,8]],"convention":"row HNF: nonnegative pivots, increasing pivot columns, entries above each pivot reduced modulo the pivot"}

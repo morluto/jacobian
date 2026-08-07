@@ -1,0 +1,158 @@
+{
+  "task_id": "jacobian/symmetric-polynomial-divisibility",
+  "conclusion": "IDENTITY_CERTIFIED",
+  "result": {
+    "variables": [
+      "a",
+      "b",
+      "c",
+      "d"
+    ],
+    "generator_multipliers": [
+      [
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            3
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            3,
+            0
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            0,
+            3,
+            0,
+            0
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "coefficient": "1"
+        },
+        {
+          "exponents": [
+            3,
+            0,
+            0,
+            0
+          ],
+          "coefficient": "1"
+        }
+      ],
+      [
+        {
+          "exponents": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "coefficient": "-1"
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            0,
+            1
+          ],
+          "coefficient": "-1"
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "coefficient": "-1"
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "coefficient": "-1"
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            1,
+            0
+          ],
+          "coefficient": "-1"
+        },
+        {
+          "exponents": [
+            1,
+            1,
+            0,
+            0
+          ],
+          "coefficient": "-1"
+        }
+      ]
+    ],
+    "identity_conclusion": "TARGET_IN_HYPOTHESIS_IDEAL",
+    "divisibility_conclusion": "TARGET_DIVISIBLE_BY_N"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "Exact divisibility certificate over integers a,b,c,d with hypotheses n | (a+b+c+d) and n | (a^2+b^2+c^2+d^2).",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:814c81c1e83b75d90c077367d3f91512c49d6b9d3b83e59ff7db57b85928f1d0"
+    }
+  ],
+  "limitations": [
+    "The certificate was checked by local symbolic expansion, not by a proof assistant."
+  ]
+}

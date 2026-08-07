@@ -1,0 +1,418 @@
+{
+  "$defs": {
+    "CalibrationEvidenceSource": {
+      "additionalProperties": false,
+      "properties": {
+        "calibration_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Calibration Id",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Digest",
+          "type": "string"
+        },
+        "manifest_path": {
+          "pattern": "^(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+\\.json$",
+          "title": "Manifest Path",
+          "type": "string"
+        },
+        "summary_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Summary Digest",
+          "type": "string"
+        },
+        "summary_path": {
+          "pattern": "^(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+\\.json$",
+          "title": "Summary Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "calibration_id",
+        "manifest_path",
+        "manifest_digest",
+        "summary_path",
+        "summary_digest"
+      ],
+      "title": "CalibrationEvidenceSource",
+      "type": "object"
+    },
+    "CalibrationSelectionRule": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_selected_tasks": {
+          "const": 4,
+          "default": 4,
+          "title": "Maximum Selected Tasks",
+          "type": "integer"
+        },
+        "maximum_success_rate_millionths": {
+          "const": 800000,
+          "default": 800000,
+          "title": "Maximum Success Rate Millionths",
+          "type": "integer"
+        },
+        "minimum_labelled_rollouts": {
+          "const": 2,
+          "default": 2,
+          "title": "Minimum Labelled Rollouts",
+          "type": "integer"
+        },
+        "minimum_success_rate_millionths": {
+          "const": 200000,
+          "default": 200000,
+          "title": "Minimum Success Rate Millionths",
+          "type": "integer"
+        },
+        "ordering": {
+          "const": "candidate-order",
+          "default": "candidate-order",
+          "title": "Ordering",
+          "type": "string"
+        },
+        "uncertainty": {
+          "const": "wilson-95",
+          "default": "wilson-95",
+          "title": "Uncertainty",
+          "type": "string"
+        }
+      },
+      "title": "CalibrationSelectionRule",
+      "type": "object"
+    },
+    "FrozenMixedTask": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "minimum": 1,
+          "title": "Accepted",
+          "type": "integer"
+        },
+        "calibration_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Calibration Id",
+          "type": "string"
+        },
+        "calibration_result_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Calibration Result Digest",
+          "type": "string"
+        },
+        "calibration_tags": {
+          "items": {
+            "enum": [
+              "candidate-checker-repair",
+              "bounded-search-unknown",
+              "scope-assurance",
+              "one-sided-evidence",
+              "artifact-binding",
+              "capability-routing"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Calibration Tags",
+          "type": "array"
+        },
+        "dataset_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "labelled": {
+          "minimum": 2,
+          "title": "Labelled",
+          "type": "integer"
+        },
+        "rejected": {
+          "minimum": 1,
+          "title": "Rejected",
+          "type": "integer"
+        },
+        "success_rate_millionths": {
+          "maximum": 800000,
+          "minimum": 200000,
+          "title": "Success Rate Millionths",
+          "type": "integer"
+        },
+        "task_contract_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Task Contract Digest",
+          "type": "string"
+        },
+        "task_family": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Task Family",
+          "type": "string"
+        },
+        "task_group": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Task Group",
+          "type": "string"
+        },
+        "task_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "task_id",
+        "task_group",
+        "task_family",
+        "calibration_id",
+        "calibration_tags",
+        "accepted",
+        "rejected",
+        "labelled",
+        "success_rate_millionths",
+        "calibration_result_digest",
+        "task_contract_digest"
+      ],
+      "title": "FrozenMixedTask",
+      "type": "object"
+    },
+    "FrozenSelectionPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "calibration_rule": {
+          "$ref": "#/$defs/CalibrationSelectionRule",
+          "default": {
+            "maximum_selected_tasks": 4,
+            "maximum_success_rate_millionths": 800000,
+            "minimum_labelled_rollouts": 2,
+            "minimum_success_rate_millionths": 200000,
+            "ordering": "candidate-order",
+            "uncertainty": "wilson-95"
+          }
+        },
+        "maximum_main_tasks": {
+          "const": 4,
+          "default": 4,
+          "title": "Maximum Main Tasks",
+          "type": "integer"
+        },
+        "minimum_main_tasks": {
+          "const": 2,
+          "default": 2,
+          "title": "Minimum Main Tasks",
+          "type": "integer"
+        },
+        "source_combination": {
+          "const": "source-order-then-candidate-order",
+          "default": "source-order-then-candidate-order",
+          "title": "Source Combination",
+          "type": "string"
+        }
+      },
+      "title": "FrozenSelectionPolicy",
+      "type": "object"
+    },
+    "StudyModel": {
+      "additionalProperties": false,
+      "properties": {
+        "codex_cli_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Codex Cli Version",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "title": "Reasoning Effort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "reasoning_effort",
+        "codex_cli_version"
+      ],
+      "title": "StudyModel",
+      "type": "object"
+    }
+  },
+  "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-value-mixed-study-v1.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "agent_instructions": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "title": "Agent Instructions",
+      "type": "string"
+    },
+    "calibration_sources": {
+      "items": {
+        "$ref": "#/$defs/CalibrationEvidenceSource"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Calibration Sources",
+      "type": "array"
+    },
+    "estimator_comparison": {
+      "items": {
+        "enum": [
+          "GROUP_ROLLOUT",
+          "NUMCA_NUMERICAL",
+          "REASONING_TEXT",
+          "JACOBIAN_TYPED_EXACT",
+          "ABSTRACT_VALUE_STATE",
+          "ABSTRACT_VALUE_STATE_TEXT"
+        ],
+        "type": "string"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Estimator Comparison",
+      "type": "array"
+    },
+    "exact_resume_supported": {
+      "const": false,
+      "default": false,
+      "title": "Exact Resume Supported",
+      "type": "boolean"
+    },
+    "h3_warning_rule": {
+      "const": "any-strictly-negative-preterminal-selected-state-value-delta",
+      "default": "any-strictly-negative-preterminal-selected-state-value-delta",
+      "title": "H3 Warning Rule",
+      "type": "string"
+    },
+    "intermediate_value_surrogate": {
+      "const": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+      "default": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+      "title": "Intermediate Value Surrogate",
+      "type": "string"
+    },
+    "label_status_at_freeze": {
+      "const": "main-labels-not-collected",
+      "default": "main-labels-not-collected",
+      "title": "Label Status At Freeze",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/StudyModel"
+    },
+    "reasoning_log_mode": {
+      "const": "REQUIRED",
+      "default": "REQUIRED",
+      "title": "Reasoning Log Mode",
+      "type": "string"
+    },
+    "repetitions_per_task": {
+      "const": 8,
+      "default": 8,
+      "title": "Repetitions Per Task",
+      "type": "integer"
+    },
+    "retries_for_wrong_answers": {
+      "const": 0,
+      "default": 0,
+      "title": "Retries For Wrong Answers",
+      "type": "integer"
+    },
+    "sandbox": {
+      "const": "workspace-write",
+      "default": "workspace-write",
+      "title": "Sandbox",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scorer_intervention": {
+      "const": false,
+      "default": false,
+      "title": "Scorer Intervention",
+      "type": "boolean"
+    },
+    "selection_policy": {
+      "$ref": "#/$defs/FrozenSelectionPolicy",
+      "default": {
+        "calibration_rule": {
+          "maximum_selected_tasks": 4,
+          "maximum_success_rate_millionths": 800000,
+          "minimum_labelled_rollouts": 2,
+          "minimum_success_rate_millionths": 200000,
+          "ordering": "candidate-order",
+          "uncertainty": "wilson-95"
+        },
+        "maximum_main_tasks": 4,
+        "minimum_main_tasks": 2,
+        "source_combination": "source-order-then-candidate-order"
+      }
+    },
+    "study_id": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "title": "Study Id",
+      "type": "string"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/FrozenMixedTask"
+      },
+      "maxItems": 4,
+      "minItems": 2,
+      "title": "Tasks",
+      "type": "array"
+    },
+    "terminal_reward": {
+      "const": "clean-room-verifier-acceptance-only",
+      "default": "clean-room-verifier-acceptance-only",
+      "title": "Terminal Reward",
+      "type": "string"
+    },
+    "timeout_seconds": {
+      "const": 420,
+      "default": 420,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "tool_mode": {
+      "const": "direct",
+      "default": "direct",
+      "title": "Tool Mode",
+      "type": "string"
+    },
+    "training_performed": {
+      "const": false,
+      "default": false,
+      "title": "Training Performed",
+      "type": "boolean"
+    },
+    "web_search": {
+      "const": "disabled",
+      "default": "disabled",
+      "title": "Web Search",
+      "type": "string"
+    }
+  },
+  "required": [
+    "study_id",
+    "model",
+    "calibration_sources",
+    "tasks",
+    "agent_instructions",
+    "estimator_comparison"
+  ],
+  "title": "TrajectoryValueMixedStudyContract",
+  "type": "object"
+}

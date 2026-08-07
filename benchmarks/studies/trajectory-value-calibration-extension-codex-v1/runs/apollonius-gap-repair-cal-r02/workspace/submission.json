@@ -1,0 +1,27 @@
+{
+  "task_id": "jacobian/apollonius-gap-repair",
+  "conclusion": "OMITTED_APOLLONIUS_IDENTITY_REPAIRED",
+  "result": {
+    "k": "2",
+    "c": "1",
+    "p": "2/3",
+    "q": "2",
+    "center": "4/3",
+    "radius": "2/3",
+    "circle_coefficients": ["1", "1", "-8/3", "4/3"],
+    "distance_coefficients": ["-3", "-3", "8", "-4"],
+    "multiplier": "-1/3"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "OPC_TEST_ROW_1_ANNOTATED_COORDINATE_GAP",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:8fad67a46bbfc5b6936a4acbf44c93cd68951d6b29a971fc13cc98a7ea54294d"
+    }
+  ],
+  "limitations": [
+    "The certificate repairs the annotated coordinate identity; it does not independently formalize every theorem or endpoint convention in the full geometry proof."
+  ]
+}

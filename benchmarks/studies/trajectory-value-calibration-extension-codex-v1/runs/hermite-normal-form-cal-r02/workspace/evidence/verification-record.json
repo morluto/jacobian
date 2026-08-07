@@ -1,0 +1,24 @@
+{
+  "task_id": "jacobian/hermite-normal-form",
+  "verified": true,
+  "checks": [
+    {
+      "name": "matrix_multiplication",
+      "result": "U * A = H"
+    },
+    {
+      "name": "determinant",
+      "result": "det(U) = -1"
+    },
+    {
+      "name": "row_hnf_convention",
+      "result": "satisfied",
+      "details": [
+        "nonnegative pivots",
+        "strictly increasing pivot columns",
+        "entries above each pivot reduced modulo the pivot"
+      ]
+    }
+  ],
+  "method": "manual exact arithmetic from the computed matrices"
+}

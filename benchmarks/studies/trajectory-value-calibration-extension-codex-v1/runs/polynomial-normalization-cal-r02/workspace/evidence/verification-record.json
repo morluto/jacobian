@@ -1,0 +1,10 @@
+{
+  "task_id": "jacobian/polynomial-normalization",
+  "claim": "COMPUTED",
+  "status": "local-audit-only",
+  "basis": [
+    "The exact sparse polynomial terms were combined by exponent vector.",
+    "The cancelling pair 2*x^2 and -2*x^2 sums to zero.",
+    "The remaining canonical terms are 3*x*y^2 and 5."
+  ]
+}

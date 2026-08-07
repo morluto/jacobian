@@ -1,0 +1,17 @@
+Matrix A = [[2, 4], [6, 8]].
+
+Claimed row Hermite normal form:
+H = [[2, 0], [0, 4]].
+
+Unimodular left transformation:
+U = [[-2, 1], [3, -1]].
+
+Certificate:
+U * A = [[-2, 1], [3, -1]] * [[2, 4], [6, 8]]
+      = [[-4 + 6, -8 + 8], [6 - 6, 12 - 8]]
+      = [[2, 0], [0, 4]] = H.
+
+det(U) = (-2)(-1) - (1)(3) = -1, so U is unimodular.
+
+H satisfies the row-HNF convention for this task:
+nonnegative pivots, pivot columns strictly increasing, and reduced entries above each pivot.

@@ -405,6 +405,64 @@ the same model, prompt, budgets, terminal label, and selection rule. The
 extension does not rerun or alter an initial candidate and cannot revise the
 immutable first-batch result.
 
+The extension was then executed once from clean preregistration commit
+`ffe29ed6e4019ebf97ec498f62baf10465406a8d`. Its immutable
+[`manifest.json`](../../../benchmarks/studies/trajectory-value-calibration-extension-codex-v1/manifest.json)
+binds 246 non-manifest artifacts across all 16 planned rollouts. All verifier
+executions completed: eight were accepted, eight were rejected, and none was
+inconclusive. Three symbolic tasks were each 2/2 accepted; Hermite normal form,
+polynomial normalization, and symmetric-polynomial divisibility were each 0/2.
+The two remaining tasks were mixed:
+
+| Selected extension task | Accepted | Rejected | Wilson 95% interval |
+| --- | ---: | ---: | ---: |
+| Apollonius proof-gap repair | 1 | 1 | `[0.095, 0.905]` |
+| Projective-plane homology lattice | 1 | 1 | `[0.095, 0.905]` |
+
+The mixed failures are semantically useful rather than execution failures. In
+the Apollonius task, the rejected trajectory supplied the correct points,
+circle, distance polynomial, scope, evidence, limitations, and assurance, but
+used the reciprocal multiplier `-1/3` instead of `-3`. In the projective-plane
+task, the rejected trajectory supplied a correct spanning tree, boundary
+matrix, determinant, and homology conclusion, but failed the exact evidence
+contract. Both RP2 trajectories also left the external reasoning protocol
+incomplete; one still had a valid terminal certificate. This preserves the
+intended separation between workflow state and mathematical acceptance.
+
+Across both bounded calibration batches there were 32 rollouts, 13 accepted
+and 19 rejected. Exactly three tasks met the frozen 20--80% rule at 1/2 each:
+`graph-artifact-composition`, `apollonius-gap-repair`, and
+`rp2-homology-lattice`. No third calibration batch is needed.
+
+## Frozen mixed-difficulty study
+
+[`trajectory-value-mixed-study-v1.schema.json`](schemas/trajectory-value-mixed-study-v1.schema.json)
+and
+[`trajectory-value-mixed-study-v1.json`](../../../benchmarks/config/trajectory-value-mixed-study-v1.json)
+freeze the main study before any main labels are collected. The contract binds
+both calibration manifests and summaries by digest, recomputes the eligible
+population in source order and candidate order, and rejects task substitution,
+evidence drift, or estimator reordering. Every selected task also binds the
+exact Harbor public and verifier contract through its calibration manifest;
+the loader recomputes the pinned Harbor, public-file, and verifier-file digests
+and refuses execution after task drift.
+
+The main matrix contains the three selected task groups with eight independent
+rollouts each, for 24 planned rollouts. It retains the exact calibration model,
+medium reasoning effort, prompt, 420-second timeout, isolated workspace and
+state, no web search, no wrong-answer retries, and clean-room terminal reward.
+The six estimators are frozen in this order: group/rollout, Numca-like numeric,
+reasoning text, exact typed state, abstract value-state, and abstract
+value-state plus text. PR6 must define the two abstract representations without
+changing this population. PR7 must preregister its remaining analysis details
+before execution.
+
+The H3 warning rule is already fixed as any strictly negative change between
+selected preterminal value estimates. No threshold may be tuned on the main
+labels. The scorer remains observation-only, and the contract records that
+exact intermediate resume is unavailable; compatible independent rollouts are
+the declared non-causal surrogate.
+
 ## Current limitations
 
 Version 1 deliberately uses conservative generic output interpretation. A

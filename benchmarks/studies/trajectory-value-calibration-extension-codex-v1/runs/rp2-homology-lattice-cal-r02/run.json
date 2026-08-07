@@ -1,0 +1,90 @@
+{
+  "calibration_tags": [
+    "artifact-binding",
+    "scope-assurance"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 0,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 0,
+    "missing_after_tool_count": 1,
+    "pending_call_count": 1,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "INCOMPLETE",
+    "summary_characters": 354,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "9f9f96c0-bcc5-4442-9ba6-cc850ed6cb1e"
+  ],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:cbcdc43eddb1ba35854c483491b05c0737c6d69686bbc7857a6ef6e42c366d93",
+    "public_file_digests": {
+      "input.json": "sha256:5c213cbab651030f4c99caa18b6bb8ba51f2021eaec94d2b63cf1cc43cd2c7ef",
+      "instruction.md": "sha256:da4fa4972819d1bff81b6a5b4bd5fe2f280ad1a175eb3a3149b0ebf58ea77e01",
+      "submission_schema.json": "sha256:35627f56e0df6491a3d3c9b346a5550c65a74b3fba5c7dfae38198ac29c06a97"
+    },
+    "task_id": "rp2-homology-lattice",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:84a7ff83f42a17fd9453b5dbb21f045bb275281f9ca30d6ec29b86fdf4188939",
+      "expected.json": "sha256:06a720b2c4b8554dbc2d5e15124560d12cc0d3595b8982f246f48fd2ebaefb11",
+      "input.json": "sha256:5c213cbab651030f4c99caa18b6bb8ba51f2021eaec94d2b63cf1cc43cd2c7ef",
+      "public_contract.json": "sha256:5a60c54ac7a5139857423924577293ec029277906944f2314535bd2843eed73a",
+      "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+      "verifier.py": "sha256:7819fe127c81f1ed6e5107cac8477ddc3e9a73a4d60be1043cd71ab6e15940d3",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "projective-plane-homology-lattice",
+  "task_id": "rp2-homology-lattice",
+  "terminal": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": false,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 1.0,
+      "correctness": 1.0,
+      "evidence_validity": 0.0,
+      "false_certification": false,
+      "reward": 0.0,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:cbcdc43eddb1ba35854c483491b05c0737c6d69686bbc7857a6ef6e42c366d93",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:84a7ff83f42a17fd9453b5dbb21f045bb275281f9ca30d6ec29b86fdf4188939",
+      "expected.json": "sha256:06a720b2c4b8554dbc2d5e15124560d12cc0d3595b8982f246f48fd2ebaefb11",
+      "input.json": "sha256:5c213cbab651030f4c99caa18b6bb8ba51f2021eaec94d2b63cf1cc43cd2c7ef",
+      "public_contract.json": "sha256:5a60c54ac7a5139857423924577293ec029277906944f2314535bd2843eed73a",
+      "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+      "verifier.py": "sha256:7819fe127c81f1ed6e5107cac8477ddc3e9a73a4d60be1043cd71ab6e15940d3",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "rp2-homology-lattice-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 583680,
+    "input_tokens": 615481,
+    "output_tokens": 13139,
+    "reasoning_output_tokens": 6800
+  }
+}

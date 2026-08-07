@@ -1,0 +1,7 @@
+We use the exact polynomial identity
+
+(a+b+c+d) * (a^3+b^3+c^3+d^3+abc+abd+acd+bcd)
+  - (a^2+b^2+c^2+d^2) * (ab+ac+ad+bc+bd+cd)
+= a^4+b^4+c^4+d^4+4abcd.
+
+Therefore, if n divides a+b+c+d and n divides a^2+b^2+c^2+d^2, then n divides each product on the left-hand side, hence n divides their difference. So n divides a^4+b^4+c^4+d^4+4abcd.

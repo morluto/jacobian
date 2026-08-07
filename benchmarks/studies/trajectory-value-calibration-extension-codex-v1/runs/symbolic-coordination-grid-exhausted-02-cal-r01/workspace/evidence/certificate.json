@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/symbolic-coordination-grid-exhausted-02",
+  "result": {
+    "bindings": {
+      "binding_schema_version": "1",
+      "checker_id": "symbolic-coordination-v1.clean-room-polynomial-map-checker@1",
+      "claim_id": "claim://symbolic-coordination-v1/symbolic-coordination-grid-exhausted-02",
+      "forward_map_sha256": "sha256:fc4239bcf2023cbfbf2ebb35580b2bdeadd712bdae3dc4b6ed572a119cd069d7",
+      "scope_id": "scope://symbolic-coordination-v1/symbolic-coordination-grid-exhausted-02",
+      "semantics_id": "exact-sparse-polynomial-maps-over-QQ@1",
+      "subject_sha256": "sha256:eb64c72e91059e763debd332423b5cabd2e30a0b21eab49dc3499169bdddff80"
+    },
+    "case_id": "symbolic-coordination-grid-exhausted-02",
+    "family": "bounded-collision-scope",
+    "verdict": "NO_COLLISION_IN_DECLARED_GRID",
+    "certificate": {
+      "kind": "BOUNDED_GRID_EXHAUSTION_REPLAY",
+      "grid": {
+        "min_numerator": -2,
+        "max_numerator": 2,
+        "max_denominator": 1
+      },
+      "examined_point_count": 25,
+      "global_consequence": "NOT_ESTABLISHED"
+    }
+  },
+  "scope": "DECLARED_RATIONAL_GRID_AND_SUPPLIED_SEARCH_RECORD:symbolic-coordination-grid-exhausted-02",
+  "completeness": "COMPLETE",
+  "limitations": [
+    "NO_GLOBAL_INJECTIVITY_OR_INVERTIBILITY_CONCLUSION"
+  ]
+}

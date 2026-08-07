@@ -1,0 +1,27 @@
+Spanning tree:
+T = {(0,1), (0,2), (0,3), (0,4), (0,5)}.
+
+Non-tree edges, in row order:
+(1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5).
+
+Facet order:
+[0,1,2], [0,2,3], [0,1,5], [0,4,5], [0,3,4],
+[1,2,4], [1,3,4], [1,3,5], [2,3,5], [2,4,5].
+
+Cycle-coordinate matrix of the facet boundaries in the fundamental-cycle basis:
+[
+  [ 1,  0,  0,  0,  0,  1,  0,  0,  0,  0],
+  [ 0,  0,  0,  0,  0,  0,  1,  1,  0,  0],
+  [ 0,  0,  0,  0,  0, -1, -1,  0,  0,  0],
+  [ 0,  0,  1,  0,  0,  0,  0, -1,  0,  0],
+  [ 0,  1,  0,  0,  0,  0,  0,  0,  1,  0],
+  [ 0,  0,  0,  0,  0,  1,  0,  0,  0,  1],
+  [ 0,  0,  0,  0,  0,  0,  0,  0, -1, -1],
+  [ 0,  0,  0,  0,  1,  0,  1,  0,  0,  0],
+  [ 0,  0,  0,  0,  0,  0,  0,  1,  1,  0],
+  [ 0,  0,  0,  1,  0,  0,  0,  0,  0,  1]
+].
+
+Exact determinant: -2.
+The boundary lattice therefore has index 2 in the cycle lattice.
+Hence the first integral homology is Z/2Z.

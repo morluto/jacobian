@@ -1,0 +1,92 @@
+{
+  "calibration_tags": [
+    "artifact-binding",
+    "capability-routing"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 688,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "0eae5e58-27fc-4370-bab2-0e8bf16d6068"
+  ],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:e6c73281a227d9a08c0550795b5e36a4e7b519c9e2d96834e84d7982fa0d97c7",
+    "public_file_digests": {
+      "input.json": "sha256:79895576efdec03f37168afe1afcca056df8fb29166205ae8c6ca08d5ad5f0e0",
+      "instruction.md": "sha256:2259cb32ba5a79d2e1b90028f10d31e5eb3d77b8fea7bf73754dffc123b9bef4",
+      "submission_schema.json": "sha256:3c93cfd88f5cb0f976fc0a07a1a448929f7a86e1426aea1acd4b78b929618729"
+    },
+    "task_id": "hermite-normal-form",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:bc652276ed105adfd04c88416a26c680f3cf2b9e2ba52bdd7bdc98e723050a75",
+      "agent-workflow-v1-hermite-normal-form-input.json": "sha256:79895576efdec03f37168afe1afcca056df8fb29166205ae8c6ca08d5ad5f0e0",
+      "authorized_record.json": "sha256:9b9aeeee003c60c1ba476ddf8480e09202f0b0781bafa82073714d7040134249",
+      "expected.json": "sha256:6722cd548e5db7e37f9c14e1beb5850482c7217aa5ab5d064dbeb177f845ed66",
+      "public_contract.json": "sha256:7ce61274fe0884a209bd893138e5e72905f4ab517fccaec8368626f7ae6763c6",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:faab9f717c7ca898febc52ec205a8cf0e2b3e7ea41004301939f6789cb733dc6",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "hermite-normal-form-certificate",
+  "task_id": "hermite-normal-form",
+  "terminal": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "false_certification": true,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 0.0,
+      "correctness": 1.0,
+      "evidence_validity": 1.0,
+      "false_certification": true,
+      "reward": 0.0,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:e6c73281a227d9a08c0550795b5e36a4e7b519c9e2d96834e84d7982fa0d97c7",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:bc652276ed105adfd04c88416a26c680f3cf2b9e2ba52bdd7bdc98e723050a75",
+      "agent-workflow-v1-hermite-normal-form-input.json": "sha256:79895576efdec03f37168afe1afcca056df8fb29166205ae8c6ca08d5ad5f0e0",
+      "authorized_record.json": "sha256:9b9aeeee003c60c1ba476ddf8480e09202f0b0781bafa82073714d7040134249",
+      "expected.json": "sha256:6722cd548e5db7e37f9c14e1beb5850482c7217aa5ab5d064dbeb177f845ed66",
+      "public_contract.json": "sha256:7ce61274fe0884a209bd893138e5e72905f4ab517fccaec8368626f7ae6763c6",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:faab9f717c7ca898febc52ec205a8cf0e2b3e7ea41004301939f6789cb733dc6",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "hermite-normal-form-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 298496,
+    "input_tokens": 319671,
+    "output_tokens": 5672,
+    "reasoning_output_tokens": 2678
+  }
+}

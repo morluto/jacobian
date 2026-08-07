@@ -124,13 +124,26 @@ def reward(v):
     (p / "reward.json").write_text(json.dumps(v, sort_keys=True))
 
 
+def _reject_duplicate_object_pairs(pairs):
+    """Reject JSON objects with duplicate member names (last-key-wins is unsafe)."""
+    seen = set()
+    for key, _value in pairs:
+        if key in seen:
+            raise ValueError(f"duplicate JSON object member: {key!r}")
+        seen.add(key)
+    return dict(pairs)
+
+
 def _raw_submission() -> dict[str, Any] | None:
     """Read raw submission JSON before strict validation for false-certification detection."""
     path = Path("/app/submission.json")
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(
+            path.read_text(),
+            object_pairs_hook=_reject_duplicate_object_pairs,
+        )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None

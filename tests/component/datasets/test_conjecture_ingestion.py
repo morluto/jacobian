@@ -204,11 +204,27 @@ def test_allowed_license_without_evidence_withholds_text(tmp_path: Path) -> None
 @pytest.mark.parametrize(
     ("field", "fake_digest", "expected_code"),
     [
-        ("expected_content_digest", "0" * 64, "EXTERNAL_CONJECTURE_CONTENT_DIGEST_MISMATCH"),
-        ("expected_record_digest", "f" * 64, "EXTERNAL_CONJECTURE_RECORD_DIGEST_MISMATCH"),
-        ("license_evidence_digest", "0" * 64, "EXTERNAL_CONJECTURE_LICENSE_DIGEST_MISMATCH"),
+        (
+            "expected_content_digest",
+            "0" * 64,
+            "EXTERNAL_CONJECTURE_CONTENT_DIGEST_MISMATCH",
+        ),
+        (
+            "expected_record_digest",
+            "f" * 64,
+            "EXTERNAL_CONJECTURE_RECORD_DIGEST_MISMATCH",
+        ),
+        (
+            "license_evidence_digest",
+            "0" * 64,
+            "EXTERNAL_CONJECTURE_LICENSE_DIGEST_MISMATCH",
+        ),
     ],
-    ids=["content_digest_mismatch", "record_digest_mismatch", "license_digest_mismatch"],
+    ids=[
+        "content_digest_mismatch",
+        "record_digest_mismatch",
+        "license_digest_mismatch",
+    ],
 )
 def test_digest_binding_mismatch_is_rejected(
     tmp_path: Path,

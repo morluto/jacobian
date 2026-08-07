@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from jacobian_checkers.finite_partition import check_partition
 
 

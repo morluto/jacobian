@@ -54,7 +54,10 @@ _TRIANGLE_TAIL = {
         ("graph.invariant.edge_connectivity.compute", {"edge_connectivity": 1}),
         ("graph.invariant.vertex_connectivity.compute", {"vertex_connectivity": 1}),
         ("graph.invariant.is_eulerian.compute", {"is_eulerian": False}),
-        ("graph.invariant.spanning_tree_count.compute", {"spanning_tree_count": 3, "connected": True}),
+        (
+            "graph.invariant.spanning_tree_count.compute",
+            {"spanning_tree_count": 3, "connected": True},
+        ),
     ],
     ids=[
         "girth",
@@ -232,7 +235,5 @@ def test_np_hard_invariants_are_budgeted_and_carry_obligations(
     assert result.output["optimum_value"] == optimum
     assert len(result.output["witness_vertices"]) == optimum
     assert len(result.artifact_uris) == 3
-    obligation = domain_services.core.store.get(
-        result.obligations[0].obligation_uri
-    )
+    obligation = domain_services.core.store.get(result.obligations[0].obligation_uri)
     assert obligation.payload["claimed_value"] == optimum

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
+    CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityMode,
     CapabilityObligation,
@@ -45,6 +47,40 @@ from jacobian.operations import (
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import ArtifactIntegrityError, ArtifactNotFoundError
 from jacobian.storage.repository import ArtifactRepository
+
+
+def _validation_diagnostic(
+    diagnostic: CapabilityDiagnostic,
+    exc: ValidationError,
+) -> CapabilityDiagnostic:
+    """Add bounded recovery context without exposing rejected input values."""
+    raw_errors = exc.errors(include_url=False)
+    errors = exc.errors(include_url=False, include_input=False)
+    if not errors:
+        return diagnostic
+    first = errors[0]
+    path_parts = [str(part) for part in first.get("loc", ())]
+    reason = str(first.get("msg", "invalid value"))
+    rejected_container = raw_errors[0].get("input")
+    field_match = re.match(r"(?:Value error, )?([a-z][a-z0-9_]*)\b", reason)
+    if (
+        field_match is not None
+        and isinstance(rejected_container, dict)
+        and field_match.group(1) in rejected_container
+    ):
+        path_parts.append(field_match.group(1))
+    path = "/" + "/".join(path_parts)
+    return diagnostic.model_copy(
+        update={
+            "path": diagnostic.path or path or None,
+            "details": {
+                **diagnostic.details,
+                "validation_error_count": len(errors),
+                "validation_reason": reason,
+                "validation_type": str(first.get("type", "value_error")),
+            },
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,8 +267,11 @@ class ComputedOperationAdapter:
             )
         except ValidationError as exc:
             raise CapabilityInvocationError(
-                self.operation.invalid_request
-                or self.bundle.diagnostics.invalid_request
+                _validation_diagnostic(
+                    self.operation.invalid_request
+                    or self.bundle.diagnostics.invalid_request,
+                    exc,
+                )
             ) from exc
 
         started = time.monotonic()
@@ -356,10 +395,13 @@ class MaterializedOperationAdapter:
             ValidationError,
             ValueError,
         ) as exc:
-            raise CapabilityInvocationError(
+            diagnostic = (
                 self.operation.invalid_request
                 or self.bundle.diagnostics.invalid_request
-            ) from exc
+            )
+            if isinstance(exc, ValidationError):
+                diagnostic = _validation_diagnostic(diagnostic, exc)
+            raise CapabilityInvocationError(diagnostic) from exc
         started = time.monotonic()
         outcome = self.operation.implementation(validated_request)
         if isinstance(outcome, ComputedNotApplicable):
@@ -476,8 +518,11 @@ class BoundedSearchOperationAdapter:
             )
         except ValidationError as exc:
             raise CapabilityInvocationError(
-                self.operation.invalid_request
-                or self.bundle.diagnostics.invalid_request
+                _validation_diagnostic(
+                    self.operation.invalid_request
+                    or self.bundle.diagnostics.invalid_request,
+                    exc,
+                )
             ) from exc
 
         started = time.monotonic()

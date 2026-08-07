@@ -20,21 +20,6 @@ def test_observation_pair_failures_fails_closed_on_non_dict(tmp_path):
     """Formally prove that malformed observation JSON is not silently accepted."""
     from benchmarks.tooling import benchmark_contracts
 
-    # When treatment/control JSON is a valid JSON but not a dict (e.g., a list),
-    # _observation_pair_failures should return failures, not empty list.
-    treatment_path = (
-        Path(benchmark_contracts.BENCHMARKS)
-        / "datasets"
-        / "mathematical-benchmarks-v1"
-        / "jobs"
-        / "jacobian-observation.json"
-    )
-    control_path = (
-        Path(benchmark_contracts.BENCHMARKS)
-        / "config"
-        / "mathematical-benchmarks-v1-control.json"
-    )
-
     # Mock _read_json to return non-dict values
     original_read_json = benchmark_contracts._read_json
 
@@ -65,8 +50,6 @@ def test_usage_rejects_non_dict_stats():
     from benchmarks.tooling import heldout_runner
 
     # Create a temporary result file with stats as null
-    import tempfile
-
     with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
         json.dump({"stats": None}, f)
         path = Path(f.name)

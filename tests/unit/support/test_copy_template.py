@@ -1,6 +1,5 @@
 """Tests for copy_template isolation."""
 
-import os
 from pathlib import Path
 
 from tests.support.state import copy_template

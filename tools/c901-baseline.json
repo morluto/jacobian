@@ -328,11 +328,6 @@
       "complexity": 11
     },
     {
-      "path": "src/jacobian/domains/_certified_snf.py",
-      "symbol": "smith_reduce",
-      "complexity": 20
-    },
-    {
       "path": "src/jacobian/domains/number_theory/factorization.py",
       "symbol": "_compute",
       "complexity": 11

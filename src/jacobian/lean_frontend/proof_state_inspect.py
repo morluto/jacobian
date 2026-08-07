@@ -11,9 +11,11 @@ runtime is installed.
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 
 from pydantic import ValidationError
 
+from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -22,6 +24,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -37,12 +40,16 @@ from jacobian.contracts.lean_proof_state_inspect import (
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend.artifacts import (
     _environment_digest,
+    _environment_imports,
     _source_digest,
     _state_digest_payload,
 )
 from jacobian.lean_frontend.exploration import _Resources, _runtime_ms
+from jacobian.lean_frontend.repl import LeanExplorationReplRuntime
 from jacobian.references import LeanCheckerInstallation
+from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.errors import StorageError
+from jacobian.storage.repository import ArtifactRepository
 
 
 class LeanProofStateInspectAdapter:
@@ -67,7 +74,13 @@ class LeanProofStateInspectAdapter:
             modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanProofStateInspectRequest.model_json_schema(),
             output_schema=LeanProofStateInspectOutput.model_json_schema(),
+            read_only=True,
             tags=("lean", "proof-state", "inspection", "exploration"),
+            accepted_input_kinds=(
+                CapabilityInputKind.STRUCTURED_REQUEST,
+                CapabilityInputKind.TYPED_ARTIFACT,
+            ),
+            accepted_artifact_types=(resources.state_schema_uri,),
         )
 
     @property
@@ -175,9 +188,15 @@ class LeanProofStateInspectAdapter:
                     hint="Use a state URI returned by a proof-state capability.",
                 )
             ) from exc
+        installation = self.resources.installations[expected_environment]
+        expected_imports = _environment_imports(expected_environment)
         if (
             state.environment is not expected_environment
             or state.environment_digest != expected_environment_digest
+            or state.imports != expected_imports
+            or state.lean_version != installation.lean_version
+            or state.lean_commit != installation.lean_commit
+            or state.mathlib_commit != installation.mathlib_commit
             or state.source_digest
             != _source_digest(state.statement, state.tactic_prefix)
             or state.state_digest != _state_digest_payload(state)
@@ -203,7 +222,67 @@ def install_lean_proof_state_inspect_capability(
     return LeanProofStateInspectAdapter(resources, provider_runtime)
 
 
+def install_lean_proof_state_inspect_only(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    installations: Mapping[LeanEnvironment, LeanCheckerInstallation],
+    provider_runtime: CapabilityProviderRuntime,
+) -> LeanProofStateInspectAdapter:
+    """Register the read-only proof-state inspect adapter without a Lean runtime.
+
+    ``lean.proof_state.inspect`` only reads stored artifacts and never starts a
+    Lean process, so it remains available when the pinned Lean runtime is
+    absent. The semantics and state schema registered here are reused by the
+    full exploration installer when the runtime is available.
+    """
+
+    from pathlib import Path
+
+    from jacobian.contracts.lean_exploration import LeanProofStateArtifact
+
+    core = installations[LeanEnvironment.CORE]
+    mathlib = installations[LeanEnvironment.MATHLIB]
+    semantics_uri = store.register_descriptor(
+        kind="semantics",
+        name="jacobian.lean4-exploration",
+        version="1",
+        definition={
+            "description": (
+                "immutable replayable Lean proof states, one-step tactic "
+                "transitions, and premise suggestions"
+            ),
+            "lean_version": core.lean_version,
+            "lean_commit": core.lean_commit,
+            "mathlib_commit": mathlib.mathlib_commit,
+            "state_expiry": "immutable artifacts do not expire",
+            "verification": "none; completed source must pass lean.check",
+        },
+    )
+    state_schema_uri = schemas.register(
+        name="jacobian.lean4-proof-state",
+        version="1",
+        schema=LeanProofStateArtifact.model_json_schema(),
+    )
+    runtime = Path(__file__).resolve().parents[3] / "lean"
+    repl = LeanExplorationReplRuntime(runtime, installations)
+    resources = _Resources(
+        store=store,
+        artifacts=artifacts,
+        semantics_uri=semantics_uri,
+        state_schema_uri=state_schema_uri,
+        transition_schema_uri="",
+        retrieval_schema_uri="",
+        installations=installations,
+        runtime=runtime,
+        provider_runtime=provider_runtime,
+        repl=repl,
+    )
+    return LeanProofStateInspectAdapter(resources, provider_runtime)
+
+
 __all__ = [
     "LeanProofStateInspectAdapter",
     "install_lean_proof_state_inspect_capability",
+    "install_lean_proof_state_inspect_only",
 ]

@@ -737,3 +737,244 @@ def test_helper_result_envelope_still_parses_normally() -> None:
         request_id="req1",
     )
     assert payload["expression_serialization"] == "LEAN_PRETTY_PRINTED_EXPR"
+
+
+# ---------------------------------------------------------------------------
+# regression: inspect available without Lean runtime (comment F)
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_adapter_available_without_lean_runtime(tmp_path: Path) -> None:
+    from jacobian.lean_frontend.proof_state_inspect import (
+        install_lean_proof_state_inspect_only,
+    )
+    from jacobian.provider_runtime import jacobian_provider_runtime
+
+    store = ArtifactRepository(tmp_path)
+    schemas = SchemaRegistry(store)
+    artifacts = ArtifactService(store, schemas)
+    installations = {
+        environment: _installation(environment) for environment in LeanEnvironment
+    }
+    adapter = install_lean_proof_state_inspect_only(
+        store,
+        schemas,
+        artifacts,
+        installations,
+        jacobian_provider_runtime(
+            "jacobian.lean4",
+            features=("immutable-proof-state",),
+        ),
+    )
+    assert adapter.descriptor.capability_id == "lean.proof_state.inspect"
+    assert adapter.descriptor.read_only is True
+
+
+# ---------------------------------------------------------------------------
+# regression: inspect rejects forged environment metadata (comment H)
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_rejects_forged_environment_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proof_state, _, inspect, _, resources = _adapters(tmp_path)
+    _stub_apply_runtime(
+        monkeypatch,
+        proof_state,
+        lambda: _responses(before=["⊢ True"], after=["⊢ True"]),
+    )
+    opened = proof_state.invoke(
+        CapabilityRequest(
+            capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
+            input={"environment": "CORE", "statement": "True", "tactic": "skip"},
+        )
+    )
+    state = resources.store.get(opened.output["input_state_uri"])
+    forged_payload = dict(state.payload)
+    forged_payload["lean_version"] = "9.9.9"
+    # Recompute state_digest so the digest check alone would pass.
+    from jacobian.contracts.lean_exploration import LeanProofStateArtifact
+    from jacobian.lean_frontend.artifacts import _state_digest_payload
+
+    forged_artifact = LeanProofStateArtifact.model_validate(forged_payload)
+    forged_payload["state_digest"] = _state_digest_payload(forged_artifact)
+    forged = resources.artifacts.put(
+        schema_uri=resources.state_schema_uri,
+        semantics_uri=resources.semantics_uri,
+        payload=forged_payload,
+        summary="fixture with forged lean_version",
+    )
+    with pytest.raises(CapabilityInvocationError) as raised:
+        inspect.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.inspect",
+                mode=CapabilityMode.EXPLORE,
+                input={
+                    "environment": "CORE",
+                    "state_uri": forged.artifact_uri,
+                },
+            )
+        )
+    assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
+
+
+# ---------------------------------------------------------------------------
+# regression: term apply validates output via LeanTermApplyOutput (comment I)
+# ---------------------------------------------------------------------------
+
+
+def test_term_apply_output_is_validated_through_typed_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proof_state, term_apply, _, _, _ = _adapters(tmp_path)
+    _stub_apply_runtime(
+        monkeypatch,
+        proof_state,
+        lambda: _responses(
+            before=["P : Prop\n⊢ P"],
+            after=[],
+            completed=True,
+        ),
+    )
+    result = term_apply.invoke(
+        CapabilityRequest(
+            capability_id="lean.term.apply",
+            mode=CapabilityMode.EXPLORE,
+            input={
+                "environment": "CORE",
+                "statement": "P → P",
+                "proof_prefix": ["intro P"],
+                "term": "P",
+            },
+        )
+    )
+    from jacobian.contracts.lean_term_apply import LeanTermApplyOutput
+
+    validated = LeanTermApplyOutput.model_validate(result.output)
+    assert validated.term_application == "LEAN_EXACT_ELABORATION"
+    assert validated.term_apply_uri == validated.transition_uri
+
+
+# ---------------------------------------------------------------------------
+# regression: metavariable fields rejects goal-count mismatch (comment J)
+# ---------------------------------------------------------------------------
+
+
+def test_metavariable_fields_rejects_goal_count_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proof_state, _, _, metavariable, _ = _adapters(tmp_path)
+    _stub_apply_runtime(
+        monkeypatch,
+        proof_state,
+        lambda: _responses(
+            before=["P Q : Prop\n⊢ P", "P Q : Prop\n⊢ Q"],
+            after=["P Q : Prop\n⊢ P", "P Q : Prop\n⊢ Q"],
+        ),
+    )
+    opened = proof_state.invoke(
+        CapabilityRequest(
+            capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
+            input={
+                "environment": "CORE",
+                "statement": "(P Q : Prop) → P ∧ Q",
+                "proof_prefix": ["intro P Q"],
+                "tactic": "constructor",
+            },
+        )
+    )
+    state_uri = opened.output["successor_states"][0]["state_uri"]
+    structured, elaboration = _metavariable_fixture()
+    # Return only one metavariable for a two-goal state.
+    _stub_metavariable_runtime(
+        monkeypatch,
+        metavariable,
+        structured=structured,
+        elaboration=elaboration,
+        before=["P Q : Prop\n⊢ P", "P Q : Prop\n⊢ Q"],
+    )
+    with pytest.raises(CapabilityInvocationError) as raised:
+        metavariable.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.metavariable_fields",
+                mode=CapabilityMode.EXPLORE,
+                input={"environment": "CORE", "state_uri": state_uri},
+            )
+        )
+    assert raised.value.diagnostic.code == "LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED"
+
+
+# ---------------------------------------------------------------------------
+# regression: term length bound accounts for "exact " prefix (comment K)
+# ---------------------------------------------------------------------------
+
+
+def test_term_apply_rejects_term_exceeding_delegated_tactic_bound() -> None:
+    from jacobian.contracts.lean_term_apply import LeanTermApplyRequest
+
+    # A term of 995 chars + "exact " (6) = 1001, exceeding the 1000-char
+    # tactic bound on LeanProofStateRequest. The term bound must reject this.
+    with pytest.raises(ValueError):
+        LeanTermApplyRequest.model_validate(
+            {
+                "environment": "CORE",
+                "statement": "True",
+                "term": "x" * 995,
+            }
+        )
+
+
+def test_term_apply_accepts_term_at_corrected_bound() -> None:
+    from jacobian.contracts.lean_term_apply import LeanTermApplyRequest
+
+    # A term of 994 chars + "exact " (6) = 1000, exactly at the tactic bound.
+    request = LeanTermApplyRequest.model_validate(
+        {
+            "environment": "CORE",
+            "statement": "True",
+            "term": "x" * 994,
+        }
+    )
+    assert len(request.term) == 994
+
+
+# ---------------------------------------------------------------------------
+# regression: descriptors advertise accepted artifact types and read_only
+# (comments G + L)
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_descriptor_advertises_state_schema_and_read_only(
+    tmp_path: Path,
+) -> None:
+    _, _, inspect, _, resources = _adapters(tmp_path)
+    desc = inspect.descriptor
+    from jacobian.contracts.capabilities import CapabilityInputKind
+
+    assert desc.read_only is True
+    assert CapabilityInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
+    assert resources.state_schema_uri in desc.accepted_artifact_types
+
+
+def test_metavariable_descriptor_advertises_state_schema(tmp_path: Path) -> None:
+    _, _, _, metavariable, resources = _adapters(tmp_path)
+    desc = metavariable.descriptor
+    from jacobian.contracts.capabilities import CapabilityInputKind
+
+    assert CapabilityInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
+    assert resources.state_schema_uri in desc.accepted_artifact_types
+
+
+def test_term_apply_descriptor_advertises_state_schema(tmp_path: Path) -> None:
+    _, term_apply, _, _, resources = _adapters(tmp_path)
+    desc = term_apply.descriptor
+    from jacobian.contracts.capabilities import CapabilityInputKind
+
+    assert CapabilityInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
+    assert resources.state_schema_uri in desc.accepted_artifact_types

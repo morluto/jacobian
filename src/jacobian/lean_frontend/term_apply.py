@@ -18,6 +18,7 @@ from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityInvocationExample,
     CapabilityMode,
     CapabilityProviderRuntime,
@@ -58,6 +59,11 @@ class LeanTermApplyAdapter:
             input_schema=LeanTermApplyRequest.model_json_schema(),
             output_schema=LeanTermApplyOutput.model_json_schema(),
             tags=("lean", "term", "proof-state", "exploration"),
+            accepted_input_kinds=(
+                CapabilityInputKind.STRUCTURED_REQUEST,
+                CapabilityInputKind.TYPED_ARTIFACT,
+            ),
+            accepted_artifact_types=(proof_state_adapter.resources.state_schema_uri,),
             invocation_examples=(
                 CapabilityInvocationExample(
                     name="close_true_with_exact_true_intro",
@@ -125,15 +131,32 @@ class LeanTermApplyAdapter:
                 },
             )
         )
-        output = dict(delegated.output)
-        output["term_apply_uri"] = output["transition_uri"]
-        output["term_application"] = "LEAN_EXACT_ELABORATION"
+        try:
+            output = LeanTermApplyOutput.model_validate(
+                {
+                    **delegated.output,
+                    "term_apply_uri": delegated.output["transition_uri"],
+                    "term_application": "LEAN_EXACT_ELABORATION",
+                }
+            )
+        except (KeyError, TypeError, ValidationError) as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="LEAN_TERM_APPLY_OUTPUT_INVALID",
+                    stage="term_application",
+                    message=(
+                        "The delegated proof-state transition did not produce "
+                        "a valid term-application output."
+                    ),
+                    hint="Retry the term application or report this transition.",
+                )
+            ) from exc
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
             mode=delegated.mode,
             execution=delegated.execution,
-            output=output,
+            output=output.model_dump(mode="json"),
             scope=delegated.scope,
             completeness=delegated.completeness,
             assurance=delegated.assurance,

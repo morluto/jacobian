@@ -28,9 +28,13 @@ from jacobian.lean_frontend.proof_axioms import (
     install_lean_proof_axioms_capability,
 )
 from jacobian.lean_frontend.proof_edit import install_lean_proof_edit_capability
+from jacobian.lean_frontend.proof_state_inspect import (
+    install_lean_proof_state_inspect_only,
+)
 from jacobian.lean_frontend.service import LeanService
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 from jacobian.portfolio.result import PortfolioInstallation
+from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.references import REFERENCE_INSTALLATION_DOMAINS
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.runtime.services import ApplicationServices
@@ -110,6 +114,17 @@ class ReferenceLeanInstaller:
             ),
         )
         result.lean_runtime = runtime
+        inspect_adapter = install_lean_proof_state_inspect_only(
+            ctx.store,
+            ctx.schemas,
+            ctx.artifacts,
+            result.lean_checkers,
+            jacobian_provider_runtime(
+                "jacobian.lean4",
+                features=("immutable-proof-state", "read-only-inspection"),
+            ),
+        )
+        ctx.register_capability(inspect_adapter)
         if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
             _LOGGER.warning("lean.check is not installed: %s", runtime.diagnostic)
             return
@@ -143,6 +158,8 @@ class ReferenceLeanInstaller:
             runtime,
         )
         for adapter in adapters:
+            if adapter.descriptor.capability_id == "lean.proof_state.inspect":
+                continue
             ctx.register_capability(adapter)
         proof_edit_adapter, result.lean_proof_edit = install_lean_proof_edit_capability(
             ctx.store,

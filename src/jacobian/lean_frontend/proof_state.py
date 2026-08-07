@@ -35,6 +35,7 @@ from jacobian.contracts.lean_exploration import (
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend.artifacts import (
     _environment_digest,
+    _environment_imports,
     _proof_state_command,
     _source_digest,
     _state_digest_payload,
@@ -425,9 +426,15 @@ class LeanProofStateAdapter:
                     hint="Use a state URI returned by this capability.",
                 )
             ) from exc
+        installation = self.resources.installations[expected_environment]
+        expected_imports = _environment_imports(expected_environment)
         if (
             state.environment is not expected_environment
             or state.environment_digest != expected_environment_digest
+            or state.imports != expected_imports
+            or state.lean_version != installation.lean_version
+            or state.lean_commit != installation.lean_commit
+            or state.mathlib_commit != installation.mathlib_commit
             or state.source_digest
             != _source_digest(state.statement, state.tactic_prefix)
             or state.state_digest != _state_digest_payload(state)

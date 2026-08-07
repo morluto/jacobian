@@ -92,26 +92,29 @@ def localInstanceJson (inst : LocalInstance) : MetaM Json := do
 
     Uses `MVarId.getDecl`, `MVarId.isAssigned`, and
     `MVarId.isDelayedAssigned` from the maintained `Lean.Meta` API. -/
-def structuredMetavariableJson (goal : MVarId) (index : Nat) : MetaM Json := do
-  let decl ← goal.getDecl
-  let isAssigned ← goal.isAssigned
-  let isDelayedAssigned ← goal.isDelayedAssigned
-  let target ← renderedExpr (← goal.getType)
-  let mut insts : Array Json := #[]
-  for inst in decl.localInstances do
-    insts := insts.push (← localInstanceJson inst)
-  return Json.mkObj [
-    ("goal_index", toJson index),
-    ("user_name", toJson decl.userName.toString),
-    ("is_user_name_anonymous", toJson decl.userName.isAnonymous),
-    ("kind", toJson (metavarKindName decl.kind)),
-    ("is_assigned", toJson isAssigned),
-    ("is_delayed_assigned", toJson isDelayedAssigned),
-    ("depth", toJson decl.depth),
-    ("num_scope_args", toJson decl.numScopeArgs),
-    ("target_type", toJson target),
-    ("local_instances", toJson insts)
-  ]
+def structuredMetavariableJson (goal : MVarId) (index maxLocals : Nat) : MetaM Json := do
+  goal.withContext do
+    let decl ← goal.getDecl
+    let isAssigned ← goal.isAssigned
+    let isDelayedAssigned ← goal.isDelayedAssigned
+    let target ← renderedExpr (← goal.getType)
+    let mut insts : Array Json := #[]
+    for inst in decl.localInstances do
+      if insts.size == maxLocals then
+        throwError "LEAN_PROOF_STATE_LOCAL_LIMIT"
+      insts := insts.push (← localInstanceJson inst)
+    return Json.mkObj [
+      ("goal_index", toJson index),
+      ("user_name", toJson decl.userName.toString),
+      ("is_user_name_anonymous", toJson decl.userName.isAnonymous),
+      ("kind", toJson (metavarKindName decl.kind)),
+      ("is_assigned", toJson isAssigned),
+      ("is_delayed_assigned", toJson isDelayedAssigned),
+      ("depth", toJson decl.depth),
+      ("num_scope_args", toJson decl.numScopeArgs),
+      ("target_type", toJson target),
+      ("local_instances", toJson insts)
+    ]
 
 /-- Elaboration context fields from the pickled `Term.Context`.
 
@@ -194,7 +197,7 @@ def runTypedGoalsQuery (bounds : ProofStateBounds) (snapshot : ProofSnapshot) : 
 def runMetavariableFieldsQuery (bounds : ProofStateBounds) (snapshot : ProofSnapshot) : IO Json := do
   let (mvars, _) ← snapshot.runMetaM do
     snapshot.tacticState.goals.toArray.mapIdxM fun index goal =>
-      structuredMetavariableJson goal index
+      structuredMetavariableJson goal index bounds.max_local_declarations
   let elabContext := elaborationContextJson snapshot
   let payload := Json.mkObj [
     ("expression_serialization", "LEAN_PRETTY_PRINTED_EXPR"),

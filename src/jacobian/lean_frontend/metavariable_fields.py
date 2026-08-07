@@ -26,6 +26,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -44,6 +45,7 @@ from jacobian.contracts.lean_metavariable_fields import (
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend.artifacts import (
     _environment_digest,
+    _environment_imports,
     _proof_state_command,
     _source_digest,
     _state_digest_payload,
@@ -82,6 +84,11 @@ class LeanMetavariableFieldsAdapter:
             input_schema=LeanMetavariableFieldsRequest.model_json_schema(),
             output_schema=LeanMetavariableFieldsOutput.model_json_schema(),
             tags=("lean", "proof-state", "metavariable", "exploration"),
+            accepted_input_kinds=(
+                CapabilityInputKind.STRUCTURED_REQUEST,
+                CapabilityInputKind.TYPED_ARTIFACT,
+            ),
+            accepted_artifact_types=(resources.state_schema_uri,),
         )
 
     @property
@@ -229,6 +236,21 @@ class LeanMetavariableFieldsAdapter:
                     hint="Retry with smaller goal/context bounds.",
                 )
             ) from exc
+        if len(structured) != len(bound_state.normalized_goals):
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED",
+                    stage="metavariable_field_extraction",
+                    message=(
+                        "The helper returned a metavariable-fields count that "
+                        "does not match the state's open goal count."
+                    ),
+                    hint=(
+                        "Recreate the state under the current environment or "
+                        "retry with smaller goal/context bounds."
+                    ),
+                )
+            )
         artifact_payload = LeanMetavariableFieldsArtifact(
             environment=validated.environment,
             environment_digest=environment_digest,
@@ -328,9 +350,15 @@ class LeanMetavariableFieldsAdapter:
                     hint="Use a state URI returned by a proof-state capability.",
                 )
             ) from exc
+        installation = self.resources.installations[expected_environment]
+        expected_imports = _environment_imports(expected_environment)
         if (
             state.environment is not expected_environment
             or state.environment_digest != expected_environment_digest
+            or state.imports != expected_imports
+            or state.lean_version != installation.lean_version
+            or state.lean_commit != installation.lean_commit
+            or state.mathlib_commit != installation.mathlib_commit
             or state.source_digest
             != _source_digest(state.statement, state.tactic_prefix)
             or state.state_digest != _state_digest_payload(state)

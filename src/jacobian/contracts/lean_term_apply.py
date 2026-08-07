@@ -25,7 +25,7 @@ class LeanTermApplyRequest(ContractModel):
     environment: LeanEnvironment = LeanEnvironment.CORE
     statement: str | None = Field(default=None, min_length=1, max_length=2_000)
     proof_prefix: tuple[str, ...] = Field(default=(), max_length=32)
-    term: str = Field(min_length=1, max_length=1_000)
+    term: str = Field(min_length=1, max_length=994)
     max_goals: StrictInt = Field(default=32, ge=1, le=64)
     max_local_declarations: StrictInt = Field(default=128, ge=1, le=256)
     max_rendered_bytes: StrictInt = Field(default=65_536, ge=1_024, le=262_144)

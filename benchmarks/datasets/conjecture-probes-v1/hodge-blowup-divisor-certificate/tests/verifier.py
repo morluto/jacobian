@@ -24,7 +24,6 @@ LIMITATIONS = [
     "LEFSCHETZ_1_1_TRUSTED",
     "NO_HIGHER_CODIMENSION_HODGE_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 EXP = [
     (3, 0, 0),
     (2, 1, 0),
@@ -77,7 +76,7 @@ def mathematics(r: Any) -> bool:
     if (
         not isinstance(coeffs, list)
         or len(coeffs) != 10
-        or any(not isinstance(c, (int, float)) or c != int(c) or not -20 <= c <= 20 for c in coeffs)
+        or any(type(c) is not int or not -20 <= c <= 20 for c in coeffs)
         or not any(coeffs)
         or gcd(*coeffs) != 1
         or not isinstance(checks, list)
@@ -143,7 +142,8 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    m = bool(isinstance(s, dict) and mathematics(s.get("result")))
+    raw = _raw_submission()
+    m = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     e = bool(
         isinstance(s, dict)
         and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
@@ -174,7 +174,6 @@ def main():
     )
     scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
     a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
-    raw = _raw_submission()
     f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
@@ -196,4 +195,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

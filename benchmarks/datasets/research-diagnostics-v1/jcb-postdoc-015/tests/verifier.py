@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    load_submission,
+    load_submission_raw,
     read_evidence_json,
     strict_submission_contract,
 )
@@ -212,7 +212,7 @@ def _safe_evidence(submission):
 
 
 def main():
-    submission = load_submission()
+    submission = load_submission_raw()
     frozen = json.loads((E / "input.json").read_text())
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(

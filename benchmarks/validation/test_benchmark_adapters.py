@@ -12,13 +12,17 @@ def _sha256_text(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _evidence_json(payload: dict[str, object]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+
+
 def test_adapter_lock_requires_disjoint_rows_and_pinned_outputs(tmp_path: Path) -> None:
     adapter = tmp_path / "source"
     adapter.mkdir()
     (adapter / "generate.py").write_text("", encoding="utf-8")
     (adapter / "check.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-    oracle_evidence = "oracle evidence\n"
-    parity_evidence = "parity evidence\n"
+    oracle_evidence = _evidence_json({"kind": "oracle"})
+    parity_evidence = _evidence_json({"kind": "parity"})
     (adapter / "oracle-evidence.json").write_text(oracle_evidence, encoding="utf-8")
     (adapter / "parity-evidence.json").write_text(parity_evidence, encoding="utf-8")
     (adapter / "source.lock.json").write_text(
@@ -69,8 +73,8 @@ def test_adapter_output_digest_uses_the_pinned_harbor_task_model(
     (task / "task.toml").write_text("schema_version = '1.4'\n", encoding="utf-8")
     (adapter / "generate.py").write_text("", encoding="utf-8")
     (adapter / "check.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-    oracle_evidence = "oracle evidence\n"
-    parity_evidence = "parity evidence\n"
+    oracle_evidence = _evidence_json({"kind": "oracle"})
+    parity_evidence = _evidence_json({"kind": "parity"})
     (adapter / "oracle-evidence.json").write_text(oracle_evidence, encoding="utf-8")
     (adapter / "parity-evidence.json").write_text(parity_evidence, encoding="utf-8")
     lock = {
@@ -115,8 +119,8 @@ def test_adapter_evidence_must_remain_present_and_digest_bound(
     (task / "task.toml").write_text("schema_version = '1.4'\n", encoding="utf-8")
     (adapter / "generate.py").write_text("", encoding="utf-8")
     (adapter / "check.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-    oracle_evidence = "oracle evidence\n"
-    parity_evidence = "parity evidence\n"
+    oracle_evidence = _evidence_json({"kind": "oracle"})
+    parity_evidence = _evidence_json({"kind": "parity"})
     (adapter / "oracle-evidence.json").write_text(oracle_evidence, encoding="utf-8")
     (adapter / "parity-evidence.json").write_text(parity_evidence, encoding="utf-8")
     lock = {
@@ -149,7 +153,9 @@ def test_adapter_evidence_must_remain_present_and_digest_bound(
         "benchmarks.tooling.harbor_suite.task_digest", lambda _path: "b" * 64
     )
 
-    (adapter / "oracle-evidence.json").write_text("changed\n", encoding="utf-8")
+    (adapter / "oracle-evidence.json").write_text(
+        _evidence_json({"kind": "changed"}), encoding="utf-8"
+    )
     failures = _failures(adapter)
 
     assert any("oracle_evidence_digest mismatch" in failure for failure in failures)

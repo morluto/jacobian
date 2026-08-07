@@ -6,7 +6,7 @@ from pathlib import Path
 from verifier_support import (
     false_verified_claim,
     is_regular_bounded_file,
-    load_submission,
+    load_submission_raw,
     resolve_evidence,
     strict_submission_contract,
 )
@@ -303,7 +303,7 @@ def _result_matches(value):
 
 
 def main():
-    submission = load_submission()
+    submission = load_submission_raw()
     data = submission if isinstance(submission, dict) else {}
     expected = json.loads((TESTS / "expected.json").read_text())
     protocol_compliance = bool(

@@ -9,7 +9,7 @@ import subprocess
 import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -18,13 +18,21 @@ PLANNER_PATH = ROOT / ".github" / "scripts" / "plan-benchmarks"
 PATH_POLICY_PATH = ROOT / ".github" / "scripts" / "_ci_paths.py"
 VALIDATION_PLAN_PATH = ROOT / "benchmarks" / "tooling" / "validation_plan.py"
 VALIDATOR_PATH = ROOT / ".github" / "scripts" / "validate-benchmark-plan"
-_SPEC = importlib.util.spec_from_loader(
-    "benchmark_planner", SourceFileLoader("benchmark_planner", str(PLANNER_PATH))
-)
-assert _SPEC is not None and _SPEC.loader is not None
-planner = importlib.util.module_from_spec(_SPEC)
-sys.modules["benchmark_planner"] = planner
-_SPEC.loader.exec_module(planner)
+
+
+def _load_script(module_name: str, path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_loader(
+        module_name, SourceFileLoader(module_name, str(path))
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    with pytest.MonkeyPatch.context() as module_state:
+        module_state.setitem(sys.modules, module_name, module)
+        spec.loader.exec_module(module)
+    return module
+
+
+planner = _load_script("benchmark_planner", PLANNER_PATH)
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +44,34 @@ def stable_digests(monkeypatch: pytest.MonkeyPatch) -> None:
         "_digest",
         lambda path: f"sha256:{hashlib.sha256(path.name.encode()).hexdigest()}",
     )
+
+
+@pytest.mark.parametrize("preserve_existing", [False, True])
+def test_load_script_scopes_sys_modules_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    preserve_existing: bool,
+) -> None:
+    module_name = "_benchmark_planner_module_probe"
+    source = tmp_path / "module_probe.py"
+    source.write_text(
+        "import sys\nregistered_while_loading = sys.modules[__name__]\n",
+        encoding="utf-8",
+    )
+    sentinel = ModuleType("sentinel")
+    if preserve_existing:
+        monkeypatch.setitem(sys.modules, module_name, sentinel)
+    else:
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    loaded = _load_script(module_name, source)
+
+    assert vars(loaded)["registered_while_loading"] is loaded
+    if preserve_existing:
+        assert sys.modules[module_name] is sentinel
+    else:
+        assert module_name not in sys.modules
 
 
 def _matrix(result: dict[str, str]) -> list[dict[str, object]]:

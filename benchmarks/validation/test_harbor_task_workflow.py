@@ -7,19 +7,56 @@ import json
 import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = ROOT / "tools" / "harbor_task_workflow.py"
-_SPEC = importlib.util.spec_from_loader(
-    "harbor_task_workflow", SourceFileLoader("harbor_task_workflow", str(TOOL_PATH))
-)
-assert _SPEC is not None and _SPEC.loader is not None
-workflow = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = workflow
-_SPEC.loader.exec_module(workflow)
+
+
+def _load_script(module_name: str, path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_loader(
+        module_name, SourceFileLoader(module_name, str(path))
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    with pytest.MonkeyPatch.context() as module_state:
+        module_state.setitem(sys.modules, module_name, module)
+        spec.loader.exec_module(module)
+    return module
+
+
+workflow = _load_script("harbor_task_workflow", TOOL_PATH)
+
+
+@pytest.mark.parametrize("preserve_existing", [False, True])
+def test_load_script_scopes_sys_modules_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    preserve_existing: bool,
+) -> None:
+    module_name = "_harbor_task_workflow_module_probe"
+    source = tmp_path / "module_probe.py"
+    source.write_text(
+        "import sys\nregistered_while_loading = sys.modules[__name__]\n",
+        encoding="utf-8",
+    )
+    sentinel = ModuleType("sentinel")
+    if preserve_existing:
+        monkeypatch.setitem(sys.modules, module_name, sentinel)
+    else:
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    loaded = _load_script(module_name, source)
+
+    assert vars(loaded)["registered_while_loading"] is loaded
+    if preserve_existing:
+        assert sys.modules[module_name] is sentinel
+    else:
+        assert module_name not in sys.modules
 
 
 def test_resolve_selection_uses_planner_owned_host_matrix() -> None:

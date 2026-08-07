@@ -522,7 +522,11 @@ def _parse_worker_output(
     status = payload["solver_status"]
     proof_written = payload["proof_written"]
     hole_count = payload["alethe_hole_count"]
-    if status not in {"SATISFIABLE", "UNSATISFIABLE", "UNKNOWN"}:
+    if not isinstance(status, str) or status not in {
+        "SATISFIABLE",
+        "UNSATISFIABLE",
+        "UNKNOWN",
+    }:
         raise ValueError("invalid worker status")
     if not isinstance(proof_written, bool):
         raise ValueError("invalid proof-written flag")

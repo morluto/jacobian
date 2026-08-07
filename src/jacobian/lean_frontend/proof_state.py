@@ -92,7 +92,8 @@ class LeanProofStateAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    @staticmethod
+    def _validate_request(request: CapabilityRequest) -> LeanProofStateRequest:
         try:
             validated = LeanProofStateRequest.model_validate(request.input)
             if validated.statement is not None:
@@ -114,6 +115,10 @@ class LeanProofStateAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        validated = self._validate_request(request)
         started = time.monotonic()
         installation = self.resources.installations[validated.environment]
         environment_digest = _environment_digest(

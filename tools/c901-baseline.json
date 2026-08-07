@@ -365,7 +365,7 @@
     {
       "path": "src/jacobian/lean_frontend/proof_state.py",
       "symbol": "invoke",
-      "complexity": 13
+      "complexity": 12
     },
     {
       "path": "src/jacobian/plugins/matrices.py",

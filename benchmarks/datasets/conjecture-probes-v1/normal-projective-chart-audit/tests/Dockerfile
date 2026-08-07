@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.task="jacobian/normal-projective-chart-audit" jacobian.checksum="e535ca689e24a4039f07877b6fa2287ddd22d1b447ce36b2308c3c1ca223a589"
+LABEL jacobian.task="jacobian/normal-projective-chart-audit" jacobian.checksum="5e97d4844fdf85774bcf307cf29e7448be3306d81c349290c671999e616a7537"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

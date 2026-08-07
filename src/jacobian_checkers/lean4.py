@@ -161,9 +161,27 @@ def _authorized_lean_runtime() -> Path:
     return path
 
 
+def _toolchain_sibling(name: str, lean_executable: Path) -> Path:
+    """Return ``name`` from the same toolchain bin directory as *lean_executable*."""
+
+    candidate = lean_executable.with_name(
+        f"{name}.exe" if lean_executable.suffix.lower() == ".exe" else name
+    )
+    if not candidate.is_file():
+        raise _LeanSetupError(
+            f"TOOLCHAIN_RESOLUTION: The pinned Lean {LEAN_VERSION} {name} "
+            "launcher is unavailable. Install "
+            f"it with `elan toolchain install {LEAN_TOOLCHAIN}`, then retry."
+        )
+    return candidate
+
+
 def _lean_command(name: str) -> tuple[str, ...]:
-    if name == "lean" and os.environ.get("JACOBIAN_CHECKER_EXECUTABLE") is not None:
-        return (str(_authorized_lean_runtime()),)
+    if os.environ.get("JACOBIAN_CHECKER_EXECUTABLE") is not None:
+        lean = _authorized_lean_runtime()
+        if name == "lean":
+            return (str(lean),)
+        return (str(_toolchain_sibling(name, lean)),)
     elan = shutil.which("elan")
     if elan is not None:
         return (elan, "run", LEAN_TOOLCHAIN, name)
@@ -373,6 +391,73 @@ def _mathlib_runtime() -> Path:
     return runtime
 
 
+def _resolve_elan_toolchain_executable(command: tuple[str, ...]) -> Path:
+    """Resolve the pinned toolchain ``lean`` binary, not the elan multi-call proxy.
+
+    ``elan run <toolchain> which lean`` can return ``$ELAN_HOME/bin/lean``, which is
+    the elan proxy. That proxy requires a default toolchain and breaks under the
+    isolated ``HOME`` used by CORE checkers and declaration/elaboration workers.
+    ``lean --print-prefix`` returns the toolchain root that contains the real
+    ``bin/lean`` launcher.
+    """
+
+    elan_home = _elan_home(command)
+    overrides: dict[str, str] = {"ELAN_TOOLCHAIN": LEAN_TOOLCHAIN}
+    if elan_home is not None:
+        overrides["ELAN_HOME"] = elan_home
+    environment = worker_environment(
+        extra_variables=("PATH", "HOME"),
+        overrides=overrides,
+    )
+    try:
+        prefix_result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=(*command[1:], "--print-prefix"),
+                environment=environment,
+                cwd=str(Path.cwd()),
+                timeout_seconds=5.0,
+                stdin_bytes=b"",
+                stdout_limit_bytes=4096,
+                stderr_limit_bytes=4096,
+            )
+        )
+    except OSError as exc:
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+        ) from exc
+    if (
+        prefix_result.termination is not ProcessTermination.EXITED
+        or prefix_result.returncode != 0
+    ):
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+        )
+    prefix = prefix_result.stdout.decode("utf-8", errors="replace").strip()
+    if not prefix or "\n" in prefix or "\x00" in prefix:
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+        )
+    executable = Path(prefix) / "bin" / "lean"
+    if not executable.is_file():
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable is unavailable."
+        )
+    elan = shutil.which("elan")
+    if elan is not None:
+        try:
+            if executable.samefile(elan):
+                raise _LeanSetupError(
+                    f"The pinned Lean {LEAN_VERSION} executable resolved to the "
+                    "elan proxy rather than the toolchain binary."
+                )
+        except OSError as exc:
+            raise _LeanSetupError(
+                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+            ) from exc
+    return executable
+
+
 def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
     """Validate the pinned runtime and return the exact executable and profile root."""
 
@@ -381,36 +466,7 @@ def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
     if len(command) == 1:
         executable = Path(command[0])
     else:
-        environment = worker_environment(
-            extra_variables=("PATH", "HOME", "ELAN_HOME"),
-            overrides={"ELAN_TOOLCHAIN": LEAN_TOOLCHAIN},
-        )
-        try:
-            which_result = execute_process(
-                ProcessRequest(
-                    executable=command[0],
-                    arguments=(*command[1:-1], "which", "lean"),
-                    environment=environment,
-                    cwd=str(Path.cwd()),
-                    timeout_seconds=5.0,
-                    stdin_bytes=b"",
-                    stdout_limit_bytes=4096,
-                    stderr_limit_bytes=4096,
-                )
-            )
-        except OSError as exc:
-            raise _LeanSetupError(
-                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
-            ) from exc
-        if (
-            which_result.termination is not ProcessTermination.EXITED
-            or which_result.returncode != 0
-        ):
-            raise _LeanSetupError(
-                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
-            )
-        resolved = which_result.stdout.decode("utf-8", errors="replace").strip()
-        executable = Path(resolved)
+        executable = _resolve_elan_toolchain_executable(command)
     if not executable.is_file():
         raise _LeanSetupError(
             f"The pinned Lean {LEAN_VERSION} executable is unavailable."

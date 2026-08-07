@@ -201,7 +201,8 @@
       "name": "lean-python-adapter",
       "patterns": [
         "src/jacobian/lean*.py",
-        "src/jacobian/**/*lean*.py"
+        "src/jacobian/**/*lean*.py",
+        "src/jacobian_checkers/lean4.py"
       ],
       "suites": [
         "unit",

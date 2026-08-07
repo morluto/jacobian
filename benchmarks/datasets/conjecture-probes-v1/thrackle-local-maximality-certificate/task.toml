@@ -8,7 +8,7 @@ keywords=["thrackle","segment-intersection","local-maximality","exact-geometry"]
 [metadata]
 evaluation_kind="regression"
 domain="mathematical-sciences"
-primary_domain="geometry"
+primary_domain="geometry-topology"
 field="combinatorial-geometry"
 assurance_ceiling="CHECKED"
 answer_visibility="public"

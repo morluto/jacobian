@@ -1,0 +1,150 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:7e973f1eed195fca057abff7e57ede5d29853e12e467c45c074b9a178c92ca46",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-integer-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:5156b3586e259b6d3d53015c8fb97975c0c7e89a5198d0ec01047f386abdbfc1",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the nonnegative gcd of the two integers in task.json and find exact Bezout coefficients u and v, then write submission.json matching the local schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 5
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-integer-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:897eb8a5e107662355ca89ad234544f1c0b0bc51afa9c3ff6000774058bbe001",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Computed gcd 99 and verified Bezout identity for left=918273645546372819 and right=192837465564738291 using coefficients u=21 and v=-100; wrote submission.json matching the local schema.",
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the nonnegative gcd of the two integers in task.json and find exact Bezout coefficients u and v, then write submission.json matching the local schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 31
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-integer-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:9c5622b7ab40a095ec53a60193e30f9bf9fa7a7852a7a44f595fd176b673ea5d",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Computed gcd 99 and verified Bezout identity for left=918273645546372819 and right=192837465564738291 using coefficients u=21 and v=-100; wrote submission.json matching the local schema.",
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the nonnegative gcd of the two integers in task.json and find exact Bezout coefficients u and v, then write submission.json matching the local schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 37
+    }
+  ],
+  "task_family": "exact-integer-bezout",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "artifacts": {
+    "codex.jsonl": "sha256:4193b4fb4fa08ded3b80967e3b68fa92bd82efd52514d80568bc0a0ba7663074",
+    "codex.stderr": "sha256:7288e6d2c490a7f12063890b4fd00e71383d06e9ebbb9f36d6438220f446e511",
+    "extraction.json": "sha256:dce1827a0aff5c5da154ccdd407e2ed2a42894338b6d6ac0b65e3ecf7139be94",
+    "jacobian-mcp.stderr": "sha256:2022846824bed6282994eeec6223861aa455325fdd0166d9e8d776e4605c4d2a",
+    "jacobian-mcp.stdout": "sha256:3eaf5c3f9290a5114ab44a59d0fe8e34fdb20a188d48b8d1721b26a8ee164206",
+    "prompt.txt": "sha256:85f3f1957a8a7e9e923eea6b8c87b66e34984f657199da86cf8b821454663165",
+    "reasoning-log.jsonl": "sha256:8d0fb2d9a9c86bb3098e9d0b61171e42a089e69143401821bf6f69c74ef1c276",
+    "submission-schema.json": "sha256:2200d99120cee8ebabb13ab0d22c7ba885e2d6f253f7791c487c6847686ace34",
+    "submission.json": "sha256:31b71c2b0ac9f95cc102808a23f9482a8c6d1d94f5578d0652a59ce665a207f3",
+    "surface.json": "sha256:a633d866c339cf33ca4d6a1c0e9c8fbf14fb84a078e59759be48dceb35aa9e7a",
+    "task.json": "sha256:034aaf7955b998b67bc1f0add4a95563d6970ac7cec49f5d406d464faa25493b",
+    "verifier.json": "sha256:6821c3c15d7377c56c3b0a0a4fb2a35b0ed5ad02954328841d6ccc041d2919f4"
+  },
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "reasoning_protocol": {
+    "after_tool_count": 0,
+    "before_tool_count": 1,
+    "bound_invoke_count": 0,
+    "final_count": 0,
+    "missing_after_tool_count": 1,
+    "pending_call_count": 1,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "INCOMPLETE",
+    "summary_characters": 328,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "089c55b8-482e-4a9b-8e99-3fd1d29ab504"
+  ],
+  "repetition": 4,
+  "schema_version": "1",
+  "surface_digest": "sha256:4b0dd8ec6dd62e38f74ff2f9486ecc8fdd16dcd164e03838597d19786c7c0b4c",
+  "task_family": "exact-polynomial-gcd-bezout",
+  "task_group": "polynomial-gcd-bezout-01",
+  "task_id": "polynomial-gcd-bezout-01",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  },
+  "trajectory_id": "polynomial-gcd-bezout-01-r04",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 350208,
+    "input_tokens": 379327,
+    "output_tokens": 5981,
+    "reasoning_output_tokens": 2542
+  }
+}

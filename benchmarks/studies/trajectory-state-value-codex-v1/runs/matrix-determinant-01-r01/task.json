@@ -1,0 +1,47 @@
+{
+  "kind": "MATRIX_DETERMINANT",
+  "payload": {
+    "entries": [
+      [
+        "17",
+        "-3",
+        "8",
+        "5",
+        "11"
+      ],
+      [
+        "4",
+        "19",
+        "-7",
+        "2",
+        "13"
+      ],
+      [
+        "9",
+        "6",
+        "23",
+        "-5",
+        "1"
+      ],
+      [
+        "-2",
+        "14",
+        "3",
+        "29",
+        "7"
+      ],
+      [
+        "12",
+        "1",
+        "-4",
+        "10",
+        "31"
+      ]
+    ]
+  },
+  "schema_version": "1",
+  "statement": "Compute the exact determinant of the supplied square integer matrix.",
+  "task_family": "exact-matrix-determinant",
+  "task_group": "matrix-determinant-01",
+  "task_id": "matrix-determinant-01"
+}

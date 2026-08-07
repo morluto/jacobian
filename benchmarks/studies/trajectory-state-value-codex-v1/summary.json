@@ -1,0 +1,513 @@
+{
+  "accepted_count": 15,
+  "causal_claim_authorized": false,
+  "excluded": [
+    {
+      "reason": "terminal verifier outcome is inconclusive",
+      "trajectory_id": "polynomial-gcd-bezout-01-r03"
+    }
+  ],
+  "intermediate_value_reference": {
+    "exact_resume_supported": false,
+    "kind": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+    "limitation": "Codex CLI cannot resume an arbitrary intermediate tool boundary; the proxy is the leave-one-trajectory-out terminal-success mean of independently sampled compatible cross-rollout states."
+  },
+  "labelled_trajectory_count": 15,
+  "metrics": {
+    "GROUP_ROLLOUT": {
+      "brier_score": 0.0,
+      "cluster_count": 4,
+      "mean_absolute_error": 0.0,
+      "observation_count": 27,
+      "task_group_fallback_count": 0,
+      "trajectory_count": 15
+    },
+    "HYBRID_TYPED_TEXT": {
+      "brier_score": 0.0,
+      "cluster_count": 17,
+      "mean_absolute_error": 0.0,
+      "observation_count": 27,
+      "task_group_fallback_count": 10,
+      "trajectory_count": 15
+    },
+    "JACOBIAN_TYPED": {
+      "brier_score": 0.0,
+      "cluster_count": 10,
+      "mean_absolute_error": 0.0,
+      "observation_count": 27,
+      "task_group_fallback_count": 2,
+      "trajectory_count": 15
+    },
+    "NUMCA_NUMERICAL": {
+      "brier_score": 0.0,
+      "cluster_count": 9,
+      "mean_absolute_error": 0.0,
+      "observation_count": 27,
+      "task_group_fallback_count": 4,
+      "trajectory_count": 15
+    },
+    "REASONING_TEXT": {
+      "brier_score": 0.0,
+      "cluster_count": 11,
+      "mean_absolute_error": 0.0,
+      "observation_count": 27,
+      "task_group_fallback_count": 12,
+      "trajectory_count": 15
+    }
+  },
+  "question_a": {
+    "hybrid_brier_delta_vs_group": 0.0,
+    "hybrid_brier_delta_vs_numca": 0.0,
+    "typed_brier_delta_vs_group": 0.0,
+    "typed_brier_delta_vs_numca": 0.0
+  },
+  "question_b": {
+    "hybrid_brier_delta_vs_typed": 0.0
+  },
+  "question_c": {
+    "GROUP_ROLLOUT": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "precision": null,
+      "recall": null,
+      "rule": "any strictly negative preterminal selected-state value delta",
+      "true_negative": 15,
+      "true_positive": 0,
+      "warnings": []
+    },
+    "HYBRID_TYPED_TEXT": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "precision": null,
+      "recall": null,
+      "rule": "any strictly negative preterminal selected-state value delta",
+      "true_negative": 15,
+      "true_positive": 0,
+      "warnings": []
+    },
+    "JACOBIAN_TYPED": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "precision": null,
+      "recall": null,
+      "rule": "any strictly negative preterminal selected-state value delta",
+      "true_negative": 15,
+      "true_positive": 0,
+      "warnings": []
+    },
+    "NUMCA_NUMERICAL": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "precision": null,
+      "recall": null,
+      "rule": "any strictly negative preterminal selected-state value delta",
+      "true_negative": 15,
+      "true_positive": 0,
+      "warnings": []
+    },
+    "REASONING_TEXT": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "precision": null,
+      "recall": null,
+      "rule": "any strictly negative preterminal selected-state value delta",
+      "true_negative": 15,
+      "true_positive": 0,
+      "warnings": []
+    }
+  },
+  "question_d": {
+    "hybrid_separated_pair_count": 16,
+    "mixed_terminal_outcome_pair_count": 0,
+    "pairs": [
+      {
+        "hybrid_separated": false,
+        "left": "integer-bezout-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r02:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "integer-bezout-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r03:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "integer-bezout-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r04:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "integer-bezout-01-r01:1",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r04:1"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "integer-bezout-01-r01:2",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r04:2"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "integer-bezout-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r03:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "integer-bezout-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r04:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "integer-bezout-01-r03:0",
+        "mixed_terminal_outcome": false,
+        "right": "integer-bezout-01-r04:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r02:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "matrix-determinant-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r03:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r01:1",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r02:1"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r01:1",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:1"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "matrix-determinant-01-r01:2",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r02:2"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r01:2",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:2"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "matrix-determinant-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r03:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "matrix-determinant-01-r02:1",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:1"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "matrix-determinant-01-r02:2",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:2"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "matrix-determinant-01-r03:0",
+        "mixed_terminal_outcome": false,
+        "right": "matrix-determinant-01-r04:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "polynomial-gcd-bezout-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "polynomial-gcd-bezout-01-r02:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "polynomial-gcd-bezout-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "polynomial-gcd-bezout-01-r04:0"
+      },
+      {
+        "hybrid_separated": false,
+        "left": "polynomial-gcd-bezout-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "polynomial-gcd-bezout-01-r04:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "graph-independent-set-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "graph-independent-set-01-r02:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "graph-independent-set-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "graph-independent-set-01-r03:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "graph-independent-set-01-r01:0",
+        "mixed_terminal_outcome": false,
+        "right": "graph-independent-set-01-r04:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "graph-independent-set-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "graph-independent-set-01-r03:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "graph-independent-set-01-r02:0",
+        "mixed_terminal_outcome": false,
+        "right": "graph-independent-set-01-r04:0"
+      },
+      {
+        "hybrid_separated": true,
+        "left": "graph-independent-set-01-r03:0",
+        "mixed_terminal_outcome": false,
+        "right": "graph-independent-set-01-r04:0"
+      }
+    ],
+    "same_typed_different_text_pair_count": 29
+  },
+  "question_e": {
+    "critical_difference_counts": {
+      "assurance_level": 12,
+      "completeness_status": 12,
+      "scope_digest": 12
+    },
+    "pairs": [
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r01:0",
+        "right": "integer-bezout-01-r04:1"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r01:0",
+        "right": "integer-bezout-01-r04:2"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r01:1",
+        "right": "integer-bezout-01-r02:0"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r01:1",
+        "right": "integer-bezout-01-r04:0"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r01:2",
+        "right": "integer-bezout-01-r02:0"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r01:2",
+        "right": "integer-bezout-01-r04:0"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r02:0",
+        "right": "integer-bezout-01-r04:1"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "integer-bezout-01-r02:0",
+        "right": "integer-bezout-01-r04:2"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "matrix-determinant-01-r02:0",
+        "right": "matrix-determinant-01-r04:1"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "matrix-determinant-01-r02:0",
+        "right": "matrix-determinant-01-r04:2"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "matrix-determinant-01-r02:1",
+        "right": "matrix-determinant-01-r04:0"
+      },
+      {
+        "differing_fields": [
+          "scope_digest",
+          "assurance_level",
+          "completeness_status"
+        ],
+        "left": "matrix-determinant-01-r02:2",
+        "right": "matrix-determinant-01-r04:0"
+      }
+    ],
+    "same_text_cluster_typed_incompatible_pair_count": 12
+  },
+  "question_f": {
+    "fallback": "other rollouts in the same task group",
+    "univariate_exact_match_dimensions": [
+      {
+        "brier_score": 0.0,
+        "dimension": "artifact_roles",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "assurance_level",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "binding_validity",
+        "fallback_count": 0
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "boundary",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "candidate_state",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "checker_state",
+        "fallback_count": 0
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "completeness_assurance",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "completeness_status",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "discharged_obligation_uris",
+        "fallback_count": 0
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "execution_status",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "latest_meaningful_transitions",
+        "fallback_count": 1
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "open_obligation_uris",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "reasoning_protocol_state",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "scope_digest",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "scope_escalation_errors",
+        "fallback_count": 0
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "typed_object_identities",
+        "fallback_count": 2
+      },
+      {
+        "brier_score": 0.0,
+        "dimension": "typed_object_types",
+        "fallback_count": 2
+      }
+    ]
+  },
+  "rejected_count": 0,
+  "run_count": 16,
+  "schema_version": "1",
+  "study_id": "trajectory-state-value-codex-v1",
+  "training_performed": false
+}

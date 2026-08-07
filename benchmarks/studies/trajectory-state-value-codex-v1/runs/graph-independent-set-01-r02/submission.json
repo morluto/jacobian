@@ -1,0 +1,13 @@
+{
+  "task_id": "graph-independent-set-01",
+  "answer": {
+    "vertices": [
+      "c",
+      "e",
+      "h",
+      "j",
+      "l"
+    ],
+    "optimum": 5
+  }
+}

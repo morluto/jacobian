@@ -1,0 +1,19 @@
+{
+  "acceptance": "INCONCLUSIVE",
+  "artifact_binding_valid": false,
+  "checks": {
+    "artifact_binding": false,
+    "envelope_shape": false,
+    "input_binding": true,
+    "submission_json": false,
+    "task_identity": false
+  },
+  "clean_room": true,
+  "input_binding_valid": true,
+  "schema_version": "1",
+  "submission_digest": null,
+  "task_digest": "sha256:57861869c1cfbe762c400014b2b2970f47881c910d806b843aaeec93bdf039b5",
+  "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+  "verifier_execution_status": "COMPLETED",
+  "verifier_id": "trajectory-state-value-study.clean-room-exact-verifier@1"
+}

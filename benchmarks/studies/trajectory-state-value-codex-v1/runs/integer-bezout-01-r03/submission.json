@@ -1,0 +1,8 @@
+{
+  "task_id": "integer-bezout-01",
+  "answer": {
+    "gcd": "99",
+    "left_coefficient": "21",
+    "right_coefficient": "-100"
+  }
+}

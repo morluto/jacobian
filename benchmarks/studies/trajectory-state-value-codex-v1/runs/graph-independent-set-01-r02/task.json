@@ -1,0 +1,122 @@
+{
+  "kind": "GRAPH_MAXIMUM_INDEPENDENT_SET",
+  "payload": {
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ],
+      [
+        "i",
+        "j"
+      ],
+      [
+        "j",
+        "k"
+      ],
+      [
+        "k",
+        "l"
+      ],
+      [
+        "l",
+        "a"
+      ],
+      [
+        "a",
+        "g"
+      ],
+      [
+        "b",
+        "h"
+      ],
+      [
+        "c",
+        "i"
+      ],
+      [
+        "d",
+        "j"
+      ],
+      [
+        "e",
+        "k"
+      ],
+      [
+        "f",
+        "l"
+      ],
+      [
+        "a",
+        "d"
+      ],
+      [
+        "b",
+        "e"
+      ],
+      [
+        "c",
+        "f"
+      ],
+      [
+        "g",
+        "j"
+      ],
+      [
+        "h",
+        "k"
+      ],
+      [
+        "i",
+        "l"
+      ]
+    ],
+    "vertices": [
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l"
+    ]
+  },
+  "schema_version": "1",
+  "statement": "Find any maximum independent vertex set of the supplied finite simple graph and report its exact optimum cardinality.",
+  "task_family": "exact-graph-maximum-independent-set",
+  "task_group": "graph-independent-set-01",
+  "task_id": "graph-independent-set-01"
+}

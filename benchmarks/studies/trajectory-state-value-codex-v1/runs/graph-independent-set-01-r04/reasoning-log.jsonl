@@ -1,0 +1,1 @@
+{"schema_version":"1","run_id":"b56e679b-2a36-4a56-adc9-4bd3e06706cd","sequence":0,"kind":"PLAN","occurred_at":"2026-08-07T06:10:31.855509+00:00","payload":{"summary":"Compute the exact maximum independent set for the 12-vertex graph in task.json, verify it against the edge list, and write submission.json per schema."}}

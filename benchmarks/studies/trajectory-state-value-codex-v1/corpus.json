@@ -1,0 +1,3428 @@
+{
+  "corpus_id": "trajectory-state-value-codex-v1",
+  "corpus_schema_version": "1",
+  "evaluator_config": {
+    "config_schema_version": "1",
+    "linkage": "average",
+    "state_selection": "plan-milestone-and-post-milestone-after-tool",
+    "text_ngram_range": "word-1-2",
+    "text_similarity_threshold_millionths": 350000,
+    "trajectory_metric_weighting": "equal",
+    "validation": "leave-one-trajectory-out"
+  },
+  "trajectories": [
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:c2b558c73d5d41711dc42d99f7ed7d9bae8493f317fb1a38a79e5f2687457f8a",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:5156b3586e259b6d3d53015c8fb97975c0c7e89a5198d0ec01047f386abdbfc1",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact gcd and Bezout coefficients for the two task integers, then validate the identity and write the required submission JSON.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 12
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "assurance_level",
+              "completeness_assurance",
+              "completeness_status",
+              "execution_status",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state",
+              "scope_digest",
+              "typed_objects"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [
+                "COMPLETENESS_CHANGED",
+                "OBJECT_ADDED",
+                "SCOPE_CHANGED"
+              ],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:9a8683f52b874c39e36b5b137f257f06f42975ce713c9c8be1bf9f7734b522ed",
+            "index": 1,
+            "milestone_eligible": true,
+            "milestone_kinds": [
+              "COMPLETENESS_CHANGED",
+              "OBJECT_ADDED",
+              "SCOPE_CHANGED"
+            ],
+            "milestone_reason": "eligible typed mathematical state transition: COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact gcd and Bezout coefficients for the two task integers, then validate the identity and write the required submission JSON.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 19
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:7ed7dacb3bcae2419883614e698bf2cb37e896806d861ab3f5664912c04da06e",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The extended-gcd run returned gcd 99 with coefficients 21 and -100, and the identity was independently checked by direct arithmetic.",
+              "plan_summary": "Compute the exact gcd and Bezout coefficients for the two task integers, then validate the identity and write the required submission JSON.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 27
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:052755b88043ff539d073f9e67fd9cb517406c0a69f34076701ad7295d1b4b1f",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact integer Bezout task and wrote submission.json with the schema-required top-level fields only.",
+              "latest_after_tool_summary": "The extended-gcd run returned gcd 99 with coefficients 21 and -100, and the identity was independently checked by direct arithmetic.",
+              "plan_summary": "Compute the exact gcd and Bezout coefficients for the two task integers, then validate the identity and write the required submission JSON.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 29
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:62177b51dc8c159df3cdfb47264dd56b5c0e0569bbe20c18a7b0087f5fedc7e7",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact integer Bezout task and wrote submission.json with the schema-required top-level fields only.",
+              "latest_after_tool_summary": "The extended-gcd run returned gcd 99 with coefficients 21 and -100, and the identity was independently checked by direct arithmetic.",
+              "plan_summary": "Compute the exact gcd and Bezout coefficients for the two task integers, then validate the identity and write the required submission JSON.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 32
+          }
+        ],
+        "task_family": "exact-integer-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "integer-bezout-01",
+      "trajectory_id": "integer-bezout-01-r01"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:aac8041f60adc3be67f76c3f64ee0c181d46040bdc2039c0e23c8df58df539a3",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:5156b3586e259b6d3d53015c8fb97975c0c7e89a5198d0ec01047f386abdbfc1",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two task integers, verify the linear combination exactly, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 16
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:6b75bb23c41af3230fdcdcc6f39d8bb4c75418d9a5d4de9083f32c45097c83c3",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two task integers, verify the linear combination exactly, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 42
+          }
+        ],
+        "task_family": "exact-integer-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "integer-bezout-01",
+      "trajectory_id": "integer-bezout-01-r02"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:7e973f1eed195fca057abff7e57ede5d29853e12e467c45c074b9a178c92ca46",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:5156b3586e259b6d3d53015c8fb97975c0c7e89a5198d0ec01047f386abdbfc1",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the nonnegative gcd of the two integers in task.json and find exact Bezout coefficients u and v, then write submission.json matching the local schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 5
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:897eb8a5e107662355ca89ad234544f1c0b0bc51afa9c3ff6000774058bbe001",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Computed gcd 99 and verified Bezout identity for left=918273645546372819 and right=192837465564738291 using coefficients u=21 and v=-100; wrote submission.json matching the local schema.",
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the nonnegative gcd of the two integers in task.json and find exact Bezout coefficients u and v, then write submission.json matching the local schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 31
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:9c5622b7ab40a095ec53a60193e30f9bf9fa7a7852a7a44f595fd176b673ea5d",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Computed gcd 99 and verified Bezout identity for left=918273645546372819 and right=192837465564738291 using coefficients u=21 and v=-100; wrote submission.json matching the local schema.",
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the nonnegative gcd of the two integers in task.json and find exact Bezout coefficients u and v, then write submission.json matching the local schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 37
+          }
+        ],
+        "task_family": "exact-integer-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "integer-bezout-01",
+      "trajectory_id": "integer-bezout-01-r03"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:1cc462b0ae71b5d4347b64eabd4878aa2abc729721d9dc1a8f0b1609fb8c8385",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:5156b3586e259b6d3d53015c8fb97975c0c7e89a5198d0ec01047f386abdbfc1",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two supplied integers, verify the linear identity, and write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 15
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "assurance_level",
+              "completeness_assurance",
+              "completeness_status",
+              "execution_status",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state",
+              "scope_digest",
+              "typed_objects"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [
+                "COMPLETENESS_CHANGED",
+                "OBJECT_ADDED",
+                "SCOPE_CHANGED"
+              ],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:9a8683f52b874c39e36b5b137f257f06f42975ce713c9c8be1bf9f7734b522ed",
+            "index": 1,
+            "milestone_eligible": true,
+            "milestone_kinds": [
+              "COMPLETENESS_CHANGED",
+              "OBJECT_ADDED",
+              "SCOPE_CHANGED"
+            ],
+            "milestone_reason": "eligible typed mathematical state transition: COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two supplied integers, verify the linear identity, and write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 28
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:7ed7dacb3bcae2419883614e698bf2cb37e896806d861ab3f5664912c04da06e",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "Extended gcd returned gcd 99 with coefficients u=21 and v=-100 for the supplied inputs.",
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two supplied integers, verify the linear identity, and write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 30
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:052755b88043ff539d073f9e67fd9cb517406c0a69f34076701ad7295d1b4b1f",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Computed gcd 99 and Bezout coefficients u=21, v=-100 for the supplied integers, and wrote submission.json matching the required schema.",
+              "latest_after_tool_summary": "Extended gcd returned gcd 99 with coefficients u=21 and v=-100 for the supplied inputs.",
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two supplied integers, verify the linear identity, and write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 38
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:57b1d8941cb9bf66a459496c94256b1647f118f17273b91e7bc385ab376ac725",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-integer-bezout",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:76e6ab7ed1858a67423dc3b3d818b6ef6e7577c95a9ee0aae012ef40fb465413",
+                  "object_type": "integer.compute.extended_gcd.output",
+                  "source_capability_id": "integer.compute.extended_gcd"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:62177b51dc8c159df3cdfb47264dd56b5c0e0569bbe20c18a7b0087f5fedc7e7",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Computed gcd 99 and Bezout coefficients u=21, v=-100 for the supplied integers, and wrote submission.json matching the required schema.",
+              "latest_after_tool_summary": "Extended gcd returned gcd 99 with coefficients u=21 and v=-100 for the supplied inputs.",
+              "plan_summary": "Compute the gcd and Bezout coefficients for the two supplied integers, verify the linear identity, and write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 41
+          }
+        ],
+        "task_family": "exact-integer-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "integer-bezout-01",
+      "trajectory_id": "integer-bezout-01-r04"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:aa5368ee40f6f97f9b01fe3f95a784c46afa543591074de7178ae4599f20b2a0",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:b1b2170ac548bf6d0b3e013fb0a921e0386e8bd196e3060629cd4c2f912cfecb",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact determinant of the supplied 5x5 integer matrix and write the required submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 19
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "artifacts",
+              "assurance_level",
+              "candidate_state",
+              "completeness_assurance",
+              "completeness_status",
+              "execution_status",
+              "latest_candidate_digest",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state",
+              "scope_digest",
+              "typed_objects"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [
+                "ARTIFACT_ADDED",
+                "CANDIDATE_PRODUCED",
+                "COMPLETENESS_CHANGED",
+                "OBJECT_ADDED",
+                "SCOPE_CHANGED"
+              ],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:eaa69e76766b972a6952cebae3eccab8c8aa55f1adddcc8336aaede3baee5b16",
+            "index": 1,
+            "milestone_eligible": true,
+            "milestone_kinds": [
+              "ARTIFACT_ADDED",
+              "CANDIDATE_PRODUCED",
+              "COMPLETENESS_CHANGED",
+              "OBJECT_ADDED",
+              "SCOPE_CHANGED"
+            ],
+            "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact determinant of the supplied 5x5 integer matrix and write the required submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 23
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:7d83526a57f17b79db98fed00b673d68dbbd2142f4b93788b505c84738089791",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The determinant run completed successfully and returned the exact value 4312753 for the supplied matrix.",
+              "plan_summary": "Compute the exact determinant of the supplied 5x5 integer matrix and write the required submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 34
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:459bae46db77385ed9d35033a4cc87af5da83bb104647f61441b8804c54b7b53",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the determinant computation task and wrote the schema-compliant submission artifact with determinant 4312753.",
+              "latest_after_tool_summary": "The determinant run completed successfully and returned the exact value 4312753 for the supplied matrix.",
+              "plan_summary": "Compute the exact determinant of the supplied 5x5 integer matrix and write the required submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 36
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "VALID",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:139ff6e3bebf9c367631adabacb6ed869d96421ea5014e86811f27d9c37123b2",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the determinant computation task and wrote the schema-compliant submission artifact with determinant 4312753.",
+              "latest_after_tool_summary": "The determinant run completed successfully and returned the exact value 4312753 for the supplied matrix.",
+              "plan_summary": "Compute the exact determinant of the supplied 5x5 integer matrix and write the required submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 39
+          }
+        ],
+        "task_family": "exact-matrix-determinant",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "matrix-determinant-01",
+      "trajectory_id": "matrix-determinant-01-r01"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:8cb96444d597176721447fd41f68e01076c17190d59c4078e0da7a1d609c4212",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:b1b2170ac548bf6d0b3e013fb0a921e0386e8bd196e3060629cd4c2f912cfecb",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 12
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "artifacts",
+              "assurance_level",
+              "candidate_state",
+              "completeness_assurance",
+              "completeness_status",
+              "execution_status",
+              "latest_candidate_digest",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state",
+              "scope_digest",
+              "typed_objects"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [
+                "ARTIFACT_ADDED",
+                "CANDIDATE_PRODUCED",
+                "COMPLETENESS_CHANGED",
+                "OBJECT_ADDED",
+                "SCOPE_CHANGED"
+              ],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:eaa69e76766b972a6952cebae3eccab8c8aa55f1adddcc8336aaede3baee5b16",
+            "index": 1,
+            "milestone_eligible": true,
+            "milestone_kinds": [
+              "ARTIFACT_ADDED",
+              "CANDIDATE_PRODUCED",
+              "COMPLETENESS_CHANGED",
+              "OBJECT_ADDED",
+              "SCOPE_CHANGED"
+            ],
+            "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 21
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:7d83526a57f17b79db98fed00b673d68dbbd2142f4b93788b505c84738089791",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "Exact determinant computed successfully; result is 4312753.",
+              "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 23
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:459bae46db77385ed9d35033a4cc87af5da83bb104647f61441b8804c54b7b53",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact determinant computation and wrote submission.json with the required schema.",
+              "latest_after_tool_summary": "Exact determinant computed successfully; result is 4312753.",
+              "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 28
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "VALID",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:139ff6e3bebf9c367631adabacb6ed869d96421ea5014e86811f27d9c37123b2",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact determinant computation and wrote submission.json with the required schema.",
+              "latest_after_tool_summary": "Exact determinant computed successfully; result is 4312753.",
+              "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 31
+          }
+        ],
+        "task_family": "exact-matrix-determinant",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "matrix-determinant-01",
+      "trajectory_id": "matrix-determinant-01-r02"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:b5ab0ccafe1f87f060416ae314d387dc30b70a76bdc169f2973b3c2131e4f7e4",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:b1b2170ac548bf6d0b3e013fb0a921e0386e8bd196e3060629cd4c2f912cfecb",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Read the task and submission schema, compute the exact determinant of the matrix, then write submission.json with the schema-required shape.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 5
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:e5a40d8f81a7548e9973cb8b8615e418ef90b1f2f7bd54fcd944adc2d3d19b48",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Read the task and submission schema, compute the exact determinant of the matrix, then write submission.json with the schema-required shape.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 40
+          }
+        ],
+        "task_family": "exact-matrix-determinant",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "matrix-determinant-01",
+      "trajectory_id": "matrix-determinant-01-r03"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:1628bdd73e62761fe6e27d4829d71a486489030b76bb9e7106cc6aa95758084b",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:b1b2170ac548bf6d0b3e013fb0a921e0386e8bd196e3060629cd4c2f912cfecb",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact determinant of the 5x5 integer matrix from task.json, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 23
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "artifacts",
+              "assurance_level",
+              "candidate_state",
+              "completeness_assurance",
+              "completeness_status",
+              "execution_status",
+              "latest_candidate_digest",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state",
+              "scope_digest",
+              "typed_objects"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [
+                "ARTIFACT_ADDED",
+                "CANDIDATE_PRODUCED",
+                "COMPLETENESS_CHANGED",
+                "OBJECT_ADDED",
+                "SCOPE_CHANGED"
+              ],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:eaa69e76766b972a6952cebae3eccab8c8aa55f1adddcc8336aaede3baee5b16",
+            "index": 1,
+            "milestone_eligible": true,
+            "milestone_kinds": [
+              "ARTIFACT_ADDED",
+              "CANDIDATE_PRODUCED",
+              "COMPLETENESS_CHANGED",
+              "OBJECT_ADDED",
+              "SCOPE_CHANGED"
+            ],
+            "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact determinant of the 5x5 integer matrix from task.json, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 27
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:7d83526a57f17b79db98fed00b673d68dbbd2142f4b93788b505c84738089791",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The determinant computation completed exactly for the supplied matrix and returned 4312753.",
+              "plan_summary": "Compute the exact determinant of the 5x5 integer matrix from task.json, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 29
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+                  "role": "SCOPE",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "VALID",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-matrix-determinant",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+                  "object_type": "matrix.determinant.compute.output",
+                  "source_capability_id": "matrix.determinant.compute"
+                },
+                {
+                  "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+                  "object_type": "matrix.determinant.compute.output.certificate_available",
+                  "source_capability_id": "matrix.determinant.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:0a2a837f257b78992b43949303bc0feaebf10c72d4aaea641ee3e2bac6b5667b",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The determinant computation completed exactly for the supplied matrix and returned 4312753.",
+              "plan_summary": "Compute the exact determinant of the 5x5 integer matrix from task.json, then write submission.json matching the schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 46
+          }
+        ],
+        "task_family": "exact-matrix-determinant",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "matrix-determinant-01",
+      "trajectory_id": "matrix-determinant-01-r04"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:751038f2413fd8e795e0a438308908b8b5946d1ce14ae34e3583368994a0e8b9",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:3b6864ce697961d7fa5796efe3f9a8e72599fb763cc7b99c8978ef41ec34cdcf",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 21
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "execution_status",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ccd5595dfee793389a55a47185c119f9ee00699aa8b169fe74589cdfe3c17176",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 25
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ec6b1638fc91cc2ca121d17ec01131ac015b1f694f6a9b543f91cd94ef0ed4df",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The initial capability invocation was rejected by input validation; the right polynomial field was malformed or omitted in the structured payload.",
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 27
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ccd5595dfee793389a55a47185c119f9ee00699aa8b169fe74589cdfe3c17176",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The initial capability invocation was rejected by input validation; the right polynomial field was malformed or omitted in the structured payload.",
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 37
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ec6b1638fc91cc2ca121d17ec01131ac015b1f694f6a9b543f91cd94ef0ed4df",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The retry still failed validation under the bounded rational-polynomial contract, so I am proceeding with the locally computed exact Euclidean result.",
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 39
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:efa1ebd71281b867e95d090d3c40136d062f04450c66730c00166beab800e339",
+            "index": 5,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact rational polynomial gcd/Bézout task and wrote submission.json with the monic gcd and exact coefficients. Local exact-rational Euclidean computation confirmed s*left + t*right = gcd.",
+              "latest_after_tool_summary": "The retry still failed validation under the bounded rational-polynomial contract, so I am proceeding with the locally computed exact Euclidean result.",
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 44
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:56783583b4a2d207fcaf632588fb2fe9ff44677b749393300b16286074149478",
+            "index": 6,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact rational polynomial gcd/Bézout task and wrote submission.json with the monic gcd and exact coefficients. Local exact-rational Euclidean computation confirmed s*left + t*right = gcd.",
+              "latest_after_tool_summary": "The retry still failed validation under the bounded rational-polynomial contract, so I am proceeding with the locally computed exact Euclidean result.",
+              "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 47
+          }
+        ],
+        "task_family": "exact-polynomial-gcd-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "polynomial-gcd-bezout-01",
+      "trajectory_id": "polynomial-gcd-bezout-01-r01"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:cea9ff0b90e347f3babcd50109eb39eb0045debe0c0575eb15d215d13175a545",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:3b6864ce697961d7fa5796efe3f9a8e72599fb763cc7b99c8978ef41ec34cdcf",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then obtain exact Bezout coefficients s and t and verify the identity before writing submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 11
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "execution_status",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ccd5595dfee793389a55a47185c119f9ee00699aa8b169fe74589cdfe3c17176",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then obtain exact Bezout coefficients s and t and verify the identity before writing submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 21
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ec6b1638fc91cc2ca121d17ec01131ac015b1f694f6a9b543f91cd94ef0ed4df",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The attempted Jacobian polynomial GCD invocation was rejected by input validation, so it produced no mathematical result.",
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then obtain exact Bezout coefficients s and t and verify the identity before writing submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 24
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:efa1ebd71281b867e95d090d3c40136d062f04450c66730c00166beab800e339",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "The task was completed using an exact local rational-polynomial extended Euclidean computation after one Jacobian input-validation failure. The resulting monic gcd is x^2 + x + 1, with verified Bézout coefficients s and t satisfying s*left + t*right = gcd over QQ.",
+              "latest_after_tool_summary": "The attempted Jacobian polynomial GCD invocation was rejected by input validation, so it produced no mathematical result.",
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then obtain exact Bezout coefficients s and t and verify the identity before writing submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 32
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:56783583b4a2d207fcaf632588fb2fe9ff44677b749393300b16286074149478",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "The task was completed using an exact local rational-polynomial extended Euclidean computation after one Jacobian input-validation failure. The resulting monic gcd is x^2 + x + 1, with verified Bézout coefficients s and t satisfying s*left + t*right = gcd over QQ.",
+              "latest_after_tool_summary": "The attempted Jacobian polynomial GCD invocation was rejected by input validation, so it produced no mathematical result.",
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then obtain exact Bezout coefficients s and t and verify the identity before writing submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 37
+          }
+        ],
+        "task_family": "exact-polynomial-gcd-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "polynomial-gcd-bezout-01",
+      "trajectory_id": "polynomial-gcd-bezout-01-r02"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:4193b4fb4fa08ded3b80967e3b68fa92bd82efd52514d80568bc0a0ba7663074",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:3b6864ce697961d7fa5796efe3f9a8e72599fb763cc7b99c8978ef41ec34cdcf",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then derive exact Bezout coefficients s and t with s*left + t*right = gcd, and write submission.json matching submission-schema.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 16
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "execution_status",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:30401a7909c57440c8c6979607e190ea91917725681472afdf0eb64a89994651",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then derive exact Bezout coefficients s and t with s*left + t*right = gcd, and write submission.json matching submission-schema.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 25
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-polynomial-gcd-bezout",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:ca3ed252c8147b78efea0caf4477c73365e692c3f3df1460942dbcd8b0f7c92c",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the monic gcd of the two QQ polynomials from task.json, then derive exact Bezout coefficients s and t with s*left + t*right = gcd, and write submission.json matching submission-schema.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 47
+          }
+        ],
+        "task_family": "exact-polynomial-gcd-bezout",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "polynomial-gcd-bezout-01",
+      "trajectory_id": "polynomial-gcd-bezout-01-r04"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:eb7b48379c6f17d8c9aea05b4dee068554c5efec8efbde525a56ab815c335f4d",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:fc57c3c50500baf106ca0c65a255573fe748d99ba28334c1a6faeab3d073bed8",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 4
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "execution_status",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": "ERROR",
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:cbd371b7860201f772a6113de838f1bb665f1508e4cf4ccc66191e46cb95fa69",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 28
+          },
+          {
+            "boundary": "TOOL_RESULT",
+            "changed_fields": [
+              "artifacts",
+              "assurance_level",
+              "candidate_state",
+              "completeness_assurance",
+              "completeness_status",
+              "execution_status",
+              "latest_candidate_digest",
+              "latest_meaningful_transitions",
+              "open_obligation_uris",
+              "scope_digest",
+              "typed_objects"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+                  "role": "SCOPE",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+                  "role": "OBLIGATION",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+              "latest_meaningful_transitions": [
+                "ARTIFACT_ADDED",
+                "CANDIDATE_PRODUCED",
+                "COMPLETENESS_CHANGED",
+                "OBJECT_ADDED",
+                "OBLIGATION_OPENED",
+                "SCOPE_CHANGED"
+              ],
+              "open_obligation_uris": [
+                "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+              ],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+                  "object_type": "graph.invariant.independence_number.compute.output",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+                  "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:79c1b3d8d67011070a43bf8927072ff707f7d0fc3447420ecd3eeb0abae67b5e",
+            "index": 2,
+            "milestone_eligible": true,
+            "milestone_kinds": [
+              "ARTIFACT_ADDED",
+              "CANDIDATE_PRODUCED",
+              "COMPLETENESS_CHANGED",
+              "OBJECT_ADDED",
+              "OBLIGATION_OPENED",
+              "SCOPE_CHANGED"
+            ],
+            "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, OBLIGATION_OPENED, SCOPE_CHANGED",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 33
+          },
+          {
+            "boundary": "AFTER_TOOL",
+            "changed_fields": [
+              "latest_meaningful_transitions"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+                  "role": "SCOPE",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+                  "role": "OBLIGATION",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [
+                "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+              ],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+                  "object_type": "graph.invariant.independence_number.compute.output",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+                  "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:535917b6791574dff948101f215f1c0311b459f725ad2a6e6a050d4699dd234f",
+            "index": 3,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": "The exact run returned optimum 5 with witness vertices a,c,e,h,j for the supplied graph.",
+              "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 35
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+                  "role": "SCOPE",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+                  "role": "OBLIGATION",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [
+                "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+              ],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+                  "object_type": "graph.invariant.independence_number.compute.output",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+                  "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:535917b6791574dff948101f215f1c0311b459f725ad2a6e6a050d4699dd234f",
+            "index": 4,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact graph independent-set task. Submission artifact written with witness {a,c,e,h,j} and optimum 5.",
+              "latest_after_tool_summary": "The exact run returned optimum 5 with witness vertices a,c,e,h,j for the supplied graph.",
+              "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 40
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [
+                {
+                  "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+                  "role": "SCOPE",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+                  "role": "MATHEMATICAL_RESULT",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+                  "role": "OBLIGATION",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ],
+              "assurance_level": "COMPUTED",
+              "binding_validity": "VALID",
+              "candidate_state": "PRESENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": "COMPUTED",
+              "completeness_status": "COMPLETE",
+              "discharged_obligation_uris": [],
+              "execution_status": "COMPLETED",
+              "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [
+                "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+              ],
+              "reasoning_protocol_state": "INVALID",
+              "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": [
+                {
+                  "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+                  "object_type": "graph.invariant.independence_number.compute.output",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                },
+                {
+                  "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+                  "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+                  "source_capability_id": "graph.invariant.independence_number.compute"
+                }
+              ]
+            },
+            "hard_state_digest": "sha256:e7c85ea94add1632f6e29a6e3f1b3f8cdd582dc1e6fa8bccf8e71bd0dfeec284",
+            "index": 5,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Completed the exact graph independent-set task. Submission artifact written with witness {a,c,e,h,j} and optimum 5.",
+              "latest_after_tool_summary": "The exact run returned optimum 5 with witness vertices a,c,e,h,j for the supplied graph.",
+              "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 43
+          }
+        ],
+        "task_family": "exact-graph-maximum-independent-set",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "graph-independent-set-01",
+      "trajectory_id": "graph-independent-set-01-r01"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:51f8ab9fad75c7881d5b7d64c510d72604ce165db0dfebcd81e686d1d1dfc20f",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:fc57c3c50500baf106ca0c65a255573fe748d99ba28334c1a6faeab3d073bed8",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the graph independence number exactly for the 12-vertex input from task.json, using a bounded exact search if available, then serialize the witness and optimum into submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 25
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:a8a06ec5392355565b1d6a35d1e35962c67b0434e0e4e589618fba52d5f31837",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Exhaustive search over the 12-vertex graph found a maximum independent set of size 5, witnessed by vertices c, e, h, j, l. The required submission.json has been written with task_id graph-independent-set-01 and the exact optimum.",
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the graph independence number exactly for the 12-vertex input from task.json, using a bounded exact search if available, then serialize the witness and optimum into submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 38
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:679cf33586f7a9ad750e96fbeddaba5b9dbf10330279fba2d1150eb6a9cd8e11",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Exhaustive search over the 12-vertex graph found a maximum independent set of size 5, witnessed by vertices c, e, h, j, l. The required submission.json has been written with task_id graph-independent-set-01 and the exact optimum.",
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the graph independence number exactly for the 12-vertex input from task.json, using a bounded exact search if available, then serialize the witness and optimum into submission.json.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 44
+          }
+        ],
+        "task_family": "exact-graph-maximum-independent-set",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "graph-independent-set-01",
+      "trajectory_id": "graph-independent-set-01-r02"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:4404c5452ec6e7b867436dbdb86eca30a83f1345340da205421b46740b25a863",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:fc57c3c50500baf106ca0c65a255573fe748d99ba28334c1a6faeab3d073bed8",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Determine the maximum independent set of the 12-vertex graph from task.json, verify the optimum exactly, and write the result to submission.json in the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 15
+          },
+          {
+            "boundary": "FINAL",
+            "changed_fields": [
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:a8a06ec5392355565b1d6a35d1e35962c67b0434e0e4e589618fba52d5f31837",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Solved the supplied graph instance by exhaustive exact search locally; the maximum independent set has cardinality 5, with witness {a,c,e,h,j}. Wrote the schema-compliant result to submission.json. No math.run call was ultimately needed after the exact local verification.",
+              "latest_after_tool_summary": null,
+              "plan_summary": "Determine the maximum independent set of the 12-vertex graph from task.json, verify the optimum exactly, and write the result to submission.json in the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 33
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "FINALIZED",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:679cf33586f7a9ad750e96fbeddaba5b9dbf10330279fba2d1150eb6a9cd8e11",
+            "index": 2,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": "Solved the supplied graph instance by exhaustive exact search locally; the maximum independent set has cardinality 5, with witness {a,c,e,h,j}. Wrote the schema-compliant result to submission.json. No math.run call was ultimately needed after the exact local verification.",
+              "latest_after_tool_summary": null,
+              "plan_summary": "Determine the maximum independent set of the 12-vertex graph from task.json, verify the optimum exactly, and write the result to submission.json in the required schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 36
+          }
+        ],
+        "task_family": "exact-graph-maximum-independent-set",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "graph-independent-set-01",
+      "trajectory_id": "graph-independent-set-01-r03"
+    },
+    {
+      "extraction": {
+        "assurance_authority": false,
+        "extraction_schema_version": "1",
+        "extractor_id": "jacobian.observable-trajectory-state.v1",
+        "source_digest": "sha256:8bd010d25a6a56ac4503d0c816528c3690c458970c4bf2f73da03d47e08e63f5",
+        "source_format": "codex-jsonl",
+        "states": [
+          {
+            "boundary": "PLAN",
+            "changed_fields": [
+              "state_schema_version",
+              "task_family",
+              "typed_objects",
+              "artifacts",
+              "candidate_state",
+              "latest_candidate_digest",
+              "checker_state",
+              "open_obligation_uris",
+              "discharged_obligation_uris",
+              "execution_status",
+              "completeness_status",
+              "completeness_assurance",
+              "assurance_level",
+              "scope_digest",
+              "scope_escalation_errors",
+              "binding_validity",
+              "latest_meaningful_transitions",
+              "reasoning_protocol_state"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "UNKNOWN",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:fc57c3c50500baf106ca0c65a255573fe748d99ba28334c1a6faeab3d073bed8",
+            "index": 0,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact maximum independent set for the 12-vertex graph in task.json, verify it against the edge list, and write submission.json per schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 13
+          },
+          {
+            "boundary": "TERMINAL",
+            "changed_fields": [
+              "binding_validity"
+            ],
+            "hard_state": {
+              "artifacts": [],
+              "assurance_level": null,
+              "binding_validity": "VALID",
+              "candidate_state": "ABSENT",
+              "checker_state": "NOT_CHECKED",
+              "completeness_assurance": null,
+              "completeness_status": null,
+              "discharged_obligation_uris": [],
+              "execution_status": null,
+              "latest_candidate_digest": null,
+              "latest_meaningful_transitions": [],
+              "open_obligation_uris": [],
+              "reasoning_protocol_state": "READY",
+              "scope_digest": null,
+              "scope_escalation_errors": [],
+              "state_schema_version": "1",
+              "task_family": "exact-graph-maximum-independent-set",
+              "typed_objects": []
+            },
+            "hard_state_digest": "sha256:36b0a77447c486cebd1ec55ac72b5260e3c92a2f41a2bbeb9acb9ab7950de32e",
+            "index": 1,
+            "milestone_eligible": false,
+            "milestone_kinds": [],
+            "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+            "soft_state": {
+              "final_summary": null,
+              "latest_after_tool_summary": null,
+              "plan_summary": "Compute the exact maximum independent set for the 12-vertex graph in task.json, verify it against the edge list, and write submission.json per schema.",
+              "soft_state_schema_version": "1"
+            },
+            "source_event_index": 39
+          }
+        ],
+        "task_family": "exact-graph-maximum-independent-set",
+        "terminal_evidence": {
+          "acceptance": "ACCEPTED",
+          "artifact_binding_valid": true,
+          "clean_room": true,
+          "evidence_schema_version": "1",
+          "input_binding_valid": true,
+          "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+          "verifier_execution_status": "COMPLETED"
+        }
+      },
+      "task_group": "graph-independent-set-01",
+      "trajectory_id": "graph-independent-set-01-r04"
+    }
+  ]
+}

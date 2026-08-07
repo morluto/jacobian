@@ -1,0 +1,56 @@
+{
+  "artifacts": {
+    "codex.jsonl": "sha256:54bead88703f2afefae7e2186d8c67f31aaf3309170eb3ebb8064fc78c21b3a1",
+    "codex.stderr": "sha256:d93f2613efdefe9c85853071a98ad635ff1ce1fcc59f93a331bb0ecf759d0f09",
+    "extraction.json": "sha256:36194063bf73c30a0dbe7de584aa04c9e28fc82a24b887e1d3ce698cfe3e8116",
+    "jacobian-mcp.stderr": "sha256:270214008118c4ee542d09d84d73aea832fbef511e540b93fe6f06d23f4e8dc1",
+    "jacobian-mcp.stdout": "sha256:65d7d7c59e2cfff1b8f3e0c85e4c364031dff7ede7d282c93c5714c160edb7a4",
+    "prompt.txt": "sha256:85f3f1957a8a7e9e923eea6b8c87b66e34984f657199da86cf8b821454663165",
+    "reasoning-log.jsonl": "sha256:7dc7df8ce97bac2dab7c94d88f7615d4781c988d501c110073583d70d0f61a71",
+    "submission-schema.json": "sha256:2200d99120cee8ebabb13ab0d22c7ba885e2d6f253f7791c487c6847686ace34",
+    "surface.json": "sha256:a633d866c339cf33ca4d6a1c0e9c8fbf14fb84a078e59759be48dceb35aa9e7a",
+    "task.json": "sha256:034aaf7955b998b67bc1f0add4a95563d6970ac7cec49f5d406d464faa25493b",
+    "verifier.json": "sha256:c6e2730aab104deba48c72432ff30dd0e83e1b92190b64cc420c570027907f7c"
+  },
+  "command": {
+    "diagnostic": null,
+    "exit_code": null,
+    "status": "TIMED_OUT",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "reasoning_protocol": {
+    "after_tool_count": 0,
+    "before_tool_count": 1,
+    "bound_invoke_count": 0,
+    "final_count": 0,
+    "missing_after_tool_count": 1,
+    "pending_call_count": 1,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "INCOMPLETE",
+    "summary_characters": 236,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "bf5a8f52-ea27-4191-9f22-adcdac68c80c"
+  ],
+  "repetition": 3,
+  "schema_version": "1",
+  "surface_digest": "sha256:4b0dd8ec6dd62e38f74ff2f9486ecc8fdd16dcd164e03838597d19786c7c0b4c",
+  "task_family": "exact-polynomial-gcd-bezout",
+  "task_group": "polynomial-gcd-bezout-01",
+  "task_id": "polynomial-gcd-bezout-01",
+  "terminal": {
+    "acceptance": "INCONCLUSIVE",
+    "artifact_binding_valid": null,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": null,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "TIMEOUT"
+  },
+  "trajectory_id": "polynomial-gcd-bezout-01-r03",
+  "usage": null
+}

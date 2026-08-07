@@ -297,6 +297,57 @@ uv run python -m benchmarks.tooling.trajectory_value_study run \
   --execute
 ```
 
+### Frozen study result
+
+The command was executed once from clean preregistration commit
+`cd7e5d52abe3556a8ad0beb50cb82e9f4e42c86c`. The committed
+[`manifest.json`](../../../benchmarks/studies/trajectory-state-value-codex-v1/manifest.json)
+binds the exact source, spec, local model-catalog record, runner, verifier,
+extractor, evaluator, scorer, and all 285 non-manifest artifacts. The corpus
+contains the raw Codex JSONL, external reasoning logs, task-visible files,
+submissions, exact verifier records, typed extractions, MCP surface and server
+logs, replays, comparison, and summary for every rollout.
+
+| Observation | Frozen result |
+| --- | ---: |
+| independent rollouts | 16 |
+| exact verifier `ACCEPTED` | 15 |
+| exact verifier `REJECTED` | 0 |
+| `INCONCLUSIVE` after command timeout | 1 |
+| labelled trajectories | 15 |
+| selected preterminal observations | 27 |
+| reasoning protocol `COMPLETE` | 9 |
+| reasoning protocol `INCOMPLETE` | 7 |
+
+The timeout occurred in `polynomial-gcd-bezout-01-r03` with one pending
+`BEFORE_TOOL` record, no bound invocation result, and no final artifact. It is
+excluded rather than converted into a failure label. Six other runs had an
+incomplete external reasoning protocol but independently valid terminal
+objects; their terminal labels remain `ACCEPTED`. This separation is expected:
+reasoning-log compliance is observable workflow state, not mathematical
+assurance.
+
+All 15 labelled trajectories succeeded. Consequently every estimator has
+zero Brier score and zero mean absolute error, and the preregistered A, B, C,
+and F comparisons have no outcome variation with which to distinguish the
+estimators, warning rule, or individual hard-state dimensions. Precision and
+recall for a negative value-drop warning are undefined; no labelled trajectory
+failed and no estimator emitted such a warning.
+
+The descriptive diagnostics still expose representation behavior. There are
+29 same-typed/different-text state pairs, of which the hybrid representation
+separates 16, but none has mixed terminal outcomes. Text clustering also merges
+12 pairs that differ in scope digest, assurance, and completeness. This
+confirms that text alone can alias critical typed state in the observed corpus,
+but it does not establish a predictive benefit for typed or hybrid features.
+
+The pilot therefore falsifies the adequacy of this four-task suite for ranking
+the five estimators; it does not falsify or support the estimators themselves.
+No training, scorer intervention, post-label threshold tuning, or causal claim
+is authorized. A future version needs a separately preregistered, more
+difficult and outcome-diverse held-out suite. This v1 corpus remains immutable
+instead of being repaired or supplemented post hoc.
+
 ## Current limitations
 
 Version 1 deliberately uses conservative generic output interpretation. A
@@ -306,22 +357,24 @@ semantic equivalence is not inferred. Evidence binding becomes valid only from
 verified checker evidence or clean-room terminal evidence; ordinary
 reasoning-call protocol binding is not mathematical progress.
 
-The PR2 labels are unit-fixture labels, not new Codex or Harbor outcomes, so the
-table establishes implementation behavior only. It does not show that typed or
-hybrid states predict real continuation success, outperform baselines on a
-model, or generalize beyond the designed cases. TF-IDF vocabulary and cluster
-geometry are fitted to the complete feature corpus, though labels remain
-strictly leave-one-trajectory-out. The fixed threshold is a declared first
-version, not a tuned optimum. Exact content-addressed compatibility fails safe
-against merging distinct candidates, but may fragment semantically equivalent
-objects or independently produced verification records; the real study must
-measure this support-loss tradeoff before relaxing it.
+The real v1 study has only one task per family, four unseeded repetitions per
+task, one model and reasoning level, and no labelled failures. It does not show
+that typed or hybrid states predict real continuation success, outperform
+baselines, or generalize beyond the designed cases. TF-IDF vocabulary and
+cluster geometry are fitted to the complete feature corpus, though labels
+remain strictly leave-one-trajectory-out. The fixed threshold is a declared
+first version, not a tuned optimum. Exact content-addressed compatibility fails
+safe against merging distinct candidates, but may fragment semantically
+equivalent objects or independently produced verification records; the
+success-only corpus cannot measure that support-loss tradeoff.
 
 The PR3 scorer replays a completed frozen comparison; it is not an online
 critic and cannot score a previously unseen state without a new PR2 comparison.
 That limitation prevents intervention and avoids inventing an out-of-sample
-assignment rule, but it means "early" warnings in PR4 are retrospective
-predictions evaluated only after the rollout corpus is frozen. PR4 must provide
-the first bounded real predictive comparison with clean-room terminal labels.
-Any label-informed change to extraction, compatibility, clustering, threshold,
-or credit semantics requires a new schema or experiment boundary.
+assignment rule, but it means "early" warnings are retrospective predictions
+evaluated only after the rollout corpus is frozen. Codex CLI also exposes
+neither an exact arbitrary intermediate-state resume operation nor a sampling
+seed, so the study uses compatible independent rollouts as a non-causal
+Monte-Carlo-style surrogate. Any label-informed change to task difficulty,
+extraction, compatibility, clustering, threshold, or credit semantics requires
+a new schema and experiment boundary.

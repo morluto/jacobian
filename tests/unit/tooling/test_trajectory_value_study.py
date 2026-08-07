@@ -12,12 +12,16 @@ from benchmarks.tooling.trajectory_value_study import (
     load_spec,
     run_study,
 )
-from benchmarks.tooling.trajectory_value_study_verifier import verify_workspace
+from benchmarks.tooling.trajectory_value_study_verifier import (
+    file_digest,
+    verify_workspace,
+)
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[3]
 SPEC_PATH = ROOT / "benchmarks/config/trajectory-value-study-v1.json"
+STUDY_PATH = ROOT / "benchmarks/studies/trajectory-state-value-codex-v1"
 
 
 def _task(spec: TrajectoryValueStudySpec, task_id: str):
@@ -232,3 +236,59 @@ def test_clean_room_verifier_has_only_standard_library_imports() -> None:
 def test_model_execution_is_explicitly_opt_in(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="without --execute"):
         run_study(SPEC_PATH, tmp_path / "results", execute=False)
+
+
+def test_committed_real_study_manifest_binds_every_artifact() -> None:
+    manifest = json.loads((STUDY_PATH / "manifest.json").read_text(encoding="utf-8"))
+
+    assert manifest["source_revision"] == ("cd7e5d52abe3556a8ad0beb50cb82e9f4e42c86c")
+    assert manifest["source_tree_clean_at_start"] is True
+    assert manifest["codex"]["model"] == "gpt-5.4-mini"
+    assert manifest["codex"]["reasoning_effort"] == "medium"
+    assert manifest["training_performed"] is False
+    assert manifest["scorer_intervention"] is False
+    assert manifest["causal_claim_authorized"] is False
+    assert len(manifest["artifacts"]) == 285
+    assert {
+        path.relative_to(STUDY_PATH).as_posix()
+        for path in STUDY_PATH.rglob("*")
+        if path.is_file() and path.name != "manifest.json"
+    } == set(manifest["artifacts"])
+    assert all(
+        file_digest(STUDY_PATH / relative) == expected
+        for relative, expected in manifest["artifacts"].items()
+    )
+
+
+def test_committed_real_study_preserves_inconclusive_and_negative_result() -> None:
+    summary = json.loads((STUDY_PATH / "summary.json").read_text(encoding="utf-8"))
+    records = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((STUDY_PATH / "runs").glob("*/run.json"))
+    ]
+
+    assert summary["run_count"] == 16
+    assert summary["accepted_count"] == 15
+    assert summary["rejected_count"] == 0
+    assert summary["labelled_trajectory_count"] == 15
+    assert summary["excluded"] == [
+        {
+            "reason": "terminal verifier outcome is inconclusive",
+            "trajectory_id": "polynomial-gcd-bezout-01-r03",
+        }
+    ]
+    assert all(metric["brier_score"] == 0.0 for metric in summary["metrics"].values())
+    assert all(
+        metric["mean_absolute_error"] == 0.0 for metric in summary["metrics"].values()
+    )
+    assert sum(record["command"]["status"] == "TIMED_OUT" for record in records) == 1
+    assert (
+        sum(record["reasoning_protocol"]["status"] == "COMPLETE" for record in records)
+        == 9
+    )
+    assert all(
+        record["terminal"]["input_binding_valid"] is True
+        and record["terminal"]["artifact_binding_valid"] is True
+        for record in records
+        if record["terminal"]["acceptance"] == "ACCEPTED"
+    )

@@ -1,0 +1,112 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:b5ab0ccafe1f87f060416ae314d387dc30b70a76bdc169f2973b3c2131e4f7e4",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:b1b2170ac548bf6d0b3e013fb0a921e0386e8bd196e3060629cd4c2f912cfecb",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Read the task and submission schema, compute the exact determinant of the matrix, then write submission.json with the schema-required shape.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 5
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:e5a40d8f81a7548e9973cb8b8615e418ef90b1f2f7bd54fcd944adc2d3d19b48",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Read the task and submission schema, compute the exact determinant of the matrix, then write submission.json with the schema-required shape.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 40
+    }
+  ],
+  "task_family": "exact-matrix-determinant",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

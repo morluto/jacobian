@@ -1,0 +1,403 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:eb7b48379c6f17d8c9aea05b4dee068554c5efec8efbde525a56ab815c335f4d",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-graph-maximum-independent-set",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:fc57c3c50500baf106ca0c65a255573fe748d99ba28334c1a6faeab3d073bed8",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 4
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "execution_status",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-graph-maximum-independent-set",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:cbd371b7860201f772a6113de838f1bb665f1508e4cf4ccc66191e46cb95fa69",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 28
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "assurance_level",
+        "candidate_state",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_candidate_digest",
+        "latest_meaningful_transitions",
+        "open_obligation_uris",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+            "role": "SCOPE",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+            "role": "OBLIGATION",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "CANDIDATE_PRODUCED",
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "OBLIGATION_OPENED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [
+          "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+        ],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-graph-maximum-independent-set",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+            "object_type": "graph.invariant.independence_number.compute.output",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+            "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:79c1b3d8d67011070a43bf8927072ff707f7d0fc3447420ecd3eeb0abae67b5e",
+      "index": 2,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "CANDIDATE_PRODUCED",
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "OBLIGATION_OPENED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, OBLIGATION_OPENED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 33
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+            "role": "SCOPE",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+            "role": "OBLIGATION",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [
+          "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+        ],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-graph-maximum-independent-set",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+            "object_type": "graph.invariant.independence_number.compute.output",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+            "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:535917b6791574dff948101f215f1c0311b459f725ad2a6e6a050d4699dd234f",
+      "index": 3,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The exact run returned optimum 5 with witness vertices a,c,e,h,j for the supplied graph.",
+        "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 35
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+            "role": "SCOPE",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+            "role": "OBLIGATION",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [
+          "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+        ],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-graph-maximum-independent-set",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+            "object_type": "graph.invariant.independence_number.compute.output",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+            "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:535917b6791574dff948101f215f1c0311b459f725ad2a6e6a050d4699dd234f",
+      "index": 4,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the exact graph independent-set task. Submission artifact written with witness {a,c,e,h,j} and optimum 5.",
+        "latest_after_tool_summary": "The exact run returned optimum 5 with witness vertices a,c,e,h,j for the supplied graph.",
+        "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 40
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/112d19388596294f97a7227b6a3f5443186728eb7b75fb230969082cc09ce31c",
+            "role": "SCOPE",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a63fb4330046498ab1a88c8f435fb05ee27ead9bbdabc0aa5add0c0931dd5965",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e",
+            "role": "OBLIGATION",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [
+          "artifact://sha256/ad95e2899e92dbaadadbc248e4f435f8443e8577e33e05869d99144abe7c0d0e"
+        ],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:ca3e94cd8f230ca4adf954d052584235c6b9d2ab7c3f39ad96e04e1fa1f0948d",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-graph-maximum-independent-set",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:e529cb9cb152ad6896c230aae986599fa8a27de2a77b57077d3c9ff03a28f4af",
+            "object_type": "graph.invariant.independence_number.compute.output",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          },
+          {
+            "content_digest": "sha256:061fba5f72fb365feb087a3ce4747a9aa9d5c15e1f96051048b0a6bc4caa45a3",
+            "object_type": "graph.invariant.independence_number.compute.output.witness_vertices",
+            "source_capability_id": "graph.invariant.independence_number.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:e7c85ea94add1632f6e29a6e3f1b3f8cdd582dc1e6fa8bccf8e71bd0dfeec284",
+      "index": 5,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the exact graph independent-set task. Submission artifact written with witness {a,c,e,h,j} and optimum 5.",
+        "latest_after_tool_summary": "The exact run returned optimum 5 with witness vertices a,c,e,h,j for the supplied graph.",
+        "plan_summary": "Inspect task and schema, extract the graph, compute a maximum independent set exactly, then write submission.json matching the required schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 43
+    }
+  ],
+  "task_family": "exact-graph-maximum-independent-set",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

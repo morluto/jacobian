@@ -1,0 +1,48 @@
+{
+  "assurance_authority": false,
+  "changes_prompts": false,
+  "chooses_tools": false,
+  "comparison_digest": "sha256:2febc99338d06cbcfdda43b4a865e81afb9d398cc9cf86505b82917423e0e6fe",
+  "credit_semantics": "non-milestone=0;milestone=current-value-minus-previous-selected-value",
+  "estimator": "GROUP_ROLLOUT",
+  "eventual_terminal_result": "ACCEPTED",
+  "eventual_terminal_reward": 1,
+  "mutates_runtime": false,
+  "observation_only": true,
+  "replay_schema_version": "1",
+  "scorer_id": "jacobian.observation-only-trajectory-scorer.v1",
+  "source_corpus_digest": "sha256:c60a0fc1a5a2e4bfb531cf5b31faf3507900f57ac62fb2618661e4d97dedb11b",
+  "states": [
+    {
+      "assurance_authority": false,
+      "boundary": "PLAN",
+      "cluster_feature_summary": "task_group=integer-bezout-01; no intermediate-state features",
+      "cluster_id": "sha256:69b91e5065e70288f2d8893745b8188a789836bbe2872e3683f1f185516a17b5",
+      "credit_reason": "INITIAL_STATE",
+      "cumulative_milestone_credit": 0.0,
+      "estimated_value": 1.0,
+      "estimator": "GROUP_ROLLOUT",
+      "eventual_terminal_result": "ACCEPTED",
+      "eventual_terminal_reward": 1,
+      "milestone_eligible": false,
+      "observation_id": "integer-bezout-01-r03:0",
+      "observation_only": true,
+      "previous_observation_id": null,
+      "state_index": 0,
+      "supporting_trajectory_ids": [
+        "integer-bezout-01-r01",
+        "integer-bezout-01-r02",
+        "integer-bezout-01-r04"
+      ],
+      "task_group": "integer-bezout-01",
+      "trajectory_id": "integer-bezout-01-r03",
+      "transition_credit": 0.0,
+      "typed_state_digest": "sha256:f359ea17afeac8f43ad2d3372cf973ecfb7d7a74c702fa45a7a9966d0c7a8573",
+      "value_delta": null,
+      "value_source": "CLUSTER"
+    }
+  ],
+  "task_group": "integer-bezout-01",
+  "total_milestone_credit": 0.0,
+  "trajectory_id": "integer-bezout-01-r03"
+}

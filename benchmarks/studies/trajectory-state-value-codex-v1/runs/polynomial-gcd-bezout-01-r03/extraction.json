@@ -1,0 +1,112 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:54bead88703f2afefae7e2186d8c67f31aaf3309170eb3ebb8064fc78c21b3a1",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:3b6864ce697961d7fa5796efe3f9a8e72599fb763cc7b99c8978ef41ec34cdcf",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the monic gcd and one exact Bezout representation for the two QQ polynomials from task.json, then verify the identity and write submission.json.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 15
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY_TO_INVOKE",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:1db2b8fa971acfe510c1f4a576687db563b5f73c30d36652b70f9ccf2658dd44",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the monic gcd and one exact Bezout representation for the two QQ polynomials from task.json, then verify the identity and write submission.json.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 23
+    }
+  ],
+  "task_family": "exact-polynomial-gcd-bezout",
+  "terminal_evidence": {
+    "acceptance": "INCONCLUSIVE",
+    "artifact_binding_valid": null,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": null,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "TIMEOUT"
+  }
+}

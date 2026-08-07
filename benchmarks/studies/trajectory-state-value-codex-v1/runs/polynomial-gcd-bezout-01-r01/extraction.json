@@ -1,0 +1,303 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:751038f2413fd8e795e0a438308908b8b5946d1ce14ae34e3583368994a0e8b9",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:3b6864ce697961d7fa5796efe3f9a8e72599fb763cc7b99c8978ef41ec34cdcf",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 21
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "execution_status",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:ccd5595dfee793389a55a47185c119f9ee00699aa8b169fe74589cdfe3c17176",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 25
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:ec6b1638fc91cc2ca121d17ec01131ac015b1f694f6a9b543f91cd94ef0ed4df",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The initial capability invocation was rejected by input validation; the right polynomial field was malformed or omitted in the structured payload.",
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 27
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:ccd5595dfee793389a55a47185c119f9ee00699aa8b169fe74589cdfe3c17176",
+      "index": 3,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The initial capability invocation was rejected by input validation; the right polynomial field was malformed or omitted in the structured payload.",
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 37
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:ec6b1638fc91cc2ca121d17ec01131ac015b1f694f6a9b543f91cd94ef0ed4df",
+      "index": 4,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The retry still failed validation under the bounded rational-polynomial contract, so I am proceeding with the locally computed exact Euclidean result.",
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 39
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:efa1ebd71281b867e95d090d3c40136d062f04450c66730c00166beab800e339",
+      "index": 5,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the exact rational polynomial gcd/Bézout task and wrote submission.json with the monic gcd and exact coefficients. Local exact-rational Euclidean computation confirmed s*left + t*right = gcd.",
+        "latest_after_tool_summary": "The retry still failed validation under the bounded rational-polynomial contract, so I am proceeding with the locally computed exact Euclidean result.",
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 44
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-polynomial-gcd-bezout",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:56783583b4a2d207fcaf632588fb2fe9ff44677b749393300b16286074149478",
+      "index": 6,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the exact rational polynomial gcd/Bézout task and wrote submission.json with the monic gcd and exact coefficients. Local exact-rational Euclidean computation confirmed s*left + t*right = gcd.",
+        "latest_after_tool_summary": "The retry still failed validation under the bounded rational-polynomial contract, so I am proceeding with the locally computed exact Euclidean result.",
+        "plan_summary": "Compute the exact monic gcd over QQ for the task polynomials, then derive exact Bezout coefficients and write the submission artifact.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 47
+    }
+  ],
+  "task_family": "exact-polynomial-gcd-bezout",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

@@ -19,6 +19,14 @@ const r = await tools.mcp__jacobian__math_find({query: "...", limit: 3});
 text(r.structuredContent ?? r);
 ```
 
+For each requested exact mathematical outcome, use Jacobian even when the
+calculation is small or could be done mentally or in shell code. Route multiple
+requested outcomes separately. Prefer a capability matching the requested
+mathematical operation over a generic arithmetic substep that happens to produce
+the same scalar; use a supporting operation only after a dedicated search finds
+no direct capability. Do not call Jacobian for definitions, formatting, or other
+tasks needing no mathematical execution.
+
 Call `math.run` directly when the requested local outcome exactly matches one of
 these stable built-in contracts; replace the example values but preserve the
 shown JSON types:
@@ -42,6 +50,13 @@ because lower `limit` values reduce context. Inspect the `CONTRACT` view only
 when its typed schema is needed to construct the `math.run` payload. A discovery
 card's validated `invocation_example`, or its required top-level fields when no
 example is available, may already provide a sufficient payload shape.
+
+Do not add a discovery domain filter unless its exact installed spelling is
+known. If discovery reports an unknown domain, retry once without that filter.
+After invalid input, correct only the reported constraint and retry once. Stop
+after a second invalid request, no route, an unavailable provider, or a timeout.
+Accept only a completed result whose scope covers the supplied input, and carry
+forward the smallest decisive value, witness, status, and assurance.
 
 Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned. Treat timeouts, errors, incomplete

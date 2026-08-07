@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -177,7 +178,7 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert len(skill.encode("utf-8")) <= 4 * 1024
 
 
-def test_codex_skill_avoids_full_code_mode_tool_catalog_projection() -> None:
+def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     skill = (_ROOT / ".agents/skills/jacobian-math/SKILL.md").read_text(
         encoding="utf-8"
     )
@@ -186,13 +187,19 @@ def test_codex_skill_avoids_full_code_mode_tool_catalog_projection() -> None:
     assert "tools.mcp__jacobian__math_run" in skill
     # Check for key phrases that may span multiple lines in the SKILL.md.
     # Normalize whitespace to avoid brittleness from line rewrapping.
-    import re
-
     skill_flat = re.sub(r"\s+", " ", skill)
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
+    for guidance in (
+        "requested outcomes separately.",
+        "over a generic arithmetic substep",
+        "retry once without that filter",
+        "correct only the reported constraint and retry once",
+        "smallest decisive value, witness, status, and assurance",
+    ):
+        assert guidance in skill
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

@@ -134,8 +134,8 @@ def main() -> None:
     correct = math_ok and not false
     reward = (
         0.0
-        if not correct
-        else 0.7 + 0.1 * evidence_ok + 0.1 * scope_ok + 0.1 * assurance_ok
+        if not correct or not evidence_ok
+        else 0.8 + 0.1 * scope_ok + 0.1 * assurance_ok
     )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)

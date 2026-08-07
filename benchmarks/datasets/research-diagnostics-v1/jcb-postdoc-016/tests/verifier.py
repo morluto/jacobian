@@ -261,11 +261,7 @@ def main():
             or not limitations
             or false_certification
         )
-        else 0.7
-        + 0.1 * evidence_valid
-        + 0.1 * scope
-        + 0.05 * assurance
-        + 0.05 * limitations
+        else 0.8 + 0.1 * scope + 0.05 * assurance + 0.05 * limitations
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(

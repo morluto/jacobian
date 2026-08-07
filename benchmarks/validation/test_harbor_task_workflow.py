@@ -293,3 +293,34 @@ def test_oracle_evidence_freshness_rejects_unchanged_file(
         "sha256:new",
         "benchmarks/results/dataset-one-oracle/job/oracle-evidence.json",
     )
+
+
+def test_oracle_evidence_discovery_skips_candidate_deleted_before_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    selection = workflow.TaskSelection("dataset-one", ("task-a",), (tmp_path,), ())
+    evidence_root = tmp_path / "benchmarks/results/dataset-one-oracle"
+    vanished = evidence_root / "vanished/oracle-evidence.json"
+    available = evidence_root / "available/oracle-evidence.json"
+    available.parent.mkdir(parents=True)
+    available.write_text(
+        json.dumps(
+            {
+                "dataset": "dataset-one",
+                "tasks": [{"task": "task-a", "digest": "sha256:available"}],
+            }
+        )
+    )
+
+    def evidence_candidates(path: Path, pattern: str) -> tuple[Path, Path]:
+        assert path == evidence_root
+        assert pattern == "*/oracle-evidence.json"
+        return vanished, available
+
+    monkeypatch.setattr(workflow, "ROOT", tmp_path)
+    monkeypatch.setattr(Path, "glob", evidence_candidates)
+
+    assert workflow._fresh_oracle_evidence(selection, "task-a", previous={}) == (
+        "sha256:available",
+        "benchmarks/results/dataset-one-oracle/available/oracle-evidence.json",
+    )

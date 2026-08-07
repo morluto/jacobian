@@ -261,12 +261,15 @@ def _fresh_oracle_evidence(
     previous: dict[Path, tuple[int, int, str]],
 ) -> tuple[str, str]:
     evidence_root = ROOT / "benchmarks" / "results" / f"{selection.dataset}-oracle"
-    candidates = sorted(
-        evidence_root.glob("*/oracle-evidence.json"),
-        key=lambda path: path.stat().st_mtime_ns,
-        reverse=True,
-    )
-    for path in candidates:
+    candidates: list[tuple[int, Path]] = []
+    for path in evidence_root.glob("*/oracle-evidence.json"):
+        try:
+            modified_ns = path.stat().st_mtime_ns
+        except OSError:
+            continue
+        candidates.append((modified_ns, path))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    for _modified_ns, path in candidates:
         try:
             stat = path.stat()
             raw = path.read_bytes()

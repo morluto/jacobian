@@ -8,7 +8,7 @@ keywords=["illumination","convex-geometry","strict-inequality","verifier-audit"]
 [metadata]
 evaluation_kind="assurance"
 domain="mathematical-sciences"
-primary_domain="geometry"
+primary_domain="geometry-topology"
 field="convex-geometry"
 assurance_ceiling="CHECKED"
 answer_visibility="public"

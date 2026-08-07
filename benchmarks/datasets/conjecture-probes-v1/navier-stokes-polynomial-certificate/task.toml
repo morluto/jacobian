@@ -10,7 +10,7 @@ keywords = ["navier-stokes", "symbolic-pde", "incompressibility", "conjecture-sc
 [metadata]
 evaluation_kind = "conjecture-probe"
 domain = "mathematical-sciences"
-primary_domain = "partial-differential-equations"
+primary_domain = "analysis"
 field = "fluid-dynamics"
 assurance_ceiling = "CHECKED"
 answer_visibility = "public"

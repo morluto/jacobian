@@ -6,7 +6,11 @@ from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.domains.topology.checkers import TOPOLOGY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.topology.operations import TOPOLOGY_CAPABILITIES
 from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import known_provider_runtime
+from jacobian.provider_runtime import (
+    SYMPY_VERSION,
+    composite_provider_runtime,
+    known_provider_runtime,
+)
 
 
 def build_topology_bundle() -> DomainBundle:
@@ -35,8 +39,29 @@ def build_topology_bundle() -> DomainBundle:
                 "persistent_homology": "not provided",
             },
         ),
-        provider_runtime=known_provider_runtime(
+        provider_runtime=composite_provider_runtime(
             "jacobian.topology",
+            components=(
+                known_provider_runtime(
+                    "jacobian.topology",
+                    features=(
+                        "finite-simplicial-complex",
+                        "oriented-boundary-matrices",
+                        "prime-field-homology",
+                        "integral-homology",
+                        "torsion-invariant-factors",
+                        "smith-transformation-certificates",
+                    ),
+                ),
+                known_provider_runtime(
+                    "jacobian.sympy",
+                    features=(
+                        "exact-modular-elimination",
+                        "domain-matrix-rref",
+                        "domain-matrix-rank",
+                    ),
+                ),
+            ),
             features=(
                 "finite-simplicial-complex",
                 "oriented-boundary-matrices",
@@ -47,7 +72,7 @@ def build_topology_bundle() -> DomainBundle:
                 "exact-modular-elimination",
             ),
         ),
-        backend_version="jacobian.topology/1",
+        backend_version=f"jacobian.topology/1;sympy-{SYMPY_VERSION}",
         capabilities=TOPOLOGY_CAPABILITIES,
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
@@ -66,11 +91,13 @@ def build_topology_bundle() -> DomainBundle:
         completeness_basis=(
             "the finite facet closure, every oriented boundary entry, and every "
             "requested finite-field or bounded integral chain dimension were "
-            "computed exactly"
+            "computed exactly; finite-field reduction uses SymPy DomainMatrix "
+            "rref and rank over GF(p)"
         ),
         assurance_basis=(
-            "exact deterministic finite computation; independent verification is "
-            "available through the corresponding per-producer topology verifier"
+            "exact deterministic finite computation over Jacobian chain complexes "
+            "and SymPy DomainMatrix modular elimination; independent verification "
+            "is available through the corresponding per-producer topology verifier"
         ),
         checker_declarations=TOPOLOGY_EXACT_REPLAY_CHECKERS,
     )

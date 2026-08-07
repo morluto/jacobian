@@ -17,6 +17,7 @@ from verifier_support import (
 TASK_ID = "jacobian/hadamard-order12-construction"
 SCOPE = "hadamard-order12-construction:normalized-v1"
 LIMITATIONS = ["ORDER_12_ONLY", "NO_GENERAL_HADAMARD_CONJECTURE_CONCLUSION"]
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -108,7 +109,7 @@ def _reward(value: dict[str, Any]) -> None:
 def main() -> None:
     input_bound = workspace_input_is_bound()
     frozen = _frozen() if input_bound else None
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     contract = strict_submission_contract(
         submission,
         task_id=TASK_ID,
@@ -116,11 +117,22 @@ def main() -> None:
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    mathematics = bool(contract and frozen and _mathematics(submission["result"]))
-    evidence = bool(contract and evidence_list_is_bound(submission["evidence"]))
+    mathematics = bool(
+        frozen
+        and isinstance(submission, dict)
+        and _mathematics(submission.get("result"))
+    )
+    evidence = bool(
+        isinstance(submission, dict)
+        and evidence_list_is_bound(
+            submission.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES
+        )
+    )
     payload = (
         read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/answer.txt"
+            submission["evidence"][0],
+            expected_path="evidence/answer.txt",
+            max_bytes=MAX_EVIDENCE_BYTES,
         )
         if evidence
         else None
@@ -134,11 +146,15 @@ def main() -> None:
         and payload.get("limitations") == LIMITATIONS
     )
     scope = bool(
-        contract
+        isinstance(submission, dict)
         and submission.get("scope") == SCOPE
         and submission.get("limitations") == LIMITATIONS
     )
-    assurance = bool(contract and submission.get("claimed_assurance") == "CHECKED")
+    SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+    assurance = bool(
+        isinstance(submission, dict)
+        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+    )
     false_certification = bool(
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "VERIFIED"
@@ -160,6 +176,10 @@ def main() -> None:
             "false_certification": false_certification,
             "aggregate_reward": aggregate,
             "reward": aggregate,
+            "correctness": 1.0 if mathematics else 0.0,
+            "evidence_validity": 1.0 if evidence else 0.0,
+            "scope_accuracy": 1.0 if scope else 0.0,
+            "assurance_calibration": 1.0 if assurance else 0.0,
         }
     )
 
@@ -179,6 +199,10 @@ if __name__ == "__main__":
                 "false_certification": False,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
+                "correctness": 0.0,
+                "evidence_validity": 0.0,
+                "scope_accuracy": 0.0,
+                "assurance_calibration": 0.0,
                 "error": type(exc).__name__,
             }
         )

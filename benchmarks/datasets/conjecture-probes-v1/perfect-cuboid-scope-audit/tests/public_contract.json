@@ -18,10 +18,39 @@
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
     "max_items": 1,
     "media_types": [
-      "text/plain"
+      "application/json"
     ],
     "min_items": 1,
-    "payload_shape": null
+    "payload_shape": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "result": {
+          "type": "object"
+        },
+        "schema_version": {
+          "enum": [
+            "1"
+          ],
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    }
   },
   "limitations": {
     "const": [

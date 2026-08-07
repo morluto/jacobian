@@ -1,0 +1,1 @@
+{"task_id":"jacobian/moser-radical-branch-audit","conjecture_id":"C-009","scope":"moser-spindle-radical-sign-repair-v1","corrupted_vertex":5,"corrupted_y_branch":"NEGATIVE_B_OVER_2","claimed_edges":[[0,1],[0,4],[0,6],[1,2],[1,5],[2,3],[2,5],[3,4],[3,5],[3,6],[4,6]]}

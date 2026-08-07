@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.matrix_operations import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
@@ -115,7 +115,10 @@ def compute_smith_normal_form(
     from sympy.matrices.normalforms import smith_normal_form
 
     source = sympy.Matrix(
-        [[int(value) for value in row] for row in request.matrix.entries]
+        [
+            [parse_canonical_integer(value) for value in row]
+            for row in request.matrix.entries
+        ]
     )
     raw = smith_normal_form(source, domain=sympy.ZZ)
     diagonal_count = min(raw.rows, raw.cols)
@@ -133,12 +136,17 @@ def compute_smith_normal_form(
     return SmithNormalFormResult(
         normal_form=IntegerOutputMatrix(
             entries=tuple(
-                tuple(str(int(canonical[row, column])) for column in range(raw.cols))
+                tuple(
+                    format_canonical_integer(canonical[row, column])
+                    for column in range(raw.cols)
+                )
                 for row in range(raw.rows)
             )
         ),
         rank=rank,
-        invariant_factors=tuple(str(value) for value in invariant_factors),
+        invariant_factors=tuple(
+            format_canonical_integer(value) for value in invariant_factors
+        ),
     )
 
 
@@ -146,7 +154,10 @@ def compute_inverse(request: SquareIntegerMatrixRequest) -> MatrixInverseResult:
     import sympy
 
     source = sympy.Matrix(
-        [[int(value) for value in row] for row in request.matrix.entries]
+        [
+            [parse_canonical_integer(value) for value in row]
+            for row in request.matrix.entries
+        ]
     )
     inverse = native_matrices.inverse(source)
     return MatrixInverseResult(
@@ -165,7 +176,9 @@ def compute_trace(request: SquareIntegerMatrixRequest) -> MatrixTraceResult:
     source = sympy.Matrix(
         [[int(value) for value in row] for row in request.matrix.entries]
     )
-    return MatrixTraceResult(trace=str(int(native_matrices.trace(source))))
+    return MatrixTraceResult(
+        trace=format_canonical_integer(native_matrices.trace(source))
+    )
 
 
 def compute_product(request: RationalMatrixProductRequest) -> MatrixProductResult:
@@ -204,7 +217,10 @@ def compute_adjugate(request: SquareIntegerMatrixRequest) -> MatrixAdjugateResul
     import sympy
 
     source = sympy.Matrix(
-        [[int(value) for value in row] for row in request.matrix.entries]
+        [
+            [parse_canonical_integer(value) for value in row]
+            for row in request.matrix.entries
+        ]
     )
     if source.rows != source.cols:
         raise ValueError("adjugate requires a square matrix")
@@ -213,7 +229,8 @@ def compute_adjugate(request: SquareIntegerMatrixRequest) -> MatrixAdjugateResul
         adjugate=IntegerOutputMatrix(
             entries=tuple(
                 tuple(
-                    str(int(adjugate[row, column])) for column in range(adjugate.cols)
+                    format_canonical_integer(adjugate[row, column])
+                    for column in range(adjugate.cols)
                 )
                 for row in range(adjugate.rows)
             )

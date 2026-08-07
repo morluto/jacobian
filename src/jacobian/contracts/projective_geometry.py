@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.results import ContractModel
 
@@ -94,10 +95,13 @@ class PrimitiveProjectiveTriple(ContractModel):
     @model_validator(mode="after")
     def require_canonical_primitive_coordinates(self) -> Self:
         try:
-            values = tuple(int(value) for value in self.coordinates)
+            values = tuple(parse_canonical_integer(value) for value in self.coordinates)
         except ValueError as exc:
             raise ValueError("projective coordinates must be integer strings") from exc
-        if tuple(str(value) for value in values) != self.coordinates:
+        if (
+            tuple(format_canonical_integer(value) for value in values)
+            != self.coordinates
+        ):
             raise ValueError("projective coordinates must be canonical integer strings")
         divisor = 0
         for value in values:

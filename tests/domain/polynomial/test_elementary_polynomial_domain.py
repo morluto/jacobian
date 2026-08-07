@@ -106,6 +106,23 @@ def test_integer_polynomial_operations_preserve_ring_semantics(
     )["composition"]["coefficients"] == ["1", "2", "2"]
 
 
+def test_integer_polynomial_evaluation_formats_large_exact_result(
+    domain_services: DomainTestServices,
+) -> None:
+    point = "9" * 256
+    result = _invoke(
+        domain_services,
+        "polynomial.integer.compute.evaluate",
+        {
+            "polynomial": {"coefficients": ["1"] + (["0"] * 127)},
+            "point": point,
+        },
+    )
+
+    assert result["point"] == point
+    assert len(result["value"]) > 4_300
+
+
 def test_rational_polynomial_operations_return_typed_intermediates(
     domain_services,
 ) -> None:

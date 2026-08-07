@@ -16,7 +16,7 @@ import math
 from fractions import Fraction
 from typing import Literal
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.arithmetic import (
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
@@ -39,16 +39,11 @@ from jacobian.math import arithmetic as native_arithmetic
 
 
 def _int(value: str) -> int:
-    return int(value)
+    return parse_canonical_integer(value)
 
 
 def _canonical(value: int) -> str:
-    return str(value)
-
-
-def to_fraction(num: str, den: str) -> Fraction:
-    """Build a reduced ``Fraction`` from canonical integer strings."""
-    return Fraction(int(num), int(den))
+    return format_canonical_integer(value)
 
 
 def absolute_value(request: IntegerValueRequest) -> IntegerValueResult:
@@ -70,12 +65,12 @@ def sign(request: IntegerValueRequest) -> IntegerSignResult:
 
 def decimal_digit_sum(request: IntegerValueRequest) -> IntegerValueResult:
     return IntegerValueResult(
-        value=_canonical(sum(int(digit) for digit in str(abs(_int(request.value)))))
+        value=_canonical(sum(int(digit) for digit in request.value.lstrip("-")))
     )
 
 
 def decimal_digit_count(request: IntegerValueRequest) -> IntegerValueResult:
-    return IntegerValueResult(value=_canonical(len(str(abs(_int(request.value))))))
+    return IntegerValueResult(value=_canonical(len(request.value.lstrip("-"))))
 
 
 def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
@@ -181,11 +176,15 @@ def maximum(request: RationalPairRequest) -> RationalValueResult:
 
 
 def floor(request: RationalValueRequest) -> RationalIntegerResult:
-    return RationalIntegerResult(value=str(math.floor(_fraction(request.value))))
+    return RationalIntegerResult(
+        value=format_canonical_integer(math.floor(_fraction(request.value)))
+    )
 
 
 def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
-    return RationalIntegerResult(value=str(math.ceil(_fraction(request.value))))
+    return RationalIntegerResult(
+        value=format_canonical_integer(math.ceil(_fraction(request.value)))
+    )
 
 
 def continued_fraction(
@@ -197,7 +196,7 @@ def continued_fraction(
     value = _fraction(request.value)
     terms = sympy_continued_fraction(SympyRational(value.numerator, value.denominator))
     return RationalContinuedFractionResult(
-        terms=tuple(str(int(term)) for term in terms)
+        terms=tuple(format_canonical_integer(int(term)) for term in terms)
     )
 
 

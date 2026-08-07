@@ -16,6 +16,7 @@ from jacobian.canonical import (
     CanonicalLimits,
     canonicalize_json,
     format_canonical_integer,
+    parse_canonical_integer,
 )
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
 from jacobian.contracts.results import ContractModel
@@ -629,7 +630,7 @@ class IntegerListRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_nonnegative_parts(self) -> Self:
-        if any(int(v) < 0 for v in self.values):
+        if any(parse_canonical_integer(value) < 0 for value in self.values):
             raise ValueError("integer list values must be nonnegative")
         return self
 

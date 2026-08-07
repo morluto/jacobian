@@ -8,7 +8,7 @@ from fractions import Fraction
 from functools import reduce
 from itertools import pairwise
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.sequences import (
     FrequencyEntry,
@@ -23,15 +23,17 @@ from jacobian.contracts.sequences import (
 
 
 def _values(request: IntegerSequenceRequest) -> list[int]:
-    return [int(value) for value in request.values]
+    return [parse_canonical_integer(value) for value in request.values]
 
 
 def _value_result(value: int) -> IntegerSequenceValueResult:
-    return IntegerSequenceValueResult(value=str(value))
+    return IntegerSequenceValueResult(value=format_canonical_integer(value))
 
 
 def _list_result(values: list[int]) -> IntegerSequenceListResult:
-    return IntegerSequenceListResult(values=tuple(str(v) for v in values))
+    return IntegerSequenceListResult(
+        values=tuple(format_canonical_integer(value) for value in values)
+    )
 
 
 def sequence_sum(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
@@ -179,7 +181,7 @@ def signs(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
 def frequencies(request: IntegerSequenceRequest) -> IntegerSequenceFrequenciesResult:
     counts = Counter(_values(request))
     entries = tuple(
-        FrequencyEntry(value=str(value), count=counts[value])
+        FrequencyEntry(value=format_canonical_integer(value), count=counts[value])
         for value in sorted(counts)
     )
     return IntegerSequenceFrequenciesResult(entries=entries)

@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.plugin_matrices import (
     MatrixCandidate,
     MatrixCapabilityRequest,
@@ -38,7 +38,11 @@ MAX_SEARCHED_MATRICES = 65_536
 
 
 def _to_int(value: Any) -> int:
-    return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return parse_canonical_integer(value)
+    raise ValueError("matrix entries must be integers")
 
 
 def _to_int_matrix(entries: Any) -> list[list[int]]:
@@ -79,7 +83,7 @@ def _enumerate_typed(
         index = flat_index
         flat: list[str] = []
         for _ in range(rows * cols):
-            flat.append(str(values[index % len(values)]))
+            flat.append(format_canonical_integer(values[index % len(values)]))
             index //= len(values)
         entries = [flat[row * cols : (row + 1) * cols] for row in range(rows)]
         candidates.append({"rows": rows, "cols": cols, "entries": entries})
@@ -93,7 +97,7 @@ def _enumerate_typed(
         "scope": {
             "rows": rows,
             "cols": cols,
-            "entries": [str(value) for value in values],
+            "entries": [format_canonical_integer(value) for value in values],
             "labeled": True,
             "candidate_count": total,
         },
@@ -127,7 +131,11 @@ def transform_row_major_capability(request: dict[str, Any]) -> dict[str, Any]:
         ) from exc
     rows = selected.source.rows
     cols = selected.source.cols
-    values = [str(value) for row in _candidate_matrix(selected.source) for value in row]
+    values = [
+        format_canonical_integer(value)
+        for row in _candidate_matrix(selected.source)
+        for value in row
+    ]
     return {
         "response_version": "1",
         "transform_format": "matrix.row_major",

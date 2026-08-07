@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import comb, gcd
 from typing import cast
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.projective_geometry import (
     NormalizedProjectiveLine,
     PrimitiveProjectiveTriple,
@@ -60,7 +61,11 @@ def _cross(
 
 def _wire_triple(values: tuple[int, int, int]) -> PrimitiveProjectiveTriple:
     return PrimitiveProjectiveTriple(
-        coordinates=(str(values[0]), str(values[1]), str(values[2]))
+        coordinates=(
+            format_canonical_integer(values[0]),
+            format_canonical_integer(values[1]),
+            format_canonical_integer(values[2]),
+        )
     )
 
 

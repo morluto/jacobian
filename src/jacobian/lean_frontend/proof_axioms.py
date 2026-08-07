@@ -361,24 +361,23 @@ def _skip_block_comment(source: str, index: int, length: int) -> int:
 
 
 def _skip_string_literal(source: str, index: int, length: int) -> int:
+    return _skip_quoted_literal(source, index, length, '"')
+
+
+def _skip_char_literal(source: str, index: int, length: int) -> int:
+    return _skip_quoted_literal(source, index, length, "'")
+
+
+def _skip_quoted_literal(source: str, index: int, length: int, delimiter: str) -> int:
     index += 1
     while index < length:
         if source[index] == "\\":
             index += 2
-        elif source[index] == '"':
+        elif source[index] == delimiter:
             return index + 1
         else:
             index += 1
     return index
-
-
-def _skip_char_literal(source: str, index: int, length: int) -> int:
-    index += 1
-    if index < length and source[index] == "\\":
-        index += 2
-    elif index < length:
-        index += 1
-    return index + 1 if index < length and source[index] == "'" else index
 
 
 def _is_identifier_start(character: str) -> bool:

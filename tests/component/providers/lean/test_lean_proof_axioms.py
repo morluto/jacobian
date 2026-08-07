@@ -89,3 +89,20 @@ def test_proof_holes_are_counted_but_not_rejected_as_commands() -> None:
 def test_proof_hole_count_is_bounded_before_artifact_validation() -> None:
     with pytest.raises(ValueError, match="more than 64"):
         proof_axioms._validate_source("True", "by " + " ".join(["sorry"] * 65))
+
+
+@pytest.mark.parametrize("literal", (r"'\xAF'", r"'\uFACE'", r"'\''"))
+def test_char_escapes_are_not_scanned_as_tokens(literal: str) -> None:
+    assert proof_axioms._lean_source_tokens(literal) == ()
+
+
+@pytest.mark.parametrize("literal", (r"'\xAF'", r"'\uFACE'", r"'\''"))
+def test_tokens_after_char_escapes_are_scanned(literal: str) -> None:
+    source = f"{literal} sorry admit"
+
+    assert proof_axioms._lean_source_tokens(source) == ("sorry", "admit")
+    assert proof_axioms._proof_hole_counts(source) == (1, 1)
+
+
+def test_string_literal_escaped_quote_is_not_scanned_as_tokens() -> None:
+    assert proof_axioms._lean_source_tokens(r'"\"" sorry') == ("sorry",)

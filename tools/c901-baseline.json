@@ -403,11 +403,6 @@
       "complexity": 13
     },
     {
-      "path": "src/jacobian/storage/metadata.py",
-      "symbol": "_put",
-      "complexity": 11
-    },
-    {
       "path": "src/jacobian/storage/transactions.py",
       "symbol": "transaction",
       "complexity": 22

@@ -114,6 +114,21 @@ class SchemaRegistry:
 
         self._reconcile_pending()
         canonical_schema = canonicalize_json(schema)
+        return self._register_canonical(
+            name=name,
+            version=version,
+            canonical_schema=canonical_schema,
+        )
+
+    def _register_canonical(
+        self,
+        *,
+        name: str,
+        version: str,
+        canonical_schema: bytes,
+    ) -> str:
+        """Register an already canonical schema without serializing it again."""
+
         registration = (name, version, canonical_schema)
         transaction_identity = self.store.transaction_identity
         registrations = self._registrations
@@ -126,27 +141,20 @@ class SchemaRegistry:
         if cached_uri is not None:
             return cached_uri
 
+        schema = cast(dict[str, Any], loads_strict_json(canonical_schema))
         # Descriptor identity is content-addressed, but an existing descriptor
         # may have been written through ArtifactRepository.register_descriptor()
         # without ever passing Draft 2020-12 validation.  Keep the validation
         # boundary here; _validated_schema is content-cached, so repeated
         # registrations still reuse the compiled validator.
         _reject_external_references(schema)
-        expected_uri = self.store.descriptor_uri(
-            kind="schema",
-            name=name,
-            version=version,
-            definition=schema,
-        )
         _validated_schema(canonical_schema)
         schema_uri = self.store.register_descriptor(
             kind="schema",
             name=name,
             version=version,
-            definition=loads_strict_json(canonical_schema),
+            definition=schema,
         )
-        if schema_uri != expected_uri:  # pragma: no cover - identity invariant
-            raise SchemaRegistryError("schema descriptor identity changed unexpectedly")
         registrations[registration] = schema_uri
         if transaction_identity is None:
             self._schema_bytes[schema_uri] = canonical_schema
@@ -170,10 +178,11 @@ class SchemaRegistry:
         repeats this registration after every restart before accepting writes.
         """
 
-        schema_uri = self.register(
+        self._reconcile_pending()
+        schema_uri = self._register_canonical(
             name=name,
             version=version,
-            schema=model_schema(model),
+            canonical_schema=_model_schema_bytes(model),
         )
         self._bind_model_contract(schema_uri, model)
         if producer_only:

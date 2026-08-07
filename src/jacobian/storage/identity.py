@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import Final
 
 from jacobian.canonical import CanonicalLimits, canonicalize_json
@@ -21,6 +22,17 @@ BOOTSTRAP_SEMANTICS_URI: Final = (
     "artifact://sha256/"
     + hashlib.sha256(b"jacobian.bootstrap.semantics.v1").hexdigest()
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _ArtifactIdentity:
+    """Canonical artifact identity plus the manifest bytes that define it."""
+
+    artifact_uri: str
+    object_digest: str
+    manifest_digest: str
+    manifest: ArtifactManifest
+    manifest_bytes: bytes
 
 
 def sha256_digest(data: bytes) -> str:
@@ -55,7 +67,7 @@ def framed_digest(tag: bytes, parts: tuple[bytes, ...]) -> str:
     return "sha256:" + digest.hexdigest()
 
 
-def artifact_identity(
+def _prepare_artifact_identity(
     *,
     canonical_limits: CanonicalLimits,
     schema_uri: str,
@@ -63,8 +75,8 @@ def artifact_identity(
     canonical_bytes: bytes,
     parents: tuple[str, ...],
     summary: str,
-) -> tuple[str, str, str]:
-    """Calculate an artifact identity without touching storage."""
+) -> _ArtifactIdentity:
+    """Prepare an artifact identity and its canonical manifest projection."""
 
     object_digest = framed_digest(
         OBJECT_FORMAT_VERSION,
@@ -88,7 +100,39 @@ def artifact_identity(
         manifest.model_dump(mode="json"), limits=canonical_limits
     )
     manifest_digest = sha256_digest(manifest_bytes)
-    return uri_from_digest(manifest_digest), object_digest, manifest_digest
+    return _ArtifactIdentity(
+        artifact_uri=uri_from_digest(manifest_digest),
+        object_digest=object_digest,
+        manifest_digest=manifest_digest,
+        manifest=manifest,
+        manifest_bytes=manifest_bytes,
+    )
+
+
+def artifact_identity(
+    *,
+    canonical_limits: CanonicalLimits,
+    schema_uri: str,
+    semantics_uri: str,
+    canonical_bytes: bytes,
+    parents: tuple[str, ...],
+    summary: str,
+) -> tuple[str, str, str]:
+    """Calculate an artifact identity without touching storage."""
+
+    identity = _prepare_artifact_identity(
+        canonical_limits=canonical_limits,
+        schema_uri=schema_uri,
+        semantics_uri=semantics_uri,
+        canonical_bytes=canonical_bytes,
+        parents=parents,
+        summary=summary,
+    )
+    return (
+        identity.artifact_uri,
+        identity.object_digest,
+        identity.manifest_digest,
+    )
 
 
 __all__ = [

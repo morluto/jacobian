@@ -5,8 +5,109 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.storage.errors import ArtifactIntegrityError, StorageError
+from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.storage.errors import (
+    ArtifactIntegrityError,
+    StorageError,
+    StorageLimitError,
+)
+from jacobian.storage.identity import (
+    BOOTSTRAP_SCHEMA_URI,
+    BOOTSTRAP_SEMANTICS_URI,
+    artifact_identity,
+)
+from jacobian.storage.models import StorageLimits
 from jacobian.storage.repository import ArtifactRepository
+
+
+def test_artifact_identity_preserves_digest_tuple_contract() -> None:
+    artifact_uri, object_digest, manifest_digest = artifact_identity(
+        canonical_limits=CanonicalLimits(),
+        schema_uri=BOOTSTRAP_SCHEMA_URI,
+        semantics_uri=BOOTSTRAP_SEMANTICS_URI,
+        canonical_bytes=b"{}",
+        parents=(),
+        summary="identity contract",
+    )
+
+    assert artifact_uri == "artifact://sha256/" + manifest_digest.removeprefix(
+        "sha256:"
+    )
+    assert object_digest.startswith("sha256:")
+
+
+@pytest.mark.parametrize(
+    ("limits", "canonical_limits", "error"),
+    [
+        (StorageLimits(max_summary_chars=5), None, "summary"),
+        (
+            StorageLimits(max_artifact_bytes=128),
+            CanonicalLimits(max_input_bytes=4096, max_output_bytes=4096),
+            "size",
+        ),
+    ],
+)
+def test_descriptor_uri_is_independent_of_commit_limits(
+    tmp_path: Path,
+    limits: StorageLimits,
+    canonical_limits: CanonicalLimits | None,
+    error: str,
+) -> None:
+    reference = ArtifactRepository(
+        tmp_path / "reference",
+        canonical_limits=canonical_limits,
+    )
+    constrained = ArtifactRepository(
+        tmp_path / "constrained",
+        limits=limits,
+        canonical_limits=canonical_limits,
+    )
+    descriptor = {
+        "kind": "schema",
+        "name": "example.identity",
+        "version": "1",
+        "definition": {"description": "x" * 256},
+    }
+    try:
+        assert constrained.descriptor_uri(**descriptor) == reference.descriptor_uri(
+            **descriptor
+        )
+        with pytest.raises(StorageLimitError, match=error):
+            constrained.register_descriptor(**descriptor)
+    finally:
+        constrained.close()
+        reference.close()
+
+
+def test_descriptor_registration_checks_payload_size_before_manifest_size(
+    tmp_path: Path,
+) -> None:
+    descriptor = {
+        "kind": "schema",
+        "name": "x",
+        "version": "1",
+        "definition": {},
+    }
+    canonical_bytes = canonicalize_json(
+        {
+            "descriptor_version": "1",
+            **descriptor,
+        }
+    )
+    canonical_budget = len(canonical_bytes) * 2
+    store = ArtifactRepository(
+        tmp_path,
+        limits=StorageLimits(max_artifact_bytes=len(canonical_bytes) - 1),
+        canonical_limits=CanonicalLimits(
+            max_input_bytes=canonical_budget,
+            max_output_bytes=canonical_budget,
+        ),
+    )
+    try:
+        with pytest.raises(StorageLimitError, match="artifact exceeds"):
+            store.register_descriptor(**descriptor)
+    finally:
+        store.close()
 
 
 def test_artifact_identity_uses_canonical_payload_schema_and_semantics(
@@ -168,6 +269,29 @@ def test_repeated_put_rejects_corrupted_committed_blob(tmp_path: Path) -> None:
             schema_uri=schema,
             semantics_uri=semantics,
             payload={"value": "original"},
+        )
+
+
+def test_repeated_descriptor_registration_rejects_corrupted_blob(
+    tmp_path: Path,
+) -> None:
+    store = ArtifactRepository(tmp_path)
+    definition = {"type": "object", "properties": {"value": {"type": "integer"}}}
+    descriptor_uri = store.register_descriptor(
+        kind="schema",
+        name="example.descriptor-integrity",
+        version="1",
+        definition=definition,
+    )
+    descriptor = store.get(descriptor_uri)
+    store._blob_path(descriptor.manifest.payload_digest).write_bytes(b"corrupt")
+
+    with pytest.raises(ArtifactIntegrityError, match="blob digest mismatch"):
+        store.register_descriptor(
+            kind="schema",
+            name="example.descriptor-integrity",
+            version="1",
+            definition=definition,
         )
 
 

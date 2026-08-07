@@ -4,6 +4,7 @@ import json
 import re
 from pathlib import Path
 
+import benchmarks.tooling.codex_visibility as visibility
 import pytest
 from benchmarks.tooling.codex_visibility import (
     AdoptionExpectation,
@@ -14,6 +15,7 @@ from benchmarks.tooling.codex_visibility import (
     classify_visibility,
     load_suite,
 )
+from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
 from jacobian.contracts.matrices import MatrixDeterminantRequest
@@ -144,6 +146,38 @@ def test_unified_exec_mode_is_opt_in(tmp_path: Path) -> None:
 
     assert "unified_exec" not in direct
     assert unified[-3:-1] == ("--enable", "unified_exec")
+
+
+def test_run_records_monotonic_elapsed_seconds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    moments = iter((10.0, 12.3456789))
+    monkeypatch.setattr(visibility.time, "monotonic", lambda: next(moments))
+    monkeypatch.setattr(
+        visibility,
+        "run_operator_command",
+        lambda *args, **kwargs: ToolCommandResult(
+            status=ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b'{"type":"turn.completed","usage":{}}\n',
+            stderr=b"",
+        ),
+    )
+
+    result = visibility._run_case(
+        case=_case(),
+        repetition=1,
+        workspace=tmp_path,
+        output=tmp_path,
+        model="test-model",
+        reasoning_effort="high",
+        mcp_url="https://example.test/mcp",
+        timeout_seconds=30,
+        tool_mode=ToolMode.DIRECT,
+    )
+
+    assert result["command"]["elapsed_seconds"] == 2.345679
 
 
 def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:

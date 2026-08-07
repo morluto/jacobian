@@ -14,6 +14,8 @@ from jacobian.verification import VerificationService
 
 def _certificate_case(
     tmp_path: Path,
+    *,
+    checker_entrypoint: str = "jacobian_checkers.graph_paths:check_path_enumeration",
 ) -> tuple[ArtifactRepository, VerificationService, str]:
     store = ArtifactRepository(tmp_path)
     claim_schema = store.register_descriptor(
@@ -113,7 +115,7 @@ def _certificate_case(
     registry = CheckerRegistry(store)
     registry.authorize(
         name="graph-path-enumeration-v1",
-        entrypoint="jacobian_checkers.graph_paths:check_path_enumeration",
+        entrypoint=checker_entrypoint,
         evidence_kind="CERTIFICATE",
         format_id="graph.path_enumeration",
         format_version="1",
@@ -137,6 +139,39 @@ def test_complete_path_enumeration_certificate_is_verified(tmp_path: Path) -> No
     assert result.conclusion is Conclusion.FALSE
     assert result.assurance.verification is Verification.VERIFIED
     assert result.assurance.coverage.value == "EXHAUSTIVE"
+
+
+def test_certificate_supporting_artifacts_include_requested_storage_metadata(
+    tmp_path: Path,
+) -> None:
+    store, service, certificate_uri = _certificate_case(
+        tmp_path,
+        checker_entrypoint=(
+            "tests.component.checkers._fixture_checkers:"
+            "check_supporting_artifact_metadata"
+        ),
+    )
+    certificate = store.get(certificate_uri)
+    supporting_schema = store.register_descriptor(
+        kind="schema",
+        name="graph.path-enumeration.supporting-evidence",
+        version="1",
+        definition={"type": "object"},
+    )
+    supporting_artifact = store.put(
+        schema_uri=supporting_schema,
+        semantics_uri=certificate.manifest.semantics_uri,
+        payload={"kind": "supporting-evidence"},
+    )
+
+    result = service.verify_certificate(
+        certificate_uri=certificate_uri,
+        supporting_artifact_uris=(supporting_artifact.artifact_uri,),
+        include_artifact_metadata=True,
+    )
+
+    assert result.conclusion is Conclusion.FALSE
+    assert result.assurance.verification is Verification.VERIFIED
 
 
 def test_certificate_binding_substitution_is_rejected(tmp_path: Path) -> None:

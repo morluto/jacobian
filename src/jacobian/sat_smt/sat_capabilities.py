@@ -154,7 +154,7 @@ class SatCnfMaterializationAdapter:
                         "literals referring only to declared variables"
                     ),
                     hint=(
-                        "Call math.find for sat.cnf.materialize and correct "
+                        "Inspect sat.cnf.materialize with math.find and execute it with math.run to correct "
                         "the variable_names or clauses."
                     ),
                 )
@@ -417,7 +417,7 @@ class SatAssignmentVerificationAdapter:
                         "to one canonical CNF"
                     ),
                     hint=(
-                        "Use math.find for sat.model.find to produce an assignment "
+                        "Inspect sat.model.find with math.find and execute it with math.run to produce an assignment "
                         "artifact for the intended canonical CNF. If that optional "
                         "producer is unavailable, install the CaDiCaL provider; do "
                         "not invent an assignment URI."
@@ -632,7 +632,7 @@ class SatUnsatProofVerificationAdapter:
                         "lineage to one canonical CNF"
                     ),
                     hint=(
-                        "Use math.find for sat.unsat_proof.find to produce a proof "
+                        "Inspect sat.unsat_proof.find with math.find and execute it with math.run to produce a proof "
                         "artifact for the intended canonical CNF. If that optional "
                         "producer is unavailable, install the CaDiCaL provider; do "
                         "not invent a proof URI."

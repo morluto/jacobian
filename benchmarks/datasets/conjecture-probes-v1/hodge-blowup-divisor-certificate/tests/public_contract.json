@@ -1,0 +1,290 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "conclusion": {
+    "const": "ALGEBRAIC_DIVISOR_CLASS_CERTIFICATE"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "ONE_CUBIC_DIVISOR_ON_ONE_BLOWUP",
+      "LEFSCHETZ_1_1_TRUSTED",
+      "NO_HIGHER_CODIMENSION_HODGE_CONCLUSION"
+    ]
+  },
+  "public_notes": "Exact divisor-class certificate under trusted Lefschetz (1,1); no general Hodge conclusion.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {
+    "point_check": {
+      "additionalProperties": false,
+      "properties": {
+        "gradient": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "multiplicity": {
+          "const": 1
+        },
+        "point_index": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "const": 0
+        }
+      },
+      "required": [
+        "point_index",
+        "value",
+        "gradient",
+        "multiplicity"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "six-point-p2-blowup-divisor-v1",
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "arithmetic_genus": {
+        "const": 1
+      },
+      "canonical_intersection": {
+        "const": -3
+      },
+      "coefficients": {
+        "items": {
+          "maximum": 20,
+          "minimum": -20,
+          "type": "integer"
+        },
+        "maxItems": 10,
+        "minItems": 10,
+        "type": "array"
+      },
+      "cycle_classification": {
+        "const": "ALGEBRAIC_DIVISOR_HODGE_1_1"
+      },
+      "divisor_class": {
+        "const": [
+          3,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1
+        ]
+      },
+      "point_checks": {
+        "items": {
+          "$ref": "#/$defs/point_check"
+        },
+        "maxItems": 6,
+        "minItems": 6,
+        "type": "array"
+      },
+      "self_intersection": {
+        "const": 3
+      }
+    },
+    "required": [
+      "coefficients",
+      "point_checks",
+      "divisor_class",
+      "self_intersection",
+      "canonical_intersection",
+      "arithmetic_genus",
+      "cycle_classification"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "point_check": {
+        "additionalProperties": false,
+        "properties": {
+          "gradient": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "multiplicity": {
+            "const": 1
+          },
+          "point_index": {
+            "maximum": 5,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "value": {
+            "const": 0
+          }
+        },
+        "required": [
+          "point_index",
+          "value",
+          "gradient",
+          "multiplicity"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "ALGEBRAIC_DIVISOR_CLASS_CERTIFICATE"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "ONE_CUBIC_DIVISOR_ON_ONE_BLOWUP",
+          "LEFSCHETZ_1_1_TRUSTED",
+          "NO_HIGHER_CODIMENSION_HODGE_CONCLUSION"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "arithmetic_genus": {
+            "const": 1
+          },
+          "canonical_intersection": {
+            "const": -3
+          },
+          "coefficients": {
+            "items": {
+              "maximum": 20,
+              "minimum": -20,
+              "type": "integer"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          },
+          "cycle_classification": {
+            "const": "ALGEBRAIC_DIVISOR_HODGE_1_1"
+          },
+          "divisor_class": {
+            "const": [
+              3,
+              -1,
+              -1,
+              -1,
+              -1,
+              -1,
+              -1
+            ]
+          },
+          "point_checks": {
+            "items": {
+              "$ref": "#/$defs/point_check"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array"
+          },
+          "self_intersection": {
+            "const": 3
+          }
+        },
+        "required": [
+          "coefficients",
+          "point_checks",
+          "divisor_class",
+          "self_intersection",
+          "canonical_intersection",
+          "arithmetic_genus",
+          "cycle_classification"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "six-point-p2-blowup-divisor-v1",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/hodge-blowup-divisor-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/hodge-blowup-divisor-certificate",
+  "verification_record": null
+}

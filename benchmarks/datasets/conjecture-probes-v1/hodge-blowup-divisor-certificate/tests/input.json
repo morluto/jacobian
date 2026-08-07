@@ -1,0 +1,1 @@
+{"task_id":"jacobian/hodge-blowup-divisor-certificate","conjecture_id":"C-039","degree":3,"monomial_order":["x^3","x^2y","x^2z","xy^2","xyz","xz^2","y^3","y^2z","yz^2","z^3"],"blowup_points":[[0,0,1],[1,0,1],[0,1,1],[1,1,1],[2,0,1],[0,2,1]],"coefficient_bound":20,"scope":"six-point-p2-blowup-divisor-v1"}

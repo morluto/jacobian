@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/hodge-blowup-divisor-certificate"
+version="1.0.0"
+description="Construct and replay a cubic divisor class on the blow-up of P2 at six rational points."
+keywords=["hodge","divisors","blowup","intersection-theory","adjunction"]
+[metadata]
+evaluation_kind="conjecture-probe"
+domain="mathematical-sciences"
+primary_domain="algebraic-geometry"
+field="algebraic-cycles"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:7aed2472755c817517af313292b09ff011f0cd000b82c6077e8ead0e5b3a9105"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","algebraic-geometry","intersection-theory","scope-audit","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-finite-conjecture-probe"
+derivation="Derived from retained spreadsheet row C-039; the cubic and six-point blow-up fixture are authored."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

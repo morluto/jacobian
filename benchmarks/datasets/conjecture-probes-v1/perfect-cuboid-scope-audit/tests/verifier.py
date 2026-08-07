@@ -10,8 +10,8 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -23,12 +23,14 @@ SCOPE = "perfect-cuboid-scope-audit:case-set-v1"
 LIMITATIONS = ["TWELVE_FROZEN_INTEGER_CUBOIDS", "NO_GLOBAL_PERFECT_CUBOID_CONCLUSION"]
 CLASSES = {"PERFECT_CUBOID", "EULER_BRICK_ONLY", "SPACE_AND_TWO_FACES", "OTHER"}
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
-SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def _raw_submission() -> dict[str, Any] | None:
     """Parse the raw submission JSON without strict schema validation."""
-    if not is_regular_bounded_file(Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES):
+    if not is_regular_bounded_file(
+        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
+    ):
         return None
     try:
         value = json.loads(Path("/app/submission.json").read_text())
@@ -156,7 +158,7 @@ def main() -> None:
         submission,
         task_id=TASK_ID,
         conclusion="PERFECT_CUBOID_FINITE_SCOPE_AUDIT",
-        allowed_assurances=SCOREABLE_ASSURANCES,
+        allowed_assurances=scoreable_assurances,
         verification_record="forbidden",
     )
     mathematics = bool(
@@ -166,7 +168,9 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence", []), max_bytes=MAX_EVIDENCE_BYTES)
+        and evidence_list_is_bound(
+            submission.get("evidence", []), max_bytes=MAX_EVIDENCE_BYTES
+        )
     )
     payload = (
         read_evidence_json(
@@ -192,7 +196,7 @@ def main() -> None:
     )
     assurance = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+        and submission.get("claimed_assurance") in scoreable_assurances
     )
     false_certification = bool(
         isinstance(raw_submission, dict)

@@ -21,36 +21,7 @@
       "application/json"
     ],
     "min_items": 1,
-    "payload_shape": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "result": {
-          "type": "object"
-        },
-        "schema_version": {
-          "enum": [
-            "1"
-          ],
-          "type": "string"
-        },
-        "task_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    }
+    "payload_shape": null
   },
   "limitations": {
     "const": [

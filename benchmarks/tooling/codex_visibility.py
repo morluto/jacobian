@@ -64,6 +64,13 @@ class AdoptionExpectation(StrEnum):
     ABSTAIN = "ABSTAIN"
 
 
+class ToolMode(StrEnum):
+    """How Codex receives and dispatches tools during one visibility run."""
+
+    DIRECT = "direct"
+    UNIFIED_EXEC = "unified_exec"
+
+
 class VisibilityCase(BaseModel):
     """One agent-visible prompt plus hidden trajectory expectations."""
 
@@ -323,6 +330,7 @@ def _codex_arguments(
     reasoning_effort: str,
     mcp_url: str,
     prompt: str,
+    tool_mode: ToolMode,
 ) -> tuple[str, ...]:
     arguments = [
         "-a",
@@ -343,6 +351,8 @@ def _codex_arguments(
         "-c",
         f"mcp_servers.jacobian.url={json.dumps(mcp_url)}",
     ]
+    if tool_mode is ToolMode.UNIFIED_EXEC:
+        arguments.extend(("--enable", "unified_exec"))
     if os.environ.get("JACOBIAN_MCP_BEARER_TOKEN"):
         arguments.extend(
             (
@@ -376,6 +386,7 @@ def _run_case(
     reasoning_effort: str,
     mcp_url: str,
     timeout_seconds: float,
+    tool_mode: ToolMode,
 ) -> dict[str, Any]:
     stem = f"{case.case_id}-r{repetition:02d}"
     transcript_path = output / f"{stem}.jsonl"
@@ -389,6 +400,7 @@ def _run_case(
             reasoning_effort=reasoning_effort,
             mcp_url=mcp_url,
             prompt=case.prompt,
+            tool_mode=tool_mode,
         ),
         cwd=workspace,
         timeout_seconds=timeout_seconds,
@@ -441,6 +453,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--mcp-url", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--reasoning-effort", default="high")
+    parser.add_argument(
+        "--tool-mode",
+        type=ToolMode,
+        choices=tuple(ToolMode),
+        default=ToolMode.DIRECT,
+        help="Codex tool dispatch mode; unified_exec matches Harbor Code Mode.",
+    )
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument(
         "--case",
@@ -518,6 +537,7 @@ def main() -> None:
                 reasoning_effort=args.reasoning_effort,
                 mcp_url=args.mcp_url,
                 timeout_seconds=args.timeout_seconds,
+                tool_mode=args.tool_mode,
             )
             for case in selected_cases
             for repetition in range(1, args.repetitions + 1)
@@ -549,6 +569,7 @@ def main() -> None:
             "codex_version": codex_version,
             "model": args.model,
             "reasoning_effort": args.reasoning_effort,
+            "tool_mode": args.tool_mode,
             "repetitions": args.repetitions,
             "repository_revision": git_head_sha(_ROOT),
         },

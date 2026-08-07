@@ -10,7 +10,7 @@ Validates six bugs identified during the audit:
 6. ``mkstemp`` fd was leaked if ``os.fdopen`` raised before the ``with`` block.
 """
 
-import inspect
+from pathlib import Path
 
 
 def test_trial_status_missing_status_fails_closed() -> None:
@@ -170,9 +170,10 @@ def test_compare_evidence_tolerates_missing_optional_metrics() -> None:
 
 def test_mkstemp_fd_closed_on_fdopen_failure() -> None:
     """If os.fdopen fails after mkstemp, the fd must be closed."""
-    import jacobian.lean_frontend.statement as statement_module
-
-    source = inspect.getsource(statement_module)
+    statement_path = (
+        Path(__file__).parents[3] / "src/jacobian/lean_frontend/statement.py"
+    )
+    source = statement_path.read_text(encoding="utf-8")
     assert "os.close(fd)" in source, (
         "statement.py must close the mkstemp fd if os.fdopen fails"
     )

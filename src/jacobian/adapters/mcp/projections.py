@@ -268,22 +268,14 @@ def _discovery_recovery_paths(
     ):
         return []
     paths: list[dict[str, Any]] = []
-    if domain_filter_status == "UNKNOWN":
+    if request.query is not None:
         paths.append(
             {
-                "action": "remove_unknown_domain_filter",
+                "action": "reformulate_query",
                 "tool": "math.find",
-                "rejected_domain": request.domain,
-                "change": "Retry without the unrecognized domain filter.",
+                "change": "Use different or broader mathematical language for query.",
             }
         )
-    paths.append(
-        {
-            "action": "reformulate_query",
-            "tool": "math.find",
-            "change": "Use different or broader mathematical language for query.",
-        }
-    )
     if domain_filter_status != "UNKNOWN" and any(
         value is not None
         for value in (
@@ -313,6 +305,15 @@ def _discovery_recovery_paths(
             },
         )
     )
+    if domain_filter_status == "UNKNOWN":
+        paths.append(
+            {
+                "action": "remove_unknown_domain_filter",
+                "tool": "math.find",
+                "rejected_domain": request.domain,
+                "change": "Retry without the unrecognized domain filter.",
+            }
+        )
     return paths
 
 

@@ -377,7 +377,12 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "lexical fit outside that filter was not assessed"
                 in (unknown_domain["portfolio_fit_basis"])
             )
-            assert unknown_domain["available_recovery_paths"][0] == {
+            unknown_recovery = next(
+                p
+                for p in unknown_domain["available_recovery_paths"]
+                if p.get("action") == "remove_unknown_domain_filter"
+            )
+            assert unknown_recovery == {
                 "action": "remove_unknown_domain_filter",
                 "tool": "math.find",
                 "rejected_domain": "arithmetic",
@@ -393,7 +398,12 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert browse_unknown["domain_filter_status"] == "UNKNOWN"
             assert browse_unknown["portfolio_fit"] == "UNFILTERED"
             assert browse_unknown["routing_status"] == "UNFILTERED"
-            assert browse_unknown["available_recovery_paths"][0] == {
+            browse_unknown_recovery = next(
+                p
+                for p in browse_unknown["available_recovery_paths"]
+                if p.get("action") == "remove_unknown_domain_filter"
+            )
+            assert browse_unknown_recovery == {
                 "action": "remove_unknown_domain_filter",
                 "tool": "math.find",
                 "rejected_domain": "arithmetic",

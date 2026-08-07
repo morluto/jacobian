@@ -43,8 +43,12 @@ class CapabilityDiscoveryMixin:
         normalized_domain = (
             normalize_domain(request.domain) if request.domain is not None else None
         )
+        # Classify against the full catalog so that non-discoverable
+        # capabilities with matching tags are still recognised (e.g.
+        # artifact.put has discovery_visible=False but carries the
+        # ``artifact`` domain tag).
         domain_filter_status, domain_filter_basis = discovery_domain_filter_status(
-            descriptors,
+            tuple(self.catalog().capabilities),
             normalized_domain,
         )
         resolved_input_kind = request.input_kind or infer_discovery_input_kind(

@@ -128,7 +128,6 @@ class CapabilityDiscoveryMixin:
                 "installed capability; lexical fit outside that filter was not "
                 "assessed."
             )
-        if domain_filter_status == "UNKNOWN":
             routing_status = "UNFILTERED"
             routing_basis = (
                 f"The routing status was not assessed because the requested "

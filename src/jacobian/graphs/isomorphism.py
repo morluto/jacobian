@@ -162,7 +162,10 @@ class GraphIsomorphismAdapter:
         self.artifacts = artifacts
         self.verification = verification
         self.installation = installation
-        assert installation.checker_id is not None
+        if installation.checker_id is None:
+            raise RuntimeError(
+                "graph isomorphism verify adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="graph.isomorphism.verify",
             version="1",
@@ -190,7 +193,17 @@ class GraphIsomorphismAdapter:
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         validated = GraphIsomorphismVerifyRequest.model_validate(request.input)
         checker_id = self.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="GRAPH_ISOMORPHISM_CHECKER_UNAVAILABLE",
+                    stage="isomorphism_verification",
+                    message=(
+                        "The independent graph isomorphism checker is not installed "
+                        "in this runtime."
+                    ),
+                )
+            )
         left = self._load_source_graph(
             validated.left_graph_uri,
             path="left_graph_uri",

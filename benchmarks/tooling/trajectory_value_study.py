@@ -450,10 +450,10 @@ def _terminal_evidence(
         verifier_execution_status=status,
         acceptance=TerminalAcceptance(acceptance_value),
         input_binding_valid=(
-            bool(verifier.get("input_binding_valid")) if status == "COMPLETED" else None
+            verifier.get("input_binding_valid") if status == "COMPLETED" else None
         ),
         artifact_binding_valid=(
-            bool(verifier.get("artifact_binding_valid"))
+            verifier.get("artifact_binding_valid")
             if status == "COMPLETED"
             else None
         ),

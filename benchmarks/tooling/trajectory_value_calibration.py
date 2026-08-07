@@ -408,8 +408,8 @@ def _verification_outcome(
         "verifier_execution_status": "COMPLETED",
         "acceptance": "ACCEPTED" if accepted else "REJECTED",
         "reason": "TERMINAL_CLEAN_ROOM_REWARD",
-        "input_binding_valid": reward.get("input_binding") == 1.0,
-        "artifact_binding_valid": reward.get("evidence_validity") == 1.0,
+        "input_binding_valid": (None if reward.get("input_binding") is None else reward.get("input_binding") == 1.0),
+        "artifact_binding_valid": (None if reward.get("evidence_validity") is None else reward.get("evidence_validity") == 1.0),
         "false_certification": reward.get("false_certification"),
         "reward": reward,
     }

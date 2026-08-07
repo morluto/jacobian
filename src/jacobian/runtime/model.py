@@ -59,9 +59,18 @@ class JacobianRuntime:
 
         if self._closed:
             return
-        self.services.close()
-        self.portfolio.close()
-        self.core.close()
+        failures: list[Exception] = []
+        for close in (
+            self.services.close,
+            self.portfolio.close,
+            self.core.close,
+        ):
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            raise ExceptionGroup("runtime resources failed to close", failures)
         self._closed = True
 
     def __enter__(self) -> JacobianRuntime:

@@ -21,8 +21,10 @@ from pydantic import ValidationError
 from jacobian.contracts.discovery import ExperimentHandle
 from jacobian.contracts.search import ExperimentState
 from jacobian.experiments import ExperimentError, ExperimentService
+from jacobian.portfolio.result import PortfolioInstallation
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import RuntimeClosedError
+from jacobian.runtime.services import ApplicationServices, CoreServices
 from jacobian.search import SearchError, SearchService
 from jacobian.storage.errors import StorageClosedError
 
@@ -474,21 +476,26 @@ def test_close_failure_keeps_store_closable_on_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Regression test: JacobianRuntime.close() must set its closed marker only
-    # after core.close() succeeds. If service close raises, the runtime
-    # must remain closable so a retry can still release the underlying store.
+    # after core.close() succeeds. If core close raises, the runtime must remain
+    # closable so a retry can still release the underlying store.
     runtime = create_runtime(tmp_path)
     store = runtime.core.store
 
     def failing_close(self: object) -> None:
-        raise RuntimeError("service close failed")
+        raise RuntimeError("core close failed")
 
     monkeypatch.setattr(
         "jacobian.runtime.services.CoreServices.close",
         failing_close,
     )
 
-    with pytest.raises(RuntimeError, match="service close failed"):
+    with pytest.raises(
+        ExceptionGroup, match="runtime resources failed to close"
+    ) as exc:
         runtime.close()
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "core close failed",
+    ]
 
     # The store was not closed by the failed runtime close. Retrying the
     # runtime close (with the real service close restored) must eventually
@@ -498,3 +505,52 @@ def test_close_failure_keeps_store_closable_on_retry(
 
     with pytest.raises(StorageClosedError), store.connection():
         pass
+
+
+def test_close_attempts_every_owner_before_raising_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(tmp_path)
+    store = runtime.core.store
+    close_order: list[str] = []
+    services_close = ApplicationServices.close
+    portfolio_close = PortfolioInstallation.close
+    core_close = CoreServices.close
+
+    def fail_after_services_close(self: ApplicationServices) -> None:
+        close_order.append("services")
+        services_close(self)
+        raise RuntimeError("services close failed")
+
+    def fail_after_portfolio_close(self: PortfolioInstallation) -> None:
+        close_order.append("portfolio")
+        portfolio_close(self)
+        raise RuntimeError("portfolio close failed")
+
+    def fail_after_core_close(self: CoreServices) -> None:
+        close_order.append("core")
+        core_close(self)
+        raise RuntimeError("core close failed")
+
+    monkeypatch.setattr(ApplicationServices, "close", fail_after_services_close)
+    monkeypatch.setattr(PortfolioInstallation, "close", fail_after_portfolio_close)
+    monkeypatch.setattr(CoreServices, "close", fail_after_core_close)
+
+    with pytest.raises(
+        ExceptionGroup, match="runtime resources failed to close"
+    ) as exc:
+        runtime.close()
+
+    assert close_order == ["services", "portfolio", "core"]
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "services close failed",
+        "portfolio close failed",
+        "core close failed",
+    ]
+    with pytest.raises(StorageClosedError), store.connection():
+        pass
+
+    monkeypatch.undo()
+    runtime.close()
+    runtime.close()

@@ -167,6 +167,27 @@ def _verify(runtime: JacobianRuntime, proof_uri: str):
     )
 
 
+def test_invalid_proof_diagnostic_routes_through_public_capabilities(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _fake_carcara(
+        tmp_path,
+        "print('valid')\nraise SystemExit(0)",
+    )
+    runtime = _runtime_with_runtime(tmp_path, monkeypatch, executable)
+
+    result = _verify(runtime, "artifact://sha256/" + "0" * 64)
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_SMT_UNSAT_PROOF"
+    hint = result.diagnostics[0].hint or ""
+    assert "math.find" in hint
+    assert "smt.unsat_proof.find" in hint
+    assert "cvc5" in hint
+    assert "SmtArtifactService" not in hint
+
+
 def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

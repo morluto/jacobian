@@ -180,8 +180,10 @@ class SmtUnsatProofVerificationAdapter:
                         "lineage to one exact pinned-profile SMT query"
                     ),
                     hint=(
-                        "Create the proof with smt.unsat_proof.find or "
-                        "SmtArtifactService.put_proof against the intended query."
+                        "Use math.find for smt.unsat_proof.find to produce a proof "
+                        "artifact for the intended query. If that optional producer "
+                        "is unavailable, install the cvc5 provider; do not invent a "
+                        "proof URI."
                     ),
                 )
             ) from exc

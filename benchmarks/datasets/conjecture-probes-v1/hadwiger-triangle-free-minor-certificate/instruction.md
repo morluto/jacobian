@@ -11,7 +11,7 @@ minor model. Complete graphs, triangles, isolated padding, and label-only
 chromatic claims are rejected.
 
 Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
-and `limitations`, at most 2 MiB. This checks one finite graph only and does not
+and `limitations`. This checks one finite graph only and does not
 prove Hadwiger's conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
@@ -28,4 +28,5 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
 - **Evidence media types:** `text/plain`.
 - **Required artifact filenames:** `evidence/answer.txt`.
+- **Evidence payload:** JSON object with required keys `schema_version` (string "1"), `task_id`, `result`, and `limitations`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

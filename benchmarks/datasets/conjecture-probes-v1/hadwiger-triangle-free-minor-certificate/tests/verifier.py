@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -129,6 +131,17 @@ def mathematics(r: Any) -> bool:
     return r["chromatic_number"] == 4 and r["minor_order"] == 4
 
 
+def _raw_submission() -> dict[str, Any] | None:
+    path = Path("/app/submission.json")
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def reward(v):
     p = Path("/logs/verifier")
     p.mkdir(parents=True, exist_ok=True)
@@ -145,7 +158,8 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    m = bool(isinstance(s, dict) and mathematics(s.get("result")))
+    raw = _raw_submission()
+    m = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     e = bool(
         isinstance(s, dict)
         and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
@@ -161,13 +175,11 @@ def main():
     )
     e = bool(
         isinstance(payload, dict)
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": s.get("result"),
-            "limitations": LIMITATIONS,
-        }
+        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and payload.get("schema_version") == "1"
+        and payload.get("task_id") == TASK_ID
+        and payload.get("result") == s.get("result")
+        and payload.get("limitations") == LIMITATIONS
     )
     sc = bool(
         isinstance(s, dict)
@@ -176,7 +188,7 @@ def main():
     )
     scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
     a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
-    f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
+    f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
         {
@@ -197,4 +209,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

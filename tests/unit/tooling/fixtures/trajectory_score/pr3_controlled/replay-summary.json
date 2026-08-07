@@ -2,7 +2,7 @@
   "fixture_schema_version": "1",
   "fixture_kind": "CONTROLLED_OBSERVATION_ONLY_REPLAY",
   "scorer_id": "jacobian.observation-only-trajectory-scorer.v1",
-  "comparison_digest": "sha256:9aaa3654eae49d527ed60541909a89e0183fcf26c0ea8617682bd5fddd99df22",
+  "comparison_digest": "sha256:8b1ffa26155d28ad4d2aae1ffa9d518b305cc5ff9e0d3c3b8442b3e1701a0404",
   "source_corpus_digest": "sha256:6b17b8fcc411a533c822a5117e33cf73fa6766739d7d36ac86dc4bea883af4fe",
   "trajectory_id": "target",
   "estimator": "HYBRID_TYPED_TEXT",

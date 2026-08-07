@@ -23,6 +23,7 @@ from jacobian.eval.trajectory_state import (
     TrajectoryExtraction,
     TrajectoryHardState,
     TrajectorySoftState,
+    _digest,
 )
 from jacobian.eval.trajectory_value import (
     EstimatorEvaluation,
@@ -93,7 +94,7 @@ def _state(
             plan_summary=plan,
             latest_after_tool_summary=after,
         ),
-        hard_state_digest=_sha(f"hard-{index}-{hard.model_dump_json()}"),
+        hard_state_digest=_digest(hard.model_dump(mode="json")),
         changed_fields=(),
         milestone_kinds=transitions,
         milestone_eligible=bool(transitions),
@@ -230,9 +231,7 @@ def _with_candidate_digest(
             state.model_copy(
                 update={
                     "hard_state": hard,
-                    "hard_state_digest": _sha(
-                        f"variant-{state.index}-{hard.model_dump_json()}"
-                    ),
+                    "hard_state_digest": _digest(hard.model_dump(mode="json")),
                 }
             )
         )

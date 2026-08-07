@@ -206,6 +206,34 @@ class EstimatorEvaluation(ContractModel):
             raise ValueError("estimate estimator identity mismatch")
         return self
 
+    @model_validator(mode="after")
+    def recompute_metrics_from_estimates(self) -> Self:
+        by_trajectory: dict[str, list[tuple[float, float]]] = defaultdict(list)
+        for estimate in self.estimates:
+            error = estimate.estimated_value - estimate.eventual_terminal_reward
+            by_trajectory[estimate.trajectory_id].append((error * error, abs(error)))
+        if by_trajectory:
+            trajectory_brier = [
+                sum(pair[0] for pair in errors) / len(errors)
+                for errors in by_trajectory.values()
+            ]
+            trajectory_mae = [
+                sum(pair[1] for pair in errors) / len(errors)
+                for errors in by_trajectory.values()
+            ]
+            if (
+                len(self.estimates) != self.metrics.observation_count
+                or len(self.clusters) != self.metrics.cluster_count
+                or sum(
+                    e.value_source is ValueSource.TASK_GROUP_PRIOR
+                    for e in self.estimates
+                ) != self.metrics.task_group_fallback_count
+                or _round_metric(sum(trajectory_brier) / len(trajectory_brier)) != self.metrics.brier_score
+                or _round_metric(sum(trajectory_mae) / len(trajectory_mae)) != self.metrics.mean_absolute_error
+            ):
+                raise ValueError("persisted metrics do not match recomputed estimates")
+        return self
+
 
 class OfflineValueComparison(ContractModel):
     model_config = ConfigDict(
@@ -234,6 +262,26 @@ class OfflineValueComparison(ContractModel):
         kinds = tuple(item.estimator for item in self.evaluations)
         if kinds != tuple(EstimatorKind):
             raise ValueError("comparison must contain all estimators in fixed order")
+        return self
+
+    @model_validator(mode="after")
+    def require_identical_observations_across_evaluations(self) -> Self:
+        if len(self.evaluations) < 2:
+            return self
+        base = self.evaluations[0]
+        base_ids = tuple(
+            (e.trajectory_id, e.observation_id, e.eventual_terminal_reward)
+            for e in base.estimates
+        )
+        for evaluation in self.evaluations[1:]:
+            ids = tuple(
+                (e.trajectory_id, e.observation_id, e.eventual_terminal_reward)
+                for e in evaluation.estimates
+            )
+            if ids != base_ids:
+                raise ValueError(
+                    "estimator evaluations must share identical observation identities"
+                )
         return self
 
 

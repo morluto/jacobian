@@ -262,6 +262,9 @@ class TrajectoryExtraction(ContractModel):
             range(len(self.states))
         ):
             raise ValueError("state indices must be contiguous")
+        source_indices = [state.source_event_index for state in self.states]
+        if source_indices != sorted(source_indices):
+            raise ValueError("state source event indices must be monotonically ordered")
         return self
 
 
@@ -467,12 +470,22 @@ class _MutableState:
 
 
 def _record_plan(state: _MutableState, summary: str, response: dict[str, Any]) -> None:
-    if state.protocol_state is not ReasoningProtocolState.NOT_STARTED:
-        state.protocol_state = ReasoningProtocolState.INVALID
-    else:
+    if state.protocol_state is ReasoningProtocolState.NOT_STARTED:
         state.protocol_state = ReasoningProtocolState.READY
         run_id = response.get("run_id")
         state.run_id = run_id if isinstance(run_id, str) else None
+    elif state.protocol_state is ReasoningProtocolState.FINALIZED:
+        # A finalized run is valid server behavior: start a fresh protocol
+        # state for the new PLAN so subsequent BEFORE_TOOL/AFTER_TOOL states
+        # are not all marked INVALID.
+        state.protocol_state = ReasoningProtocolState.READY
+        state.pending_call_id = None
+        state.after = None
+        state.final = None
+        run_id = response.get("run_id")
+        state.run_id = run_id if isinstance(run_id, str) else None
+    else:
+        state.protocol_state = ReasoningProtocolState.INVALID
     state.plan = summary
 
 
@@ -765,7 +778,18 @@ def _record_checker(
             record_uri = None
             if validated is not None:
                 record_uri = validated.assurance.verification_record_uri
-            state.candidate_state = (
+            # Only promote the current candidate if the checker output
+            # references the same candidate digest; otherwise this is a
+            # verification of a different candidate or claim.
+            checker_output = validated.output if validated is not None else {}
+            checker_candidate = checker_output.get("candidate_digest")
+            if (
+                checker_candidate is not None
+                and checker_candidate != state.candidate_digest
+            ):
+                state.candidate_state = CandidateState.CHECKED
+            else:
+                state.candidate_state = (
                 CandidateState.VERIFIED
                 if state.assurance_level == "VERIFIED" and isinstance(record_uri, str)
                 else CandidateState.CHECKED
@@ -864,6 +888,8 @@ def _state_observation(
     # Only successful writes exist in the durable external log. A rejected
     # attempt is diagnostic tool traffic, not a state event.
     if item.get("status") != "completed" or response is None:
+        return None
+    if not isinstance(response, dict) or not response:
         return None
     boundary = _record_reasoning(state, arguments, response)
     return (boundary, ()) if boundary is not None else None

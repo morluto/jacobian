@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     load_submission,
     read_evidence_json,
@@ -98,9 +99,13 @@ def _mathematics(result: Any) -> bool:
     except (ValueError, ZeroDivisionError, TypeError):
         return False
     obstruction = abs(discriminant) % (y * y) != 0
+    submitted_discriminant = result["discriminant"]
+    submitted_y_square = result["y_square"]
     return (
-        result["discriminant"] == discriminant
-        and result["y_square"] == y * y
+        type(submitted_discriminant) is int
+        and submitted_discriminant == discriminant
+        and type(submitted_y_square) is int
+        and submitted_y_square == y * y
         and result["y_square_divides_discriminant"] is False
         and obstruction
         and submitted_double == double
@@ -130,13 +135,13 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=MAX_SUBMISSION_BYTES)
     )
     payload = (
         read_evidence_json(
             submission["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=None,
+            max_bytes=MAX_SUBMISSION_BYTES,
         )
         if evidence
         else None

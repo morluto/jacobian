@@ -22,7 +22,7 @@ LIMITATIONS = [
     "EXACT_CARD_EMBEDDINGS",
     "NO_GLOBAL_RECONSTRUCTION_CONCLUSION",
 ]
-SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def frozen():
@@ -165,7 +165,7 @@ def main():
         and s.get("scope") == SCOPE
         and s.get("limitations") == LIMITATIONS
     )
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in SCOREABLE_ASSURANCES)
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
     f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

@@ -21,30 +21,7 @@
       "application/json"
     ],
     "min_items": 1,
-    "payload_shape": {
-      "type": "object",
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "properties": {
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/reconstruction-deck-certificate"
-        },
-        "result": {
-          "type": "object"
-        },
-        "limitations": {
-          "type": "array"
-        }
-      },
-      "additionalProperties": false
-    }
+    "payload_shape": null
   },
   "limitations": {
     "const": [

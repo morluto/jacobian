@@ -377,12 +377,18 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "lexical fit outside that filter was not assessed"
                 in (unknown_domain["portfolio_fit_basis"])
             )
-            assert unknown_domain["available_recovery_paths"][0] == {
+            assert unknown_domain["recovery_paths_are_unranked"] is True
+            assert {
                 "action": "remove_unknown_domain_filter",
                 "tool": "math.find",
                 "rejected_domain": "arithmetic",
                 "change": "Retry without the unrecognized domain filter.",
-            }
+            } in unknown_domain["available_recovery_paths"]
+            assert {
+                "action": "reformulate_query",
+                "tool": "math.find",
+                "change": "Use different or broader mathematical language for query.",
+            } in unknown_domain["available_recovery_paths"]
 
             browse_unknown_result = await client.call_tool(
                 "math.find",
@@ -393,11 +399,28 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert browse_unknown["domain_filter_status"] == "UNKNOWN"
             assert browse_unknown["portfolio_fit"] == "UNFILTERED"
             assert browse_unknown["routing_status"] == "UNFILTERED"
-            assert browse_unknown["available_recovery_paths"][0] == {
+            assert browse_unknown["recovery_paths_are_unranked"] is True
+            assert {
                 "action": "remove_unknown_domain_filter",
                 "tool": "math.find",
                 "rejected_domain": "arithmetic",
                 "change": "Retry without the unrecognized domain filter.",
+            } in browse_unknown["available_recovery_paths"]
+            assert all(
+                option["action"] != "reformulate_query"
+                for option in browse_unknown["available_recovery_paths"]
+            )
+
+            hidden_domain_result = await client.call_tool(
+                "math.find",
+                {"domain": "artifact"},
+            )
+            assert isinstance(hidden_domain_result.structured_content, dict)
+            hidden_domain = hidden_domain_result.structured_content
+            assert hidden_domain["domain_filter_status"] == "MATCHED"
+            assert hidden_domain["matches"] == []
+            assert "artifact.put" not in {
+                match["capability_id"] for match in hidden_domain["matches"]
             }
 
             catalog_result = await client.read_resource("capability://catalog")

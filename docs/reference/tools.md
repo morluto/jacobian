@@ -114,10 +114,12 @@ treated as capability fit.
 
 `domain_filter_status` distinguishes an omitted filter (`UNFILTERED`), a filter
 matching at least one installed capability namespace or exact tag (`MATCHED`),
-and an unrecognized filter (`UNKNOWN`). For `UNKNOWN`, lexical fit outside the
-filter is not assessed and the first recovery action is to retry without that
-filter. The response does not guess or silently substitute another domain;
-`available_domains` remains a bounded vocabulary aid.
+and an unrecognized filter (`UNKNOWN`). Recognition uses the complete installed
+catalog, including non-discoverable storage primitives, while returned matches
+still omit `discovery_visible=False` entries. For `UNKNOWN`, lexical fit outside
+the filter is not assessed. The response does not guess or silently substitute
+another domain; `available_domains` remains a bounded vocabulary aid drawn from
+discoverable capabilities.
 
 Each match is an operation card containing accepted input and artifact kinds,
 an output-schema summary, provider availability, exact-input scope, assurance
@@ -136,9 +138,11 @@ General natural-language proof prose is not a formal artifact: declaring
 proof” or “proof prose,” returns typed `NO_ROUTE` unless an installed provider
 explicitly accepts that input. The response's `routing_status` and
 `routing_basis` are separate from lexical `portfolio_fit`. Weak, empty, or
-incompatible results expose unranked recovery paths: reformulate the query,
-remove applicable filters, browse without arguments, or inspect
-`capability://catalog`. These paths do not imply that the requested operation is
+incompatible results expose unranked recovery paths (`recovery_paths_are_unranked`
+is always true): reformulate the query when one was supplied, remove an
+unrecognized domain filter or other applicable filters, browse without
+arguments, or inspect `capability://catalog`. Array position is not a preferred
+next step. These paths do not imply that the requested operation is
 mathematically impossible or absent in principle.
 
 Passing one `capability_id` returns the default `SUMMARY` exact projection. It

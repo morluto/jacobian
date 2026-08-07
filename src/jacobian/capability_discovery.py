@@ -32,9 +32,10 @@ class CapabilityDiscoveryMixin:
         self: DiscoveryOwner,
         request: CapabilityDiscoveryRequest,
     ) -> CapabilityDiscoveryResult:
+        catalog_descriptors = self.catalog().capabilities
         descriptors = tuple(
             descriptor
-            for descriptor in self.catalog().capabilities
+            for descriptor in catalog_descriptors
             if descriptor.discovery_visible
         )
         available_domains = tuple(
@@ -44,7 +45,7 @@ class CapabilityDiscoveryMixin:
             normalize_domain(request.domain) if request.domain is not None else None
         )
         domain_filter_status, domain_filter_basis = discovery_domain_filter_status(
-            descriptors,
+            catalog_descriptors,
             normalized_domain,
         )
         resolved_input_kind = request.input_kind or infer_discovery_input_kind(

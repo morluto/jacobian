@@ -141,6 +141,20 @@ def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
     assert browsed.routing_status == "UNFILTERED"
 
 
+def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
+    authorized_complete_runtime: JacobianRuntime,
+) -> None:
+    discovered = authorized_complete_runtime.core.capabilities.discover(
+        CapabilityDiscoveryRequest(domain="artifact")
+    )
+
+    assert discovered.domain == "artifact"
+    assert discovered.domain_filter_status == "MATCHED"
+    assert "matches at least one installed capability" in discovered.domain_filter_basis
+    assert discovered.matches == ()
+    assert "artifact" not in discovered.available_domains
+
+
 def test_storage_primitive_is_catalogued_but_not_discovered(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:

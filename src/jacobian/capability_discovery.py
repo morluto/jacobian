@@ -39,6 +39,10 @@ class CapabilityDiscoveryMixin:
         normalized_domain = (
             normalize_domain(request.domain) if request.domain is not None else None
         )
+        domain_filter_status, domain_filter_basis = discovery_domain_filter_status(
+            descriptors,
+            normalized_domain,
+        )
         resolved_input_kind = request.input_kind or infer_discovery_input_kind(
             request.query
         )
@@ -113,6 +117,12 @@ class CapabilityDiscoveryMixin:
             request.query,
             lexical_candidates,
         )
+        if domain_filter_status == "UNKNOWN":
+            portfolio_fit_basis = (
+                f"The requested domain filter {normalized_domain!r} matched no "
+                "installed capability; lexical fit outside that filter was not "
+                "assessed."
+            )
         routing_status, routing_basis = discovery_routing_status(
             resolved_input_kind,
             request.artifact_type,
@@ -121,6 +131,8 @@ class CapabilityDiscoveryMixin:
         return CapabilityDiscoveryResult(
             query=request.query,
             domain=normalized_domain,
+            domain_filter_status=domain_filter_status,
+            domain_filter_basis=domain_filter_basis,
             mode=request.mode,
             resolved_input_kind=resolved_input_kind,
             artifact_type=request.artifact_type,
@@ -134,6 +146,27 @@ class CapabilityDiscoveryMixin:
             portfolio_fit=portfolio_fit,
             portfolio_fit_basis=portfolio_fit_basis,
         )
+
+
+def discovery_domain_filter_status(
+    descriptors: tuple[CapabilityDescriptor, ...],
+    normalized_domain: str | None,
+) -> tuple[Literal["UNFILTERED", "MATCHED", "UNKNOWN"], str]:
+    """Classify a requested domain independently from lexical query fit."""
+
+    if normalized_domain is None:
+        return "UNFILTERED", "No domain filter was supplied."
+    if any(matches_domain(descriptor, normalized_domain) for descriptor in descriptors):
+        return (
+            "MATCHED",
+            f"The requested domain filter {normalized_domain!r} matches at least "
+            "one installed capability domain or tag.",
+        )
+    return (
+        "UNKNOWN",
+        f"The requested domain filter {normalized_domain!r} matches no installed "
+        "capability domain or tag.",
+    )
 
 
 def normalize_discovery_text(value: str) -> str:
@@ -318,6 +351,7 @@ __all__ = [
     "CapabilityDiscoveryMixin",
     "accepts_discovery_input",
     "capability_domain",
+    "discovery_domain_filter_status",
     "discovery_relevance",
     "infer_discovery_input_kind",
     "matches_domain",

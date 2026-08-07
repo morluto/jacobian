@@ -90,8 +90,47 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
     assert first.matches[0].lexical_fit == "WEAK_LEXICAL_MATCH"
     assert first.portfolio_fit == "ONLY_WEAK_LEXICAL_MATCHES"
     assert first.domain == "fixture_algebra"
+    assert first.domain_filter_status == "MATCHED"
+    assert "matches at least one installed capability" in first.domain_filter_basis
     assert "fixture_algebra" in first.available_domains
     assert "fixture_graph" in first.available_domains
+
+
+def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
+    capability_core_services: DomainTestServices,
+) -> None:
+    schema = {"type": "object"}
+    capability_core_services.installation.register_capability(
+        DiscoveryAdapter(
+            CapabilityDescriptor(
+                capability_id="fixture_probability.event.compute",
+                version="1",
+                title="Compute event probability",
+                description="Compute one exact finite event probability.",
+                provider="tests",
+                provider_runtime=TEST_RUNTIME,
+                modes=(CapabilityMode.EXPLORE,),
+                input_schema=schema,
+                output_schema=schema,
+                tags=("probability", "exact"),
+            )
+        )
+    )
+
+    discovered = capability_core_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="compute exact event probability",
+            domain="arithmetic",
+        )
+    )
+
+    assert discovered.matches == ()
+    assert discovered.domain == "arithmetic"
+    assert discovered.domain_filter_status == "UNKNOWN"
+    assert "matches no installed capability" in discovered.domain_filter_basis
+    assert "lexical fit outside that filter was not assessed" in (
+        discovered.portfolio_fit_basis
+    )
 
 
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(

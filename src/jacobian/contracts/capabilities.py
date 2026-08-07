@@ -130,6 +130,12 @@ class CapabilityDiscoveryResult(ContractModel):
     discovery_version: Literal["1"] = "1"
     query: str | None = None
     domain: str | None = None
+    domain_filter_status: Literal["UNFILTERED", "MATCHED", "UNKNOWN"] = "UNFILTERED"
+    domain_filter_basis: str = Field(
+        default="No domain filter was supplied.",
+        min_length=1,
+        max_length=512,
+    )
     mode: CapabilityMode | None = None
     resolved_input_kind: CapabilityInputKind | None = None
     artifact_type: ArtifactUri | None = None

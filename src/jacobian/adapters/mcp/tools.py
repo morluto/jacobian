@@ -105,6 +105,8 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             ],
             "portfolio_fit": response.get("portfolio_fit"),
             "portfolio_fit_basis": response.get("portfolio_fit_basis"),
+            "domain_filter_status": response.get("domain_filter_status"),
+            "domain_filter_basis": response.get("domain_filter_basis"),
             "routing_status": response.get("routing_status"),
             "routing_basis": response.get("routing_basis"),
             "total_matches": response.get("total_matches"),

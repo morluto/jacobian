@@ -359,6 +359,31 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "arguments": {},
             }
 
+            unknown_domain_result = await client.call_tool(
+                "math.find",
+                {
+                    "query": "compute exact event probability",
+                    "domain": "arithmetic",
+                },
+            )
+            assert isinstance(unknown_domain_result.structured_content, dict)
+            unknown_domain = unknown_domain_result.structured_content
+            assert unknown_domain["domain_filter_status"] == "UNKNOWN"
+            assert (
+                "matches no installed capability"
+                in unknown_domain["domain_filter_basis"]
+            )
+            assert (
+                "lexical fit outside that filter was not assessed"
+                in (unknown_domain["portfolio_fit_basis"])
+            )
+            assert unknown_domain["available_recovery_paths"][0] == {
+                "action": "remove_unknown_domain_filter",
+                "tool": "math.find",
+                "rejected_domain": "arithmetic",
+                "change": "Retry without the unrecognized domain filter.",
+            }
+
             catalog_result = await client.read_resource("capability://catalog")
             catalog = json.loads(catalog_result.contents[0].text)
             capability_ids = {

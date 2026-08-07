@@ -254,6 +254,7 @@ def _discovery_operation_card(
 def _discovery_recovery_paths(
     request: CapabilityDiscoveryRequest,
     *,
+    domain_filter_status: str,
     portfolio_fit: str,
     routing_status: str,
 ) -> list[dict[str, Any]]:
@@ -263,14 +264,24 @@ def _discovery_recovery_paths(
         routing_status != "NO_ROUTE"
     ):
         return []
-    paths: list[dict[str, Any]] = [
+    paths: list[dict[str, Any]] = []
+    if domain_filter_status == "UNKNOWN":
+        paths.append(
+            {
+                "action": "remove_unknown_domain_filter",
+                "tool": "math.find",
+                "rejected_domain": request.domain,
+                "change": "Retry without the unrecognized domain filter.",
+            }
+        )
+    paths.append(
         {
             "action": "reformulate_query",
             "tool": "math.find",
             "change": "Use different or broader mathematical language for query.",
         }
-    ]
-    if any(
+    )
+    if domain_filter_status != "UNKNOWN" and any(
         value is not None
         for value in (
             request.domain,
@@ -434,6 +445,7 @@ def _capability_discovery_response(
     ]
     recovery_paths = _discovery_recovery_paths(
         discovery_request,
+        domain_filter_status=discovered.domain_filter_status,
         portfolio_fit=discovered.portfolio_fit,
         routing_status=discovered.routing_status,
     )

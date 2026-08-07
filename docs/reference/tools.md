@@ -112,6 +112,13 @@ signals, not a proof that an operation is mathematically suitable or absent.
 In particular, top-N ordering among `WEAK_LEXICAL_MATCH` entries must not be
 treated as capability fit.
 
+`domain_filter_status` distinguishes an omitted filter (`UNFILTERED`), a filter
+matching at least one installed capability namespace or exact tag (`MATCHED`),
+and an unrecognized filter (`UNKNOWN`). For `UNKNOWN`, lexical fit outside the
+filter is not assessed and the first recovery action is to retry without that
+filter. The response does not guess or silently substitute another domain;
+`available_domains` remains a bounded vocabulary aid.
+
 Each match is an operation card containing accepted input and artifact kinds,
 an output-schema summary, provider availability, exact-input scope, assurance
 ceiling, factual relationships to installed compatible operations, and one

@@ -333,12 +333,10 @@ class MaterializedOperationAdapter:
             )
             source_artifact_uris: tuple[str, ...] = ()
             if self.operation.input_resolver is not None:
-                validated_request, source_artifact_uris = (
-                    self.operation.input_resolver(
-                        validated_request,
-                        self.resources.artifacts.store,
-                        self._descriptor.accepted_artifact_types,
-                    )
+                validated_request, source_artifact_uris = self.operation.input_resolver(
+                    validated_request,
+                    self.resources.artifacts.store,
+                    self._descriptor.accepted_artifact_types,
                 )
         except (StorageError, ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(

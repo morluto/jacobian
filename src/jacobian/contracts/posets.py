@@ -356,9 +356,7 @@ class PosetRequest(ContractModel):
     @model_validator(mode="after")
     def require_exactly_one_poset_source(self) -> Self:
         if (self.poset is None) == (self.poset_artifact_uri is None):
-            raise ValueError(
-                "provide exactly one of poset or poset_artifact_uri"
-            )
+            raise ValueError("provide exactly one of poset or poset_artifact_uri")
         return self
 
 

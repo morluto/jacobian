@@ -331,9 +331,7 @@ class CapabilityDescriptor(ContractModel):
             self.accepted_input_kinds,
             self.accepted_artifact_types,
         )
-        if len(set(self.produced_artifact_types)) != len(
-            self.produced_artifact_types
-        ):
+        if len(set(self.produced_artifact_types)) != len(self.produced_artifact_types):
             raise ValueError("produced artifact types must be unique")
         if len({example.name for example in self.invocation_examples}) != len(
             self.invocation_examples

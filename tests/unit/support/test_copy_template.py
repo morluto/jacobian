@@ -1,4 +1,5 @@
 """Tests for copy_template isolation."""
+
 import os
 from pathlib import Path
 

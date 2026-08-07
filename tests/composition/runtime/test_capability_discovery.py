@@ -103,9 +103,7 @@ def test_storage_primitive_is_catalogued_but_not_discovered(
     }
     discovered_ids = {
         match.capability_id
-        for match in capabilities.discover(
-            CapabilityDiscoveryRequest(limit=20)
-        ).matches
+        for match in capabilities.discover(CapabilityDiscoveryRequest(limit=20)).matches
     }
 
     assert "artifact.put" in catalog_ids

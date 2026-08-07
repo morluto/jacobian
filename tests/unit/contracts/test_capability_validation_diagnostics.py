@@ -4,6 +4,7 @@ import pytest
 
 from jacobian.capability_errors import PayloadValidationError
 from jacobian.capability_validation import validate_payload
+from jacobian.contracts.capabilities import CapabilityDiagnostic
 
 
 def test_payload_validation_reports_exact_maximum_constraint() -> None:
@@ -43,3 +44,66 @@ def test_payload_validation_bounds_long_pattern_text() -> None:
     assert len(error.value.expected) <= 1024
     assert error.value.expected.startswith("a string matching pattern ")
     assert error.value.expected.endswith("...")
+
+
+@pytest.mark.parametrize(
+    ("validator_name", "schema_property", "payload_value"),
+    [
+        ("pattern", {"type": "string", "pattern": "a" * 2000}, "b"),
+        ("enum", {"type": "string", "enum": ["a" * 2000]}, "b"),
+        ("const", {"type": "string", "const": "a" * 2000}, "b"),
+    ],
+)
+def test_payload_validation_bounds_long_constraint_details(
+    validator_name: str, schema_property: dict[str, object], payload_value: str
+) -> None:
+    """A large pattern/enum/const must not be copied unbounded into details."""
+
+    with pytest.raises(PayloadValidationError) as error:
+        validate_payload(
+            {
+                "type": "object",
+                "properties": {"s": schema_property},
+                "required": ["s"],
+                "additionalProperties": False,
+            },
+            {"s": payload_value},
+        )
+
+    # The validator identity must survive the summary.
+    assert error.value.details["validator"] == validator_name
+    constraint = error.value.details["constraint"]
+    assert isinstance(constraint, str)
+    # The constraint is summarized, not copied verbatim.
+    assert len(constraint) <= 1024
+    assert constraint.endswith("...")
+
+
+def test_payload_validation_bounds_serialized_diagnostic_size() -> None:
+    """The serialized diagnostic stays small even for a large schema pattern."""
+
+    long_pattern = "a" * 2000
+    with pytest.raises(PayloadValidationError) as error:
+        validate_payload(
+            {
+                "type": "object",
+                "properties": {"s": {"type": "string", "pattern": long_pattern}},
+                "required": ["s"],
+                "additionalProperties": False,
+            },
+            {"s": "b"},
+        )
+
+    diagnostic = CapabilityDiagnostic(
+        code="INVALID_REQUEST",
+        stage="capability_input_validation",
+        message="The capability input does not match its advertised schema at s.",
+        path="s",
+        expected=error.value.expected,
+        actual_type=error.value.actual_type,
+        hint="Correct the reported field.",
+        details=error.value.details,
+    )
+    # failed_result serializes this diagnostic in both output.error and
+    # diagnostics, so a bounded dump keeps the whole response bounded.
+    assert len(diagnostic.model_dump_json()) <= 4096

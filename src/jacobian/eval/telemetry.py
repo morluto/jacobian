@@ -213,7 +213,9 @@ def _mcp_resource_link_uris(item: Mapping[str, Any]) -> tuple[str, ...]:
 def _mcp_resource_read_uri(item: Mapping[str, Any]) -> str | None:
     item_type = item.get("type")
     tool = item.get("tool")
-    if item_type != "mcp_resource_read" and tool not in _RESOURCE_READ_TOOL_NAMES:
+    if item_type != "mcp_resource_read" and (
+        not isinstance(tool, str) or tool not in _RESOURCE_READ_TOOL_NAMES
+    ):
         return None
     for key in ("arguments", "params", "input"):
         value = item.get(key)

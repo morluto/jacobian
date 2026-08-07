@@ -172,6 +172,24 @@ def test_agent_telemetry_ignores_non_string_mcp_status(tmp_path: Path) -> None:
     assert telemetry["mcp_resource_read_successes"] == 1
 
 
+def test_agent_telemetry_ignores_non_string_mcp_tool(tmp_path: Path) -> None:
+    event = {
+        "type": "item.completed",
+        "item": {
+            "type": "not_resource_read",
+            "tool": [],
+            "arguments": {"uri": "artifact://sha256/" + ("a" * 64)},
+        },
+    }
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["mcp_calls"] == []
+    assert telemetry["mcp_resource_read_attempts"] == 0
+
+
 def test_agent_telemetry_reports_reasoning_protocol_without_summary_text(
     tmp_path: Path,
 ) -> None:

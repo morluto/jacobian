@@ -95,7 +95,9 @@ def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
     frozen["points"][0]["x"] += 1
     (app / "input.json").write_text(json.dumps(frozen))
     _write(app, submission)
-    assert _run(app, logs)["input_binding"] == 0.0
+    reward = _run(app, logs)
+    assert reward["input_binding"] == 0.0
+    assert reward["mathematics"] == 1.0
 
     app, logs, submission = _case(tmp_path / "evidence")
     (app / "evidence/answer.txt").write_text("{}\n")

@@ -199,7 +199,7 @@ def _reward(value: dict[str, Any]) -> None:
 
 def main() -> None:
     input_bound = workspace_input_is_bound()
-    frozen = _frozen() if input_bound else None
+    frozen = _frozen()
     submission = load_submission(require_input_binding=False)
     contract = strict_submission_contract(
         submission,
@@ -215,13 +215,13 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=2 * 1024 * 1024)
     )
     payload = (
         read_evidence_json(
             submission["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=None,
+            max_bytes=2 * 1024 * 1024,
         )
         if evidence and isinstance(submission, dict) and submission.get("evidence")
         else None

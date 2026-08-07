@@ -152,15 +152,18 @@ def _raw_submission() -> dict[str, Any] | None:
 def main():
     ib = workspace_input_is_bound()
     data = frozen()
-    s = load_submission(require_input_binding=False)
-    c = strict_submission_contract(
-        s,
-        task_id=TASK_ID,
-        conclusion="FINITE_GRAPH_DECK_RECONSTRUCTION",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
     raw = _raw_submission()
+    s = load_submission(require_input_binding=False)
+    c = bool(
+        isinstance(raw, dict)
+        and strict_submission_contract(
+            s,
+            task_id=TASK_ID,
+            conclusion="FINITE_GRAPH_DECK_RECONSTRUCTION",
+            allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
+            verification_record="forbidden",
+        )
+    )
     m = bool(
         isinstance(raw, dict)
         and isinstance(data, dict)

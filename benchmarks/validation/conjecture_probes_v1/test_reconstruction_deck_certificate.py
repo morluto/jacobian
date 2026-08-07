@@ -236,5 +236,6 @@ def test_duplicate_json_object_member_in_submission_rejected(tmp_path):
     assert duplicate != raw, "replacement target not found in canonical submission"
     (app / "submission.json").write_text(duplicate)
     r = run(app, logs)
+    assert r["protocol"] == 0.0
     assert r["aggregate_reward"] == 0.0
     assert r["reward"] == 0.0

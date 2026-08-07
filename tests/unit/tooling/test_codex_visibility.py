@@ -184,10 +184,14 @@ def test_codex_skill_avoids_full_code_mode_tool_catalog_projection() -> None:
 
     assert "tools.mcp__jacobian__math_find" in skill
     assert "tools.mcp__jacobian__math_run" in skill
-    assert "Do not enumerate, filter, or\nprint `ALL_TOOLS`" in skill
+    # Check for key phrases that may span multiple lines in the SKILL.md.
+    # Normalize whitespace to avoid brittleness from line rewrapping.
+    import re
+    skill_flat = re.sub(r"\s+", " ", skill)
+    assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
-    assert "never reconstruct or paraphrase such a\nrecord" in skill
-    assert "required task authorization and bindings are preserved" in skill
+    assert "never reconstruct or paraphrase such a record" in skill_flat
+    assert "required task authorization and bindings are preserved" in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

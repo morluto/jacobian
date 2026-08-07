@@ -1,5 +1,5 @@
 """Tests for copy_template isolation."""
-import os
+
 from pathlib import Path
 
 from tests.support.state import copy_template
@@ -18,15 +18,15 @@ def test_copy_template_copies_blobs_without_sharing_inodes(tmp_path: Path) -> No
     copy_template(template, dest)
 
     assert (dest / "blobs" / "sha256" / "00" / "abc123").read_bytes() == b"blob content"
-    template_inode = os.stat(blob).st_ino
-    dest_inode = os.stat(dest / "blobs" / "sha256" / "00" / "abc123").st_ino
+    template_inode = blob.stat().st_ino
+    dest_inode = (dest / "blobs" / "sha256" / "00" / "abc123").stat().st_ino
     assert template_inode != dest_inode, "blob should be copied, not hardlinked"
 
     (dest / "blobs" / "sha256" / "00" / "abc123").write_bytes(b"changed")
     assert blob.read_bytes() == b"blob content"
 
-    template_meta = os.stat(template / "metadata.sqlite3").st_ino
-    dest_meta = os.stat(dest / "metadata.sqlite3").st_ino
+    template_meta = (template / "metadata.sqlite3").stat().st_ino
+    dest_meta = (dest / "metadata.sqlite3").stat().st_ino
     assert template_meta != dest_meta, "metadata should be copied, not hardlinked"
 
 

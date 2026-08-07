@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.receipts import canonical_json, digest_bytes, receipt_digest
@@ -58,11 +58,11 @@ ShardRunner = Callable[[HostValidation, tuple[str, ...], int], ShardResult]
 
 
 def _canonical(value: object) -> bytes:
-    return canonical_json(value)
+    return cast(bytes, canonical_json(value))
 
 
 def _digest_bytes(value: bytes) -> str:
-    return digest_bytes(value)
+    return cast(str, digest_bytes(value))
 
 
 def _require_digest(value: object, label: str) -> str:
@@ -322,7 +322,7 @@ def _command_digest(
         workers=workers,
         store_durations=store_durations,
     )
-    return receipt_digest({"arguments": arguments})
+    return cast(str, receipt_digest({"arguments": arguments}))
 
 
 def timing_digest(path: Path) -> str:
@@ -635,7 +635,9 @@ def _validate_receipt(
     if not valid_budget:
         raise HarborSuiteError(f"host-validation receipt exceeds worker budget: {path}")
     if payload.get("command_digest") != _command_digest(
-        entry, workers=workers, store_durations=store_durations
+        entry,
+        workers=cast(int, workers),
+        store_durations=cast(bool, store_durations),
     ):
         raise HarborSuiteError(f"host-validation receipt command mismatch: {path}")
     actual_seconds = payload.get("actual_seconds")

@@ -8,6 +8,7 @@ import os
 import tempfile
 import threading
 import uuid
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -290,6 +291,16 @@ class _SessionEntry:
     session: _DeclarationQuerySession
 
 
+def _close_declaration_sessions(
+    sessions: dict[LeanEnvironment, _SessionEntry],
+    session_locks: dict[LeanEnvironment, threading.Lock],
+) -> None:
+    """Release declaration sessions retained past their backend's lifetime."""
+    for environment, entry in list(sessions.items()):
+        with session_locks[environment]:
+            entry.session.close()
+
+
 class LeanSubprocessDeclarationBackend:
     """Reuse one catalog across bounded processes for each validated environment."""
 
@@ -312,6 +323,12 @@ class LeanSubprocessDeclarationBackend:
         self._session_locks = {
             environment: threading.Lock() for environment in LeanEnvironment
         }
+        self._finalizer = weakref.finalize(
+            self,
+            _close_declaration_sessions,
+            self._sessions,
+            self._session_locks,
+        )
 
     def environment_digest(self, environment: LeanEnvironment) -> str:
         try:
@@ -450,6 +467,7 @@ class LeanSubprocessDeclarationBackend:
         for environment, lock in self._session_locks.items():
             with lock:
                 self._discard_session(environment)
+        self._finalizer.detach()
 
     def _start_session(
         self,

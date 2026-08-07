@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import threading
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -150,6 +152,32 @@ def test_subprocess_backend_reuses_one_pinned_session_per_environment(
     assert searched["_environment_digest"] == inspected["_environment_digest"]
     backend.close()
     assert session.closed
+
+
+def test_subprocess_backend_finalizer_closes_sessions_after_garbage_collection(
+    tmp_path: Path,
+) -> None:
+    session = RecordingSession(responses=[{"operation": "search", "declarations": []}])
+    backend, _ = _recording_backend(tmp_path, [session])
+    backend.query(LeanEnvironment.CORE, {"operation": "search"})
+    reference = weakref.ref(backend)
+
+    del backend
+    gc.collect()
+
+    assert reference() is None
+    assert session.closed
+
+
+def test_subprocess_backend_close_detaches_finalizer(tmp_path: Path) -> None:
+    session = RecordingSession(responses=[{"operation": "search", "declarations": []}])
+    backend, _ = _recording_backend(tmp_path, [session])
+    backend.query(LeanEnvironment.CORE, {"operation": "search"})
+
+    backend.close()
+
+    assert session.closed
+    assert not backend._finalizer.alive
 
 
 def test_subprocess_backend_serializes_concurrent_session_requests(

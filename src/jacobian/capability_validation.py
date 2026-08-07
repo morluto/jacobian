@@ -138,7 +138,15 @@ def schema_violation_details(error: JsonSchemaValidationError) -> dict[str, obje
         "const",
         "type",
     }:
-        details["constraint"] = error.validator_value
+        constraint_value = error.validator_value
+        if isinstance(constraint_value, str):
+            if len(constraint_value) > 1024:
+                constraint_value = constraint_value[:1021] + "..."
+        else:
+            rendered = json.dumps(constraint_value, ensure_ascii=False)
+            if len(rendered) > 1024:
+                constraint_value = rendered[:1021] + "..."
+        details["constraint"] = constraint_value
     return details
 
 

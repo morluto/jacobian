@@ -201,10 +201,24 @@ def test_allowed_license_without_evidence_withholds_text(tmp_path: Path) -> None
     assert "lacks a URL-and-digest" in result.output["license_reason"]
 
 
-def test_changed_content_fails_expected_digest_binding(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("field", "fake_digest", "expected_code"),
+    [
+        ("expected_content_digest", "0" * 64, "EXTERNAL_CONJECTURE_CONTENT_DIGEST_MISMATCH"),
+        ("expected_record_digest", "f" * 64, "EXTERNAL_CONJECTURE_RECORD_DIGEST_MISMATCH"),
+        ("license_evidence_digest", "0" * 64, "EXTERNAL_CONJECTURE_LICENSE_DIGEST_MISMATCH"),
+    ],
+    ids=["content_digest_mismatch", "record_digest_mismatch", "license_digest_mismatch"],
+)
+def test_digest_binding_mismatch_is_rejected(
+    tmp_path: Path,
+    field: str,
+    fake_digest: str,
+    expected_code: str,
+) -> None:
     adapter = _adapter(tmp_path)
     payload = _request()
-    payload["expected_content_digest"] = "sha256:" + "0" * 64
+    payload[field] = "sha256:" + fake_digest
 
     with pytest.raises(CapabilityInvocationError) as exc_info:
         adapter.invoke(
@@ -214,45 +228,7 @@ def test_changed_content_fails_expected_digest_binding(tmp_path: Path) -> None:
             )
         )
 
-    assert (
-        exc_info.value.diagnostic.code == "EXTERNAL_CONJECTURE_CONTENT_DIGEST_MISMATCH"
-    )
-
-
-def test_tampered_record_fails_expected_digest_binding(tmp_path: Path) -> None:
-    adapter = _adapter(tmp_path)
-    payload = _request()
-    payload["expected_record_digest"] = "sha256:" + "f" * 64
-
-    with pytest.raises(CapabilityInvocationError) as exc_info:
-        adapter.invoke(
-            CapabilityRequest(
-                capability_id="dataset.conjecture.ingest",
-                input=payload,
-            )
-        )
-
-    assert (
-        exc_info.value.diagnostic.code == "EXTERNAL_CONJECTURE_RECORD_DIGEST_MISMATCH"
-    )
-
-
-def test_tampered_license_evidence_digest_is_rejected(tmp_path: Path) -> None:
-    adapter = _adapter(tmp_path)
-    payload = _request()
-    payload["license_evidence_digest"] = "sha256:" + "0" * 64
-
-    with pytest.raises(CapabilityInvocationError) as exc_info:
-        adapter.invoke(
-            CapabilityRequest(
-                capability_id="dataset.conjecture.ingest",
-                input=payload,
-            )
-        )
-
-    assert (
-        exc_info.value.diagnostic.code == "EXTERNAL_CONJECTURE_LICENSE_DIGEST_MISMATCH"
-    )
+    assert exc_info.value.diagnostic.code == expected_code
 
 
 def test_metadata_only_source_without_statement_is_retained(tmp_path: Path) -> None:

@@ -10,6 +10,9 @@ from tools.test_topology import lane_environment, load_topology, main, pytest_co
 
 ROOT = Path(__file__).resolve().parents[4]
 
+_FAKE_HOME = "/tmp/jacobian-fake-home"
+_FAKE_ELAN = "/tmp/jacobian-fake-elan"
+
 
 def test_domain_lane_dry_run_is_explicit_and_topology_owned() -> None:
     result = subprocess.run(
@@ -268,22 +271,22 @@ def test_lane_environment_forwards_only_allowlisted_lean_variables(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     topology = load_topology(ROOT / "tests" / "topology.toml")
-    monkeypatch.setenv("HOME", "/tmp/jacobian-fake-home")
-    monkeypatch.setenv("ELAN_HOME", "/tmp/jacobian-fake-elan")
+    monkeypatch.setenv("HOME", _FAKE_HOME)
+    monkeypatch.setenv("ELAN_HOME", _FAKE_ELAN)
     monkeypatch.setenv("JACOBIAN_TOPOLOGY_LEAK", "secret")
 
     lean = lane_environment(topology.lane("lean"))
     assert lean["JACOBIAN_TEST_LANE"] == "lean"
     assert lean["PATH"] == os.environ["PATH"]
-    assert lean["HOME"] == "/tmp/jacobian-fake-home"
-    assert lean["ELAN_HOME"] == "/tmp/jacobian-fake-elan"
+    assert lean["HOME"] == _FAKE_HOME
+    assert lean["ELAN_HOME"] == _FAKE_ELAN
     assert "JACOBIAN_TOPOLOGY_LEAK" not in lean
 
     provider = lane_environment(topology.lane("provider"))
     assert provider["JACOBIAN_TEST_LANE"] == "provider"
     assert provider["PATH"] == os.environ["PATH"]
-    assert provider["HOME"] == "/tmp/jacobian-fake-home"
-    assert provider["ELAN_HOME"] == "/tmp/jacobian-fake-elan"
+    assert provider["HOME"] == _FAKE_HOME
+    assert provider["ELAN_HOME"] == _FAKE_ELAN
     assert "JACOBIAN_TOPOLOGY_LEAK" not in provider
 
     unit = lane_environment(topology.lane("unit"))
@@ -299,7 +302,7 @@ def test_lane_environment_never_forwards_unauthorized_host_variables(
 ) -> None:
     topology = load_topology(ROOT / "tests" / "topology.toml")
     monkeypatch.setenv("JACOBIAN_TOPOLOGY_LEAK", "secret")
-    monkeypatch.setenv("HOME", "/tmp/jacobian-fake-home")
+    monkeypatch.setenv("HOME", _FAKE_HOME)
 
     for lane_name in ("lean", "provider", "unit", "process", "storage"):
         environment = lane_environment(topology.lane(lane_name))

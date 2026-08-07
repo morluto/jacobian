@@ -85,38 +85,42 @@ def test_finite_partition_checker_rejects_gap_and_overlap() -> None:
     assert "overlap" in overlap["detail"]
 
 
-def test_finite_partition_checker_rejects_unbound_relationship_metadata() -> None:
-    request = _request(
-        cases=[
-            {"case_id": "left", "members": ["a", "b"]},
-            {"case_id": "right", "members": ["c", "d"]},
-        ]
-    )
+_PARTITION_CASES = [
+    {"case_id": "left", "members": ["a", "b"]},
+    {"case_id": "right", "members": ["c", "d"]},
+]
+
+
+def _unbound_relationship_metadata(request: dict) -> None:
     request["certificate"]["payload"]["payload"]["obligation_uri"] = (
         "artifact://sha256/" + "9" * 64
     )
 
-    decision = check_partition(request)
 
-    assert decision["accepted"] is False
-    assert "relationship metadata" in decision["detail"]
-
-
-def test_finite_partition_checker_rejects_binding_substitution() -> None:
-    request = _request(
-        cases=[
-            {"case_id": "left", "members": ["a", "b"]},
-            {"case_id": "right", "members": ["c", "d"]},
-        ]
-    )
+def _rebound_bindings(request: dict) -> None:
     rebound = dict(request["certificate"]["payload"]["bindings"])
     rebound["scope_digest"] = "sha256:" + "9" * 64
     request["certificate"]["payload"]["bindings"] = rebound
 
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_detail"),
+    [
+        (_unbound_relationship_metadata, "relationship metadata"),
+        (_rebound_bindings, "bindings"),
+    ],
+    ids=["unbound_relationship_metadata", "binding_substitution"],
+)
+def test_finite_partition_checker_rejects_corrupted_certificate(
+    mutation: Any, expected_detail: str
+) -> None:
+    request = _request(cases=_PARTITION_CASES)
+    mutation(request)
+
     decision = check_partition(request)
 
     assert decision["accepted"] is False
-    assert "bindings" in decision["detail"]
+    assert expected_detail in decision["detail"]
 
 
 def test_finite_partition_checker_rejects_unknown_format() -> None:

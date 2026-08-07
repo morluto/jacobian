@@ -31,20 +31,18 @@ def _graph(
     return {"vertices": vertices, "edges": edges}
 
 
-def test_graph_invariant_family_boundaries_and_witnesses(domain_services) -> None:
-    triangle_tail = _graph(
-        ["a", "b", "c", "d"],
-        [["a", "b"], ["b", "c"], ["a", "c"], ["c", "d"]],
-    )
-    cases = (
-        (
-            "graph.invariant.girth.compute",
-            triangle_tail,
-            {"girth": 3, "has_cycle": True},
-        ),
+_TRIANGLE_TAIL = {
+    "vertices": ["a", "b", "c", "d"],
+    "edges": [["a", "b"], ["b", "c"], ["a", "c"], ["c", "d"]],
+}
+
+
+@pytest.mark.parametrize(
+    ("capability_id", "expected"),
+    [
+        ("graph.invariant.girth.compute", {"girth": 3, "has_cycle": True}),
         (
             "graph.invariant.diameter.compute",
-            triangle_tail,
             {
                 "status": "COMPUTED",
                 "diameter": 2,
@@ -53,34 +51,38 @@ def test_graph_invariant_family_boundaries_and_witnesses(domain_services) -> Non
                 "detail": None,
             },
         ),
-        (
-            "graph.invariant.edge_connectivity.compute",
-            triangle_tail,
-            {"edge_connectivity": 1},
-        ),
-        (
-            "graph.invariant.vertex_connectivity.compute",
-            triangle_tail,
-            {"vertex_connectivity": 1},
-        ),
-        (
-            "graph.invariant.is_eulerian.compute",
-            triangle_tail,
-            {"is_eulerian": False},
-        ),
-        (
-            "graph.invariant.spanning_tree_count.compute",
-            triangle_tail,
-            {"spanning_tree_count": 3, "connected": True},
-        ),
+        ("graph.invariant.edge_connectivity.compute", {"edge_connectivity": 1}),
+        ("graph.invariant.vertex_connectivity.compute", {"vertex_connectivity": 1}),
+        ("graph.invariant.is_eulerian.compute", {"is_eulerian": False}),
+        ("graph.invariant.spanning_tree_count.compute", {"spanning_tree_count": 3, "connected": True}),
+    ],
+    ids=[
+        "girth",
+        "diameter",
+        "edge_connectivity",
+        "vertex_connectivity",
+        "is_eulerian",
+        "spanning_tree_count",
+    ],
+)
+def test_graph_invariant_family_boundaries_and_witnesses(
+    domain_services,
+    capability_id: str,
+    expected: dict[str, object],
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id=capability_id, input={"graph": _TRIANGLE_TAIL})
     )
-    for capability_id, graph, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input={"graph": graph})
-        )
-        assert result.execution.status is ExecutionStatus.COMPLETED
-        assert result.output["result"] == expected
-        assert result.artifact_uris == ()
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == expected
+    assert result.artifact_uris == ()
+
+
+def test_maximum_matching_and_star_conventions(domain_services) -> None:
+    triangle_tail = _graph(
+        ["a", "b", "c", "d"],
+        [["a", "b"], ["b", "c"], ["a", "c"], ["c", "d"]],
+    )
 
     matching = domain_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -193,36 +195,44 @@ def test_radius_uses_explicit_not_applicable_for_disconnected_graph(
     }
 
 
-def test_np_hard_invariants_are_budgeted_and_carry_obligations(
-    domain_services,
-) -> None:
-    cycle = _graph(
-        ["a", "b", "c", "d", "e"],
-        [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"], ["a", "e"]],
-    )
-    for capability_id, optimum in (
+_CYCLE_5 = {
+    "vertices": ["a", "b", "c", "d", "e"],
+    "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"], ["a", "e"]],
+}
+
+
+@pytest.mark.parametrize(
+    ("capability_id", "optimum"),
+    [
         ("graph.invariant.clique_number.compute", 2),
         ("graph.invariant.independence_number.compute", 2),
-    ):
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=capability_id,
-                input={
-                    "graph": cycle,
-                    "resource_budget": {
-                        "wall_seconds": 5,
-                        "max_solver_calls": 33,
-                        "max_order": 32,
-                    },
+    ],
+    ids=["clique_number", "independence_number"],
+)
+def test_np_hard_invariants_are_budgeted_and_carry_obligations(
+    domain_services,
+    capability_id: str,
+    optimum: int,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=capability_id,
+            input={
+                "graph": _CYCLE_5,
+                "resource_budget": {
+                    "wall_seconds": 5,
+                    "max_solver_calls": 33,
+                    "max_order": 32,
                 },
-            )
+            },
         )
-        assert result.execution.status is ExecutionStatus.COMPLETED
-        assert result.output["status"] == "EXACT"
-        assert result.output["optimum_value"] == optimum
-        assert len(result.output["witness_vertices"]) == optimum
-        assert len(result.artifact_uris) == 3
-        obligation = domain_services.core.store.get(
-            result.obligations[0].obligation_uri
-        )
-        assert obligation.payload["claimed_value"] == optimum
+    )
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["status"] == "EXACT"
+    assert result.output["optimum_value"] == optimum
+    assert len(result.output["witness_vertices"]) == optimum
+    assert len(result.artifact_uris) == 3
+    obligation = domain_services.core.store.get(
+        result.obligations[0].obligation_uri
+    )
+    assert obligation.payload["claimed_value"] == optimum

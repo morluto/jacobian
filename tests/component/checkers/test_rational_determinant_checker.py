@@ -115,20 +115,27 @@ def test_checker_accepts_exact_rational_determinant() -> None:
     assert decision["method"] == "DIRECT_WITNESS"
 
 
-def test_checker_rejects_mutated_determinant_with_refreshed_digest() -> None:
-    request = _request()
-    request["candidate"]["payload"]["determinant"] = _rational(1)
-    _refresh_payload_digest(request["candidate"])
-
-    decision = check_rational_determinant(request)
-
-    assert decision["accepted"] is False
-    assert decision["conclusion"] == "UNKNOWN"
+def _mutated_determinant(request: dict[str, Any]) -> None:
+    request["candidate"]["payload"]["determinant"].update(num="1")
 
 
-def test_checker_rejects_rebound_source_identity() -> None:
-    request = _request()
+def _rebound_source_identity(request: dict[str, Any]) -> None:
     request["candidate"]["payload"]["matrix_uri"] = _uri("9")
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        _mutated_determinant,
+        _rebound_source_identity,
+    ],
+    ids=["mutated_determinant", "rebound_source_identity"],
+)
+def test_checker_rejects_candidate_rebinding_with_refreshed_digest(
+    mutation: Any,
+) -> None:
+    request = _request()
+    mutation(request)
     _refresh_payload_digest(request["candidate"])
 
     decision = check_rational_determinant(request)

@@ -282,9 +282,29 @@ def main() -> None:
             "scope": float(scope_ok),
             "assurance": float(assurance_ok),
             "aggregate_reward": aggregate,
+            "reward": aggregate,
+            "false_certification": bool(
+                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
+            ),
         }
     )
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException as exc:
+        reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

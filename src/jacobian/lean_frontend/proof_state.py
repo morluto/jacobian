@@ -200,6 +200,20 @@ class LeanProofStateAdapter:
                         pickle_path=pickle_path,
                         request=validated,
                     )
+                except _exploration_support.LeanHelperError as exc:
+                    raise CapabilityInvocationError(
+                        CapabilityDiagnostic(
+                            code=exc.code,
+                            stage="proof_state_extraction",
+                            message=(
+                                f"Lean helper reported an error: {exc.code}."
+                            ),
+                            hint=(
+                                "Retry with smaller goal/context bounds or verify "
+                                "that the pinned proof-state helper is installed."
+                            ),
+                        )
+                    ) from exc
                 except RuntimeError as exc:
                     raise CapabilityInvocationError(
                         CapabilityDiagnostic(

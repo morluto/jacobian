@@ -389,7 +389,7 @@ def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
             which_result = execute_process(
                 ProcessRequest(
                     executable=command[0],
-                    arguments=(*command[1:], "which", "lean"),
+                    arguments=(*command[1:-1], "which", "lean"),
                     environment=environment,
                     cwd=str(Path.cwd()),
                     timeout_seconds=5.0,

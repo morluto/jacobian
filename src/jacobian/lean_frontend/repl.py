@@ -25,7 +25,7 @@ _RESOURCE_POLL_SECONDS = 0.1
 
 def _repl_process_environment() -> dict[str, str]:
     return worker_environment(
-        extra_variables=("ELAN_HOME",),
+        extra_variables=("HOME", "PATH", "ELAN_HOME"),
     )
 
 

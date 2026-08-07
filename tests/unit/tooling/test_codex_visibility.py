@@ -187,6 +187,7 @@ def test_codex_skill_avoids_full_code_mode_tool_catalog_projection() -> None:
     # Check for key phrases that may span multiple lines in the SKILL.md.
     # Normalize whitespace to avoid brittleness from line rewrapping.
     import re
+
     skill_flat = re.sub(r"\s+", " ", skill)
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill

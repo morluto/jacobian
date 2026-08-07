@@ -25,7 +25,10 @@ SERVER_INSTRUCTIONS = (
     "mathematical conclusion, and assurance separate. No descriptor match, timeout, "
     "bounded or exhausted search, or failure to find a witness is a mathematical "
     "conclusion. Only assurance level VERIFIED with a local verification record is "
-    "verified. Read jacobian://instructions for the complete operating guide."
+    "verified. A verification record for an input, premise, factorization, or related "
+    "artifact does not verify a model-derived conclusion; the record must be bound to "
+    "the exact final claim. Read jacobian://instructions for the complete operating "
+    "guide."
 )
 
 MATH_FIND_DESCRIPTION = """\
@@ -79,6 +82,10 @@ COMPLETED does not by itself establish a mathematical conclusion. One invocation
 covers only its exact supplied input or claim, and repeated finite or bounded calls do
 not widen that scope. Follow returned `artifact://` references when durable evidence
 or a size-separated result is provided.
+
+A verification record is claim-bound. Verification of an input, premise,
+factorization, or related artifact does not promote a conclusion derived by the model
+to `VERIFIED`; the checker record must bind the exact final claim.
 
 Examples:
 - `{"capability_id":"integer.compute.gcd","mode":"EXPLORE","payload":{"left":"84","right":"30"}}`
@@ -139,6 +146,10 @@ evaluation, solver output, and retrieved memory are not proof.
 accepts evidence bound to the exact claim, semantics, candidate, scope, certificate
 format, and checker identity. Only assurance level `VERIFIED` with a local
 verification record is verified.
+
+Verification does not transfer across model-authored deductions. A record accepting
+premises, inputs, factorizations, or related artifacts does not verify a derived
+conclusion unless a checker record is bound to that exact conclusion.
 
 Execution status is not a mathematical conclusion. `COMPLETED` bounded execution may
 still have partial or unknown completeness and open obligations. A timeout,

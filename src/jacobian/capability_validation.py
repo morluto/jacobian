@@ -60,6 +60,7 @@ def validate_payload(
             path=location,
             actual_type=json_value_type(first.instance),
             expected=schema_expectation(first),
+            details=schema_violation_details(first),
         )
     return normalized
 
@@ -95,13 +96,52 @@ def schema_expectation(error: JsonSchemaValidationError) -> str:
         if isinstance(expected, list):
             return "JSON type " + " or ".join(str(item) for item in expected)
         return f"JSON type {expected}"
+    constraint_labels = {
+        "minimum": "a number greater than or equal to",
+        "exclusiveMinimum": "a number greater than",
+        "maximum": "a number less than or equal to",
+        "exclusiveMaximum": "a number less than",
+        "minLength": "a string with minimum length",
+        "maxLength": "a string with maximum length",
+        "minItems": "an array with minimum length",
+        "maxItems": "an array with maximum length",
+        "multipleOf": "a number that is a multiple of",
+        "pattern": "a string matching pattern",
+    }
+    label = constraint_labels.get(str(error.validator))
+    if label is not None:
+        return f"{label} {json.dumps(error.validator_value, ensure_ascii=False)}"
     return "input matching the capability descriptor JSON Schema"
+
+
+def schema_violation_details(error: JsonSchemaValidationError) -> dict[str, object]:
+    """Return the exact public schema constraint that rejected one value."""
+
+    details: dict[str, object] = {"validator": str(error.validator)}
+    if error.validator in {
+        "minimum",
+        "exclusiveMinimum",
+        "maximum",
+        "exclusiveMaximum",
+        "minLength",
+        "maxLength",
+        "minItems",
+        "maxItems",
+        "multipleOf",
+        "pattern",
+        "enum",
+        "const",
+        "type",
+    }:
+        details["constraint"] = error.validator_value
+    return details
 
 
 __all__ = [
     "compiled_validator",
     "json_value_type",
     "schema_expectation",
+    "schema_violation_details",
     "validate_payload",
     "validator",
 ]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 
 
@@ -19,11 +21,13 @@ class PayloadValidationError(CapabilityError):
         path: str,
         actual_type: str,
         expected: str,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.path = path
         self.actual_type = actual_type
         self.expected = expected
+        self.details = details or {}
 
 
 class CapabilityDiscoveryCursorError(ValueError):

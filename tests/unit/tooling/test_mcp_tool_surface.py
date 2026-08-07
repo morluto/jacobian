@@ -54,3 +54,9 @@ def test_server_instructions_front_load_implicit_activation_signal() -> None:
 def test_server_instructions_allow_known_contracts_to_run_directly() -> None:
     assert "exact installed capability ID" in SERVER_INSTRUCTIONS
     assert "math.run may execute a known contract directly" in SERVER_INSTRUCTIONS
+
+
+def test_guidance_rejects_verification_transfer_to_derived_claims() -> None:
+    combined = "\n".join((SERVER_INSTRUCTIONS, MATH_RUN_DESCRIPTION))
+    assert "does not verify a model-derived conclusion" in combined
+    assert "record must be bound to the exact final claim" in combined

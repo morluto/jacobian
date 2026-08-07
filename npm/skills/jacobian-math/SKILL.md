@@ -55,3 +55,7 @@ record from the returned fields. Claim `VERIFIED` only when the result has
 assurance level `VERIFIED`, the exact record bytes are available, and any
 required task authorization and bindings are preserved. Otherwise use a lower
 assurance permitted by the task.
+
+Verification is bound to the exact checked claim. Do not transfer `VERIFIED` from an
+input, premise, factorization, or related artifact to a conclusion derived by the
+model; the final conclusion needs its own checker-bound verification record.

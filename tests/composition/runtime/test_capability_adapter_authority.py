@@ -138,6 +138,8 @@ def test_invalid_capability_input_does_not_echo_payload(
     assert diagnostic.details == {
         "required_fields": ["value"],
         "missing_fields": [],
+        "validator": "type",
+        "constraint": "integer",
     }
     assert "fixture-secret-value" not in repr(diagnostic)
 

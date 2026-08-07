@@ -146,14 +146,20 @@ class CapabilityDispatchMixin:
                         else json_value_type(request.input)
                     ),
                     hint=(
-                        "Correct the reported field. The exact required and missing "
-                        "top-level fields are included in diagnostic details."
+                        "Correct the reported field. The exact violated constraint "
+                        "and any required or missing top-level fields are included "
+                        "in diagnostic details."
                     ),
                     details={
                         "required_fields": descriptor.input_schema.get("required", []),
                         "missing_fields": sorted(
                             set(descriptor.input_schema.get("required", []))
                             - set(request.input)
+                        ),
+                        **(
+                            exc.details
+                            if isinstance(exc, PayloadValidationError)
+                            else {}
                         ),
                     },
                 ),

@@ -55,6 +55,47 @@ from jacobian.contracts.number_theory import (
     ValuationRequest,
 )
 
+__all__ = [
+    "compute_aliquot_sum",
+    "compute_divisor_count",
+    "compute_divisor_sum",
+    "compute_euler_totient",
+    "compute_extended_gcd",
+    "compute_factorial_valuation",
+    "compute_floor_square_root",
+    "compute_gcd",
+    "compute_jacobi_symbol",
+    "compute_lcm",
+    "compute_legendre_symbol",
+    "compute_mobius",
+    "compute_modular_inverse",
+    "compute_modular_polynomial_residue_image",
+    "compute_multiplicative_order",
+    "compute_next_prime",
+    "compute_nth_prime",
+    "compute_previous_prime",
+    "compute_prime_count",
+    "compute_primorial",
+    "compute_radical",
+    "compute_valuation",
+    "decide_abundant",
+    "decide_coprime",
+    "decide_deficient",
+    "decide_divides",
+    "decide_even",
+    "decide_odd",
+    "decide_perfect",
+    "decide_powerful",
+    "decide_prime",
+    "decide_square",
+    "decide_squarefree",
+    "enumerate_divisors",
+    "enumerate_proper_divisors",
+    "enumerate_quadratic_residues",
+    "factorize_primes",
+    "solve_chinese_remainder",
+]
+
 
 def compute_gcd(request: IntegerPairRequest) -> IntegerValueResult:
     """Compute gcd(a, b) using ``math.gcd``."""

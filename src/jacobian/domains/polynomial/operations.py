@@ -32,6 +32,15 @@ from jacobian.contracts.polynomials import (
 
 _MAX_OUTPUT_TERMS = 1024
 
+__all__ = [
+    "PolynomialOutputBudgetError",
+    "polynomial_discriminant",
+    "polynomial_gcd",
+    "polynomial_groebner_basis",
+    "polynomial_resultant",
+    "polynomial_square_free_decomposition",
+]
+
 
 class PolynomialOutputBudgetError(RuntimeError):
     """A valid computation produced more output than its public contract permits."""

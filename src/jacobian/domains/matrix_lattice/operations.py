@@ -29,6 +29,18 @@ from jacobian.contracts.matrix_operations import (
 )
 from jacobian.math import matrices as native_matrices
 
+__all__ = [
+    "compute_adjugate",
+    "compute_characteristic_polynomial",
+    "compute_inverse",
+    "compute_nullspace",
+    "compute_product",
+    "compute_rational_linear_solve",
+    "compute_rref",
+    "compute_smith_normal_form",
+    "compute_trace",
+]
+
 
 def _rational(value: Any) -> OutputRational:
     fraction = Fraction(value)

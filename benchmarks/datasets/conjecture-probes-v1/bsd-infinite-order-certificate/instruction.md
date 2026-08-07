@@ -31,6 +31,5 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Completeness:** `COMPLETE`.
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
 - **Evidence media types:** `application/json`.
-- **Evidence payload:** JSON object with exactly `schema_version` (string `"1"`), `task_id`, `result`, and `limitations`.
 - **Required artifact filenames:** `evidence/answer.txt`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

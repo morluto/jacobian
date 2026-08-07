@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
+    is_regular_bounded_file,
     evidence_list_is_bound,
     load_submission,
     read_evidence_json,
@@ -26,6 +28,8 @@ SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 def _raw_submission() -> dict[str, Any] | None:
     """Parse the raw submission JSON without strict schema validation."""
+    if not is_regular_bounded_file(Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES):
+        return None
     try:
         value = json.loads(Path("/app/submission.json").read_text())
     except (OSError, ValueError, RecursionError, MemoryError):

@@ -12,6 +12,8 @@ import re
 from fractions import Fraction
 from typing import Any
 
+from jacobian_checkers.bound_artifacts import valid_unscoped_unencoded_bindings
+
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
@@ -23,13 +25,6 @@ _ARTIFACT_KEYS = {
     "semantics_uri",
     "parents",
     "payload",
-}
-_BINDING_KEYS = {
-    "claim_digest",
-    "semantics_digest",
-    "candidate_digest",
-    "scope_digest",
-    "encoding_digest",
 }
 _OPERATIONS = {
     "geometry.points.compute.squared_distance",
@@ -93,19 +88,6 @@ def _valid_artifact(value: object) -> bool:
         and all(
             isinstance(parent, str) and _ARTIFACT_URI.fullmatch(parent) is not None
             for parent in parents
-        )
-    )
-
-
-def _valid_bindings(value: object) -> bool:
-    return (
-        isinstance(value, dict)
-        and set(value) == _BINDING_KEYS
-        and value["scope_digest"] is None
-        and value["encoding_digest"] is None
-        and all(
-            isinstance(value[key], str) and _DIGEST.fullmatch(value[key]) is not None
-            for key in ("claim_digest", "semantics_digest", "candidate_digest")
         )
     )
 
@@ -580,7 +562,7 @@ def check_exact_geometry(request: dict[str, Any]) -> dict[str, Any]:
         ):
             return _reject("checker artifact metadata is malformed")
         bindings = request["expected_bindings"]
-        if not _valid_bindings(bindings):
+        if not valid_unscoped_unencoded_bindings(bindings):
             return _reject("expected evidence bindings are malformed")
         if (
             bindings["claim_digest"] != claim["object_digest"]

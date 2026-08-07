@@ -14,6 +14,8 @@ from fractions import Fraction
 from math import comb
 from typing import Any
 
+from jacobian_checkers.bound_artifacts import valid_unscoped_unencoded_bindings
+
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
@@ -26,13 +28,6 @@ _ARTIFACT_KEYS = {
     "semantics_uri",
     "parents",
     "payload",
-}
-_BINDING_KEYS = {
-    "claim_digest",
-    "semantics_digest",
-    "candidate_digest",
-    "scope_digest",
-    "encoding_digest",
 }
 _EXPRESSION_BINDING_KEYS = {
     "binding_version",
@@ -145,17 +140,6 @@ def _valid_artifact(value: object) -> bool:
             isinstance(parent, str) and _ARTIFACT_URI.fullmatch(parent) is not None
             for parent in parents
         )
-    )
-
-
-def _valid_bindings(value: object) -> bool:
-    if not isinstance(value, dict) or set(value) != _BINDING_KEYS:
-        return False
-    if value["scope_digest"] is not None or value["encoding_digest"] is not None:
-        return False
-    return all(
-        isinstance(value[key], str) and _DIGEST.fullmatch(value[key]) is not None
-        for key in ("claim_digest", "semantics_digest", "candidate_digest")
     )
 
 
@@ -546,7 +530,7 @@ def check_polynomial_expression_normalization(
         if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
             return _reject("checker artifact metadata is malformed")
         expected_bindings = request["expected_bindings"]
-        if not _valid_bindings(expected_bindings):
+        if not valid_unscoped_unencoded_bindings(expected_bindings):
             return _reject("expected evidence bindings are malformed")
         if (
             claim["semantics_uri"] != candidate["semantics_uri"]

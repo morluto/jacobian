@@ -27,6 +27,19 @@ _BINDING_KEYS = {
 }
 
 
+def valid_unscoped_unencoded_bindings(value: object) -> bool:
+    """Validate exact five-key bindings without scope or encoding digests."""
+
+    if not isinstance(value, dict) or set(value) != _BINDING_KEYS:
+        return False
+    if value["scope_digest"] is not None or value["encoding_digest"] is not None:
+        return False
+    return all(
+        isinstance(value[key], str) and _DIGEST.fullmatch(value[key]) is not None
+        for key in ("claim_digest", "semantics_digest", "candidate_digest")
+    )
+
+
 def _digest(value: object) -> str:
     encoded = json.dumps(
         value,
@@ -100,10 +113,7 @@ def bound_request(
         raise ValueError("artifacts use different semantics")
     bindings = request["expected_bindings"]
     if (
-        not isinstance(bindings, dict)
-        or set(bindings) != _BINDING_KEYS
-        or bindings["scope_digest"] is not None
-        or bindings["encoding_digest"] is not None
+        not valid_unscoped_unencoded_bindings(bindings)
         or bindings["claim_digest"] != claim["object_digest"]
         or bindings["candidate_digest"] != candidate["object_digest"]
         or bindings["semantics_digest"] != semantics["object_digest"]
@@ -140,4 +150,4 @@ def bound_request(
     return claim["payload"], candidate["payload"]
 
 
-__all__ = ["bound_request"]
+__all__ = ["bound_request", "valid_unscoped_unencoded_bindings"]

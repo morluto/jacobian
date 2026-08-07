@@ -13,7 +13,14 @@ CVC5_WORKER_PROTOCOL = "jacobian.cvc5-worker/v1"
 CVC5_INPUT_LIMIT = 1_000_000
 CVC5_PROOF_LIMIT = 6_000_000
 _ALLOWED_PARSED_COMMANDS = frozenset(
-    {"set-logic", "declare-sort", "declare-fun", "assert", "check-sat"}
+    {
+        "set-logic",
+        "declare-sort",
+        "declare-fun",
+        "declare-const",
+        "assert",
+        "check-sat",
+    }
 )
 _STATUS_MAP = {
     "sat": "SATISFIABLE",

@@ -1,0 +1,78 @@
+{
+  "agent_instructions": "Complete the mathematical task in this isolated directory. Read instruction.md, input.json, and submission_schema.json. Harbor's /app/submission.json is mapped to ./submission.json and environment/submission_schema.json is mapped to ./submission_schema.json; remain inside this workspace. Write submission.json and every required evidence file, using any mathematical method and any available Jacobian capability when useful. Do not use the web, inspect paths outside this directory, or look for verifier or solution material. Tool calls, tokens, log length, retries, and repeated actions receive no reward. The Jacobian server requires concise external reasoning records: one PLAN before work, BEFORE_TOOL and AFTER_TOOL around each math.run, and one FINAL audit before answering. Do not infer a mathematical conclusion from timeout, incomplete search, provider status, or one-sided evidence.",
+  "calibration_id": "trajectory-value-calibration-codex-v1",
+  "candidates": [
+    {
+      "calibration_tags": ["one-sided-evidence", "candidate-checker-repair"],
+      "dataset_id": "symbolic-coordination-v1",
+      "task_family": "polynomial-one-direction-evidence",
+      "task_id": "symbolic-coordination-one-direction-03"
+    },
+    {
+      "calibration_tags": ["bounded-search-unknown", "scope-assurance"],
+      "dataset_id": "symbolic-coordination-v1",
+      "task_family": "polynomial-bounded-search-nonconclusion",
+      "task_id": "symbolic-coordination-search-incomplete-01"
+    },
+    {
+      "calibration_tags": ["candidate-checker-repair", "capability-routing"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "radical-elimination-root-rejection",
+      "task_id": "radical-system-uniqueness-audit"
+    },
+    {
+      "calibration_tags": ["scope-assurance", "capability-routing"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "metric-tsp-proof-repair",
+      "task_id": "metric-tsp-proof-repair"
+    },
+    {
+      "calibration_tags": ["artifact-binding", "scope-assurance"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "exact-farkas-certificate",
+      "task_id": "exact-farkas-ldl-slice"
+    },
+    {
+      "calibration_tags": ["artifact-binding", "capability-routing"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "graph-artifact-composition",
+      "task_id": "graph-artifact-composition"
+    },
+    {
+      "calibration_tags": ["candidate-checker-repair", "artifact-binding"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "polynomial-map-collision-witness",
+      "task_id": "polynomial-map-collision"
+    },
+    {
+      "calibration_tags": ["scope-assurance", "capability-routing", "artifact-binding"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "finite-scheme-rational-point-audit",
+      "task_id": "finite-scheme-rational-points-audit"
+    }
+  ],
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_candidate": 2,
+  "retries_for_wrong_answers": 0,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "selection_rule": {
+    "maximum_selected_tasks": 4,
+    "maximum_success_rate_millionths": 800000,
+    "minimum_labelled_rollouts": 2,
+    "minimum_success_rate_millionths": 200000,
+    "ordering": "candidate-order",
+    "uncertainty": "wilson-95"
+  },
+  "terminal_reward": "clean-room-verifier-acceptance-only",
+  "timeout_seconds": 420,
+  "tool_mode": "direct",
+  "training_performed": false,
+  "web_search": "disabled"
+}

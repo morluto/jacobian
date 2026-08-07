@@ -348,6 +348,39 @@ is authorized. A future version needs a separately preregistered, more
 difficult and outcome-diverse held-out suite. This v1 corpus remains immutable
 instead of being repaired or supplemented post hoc.
 
+## PR5 mixed-difficulty calibration protocol
+
+[`trajectory-value-calibration-v1.schema.json`](schemas/trajectory-value-calibration-v1.schema.json)
+defines a closed calibration protocol over existing Harbor tasks. The frozen
+[`trajectory-value-calibration-v1.json`](../../../benchmarks/config/trajectory-value-calibration-v1.json)
+keeps the PR4 model and reasoning settings (`gpt-5.4-mini`, medium), uses two
+independent rollouts for each of eight candidates, and caps each rollout at 420
+seconds. It covers candidate/checker repair, bounded-search non-conclusions,
+scope and assurance traps, one-sided evidence, artifact binding, and meaningful
+capability-routing choices.
+
+Every rollout exposes only `instruction.md`, `input.json`, and
+`submission_schema.json` from the existing task. The manifest binds the pinned
+Harbor task digest, every public-file digest, and every task-owned verifier-file
+digest. The existing verifier runs in a fresh child interpreter after Codex
+exits. A completed verifier reward of one is `ACCEPTED`; a completed verifier
+reward below one is `REJECTED`. Model timeout, model error, missing submission,
+or verifier error is `INCONCLUSIVE`, never a negative label.
+
+The task-selection rule is frozen before calibration labels:
+
+- require two labelled rollouts;
+- retain empirical acceptance between 20% and 80%, inclusive;
+- order eligible tasks by their original candidate order and keep at most four;
+- report 95% Wilson intervals without using them to change selection; and
+- perform no retry of a rejected mathematical answer.
+
+The calibration changes neither prompts nor runtime in response to an outcome.
+Tool calls, tokens, reasoning-log length, and repeated actions have reward zero.
+Its output is difficulty-screening evidence, not estimator evaluation. The
+selected task set is frozen in a separate main-study contract only after this
+calibration completes and before any H1--H3 labels are collected.
+
 ## Current limitations
 
 Version 1 deliberately uses conservative generic output interpretation. A

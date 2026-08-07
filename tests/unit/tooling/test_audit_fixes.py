@@ -77,7 +77,13 @@ def test_source_only_importer_purges_sys_modules(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Formally prove that pre-imported modules are purged."""
-    from jacobian.implementation import _SourceOnlyFinder, install_source_only_importer
+    from jacobian.implementation import install_source_only_importer
+
+    # Snapshot sys.meta_path *before* calling the installer so monkeypatch
+    # restores the clean list (without the finder) at fixture teardown.
+    # If we patched after the installer ran, monkeypatch would record the
+    # already-mutated list and leak the finder back in at teardown.
+    monkeypatch.setattr(sys, "meta_path", list(sys.meta_path))
 
     # Create a fake module in sys.modules that looks like the target package
     fake_module = type(sys)("fake_test_package")
@@ -93,11 +99,4 @@ def test_source_only_importer_purges_sys_modules(
     )
     assert "fake_test_package.helper" not in sys.modules, (
         "Pre-imported submodule should be purged"
-    )
-
-    # Clean up meta_path — monkeypatch does not manage this automatically
-    # since the importer appends to sys.meta_path after import.
-    monkeypatch.setattr(
-        sys, "meta_path",
-        [f for f in sys.meta_path if not isinstance(f, _SourceOnlyFinder)],
     )

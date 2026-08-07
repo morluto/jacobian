@@ -487,12 +487,13 @@ class PosetWidthResult(PosetExactResult):
         return self
 
 
-class LinearExtensionRequest(ContractModel):
-    poset: FinitePoset
-
+class LinearExtensionRequest(PosetRequest):
     @model_validator(mode="after")
     def require_subset_dp_bound(self) -> Self:
-        if len(self.poset.elements) > MAX_LINEAR_EXTENSION_ELEMENTS:
+        if (
+            self.poset is not None
+            and len(self.poset.elements) > MAX_LINEAR_EXTENSION_ELEMENTS
+        ):
             raise ValueError(
                 "linear-extension counting supports at most "
                 f"{MAX_LINEAR_EXTENSION_ELEMENTS} elements"

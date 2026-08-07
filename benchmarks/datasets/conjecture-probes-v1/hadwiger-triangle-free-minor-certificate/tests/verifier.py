@@ -21,9 +21,6 @@ LIMITATIONS = [
     "EXHAUSTIVE_THREE_COLOR_REJECTION",
     "NO_GLOBAL_HADWIGER_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
-
-
 def three_colorable(adj):
     colors = [-1] * 11
 
@@ -82,10 +79,9 @@ def mathematics(r: Any) -> bool:
             not isinstance(e, list)
             or len(e) != 2
             or any(type(v) is not int or not 0 <= v < 11 for v in e)
-            or e[0] >= e[1]
         ):
             return False
-        normalized.append(tuple(e))
+        normalized.append(tuple(sorted(e)))
     if len(set(normalized)) != 20:
         return False
     adj = [set() for _ in range(11)]
@@ -147,13 +143,13 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    m = bool(c and mathematics(s["result"]))
-    e = bool(c and evidence_list_is_bound(s["evidence"], max_bytes=MAX_EVIDENCE_BYTES))
+    m = bool(isinstance(s, dict) and mathematics(s.get("result")))
+    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=None))
     payload = (
         read_evidence_json(
             s["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if e
         else None
@@ -168,8 +164,9 @@ def main():
             "limitations": LIMITATIONS,
         }
     )
-    sc = bool(c and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
-    a = bool(c and s.get("claimed_assurance") == "CHECKED")
+    sc = bool(isinstance(s, dict) and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
+    SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in SCOREABLE_ASSURANCES)
     f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

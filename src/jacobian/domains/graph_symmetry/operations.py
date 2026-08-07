@@ -29,7 +29,7 @@ def _orbit_components[Element: Hashable](
     for action in actions:
         for element in elements:
             union_find.union(element, action[element])
-    return tuple(tuple(sorted(members)) for members in union_find.to_sets())
+    return tuple(tuple(members) for members in union_find.to_sets())
 
 
 def _vertex_orbits(

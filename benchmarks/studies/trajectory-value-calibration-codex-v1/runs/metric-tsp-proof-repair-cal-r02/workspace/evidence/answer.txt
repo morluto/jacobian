@@ -1,0 +1,11 @@
+Proof repair:
+The invalid inference is in Step 4: shortcutting repeated vertices in a metric does not preserve exact cost. It only guarantees that the shortcut tour is no longer than the doubled-tree Euler tour, so the strongest generic claim is the standard 2-approximation bound, not exactness.
+
+Concrete certificate on the supplied instance:
+MST edges: AB=3, BE=3, EF=4, AD=7, DC=3, total MST weight = 20.
+Doubled-tree Euler circuit: A-D-C-D-A-B-E-F-E-B-A, total Euler weight = 40.
+First-visit shortcut tour: A-D-C-B-E-F-A, weight = 7+3+13+3+4+4 = 34.
+Optimal Hamiltonian cycle: A-B-E-F-C-D-A, weight = 3+3+4+12+3+7 = 32.
+
+So the shortcut tour is feasible but not exact: 34 > 32.
+RESULT_JSON: {"flaw_location":"STEP_4","invalid_inference":"SHORTCUTTING_PRESERVES_EXACT_COST","corrected_claim":"For metric TSP, doubling an MST, taking an Euler circuit, and shortcutting repeated vertices yields a Hamiltonian cycle whose weight is at most twice the MST weight; shortcutting does not preserve exact cost, so the method is a 2-approximation rather than an exact algorithm.","mst_edges":[["A","B"],["B","E"],["E","F"],["A","D"],["D","C"]],"euler_walk":["A","D","C","D","A","B","E","F","E","B","A"],"shortcut_tour":["A","D","C","B","E","F","A"],"optimal_tour":["A","B","E","F","C","D","A"],"weights":{"mst":20,"euler":40,"shortcut":34,"optimal":32}}

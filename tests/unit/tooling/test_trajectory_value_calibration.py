@@ -14,6 +14,9 @@ from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[3]
 SPEC = ROOT / "benchmarks/config/trajectory-value-calibration-v1.json"
+EXTENSION_SPEC = (
+    ROOT / "benchmarks/config/trajectory-value-calibration-extension-v1.json"
+)
 
 
 def _record(dataset: str, task: str, acceptance: str) -> dict[str, object]:
@@ -47,6 +50,18 @@ def test_unknown_spec_fields_fail_closed() -> None:
     value["post_label_tuning"] = True
     with pytest.raises(ValidationError):
         TrajectoryValueCalibrationSpec.model_validate(value)
+
+
+def test_extension_is_a_separate_preregistered_candidate_batch() -> None:
+    initial = load_spec(SPEC)
+    extension = load_spec(EXTENSION_SPEC)
+    assert extension.calibration_id != initial.calibration_id
+    assert len(extension.candidates) == 8
+    assert not {
+        (candidate.dataset_id, candidate.task_id) for candidate in initial.candidates
+    }.intersection(
+        (candidate.dataset_id, candidate.task_id) for candidate in extension.candidates
+    )
 
 
 def test_candidate_coverage_is_required() -> None:

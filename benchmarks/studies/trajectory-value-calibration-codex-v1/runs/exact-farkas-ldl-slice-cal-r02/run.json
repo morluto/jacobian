@@ -1,0 +1,90 @@
+{
+  "calibration_tags": [
+    "artifact-binding",
+    "scope-assurance"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 742,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "c74a4b97-8be5-4e59-86a8-f9dff356da0f"
+  ],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:71df693d3d48138ca41e7e2ca86873df063a210e74e579498d6f1cbc6a7f4f01",
+    "public_file_digests": {
+      "input.json": "sha256:9f36d185a810773e7556539513c7a925549df0babec833cca1e0b23dc58ddb8e",
+      "instruction.md": "sha256:66b6751aa1520ad36963cca58ca51972e751492862f8e0705645b41db91312a5",
+      "submission_schema.json": "sha256:cb1ff9d0e70a50dbd31ea9c33f36fa667ed26523fd83049157623737ef9e5a9b"
+    },
+    "task_id": "exact-farkas-ldl-slice",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:a454dd51856093f81d181af400871ccf683990ee509b8b0b92f79758274d2deb",
+      "expected.json": "sha256:fb39bfd1282b3bc386e9a4b6bd93223817720116c36865efc9f08259fa32683d",
+      "input.json": "sha256:9f36d185a810773e7556539513c7a925549df0babec833cca1e0b23dc58ddb8e",
+      "public_contract.json": "sha256:795c1ee8bbbe77951fc5af7fea8c6f4446aa30d8cbed8a578551c9f2900baee3",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:58b662026d55578021f6b1955352d4af39b57d006d2038e067bf16e7f0613276",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "exact-farkas-certificate",
+  "task_id": "exact-farkas-ldl-slice",
+  "terminal": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 1.0,
+      "correctness": 0.0,
+      "evidence_validity": 1.0,
+      "false_certification": false,
+      "reward": 0.0,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:71df693d3d48138ca41e7e2ca86873df063a210e74e579498d6f1cbc6a7f4f01",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:a454dd51856093f81d181af400871ccf683990ee509b8b0b92f79758274d2deb",
+      "expected.json": "sha256:fb39bfd1282b3bc386e9a4b6bd93223817720116c36865efc9f08259fa32683d",
+      "input.json": "sha256:9f36d185a810773e7556539513c7a925549df0babec833cca1e0b23dc58ddb8e",
+      "public_contract.json": "sha256:795c1ee8bbbe77951fc5af7fea8c6f4446aa30d8cbed8a578551c9f2900baee3",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:58b662026d55578021f6b1955352d4af39b57d006d2038e067bf16e7f0613276",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "exact-farkas-ldl-slice-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 353152,
+    "input_tokens": 375649,
+    "output_tokens": 6831,
+    "reasoning_output_tokens": 2430
+  }
+}

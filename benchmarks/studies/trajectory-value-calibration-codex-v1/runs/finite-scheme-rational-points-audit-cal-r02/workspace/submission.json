@@ -1,0 +1,44 @@
+{
+  "task_id": "jacobian/finite-scheme-rational-points-audit",
+  "conclusion": "RATIONAL_POINT_BIJECTION_DOES_NOT_FORCE_SCHEME_ISOMORPHISM",
+  "result": {
+    "field_prime": 5,
+    "a_unit": [1, 1, 1, 0, 0],
+    "b_unit": [1, 1, 1],
+    "a_multiplication": [
+      [[1, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 1, 0], [0, 0, 0, 0, 1]],
+      [[0, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+      [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+      [[0, 0, 0, 1, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 0]],
+      [[0, 0, 0, 0, 1], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
+    ],
+    "b_multiplication": [
+      [[1, 0, 0], [0, 0, 0], [0, 0, 0]],
+      [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+      [[0, 0, 0], [0, 0, 0], [0, 0, 1]]
+    ],
+    "morphism_columns": [[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]],
+    "a_points": [[0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]],
+    "b_points": [[0, 0, 1], [0, 1, 0], [1, 0, 0]],
+    "induced_point_map": [0, 1, 2],
+    "nilpotent": {
+      "vector": [0, 0, 0, 1, 0],
+      "power2": [0, 0, 0, 0, 1],
+      "power3": [0, 0, 0, 0, 0],
+      "exact_order": 3
+    },
+    "b_reduced": true
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "finite-affine-schemes-over-F5-certificate",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:c5e99d6d860613f6528bd19987e9702ca71f41aa7cad95a90cf11260a1bcb62c"
+    }
+  ],
+  "limitations": [
+    "This is one finite affine countermodel over F_5; it does not prove a general theorem about all schemes or functors of points."
+  ]
+}

@@ -1,0 +1,111 @@
+Uninstalled 1 package in 2ms
+Installed 1 package in 2ms
+INFO:     Started server process [26767]
+INFO:     Waiting for application startup.
+[08/07/26 01:30:43] INFO     StreamableHTTP       streamable_http_manager.py:151
+                             session manager                                    
+                             started                                            
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:60014 (Press CTRL+C to quit)
+[08/07/26 01:30:46] WARNING  lean.check is not     reference_installation.py:114
+                             installed: The pinned                              
+                             Lean 4.31.0 runtime                                
+                             is unavailable.                                    
+                    INFO     Created new          streamable_http_manager.py:303
+                             transport with                                     
+                             session ID:                                        
+                             1214b971ff2a46718404                               
+                             4a5a26185b66                                       
+[08/07/26 01:31:14] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=d4735e3a265e16ee                    
+                             trace_digest=d4735e3a                              
+                             trace_source=request_id                            
+                             duration_ms=3.869 response_bytes=860               
+                             argument_digest=sha256:9f8a968a163aa5              
+                             1028e7915358b0fa2e5e08947873a40e66edd              
+                             fc35f581a9c6a                                      
+[08/07/26 01:31:20] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4e07408562bedb8b                    
+                             trace_digest=4e074085                              
+                             trace_source=request_id                            
+                             duration_ms=142.738                                
+                             response_bytes=16053                               
+                             argument_digest=sha256:b4c44dc2a2187b              
+                             1a6819efe038385d5b114df25c0b62bb3e9ea              
+                             8938584d5ec10                                      
+[08/07/26 01:31:34] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4b227777d4dd1fc6                    
+                             trace_digest=4b227777                              
+                             trace_source=request_id                            
+                             duration_ms=57.727                                 
+                             response_bytes=5032                                
+                             argument_digest=sha256:4e11496da876a2              
+                             c27e5e1cb5406ead9fec345eb26a2852c6306              
+                             49693e4836608                                      
+[08/07/26 01:31:57] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=ef2d127de37b942b                    
+                             trace_digest=ef2d127d                              
+                             trace_source=request_id                            
+                             duration_ms=53.866 response_bytes=944              
+                             argument_digest=sha256:1529cc01ad5755              
+                             f154256b2667aaf15528503cee4422713e9ab              
+                             30c0175130daf                                      
+[08/07/26 01:32:05] INFO     capability invocation    capability_telemetry.py:18
+                             capability_id=matrix.det                           
+                             erminant.compute                                   
+                             version=1 mode=EXPLORE                             
+                             status=COMPLETED                                   
+                             assurance=COMPUTED                                 
+                             elapsed_ms=17                                      
+                             diagnostics=-                                      
+                    INFO     MCP capability attempt               tooling.py:183
+                             request_digest=e7f6c011776e8db7                    
+                             trace_digest=e7f6c011                              
+                             trace_source=request_id                            
+                             capability_id=matrix.determinant.com               
+                             pute capability_version=1                          
+                             mode=EXPLORE                                       
+                             execution_status=COMPLETED                         
+                             assurance=COMPUTED                                 
+                             diagnostic_codes=none                              
+                             attempt_duration_ms=20.302                         
+                             operation_runtime_ms=14                            
+                             response_bytes=2031                                
+                             argument_digest=sha256:5941e8fdbb4ca               
+                             a469bd217a4529b95bc5c8eb8a139c2234ca               
+                             dbcae442be9d3ce                                    
+                    INFO     MCP tool call tool=math.run           server.py:335
+                             status=success                                     
+                             request_digest=e7f6c011776e8db7                    
+                             trace_digest=e7f6c011                              
+                             trace_source=request_id                            
+                             duration_ms=22.766                                 
+                             response_bytes=4180                                
+                             argument_digest=sha256:fa4e2a15d1cf4f              
+                             f086352b5b4d3e6c5c0fd1c9f63490cfd1aa1              
+                             ea93303feb0e1                                      
+[08/07/26 01:32:09] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=7902699be42c8a8e                    
+                             trace_digest=7902699b                              
+                             trace_source=request_id                            
+                             duration_ms=1.731 response_bytes=930               
+                             argument_digest=sha256:bbc318aab29e12              
+                             173429b3dc60978cd6511deecfb766258d711              
+                             218d40ca06d3c                                      
+[08/07/26 01:33:13] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=2c624232cdd22177                    
+                             trace_digest=2c624232                              
+                             trace_source=request_id                            
+                             duration_ms=1.683 response_bytes=836               
+                             argument_digest=sha256:d0e692aa27724b              
+                             39f8f163b7dbb13ba5afb209d90307fe85d8b              
+                             33a17fa7e081e                                      
+[08/07/26 01:33:28] INFO     Terminating session:         streamable_http.py:814
+                             1214b971ff2a467184044a5a2618                       
+                             5b66                                               

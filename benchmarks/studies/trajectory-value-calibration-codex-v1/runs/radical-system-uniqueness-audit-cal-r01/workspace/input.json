@@ -1,0 +1,20 @@
+{
+  "task_id": "jacobian/radical-system-uniqueness-audit",
+  "claim": "The system has at least two real solutions (a,b,c).",
+  "system": [
+    "a/c = b - sqrt(b) + c",
+    "sqrt(a/c) = sqrt(b) + 1",
+    "fourth_root(a/c) = cube_root(b) - 1"
+  ],
+  "root_semantics": "All even roots are principal nonnegative real roots; c is nonzero because a/c occurs.",
+  "substitution": "u = b^(1/6)",
+  "source": {
+    "dataset": "INSAIT-Institute/BrokenMath",
+    "revision": "5eda8c5fbd150afde41b6206b60700ab7d8e25c7",
+    "config": "default",
+    "split": "benchmark",
+    "row": 228,
+    "problem_id": "german_2025_1",
+    "row_sha256": "sha256:b9a10fbc445876cc412565550ef03722124d698b9ad52d0f1f6aacd0e97b823c"
+  }
+}

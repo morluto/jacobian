@@ -1,0 +1,78 @@
+{
+  "agent_instructions": "Complete the mathematical task in this isolated directory. Read instruction.md, input.json, and submission_schema.json. Harbor's /app/submission.json is mapped to ./submission.json and environment/submission_schema.json is mapped to ./submission_schema.json; remain inside this workspace. Write submission.json and every required evidence file, using any mathematical method and any available Jacobian capability when useful. Do not use the web, inspect paths outside this directory, or look for verifier or solution material. Tool calls, tokens, log length, retries, and repeated actions receive no reward. The Jacobian server requires concise external reasoning records: one PLAN before work, BEFORE_TOOL and AFTER_TOOL around each math.run, and one FINAL audit before answering. Do not infer a mathematical conclusion from timeout, incomplete search, provider status, or one-sided evidence.",
+  "calibration_id": "trajectory-value-calibration-extension-codex-v1",
+  "candidates": [
+    {
+      "calibration_tags": ["candidate-checker-repair", "scope-assurance"],
+      "dataset_id": "symbolic-coordination-v1",
+      "task_family": "polynomial-near-miss-composition",
+      "task_id": "symbolic-coordination-near-miss-04"
+    },
+    {
+      "calibration_tags": ["bounded-search-unknown", "scope-assurance"],
+      "dataset_id": "symbolic-coordination-v1",
+      "task_family": "polynomial-grid-exhaustion",
+      "task_id": "symbolic-coordination-grid-exhausted-02"
+    },
+    {
+      "calibration_tags": ["one-sided-evidence", "capability-routing"],
+      "dataset_id": "symbolic-coordination-v1",
+      "task_family": "polynomial-three-variable-inverse",
+      "task_id": "symbolic-coordination-valid-inverse-05"
+    },
+    {
+      "calibration_tags": ["artifact-binding", "capability-routing"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "hermite-normal-form-certificate",
+      "task_id": "hermite-normal-form"
+    },
+    {
+      "calibration_tags": ["candidate-checker-repair", "artifact-binding"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "polynomial-normalization-certificate",
+      "task_id": "polynomial-normalization"
+    },
+    {
+      "calibration_tags": ["artifact-binding", "capability-routing"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "symmetric-polynomial-ideal-membership",
+      "task_id": "symmetric-polynomial-divisibility"
+    },
+    {
+      "calibration_tags": ["scope-assurance", "candidate-checker-repair"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "apollonius-proof-gap-repair",
+      "task_id": "apollonius-gap-repair"
+    },
+    {
+      "calibration_tags": ["artifact-binding", "scope-assurance"],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "task_family": "projective-plane-homology-lattice",
+      "task_id": "rp2-homology-lattice"
+    }
+  ],
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_candidate": 2,
+  "retries_for_wrong_answers": 0,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "selection_rule": {
+    "maximum_selected_tasks": 4,
+    "maximum_success_rate_millionths": 800000,
+    "minimum_labelled_rollouts": 2,
+    "minimum_success_rate_millionths": 200000,
+    "ordering": "candidate-order",
+    "uncertainty": "wilson-95"
+  },
+  "terminal_reward": "clean-room-verifier-acceptance-only",
+  "timeout_seconds": 420,
+  "tool_mode": "direct",
+  "training_performed": false,
+  "web_search": "disabled"
+}

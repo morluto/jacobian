@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "conclusion": {
+      "enum": [
+        "UNIQUE_REAL_SOLUTION",
+        "MULTIPLE_REAL_SOLUTIONS",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "elimination_coefficients": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "linear_factors": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "constant": {
+                "type": "integer"
+              },
+              "x_coefficient": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "constant",
+              "x_coefficient"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "root_classification": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "enum": [
+                  "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE",
+                  "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE",
+                  "SATISFIES_ALL_ROOT_DOMAINS"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "ACCEPTED",
+                  "REJECTED"
+                ]
+              },
+              "u": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "u",
+              "status",
+              "reason"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "solutions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "a": {
+                "type": "integer"
+              },
+              "b": {
+                "type": "integer"
+              },
+              "c": {
+                "type": "integer"
+              },
+              "equation_values": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "u": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "a",
+              "b",
+              "c",
+              "u",
+              "equation_values"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "type": "array"
+        },
+        "substitution": {
+          "const": "u=b^(1/6)"
+        }
+      },
+      "required": [
+        "substitution",
+        "elimination_coefficients",
+        "linear_factors",
+        "root_classification",
+        "solutions"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/radical-system-uniqueness-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

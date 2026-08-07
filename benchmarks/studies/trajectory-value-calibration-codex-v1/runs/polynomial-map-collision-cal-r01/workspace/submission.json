@@ -1,0 +1,20 @@
+{
+  "task_id": "jacobian/polynomial-map-collision",
+  "conclusion": "TRUE",
+  "result": {
+    "image_p": [3, 2],
+    "image_q": [3, 2]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "jacobian/polynomial-map-collision complete finite input",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:d2a958684f47814e8d033449373b22398f365b1afcc13ff7aac174183dc92976"
+    }
+  ],
+  "limitations": [
+    "No independent checker was invoked; assurance is COMPUTED."
+  ]
+}

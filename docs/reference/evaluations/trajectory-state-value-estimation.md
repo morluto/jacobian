@@ -381,6 +381,30 @@ Its output is difficulty-screening evidence, not estimator evaluation. The
 selected task set is frozen in a separate main-study contract only after this
 calibration completes and before any H1--H3 labels are collected.
 
+### Initial calibration result and bounded extension
+
+The initial calibration was executed once from clean preregistration commit
+`2ad56d98f265ad1cd04c55b0cd6d2e86c2704422`. Its immutable
+[`manifest.json`](../../../benchmarks/studies/trajectory-value-calibration-codex-v1/manifest.json)
+binds 243 non-manifest artifacts across all 16 planned rollouts. Every rollout
+produced a completed clean-room label: 5 were `ACCEPTED`, 11 were `REJECTED`,
+and none was `INCONCLUSIVE`.
+
+The original metadata split sharply: the two symbolic audit tasks were each
+2/2 accepted, while radical elimination, Metric TSP repair, exact Farkas,
+polynomial collision, and the finite-scheme audit were each 0/2. Only
+`graph-artifact-composition` was mixed at 1/2. The 95% Wilson interval for its
+50% point estimate is approximately `[0.095, 0.905]`; the small calibration is
+used for screening, not a precise success-rate claim.
+
+One eligible task is insufficient for the cross-task H1--H3 study. Before
+collecting any further labels, the separate
+[`trajectory-value-calibration-extension-v1.json`](../../../benchmarks/config/trajectory-value-calibration-extension-v1.json)
+freezes eight new candidates near the observed easy/hard boundary. It retains
+the same model, prompt, budgets, terminal label, and selection rule. The
+extension does not rerun or alter an initial candidate and cannot revise the
+immutable first-batch result.
+
 ## Current limitations
 
 Version 1 deliberately uses conservative generic output interpretation. A

@@ -1,0 +1,65 @@
+{
+  "task_id": "jacobian/metric-tsp-proof-repair",
+  "conclusion": "REPAIRED",
+  "result": {
+    "flaw_location": "STEP_4",
+    "invalid_inference": "SHORTCUTTING_PRESERVES_EXACT_COST",
+    "corrected_claim": "For metric TSP, doubling an MST, taking an Euler circuit, and shortcutting repeated vertices yields a Hamiltonian cycle whose weight is at most twice the MST weight; shortcutting does not preserve exact cost, so the method is a 2-approximation rather than an exact algorithm.",
+    "mst_edges": [
+      ["A", "B"],
+      ["B", "E"],
+      ["E", "F"],
+      ["A", "D"],
+      ["D", "C"]
+    ],
+    "euler_walk": [
+      "A",
+      "D",
+      "C",
+      "D",
+      "A",
+      "B",
+      "E",
+      "F",
+      "E",
+      "B",
+      "A"
+    ],
+    "shortcut_tour": [
+      "A",
+      "D",
+      "C",
+      "B",
+      "E",
+      "F",
+      "A"
+    ],
+    "optimal_tour": [
+      "A",
+      "B",
+      "E",
+      "F",
+      "C",
+      "D",
+      "A"
+    ],
+    "weights": {
+      "mst": 20,
+      "euler": 40,
+      "shortcut": 34,
+      "optimal": 32
+    }
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "metric-tsp-proof-repair exact finite optimization certificate",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:6780c871c8df73b67b324c7f594373536ac71ddbda88e093b2dd3956ae91b96c"
+    }
+  ],
+  "limitations": [
+    "This certificate shows the double-tree method gives a valid approximation guarantee, not an exact TSP algorithm."
+  ]
+}

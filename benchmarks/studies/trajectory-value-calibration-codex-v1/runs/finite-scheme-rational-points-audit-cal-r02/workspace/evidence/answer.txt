@@ -1,0 +1,1 @@
+Both affine schemes are nonempty and each has exactly three F_5-rational points; precomposition with B -> A matches the three points bijectively. In A, u is nonzero with u^2 = u2 != 0 and u^3 = 0, so u has exact nilpotency order 3. B is a product of three copies of F_5, hence reduced, so the two schemes are not isomorphic.

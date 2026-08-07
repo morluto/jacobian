@@ -1,0 +1,1 @@
+{"schema_version":"1","run_id":"91e94b62-9e9c-4e62-aea3-4c6adf166af4","sequence":0,"kind":"PLAN","occurred_at":"2026-08-07T08:08:43.725761+00:00","payload":{"summary":"Verify exact two-sided composition for the supplied inverse candidate over QQ, then write the mirrored certificate and submission envelope in the workspace."}}

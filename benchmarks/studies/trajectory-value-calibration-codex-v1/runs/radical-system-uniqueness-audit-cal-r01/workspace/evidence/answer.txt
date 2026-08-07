@@ -1,0 +1,42 @@
+We use the substitution u = b^(1/6), so b = u^6 and sqrt(b) = u^3, cube_root(b) = u^2 with u >= 0 because the principal sixth root is nonnegative.
+
+Let x = a/c. Then the second equation gives
+  sqrt(x) = sqrt(b) + 1 = u^3 + 1,
+hence
+  x = (u^3 + 1)^2.
+
+The first equation gives
+  x = b - sqrt(b) + c = u^6 - u^3 + c,
+so
+  c = (u^3 + 1)^2 - u^6 + u^3 = 3u^3 + 1.
+
+The third equation gives
+  fourth_root(x) = cube_root(b) - 1 = u^2 - 1.
+Since fourth_root(x) is principal, its value is nonnegative. Therefore u^2 - 1 >= 0, and after squaring
+  sqrt(x) = sqrt(u^3 + 1) = u^2 - 1.
+Substituting x = (u^3 + 1)^2 yields
+  u^3 + 1 = (u^2 - 1)^2,
+equivalently
+  u^4 - u^3 - 2u^2 = 0
+  = u^2 (u - 2)(u + 1).
+
+So the exact elimination polynomial is u^4 - u^3 - 2u^2, with linear factors u, u, u + 1, u - 2.
+
+Real roots and domain checks:
+- u = -1 is rejected because the principal sixth root requires u >= 0.
+- u = 0 is rejected because the third equation requires u^2 - 1 >= 0, which fails.
+- u = 2 is accepted.
+
+Reconstructing the surviving triple:
+  b = 2^6 = 64
+  x = (2^3 + 1)^2 = 81
+  c = 3*2^3 + 1 = 25
+  a = x*c = 81*25 = 2025
+
+Exact verification:
+  a/c = 2025/25 = 81 = 64 - 8 + 25
+  sqrt(a/c) = 9 = 8 + 1
+  fourth_root(a/c) = 3 = 4 - 1
+
+Thus the system has exactly one real solution:
+  (a,b,c) = (2025, 64, 25).

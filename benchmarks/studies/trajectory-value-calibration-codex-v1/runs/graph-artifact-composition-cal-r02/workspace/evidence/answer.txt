@@ -1,0 +1,28 @@
+Graph:
+Vertices = {0,1,2,3,4,5}
+Edges = {0-3, 0-4, 1-4, 2-4, 3-4, 3-5}
+
+Degrees:
+deg(0)=2
+deg(1)=1
+deg(2)=1
+deg(3)=3
+deg(4)=4
+deg(5)=1
+
+Maximum-degree vertices:
+{4}
+
+Distances to {4} in lexicographic vertex order:
+0 -> 1
+1 -> 1
+2 -> 1
+3 -> 1
+4 -> 0
+5 -> 2
+
+Maximum distance to {4}:
+2
+
+Vertices attaining maximum distance:
+{5}

@@ -1,0 +1,1 @@
+{"schema_version":"1","run_id":"2cab6408-e6d0-4b92-b1ec-a114edc78b7f","sequence":0,"kind":"PLAN","occurred_at":"2026-08-07T08:28:43.532125+00:00","payload":{"summary":"Compute exact rational sign checks and certify positive definiteness of the 4x4 slice using an exact method, then write schema-valid submission and digest-bound evidence."}}

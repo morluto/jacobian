@@ -1,0 +1,55 @@
+Task: audit the radical system
+
+Given
+  a/c = b - sqrt(b) + c
+  sqrt(a/c) = sqrt(b) + 1
+  fourth_root(a/c) = cube_root(b) - 1
+with principal even roots and c != 0.
+
+Use u = b^(1/6). Then b = u^6, sqrt(b) = u^3, and cube_root(b) = u^2.
+
+From the second equation,
+  sqrt(a/c) = u^3 + 1
+so
+  a/c = (u^3 + 1)^2.
+Because the fourth root is principal,
+  fourth_root(a/c) = sqrt(sqrt(a/c)) = sqrt(u^3 + 1).
+The third equation becomes
+  sqrt(u^3 + 1) = u^2 - 1.
+This forces u^2 - 1 >= 0.
+
+Squaring gives
+  u^3 + 1 = (u^2 - 1)^2 = u^4 - 2u^2 + 1,
+hence
+  u^4 - u^3 - 2u^2 = 0
+  = u^2(u + 1)(u - 2).
+
+Exact elimination polynomial:
+  u^4 - u^3 - 2u^2
+with coefficients [1, -1, -2, 0, 0].
+
+All real roots of the elimination polynomial:
+  u = 0, 2, -1.
+
+Root classification against principal-root constraints:
+  u = 0: rejected, because sqrt(u^3 + 1) = 1 but u^2 - 1 = -1, so the principal fourth-root equation fails.
+  u = 2: accepted, because sqrt(9) = 3 and 2^2 - 1 = 3.
+  u = -1: rejected, because u = b^(1/6) is a principal sixth root and must be nonnegative.
+
+Reconstruct the surviving triple from u = 2:
+  b = 2^6 = 64
+  sqrt(b) = 8
+  cube_root(b) = 4
+  sqrt(a/c) = 8 + 1 = 9
+  a/c = 81
+Using the first equation,
+  81 = 64 - 8 + c
+so c = 25, and then a = 81*c = 2025.
+
+Exact check:
+  2025/25 = 81 = 64 - 8 + 25
+  sqrt(2025/25) = 9 = 8 + 1
+  fourth_root(2025/25) = 3 = 4 - 1
+
+Therefore the real solution set is the singleton {(2025, 64, 25)}.
+The claim that the system has at least two real solutions is false.

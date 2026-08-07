@@ -135,9 +135,7 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(
-            submission.get("evidence")
-        )
+        and evidence_list_is_bound(submission.get("evidence"))
     )
     payload = (
         read_evidence_json(
@@ -160,10 +158,10 @@ def main() -> None:
         and submission.get("scope") == SCOPE
         and submission.get("limitations") == LIMITATIONS
     )
-    SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+    scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
     assurance = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+        and submission.get("claimed_assurance") in scoreable_assurances
     )
     false_certification = bool(
         isinstance(submission, dict)

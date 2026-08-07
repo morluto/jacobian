@@ -23,6 +23,13 @@ LIMITATIONS = [
     "EXHAUSTIVE_THREE_COLOR_REJECTION",
     "NO_GLOBAL_HADWIGER_CONCLUSION",
 ]
+RESULT_KEYS = {
+    "edges",
+    "four_coloring",
+    "branch_sets",
+    "chromatic_number",
+    "minor_order",
+}
 
 
 def three_colorable(adj):
@@ -56,15 +63,9 @@ def connected(vertices, adj):
     return seen == vertices
 
 
-def mathematics(r: Any) -> bool:
-    if not isinstance(r, dict) or set(r) != {
-        "edges",
-        "four_coloring",
-        "branch_sets",
-        "chromatic_number",
-        "minor_order",
-    }:
-        return False
+def _result_parts(r: Any):
+    if not isinstance(r, dict) or set(r) != RESULT_KEYS:
+        return None
     edges = r.get("edges")
     colors = r.get("four_coloring")
     branches = r.get("branch_sets")
@@ -76,7 +77,11 @@ def mathematics(r: Any) -> bool:
         or not isinstance(branches, list)
         or len(branches) != 4
     ):
-        return False
+        return None
+    return edges, colors, branches
+
+
+def _normalized_edges(edges):
     normalized = []
     for e in edges:
         if (
@@ -84,29 +89,47 @@ def mathematics(r: Any) -> bool:
             or len(e) != 2
             or any(type(v) is not int or not 0 <= v < 11 for v in e)
         ):
-            return False
+            return None
         normalized.append(tuple(sorted(e)))
     if len(set(normalized)) != 20:
-        return False
+        return None
+    return normalized
+
+
+def _adjacency(normalized):
     adj = [set() for _ in range(11)]
     for a, b in normalized:
         adj[a].add(b)
         adj[b].add(a)
-    if min(map(len, adj)) < 3 or not connected(set(range(11)), adj):
-        return False
-    if any(
+    return adj
+
+
+def _has_triangle(adj) -> bool:
+    return any(
         b in adj[a] and c in adj[a] and c in adj[b]
         for a in range(11)
         for b in range(a + 1, 11)
         for c in range(b + 1, 11)
-    ):
-        return False
-    if (
+    )
+
+
+def _graph_is_candidate(adj) -> bool:
+    return (
+        min(map(len, adj)) >= 3
+        and connected(set(range(11)), adj)
+        and not _has_triangle(adj)
+    )
+
+
+def _coloring_certifies_four_chromatic(colors, normalized, adj) -> bool:
+    return not (
         any(type(c) is not int or not 0 <= c < 4 for c in colors)
         or any(colors[a] == colors[b] for a, b in normalized)
         or three_colorable(adj)
-    ):
-        return False
+    )
+
+
+def _connected_branch_sets(branches, adj):
     sets = []
     for branch in branches:
         if (
@@ -115,18 +138,39 @@ def mathematics(r: Any) -> bool:
             or len(branch) != len(set(branch))
             or any(type(v) is not int or not 0 <= v < 11 for v in branch)
         ):
-            return False
+            return None
         s = set(branch)
         if not connected(s, adj):
-            return False
+            return None
         sets.append(s)
+    return sets
+
+
+def _branch_sets_form_k4_minor(sets, adj) -> bool:
     if any(sets[i] & sets[j] for i in range(4) for j in range(i)):
         return False
-    if not all(
+    return all(
         any(v in adj[u] for u in sets[i] for v in sets[j])
         for i in range(4)
         for j in range(i)
-    ):
+    )
+
+
+def mathematics(r: Any) -> bool:
+    parts = _result_parts(r)
+    if parts is None:
+        return False
+    edges, colors, branches = parts
+    normalized = _normalized_edges(edges)
+    if normalized is None:
+        return False
+    adj = _adjacency(normalized)
+    if not _graph_is_candidate(adj):
+        return False
+    if not _coloring_certifies_four_chromatic(colors, normalized, adj):
+        return False
+    sets = _connected_branch_sets(branches, adj)
+    if sets is None or not _branch_sets_form_k4_minor(sets, adj):
         return False
     return r["chromatic_number"] == 4 and r["minor_order"] == 4
 

@@ -7,7 +7,9 @@ import pytest
 from benchmarks.tooling.codex_visibility import (
     AdoptionExpectation,
     CueLevel,
+    ToolMode,
     VisibilityCase,
+    _codex_arguments,
     classify_visibility,
     load_suite,
 )
@@ -127,6 +129,22 @@ def test_packaged_codex_skill_matches_repository_skill() -> None:
     assert packaged_skill.read_bytes() == repository_skill.read_bytes()
 
 
+def test_unified_exec_mode_is_opt_in(tmp_path: Path) -> None:
+    common = {
+        "workspace": tmp_path,
+        "model": "test-model",
+        "reasoning_effort": "high",
+        "mcp_url": "https://example.test/mcp",
+        "prompt": "Compute exactly.",
+    }
+
+    direct = _codex_arguments(**common, tool_mode=ToolMode.DIRECT)
+    unified = _codex_arguments(**common, tool_mode=ToolMode.UNIFIED_EXEC)
+
+    assert "unified_exec" not in direct
+    assert unified[-3:-1] == ("--enable", "unified_exec")
+
+
 def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     skill = (_ROOT / ".agents/skills/jacobian-math/SKILL.md").read_text(
         encoding="utf-8"
@@ -157,6 +175,19 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
         {"left": polynomial_value, "right": polynomial_value}
     )
     assert len(skill.encode("utf-8")) <= 4 * 1024
+
+
+def test_codex_skill_avoids_full_code_mode_tool_catalog_projection() -> None:
+    skill = (_ROOT / ".agents/skills/jacobian-math/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "tools.mcp__jacobian__math_find" in skill
+    assert "tools.mcp__jacobian__math_run" in skill
+    assert "Do not enumerate, filter, or\nprint `ALL_TOOLS`" in skill
+    assert "text(r.structuredContent ?? r)" in skill
+    assert "never reconstruct or paraphrase such a\nrecord" in skill
+    assert "required task authorization and bindings are preserved" in skill
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

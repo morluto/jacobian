@@ -8,7 +8,7 @@ keywords=["yang-mills","su2","quaternions","gauge-invariance"]
 [metadata]
 evaluation_kind="conjecture-probe"
 domain="mathematical-sciences"
-primary_domain="mathematical-physics"
+primary_domain="geometry-topology"
 field="gauge-theory"
 assurance_ceiling="CHECKED"
 answer_visibility="public"

@@ -169,8 +169,9 @@ def test_deeply_nested_evidence_json_does_not_crash(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
     assert result["evidence_validity"] == 0.0
-    # Evidence validity is a bonus, not a gate; correct math still earns 0.9.
-    assert result["reward"] == pytest.approx(0.9)
+    assert result["correctness"] == 1.0
+    # Invalid evidence is a hard gate even when the mathematics remains correct.
+    assert result["reward"] == pytest.approx(0.0)
 
 
 def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:

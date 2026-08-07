@@ -20,7 +20,7 @@ _NO_MARKER_CASES = (
     ("calendar-good-days-audit", None),
     ("modular-cubic-obstruction", None),
     ("lagrangian-projection-proof-audit", None),
-    ("research-status-evidence-audit", 0.2),
+    ("research-status-evidence-audit", 0.0),
 )
 
 _UNDOCUMENTED_MARKER_TASKS = (

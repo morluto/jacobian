@@ -43,7 +43,7 @@ from jacobian.operations import (
     OperationExecutionFailure,
 )
 from jacobian.schema_registry import SchemaRegistry, model_schema
-from jacobian.storage.errors import StorageError
+from jacobian.storage.errors import ArtifactIntegrityError, ArtifactNotFoundError
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -283,7 +283,7 @@ class MaterializedOperationAdapter:
 
     def __init__(
         self,
-        operation: MaterializedOperation[Any, Any, Any],
+        operation: MaterializedOperation[Any, Any, Any, Any],
         bundle: DomainBundle,
         resources: _OperationResources,
     ) -> None:
@@ -350,7 +350,12 @@ class MaterializedOperationAdapter:
                     validated_request, source_artifact_uris = (
                         self.operation.artifact_converter(validated_request, payload)
                     )
-        except (StorageError, ValidationError, ValueError) as exc:
+        except (
+            ArtifactNotFoundError,
+            ArtifactIntegrityError,
+            ValidationError,
+            ValueError,
+        ) as exc:
             raise CapabilityInvocationError(
                 self.operation.invalid_request
                 or self.bundle.diagnostics.invalid_request

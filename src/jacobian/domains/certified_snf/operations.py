@@ -29,7 +29,7 @@ def _certified_smith(
     )
 
 
-CERTIFIED_SNF_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+CERTIFIED_SNF_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
     MaterializedOperation(
         capability_id="matrix.normal_form.smith.certified.compute",
         title="Compute a transformation-certified Smith normal form",

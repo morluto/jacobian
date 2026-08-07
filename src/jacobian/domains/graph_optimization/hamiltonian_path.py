@@ -9,6 +9,7 @@ from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
 )
+from jacobian.contracts.results import ContractModel
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.operations import (
     ComputedNotApplicable,
@@ -109,6 +110,7 @@ HAMILTONIAN_PATH_CAPABILITY: MaterializedOperation[
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
     GraphHamiltonianPathResult,
+    ContractModel,
 ] = MaterializedOperation(
     capability_id="graph.hamiltonian_path.decide",
     title="Decide bounded Hamiltonian-path existence",

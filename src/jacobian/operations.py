@@ -79,6 +79,7 @@ class MaterializedOperation[
     RequestT: ContractModel,
     ArtifactT: ContractModel,
     PreviewT: ContractModel,
+    PayloadT: ContractModel,
 ]:
     """One deterministic producer whose durable result is materialized."""
 
@@ -97,9 +98,9 @@ class MaterializedOperation[
     preview_complete: bool = False
     accepted_result_capability_ids: tuple[str, ...] = ()
     artifact_converter: (
-        Callable[[RequestT, ArtifactT], tuple[RequestT, tuple[str, ...]]] | None
+        Callable[[RequestT, PayloadT], tuple[RequestT, tuple[str, ...]]] | None
     ) = None
-    artifact_payload_model: type[ContractModel] | None = None
+    artifact_payload_model: type[PayloadT] | None = None
     artifact_uri_field: str | None = None
     version: str = "2"
 
@@ -201,7 +202,7 @@ class MaterializedOperationFactory:
         preview: Callable[[ResultT], ResultT] | None = None,
         preview_complete: bool = False,
         version: str = "2",
-    ) -> MaterializedOperation[RequestT, ResultT, ResultT]:
+    ) -> MaterializedOperation[RequestT, ResultT, ResultT, ContractModel]:
         def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
             try:
                 return ComputedSuccess(operation(request))
@@ -339,7 +340,7 @@ class DomainDiagnostics:
 
 type DomainOperation = (
     ComputedOperation[Any, Any]
-    | MaterializedOperation[Any, Any, Any]
+    | MaterializedOperation[Any, Any, Any, Any]
     | BoundedSearchOperation[Any, Any, Any]
 )
 

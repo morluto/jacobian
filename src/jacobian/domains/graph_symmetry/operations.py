@@ -128,7 +128,7 @@ def _generator_orbits(
     )
 
 
-GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
     MaterializedOperation(
         capability_id="graph.symmetry.generator_orbits.compute",
         title="Exact declared graph-symmetry orbit partitions",

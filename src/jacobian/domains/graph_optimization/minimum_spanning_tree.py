@@ -18,6 +18,7 @@ from jacobian.contracts.graph_optimization import (
     GraphMstCycleCheck,
     GraphMstOptimalityCertificate,
 )
+from jacobian.contracts.results import ContractModel
 from jacobian.operations import (
     ComputedNotApplicable,
     ComputedOutcome,
@@ -183,6 +184,7 @@ MINIMUM_SPANNING_TREE_CAPABILITY: MaterializedOperation[
     GraphMinimumSpanningTreeRequest,
     GraphMinimumSpanningTreeResult,
     GraphMinimumSpanningTreeResult,
+    ContractModel,
 ] = MaterializedOperation(
     capability_id="graph.spanning_tree.minimum.compute",
     title="Exact weighted minimum spanning tree",

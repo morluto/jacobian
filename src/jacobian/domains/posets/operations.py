@@ -332,7 +332,7 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
     MaterializedOperation(
         capability_id="poset.finite.materialize",
         title="Materialize a canonical finite poset",

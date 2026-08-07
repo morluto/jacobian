@@ -88,6 +88,7 @@ class JacobianDegreeSliceMaterializeAdapter:
             input_schema=model_schema(JacobianDegreeSliceMaterializeRequest),
             output_schema=model_schema(JacobianDegreeSliceMaterializeOutput),
             tags=("polynomial", "jacobian", "degree-slice", "rabinowitsch", "exact"),
+            produced_artifact_types=(self.installation.system_schema_uri,),
         )
 
     @property

@@ -634,7 +634,7 @@ _CIRCLE = {
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
 }
 
-TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
     MaterializedOperation(
         capability_id="topology.simplicial_complex.materialize",
         title="Materialize a finite simplicial complex",

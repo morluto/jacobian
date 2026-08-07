@@ -14,6 +14,7 @@ from jacobian.contracts.projective_geometry import (
     ProjectiveLineArrangementResult,
     ProjectiveMultiplicityCount,
 )
+from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
 from jacobian.operations import (
     MaterializedOperation,
@@ -156,6 +157,7 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: MaterializedOperation[
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
     ProjectiveLineArrangementResult,
+    ContractModel,
 ] = _FACTORY(
     "geometry.projective_line_arrangement.flats.materialize",
     "Materialize projective line-arrangement flats",

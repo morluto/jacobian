@@ -358,6 +358,7 @@ class SingularNullstellensatzCertificateAdapter:
             ),
             accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
             accepted_artifact_types=(self.system_schema_uri,),
+            produced_artifact_types=(self.bundle_schema_uri,),
         )
 
     @property

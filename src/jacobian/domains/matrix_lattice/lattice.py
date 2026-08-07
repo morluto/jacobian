@@ -149,7 +149,7 @@ def reduce_lattice_basis(
     return ComputedSuccess(result)
 
 
-LATTICE_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
+LATTICE_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
     MaterializedOperation(
         capability_id="lattice.basis.reduce",
         title="Reduce an exact integer lattice basis",

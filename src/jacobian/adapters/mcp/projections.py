@@ -475,7 +475,12 @@ def _capability_discovery_response(
         response["available_domains_truncated"] = True
         response["truncation_reason"] = "BYTE_LIMIT"
     response["match_metadata_truncated"] = False
-    compact_fields = ("tags", "matched_on", "matched_terms")
+    compact_fields = (
+        "tags",
+        "matched_on",
+        "matched_terms",
+        "produced_artifact_types",
+    )
     while (
         len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
     ):

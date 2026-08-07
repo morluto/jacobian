@@ -9,7 +9,8 @@ For the strict-transform divisor class `D=3H-E1-...-E6`, report its class
 vector, `D^2`, `D·K` for `K=-3H+E1+...+E6`, and the adjunction arithmetic
 genus. The verifier recomputes all evaluations and intersection arithmetic.
 
-Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
+The coefficients must be primitive (i.e., their GCD must be 1); scalar multiples
+are rejected. Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
 and `limitations`, at most 2 MiB. Lefschetz (1,1) is a declared trusted theorem.
 This one divisor certificate does not address higher-codimension Hodge classes
 or prove the Hodge Conjecture.
@@ -26,6 +27,7 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Scope:** the exact value declared in `submission_schema.json`
 - **Completeness:** `COMPLETE`.
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
+- **Evidence media types:** `application/json`.
 - **Required artifact filenames:** `evidence/answer.txt`.
+- **Evidence payload:** JSON object with required keys `schema_version` (string `"1"`), `task_id`, `result`, and `limitations`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

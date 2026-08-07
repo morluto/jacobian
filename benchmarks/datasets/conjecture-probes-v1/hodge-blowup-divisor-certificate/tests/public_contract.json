@@ -18,10 +18,35 @@
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
     "max_items": 1,
     "media_types": [
-      "text/plain"
+      "application/json"
     ],
     "min_items": 1,
-    "payload_shape": null
+    "payload_shape": {
+      "properties": {
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "result": {
+          "type": "object"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/hodge-blowup-divisor-certificate"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object"
+    }
   },
   "limitations": {
     "const": [

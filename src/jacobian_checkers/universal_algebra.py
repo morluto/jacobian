@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import Any
+from typing import Any, cast
 
 _MAX_ORDER = 8
 _MAX_LAWS = 16
@@ -217,32 +217,63 @@ def _parse_term(value: object, *, depth: int = 1) -> Term:
     return term
 
 
-def _term_node_count(term: Term) -> int:
+def _term_tuple(term: object) -> Term:
+    if type(term) is not tuple or len(term) != 4:
+        raise ValueError("parsed magma term is not an exact four-tuple")
+    return cast(Term, term)
+
+
+def _variable_name(term: object) -> str:
+    term = _term_tuple(term)
+    variable = term[1]
+    if (
+        term[0] != "VARIABLE"
+        or not isinstance(variable, str)
+        or not variable
+        or term[2] is not None
+        or term[3] is not None
+    ):
+        raise ValueError("parsed variable term is inconsistent")
+    return variable
+
+
+def _product_children(term: object) -> tuple[Term, Term]:
+    term = _term_tuple(term)
+    left = term[2]
+    right = term[3]
+    if term[0] != "PRODUCT" or term[1] is not None or left is None or right is None:
+        raise ValueError("parsed product term is inconsistent")
+    return left, right
+
+
+def _term_node_count(term: object) -> int:
+    term = _term_tuple(term)
     if term[0] == "VARIABLE":
+        _variable_name(term)
         return 1
-    assert term[2] is not None and term[3] is not None
-    return 1 + _term_node_count(term[2]) + _term_node_count(term[3])
+    left, right = _product_children(term)
+    return 1 + _term_node_count(left) + _term_node_count(right)
 
 
-def _term_variables(term: Term) -> frozenset[str]:
+def _term_variables(term: object) -> frozenset[str]:
+    term = _term_tuple(term)
     if term[0] == "VARIABLE":
-        assert term[1] is not None
-        return frozenset((term[1],))
-    assert term[2] is not None and term[3] is not None
-    return _term_variables(term[2]) | _term_variables(term[3])
+        return frozenset((_variable_name(term),))
+    left, right = _product_children(term)
+    return _term_variables(left) | _term_variables(right)
 
 
 def _evaluate_term(
-    term: Term,
+    term: object,
     table: tuple[tuple[int, ...], ...],
     assignment: dict[str, int],
 ) -> int:
+    term = _term_tuple(term)
     if term[0] == "VARIABLE":
-        assert term[1] is not None
-        return assignment[term[1]]
-    assert term[2] is not None and term[3] is not None
-    return table[_evaluate_term(term[2], table, assignment)][
-        _evaluate_term(term[3], table, assignment)
+        return assignment[_variable_name(term)]
+    left, right = _product_children(term)
+    return table[_evaluate_term(left, table, assignment)][
+        _evaluate_term(right, table, assignment)
     ]
 
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
+import pytest
+
+import jacobian_checkers.universal_algebra as checker_module
 from jacobian_checkers.universal_algebra import check_law_evaluation
 
 
@@ -114,6 +117,39 @@ def test_checker_rejects_forged_counterexample_order() -> None:
     record["checked_valuations"] = 3
 
     decision = check_law_evaluation(request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    "broken_term",
+    [
+        ("VARIABLE", None, None, None),
+        ("PRODUCT", None, None, ("VARIABLE", "x", None, None)),
+        (),
+        ("VARIABLE", "x", None, None, "extra"),
+        ("PRODUCT", None, (), ("VARIABLE", "x", None, None)),
+    ],
+)
+def test_checker_rejects_broken_parsed_term_invariants(
+    monkeypatch: pytest.MonkeyPatch,
+    broken_term: object,
+) -> None:
+    valid_term: checker_module.Term = ("VARIABLE", "x", None, None)
+    law: checker_module.Law = (
+        "commutative",
+        ("x",),
+        cast(checker_module.Term, broken_term),
+        valid_term,
+    )
+    monkeypatch.setattr(
+        checker_module,
+        "_parse_problem",
+        lambda _problem: (2, ((0, 0), (1, 1)), (law,)),
+    )
+
+    decision = check_law_evaluation(_request())
 
     assert decision["accepted"] is False
     assert decision["conclusion"] == "UNKNOWN"

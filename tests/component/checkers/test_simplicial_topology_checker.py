@@ -261,6 +261,40 @@ def test_integral_homology_checker_rejects_a_forged_unimodular_transform() -> No
     assert checked["conclusion"] == "UNKNOWN"
 
 
+def test_prime_field_boundary_rejects_a_missing_prime() -> None:
+    with pytest.raises(ValueError, match="prime-field boundary requires a prime"):
+        checker_module._boundary(
+            _COMPLEX.model_dump(mode="json"),
+            1,
+            ring="PRIME_FIELD",
+            prime=None,
+        )
+
+
+def test_chain_checker_rejects_an_incomplete_reconstructed_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = next(
+        request
+        for checker, request in _CASES
+        if checker is check_simplicial_chain_complex
+    )
+    original_boundary = checker_module._boundary
+
+    def incomplete_boundary(*args: Any, **kwargs: Any) -> Any:
+        dimension = args[1]
+        if dimension == 0:
+            return None
+        return original_boundary(*args, **kwargs)
+
+    monkeypatch.setattr(checker_module, "_boundary", incomplete_boundary)
+
+    checked = check_simplicial_chain_complex(copy.deepcopy(case))
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"
+
+
 def test_checker_source_does_not_import_topology_producer_or_contracts() -> None:
     source = inspect.getsource(checker_module)
 

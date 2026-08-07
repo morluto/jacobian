@@ -160,12 +160,12 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/cddlib/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 11
+      "complexity": 17
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/cgal/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 13
+      "complexity": 16
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/environment/spike.py",
@@ -175,12 +175,12 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 15
+      "complexity": 16
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/nauty/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 17
+      "complexity": 25
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/regina/environment/spike.py",
@@ -190,7 +190,7 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/regina/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 11
+      "complexity": 15
     },
     {
       "path": "benchmarks/datasets/public-reproductions-v1/superposition-proof-replay/tests/verifier.py",

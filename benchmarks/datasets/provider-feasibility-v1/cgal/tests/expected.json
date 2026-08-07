@@ -20,5 +20,7 @@
       "expected_output_sha256": "sha256:a1cecc8c3781dfd8626e62da3d2ff4a4f974b31a3cb19c4baa23db0d11741ce9"
     }
   },
-  "task_id": "jacobian/cgal"
+  "task_id": "jacobian/cgal",
+  "adapter_source_sha256": "sha256:22c836bb7030f8f51fc20ec38b8ea0f8560f7546e703d17655a7f6f0c74c6768",
+  "archive_sha256": "sha256:f75d2b2486842fb47222c780c7241c262d392802d0811143c4e9b539972ee55b"
 }

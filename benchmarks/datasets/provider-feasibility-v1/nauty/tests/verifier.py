@@ -61,6 +61,30 @@ def _execution_bound(report: object) -> bool:
         return False
     if observed_digest != expected_digest:
         return False
+    canonicalization = report.get("canonicalization")
+    frozen_canonicalization = expected["canonicalization"]
+    if not isinstance(canonicalization, dict) or not isinstance(
+        frozen_canonicalization, dict
+    ):
+        return False
+    if canonicalization.get("command") != frozen_canonicalization["command"]:
+        return False
+    if (
+        canonicalization.get("expected_output_graph6")
+        != frozen_canonicalization["expected_output_graph6"]
+    ):
+        return False
+    if canonicalization.get("input_graph6") != frozen_canonicalization["input_graph6"]:
+        return False
+    canonical_digest = canonicalization.get("expected_output_sha256")
+    if canonical_digest != frozen_canonicalization["expected_output_sha256"]:
+        return False
+    if not _digest_ok(canonical_digest):
+        return False
+    if canonicalization.get("observed_output_sha256") != canonical_digest:
+        return False
+    if canonicalization.get("isomorphic_inputs_converged") is not True:
+        return False
     limitations = report.get("limitations")
     if not isinstance(limitations, list) or not limitations:
         return False

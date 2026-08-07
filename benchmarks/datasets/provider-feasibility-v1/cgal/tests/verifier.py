@@ -70,6 +70,13 @@ def _execution_bound(report: object) -> bool:
         return False
     if not _digest_ok(provider.get("executable_sha256")):
         return False
+    if provider.get("adapter_source_sha256") != expected["adapter_source_sha256"]:
+        return False
+    source = provider.get("source")
+    if not isinstance(source, dict):
+        return False
+    if source.get("archive_sha256") != expected["archive_sha256"]:
+        return False
     if set(reproductions) != {"unique", "cocircular"}:
         return False
     if not _case_bound("unique", reproductions.get("unique")):

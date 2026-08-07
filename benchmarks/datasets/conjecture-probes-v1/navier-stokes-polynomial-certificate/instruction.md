@@ -11,8 +11,9 @@ both momentum residuals, and scalar vorticity `∂x u2 - ∂y u1`. The vorticity
 must be nonzero, so the zero field and pure-gradient shortcuts are rejected.
 
 `evidence/answer.txt` must be a JSON object with exactly `schema_version`,
-`task_id`, `result`, and `limitations`, matching the result and limitations in
-the submission. 
+`task_id`, `result`, and `limitations`. Use schema version `1` (the string
+`"1"`), the task ID and limitations from the submission contract, and the same
+`result` object as in `submission.json`. 
 This finite symbolic certificate concerns one exact steady polynomial flow.
 It neither proves nor disproves global existence or smoothness for the
 three-dimensional Navier–Stokes equations. Claim only `CHECKED` for the frozen

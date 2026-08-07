@@ -12,7 +12,7 @@ CERTIFIED_SNF_EXACT_REPLAY_CHECKERS = (
         entrypoint_module="jacobian_checkers.certified_snf",
         replay_method="independent Smith transformation-certificate replay",
         reason=(
-            "operator-authorized standard-library checker validates D=UAV, both "
+            "operator-authorized independent checker validates D=UAV, both "
             "unimodular determinants, and the complete canonical divisibility chain"
         ),
         verification_capability_id="matrix.normal_form.smith.certified.verify",

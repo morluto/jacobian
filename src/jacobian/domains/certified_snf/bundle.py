@@ -34,8 +34,7 @@ def build_certified_snf_bundle() -> DomainBundle:
             "jacobian.certified-snf",
             features=(
                 "exact-integer",
-                "elementary-row-operations",
-                "elementary-column-operations",
+                "sympy-smith-normal-decomposition",
                 "left-unimodular-transformation",
                 "right-unimodular-transformation",
                 "smith-divisibility-chain",

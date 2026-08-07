@@ -284,7 +284,7 @@ def check_certified_smith_normal_form(request: object) -> dict[str, Any]:
         if (
             result["exactness"] != "EXACT_INTEGER"
             or result["determinism"] != "DETERMINISTIC"
-            or result["backend"] != "jacobian-stdlib-elementary-operations"
+            or result["backend"] != "jacobian-sympy-smith-normal-decomposition"
             or result["backend_version"] != "1"
             or result["completeness"] != "FULL_MATRIX_TRANSFORMATIONS"
             or result["verification"] != "UNVERIFIED"

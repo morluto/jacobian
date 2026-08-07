@@ -315,55 +315,70 @@ class TenantRuntimeRouter:
             entry.last_used = self._clock()
             self._condition.notify_all()
 
+    def _claim_shutdown(self) -> bool:
+        with self._condition:
+            if self._closed:
+                return False
+            while self._shutdown_in_flight:
+                self._condition.wait()
+                if self._closed:
+                    return False
+            self._closing = True
+            self._shutdown_in_flight = True
+            return True
+
+    def _collect_shutdown_runtimes(
+        self,
+    ) -> tuple[tuple[str, _TenantRuntimeEntry], ...]:
+        with self._condition:
+            while (
+                self._creating
+                or self._evictions_in_flight
+                or any(entry.active_leases for entry in self._runtimes.values())
+            ):
+                self._condition.wait()
+            return tuple(self._runtimes.items()) + tuple(self._quarantined.items())
+
+    def _close_runtime_entries(
+        self, runtimes: tuple[tuple[str, _TenantRuntimeEntry], ...]
+    ) -> None:
+        failures: list[Exception] = []
+        for tenant_key, entry in runtimes:
+            try:
+                entry.runtime.close()
+            except Exception as exc:
+                failures.append(exc)
+            else:
+                with self._condition:
+                    self._runtimes.pop(tenant_key, None)
+                    self._quarantined.pop(tenant_key, None)
+        if failures:
+            raise ExceptionGroup(
+                "one or more tenant runtimes failed to close", failures
+            )
+
+    def _finish_shutdown(self) -> None:
+        with self._condition:
+            self._shutdown_in_flight = False
+            self._closed = True
+            self._closing = False
+            self._condition.notify_all()
+
+    def _abort_shutdown(self) -> None:
+        with self._condition:
+            self._shutdown_in_flight = False
+            self._condition.notify_all()
+
     def close(self) -> None:
         """Close every tenant runtime owned by this router."""
 
-        owns_shutdown = False
+        if not self._claim_shutdown():
+            return
         try:
-            with self._condition:
-                if self._closed:
-                    return
-                while self._shutdown_in_flight:
-                    self._condition.wait()
-                    if self._closed:
-                        return
-                self._closing = True
-                owns_shutdown = True
-                self._shutdown_in_flight = True
-            with self._condition:
-                while (
-                    self._creating
-                    or self._evictions_in_flight
-                    or any(entry.active_leases for entry in self._runtimes.values())
-                ):
-                    self._condition.wait()
-                runtimes = tuple(self._runtimes.items()) + tuple(
-                    self._quarantined.items()
-                )
-            failures: list[Exception] = []
-            for tenant_key, entry in runtimes:
-                try:
-                    entry.runtime.close()
-                except Exception as exc:
-                    failures.append(exc)
-                else:
-                    with self._condition:
-                        self._runtimes.pop(tenant_key, None)
-                        self._quarantined.pop(tenant_key, None)
-            if failures:
-                raise ExceptionGroup(
-                    "one or more tenant runtimes failed to close", failures
-                )
-            with self._condition:
-                self._shutdown_in_flight = False
-                self._closed = True
-                self._closing = False
-                self._condition.notify_all()
+            self._close_runtime_entries(self._collect_shutdown_runtimes())
+            self._finish_shutdown()
         except BaseException:
-            if owns_shutdown:
-                with self._condition:
-                    self._shutdown_in_flight = False
-                    self._condition.notify_all()
+            self._abort_shutdown()
             raise
 
 

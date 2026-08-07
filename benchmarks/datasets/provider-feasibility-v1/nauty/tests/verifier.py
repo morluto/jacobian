@@ -26,29 +26,17 @@ def _digest_ok(value: object) -> bool:
     return isinstance(value, str) and value.startswith("sha256:") and len(value) == 71
 
 
-def _execution_bound(report: object) -> bool:
-    """Reject reports that only restate public spike success literals."""
-
-    if not isinstance(report, dict):
-        return False
+def _report_header_ok(report: dict) -> bool:
     if report.get("contract") != expected["contract"]:
         return False
     if report.get("status") != "COMPLETED":
         return False
     if report.get("conclusion") != expected["report_conclusion"]:
         return False
-    if report.get("assurance") != expected["report_assurance"]:
-        return False
-    provider = report.get("provider")
-    reproduction = report.get("reproduction")
-    frozen = expected["reproduction"]
-    if not isinstance(provider, dict) or not isinstance(reproduction, dict):
-        return False
-    if not isinstance(frozen, dict):
-        return False
-    executables = provider.get("executables")
-    if not isinstance(executables, dict) or not executables:
-        return False
+    return report.get("assurance") == expected["report_assurance"]
+
+
+def _graph6_count_bound(reproduction: dict, frozen: dict) -> bool:
     expected_graph6 = reproduction.get("expected_graph6")
     if expected_graph6 != frozen["expected_graph6"]:
         return False
@@ -57,16 +45,29 @@ def _execution_bound(report: object) -> bool:
     observed_count = reproduction.get("observed_count")
     if type(observed_count) is not int or observed_count != frozen["observed_count"]:
         return False
-    if observed_count != len(expected_graph6):
-        return False
+    return observed_count == len(expected_graph6)
+
+
+def _reproduction_digest_bound(reproduction: dict, frozen: dict) -> bool:
     expected_digest = reproduction.get("expected_output_sha256")
     observed_digest = reproduction.get("observed_output_sha256")
     if expected_digest != frozen["expected_output_sha256"]:
         return False
     if not _digest_ok(expected_digest) or not _digest_ok(observed_digest):
         return False
-    if observed_digest != expected_digest:
+    return observed_digest == expected_digest
+
+
+def _reproduction_graph_bound(reproduction: dict, frozen: dict, provider: dict) -> bool:
+    executables = provider.get("executables")
+    if not isinstance(executables, dict) or not executables:
         return False
+    if not _graph6_count_bound(reproduction, frozen):
+        return False
+    return _reproduction_digest_bound(reproduction, frozen)
+
+
+def _canonicalization_bound(report: dict) -> bool:
     canonicalization = report.get("canonicalization")
     frozen_canonicalization = expected["canonicalization"]
     if not isinstance(canonicalization, dict) or not isinstance(
@@ -89,7 +90,24 @@ def _execution_bound(report: object) -> bool:
         return False
     if canonicalization.get("observed_output_sha256") != canonical_digest:
         return False
-    if canonicalization.get("isomorphic_inputs_converged") is not True:
+    return canonicalization.get("isomorphic_inputs_converged") is True
+
+
+def _execution_bound(report: object) -> bool:
+    """Reject reports that only restate public spike success literals."""
+
+    if not isinstance(report, dict) or not _report_header_ok(report):
+        return False
+    provider = report.get("provider")
+    reproduction = report.get("reproduction")
+    frozen = expected["reproduction"]
+    if not isinstance(provider, dict) or not isinstance(reproduction, dict):
+        return False
+    if not isinstance(frozen, dict):
+        return False
+    if not _reproduction_graph_bound(reproduction, frozen, provider):
+        return False
+    if not _canonicalization_bound(report):
         return False
     limitations = report.get("limitations")
     if not isinstance(limitations, list) or not limitations:

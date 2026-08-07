@@ -477,13 +477,11 @@ def _mod_inverse(value: int, prime: int) -> int:
     return pow(value, -1, prime)
 
 
-def _independent_reduction(
-    simplices: Sequence[Mapping[str, Any]], prime: int
-) -> dict[str, Any]:
-    """Reduce the boundary matrix without importing or calling GUDHI."""
-    index_by_vertices = {
-        tuple(item["vertices"]): index for index, item in enumerate(simplices)
-    }
+def _reduce_columns(
+    simplices: Sequence[Mapping[str, Any]],
+    index_by_vertices: dict[tuple[int, ...], int],
+    prime: int,
+) -> tuple[list[dict[int, int]], dict[int, int], list[dict[str, Any]]]:
     reduced_columns: list[dict[int, int]] = []
     pivot_to_column: dict[int, int] = {}
     ledger: list[dict[str, Any]] = []
@@ -527,7 +525,14 @@ def _independent_reduction(
                 ],
             }
         )
+    return reduced_columns, pivot_to_column, ledger
 
+
+def _build_pairs(
+    simplices: Sequence[Mapping[str, Any]],
+    reduced_columns: list[dict[int, int]],
+    pivot_to_column: dict[int, int],
+) -> list[dict[str, Any]]:
     pairs: list[dict[str, Any]] = []
     for birth_index, item in enumerate(simplices):
         if reduced_columns[birth_index]:
@@ -556,6 +561,20 @@ def _independent_reduction(
             pair["death"].get("rank", len(simplices)),
         )
     )
+    return pairs
+
+
+def _independent_reduction(
+    simplices: Sequence[Mapping[str, Any]], prime: int
+) -> dict[str, Any]:
+    """Reduce the boundary matrix without importing or calling GUDHI."""
+    index_by_vertices = {
+        tuple(item["vertices"]): index for index, item in enumerate(simplices)
+    }
+    reduced_columns, pivot_to_column, ledger = _reduce_columns(
+        simplices, index_by_vertices, prime
+    )
+    pairs = _build_pairs(simplices, reduced_columns, pivot_to_column)
     return {
         "algorithm": "STDLIB_MOD_P_BOUNDARY_COLUMN_REDUCTION",
         "coefficient_prime": prime,

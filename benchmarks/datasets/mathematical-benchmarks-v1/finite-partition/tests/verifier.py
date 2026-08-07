@@ -33,6 +33,95 @@ def _matches_recorded_candidate(groups, universe):
     ]
 
 
+def _full_contract(s, e, expected_keys):
+    return (
+        isinstance(s, dict)
+        and set(s) == expected_keys
+        and s.get("task_id") == e["task_id"]
+        and s.get("conclusion") == "TRUE"
+        and s.get("completeness") == "COMPLETE"
+        and isinstance(s.get("result"), dict)
+        and isinstance(s.get("scope"), str)
+        and isinstance(s.get("limitations"), list)
+        and isinstance(s.get("evidence"), list)
+        and len(s["evidence"]) == 1
+        and isinstance(s.get("claimed_assurance"), str)
+        and s.get("claimed_assurance")
+        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
+    )
+
+
+def _math_contract_check(s, e, required):
+    return (
+        isinstance(s, dict)
+        and required <= set(s) <= required | {"verification_record_uri"}
+        and s.get("task_id") == e["task_id"]
+        and s.get("conclusion") == "TRUE"
+        and s.get("completeness") == "COMPLETE"
+        and isinstance(s.get("result"), dict)
+        and isinstance(s.get("scope"), str)
+        and isinstance(s.get("limitations"), list)
+        and isinstance(s.get("claimed_assurance"), str)
+        and s.get("claimed_assurance")
+        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
+    )
+
+
+def _validate_groups(groups, x):
+    members = []
+    valid = isinstance(groups, list) and len(groups) == 3
+    for g in groups:
+        valid = (
+            valid
+            and isinstance(g, dict)
+            and isinstance(g.get("name"), str)
+            and isinstance(g.get("members"), list)
+        )
+        if valid:
+            members.extend(g["members"])
+    actual = {}
+    if valid:
+        try:
+            for g in groups:
+                if g["name"] in actual:
+                    valid = False
+                    break
+                actual[g["name"]] = frozenset(g["members"])
+        except TypeError:
+            valid = False
+    expected = {
+        f"residue-{r}": frozenset(n for n in x["universe"] if int(n) % 3 == r)
+        for r in range(3)
+    }
+    return members, actual, expected
+
+
+def _check_evidence_items(evidence):
+    good = True
+    for i in evidence:
+        if (
+            not isinstance(i, dict)
+            or not isinstance(i.get("path"), str)
+            or not isinstance(i.get("sha256"), str)
+        ):
+            good = False
+            continue
+        p = Path(i["path"])
+        t = (W / p).resolve()
+        if (
+            p.is_absolute()
+            or p != Path("evidence/answer.txt")
+            or ".." in p.parts
+            or (W / p).is_symlink()
+            or not t.is_relative_to(W.resolve())
+            or not t.is_file()
+        ):
+            good = False
+            continue
+        good &= i.get("sha256") == _digest(t)
+    return good
+
+
 def main():
     try:
         s = json.loads((W / "submission.json").read_text())
@@ -55,63 +144,11 @@ def main():
         if isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
         else set()
     )
-    contract = (
-        isinstance(s, dict)
-        and set(s) == expected_keys
-        and s.get("task_id") == e["task_id"]
-        and s.get("conclusion") == "TRUE"
-        and s.get("completeness") == "COMPLETE"
-        and isinstance(s.get("result"), dict)
-        and isinstance(s.get("scope"), str)
-        and isinstance(s.get("limitations"), list)
-        and isinstance(s.get("evidence"), list)
-        and len(s["evidence"]) == 1
-        and isinstance(s.get("claimed_assurance"), str)
-        and s.get("claimed_assurance")
-        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
-    )
-
-    math_contract = (
-        isinstance(s, dict)
-        and required <= set(s) <= required | {"verification_record_uri"}
-        and s.get("task_id") == e["task_id"]
-        and s.get("conclusion") == "TRUE"
-        and s.get("completeness") == "COMPLETE"
-        and isinstance(s.get("result"), dict)
-        and isinstance(s.get("scope"), str)
-        and isinstance(s.get("limitations"), list)
-        and isinstance(s.get("claimed_assurance"), str)
-        and s.get("claimed_assurance")
-        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
-    )
-
+    contract = _full_contract(s, e, expected_keys)
+    math_contract = _math_contract_check(s, e, required)
     groups = s.get("result", {}).get("cases", []) if math_contract else []
-    members = []
-    valid = isinstance(groups, list) and len(groups) == 3
-    for g in groups:
-        valid = (
-            valid
-            and isinstance(g, dict)
-            and isinstance(g.get("name"), str)
-            and isinstance(g.get("members"), list)
-        )
-        if valid:
-            members.extend(g["members"])
+    members, actual, expected = _validate_groups(groups, x)
     wanted = set(x["universe"])
-    actual = {}
-    if valid:
-        try:
-            for g in groups:
-                if g["name"] in actual:
-                    valid = False
-                    break
-                actual[g["name"]] = frozenset(g["members"])
-        except TypeError:
-            valid = False
-    expected = {
-        f"residue-{r}": frozenset(n for n in x["universe"] if int(n) % 3 == r)
-        for r in range(3)
-    }
     record_bound = (
         verification_record_is_bound(s)
         and _matches_recorded_candidate(groups, x["universe"])
@@ -131,30 +168,12 @@ def main():
         and math_correct
         and (s["claimed_assurance"] != "VERIFIED" or record_bound)
     )
-    good_evidence = False
-    if contract and isinstance(s["evidence"], list) and s["evidence"]:
-        good_evidence = True
-        for i in s["evidence"]:
-            if (
-                not isinstance(i, dict)
-                or not isinstance(i.get("path"), str)
-                or not isinstance(i.get("sha256"), str)
-            ):
-                good_evidence = False
-                continue
-            p = Path(i["path"])
-            t = (W / p).resolve()
-            if (
-                p.is_absolute()
-                or p != Path("evidence/answer.txt")
-                or ".." in p.parts
-                or (W / p).is_symlink()
-                or not t.is_relative_to(W.resolve())
-                or not t.is_file()
-            ):
-                good_evidence = False
-                continue
-            good_evidence &= i.get("sha256") == _digest(t)
+    good_evidence = bool(
+        contract
+        and isinstance(s["evidence"], list)
+        and s["evidence"]
+        and _check_evidence_items(s["evidence"])
+    )
     scope = bool(contract and s["scope"] == " ".join(e["required_scope_terms"]))
     assurance = bool(
         contract

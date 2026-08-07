@@ -459,32 +459,314 @@ def parse_reasoning_protocol_trace(path: Path) -> dict[str, int | str]:
     return _parse_atif_reasoning_protocol(value)
 
 
+@dataclass
+class _AgentTranscriptTelemetry:
+    mcp_calls: list[str] = field(default_factory=list)
+    successful_calls: list[str] = field(default_factory=list)
+    capability_attempt_ids: list[str] = field(default_factory=list)
+    capability_ids: list[str] = field(default_factory=list)
+    capability_invocations: list[dict[str, Any]] = field(default_factory=list)
+    capability_descriptions: list[dict[str, Any]] = field(default_factory=list)
+    shell_calls: list[str] = field(default_factory=list)
+    usage: dict[str, Any] | None = None
+    tool_error_count: int = 0
+    parameter_error_count: int = 0
+    capability_rejection_count: int = 0
+    mcp_wire_bytes: int = 0
+    mcp_wire_bytes_by_tool: Counter[str] = field(default_factory=Counter)
+    mcp_model_visible_bytes: int = 0
+    mcp_model_visible_bytes_by_tool: Counter[str] = field(default_factory=Counter)
+    mcp_logical_payload_bytes: int = 0
+    mcp_logical_payload_bytes_by_tool: Counter[str] = field(default_factory=Counter)
+    mcp_logical_payload_observed_calls: int = 0
+    mcp_call_signatures: Counter[tuple[str, str]] = field(default_factory=Counter)
+    capability_describe_index_calls: int = 0
+    capability_describe_exact_calls: int = 0
+    reasoning_telemetry: _ReasoningProtocolTelemetry = field(
+        default_factory=_ReasoningProtocolTelemetry
+    )
+    resource_telemetry: _McpResourceTelemetry = field(
+        default_factory=_McpResourceTelemetry
+    )
+
+
+def _is_command_execution_event(event: dict[str, Any], item: object) -> bool:
+    return (
+        event.get("type") == "item.completed"
+        and isinstance(item, dict)
+        and item.get("type") == "command_execution"
+    )
+
+
+def _is_mcp_tool_call_event(event: dict[str, Any], item: object) -> bool:
+    return (
+        event.get("type") == "item.completed"
+        and isinstance(item, dict)
+        and item.get("type") == "mcp_tool_call"
+        and isinstance(item.get("tool"), str)
+    )
+
+
+def _record_mcp_byte_metrics(
+    telemetry: _AgentTranscriptTelemetry,
+    item: Mapping[str, Any],
+    tool: str,
+) -> tuple[Mapping[str, Any] | None, Mapping[str, Any] | None]:
+    wire_bytes = _mcp_wire_bytes(item)
+    model_visible_bytes = _mcp_model_visible_bytes(item)
+    text_response = _mcp_text_payload(item)
+    structured_response = _mcp_structured_payload(item)
+    logical_bytes = _mcp_logical_payload_bytes(
+        item,
+        text_payload=text_response,
+        structured_payload=structured_response,
+    )
+    telemetry.mcp_wire_bytes += wire_bytes
+    telemetry.mcp_model_visible_bytes += model_visible_bytes
+    if wire_bytes:
+        telemetry.mcp_wire_bytes_by_tool[tool] += wire_bytes
+    if model_visible_bytes:
+        telemetry.mcp_model_visible_bytes_by_tool[tool] += model_visible_bytes
+    if logical_bytes is not None:
+        telemetry.mcp_logical_payload_observed_calls += 1
+        telemetry.mcp_logical_payload_bytes += logical_bytes
+        telemetry.mcp_logical_payload_bytes_by_tool[tool] += logical_bytes
+    return text_response, structured_response
+
+
+def _record_describe_and_attempt(
+    telemetry: _AgentTranscriptTelemetry,
+    tool: str,
+    arguments: object,
+) -> None:
+    if tool == "math.find":
+        if isinstance(arguments, Mapping) and isinstance(
+            arguments.get("capability_id"), str
+        ):
+            telemetry.capability_describe_exact_calls += 1
+        else:
+            telemetry.capability_describe_index_calls += 1
+    if (
+        tool == "math.run"
+        and isinstance(arguments, Mapping)
+        and isinstance(arguments.get("capability_id"), str)
+    ):
+        telemetry.capability_attempt_ids.append(arguments["capability_id"])
+
+
+def _mcp_call_failed(
+    item: Mapping[str, Any],
+    result: object,
+    text_response: Mapping[str, Any] | None,
+    status: object,
+) -> bool:
+    return bool(
+        (isinstance(status, str) and status in {"error", "failed"})
+        or item.get("error")
+        or (
+            isinstance(result, Mapping)
+            and (result.get("isError") is True or result.get("is_error") is True)
+        )
+        or (
+            isinstance(text_response, Mapping)
+            and isinstance(text_response.get("error"), Mapping)
+        )
+        or _contains_value(
+            item,
+            field="status",
+            accepted={"CANCELLED", "ERROR", "TIMEOUT"},
+        )
+    )
+
+
+def _capability_match_ids(matches: object) -> list[str]:
+    if not isinstance(matches, list):
+        return []
+    return [
+        match["capability_id"]
+        for match in matches
+        if isinstance(match, Mapping) and isinstance(match.get("capability_id"), str)
+    ]
+
+
+def _build_capability_description(
+    arguments: Mapping[str, Any],
+    response: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    matches = response.get("matches") if isinstance(response, Mapping) else None
+    return {
+        "kind": (
+            response.get("kind")
+            if isinstance(response, Mapping) and isinstance(response.get("kind"), str)
+            else None
+        ),
+        "query": (
+            arguments.get("query") if isinstance(arguments.get("query"), str) else None
+        ),
+        "domain": (
+            arguments.get("domain")
+            if isinstance(arguments.get("domain"), str)
+            else None
+        ),
+        "mode": (
+            arguments.get("mode") if isinstance(arguments.get("mode"), str) else None
+        ),
+        "capability_id": (
+            arguments.get("capability_id")
+            if isinstance(arguments.get("capability_id"), str)
+            else None
+        ),
+        "match_ids": _capability_match_ids(matches),
+    }
+
+
+def _record_capability_invocation(
+    telemetry: _AgentTranscriptTelemetry,
+    tool: str,
+    arguments: object,
+    response: Mapping[str, Any] | None,
+) -> None:
+    execution = response.get("execution") if isinstance(response, Mapping) else None
+    if not (
+        tool == "math.run"
+        and isinstance(arguments, Mapping)
+        and isinstance(arguments.get("capability_id"), str)
+        and isinstance(response, Mapping)
+        and response.get("capability_id") == arguments["capability_id"]
+        and isinstance(execution, Mapping)
+        and execution.get("status") == "COMPLETED"
+    ):
+        return
+    telemetry.capability_ids.append(arguments["capability_id"])
+    telemetry.capability_invocations.append(
+        {
+            "capability_id": arguments["capability_id"],
+            "input": arguments.get("payload"),
+            "output": response.get("output"),
+            "artifact_uris": response.get("artifact_uris"),
+            "assurance": response.get("assurance"),
+            "completeness": response.get("completeness"),
+        }
+    )
+
+
+def _record_successful_mcp_call(
+    telemetry: _AgentTranscriptTelemetry,
+    tool: str,
+    arguments: object,
+    response: Mapping[str, Any] | None,
+) -> None:
+    telemetry.successful_calls.append(tool)
+    telemetry.reasoning_telemetry.record_write(tool, arguments, response)
+    if tool == "math.find" and isinstance(arguments, Mapping):
+        telemetry.capability_descriptions.append(
+            _build_capability_description(arguments, response)
+        )
+    if (
+        tool == "math.run"
+        and isinstance(response, Mapping)
+        and _contains_value(
+            response.get("output"),
+            field="status",
+            accepted={"REJECTED"},
+        )
+    ):
+        telemetry.capability_rejection_count += 1
+    _record_capability_invocation(telemetry, tool, arguments, response)
+
+
+def _process_mcp_tool_call(
+    telemetry: _AgentTranscriptTelemetry,
+    item: dict[str, Any],
+) -> None:
+    tool = item["tool"]
+    telemetry.mcp_calls.append(tool)
+    arguments = item.get("arguments")
+    telemetry.reasoning_telemetry.record_attempt(tool, arguments)
+    text_response, structured_response = _record_mcp_byte_metrics(telemetry, item, tool)
+    telemetry.mcp_call_signatures[_mcp_call_signature(tool, arguments)] += 1
+    _record_describe_and_attempt(telemetry, tool, arguments)
+    result = item.get("result")
+    response = structured_response or text_response
+    status = item.get("status")
+    if _mcp_call_failed(item, result, text_response, status):
+        telemetry.tool_error_count += 1
+    else:
+        _record_successful_mcp_call(telemetry, tool, arguments, response)
+    if _contains_value(
+        item,
+        field="code",
+        accepted=set(_PARAMETER_ERROR_CODES),
+    ):
+        telemetry.parameter_error_count += 1
+
+
+def _transcript_payload(telemetry: _AgentTranscriptTelemetry) -> dict[str, Any]:
+    return {
+        "mcp_calls": telemetry.mcp_calls,
+        "shell_calls": telemetry.shell_calls,
+        "usage": telemetry.usage,
+        "tool_error_count": telemetry.tool_error_count,
+        "parameter_error_count": telemetry.parameter_error_count,
+        "capability_rejection_count": telemetry.capability_rejection_count,
+        "successful_tool_calls": telemetry.successful_calls,
+        "capability_attempt_ids": telemetry.capability_attempt_ids,
+        "capability_ids": telemetry.capability_ids,
+        "capability_invocations": telemetry.capability_invocations,
+        "capability_descriptions": telemetry.capability_descriptions,
+        "mcp_wire_bytes": telemetry.mcp_wire_bytes,
+        "mcp_wire_bytes_by_tool": dict(
+            sorted(telemetry.mcp_wire_bytes_by_tool.items())
+        ),
+        "mcp_model_visible_bytes": telemetry.mcp_model_visible_bytes,
+        "mcp_model_visible_bytes_by_tool": dict(
+            sorted(telemetry.mcp_model_visible_bytes_by_tool.items())
+        ),
+        "mcp_logical_payload_bytes": telemetry.mcp_logical_payload_bytes,
+        "mcp_logical_payload_bytes_by_tool": dict(
+            sorted(telemetry.mcp_logical_payload_bytes_by_tool.items())
+        ),
+        "mcp_logical_payload_observed_calls": (
+            telemetry.mcp_logical_payload_observed_calls
+        ),
+        "mcp_resource_links_returned": telemetry.resource_telemetry.links_returned,
+        "mcp_resource_link_uris": telemetry.resource_telemetry.link_uris,
+        "mcp_resource_read_attempts": telemetry.resource_telemetry.read_attempts,
+        "mcp_resource_read_uris": telemetry.resource_telemetry.read_uris,
+        "mcp_resource_read_successes": telemetry.resource_telemetry.read_successes,
+        "mcp_resource_uri_preservation_attempts": (
+            telemetry.resource_telemetry.uri_preservation_attempts
+        ),
+        "mcp_resource_uri_preservation_successes": (
+            telemetry.resource_telemetry.uri_preservation_successes
+        ),
+        "mcp_resource_digest_preservation_successes": (
+            telemetry.resource_telemetry.digest_preservation_successes
+        ),
+        "repeated_mcp_call_count": sum(
+            count - 1 for count in telemetry.mcp_call_signatures.values() if count > 1
+        ),
+        "repeated_mcp_calls": [
+            {
+                "tool": tool,
+                "argument_digest": argument_digest,
+                "count": count,
+            }
+            for (tool, argument_digest), count in sorted(
+                telemetry.mcp_call_signatures.items()
+            )
+            if count > 1
+        ],
+        "capability_describe_index_calls": telemetry.capability_describe_index_calls,
+        "capability_describe_exact_calls": telemetry.capability_describe_exact_calls,
+        "reasoning_protocol": telemetry.reasoning_telemetry.payload(),
+    }
+
+
 def parse_agent_transcript(path: Path) -> dict[str, Any]:
     """Return calls, usage, failures, and successful capability dataflow."""
 
-    mcp_calls: list[str] = []
-    successful_calls: list[str] = []
-    capability_attempt_ids: list[str] = []
-    capability_ids: list[str] = []
-    capability_invocations: list[dict[str, Any]] = []
-    capability_descriptions: list[dict[str, Any]] = []
-    shell_calls: list[str] = []
-    usage: dict[str, Any] | None = None
-    tool_error_count = 0
-    parameter_error_count = 0
-    capability_rejection_count = 0
-    mcp_wire_bytes = 0
-    mcp_wire_bytes_by_tool: Counter[str] = Counter()
-    mcp_model_visible_bytes = 0
-    mcp_model_visible_bytes_by_tool: Counter[str] = Counter()
-    mcp_logical_payload_bytes = 0
-    mcp_logical_payload_bytes_by_tool: Counter[str] = Counter()
-    mcp_logical_payload_observed_calls = 0
-    mcp_call_signatures: Counter[tuple[str, str]] = Counter()
-    resource_telemetry = _McpResourceTelemetry()
-    capability_describe_index_calls = 0
-    capability_describe_exact_calls = 0
-    reasoning_telemetry = _ReasoningProtocolTelemetry()
+    telemetry = _AgentTranscriptTelemetry()
     for line in path.read_text(encoding="utf-8").splitlines():
         try:
             event = json.loads(line)
@@ -493,221 +775,17 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
         if not isinstance(event, dict):
             continue
         item = event.get("item")
-        if (
-            event.get("type") == "item.completed"
-            and isinstance(item, dict)
-            and item.get("type") == "command_execution"
-        ):
+        if not isinstance(item, dict):
+            _record_mcp_resource_telemetry(telemetry.resource_telemetry, item)
+            continue
+        if _is_command_execution_event(event, item):
             command = item.get("command")
-            shell_calls.append(command if isinstance(command, str) else "")
-        if (
-            event.get("type") == "item.completed"
-            and isinstance(item, dict)
-            and item.get("type") == "mcp_tool_call"
-            and isinstance(item.get("tool"), str)
-        ):
-            tool = item["tool"]
-            mcp_calls.append(tool)
-            arguments = item.get("arguments")
-            reasoning_telemetry.record_attempt(tool, arguments)
-            wire_bytes = _mcp_wire_bytes(item)
-            model_visible_bytes = _mcp_model_visible_bytes(item)
-            text_response = _mcp_text_payload(item)
-            structured_response = _mcp_structured_payload(item)
-            logical_bytes = _mcp_logical_payload_bytes(
-                item,
-                text_payload=text_response,
-                structured_payload=structured_response,
-            )
-            mcp_wire_bytes += wire_bytes
-            mcp_model_visible_bytes += model_visible_bytes
-            if wire_bytes:
-                mcp_wire_bytes_by_tool[tool] += wire_bytes
-            if model_visible_bytes:
-                mcp_model_visible_bytes_by_tool[tool] += model_visible_bytes
-            if logical_bytes is not None:
-                mcp_logical_payload_observed_calls += 1
-                mcp_logical_payload_bytes += logical_bytes
-                mcp_logical_payload_bytes_by_tool[tool] += logical_bytes
-            mcp_call_signatures[_mcp_call_signature(tool, arguments)] += 1
-            if tool == "math.find":
-                if isinstance(arguments, Mapping) and isinstance(
-                    arguments.get("capability_id"), str
-                ):
-                    capability_describe_exact_calls += 1
-                else:
-                    capability_describe_index_calls += 1
-            if (
-                tool == "math.run"
-                and isinstance(arguments, Mapping)
-                and isinstance(arguments.get("capability_id"), str)
-            ):
-                capability_attempt_ids.append(arguments["capability_id"])
-            result = item.get("result")
-            response = structured_response or text_response
-            status = item.get("status")
-            failed = bool(
-                (isinstance(status, str) and status in {"error", "failed"})
-                or item.get("error")
-                or (
-                    isinstance(result, Mapping)
-                    and (
-                        result.get("isError") is True or result.get("is_error") is True
-                    )
-                )
-                or (
-                    isinstance(text_response, Mapping)
-                    and isinstance(text_response.get("error"), Mapping)
-                )
-                or _contains_value(
-                    item,
-                    field="status",
-                    accepted={"CANCELLED", "ERROR", "TIMEOUT"},
-                )
-            )
-            if failed:
-                tool_error_count += 1
-            else:
-                successful_calls.append(tool)
-                reasoning_telemetry.record_write(tool, arguments, response)
-                if tool == "math.find" and isinstance(arguments, Mapping):
-                    matches = (
-                        response.get("matches")
-                        if isinstance(response, Mapping)
-                        else None
-                    )
-                    capability_descriptions.append(
-                        {
-                            "kind": (
-                                response.get("kind")
-                                if isinstance(response, Mapping)
-                                and isinstance(response.get("kind"), str)
-                                else None
-                            ),
-                            "query": (
-                                arguments.get("query")
-                                if isinstance(arguments.get("query"), str)
-                                else None
-                            ),
-                            "domain": (
-                                arguments.get("domain")
-                                if isinstance(arguments.get("domain"), str)
-                                else None
-                            ),
-                            "mode": (
-                                arguments.get("mode")
-                                if isinstance(arguments.get("mode"), str)
-                                else None
-                            ),
-                            "capability_id": (
-                                arguments.get("capability_id")
-                                if isinstance(arguments.get("capability_id"), str)
-                                else None
-                            ),
-                            "match_ids": [
-                                match["capability_id"]
-                                for match in matches
-                                if isinstance(match, Mapping)
-                                and isinstance(match.get("capability_id"), str)
-                            ]
-                            if isinstance(matches, list)
-                            else [],
-                        }
-                    )
-                if (
-                    tool == "math.run"
-                    and isinstance(response, Mapping)
-                    and _contains_value(
-                        response.get("output"),
-                        field="status",
-                        accepted={"REJECTED"},
-                    )
-                ):
-                    capability_rejection_count += 1
-                execution = (
-                    response.get("execution") if isinstance(response, Mapping) else None
-                )
-                if (
-                    tool == "math.run"
-                    and isinstance(arguments, Mapping)
-                    and isinstance(arguments.get("capability_id"), str)
-                    and isinstance(response, Mapping)
-                    and response.get("capability_id") == arguments["capability_id"]
-                    and isinstance(execution, Mapping)
-                    and execution.get("status") == "COMPLETED"
-                ):
-                    capability_ids.append(arguments["capability_id"])
-                    capability_invocations.append(
-                        {
-                            "capability_id": arguments["capability_id"],
-                            "input": arguments.get("payload"),
-                            "output": response.get("output"),
-                            "artifact_uris": response.get("artifact_uris"),
-                            "assurance": response.get("assurance"),
-                            "completeness": response.get("completeness"),
-                        }
-                    )
-            if _contains_value(
-                item,
-                field="code",
-                accepted=set(_PARAMETER_ERROR_CODES),
-            ):
-                parameter_error_count += 1
-        _record_mcp_resource_telemetry(resource_telemetry, item)
+            telemetry.shell_calls.append(command if isinstance(command, str) else "")
+        if _is_mcp_tool_call_event(event, item):
+            _process_mcp_tool_call(telemetry, item)
+        _record_mcp_resource_telemetry(telemetry.resource_telemetry, item)
         if event.get("type") == "turn.completed" and isinstance(
             event.get("usage"), dict
         ):
-            usage = event["usage"]
-    return {
-        "mcp_calls": mcp_calls,
-        "shell_calls": shell_calls,
-        "usage": usage,
-        "tool_error_count": tool_error_count,
-        "parameter_error_count": parameter_error_count,
-        "capability_rejection_count": capability_rejection_count,
-        "successful_tool_calls": successful_calls,
-        "capability_attempt_ids": capability_attempt_ids,
-        "capability_ids": capability_ids,
-        "capability_invocations": capability_invocations,
-        "capability_descriptions": capability_descriptions,
-        "mcp_wire_bytes": mcp_wire_bytes,
-        "mcp_wire_bytes_by_tool": dict(sorted(mcp_wire_bytes_by_tool.items())),
-        "mcp_model_visible_bytes": mcp_model_visible_bytes,
-        "mcp_model_visible_bytes_by_tool": dict(
-            sorted(mcp_model_visible_bytes_by_tool.items())
-        ),
-        "mcp_logical_payload_bytes": mcp_logical_payload_bytes,
-        "mcp_logical_payload_bytes_by_tool": dict(
-            sorted(mcp_logical_payload_bytes_by_tool.items())
-        ),
-        "mcp_logical_payload_observed_calls": mcp_logical_payload_observed_calls,
-        "mcp_resource_links_returned": resource_telemetry.links_returned,
-        "mcp_resource_link_uris": resource_telemetry.link_uris,
-        "mcp_resource_read_attempts": resource_telemetry.read_attempts,
-        "mcp_resource_read_uris": resource_telemetry.read_uris,
-        "mcp_resource_read_successes": resource_telemetry.read_successes,
-        "mcp_resource_uri_preservation_attempts": (
-            resource_telemetry.uri_preservation_attempts
-        ),
-        "mcp_resource_uri_preservation_successes": (
-            resource_telemetry.uri_preservation_successes
-        ),
-        "mcp_resource_digest_preservation_successes": (
-            resource_telemetry.digest_preservation_successes
-        ),
-        "repeated_mcp_call_count": sum(
-            count - 1 for count in mcp_call_signatures.values() if count > 1
-        ),
-        "repeated_mcp_calls": [
-            {
-                "tool": tool,
-                "argument_digest": argument_digest,
-                "count": count,
-            }
-            for (tool, argument_digest), count in sorted(mcp_call_signatures.items())
-            if count > 1
-        ],
-        "capability_describe_index_calls": capability_describe_index_calls,
-        "capability_describe_exact_calls": capability_describe_exact_calls,
-        "reasoning_protocol": reasoning_telemetry.payload(),
-    }
+            telemetry.usage = event["usage"]
+    return _transcript_payload(telemetry)

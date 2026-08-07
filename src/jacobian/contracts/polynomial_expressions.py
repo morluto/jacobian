@@ -194,6 +194,124 @@ def _maximum_requested_power(expression: PolynomialExpressionNode) -> int | None
     return None
 
 
+def _analyze_rational_node(
+    expression: PolynomialRationalExpression,
+    zero_degrees: tuple[int, ...],
+) -> _NodeAnalysis:
+    if (
+        len(expression.value.num.lstrip("-")) > MAX_EXPRESSION_INTEGER_DIGITS
+        or len(expression.value.den) > MAX_EXPRESSION_INTEGER_DIGITS
+    ):
+        raise ValueError(
+            "polynomial rational literals are limited to 256 decimal digits"
+        )
+    return _NodeAnalysis(
+        node_count=1,
+        depth=1,
+        term_upper_bound=int(expression.value.as_fraction() != 0),
+        maximum_exponents=zero_degrees,
+        coefficient_digit_budget=(
+            len(expression.value.num.lstrip("-")) + len(expression.value.den)
+        ),
+    )
+
+
+def _analyze_variable_node(
+    expression: PolynomialVariableExpression,
+    variable_indices: dict[str, int],
+    dimension: int,
+) -> _NodeAnalysis:
+    index = variable_indices.get(expression.name)
+    if index is None:
+        raise ValueError(f"expression variable {expression.name!r} is not declared")
+    variable_degrees = [0] * dimension
+    variable_degrees[index] = 1
+    return _NodeAnalysis(1, 1, 1, tuple(variable_degrees), 1)
+
+
+def _analyze_negate_node(
+    expression: PolynomialNegateExpression,
+    variable_indices: dict[str, int],
+) -> _NodeAnalysis:
+    operand = _analyze_node(expression.operand, variable_indices)
+    return _NodeAnalysis(
+        node_count=1 + operand.node_count,
+        depth=1 + operand.depth,
+        term_upper_bound=operand.term_upper_bound,
+        maximum_exponents=operand.maximum_exponents,
+        coefficient_digit_budget=operand.coefficient_digit_budget,
+    )
+
+
+def _analyze_power_node(
+    expression: PolynomialPowerExpression,
+    variable_indices: dict[str, int],
+    zero_degrees: tuple[int, ...],
+) -> _NodeAnalysis:
+    base = _analyze_node(expression.base, variable_indices)
+    exponent = expression.exponent
+    if exponent == 0:
+        terms = 1
+        power_degrees = zero_degrees
+    elif base.term_upper_bound == 0:
+        terms = 0
+        power_degrees = zero_degrees
+    else:
+        terms = _bounded_combination_count(base.term_upper_bound, exponent)
+        power_degrees = tuple(value * exponent for value in base.maximum_exponents)
+    return _NodeAnalysis(
+        node_count=1 + base.node_count,
+        depth=1 + base.depth,
+        term_upper_bound=terms,
+        maximum_exponents=power_degrees,
+        coefficient_digit_budget=(
+            1 if exponent == 0 else base.coefficient_digit_budget * exponent
+        ),
+    )
+
+
+def _analyze_add_or_multiply_node(
+    expression: PolynomialAddExpression | PolynomialMultiplyExpression,
+    variable_indices: dict[str, int],
+    dimension: int,
+    zero_degrees: tuple[int, ...],
+) -> _NodeAnalysis:
+    children = tuple(
+        _analyze_node(operand, variable_indices) for operand in expression.operands
+    )
+    node_count = 1 + sum(child.node_count for child in children)
+    depth = 1 + max(child.depth for child in children)
+    if isinstance(expression, PolynomialAddExpression):
+        terms = _bounded_sum(child.term_upper_bound for child in children)
+        combined_degrees = tuple(
+            max(child.maximum_exponents[index] for child in children)
+            for index in range(dimension)
+        )
+        coefficient_digit_budget = sum(
+            child.coefficient_digit_budget for child in children
+        ) + len(children)
+    else:
+        if any(child.term_upper_bound == 0 for child in children):
+            terms = 0
+            combined_degrees = zero_degrees
+        else:
+            terms = _bounded_product(child.term_upper_bound for child in children)
+            combined_degrees = tuple(
+                sum(child.maximum_exponents[index] for child in children)
+                for index in range(dimension)
+            )
+        coefficient_digit_budget = sum(
+            child.coefficient_digit_budget for child in children
+        )
+    return _NodeAnalysis(
+        node_count,
+        depth,
+        terms,
+        combined_degrees,
+        coefficient_digit_budget,
+    )
+
+
 def _analyze_node(
     expression: PolynomialExpressionNode,
     variable_indices: dict[str, int],
@@ -201,93 +319,16 @@ def _analyze_node(
     dimension = len(variable_indices)
     zero_degrees = (0,) * dimension
     if isinstance(expression, PolynomialRationalExpression):
-        if (
-            len(expression.value.num.lstrip("-")) > MAX_EXPRESSION_INTEGER_DIGITS
-            or len(expression.value.den) > MAX_EXPRESSION_INTEGER_DIGITS
-        ):
-            raise ValueError(
-                "polynomial rational literals are limited to 256 decimal digits"
-            )
-        return _NodeAnalysis(
-            node_count=1,
-            depth=1,
-            term_upper_bound=int(expression.value.as_fraction() != 0),
-            maximum_exponents=zero_degrees,
-            coefficient_digit_budget=(
-                len(expression.value.num.lstrip("-")) + len(expression.value.den)
-            ),
-        )
+        return _analyze_rational_node(expression, zero_degrees)
     if isinstance(expression, PolynomialVariableExpression):
-        index = variable_indices.get(expression.name)
-        if index is None:
-            raise ValueError(f"expression variable {expression.name!r} is not declared")
-        variable_degrees = [0] * dimension
-        variable_degrees[index] = 1
-        return _NodeAnalysis(1, 1, 1, tuple(variable_degrees), 1)
+        return _analyze_variable_node(expression, variable_indices, dimension)
     if isinstance(expression, PolynomialNegateExpression):
-        operand = _analyze_node(expression.operand, variable_indices)
-        return _NodeAnalysis(
-            node_count=1 + operand.node_count,
-            depth=1 + operand.depth,
-            term_upper_bound=operand.term_upper_bound,
-            maximum_exponents=operand.maximum_exponents,
-            coefficient_digit_budget=operand.coefficient_digit_budget,
-        )
+        return _analyze_negate_node(expression, variable_indices)
     if isinstance(expression, PolynomialPowerExpression):
-        base = _analyze_node(expression.base, variable_indices)
-        exponent = expression.exponent
-        if exponent == 0:
-            terms = 1
-            power_degrees = zero_degrees
-        elif base.term_upper_bound == 0:
-            terms = 0
-            power_degrees = zero_degrees
-        else:
-            terms = _bounded_combination_count(base.term_upper_bound, exponent)
-            power_degrees = tuple(value * exponent for value in base.maximum_exponents)
-        return _NodeAnalysis(
-            node_count=1 + base.node_count,
-            depth=1 + base.depth,
-            term_upper_bound=terms,
-            maximum_exponents=power_degrees,
-            coefficient_digit_budget=(
-                1 if exponent == 0 else base.coefficient_digit_budget * exponent
-            ),
-        )
+        return _analyze_power_node(expression, variable_indices, zero_degrees)
     if isinstance(expression, (PolynomialAddExpression, PolynomialMultiplyExpression)):
-        children = tuple(
-            _analyze_node(operand, variable_indices) for operand in expression.operands
-        )
-        node_count = 1 + sum(child.node_count for child in children)
-        depth = 1 + max(child.depth for child in children)
-        if isinstance(expression, PolynomialAddExpression):
-            terms = _bounded_sum(child.term_upper_bound for child in children)
-            combined_degrees = tuple(
-                max(child.maximum_exponents[index] for child in children)
-                for index in range(dimension)
-            )
-            coefficient_digit_budget = sum(
-                child.coefficient_digit_budget for child in children
-            ) + len(children)
-        else:
-            if any(child.term_upper_bound == 0 for child in children):
-                terms = 0
-                combined_degrees = zero_degrees
-            else:
-                terms = _bounded_product(child.term_upper_bound for child in children)
-                combined_degrees = tuple(
-                    sum(child.maximum_exponents[index] for child in children)
-                    for index in range(dimension)
-                )
-            coefficient_digit_budget = sum(
-                child.coefficient_digit_budget for child in children
-            )
-        return _NodeAnalysis(
-            node_count,
-            depth,
-            terms,
-            combined_degrees,
-            coefficient_digit_budget,
+        return _analyze_add_or_multiply_node(
+            expression, variable_indices, dimension, zero_degrees
         )
     raise TypeError("unsupported polynomial expression node")
 

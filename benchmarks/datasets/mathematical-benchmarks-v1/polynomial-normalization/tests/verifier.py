@@ -37,25 +37,15 @@ def verification_record_is_bound(submission):
     )
 
 
-def main():
-    try:
-        s = json.loads((W / "submission.json").read_text())
-    except (OSError, ValueError):
-        s = None
-    x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads(
-        (
-            E / "mathematical-benchmarks-v1-polynomial-normalization-expected.json"
-        ).read_text()
-    )
-    r = s.get("result") if isinstance(s, dict) else None
-    r = r if isinstance(r, dict) else {}
-    terms = r.get("terms", [])
+def _compute_want(x):
     want = {}
     for t in x["terms"]:
         k = tuple(t["exponents"])
         want[k] = want.get(k, Fraction(0)) + Fraction(t["coefficient"])
-    want = {k: v for k, v in want.items() if v}
+    return {k: v for k, v in want.items() if v}
+
+
+def _parse_terms(terms):
     got = {}
     try:
         if not isinstance(terms, list):
@@ -75,22 +65,11 @@ def main():
             got[key] = coefficient
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         got = {}
-    required = {
-        "task_id",
-        "conclusion",
-        "result",
-        "claimed_assurance",
-        "scope",
-        "completeness",
-        "evidence",
-        "limitations",
-    }
-    expected_keys = required | (
-        {"verification_record_uri"}
-        if isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
-        else set()
-    )
-    contract = (
+    return got
+
+
+def _contract_ok(s, expected_keys, e):
+    return (
         isinstance(s, dict)
         and set(s) == expected_keys
         and s.get("task_id") == e["task_id"]
@@ -105,7 +84,9 @@ def main():
         in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
     )
 
-    math_contract = (
+
+def _math_contract_ok(s, required, e):
+    return (
         isinstance(s, dict)
         and required <= set(s) <= required | {"verification_record_uri"}
         and s.get("task_id") == e["task_id"]
@@ -118,18 +99,8 @@ def main():
         in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
     )
 
-    record_bound = verification_record_is_bound(s) if isinstance(s, dict) else False
-    math_correct = bool(
-        workspace_input_is_bound()
-        and math_contract
-        and got == want
-        and all(len(k) == 2 for k in got)
-    )
-    correct = bool(
-        contract
-        and math_correct
-        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
-    )
+
+def _evidence_ok(s, contract):
     good = False
     if contract and isinstance(s["evidence"], list) and s["evidence"]:
         good = True
@@ -154,6 +125,55 @@ def main():
             )
             if good:
                 good &= i.get("sha256") == _digest(t)
+    return good
+
+
+def main():
+    try:
+        s = json.loads((W / "submission.json").read_text())
+    except (OSError, ValueError):
+        s = None
+    x = json.loads(next(E.glob("*input*.json")).read_text())
+    e = json.loads(
+        (
+            E / "mathematical-benchmarks-v1-polynomial-normalization-expected.json"
+        ).read_text()
+    )
+    r = s.get("result") if isinstance(s, dict) else None
+    r = r if isinstance(r, dict) else {}
+    terms = r.get("terms", [])
+    want = _compute_want(x)
+    got = _parse_terms(terms)
+    required = {
+        "task_id",
+        "conclusion",
+        "result",
+        "claimed_assurance",
+        "scope",
+        "completeness",
+        "evidence",
+        "limitations",
+    }
+    expected_keys = required | (
+        {"verification_record_uri"}
+        if isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
+        else set()
+    )
+    contract = _contract_ok(s, expected_keys, e)
+    math_contract = _math_contract_ok(s, required, e)
+    record_bound = verification_record_is_bound(s) if isinstance(s, dict) else False
+    math_correct = bool(
+        workspace_input_is_bound()
+        and math_contract
+        and got == want
+        and all(len(k) == 2 for k in got)
+    )
+    correct = bool(
+        contract
+        and math_correct
+        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
+    )
+    good = _evidence_ok(s, contract)
     scope = bool(contract and s["scope"] == " ".join(e["required_scope_terms"]))
     assurance = bool(
         contract

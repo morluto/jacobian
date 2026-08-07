@@ -187,6 +187,22 @@ def _corrected_left_conditions(values: list[int | None], ell: int) -> bool:
     return True
 
 
+def _certificate_indices_ok(prime, ell, j):
+    if (
+        not isinstance(prime, int)
+        or isinstance(prime, bool)
+        or prime > 19
+        or not _is_prime(prime)
+    ):
+        return False
+    return not (
+        not isinstance(ell, int)
+        or isinstance(ell, bool)
+        or not isinstance(j, int)
+        or isinstance(j, bool)
+    )
+
+
 def _certificate_valid(result: object, source: dict) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "prime",
@@ -197,19 +213,7 @@ def _certificate_valid(result: object, source: dict) -> bool:
     }:
         return False
     prime, ell, j = result["prime"], result["ell"], result["j"]
-    if (
-        not isinstance(prime, int)
-        or isinstance(prime, bool)
-        or prime > 19
-        or not _is_prime(prime)
-    ):
-        return False
-    if (
-        not isinstance(ell, int)
-        or isinstance(ell, bool)
-        or not isinstance(j, int)
-        or isinstance(j, bool)
-    ):
+    if not _certificate_indices_ok(prime, ell, j):
         return False
     left, right = (
         _coefficients(result["factor_left"]),

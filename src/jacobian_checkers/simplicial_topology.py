@@ -633,6 +633,105 @@ def _replay_chain(source: dict[str, Any], result: dict[str, Any]) -> bool:
     return result == expected
 
 
+_HOMOLOGY_GROUP_FIELDS = {
+    "dimension",
+    "chain_dimension",
+    "outgoing_boundary_rank",
+    "cycle_dimension",
+    "incoming_boundary_rank",
+    "betti_number",
+    "cycle_basis",
+    "boundary_basis",
+    "homology_basis",
+    "quotient_span_rank",
+}
+
+
+def _check_homology_group(
+    group: dict[str, Any],
+    dimension: int,
+    complex_: dict[str, Any],
+    convention: str,
+    boundaries: list[list[list[int]]],
+    augmentation: list[list[int]],
+    prime: int,
+) -> bool:
+    if not isinstance(group, dict) or set(group) != _HOMOLOGY_GROUP_FIELDS:
+        return False
+    chain_dimension = complex_["f_vector"][dimension]
+    outgoing = (
+        augmentation
+        if dimension == 0 and convention == "REDUCED"
+        else boundaries[dimension]
+    )
+    outgoing_rank = _rank(
+        outgoing,
+        columns=chain_dimension,
+        prime=prime,
+    )
+    cycle_dimension = chain_dimension - outgoing_rank
+    if dimension < complex_["dimension"]:
+        incoming = boundaries[dimension + 1]
+        incoming_columns = complex_["f_vector"][dimension + 1]
+    else:
+        incoming = [[] for _ in range(chain_dimension)]
+        incoming_columns = 0
+    actual_boundaries = _columns(incoming, count=incoming_columns)
+    incoming_rank = _vector_rank(actual_boundaries, prime=prime)
+    betti = cycle_dimension - incoming_rank
+    integer_fields = {
+        "dimension": dimension,
+        "chain_dimension": chain_dimension,
+        "outgoing_boundary_rank": outgoing_rank,
+        "cycle_dimension": cycle_dimension,
+        "incoming_boundary_rank": incoming_rank,
+        "betti_number": betti,
+        "quotient_span_rank": cycle_dimension,
+    }
+    if any(group[key] != value for key, value in integer_fields.items()):
+        return False
+    cycles = _vectors(
+        group["cycle_basis"],
+        count=cycle_dimension,
+        length=chain_dimension,
+        prime=prime,
+    )
+    reported_boundaries = _vectors(
+        group["boundary_basis"],
+        count=incoming_rank,
+        length=chain_dimension,
+        prime=prime,
+    )
+    homology = _vectors(
+        group["homology_basis"],
+        count=betti,
+        length=chain_dimension,
+        prime=prime,
+    )
+    return not (
+        any(not _is_zero(_matvec(outgoing, vector, prime=prime)) for vector in cycles)
+        or _vector_rank(cycles, prime=prime) != cycle_dimension
+        or any(
+            not _is_zero(_matvec(outgoing, vector, prime=prime))
+            for vector in actual_boundaries
+        )
+        or _vector_rank(reported_boundaries, prime=prime) != incoming_rank
+        or _vector_rank(
+            (*actual_boundaries, *reported_boundaries),
+            prime=prime,
+        )
+        != incoming_rank
+        or any(
+            not _is_zero(_matvec(outgoing, vector, prime=prime)) for vector in homology
+        )
+        or _vector_rank(
+            (*reported_boundaries, *homology),
+            prime=prime,
+        )
+        != cycle_dimension
+    )
+
+
 def _replay_homology(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if set(source) != {"complex", "prime", "convention"}:
         return False
@@ -686,99 +785,225 @@ def _replay_homology(source: dict[str, Any], result: dict[str, Any]) -> bool:
             prime=prime,
         ):
             return False
-    group_fields = {
-        "dimension",
-        "chain_dimension",
-        "outgoing_boundary_rank",
-        "cycle_dimension",
-        "incoming_boundary_rank",
-        "betti_number",
-        "cycle_basis",
-        "boundary_basis",
-        "homology_basis",
-        "quotient_span_rank",
-    }
     for dimension, group in enumerate(result["groups"]):
-        if not isinstance(group, dict) or set(group) != group_fields:
-            return False
-        chain_dimension = complex_["f_vector"][dimension]
-        outgoing = (
-            augmentation
-            if dimension == 0 and convention == "REDUCED"
-            else boundaries[dimension]
-        )
-        outgoing_rank = _rank(
-            outgoing,
-            columns=chain_dimension,
-            prime=prime,
-        )
-        cycle_dimension = chain_dimension - outgoing_rank
-        if dimension < complex_["dimension"]:
-            incoming = boundaries[dimension + 1]
-            incoming_columns = complex_["f_vector"][dimension + 1]
-        else:
-            incoming = [[] for _ in range(chain_dimension)]
-            incoming_columns = 0
-        actual_boundaries = _columns(incoming, count=incoming_columns)
-        incoming_rank = _vector_rank(actual_boundaries, prime=prime)
-        betti = cycle_dimension - incoming_rank
-        integer_fields = {
-            "dimension": dimension,
-            "chain_dimension": chain_dimension,
-            "outgoing_boundary_rank": outgoing_rank,
-            "cycle_dimension": cycle_dimension,
-            "incoming_boundary_rank": incoming_rank,
-            "betti_number": betti,
-            "quotient_span_rank": cycle_dimension,
-        }
-        if any(group[key] != value for key, value in integer_fields.items()):
-            return False
-        cycles = _vectors(
-            group["cycle_basis"],
-            count=cycle_dimension,
-            length=chain_dimension,
-            prime=prime,
-        )
-        reported_boundaries = _vectors(
-            group["boundary_basis"],
-            count=incoming_rank,
-            length=chain_dimension,
-            prime=prime,
-        )
-        homology = _vectors(
-            group["homology_basis"],
-            count=betti,
-            length=chain_dimension,
-            prime=prime,
-        )
-        if (
-            any(
-                not _is_zero(_matvec(outgoing, vector, prime=prime))
-                for vector in cycles
-            )
-            or _vector_rank(cycles, prime=prime) != cycle_dimension
-            or any(
-                not _is_zero(_matvec(outgoing, vector, prime=prime))
-                for vector in actual_boundaries
-            )
-            or _vector_rank(reported_boundaries, prime=prime) != incoming_rank
-            or _vector_rank(
-                (*actual_boundaries, *reported_boundaries),
-                prime=prime,
-            )
-            != incoming_rank
-            or any(
-                not _is_zero(_matvec(outgoing, vector, prime=prime))
-                for vector in homology
-            )
-            or _vector_rank(
-                (*reported_boundaries, *homology),
-                prime=prime,
-            )
-            != cycle_dimension
+        if not _check_homology_group(
+            group, dimension, complex_, convention, boundaries, augmentation, prime
         ):
             return False
     return True
+
+
+_INTEGRAL_GROUP_FIELDS = {
+    "dimension",
+    "chain_dimension",
+    "incoming_chain_dimension",
+    "outgoing_boundary_rank",
+    "cycle_rank",
+    "incoming_boundary_rank",
+    "betti_number",
+    "torsion_coefficients",
+    "free_generators",
+    "torsion_generators",
+    "outgoing_smith_certificate",
+    "boundary_in_cycle_coordinates",
+    "incoming_smith_certificate",
+    "generator_basis",
+}
+
+
+def _check_integral_free_generators(
+    group: dict[str, Any],
+    cycle_rank: int,
+    chain_dimension: int,
+    cycle_basis: Any,
+    outgoing: Any,
+    incoming_certificate: Any,
+    incoming_rank: int,
+) -> bool:
+    for offset, item in enumerate(group["free_generators"]):
+        if not isinstance(item, dict) or set(item) != {
+            "cycle",
+            "cycle_coordinates",
+        }:
+            return False
+        coordinate = _integer_vector(
+            item["cycle_coordinates"],
+            length=cycle_rank,
+        )
+        cycle = _integer_vector(item["cycle"], length=chain_dimension)
+        smith_index = incoming_rank + offset
+        if (
+            _integer_matvec(incoming_certificate.left, coordinate)
+            != _unit_vector(cycle_rank, smith_index)
+            or _integer_matvec(cycle_basis, coordinate) != cycle
+            or any(_integer_matvec(outgoing, cycle))
+        ):
+            return False
+    return True
+
+
+def _check_integral_torsion_generators(
+    group: dict[str, Any],
+    cycle_rank: int,
+    chain_dimension: int,
+    cycle_basis: Any,
+    outgoing: Any,
+    incoming: Any,
+    incoming_certificate: Any,
+    incoming_chain_dimension: int,
+    torsion_positions: list[tuple[int, int]],
+) -> bool:
+    for item, (smith_index, factor) in zip(
+        group["torsion_generators"],
+        torsion_positions,
+        strict=True,
+    ):
+        if not isinstance(item, dict) or set(item) != {
+            "order",
+            "cycle",
+            "cycle_coordinates",
+            "bounding_chain",
+        }:
+            return False
+        coordinate = _integer_vector(
+            item["cycle_coordinates"],
+            length=cycle_rank,
+        )
+        cycle = _integer_vector(item["cycle"], length=chain_dimension)
+        bounding = _integer_vector(
+            item["bounding_chain"],
+            length=incoming_chain_dimension,
+        )
+        expected_bounding = [
+            incoming_certificate.right.entries[row][smith_index]
+            for row in range(incoming_chain_dimension)
+        ]
+        if (
+            item["order"] != str(factor)
+            or _integer_matvec(incoming_certificate.left, coordinate)
+            != _unit_vector(cycle_rank, smith_index)
+            or _integer_matvec(cycle_basis, coordinate) != cycle
+            or any(_integer_matvec(outgoing, cycle))
+            or bounding != expected_bounding
+            or _integer_matvec(incoming, bounding)
+            != [factor * value for value in cycle]
+        ):
+            return False
+    return True
+
+
+def _check_integral_homology_group(
+    group: dict[str, Any],
+    dimension: int,
+    complex_: dict[str, Any],
+    convention: str,
+    boundaries: list[list[list[int]]],
+    raw_boundaries: list[dict[str, Any]],
+    augmentation: list[list[int]],
+) -> bool:
+    if not isinstance(group, dict) or set(group) != _INTEGRAL_GROUP_FIELDS:
+        return False
+    chain_dimension = complex_["f_vector"][dimension]
+    if dimension == 0 and convention == "REDUCED":
+        outgoing_entries = augmentation
+        outgoing_rows = 1
+    else:
+        outgoing_entries = boundaries[dimension]
+        outgoing_rows = raw_boundaries[dimension]["rows"]
+    outgoing = _parsed_matrix(
+        outgoing_entries,
+        rows=outgoing_rows,
+        columns=chain_dimension,
+    )
+    outgoing_certificate = _validate_smith_certificate(
+        group["outgoing_smith_certificate"]
+    )
+    if (
+        not _certificate_within_integral_digit_budget(outgoing_certificate)
+        or outgoing_certificate.source != outgoing
+    ):
+        return False
+    outgoing_rank = outgoing_certificate.rank
+    cycle_rank = chain_dimension - outgoing_rank
+    cycle_basis = _matrix_tail_columns(
+        outgoing_certificate.right,
+        start=outgoing_rank,
+    )
+    if dimension < complex_["dimension"]:
+        incoming_entries = boundaries[dimension + 1]
+        incoming_chain_dimension = complex_["f_vector"][dimension + 1]
+    else:
+        incoming_chain_dimension = 0
+        incoming_entries = [[] for _ in range(chain_dimension)]
+    incoming = _parsed_matrix(
+        incoming_entries,
+        rows=chain_dimension,
+        columns=incoming_chain_dimension,
+    )
+    coordinates = _parse_integer_matrix(
+        group["boundary_in_cycle_coordinates"],
+        maximum_digits=_MAX_INTEGER_DIGITS,
+    )
+    if (
+        coordinates.rows != cycle_rank
+        or coordinates.columns != incoming_chain_dimension
+        or _integer_matmul(cycle_basis, coordinates) != incoming
+    ):
+        return False
+    incoming_certificate = _validate_smith_certificate(
+        group["incoming_smith_certificate"]
+    )
+    if (
+        not _certificate_within_integral_digit_budget(incoming_certificate)
+        or incoming_certificate.source != coordinates
+    ):
+        return False
+    incoming_rank = incoming_certificate.rank
+    betti_number = cycle_rank - incoming_rank
+    torsion_positions = [
+        (index, factor)
+        for index, factor in enumerate(incoming_certificate.factors)
+        if factor > 1
+    ]
+    if (
+        group["dimension"] != dimension
+        or group["chain_dimension"] != chain_dimension
+        or group["incoming_chain_dimension"] != incoming_chain_dimension
+        or group["outgoing_boundary_rank"] != outgoing_rank
+        or group["cycle_rank"] != cycle_rank
+        or group["incoming_boundary_rank"] != incoming_rank
+        or group["betti_number"] != betti_number
+        or group["torsion_coefficients"]
+        != [str(factor) for _, factor in torsion_positions]
+        or group["generator_basis"]
+        != "CANONICAL_SIMPLEX_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+        or not isinstance(group["free_generators"], list)
+        or len(group["free_generators"]) != betti_number
+        or not isinstance(group["torsion_generators"], list)
+        or len(group["torsion_generators"]) != len(torsion_positions)
+    ):
+        return False
+    if not _check_integral_free_generators(
+        group,
+        cycle_rank,
+        chain_dimension,
+        cycle_basis,
+        outgoing,
+        incoming_certificate,
+        incoming_rank,
+    ):
+        return False
+    return _check_integral_torsion_generators(
+        group,
+        cycle_rank,
+        chain_dimension,
+        cycle_basis,
+        outgoing,
+        incoming,
+        incoming_certificate,
+        incoming_chain_dimension,
+        torsion_positions,
+    )
 
 
 def _replay_integral_homology(
@@ -837,160 +1062,17 @@ def _replay_integral_homology(
     boundaries = [_dense(matrix, prime=None) for matrix in raw_boundaries]
     augmentation_raw = _augmentation(len(complex_["vertices"]))
     augmentation = _dense(augmentation_raw, prime=None)
-    group_fields = {
-        "dimension",
-        "chain_dimension",
-        "incoming_chain_dimension",
-        "outgoing_boundary_rank",
-        "cycle_rank",
-        "incoming_boundary_rank",
-        "betti_number",
-        "torsion_coefficients",
-        "free_generators",
-        "torsion_generators",
-        "outgoing_smith_certificate",
-        "boundary_in_cycle_coordinates",
-        "incoming_smith_certificate",
-        "generator_basis",
-    }
     for dimension, group in enumerate(result["groups"]):
-        if not isinstance(group, dict) or set(group) != group_fields:
-            return False
-        chain_dimension = complex_["f_vector"][dimension]
-        if dimension == 0 and convention == "REDUCED":
-            outgoing_entries = augmentation
-            outgoing_rows = 1
-        else:
-            outgoing_entries = boundaries[dimension]
-            outgoing_rows = raw_boundaries[dimension]["rows"]
-        outgoing = _parsed_matrix(
-            outgoing_entries,
-            rows=outgoing_rows,
-            columns=chain_dimension,
-        )
-        outgoing_certificate = _validate_smith_certificate(
-            group["outgoing_smith_certificate"]
-        )
-        if (
-            not _certificate_within_integral_digit_budget(outgoing_certificate)
-            or outgoing_certificate.source != outgoing
+        if not _check_integral_homology_group(
+            group,
+            dimension,
+            complex_,
+            convention,
+            boundaries,
+            raw_boundaries,
+            augmentation,
         ):
             return False
-        outgoing_rank = outgoing_certificate.rank
-        cycle_rank = chain_dimension - outgoing_rank
-        cycle_basis = _matrix_tail_columns(
-            outgoing_certificate.right,
-            start=outgoing_rank,
-        )
-        if dimension < complex_["dimension"]:
-            incoming_entries = boundaries[dimension + 1]
-            incoming_chain_dimension = complex_["f_vector"][dimension + 1]
-        else:
-            incoming_chain_dimension = 0
-            incoming_entries = [[] for _ in range(chain_dimension)]
-        incoming = _parsed_matrix(
-            incoming_entries,
-            rows=chain_dimension,
-            columns=incoming_chain_dimension,
-        )
-        coordinates = _parse_integer_matrix(
-            group["boundary_in_cycle_coordinates"],
-            maximum_digits=_MAX_INTEGER_DIGITS,
-        )
-        if (
-            coordinates.rows != cycle_rank
-            or coordinates.columns != incoming_chain_dimension
-            or _integer_matmul(cycle_basis, coordinates) != incoming
-        ):
-            return False
-        incoming_certificate = _validate_smith_certificate(
-            group["incoming_smith_certificate"]
-        )
-        if (
-            not _certificate_within_integral_digit_budget(incoming_certificate)
-            or incoming_certificate.source != coordinates
-        ):
-            return False
-        incoming_rank = incoming_certificate.rank
-        betti_number = cycle_rank - incoming_rank
-        torsion_positions = [
-            (index, factor)
-            for index, factor in enumerate(incoming_certificate.factors)
-            if factor > 1
-        ]
-        if (
-            group["dimension"] != dimension
-            or group["chain_dimension"] != chain_dimension
-            or group["incoming_chain_dimension"] != incoming_chain_dimension
-            or group["outgoing_boundary_rank"] != outgoing_rank
-            or group["cycle_rank"] != cycle_rank
-            or group["incoming_boundary_rank"] != incoming_rank
-            or group["betti_number"] != betti_number
-            or group["torsion_coefficients"]
-            != [str(factor) for _, factor in torsion_positions]
-            or group["generator_basis"]
-            != "CANONICAL_SIMPLEX_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
-            or not isinstance(group["free_generators"], list)
-            or len(group["free_generators"]) != betti_number
-            or not isinstance(group["torsion_generators"], list)
-            or len(group["torsion_generators"]) != len(torsion_positions)
-        ):
-            return False
-        for offset, item in enumerate(group["free_generators"]):
-            if not isinstance(item, dict) or set(item) != {
-                "cycle",
-                "cycle_coordinates",
-            }:
-                return False
-            coordinate = _integer_vector(
-                item["cycle_coordinates"],
-                length=cycle_rank,
-            )
-            cycle = _integer_vector(item["cycle"], length=chain_dimension)
-            smith_index = incoming_rank + offset
-            if (
-                _integer_matvec(incoming_certificate.left, coordinate)
-                != _unit_vector(cycle_rank, smith_index)
-                or _integer_matvec(cycle_basis, coordinate) != cycle
-                or any(_integer_matvec(outgoing, cycle))
-            ):
-                return False
-        for item, (smith_index, factor) in zip(
-            group["torsion_generators"],
-            torsion_positions,
-            strict=True,
-        ):
-            if not isinstance(item, dict) or set(item) != {
-                "order",
-                "cycle",
-                "cycle_coordinates",
-                "bounding_chain",
-            }:
-                return False
-            coordinate = _integer_vector(
-                item["cycle_coordinates"],
-                length=cycle_rank,
-            )
-            cycle = _integer_vector(item["cycle"], length=chain_dimension)
-            bounding = _integer_vector(
-                item["bounding_chain"],
-                length=incoming_chain_dimension,
-            )
-            expected_bounding = [
-                incoming_certificate.right.entries[row][smith_index]
-                for row in range(incoming_chain_dimension)
-            ]
-            if (
-                item["order"] != str(factor)
-                or _integer_matvec(incoming_certificate.left, coordinate)
-                != _unit_vector(cycle_rank, smith_index)
-                or _integer_matvec(cycle_basis, coordinate) != cycle
-                or any(_integer_matvec(outgoing, cycle))
-                or bounding != expected_bounding
-                or _integer_matvec(incoming, bounding)
-                != [factor * value for value in cycle]
-            ):
-                return False
     return True
 
 

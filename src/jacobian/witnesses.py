@@ -12,7 +12,7 @@ from jacobian.contracts.evidence import (
     WitnessEnvelope,
     WitnessRole,
 )
-from jacobian.contracts.plugins import CapabilityName
+from jacobian.contracts.plugins import CapabilityName, PluginManifest
 from jacobian.contracts.results import (
     Arithmetic,
     Assurance,
@@ -35,6 +35,7 @@ from jacobian.plugin_execution import PluginExecutor
 from jacobian.plugins.registry import PluginRegistry, PluginRegistryError
 from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_schema
 from jacobian.storage.errors import StorageError
+from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification import VerificationService
 
@@ -175,66 +176,27 @@ class WitnessSearchService:
             response = PluginWitnessResponse.model_validate(execution.output)
             witness_uri = None
             if response.status == WitnessSearchStatus.NONE_CERTIFIED:
-                if response.certificate_uri is None:
-                    raise ValueError("NONE_CERTIFIED response requires certificate_uri")
-                verified = self.verification.verify_certificate(
-                    certificate_uri=response.certificate_uri
-                )
-                if (
-                    verified.assurance.verification == Verification.VERIFIED
-                    and verified.conclusion == _conclusion_proving_absence(role)
-                    and verified.claim_digest == claim.manifest.object_digest
-                    and verified.semantics_digest == semantics.manifest.object_digest
-                    and verified.candidate_digest == candidate.manifest.object_digest
-                    and response.certificate_uri in verified.evidence_uris
-                ):
-                    return WitnessFindResult(
-                        status=WitnessSearchStatus.NONE_CERTIFIED,
-                        result=verified,
-                        claim_uri=claim_uri,
-                        candidate_uri=candidate_uri,
-                        plugin_id=plugin_id,
-                        certificate_uri=response.certificate_uri,
-                        detail=response.detail,
-                    )
-                raise ValueError(
-                    "The no-witness certificate was not verified for this claim and "
-                    "candidate. Verify a certificate bound to these exact artifacts."
+                return self._handle_none_certified(
+                    response=response,
+                    role=role,
+                    claim=claim,
+                    candidate=candidate,
+                    semantics=semantics,
+                    claim_uri=claim_uri,
+                    candidate_uri=candidate_uri,
+                    plugin_id=plugin_id,
                 )
             if response.status == WitnessSearchStatus.FOUND:
-                if response.role != role:
-                    raise ValueError(
-                        "The plugin returned a different witness role than requested. "
-                        "Call math.find and retry with a supported role."
-                    )
-                if (
-                    response.witness is None
-                    or response.witness_format is None
-                    or response.format_version is None
-                ):
-                    raise ValueError(
-                        "The plugin reported FOUND without complete witness data. "
-                        "Retry once; if it repeats, inspect the local plugin log."
-                    )
-                witness = WitnessEnvelope(
-                    witness_format=response.witness_format,
-                    format_version=response.format_version,
-                    role=response.role,
-                    bindings=EvidenceBindings(
-                        claim_digest=claim.manifest.object_digest,
-                        semantics_digest=semantics.manifest.object_digest,
-                        candidate_digest=candidate.manifest.object_digest,
-                    ),
-                    payload=response.witness,
+                witness_uri = self._store_found_witness(
+                    response=response,
+                    role=role,
+                    claim=claim,
+                    candidate=candidate,
+                    semantics=semantics,
+                    manifest=manifest,
+                    claim_uri=claim_uri,
+                    candidate_uri=candidate_uri,
                 )
-                stored_witness = self.store.put(
-                    schema_uri=self.witness_schema_uri,
-                    semantics_uri=manifest.semantics_uri,
-                    payload=witness.model_dump(mode="json"),
-                    parents=(claim_uri, candidate_uri),
-                    summary="unverified proposed witness",
-                )
-                witness_uri = stored_witness.artifact_uri
 
             return WitnessFindResult(
                 status=response.status,
@@ -287,6 +249,91 @@ class WitnessSearchService:
                 plugin_id=plugin_id,
                 detail=detail,
             )
+
+    def _handle_none_certified(
+        self,
+        *,
+        response: PluginWitnessResponse,
+        role: WitnessRole,
+        claim: StoredArtifact,
+        candidate: StoredArtifact,
+        semantics: StoredArtifact,
+        claim_uri: str,
+        candidate_uri: str,
+        plugin_id: str,
+    ) -> WitnessFindResult:
+        if response.certificate_uri is None:
+            raise ValueError("NONE_CERTIFIED response requires certificate_uri")
+        verified = self.verification.verify_certificate(
+            certificate_uri=response.certificate_uri
+        )
+        if (
+            verified.assurance.verification == Verification.VERIFIED
+            and verified.conclusion == _conclusion_proving_absence(role)
+            and verified.claim_digest == claim.manifest.object_digest
+            and verified.semantics_digest == semantics.manifest.object_digest
+            and verified.candidate_digest == candidate.manifest.object_digest
+            and response.certificate_uri in verified.evidence_uris
+        ):
+            return WitnessFindResult(
+                status=WitnessSearchStatus.NONE_CERTIFIED,
+                result=verified,
+                claim_uri=claim_uri,
+                candidate_uri=candidate_uri,
+                plugin_id=plugin_id,
+                certificate_uri=response.certificate_uri,
+                detail=response.detail,
+            )
+        raise ValueError(
+            "The no-witness certificate was not verified for this claim and "
+            "candidate. Verify a certificate bound to these exact artifacts."
+        )
+
+    def _store_found_witness(
+        self,
+        *,
+        response: PluginWitnessResponse,
+        role: WitnessRole,
+        claim: StoredArtifact,
+        candidate: StoredArtifact,
+        semantics: StoredArtifact,
+        manifest: PluginManifest,
+        claim_uri: str,
+        candidate_uri: str,
+    ) -> str:
+        if response.role != role:
+            raise ValueError(
+                "The plugin returned a different witness role than requested. "
+                "Call math.find and retry with a supported role."
+            )
+        if (
+            response.witness is None
+            or response.witness_format is None
+            or response.format_version is None
+        ):
+            raise ValueError(
+                "The plugin reported FOUND without complete witness data. "
+                "Retry once; if it repeats, inspect the local plugin log."
+            )
+        witness = WitnessEnvelope(
+            witness_format=response.witness_format,
+            format_version=response.format_version,
+            role=response.role,
+            bindings=EvidenceBindings(
+                claim_digest=claim.manifest.object_digest,
+                semantics_digest=semantics.manifest.object_digest,
+                candidate_digest=candidate.manifest.object_digest,
+            ),
+            payload=response.witness,
+        )
+        stored_witness = self.store.put(
+            schema_uri=self.witness_schema_uri,
+            semantics_uri=manifest.semantics_uri,
+            payload=witness.model_dump(mode="json"),
+            parents=(claim_uri, candidate_uri),
+            summary="unverified proposed witness",
+        )
+        return stored_witness.artifact_uri
 
     @staticmethod
     def _rejected(

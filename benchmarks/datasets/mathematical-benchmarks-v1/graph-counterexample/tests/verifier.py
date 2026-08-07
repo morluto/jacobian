@@ -60,25 +60,23 @@ def _graph_arrays(result):
     return [], []
 
 
-def graph_ok(result):
-    raw_vertices, edges = _graph_arrays(result)
-    vertices = {str(x) for x in raw_vertices}
-    if vertices != {str(i) for i in range(6)}:
-        return False
+def _build_adjacency(vertices, edges):
     adj = {v: set() for v in vertices}
     for edge in edges:
         if not isinstance(edge, list) or len(edge) != 2:
-            return False
+            return None
         a, b = map(str, edge)
         if a == b or {a, b} - vertices:
-            return False
+            return None
         a, b = sorted((a, b))
         if b in adj[a]:
-            return False
+            return None
         adj[a].add(b)
         adj[b].add(a)
-    if min(map(len, adj.values())) < 2:
-        return False
+    return adj
+
+
+def _is_connected(vertices, adj):
     seen, todo = set(), ["0"]
     while todo:
         v = todo.pop()
@@ -86,10 +84,14 @@ def graph_ok(result):
             continue
         seen.add(v)
         todo.extend(adj[v] - seen)
-    if seen != vertices:
-        return False
-    if any(c in adj[a] for a in vertices for b in adj[a] for c in adj[b] if c != a):
-        return False
+    return seen == vertices
+
+
+def _has_triangle(vertices, adj):
+    return any(c in adj[a] for a in vertices for b in adj[a] for c in adj[b] if c != a)
+
+
+def _is_non_bipartite(vertices, adj):
     colors = {}
     for start in vertices:
         if start in colors:
@@ -105,6 +107,23 @@ def graph_ok(result):
                     colors[n] = 1 - colors[v]
                     todo.append(n)
     return False
+
+
+def graph_ok(result):
+    raw_vertices, edges = _graph_arrays(result)
+    vertices = {str(x) for x in raw_vertices}
+    if vertices != {str(i) for i in range(6)}:
+        return False
+    adj = _build_adjacency(vertices, edges)
+    if adj is None:
+        return False
+    if min(map(len, adj.values())) < 2:
+        return False
+    if not _is_connected(vertices, adj):
+        return False
+    if _has_triangle(vertices, adj):
+        return False
+    return _is_non_bipartite(vertices, adj)
 
 
 def main():

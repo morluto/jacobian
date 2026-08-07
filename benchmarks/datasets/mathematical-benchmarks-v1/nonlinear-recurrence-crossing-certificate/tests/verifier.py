@@ -104,6 +104,97 @@ def _valid_chain(bounds, threshold):
     return isinstance(bridge_output_upper, Fraction) and bridge_output_upper < 1
 
 
+def _potential_coefficients_valid(result):
+    # Validate potential identity coefficients: d[n+1] = d[n] - 2 + 1/d[n]
+    # in basis [a^2, 1, a^{-2}] = [d, 1, 1/d], so coefficients = [1, -2, 1].
+    coefficients = result["potential_identity_coefficients"]
+    return not (
+        not isinstance(coefficients, list)
+        or len(coefficients) != 3
+        or not all(_is_int(c) for c in coefficients)
+        or coefficients != [1, -2, 1]
+    )
+
+
+def _initial_potential_valid(result, frozen):
+    # Validate initial_potential = initial_value^2 (derived from frozen input).
+    initial_value = frozen.get("initial_value")
+    initial_index = frozen.get("initial_index")
+    if not _is_int(initial_value) or not _is_int(initial_index):
+        return None
+    initial_potential = result["initial_potential"]
+    if not _is_int(initial_potential) or initial_potential != initial_value**2:
+        return None
+    return initial_potential, initial_index
+
+
+def _threshold_and_decrement_valid(result):
+    # Validate threshold is a positive reduced rational.
+    threshold = _rational(result["threshold"])
+    if threshold is None or threshold <= 0:
+        return None
+    # Validate decrement_lower_bound = 2 - 1/threshold (derived from threshold).
+    expected_decrement = 2 - Fraction(1) / threshold
+    decrement = _rational(result["decrement_lower_bound"])
+    if decrement is None or decrement != expected_decrement:
+        return None
+    return threshold, expected_decrement
+
+
+def _phase_transitions_valid(
+    result, initial_potential, initial_index, expected_decrement, threshold
+):
+    # Validate phase_transitions is the minimal step budget.
+    transitions = result["phase_transitions"]
+    if not _is_int(transitions) or transitions < 1:
+        return False
+    potential = Fraction(initial_potential)
+    if not (
+        potential - transitions * expected_decrement < threshold
+        and potential - (transitions - 1) * expected_decrement >= threshold
+    ):
+        return False
+    # Validate threshold_index_upper = initial_index + phase_transitions.
+    return not (
+        not _is_int(result["threshold_index_upper"])
+        or result["threshold_index_upper"] != initial_index + transitions
+    )
+
+
+def _terminal_bounds_valid(result):
+    # Validate terminal bounds: correct images under f(a) = a - 1/a.
+    bounds = result["terminal_bounds"]
+    if not isinstance(bounds, list) or len(bounds) != 3:
+        return None
+    parsed_bounds = []
+    for item in bounds:
+        if not isinstance(item, dict) or set(item) != {
+            "input_lower",
+            "input_upper",
+            "output_lower",
+            "output_upper",
+        }:
+            return None
+        input_lower = _extended_bound(item["input_lower"])
+        input_upper = _extended_bound(item["input_upper"])
+        output_lower = _extended_bound(item["output_lower"])
+        output_upper = _extended_bound(item["output_upper"])
+        if any(
+            b is None for b in (input_lower, input_upper, output_lower, output_upper)
+        ):
+            return None
+        if not isinstance(input_lower, Fraction) or input_lower < 0:
+            return None
+        if not isinstance(input_upper, Fraction) or input_upper <= 0:
+            return None
+        if input_lower >= input_upper:
+            return None
+        if output_lower != _image(input_lower) or output_upper != _image(input_upper):
+            return None
+        parsed_bounds.append((input_lower, input_upper, output_lower, output_upper))
+    return parsed_bounds
+
+
 def _result_valid(result, frozen):
     required = {
         "potential_identity_coefficients",
@@ -117,98 +208,32 @@ def _result_valid(result, frozen):
     }
     if not isinstance(result, dict) or set(result) != required:
         return False
-
-    # Validate potential identity coefficients: d[n+1] = d[n] - 2 + 1/d[n]
-    # in basis [a^2, 1, a^{-2}] = [d, 1, 1/d], so coefficients = [1, -2, 1].
-    coefficients = result["potential_identity_coefficients"]
-    if (
-        not isinstance(coefficients, list)
-        or len(coefficients) != 3
-        or not all(_is_int(c) for c in coefficients)
-        or coefficients != [1, -2, 1]
+    if not _potential_coefficients_valid(result):
+        return False
+    initial = _initial_potential_valid(result, frozen)
+    if initial is None:
+        return False
+    initial_potential, initial_index = initial
+    td = _threshold_and_decrement_valid(result)
+    if td is None:
+        return False
+    threshold, expected_decrement = td
+    if not _phase_transitions_valid(
+        result, initial_potential, initial_index, expected_decrement, threshold
     ):
         return False
-
-    # Validate initial_potential = initial_value^2 (derived from frozen input).
-    initial_value = frozen.get("initial_value")
-    initial_index = frozen.get("initial_index")
-    if not _is_int(initial_value) or not _is_int(initial_index):
+    parsed_bounds = _terminal_bounds_valid(result)
+    if parsed_bounds is None:
         return False
-    initial_potential = result["initial_potential"]
-    if not _is_int(initial_potential) or initial_potential != initial_value**2:
-        return False
-
-    # Validate threshold is a positive reduced rational.
-    threshold = _rational(result["threshold"])
-    if threshold is None or threshold <= 0:
-        return False
-
-    # Validate decrement_lower_bound = 2 - 1/threshold (derived from threshold).
-    expected_decrement = 2 - Fraction(1) / threshold
-    decrement = _rational(result["decrement_lower_bound"])
-    if decrement is None or decrement != expected_decrement:
-        return False
-
-    # Validate phase_transitions is the minimal step budget.
-    transitions = result["phase_transitions"]
-    if not _is_int(transitions) or transitions < 1:
-        return False
-    potential = Fraction(initial_potential)
-    if not (
-        potential - transitions * expected_decrement < threshold
-        and potential - (transitions - 1) * expected_decrement >= threshold
-    ):
-        return False
-
-    # Validate threshold_index_upper = initial_index + phase_transitions.
-    if (
-        not _is_int(result["threshold_index_upper"])
-        or result["threshold_index_upper"] != initial_index + transitions
-    ):
-        return False
-
-    # Validate terminal bounds: correct images under f(a) = a - 1/a.
-    bounds = result["terminal_bounds"]
-    if not isinstance(bounds, list) or len(bounds) != 3:
-        return False
-    parsed_bounds = []
-    for item in bounds:
-        if not isinstance(item, dict) or set(item) != {
-            "input_lower",
-            "input_upper",
-            "output_lower",
-            "output_upper",
-        }:
-            return False
-        input_lower = _extended_bound(item["input_lower"])
-        input_upper = _extended_bound(item["input_upper"])
-        output_lower = _extended_bound(item["output_lower"])
-        output_upper = _extended_bound(item["output_upper"])
-        if any(
-            b is None for b in (input_lower, input_upper, output_lower, output_upper)
-        ):
-            return False
-        if not isinstance(input_lower, Fraction) or input_lower < 0:
-            return False
-        if not isinstance(input_upper, Fraction) or input_upper <= 0:
-            return False
-        if input_lower >= input_upper:
-            return False
-        if output_lower != _image(input_lower) or output_upper != _image(input_upper):
-            return False
-        parsed_bounds.append((input_lower, input_upper, output_lower, output_upper))
-
     # Validate the three bounds form a valid chain to a negative term.
     if not _valid_chain(parsed_bounds, threshold):
         return False
-
     # Validate negative_index_upper = threshold_index_upper + 3 (chain length).
     if (
         not _is_int(result["negative_index_upper"])
         or result["negative_index_upper"] != result["threshold_index_upper"] + 3
     ):
         return False
-
     # Validate negative_index_upper < target.index_upper_exclusive.
     target = frozen.get("target", {})
     return bool(

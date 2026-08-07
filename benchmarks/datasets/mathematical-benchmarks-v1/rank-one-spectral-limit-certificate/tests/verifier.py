@@ -44,6 +44,26 @@ def rat(value: object) -> Fraction | None:
     return Fraction(n, d)
 
 
+def _checkpoints_valid(checkpoints: object) -> list[int] | None:
+    if not isinstance(checkpoints, list) or not 3 <= len(checkpoints) <= 8:
+        return None
+    ns = []
+    for item in checkpoints:
+        if not isinstance(item, dict) or set(item) != {"n", "reciprocal_sum", "root"}:
+            return None
+        n = item["n"]
+        if type(n) is not int or not 4 <= n <= 30:
+            return None
+        expected_sum = sum((Fraction(1, k**3 - k) for k in range(2, n + 1)), Fraction())
+        if (
+            rat(item["reciprocal_sum"]) != expected_sum
+            or rat(item["root"]) != 1 / expected_sum
+        ):
+            return None
+        ns.append(n)
+    return ns
+
+
 def certificate_valid(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "rank_one_sign",
@@ -72,23 +92,9 @@ def certificate_valid(result: object) -> bool:
         proposed = scale * (Fraction(1, k * (k - 1)) - Fraction(1, k * (k + 1)))
         if proposed != Fraction(1, k**3 - k):
             return False
-    checkpoints = result["checkpoints"]
-    if not isinstance(checkpoints, list) or not 3 <= len(checkpoints) <= 8:
+    ns = _checkpoints_valid(result["checkpoints"])
+    if ns is None:
         return False
-    ns = []
-    for item in checkpoints:
-        if not isinstance(item, dict) or set(item) != {"n", "reciprocal_sum", "root"}:
-            return False
-        n = item["n"]
-        if type(n) is not int or not 4 <= n <= 30:
-            return False
-        expected_sum = sum((Fraction(1, k**3 - k) for k in range(2, n + 1)), Fraction())
-        if (
-            rat(item["reciprocal_sum"]) != expected_sum
-            or rat(item["root"]) != 1 / expected_sum
-        ):
-            return False
-        ns.append(n)
     return bool(
         ns == sorted(set(ns))
         and result["rank_one_sign"] == "DIAGONAL_MINUS_LAMBDA_ONES"

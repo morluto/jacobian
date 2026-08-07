@@ -91,6 +91,40 @@ def _lower(value: object) -> bool:
     )
 
 
+def _cycle_adjacency(sites):
+    adjacency = {
+        site: {other for other in sites if other != site and _knight(site, other)}
+        for site in sites
+    }
+    if any(len(neighbors) != 2 for neighbors in adjacency.values()):
+        return None
+    if sum(len(neighbors) for neighbors in adjacency.values()) // 2 != 4:
+        return None
+    return adjacency
+
+
+def _cycle_opposite_pairs(raw_pairs, sites):
+    if not isinstance(raw_pairs, list) or len(raw_pairs) != 2:
+        return None
+    pairs: list[frozenset[tuple[int, int]]] = []
+    for raw_pair in raw_pairs:
+        if not isinstance(raw_pair, list) or len(raw_pair) != 2:
+            return None
+        pair_values = [_parse_site(site) for site in raw_pair]
+        if any(site is None for site in pair_values):
+            return None
+        pair = frozenset(site for site in pair_values if site is not None)
+        if len(pair) != 2 or not pair <= set(sites):
+            return None
+        left, right = tuple(pair)
+        if _knight(left, right):
+            return None
+        pairs.append(pair)
+    if len(set(pairs)) != 2 or set().union(*pairs) != set(sites):
+        return None
+    return pairs
+
+
 def _cycle(value: object) -> tuple[bool, set[tuple[int, int]]]:
     if not isinstance(value, dict) or set(value) != {"sites", "opposite_pairs"}:
         return False, set()
@@ -101,32 +135,11 @@ def _cycle(value: object) -> tuple[bool, set[tuple[int, int]]]:
     if any(site is None for site in parsed) or len(set(parsed)) != 4:
         return False, set()
     sites = [site for site in parsed if site is not None]
-    adjacency = {
-        site: {other for other in sites if other != site and _knight(site, other)}
-        for site in sites
-    }
-    if any(len(neighbors) != 2 for neighbors in adjacency.values()):
+    adjacency = _cycle_adjacency(sites)
+    if adjacency is None:
         return False, set()
-    if sum(len(neighbors) for neighbors in adjacency.values()) // 2 != 4:
-        return False, set()
-    raw_pairs = value["opposite_pairs"]
-    if not isinstance(raw_pairs, list) or len(raw_pairs) != 2:
-        return False, set()
-    pairs: list[frozenset[tuple[int, int]]] = []
-    for raw_pair in raw_pairs:
-        if not isinstance(raw_pair, list) or len(raw_pair) != 2:
-            return False, set()
-        pair_values = [_parse_site(site) for site in raw_pair]
-        if any(site is None for site in pair_values):
-            return False, set()
-        pair = frozenset(site for site in pair_values if site is not None)
-        if len(pair) != 2 or not pair <= set(sites):
-            return False, set()
-        left, right = tuple(pair)
-        if _knight(left, right):
-            return False, set()
-        pairs.append(pair)
-    if len(set(pairs)) != 2 or set().union(*pairs) != set(sites):
+    pairs = _cycle_opposite_pairs(value["opposite_pairs"], sites)
+    if pairs is None:
         return False, set()
     for pair in pairs:
         left, right = tuple(pair)

@@ -158,25 +158,31 @@ def _normalize(value: Any, *, limits: CanonicalLimits, depth: int) -> Any:
     if isinstance(value, list):
         return [_normalize(item, limits=limits, depth=depth + 1) for item in value]
     if isinstance(value, dict):
-        rational = _normalize_rational(value, limits=limits)
-        if rational is not None:
-            return rational
-        result: dict[str, Any] = {}
-        for raw_key, raw_value in value.items():
-            if not isinstance(raw_key, str):
-                raise CanonicalizationError("JSON object keys must be strings")
-            key = unicodedata.normalize("NFC", raw_key)
-            if key in result:
-                raise CanonicalizationError(
-                    "object keys collide after Unicode normalization"
-                )
-            result[key] = _normalize(
-                raw_value,
-                limits=limits,
-                depth=depth + 1,
-            )
-        return result
+        return _normalize_object(value, limits=limits, depth=depth)
     raise CanonicalizationError("unsupported JSON value type")
+
+
+def _normalize_object(
+    value: dict[str, Any], *, limits: CanonicalLimits, depth: int
+) -> dict[str, Any]:
+    rational = _normalize_rational(value, limits=limits)
+    if rational is not None:
+        return rational
+    result: dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        if not isinstance(raw_key, str):
+            raise CanonicalizationError("JSON object keys must be strings")
+        key = unicodedata.normalize("NFC", raw_key)
+        if key in result:
+            raise CanonicalizationError(
+                "object keys collide after Unicode normalization"
+            )
+        result[key] = _normalize(
+            raw_value,
+            limits=limits,
+            depth=depth + 1,
+        )
+    return result
 
 
 def canonicalize_json(

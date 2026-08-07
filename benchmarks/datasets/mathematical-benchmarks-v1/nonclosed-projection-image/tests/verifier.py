@@ -221,6 +221,44 @@ def _tail_bound_ok(
     )
 
 
+def _witness_strings_ok(value):
+    for key in ("space", "operator", "subspace", "projection", "limit_preimage"):
+        if not isinstance(value[key], str) or not value[key].strip():
+            return None
+    space = value["space"].casefold()
+    operator = value["operator"].casefold()
+    subspace = value["subspace"].casefold()
+    projection = value["projection"].casefold()
+    preimage = value["limit_preimage"].casefold()
+    if "ell2" not in space or "graph" not in subspace or "closed" not in subspace:
+        return None
+    orthogonal_projection = bool(
+        "second" in projection
+        and (
+            re.search(r"\borthogonal\b", projection)
+            or "(0,v)" in projection.replace(" ", "")
+        )
+        and "nonorthogonal" not in projection
+    )
+    if not orthogonal_projection:
+        return None
+    if not any(
+        term in preimage for term in ("not in ell2", "not square", "not summable")
+    ):
+        return None
+    return operator
+
+
+def _witness_operator_ok(operator):
+    weighted_shift = "weighted shift" in operator
+    if weighted_shift:
+        if not any(term in operator for term in ("1/n", "1/(n", "1 / n", "/n", "/(n")):
+            return None
+    elif "diagonal" not in operator or "1/n" not in operator:
+        return None
+    return weighted_shift
+
+
 def _witness(value: object, source: dict[str, Any]) -> bool:
     """Validate a diagonal-operator graph counterexample generically.
 
@@ -234,35 +272,11 @@ def _witness(value: object, source: dict[str, Any]) -> bool:
         return False
     if not isinstance(value, dict) or set(value) != _RESULT_FIELDS:
         return False
-    for key in ("space", "operator", "subspace", "projection", "limit_preimage"):
-        if not isinstance(value[key], str) or not value[key].strip():
-            return False
-    space = value["space"].casefold()
-    operator = value["operator"].casefold()
-    subspace = value["subspace"].casefold()
-    projection = value["projection"].casefold()
-    preimage = value["limit_preimage"].casefold()
-    if "ell2" not in space or "graph" not in subspace or "closed" not in subspace:
+    operator = _witness_strings_ok(value)
+    if operator is None:
         return False
-    orthogonal_projection = bool(
-        "second" in projection
-        and (
-            re.search(r"\borthogonal\b", projection)
-            or "(0,v)" in projection.replace(" ", "")
-        )
-        and "nonorthogonal" not in projection
-    )
-    if not orthogonal_projection:
-        return False
-    if not any(
-        term in preimage for term in ("not in ell2", "not square", "not summable")
-    ):
-        return False
-    weighted_shift = "weighted shift" in operator
-    if weighted_shift:
-        if not any(term in operator for term in ("1/n", "1/(n", "1 / n", "/n", "/(n")):
-            return False
-    elif "diagonal" not in operator or "1/n" not in operator:
+    weighted_shift = _witness_operator_ok(operator)
+    if weighted_shift is None:
         return False
     bound = _positive_fraction(value["operator_bound"])
     if bound is None:

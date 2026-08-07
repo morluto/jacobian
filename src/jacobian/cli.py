@@ -87,6 +87,20 @@ def _public_error(exc: Exception) -> tuple[dict[str, str], int]:
     # Error-class imports are deferred so ``--help`` and subcommand ``--help``
     # never import the runtime owner or heavy mathematical modules. These are
     # only needed on the exception path, where the import cost is unavoidable.
+    classified = _classify_public_error(exc)
+    if classified is not None:
+        return classified
+    return (
+        {
+            "code": "INTERNAL_ERROR",
+            "message": "Jacobian encountered an unexpected error.",
+            "hint": "Retry once. If it happens again, inspect the local Jacobian log.",
+        },
+        1,
+    )
+
+
+def _classify_public_error(exc: Exception) -> tuple[dict[str, str], int] | None:
     from jacobian.artifacts import ArtifactValidationError
     from jacobian.capability_service import CapabilityError
     from jacobian.conjectures import ConjectureError
@@ -110,63 +124,17 @@ def _public_error(exc: Exception) -> tuple[dict[str, str], int]:
     )
     from jacobian.verification import CheckerExecutionError
 
-    if isinstance(exc, FileNotFoundError):
-        return (
-            {
-                "code": "INPUT_FILE_UNAVAILABLE",
-                "message": "Jacobian could not read the input file.",
-                "hint": "Check that the path exists and is readable, then retry.",
-            },
-            1,
-        )
-    if isinstance(
+    resource_or_input = _classify_resource_or_input_error(
         exc,
-        (ArtifactNotFoundError, CheckerNotFoundError, ExperimentNotFoundError),
-    ):
-        return (
-            {
-                "code": "RESOURCE_NOT_FOUND",
-                "message": "Jacobian could not find the requested resource.",
-                "hint": "Check the supplied URI or identifier, then retry.",
-            },
-            1,
-        )
-    if isinstance(
-        exc,
-        StorageLimitError,
-    ):
-        return (
-            {
-                "code": "STORAGE_LIMIT_REACHED",
-                "message": "The input or stored data exceeds a configured size limit.",
-                "hint": (
-                    "Reduce the payload size or free space in the state directory, "
-                    "then retry."
-                ),
-            },
-            1,
-        )
-    if isinstance(
-        exc,
-        (
-            ArtifactValidationError,
-            CanonicalizationError,
-            SchemaValidationError,
-            ValidationError,
-            ValueError,
-        ),
-    ):
-        return (
-            {
-                "code": "INVALID_INPUT",
-                "message": "Jacobian could not use the supplied input.",
-                "hint": (
-                    "Check the command arguments and JSON payload against the "
-                    "documented schema, then retry."
-                ),
-            },
-            2,
-        )
+        artifact_not_found=ArtifactNotFoundError,
+        checker_not_found=CheckerNotFoundError,
+        experiment_not_found=ExperimentNotFoundError,
+        storage_limit=StorageLimitError,
+        artifact_validation=ArtifactValidationError,
+        schema_validation=SchemaValidationError,
+    )
+    if resource_or_input is not None:
+        return resource_or_input
     if isinstance(
         exc,
         (
@@ -246,14 +214,77 @@ def _public_error(exc: Exception) -> tuple[dict[str, str], int]:
             },
             1,
         )
-    return (
-        {
-            "code": "INTERNAL_ERROR",
-            "message": "Jacobian encountered an unexpected error.",
-            "hint": "Retry once. If it happens again, inspect the local Jacobian log.",
-        },
-        1,
-    )
+    return None
+
+
+def _classify_resource_or_input_error(
+    exc: Exception,
+    *,
+    artifact_not_found: type,
+    checker_not_found: type,
+    experiment_not_found: type,
+    storage_limit: type,
+    artifact_validation: type,
+    schema_validation: type,
+) -> tuple[dict[str, str], int] | None:
+    if isinstance(exc, FileNotFoundError):
+        return (
+            {
+                "code": "INPUT_FILE_UNAVAILABLE",
+                "message": "Jacobian could not read the input file.",
+                "hint": "Check that the path exists and is readable, then retry.",
+            },
+            1,
+        )
+    if isinstance(
+        exc,
+        (artifact_not_found, checker_not_found, experiment_not_found),
+    ):
+        return (
+            {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "Jacobian could not find the requested resource.",
+                "hint": "Check the supplied URI or identifier, then retry.",
+            },
+            1,
+        )
+    if isinstance(
+        exc,
+        storage_limit,
+    ):
+        return (
+            {
+                "code": "STORAGE_LIMIT_REACHED",
+                "message": "The input or stored data exceeds a configured size limit.",
+                "hint": (
+                    "Reduce the payload size or free space in the state directory, "
+                    "then retry."
+                ),
+            },
+            1,
+        )
+    if isinstance(
+        exc,
+        (
+            artifact_validation,
+            CanonicalizationError,
+            schema_validation,
+            ValidationError,
+            ValueError,
+        ),
+    ):
+        return (
+            {
+                "code": "INVALID_INPUT",
+                "message": "Jacobian could not use the supplied input.",
+                "hint": (
+                    "Check the command arguments and JSON payload against the "
+                    "documented schema, then retry."
+                ),
+            },
+            2,
+        )
+    return None
 
 
 class CliState:

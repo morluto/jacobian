@@ -48,6 +48,54 @@ def _parse_range(payload: dict[str, Any]) -> tuple[int, int] | None:
     return lower, upper
 
 
+def _validated_range(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[tuple[int, int] | None, str | None]:
+    claim_range = _parse_range(claim)
+    candidate_range = _parse_range(candidate)
+    if claim_range is None or candidate_range is None:
+        return None, "claim or candidate range is malformed"
+    if claim_range != candidate_range:
+        return None, "candidate range does not exactly match the claim"
+    return claim_range, None
+
+
+def _witness_reject_detail(
+    witness: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if witness.get("witness_format") != "erdos_straus.decomposition_table":
+        return "unexpected witness format"
+    if witness.get("format_version") != "1":
+        return "unsupported witness format version"
+    if witness.get("role") != "SUPPORTS_CLAIM":
+        return "witness role does not support the claim"
+    if witness.get("bindings") != expected_bindings:
+        return "witness bindings do not match the request"
+    return None
+
+
+def _parse_decomposition_table(
+    table: list[Any],
+) -> tuple[dict[int, tuple[int, int, int]], str | None]:
+    parsed: dict[int, tuple[int, int, int]] = {}
+    for row in table:
+        if not isinstance(row, dict) or set(row) != {"n", "x", "y", "z"}:
+            return parsed, "decomposition row is malformed"
+        n, x, y, z = row["n"], row["x"], row["y"], row["z"]
+        if not all(_is_int(value) for value in (n, x, y, z)):
+            return parsed, "decomposition values must be integers"
+        if x <= 0 or y <= 0 or z <= 0:
+            return parsed, "decomposition denominators must be positive"
+        if n in parsed:
+            return parsed, "decomposition table contains duplicate n values"
+        if 4 * x * y * z != n * (x * y + x * z + y * z):
+            return parsed, f"decomposition identity fails for n={n}"
+        parsed[n] = (x, y, z)
+    return parsed, None
+
+
 def check_decomposition_table(request: dict[str, Any]) -> dict[str, Any]:
     """Check one exact decomposition for every integer in the declared range."""
 
@@ -59,38 +107,21 @@ def check_decomposition_table(request: dict[str, Any]) -> dict[str, Any]:
         witness = request["witness"]["payload"]
         if claim.get("predicate") != "erdos_straus_range":
             return _reject("unsupported claim predicate")
-        claim_range = _parse_range(claim)
-        candidate_range = _parse_range(candidate)
-        if claim_range is None or candidate_range is None:
+        claim_range, detail = _validated_range(claim, candidate)
+        if detail is not None:
+            return _reject(detail)
+        if claim_range is None:
             return _reject("claim or candidate range is malformed")
-        if claim_range != candidate_range:
-            return _reject("candidate range does not exactly match the claim")
-        if witness.get("witness_format") != "erdos_straus.decomposition_table":
-            return _reject("unexpected witness format")
-        if witness.get("format_version") != "1":
-            return _reject("unsupported witness format version")
-        if witness.get("role") != "SUPPORTS_CLAIM":
-            return _reject("witness role does not support the claim")
-        if witness.get("bindings") != request["expected_bindings"]:
-            return _reject("witness bindings do not match the request")
+        detail = _witness_reject_detail(witness, request["expected_bindings"])
+        if detail is not None:
+            return _reject(detail)
 
         table = witness.get("payload", {}).get("decompositions")
         if not isinstance(table, list):
             return _reject("decomposition table must be a list")
-        parsed: dict[int, tuple[int, int, int]] = {}
-        for row in table:
-            if not isinstance(row, dict) or set(row) != {"n", "x", "y", "z"}:
-                return _reject("decomposition row is malformed")
-            n, x, y, z = row["n"], row["x"], row["y"], row["z"]
-            if not all(_is_int(value) for value in (n, x, y, z)):
-                return _reject("decomposition values must be integers")
-            if x <= 0 or y <= 0 or z <= 0:
-                return _reject("decomposition denominators must be positive")
-            if n in parsed:
-                return _reject("decomposition table contains duplicate n values")
-            if 4 * x * y * z != n * (x * y + x * z + y * z):
-                return _reject(f"decomposition identity fails for n={n}")
-            parsed[n] = (x, y, z)
+        parsed, detail = _parse_decomposition_table(table)
+        if detail is not None:
+            return _reject(detail)
 
         lower, upper = claim_range
         expected = set(range(lower, upper + 1))

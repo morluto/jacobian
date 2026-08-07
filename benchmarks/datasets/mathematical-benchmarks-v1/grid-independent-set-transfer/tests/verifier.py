@@ -97,6 +97,32 @@ def matches(result):
     return result_matches(result)
 
 
+def _case_shape_ok(case: object) -> bool:
+    if not isinstance(case, dict):
+        return False
+    if set(case) != {
+        "n",
+        "valid_row_masks",
+        "compatible_pair_count",
+        "layer_totals",
+        "independent_set_count",
+    }:
+        return False
+    if type(case["n"]) is not int:
+        return False
+    if not isinstance(case["valid_row_masks"], list) or not all(
+        type(m) is int for m in case["valid_row_masks"]
+    ):
+        return False
+    if type(case["compatible_pair_count"]) is not int:
+        return False
+    if not isinstance(case["layer_totals"], list) or not all(
+        type(v) is int for v in case["layer_totals"]
+    ):
+        return False
+    return type(case["independent_set_count"]) is int
+
+
 def _result_shape_ok(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {"cases", "total"}:
         return False
@@ -105,32 +131,7 @@ def _result_shape_ok(result: object) -> bool:
     cases = result["cases"]
     if not isinstance(cases, list) or len(cases) != len(REQUIRED_N):
         return False
-    for case in cases:
-        if not isinstance(case, dict):
-            return False
-        if set(case) != {
-            "n",
-            "valid_row_masks",
-            "compatible_pair_count",
-            "layer_totals",
-            "independent_set_count",
-        }:
-            return False
-        if type(case["n"]) is not int:
-            return False
-        if not isinstance(case["valid_row_masks"], list) or not all(
-            type(m) is int for m in case["valid_row_masks"]
-        ):
-            return False
-        if type(case["compatible_pair_count"]) is not int:
-            return False
-        if not isinstance(case["layer_totals"], list) or not all(
-            type(v) is int for v in case["layer_totals"]
-        ):
-            return False
-        if type(case["independent_set_count"]) is not int:
-            return False
-    return True
+    return all(_case_shape_ok(case) for case in cases)
 
 
 def _evidence_descriptor_ok(descriptor: object) -> bool:

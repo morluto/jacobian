@@ -116,6 +116,46 @@ def _claim(
     return dimension, point_uri, generator_set_uri
 
 
+def _check_convex_witness_header(
+    witness: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if witness.get("witness_format") != "polytope.convex_combination":
+        return "unexpected witness format"
+    if witness.get("format_version") != "1":
+        return "unsupported witness version"
+    if witness.get("role") != "SUPPORTS_CLAIM":
+        return "witness does not support the claim"
+    if witness.get("bindings") != expected_bindings:
+        return "witness bindings do not match"
+    return None
+
+
+def _check_object_dimensions(
+    point: tuple[Fraction, ...],
+    generators: tuple[tuple[Fraction, ...], ...],
+    dimension: int,
+) -> str | None:
+    if len(point) != dimension or any(
+        len(generator) != dimension for generator in generators
+    ):
+        return "claim dimension does not match objects"
+    return None
+
+
+def _check_convex_weights(
+    inner: dict[str, Any],
+    generators: tuple[tuple[Fraction, ...], ...],
+) -> tuple[tuple[Fraction, ...], str | None]:
+    raw_weights = inner.get("weights")
+    if not isinstance(raw_weights, list) or len(raw_weights) != len(generators):
+        return (), "weight count does not match generators"
+    weights = tuple(_parse_rational(value) for value in raw_weights)
+    if any(weight < 0 for weight in weights) or sum(weights) != 1:
+        return (), "weights are not a convex combination"
+    return weights, None
+
+
 def check_convex_combination(request: dict[str, Any]) -> dict[str, Any]:
     """Check exact nonnegative weights reconstruct the bound point."""
 
@@ -125,29 +165,20 @@ def check_convex_combination(request: dict[str, Any]) -> dict[str, Any]:
             return _reject("unsupported request version", method=method)
         dimension, _, _ = _claim(request, "INSIDE_CONVEX_HULL")
         witness = request["witness"]["payload"]
-        if witness.get("witness_format") != "polytope.convex_combination":
-            return _reject("unexpected witness format", method=method)
-        if witness.get("format_version") != "1":
-            return _reject("unsupported witness version", method=method)
-        if witness.get("role") != "SUPPORTS_CLAIM":
-            return _reject("witness does not support the claim", method=method)
-        if witness.get("bindings") != request["expected_bindings"]:
-            return _reject("witness bindings do not match", method=method)
+        error = _check_convex_witness_header(witness, request["expected_bindings"])
+        if error is not None:
+            return _reject(error, method=method)
         point = _point(request["candidate"]["payload"])
         generators = _generators(request["scope"]["payload"])
-        if len(point) != dimension or any(
-            len(generator) != dimension for generator in generators
-        ):
-            return _reject("claim dimension does not match objects", method=method)
+        error = _check_object_dimensions(point, generators, dimension)
+        if error is not None:
+            return _reject(error, method=method)
         inner = witness.get("payload")
         if not isinstance(inner, dict):
             return _reject("witness payload is missing", method=method)
-        raw_weights = inner.get("weights")
-        if not isinstance(raw_weights, list) or len(raw_weights) != len(generators):
-            return _reject("weight count does not match generators", method=method)
-        weights = tuple(_parse_rational(value) for value in raw_weights)
-        if any(weight < 0 for weight in weights) or sum(weights) != 1:
-            return _reject("weights are not a convex combination", method=method)
+        weights, error = _check_convex_weights(inner, generators)
+        if error is not None:
+            return _reject(error, method=method)
         reconstructed = tuple(
             sum(
                 weight * generator[index]
@@ -182,6 +213,49 @@ def check_convex_combination(request: dict[str, Any]) -> dict[str, Any]:
         return _reject("malformed convex-combination request", method=method)
 
 
+def _check_separator_certificate_header(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if certificate.get("certificate_type") != "polytope.linear_separator":
+        return "unexpected certificate format"
+    if certificate.get("format_version") != "1":
+        return "unsupported certificate version"
+    if certificate.get("bindings") != expected_bindings:
+        return "certificate bindings do not match"
+    return None
+
+
+def _check_separator_payload(
+    payload: object,
+    dimension: int,
+) -> tuple[tuple[Fraction, ...], Fraction] | str:
+    if not isinstance(payload, dict) or payload.get("sense") != "<=":
+        return "separator must use <= sense"
+    raw_coefficients = payload.get("coefficients")
+    if not isinstance(raw_coefficients, list) or len(raw_coefficients) != dimension:
+        return "separator dimension does not match"
+    coefficients = tuple(_parse_rational(value) for value in raw_coefficients)
+    if all(value == 0 for value in coefficients):
+        return "separator normal cannot be zero"
+    rhs = _parse_rational(payload.get("rhs"))
+    return coefficients, rhs
+
+
+def _check_separator_declared_values(
+    payload: dict[str, Any],
+    point_value: Fraction,
+    max_generator: Fraction,
+) -> str | None:
+    if _parse_rational(payload.get("point_value")) != point_value:
+        return "declared point value is incorrect"
+    if _parse_rational(payload.get("max_generator_value")) != max_generator:
+        return "declared maximum generator value is incorrect"
+    if _parse_rational(payload.get("margin")) != point_value - max_generator:
+        return "declared separator margin is incorrect"
+    return None
+
+
 def check_linear_separator(request: dict[str, Any]) -> dict[str, Any]:
     """Check a strict exact separator against every finite generator."""
 
@@ -191,61 +265,55 @@ def check_linear_separator(request: dict[str, Any]) -> dict[str, Any]:
             return _reject("unsupported request version", method=method)
         dimension, _, _ = _claim(request, "OUTSIDE_CONVEX_HULL")
         certificate = request["certificate"]["payload"]
-        if certificate.get("certificate_type") != "polytope.linear_separator":
-            return _reject("unexpected certificate format", method=method)
-        if certificate.get("format_version") != "1":
-            return _reject("unsupported certificate version", method=method)
-        if certificate.get("bindings") != request["expected_bindings"]:
-            return _reject("certificate bindings do not match", method=method)
+        error = _check_separator_certificate_header(
+            certificate, request["expected_bindings"]
+        )
+        if error is not None:
+            return _reject(error, method=method)
         point = _point(request["candidate"]["payload"])
         generators = _generators(request["scope"]["payload"])
-        if len(point) != dimension or any(
-            len(generator) != dimension for generator in generators
-        ):
-            return _reject("claim dimension does not match objects", method=method)
-        payload = certificate.get("payload")
-        if not isinstance(payload, dict) or payload.get("sense") != "<=":
-            return _reject("separator must use <= sense", method=method)
-        raw_coefficients = payload.get("coefficients")
-        if not isinstance(raw_coefficients, list) or len(raw_coefficients) != dimension:
-            return _reject("separator dimension does not match", method=method)
-        coefficients = tuple(_parse_rational(value) for value in raw_coefficients)
-        if all(value == 0 for value in coefficients):
-            return _reject("separator normal cannot be zero", method=method)
-        rhs = _parse_rational(payload.get("rhs"))
+        error = _check_object_dimensions(point, generators, dimension)
+        if error is not None:
+            return _reject(error, method=method)
+        result = _check_separator_payload(certificate.get("payload"), dimension)
+        if isinstance(result, str):
+            return _reject(result, method=method)
+        coefficients, rhs = result
         generator_values = tuple(
             sum(
-                coefficient * coordinate
-                for coefficient, coordinate in zip(
-                    coefficients,
-                    generator,
-                    strict=True,
-                )
+                (
+                    coefficient * coordinate
+                    for coefficient, coordinate in zip(
+                        coefficients,
+                        generator,
+                        strict=True,
+                    )
+                ),
+                Fraction(),
             )
             for generator in generators
         )
         if any(value > rhs for value in generator_values):
             return _reject("separator excludes a generator", method=method)
         point_value = sum(
-            coefficient * coordinate
-            for coefficient, coordinate in zip(
-                coefficients,
-                point,
-                strict=True,
-            )
+            (
+                coefficient * coordinate
+                for coefficient, coordinate in zip(
+                    coefficients,
+                    point,
+                    strict=True,
+                )
+            ),
+            Fraction(),
         )
         max_generator = max(generator_values)
         if point_value <= rhs:
             return _reject("separator does not strictly exclude point", method=method)
-        if _parse_rational(payload.get("point_value")) != point_value:
-            return _reject("declared point value is incorrect", method=method)
-        if _parse_rational(payload.get("max_generator_value")) != max_generator:
-            return _reject(
-                "declared maximum generator value is incorrect",
-                method=method,
-            )
-        if _parse_rational(payload.get("margin")) != point_value - max_generator:
-            return _reject("declared separator margin is incorrect", method=method)
+        error = _check_separator_declared_values(
+            certificate["payload"], point_value, max_generator
+        )
+        if error is not None:
+            return _reject(error, method=method)
         return {
             "accepted": True,
             "conclusion": "TRUE",

@@ -246,66 +246,15 @@ class ConjectureService:
         """
 
         try:
-            subject_artifact = self.store.get(subject_uri)
-            if (
-                subject_artifact.manifest.schema_uri
-                != self.parameter_region_subject_schema_uri
-            ):
-                raise ConjectureError(
-                    "This parameter region uses the wrong schema. Promote the "
-                    "subject_uri returned by parameter.generalize, then retry."
-                )
-            subject = ParameterRegionSubject.model_validate(subject_artifact.payload)
-            claim = self.store.get(subject.claim_uri)
-            subject_parents = set(subject_artifact.manifest.parents)
-            if subject.claim_uri not in subject_parents or not set(
-                subject.sample_uris
-            ).issubset(subject_parents):
-                raise ConjectureError(
-                    "This parameter region is missing its claim or sample lineage. "
-                    "Run parameter.generalize again and promote the returned subject."
-                )
-            if claim.manifest.semantics_uri != subject_artifact.manifest.semantics_uri:
-                raise ConjectureError(
-                    "The parameter region and target claim use different semantics. "
-                    "Use artifacts from one reference contract, then retry."
-                )
-            record_artifact = self.store.get(verification_record_uri)
-            record = VerificationRecord.model_validate(record_artifact.payload)
-            record_parents = set(record_artifact.manifest.parents)
-            if subject_artifact.artifact_uri not in record_parents:
-                raise ConjectureError(
-                    "The verification record does not cover this parameter region. "
-                    "Verify the supplied subject_uri, then retry."
-                )
-            if subject.claim_uri not in record_parents:
-                raise ConjectureError(
-                    "The verification record does not cover this region's claim. "
-                    "Verify the exact claim and subject together, then retry."
-                )
-            if record.evidence_kind is not EvidenceKind.CERTIFICATE:
-                raise ConjectureError(
-                    "Parameter-region promotion requires certificate evidence. "
-                    "Run certificate verification for this subject, then retry."
-                )
-            if record.conclusion is not Conclusion.TRUE:
-                raise ConjectureError(
-                    "The certificate did not establish the parameter region. "
-                    "Provide a certificate with conclusion TRUE, then retry."
-                )
-            if record.bindings.claim_digest != claim.manifest.object_digest:
-                raise ConjectureError(
-                    "The verification record covers a different claim. Verify this "
-                    "region's exact claim, then retry."
-                )
-            if (
-                record.bindings.candidate_digest
-                != subject_artifact.manifest.object_digest
-            ):
-                raise ConjectureError(
-                    "The verification record covers different parameter conditions. "
-                    "Verify this exact subject_uri, then retry."
-                )
+            subject_artifact, subject, claim = self._load_parameter_region_subject(
+                subject_uri
+            )
+            record_artifact, record = self._load_region_verification_record(
+                verification_record_uri,
+                subject_artifact=subject_artifact,
+                subject=subject,
+                claim=claim,
+            )
             self._replay_verification_record(
                 source=subject_artifact,
                 record_artifact=record_artifact,
@@ -329,6 +278,79 @@ class ConjectureService:
             subject_uri=subject_artifact.artifact_uri,
             verification_record_uri=record_artifact.artifact_uri,
         )
+
+    def _load_parameter_region_subject(
+        self,
+        subject_uri: str,
+    ) -> tuple[StoredArtifact, ParameterRegionSubject, StoredArtifact]:
+        subject_artifact = self.store.get(subject_uri)
+        if (
+            subject_artifact.manifest.schema_uri
+            != self.parameter_region_subject_schema_uri
+        ):
+            raise ConjectureError(
+                "This parameter region uses the wrong schema. Promote the "
+                "subject_uri returned by parameter.generalize, then retry."
+            )
+        subject = ParameterRegionSubject.model_validate(subject_artifact.payload)
+        claim = self.store.get(subject.claim_uri)
+        subject_parents = set(subject_artifact.manifest.parents)
+        if subject.claim_uri not in subject_parents or not set(
+            subject.sample_uris
+        ).issubset(subject_parents):
+            raise ConjectureError(
+                "This parameter region is missing its claim or sample lineage. "
+                "Run parameter.generalize again and promote the returned subject."
+            )
+        if claim.manifest.semantics_uri != subject_artifact.manifest.semantics_uri:
+            raise ConjectureError(
+                "The parameter region and target claim use different semantics. "
+                "Use artifacts from one reference contract, then retry."
+            )
+        return subject_artifact, subject, claim
+
+    def _load_region_verification_record(
+        self,
+        verification_record_uri: str,
+        *,
+        subject_artifact: StoredArtifact,
+        subject: ParameterRegionSubject,
+        claim: StoredArtifact,
+    ) -> tuple[StoredArtifact, VerificationRecord]:
+        record_artifact = self.store.get(verification_record_uri)
+        record = VerificationRecord.model_validate(record_artifact.payload)
+        record_parents = set(record_artifact.manifest.parents)
+        if subject_artifact.artifact_uri not in record_parents:
+            raise ConjectureError(
+                "The verification record does not cover this parameter region. "
+                "Verify the supplied subject_uri, then retry."
+            )
+        if subject.claim_uri not in record_parents:
+            raise ConjectureError(
+                "The verification record does not cover this region's claim. "
+                "Verify the exact claim and subject together, then retry."
+            )
+        if record.evidence_kind is not EvidenceKind.CERTIFICATE:
+            raise ConjectureError(
+                "Parameter-region promotion requires certificate evidence. "
+                "Run certificate verification for this subject, then retry."
+            )
+        if record.conclusion is not Conclusion.TRUE:
+            raise ConjectureError(
+                "The certificate did not establish the parameter region. "
+                "Provide a certificate with conclusion TRUE, then retry."
+            )
+        if record.bindings.claim_digest != claim.manifest.object_digest:
+            raise ConjectureError(
+                "The verification record covers a different claim. Verify this "
+                "region's exact claim, then retry."
+            )
+        if record.bindings.candidate_digest != subject_artifact.manifest.object_digest:
+            raise ConjectureError(
+                "The verification record covers different parameter conditions. "
+                "Verify this exact subject_uri, then retry."
+            )
+        return record_artifact, record
 
     def _prepare(
         self,
@@ -356,6 +378,19 @@ class ConjectureService:
                 "The source and hypothesis plugin use different semantics. Choose "
                 "the plugin from the source's reference contract, then retry."
             )
+        evidence = self._collect_workflow_evidence(request, source)
+        self._validate_reference_claims(request, manifest)
+        if request.operation is ConjectureOperation.REPAIR:
+            self._validate_repair_source(request, manifest, source)
+        if request.falsification is not None:
+            self._validate_falsification_capabilities(request, capability)
+        return manifest, capability, source, tuple(evidence)
+
+    def _collect_workflow_evidence(
+        self,
+        request: ConjectureWorkflowRequest,
+        source: StoredArtifact | None,
+    ) -> list[StoredArtifact]:
         evidence: list[StoredArtifact] = []
         if request.verification_record_uri is not None:
             record_artifact = self.store.get(request.verification_record_uri)
@@ -367,6 +402,18 @@ class ConjectureService:
             evidence.append(record_artifact)
             record = VerificationRecord.model_validate(record_artifact.payload)
             evidence.append(self.store.get(record.evidence_uri))
+        known_evidence_uris = {artifact.artifact_uri for artifact in evidence}
+        for evidence_uri in request.evidence_uris:
+            if evidence_uri not in known_evidence_uris:
+                evidence.append(self.store.get(evidence_uri))
+                known_evidence_uris.add(evidence_uri)
+        return evidence
+
+    def _validate_reference_claims(
+        self,
+        request: ConjectureWorkflowRequest,
+        manifest: PluginManifest,
+    ) -> None:
         for claim_uri in request.reference_claim_uris:
             reference = self.store.get(claim_uri)
             if (
@@ -378,54 +425,60 @@ class ConjectureService:
                     "Use claims returned by the same reference domain, then retry."
                 )
             self.schemas.validate(reference.manifest.schema_uri, reference.payload)
-        known_evidence_uris = {artifact.artifact_uri for artifact in evidence}
-        for evidence_uri in request.evidence_uris:
-            if evidence_uri not in known_evidence_uris:
-                evidence.append(self.store.get(evidence_uri))
-                known_evidence_uris.add(evidence_uri)
-        if request.operation is ConjectureOperation.REPAIR:
-            if source is None:
-                raise ConjectureError(
-                    "Conjecture repair requires source_uri. Supply the claim to repair, "
-                    "then retry."
-                )
-            if source.manifest.schema_uri != manifest.claim_schema_uri:
-                raise ConjectureError(
-                    "The repair source does not match the plugin's claim schema. "
-                    "Choose the plugin from the source's reference contract."
-                )
-            validation = self.claims.validate(
-                claim_uri=source.artifact_uri,
-                plugin_id=request.plugin_id,
+
+    def _validate_repair_source(
+        self,
+        request: ConjectureWorkflowRequest,
+        manifest: PluginManifest,
+        source: StoredArtifact | None,
+    ) -> None:
+        if source is None:
+            raise ConjectureError(
+                "Conjecture repair requires source_uri. Supply the claim to repair, "
+                "then retry."
             )
-            if not validation.valid:
-                raise ConjectureError(
-                    "The repair source is not a valid claim for this plugin. Check "
-                    "claim.validate, correct the source, then retry. Validation: "
-                    + "; ".join(validation.input.errors)
+        if source.manifest.schema_uri != manifest.claim_schema_uri:
+            raise ConjectureError(
+                "The repair source does not match the plugin's claim schema. "
+                "Choose the plugin from the source's reference contract."
+            )
+        validation = self.claims.validate(
+            claim_uri=source.artifact_uri,
+            plugin_id=request.plugin_id,
+        )
+        if not validation.valid:
+            raise ConjectureError(
+                "The repair source is not a valid claim for this plugin. Check "
+                "claim.validate, correct the source, then retry. Validation: "
+                + "; ".join(validation.input.errors)
+            )
+
+    def _validate_falsification_capabilities(
+        self,
+        request: ConjectureWorkflowRequest,
+        capability: ResolvedCapability,
+    ) -> None:
+        search_capabilities = [
+            self.plugins.resolve(request.plugin_id, CapabilityName.PROPOSER),
+            self.plugins.resolve(request.plugin_id, CapabilityName.REFINER),
+            self.plugins.resolve(request.plugin_id, CapabilityName.EVALUATOR),
+        ]
+        falsification = request.falsification
+        if falsification is not None and falsification.witness_role is not None:
+            search_capabilities.append(
+                self.plugins.resolve(
+                    request.plugin_id,
+                    CapabilityName.WITNESS_ORACLE,
                 )
-        if request.falsification is not None:
-            search_capabilities = [
-                self.plugins.resolve(request.plugin_id, CapabilityName.PROPOSER),
-                self.plugins.resolve(request.plugin_id, CapabilityName.REFINER),
-                self.plugins.resolve(request.plugin_id, CapabilityName.EVALUATOR),
-            ]
-            if request.falsification.witness_role is not None:
-                search_capabilities.append(
-                    self.plugins.resolve(
-                        request.plugin_id,
-                        CapabilityName.WITNESS_ORACLE,
-                    )
-                )
-            if {
-                resolved.registry_snapshot_uri
-                for resolved in (capability, *search_capabilities)
-            } != {capability.registry_snapshot_uri}:
-                raise ConjectureError(
-                    "The hypothesis and falsification capabilities were loaded from "
-                    "different plugin versions. Reload Jacobian, then retry."
-                )
-        return manifest, capability, source, tuple(evidence)
+            )
+        if {
+            resolved.registry_snapshot_uri
+            for resolved in (capability, *search_capabilities)
+        } != {capability.registry_snapshot_uri}:
+            raise ConjectureError(
+                "The hypothesis and falsification capabilities were loaded from "
+                "different plugin versions. Reload Jacobian, then retry."
+            )
 
     def _validate_verified_source(
         self,

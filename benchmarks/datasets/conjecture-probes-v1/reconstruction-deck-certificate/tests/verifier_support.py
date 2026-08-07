@@ -267,6 +267,21 @@ _JSON_WHITESPACE = frozenset(" \t\n\r")
 _JSON_WHITESPACE_CHARS = " \t\n\r"
 
 
+def _drain_stream_tail(stream, decoder) -> None:
+    """Reject any non-whitespace content after the parsed JSON value."""
+
+    while True:
+        block = stream.read(65_536)
+        if not block:
+            break
+        tail = decoder.decode(block)
+        if tail and not all(character in _JSON_WHITESPACE for character in tail):
+            raise ValueError("non-whitespace after evidence JSON value")
+    tail = decoder.decode(b"", final=True)
+    if tail and not all(character in _JSON_WHITESPACE for character in tail):
+        raise ValueError("non-whitespace after evidence JSON value")
+
+
 def _read_streaming_json_value(stream) -> Any:
     """Parse the first JSON value from a binary stream without a byte cap.
 
@@ -301,16 +316,7 @@ def _read_streaming_json_value(stream) -> Any:
             continue
         if not all(character in _JSON_WHITESPACE for character in buffer[end:]):
             raise ValueError("non-whitespace after evidence JSON value")
-        while True:
-            block = stream.read(65_536)
-            if not block:
-                break
-            tail = decoder.decode(block)
-            if tail and not all(character in _JSON_WHITESPACE for character in tail):
-                raise ValueError("non-whitespace after evidence JSON value")
-        tail = decoder.decode(b"", final=True)
-        if tail and not all(character in _JSON_WHITESPACE for character in tail):
-            raise ValueError("non-whitespace after evidence JSON value")
+        _drain_stream_tail(stream, decoder)
         return value
 
 

@@ -53,6 +53,28 @@ def _factorization(order: list[int], weights: list[int]) -> bool:
     )
 
 
+def _trace_valid(trace: list, expected_trace: list) -> bool:
+    # Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in trace numeric fields.
+    trace_by_n = {}
+    for entry in trace:
+        if not isinstance(entry, dict) or set(entry) != {
+            "n",
+            "even_nonempty_count",
+            "determinant",
+        }:
+            return False
+        if not (
+            _is_int(entry["n"])
+            and _is_int(entry["even_nonempty_count"])
+            and _is_int(entry["determinant"])
+        ):
+            return False
+        if entry["n"] in trace_by_n:
+            return False
+        trace_by_n[entry["n"]] = entry
+    return trace_by_n == {entry["n"]: entry for entry in expected_trace}
+
+
 def _result(value: object, source: dict[str, Any]) -> bool:
     required = {
         "sample_n",
@@ -99,27 +121,10 @@ def _result(value: object, source: dict[str, Any]) -> bool:
         }
         for k in range(1, source["trace_max_n"] + 1)
     ]
-    # Thread PRRT_kwDOThEfjc6Vu43n: reject booleans in trace numeric fields.
-    trace_by_n = {}
-    for entry in trace:
-        if not isinstance(entry, dict) or set(entry) != {
-            "n",
-            "even_nonempty_count",
-            "determinant",
-        }:
-            return False
-        if not (
-            _is_int(entry["n"])
-            and _is_int(entry["even_nonempty_count"])
-            and _is_int(entry["determinant"])
-        ):
-            return False
-        if entry["n"] in trace_by_n:
-            return False
-        trace_by_n[entry["n"]] = entry
+    if not _trace_valid(trace, expected_trace):
+        return False
     return bool(
-        trace_by_n == {entry["n"]: entry for entry in expected_trace}
-        and value["general_even_count"] == "2^(n-1)-1"
+        value["general_even_count"] == "2^(n-1)-1"
         and value["general_determinant"] == "1_if_n_eq_1_else_minus_1"
     )
 

@@ -183,8 +183,13 @@ def _det_fraction(matrix: list[list[int]]) -> Fraction:
     return det
 
 
-def _kernel_vector(matrix: list[list[int]]) -> list[Fraction] | None:
-    """Return a non-zero rational vector in the kernel, or None if trivial."""
+def _row_echelon(
+    matrix: list[list[int]],
+) -> tuple[list[list[Fraction]], list[int], list[int]]:
+    """Reduce *matrix* to row echelon form over QQ.
+
+    Returns the reduced matrix together with the pivot columns and rows.
+    """
     rows = len(matrix)
     cols = len(matrix[0]) if rows else 0
     a = [[Fraction(x) for x in row] for row in matrix]
@@ -209,6 +214,14 @@ def _kernel_vector(matrix: list[list[int]]) -> list[Fraction] | None:
             for j in range(c, cols):
                 a[i][j] -= factor * a[r][j]
         r += 1
+    return a, pivot_cols, pivot_rows
+
+
+def _kernel_vector(matrix: list[list[int]]) -> list[Fraction] | None:
+    """Return a non-zero rational vector in the kernel, or None if trivial."""
+    rows = len(matrix)
+    cols = len(matrix[0]) if rows else 0
+    a, pivot_cols, pivot_rows = _row_echelon(matrix)
 
     if len(pivot_cols) == cols:
         return None

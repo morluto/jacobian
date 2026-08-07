@@ -635,6 +635,62 @@ def _profile(
     raise ValueError("unknown Lean environment")
 
 
+def _validate_kernel_certificate_envelope(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> None:
+    if certificate.get("certificate_type") != "lean4.kernel":
+        raise ValueError("unexpected certificate format")
+    if certificate.get("format_version") != "1":
+        raise ValueError("unsupported certificate format version")
+    if certificate.get("bindings") != expected_bindings:
+        raise ValueError("certificate bindings do not match the request")
+
+
+def _validate_kernel_certificate_sources(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    statement: str,
+    proof: str,
+    environment_name: object,
+) -> None:
+    if (
+        claim.get("statement") != statement
+        or candidate.get("statement") != statement
+        or candidate.get("proof") != proof
+    ):
+        raise ValueError("claim, candidate, and certificate source differ")
+    if (
+        claim.get("environment") != environment_name
+        or candidate.get("environment") != environment_name
+    ):
+        raise ValueError("claim, candidate, and certificate profiles differ")
+
+
+def _validate_kernel_certificate_runtime(
+    claim: dict[str, Any],
+    payload: dict[str, Any],
+    allowed_axioms: frozenset[str],
+    import_name: str | None,
+    mathlib_commit: str | None,
+) -> None:
+    expected_axioms = sorted(allowed_axioms)
+    if (
+        sorted(claim.get("allowed_axioms", [])) != expected_axioms
+        or sorted(payload.get("allowed_axioms", [])) != expected_axioms
+    ):
+        raise ValueError("certificate requests an unauthorized Lean trust base")
+    if payload.get("declaration_name") != "jacobian_theorem":
+        raise ValueError("unexpected Lean declaration name")
+    if (
+        payload.get("lean_version") != LEAN_VERSION
+        or payload.get("lean_commit") != LEAN_COMMIT
+        or payload.get("import_name") != import_name
+        or payload.get("mathlib_commit") != mathlib_commit
+    ):
+        raise ValueError("certificate requests another Lean runtime")
+
+
 def check_kernel_certificate(request: dict[str, Any]) -> dict[str, Any]:
     """Compile the exact bound proposition under its authorized trust profile."""
 
@@ -642,12 +698,7 @@ def check_kernel_certificate(request: dict[str, Any]) -> dict[str, Any]:
         if request.get("request_version") != "1":
             return _reject("unsupported request version")
         certificate = request["certificate"]["payload"]
-        if certificate.get("certificate_type") != "lean4.kernel":
-            return _reject("unexpected certificate format")
-        if certificate.get("format_version") != "1":
-            return _reject("unsupported certificate format version")
-        if certificate.get("bindings") != request["expected_bindings"]:
-            return _reject("certificate bindings do not match the request")
+        _validate_kernel_certificate_envelope(certificate, request["expected_bindings"])
         payload = certificate["payload"]
         claim = request["claim"]["payload"]
         candidate = request["candidate"]["payload"]
@@ -655,32 +706,12 @@ def check_kernel_certificate(request: dict[str, Any]) -> dict[str, Any]:
         import_name, mathlib_commit, allowed_axioms = _profile(environment_name)
         statement = _text(payload.get("statement"), name="statement", limit=2_000)
         proof = _text(payload.get("proof"), name="proof", limit=20_000)
-        if (
-            claim.get("statement") != statement
-            or candidate.get("statement") != statement
-            or candidate.get("proof") != proof
-        ):
-            return _reject("claim, candidate, and certificate source differ")
-        if (
-            claim.get("environment") != environment_name
-            or candidate.get("environment") != environment_name
-        ):
-            return _reject("claim, candidate, and certificate profiles differ")
-        expected_axioms = sorted(allowed_axioms)
-        if (
-            sorted(claim.get("allowed_axioms", [])) != expected_axioms
-            or sorted(payload.get("allowed_axioms", [])) != expected_axioms
-        ):
-            return _reject("certificate requests an unauthorized Lean trust base")
-        if payload.get("declaration_name") != "jacobian_theorem":
-            return _reject("unexpected Lean declaration name")
-        if (
-            payload.get("lean_version") != LEAN_VERSION
-            or payload.get("lean_commit") != LEAN_COMMIT
-            or payload.get("import_name") != import_name
-            or payload.get("mathlib_commit") != mathlib_commit
-        ):
-            return _reject("certificate requests another Lean runtime")
+        _validate_kernel_certificate_sources(
+            claim, candidate, statement, proof, environment_name
+        )
+        _validate_kernel_certificate_runtime(
+            claim, payload, allowed_axioms, import_name, mathlib_commit
+        )
         completed = _run_lean(
             _source(statement, proof, import_name),
             environment_name=environment_name,

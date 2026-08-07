@@ -41,6 +41,12 @@ def _emit(tmp_path: Path, *, paths: str = "README.md\n") -> dict[str, object]:
         ".github/workflows/ci.yml",
         "--config",
         "Makefile",
+        "--config",
+        "make/development.mk",
+        "--config",
+        "make/harbor.mk",
+        "--config",
+        "make/evaluations.mk",
         "--plan-file",
         plan,
         "--paths-file",
@@ -66,6 +72,9 @@ def test_plan_receipt_binds_plan_paths_source_and_configuration(tmp_path: Path) 
         ".github/scripts/validate-ci-plan",
         ".github/workflows/ci.yml",
         "Makefile",
+        "make/development.mk",
+        "make/harbor.mk",
+        "make/evaluations.mk",
     }
     assert str(receipt["plan_digest"]).startswith("sha256:")
     assert str(receipt["receipt_digest"]).startswith("sha256:")

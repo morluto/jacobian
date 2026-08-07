@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import TYPE_CHECKING, Any, cast
@@ -239,9 +240,10 @@ class GraphPropertyAdapter:
         )
 
 
-def _compute_property(graph: nx_type.Graph[Any], name: str) -> Any:
-    """Compute only the requested outcome instead of the full property portfolio."""
+_UNCOMPUTED = object()
 
+
+def _basic_property(graph: nx_type.Graph[Any], name: str) -> Any:
     if name == "order":
         return graph.number_of_nodes()
     if name == "size":
@@ -252,61 +254,114 @@ def _compute_property(graph: nx_type.Graph[Any], name: str) -> Any:
         return nx().is_bipartite(graph)
     if name == "tree":
         return nx().is_tree(graph) if graph else False
-    if name in {"degree_sequence", "minimum_degree", "maximum_degree"}:
-        degrees = sorted((degree for _, degree in graph.degree), reverse=True)
-        if name == "degree_sequence":
-            return degrees
-        if name == "minimum_degree":
-            return min(degrees) if degrees else None
-        return max(degrees) if degrees else None
-    if name == "triangle_count":
-        return sum(cast(dict[Any, int], nx().triangles(graph)).values()) // 3
-    if name == "independence_number":
-        if not graph:
-            return 0
-        independent_set, independence_number = nx().max_weight_clique(
-            nx().complement(graph),
-            weight=None,
+    return _UNCOMPUTED
+
+
+def _degree_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name not in {"degree_sequence", "minimum_degree", "maximum_degree"}:
+        return _UNCOMPUTED
+    degrees = sorted((degree for _, degree in graph.degree), reverse=True)
+    if name == "degree_sequence":
+        return degrees
+    if name == "minimum_degree":
+        return min(degrees) if degrees else None
+    return max(degrees) if degrees else None
+
+
+def _triangle_count_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name != "triangle_count":
+        return _UNCOMPUTED
+    return sum(cast(dict[Any, int], nx().triangles(graph)).values()) // 3
+
+
+def _independence_number_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name != "independence_number":
+        return _UNCOMPUTED
+    if not graph:
+        return 0
+    independent_set, independence_number = nx().max_weight_clique(
+        nx().complement(graph),
+        weight=None,
+    )
+    assert len(independent_set) == independence_number
+    return independence_number
+
+
+def _girth_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name != "girth":
+        return _UNCOMPUTED
+    value = nx().girth(graph)
+    return None if math.isinf(value) else int(value)
+
+
+def _eccentricity_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name not in {"eccentricities", "diameter", "radius", "average_eccentricity"}:
+        return _UNCOMPUTED
+    if not graph:
+        raise nx().NetworkXPointlessConcept(
+            "distance properties are undefined for the null graph"
         )
-        assert len(independent_set) == independence_number
-        return independence_number
-    if name == "girth":
-        value = nx().girth(graph)
-        return None if math.isinf(value) else int(value)
-    if name in {"eccentricities", "diameter", "radius", "average_eccentricity"}:
-        if not graph:
-            raise nx().NetworkXPointlessConcept(
-                "distance properties are undefined for the null graph"
-            )
-        eccentricities = cast(dict[Any, int], nx().eccentricity(graph))
-        ordered = {
-            str(vertex): eccentricities[vertex]
-            for vertex in sorted(eccentricities, key=str)
-        }
-        if name == "eccentricities":
-            return ordered
-        if name == "diameter":
-            return max(eccentricities.values(), default=0)
-        if name == "radius":
-            return min(eccentricities.values(), default=0)
-        total = sum(eccentricities.values())
-        return _rational_payload(Fraction(total, len(eccentricities)))
-    if name == "triangle_frequencies":
-        frequencies = cast(dict[Any, int], nx().triangles(graph))
-        return {
-            str(vertex): frequencies[vertex] for vertex in sorted(frequencies, key=str)
-        }
-    if name == "harmonic_index":
-        harmonic_value = Fraction(0)
-        for source, target in graph.edges:
-            harmonic_value += Fraction(
-                2,
-                graph.degree[source] + graph.degree[target],
-            )
-        return _rational_payload(harmonic_value)
-    if name in {"havel_hakimi_trace", "residue"}:
-        trace = _havel_hakimi_trace(graph)
-        return trace if name == "havel_hakimi_trace" else len(trace[-1])
+    eccentricities = cast(dict[Any, int], nx().eccentricity(graph))
+    ordered = {
+        str(vertex): eccentricities[vertex]
+        for vertex in sorted(eccentricities, key=str)
+    }
+    if name == "eccentricities":
+        return ordered
+    if name == "diameter":
+        return max(eccentricities.values(), default=0)
+    if name == "radius":
+        return min(eccentricities.values(), default=0)
+    total = sum(eccentricities.values())
+    return _rational_payload(Fraction(total, len(eccentricities)))
+
+
+def _triangle_frequencies_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name != "triangle_frequencies":
+        return _UNCOMPUTED
+    frequencies = cast(dict[Any, int], nx().triangles(graph))
+    return {str(vertex): frequencies[vertex] for vertex in sorted(frequencies, key=str)}
+
+
+def _harmonic_index_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name != "harmonic_index":
+        return _UNCOMPUTED
+    harmonic_value = Fraction(0)
+    for source, target in graph.edges:
+        harmonic_value += Fraction(
+            2,
+            graph.degree[source] + graph.degree[target],
+        )
+    return _rational_payload(harmonic_value)
+
+
+def _havel_hakimi_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    if name not in {"havel_hakimi_trace", "residue"}:
+        return _UNCOMPUTED
+    trace = _havel_hakimi_trace(graph)
+    return trace if name == "havel_hakimi_trace" else len(trace[-1])
+
+
+_PROPERTY_COMPUTERS: tuple[Callable[[nx_type.Graph[Any], str], Any], ...] = (
+    _basic_property,
+    _degree_property,
+    _triangle_count_property,
+    _independence_number_property,
+    _girth_property,
+    _eccentricity_property,
+    _triangle_frequencies_property,
+    _harmonic_index_property,
+    _havel_hakimi_property,
+)
+
+
+def _compute_property(graph: nx_type.Graph[Any], name: str) -> Any:
+    """Compute only the requested outcome instead of the full property portfolio."""
+
+    for computer in _PROPERTY_COMPUTERS:
+        result = computer(graph, name)
+        if result is not _UNCOMPUTED:
+            return result
     raise AssertionError(f"unsupported graph property: {name}")
 
 

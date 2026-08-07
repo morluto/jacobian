@@ -34,26 +34,19 @@ def _sha256_bytes(payload: bytes) -> str:
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def _execution_bound(report: object) -> bool:
-    """Reject reports that only restate public spike success literals."""
-
-    if not isinstance(report, dict):
-        return False
+def _report_header_ok(report: dict) -> bool:
     if report.get("contract") != expected["contract"]:
         return False
     if report.get("status") != "COMPLETED":
         return False
     if report.get("conclusion") != expected["report_conclusion"]:
         return False
-    if report.get("assurance") != expected["report_assurance"]:
-        return False
-    provider = report.get("provider")
-    reproduction = report.get("reproduction")
-    frozen = expected["reproduction"]
-    if not isinstance(provider, dict) or not isinstance(reproduction, dict):
-        return False
-    if not isinstance(frozen, dict):
-        return False
+    return report.get("assurance") == expected["report_assurance"]
+
+
+def _mathematical_output_bound(
+    reproduction: dict, frozen: dict, provider: dict
+) -> bool:
     if reproduction.get("scope") != frozen["scope"]:
         return False
     runtime = provider.get("runtime")
@@ -77,7 +70,22 @@ def _execution_bound(report: object) -> bool:
     if mathematical_output != expected_output:
         return False
     mathematical_digest = _sha256_bytes(_canonical_json(mathematical_output))
-    if mathematical_digest != frozen["expected_mathematical_output_sha256"]:
+    return mathematical_digest == frozen["expected_mathematical_output_sha256"]
+
+
+def _execution_bound(report: object) -> bool:
+    """Reject reports that only restate public spike success literals."""
+
+    if not isinstance(report, dict) or not _report_header_ok(report):
+        return False
+    provider = report.get("provider")
+    reproduction = report.get("reproduction")
+    frozen = expected["reproduction"]
+    if not isinstance(provider, dict) or not isinstance(reproduction, dict):
+        return False
+    if not isinstance(frozen, dict):
+        return False
+    if not _mathematical_output_bound(reproduction, frozen, provider):
         return False
     limitations = report.get("limitations")
     if not isinstance(limitations, list) or not limitations:

@@ -126,6 +126,59 @@ def test_checker_accepts_a_total_assignment_satisfying_every_clause() -> None:
     assert decision["coverage"] == "NOT_APPLICABLE"
 
 
+def _mutate_cnf(request: dict[str, Any], mutation: str) -> None:
+    cnf = request["claim"]["payload"]
+    if mutation == "omit_clause":
+        cnf["clauses"].pop()
+    elif mutation == "add_clause":
+        cnf["clauses"].append({"literals": [2]})
+    elif mutation == "reorder_clauses":
+        cnf["clauses"] = list(reversed(cnf["clauses"]))
+    elif mutation == "renumber_literal":
+        cnf["clauses"][0]["literals"][1] = 1
+    elif mutation == "change_variable_map":
+        cnf["variables"][1]["name"] = "c"
+
+
+def _mutate_assignment(request: dict[str, Any], mutation: str) -> None:
+    assignment = request["candidate"]["payload"]
+    if mutation == "flip_value":
+        assignment["values"][1] = False
+    elif mutation == "change_source_uri":
+        assignment["cnf"]["cnf_artifact_uri"] = "artifact://sha256/" + "9" * 64
+    elif mutation == "partial_assignment":
+        assignment["values"].pop()
+    elif mutation == "boolean_variable_count":
+        assignment["cnf"]["variable_count"] = True
+    elif mutation == "extra_candidate_field":
+        assignment["verification"] = "VERIFIED"
+
+
+def _apply_assignment_mutation(mutation: str, request: dict[str, Any]) -> None:
+    if mutation in {
+        "omit_clause",
+        "add_clause",
+        "reorder_clauses",
+        "renumber_literal",
+        "change_variable_map",
+    }:
+        _mutate_cnf(request, mutation)
+    elif mutation in {
+        "flip_value",
+        "change_source_uri",
+        "partial_assignment",
+        "boolean_variable_count",
+        "extra_candidate_field",
+    }:
+        _mutate_assignment(request, mutation)
+    elif mutation == "mismatched_bindings":
+        request["witness"]["payload"]["bindings"]["candidate_digest"] = (
+            "sha256:" + "9" * 64
+        )
+    elif mutation == "missing_lineage":
+        request["candidate"]["parents"] = []
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
@@ -147,34 +200,7 @@ def test_checker_rejects_mutated_or_misbound_assignment_evidence(
     mutation: str,
 ) -> None:
     request = _request()
-    cnf = request["claim"]["payload"]
-    assignment = request["candidate"]["payload"]
-    if mutation == "flip_value":
-        assignment["values"][1] = False
-    elif mutation == "omit_clause":
-        cnf["clauses"].pop()
-    elif mutation == "add_clause":
-        cnf["clauses"].append({"literals": [2]})
-    elif mutation == "reorder_clauses":
-        cnf["clauses"] = list(reversed(cnf["clauses"]))
-    elif mutation == "renumber_literal":
-        cnf["clauses"][0]["literals"][1] = 1
-    elif mutation == "change_variable_map":
-        cnf["variables"][1]["name"] = "c"
-    elif mutation == "change_source_uri":
-        assignment["cnf"]["cnf_artifact_uri"] = "artifact://sha256/" + "9" * 64
-    elif mutation == "partial_assignment":
-        assignment["values"].pop()
-    elif mutation == "boolean_variable_count":
-        assignment["cnf"]["variable_count"] = True
-    elif mutation == "mismatched_bindings":
-        request["witness"]["payload"]["bindings"]["candidate_digest"] = (
-            "sha256:" + "9" * 64
-        )
-    elif mutation == "missing_lineage":
-        request["candidate"]["parents"] = []
-    else:
-        assignment["verification"] = "VERIFIED"
+    _apply_assignment_mutation(mutation, request)
 
     decision = check_assignment(request)
 

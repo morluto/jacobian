@@ -147,118 +147,211 @@ def _artifact_uri(value: object) -> bool:
     return isinstance(value, str) and _ARTIFACT_URI.fullmatch(value) is not None
 
 
+def _request_shape_detail(request: object) -> str | None:
+    if not isinstance(request, dict) or set(request) != {
+        "request_version",
+        "claim",
+        "candidate",
+        "scope",
+        "certificate",
+        "expected_bindings",
+    }:
+        return "malformed checker request"
+    if request["request_version"] != "1":
+        return "unsupported checker request"
+    return None
+
+
+def _artifact_and_payload_detail(
+    claim_artifact: object,
+    candidate_artifact: object,
+    scope_artifact: object,
+    certificate_artifact: object,
+    expected_bindings: object,
+) -> str | None:
+    if (
+        not isinstance(claim_artifact, dict)
+        or not isinstance(candidate_artifact, dict)
+        or not isinstance(scope_artifact, dict)
+        or not isinstance(certificate_artifact, dict)
+    ):
+        return "graph-coloring artifacts are malformed"
+    if not isinstance(expected_bindings, dict):
+        return "graph-coloring evidence bindings are malformed"
+    claim = claim_artifact["payload"]
+    candidate = candidate_artifact["payload"]
+    scope = scope_artifact["payload"]
+    certificate = certificate_artifact["payload"]
+    if not all(
+        isinstance(item, dict) for item in (claim, candidate, scope, certificate)
+    ):
+        return "graph-coloring artifact payloads are malformed"
+    return None
+
+
+def _claim_and_colors_detail(claim: dict[str, Any]) -> str | None:
+    if (
+        claim.get("claim_schema_version") != "1"
+        or claim.get("predicate") != "GRAPH_K_COLORABILITY_ENCODING"
+        or set(claim) != {"claim_schema_version", "predicate", "graph", "colors"}
+    ):
+        return "unexpected graph-coloring claim"
+    colors = claim["colors"]
+    if type(colors) is not int or not 1 <= colors <= _MAX_COLORS:
+        return "invalid graph-coloring color count"
+    return None
+
+
+def _candidate_detail(candidate: dict[str, Any]) -> str | None:
+    if (
+        set(candidate) != {"candidate_schema_version", "cnf_uri", "scope_uri"}
+        or candidate.get("candidate_schema_version") != "1"
+        or not _artifact_uri(candidate.get("cnf_uri"))
+        or not _artifact_uri(candidate.get("scope_uri"))
+    ):
+        return "malformed graph-coloring candidate"
+    return None
+
+
+def _scope_detail(
+    scope: dict[str, Any],
+    claim_graph: object,
+    colors: int,
+) -> str | None:
+    if (
+        set(scope)
+        != {
+            "scope_schema_version",
+            "graph",
+            "colors",
+            "cnf_uri",
+            "cnf_object_digest",
+            "cnf",
+        }
+        or scope.get("scope_schema_version") != "1"
+        or scope.get("graph") != claim_graph
+        or scope.get("colors") != colors
+        or not _artifact_uri(scope.get("cnf_uri"))
+        or not _DIGEST.fullmatch(str(scope.get("cnf_object_digest")))
+    ):
+        return "malformed graph-coloring scope"
+    return None
+
+
+def _scope_pointer_detail(
+    scope: dict[str, Any],
+    candidate: dict[str, Any],
+    scope_artifact: dict[str, Any],
+) -> str | None:
+    if (
+        scope["cnf_uri"] != candidate["cnf_uri"]
+        or scope_artifact["artifact_uri"] != candidate["scope_uri"]
+    ):
+        return "graph-coloring candidate pointers are inconsistent"
+    return None
+
+
+def _candidate_and_scope_detail(
+    candidate: dict[str, Any],
+    scope: dict[str, Any],
+    claim_graph: object,
+    colors: int,
+    scope_artifact: dict[str, Any],
+) -> str | None:
+    detail = _candidate_detail(candidate)
+    if detail is not None:
+        return detail
+    detail = _scope_detail(scope, claim_graph, colors)
+    if detail is not None:
+        return detail
+    return _scope_pointer_detail(scope, candidate, scope_artifact)
+
+
+def _certificate_detail(
+    certificate: dict[str, Any],
+    expected_bindings: dict[str, Any],
+    claim_artifact: dict[str, Any],
+    candidate_artifact: dict[str, Any],
+    scope_artifact: dict[str, Any],
+) -> str | None:
+    replay = certificate.get("payload")
+    if (
+        set(certificate)
+        != {
+            "evidence_schema_version",
+            "certificate_type",
+            "format_version",
+            "bindings",
+            "payload_digest",
+            "payload",
+        }
+        or certificate.get("evidence_schema_version") != "1"
+        or certificate.get("certificate_type") != "graph.coloring.encoding"
+        or certificate.get("format_version") != "1"
+        or certificate.get("bindings") != expected_bindings
+        or not isinstance(replay, dict)
+        or replay
+        != {
+            "method": "INDEPENDENT_GRAPH_COLORING_CNF_REPLAY",
+            "claim_uri": claim_artifact["artifact_uri"],
+            "candidate_uri": candidate_artifact["artifact_uri"],
+            "scope_uri": scope_artifact["artifact_uri"],
+        }
+        or certificate.get("payload_digest") != _sha256(_canonical_json(replay))
+    ):
+        return "graph-coloring certificate is not exactly bound"
+    if not _DIGEST.fullmatch(str(expected_bindings.get("claim_digest"))):
+        return "graph-coloring evidence bindings are malformed"
+    return None
+
+
 def check_encoding(request: dict[str, Any]) -> dict[str, Any]:
     """Replay the graph-owned k-colorability CNF semantics independently."""
 
     try:
-        if not isinstance(request, dict) or set(request) != {
-            "request_version",
-            "claim",
-            "candidate",
-            "scope",
-            "certificate",
-            "expected_bindings",
-        }:
-            return _reject("malformed checker request")
-        if request["request_version"] != "1":
-            return _reject("unsupported checker request")
+        detail = _request_shape_detail(request)
+        if detail is not None:
+            return _reject(detail)
         claim_artifact = request["claim"]
         candidate_artifact = request["candidate"]
         scope_artifact = request["scope"]
         certificate_artifact = request["certificate"]
-        if not all(
-            isinstance(item, dict)
-            for item in (
-                claim_artifact,
-                candidate_artifact,
-                scope_artifact,
-                certificate_artifact,
-            )
-        ):
-            return _reject("graph-coloring artifacts are malformed")
         expected_bindings = request["expected_bindings"]
-        if not isinstance(expected_bindings, dict):
-            return _reject("graph-coloring evidence bindings are malformed")
-        if not isinstance(scope_artifact, dict):
-            return _reject("graph-coloring scope is missing")
+        detail = _artifact_and_payload_detail(
+            claim_artifact,
+            candidate_artifact,
+            scope_artifact,
+            certificate_artifact,
+            expected_bindings,
+        )
+        if detail is not None:
+            return _reject(detail)
         claim = claim_artifact["payload"]
         candidate = candidate_artifact["payload"]
         scope = scope_artifact["payload"]
         certificate = certificate_artifact["payload"]
-        if not all(
-            isinstance(item, dict) for item in (claim, candidate, scope, certificate)
-        ):
-            return _reject("graph-coloring artifact payloads are malformed")
-        if (
-            claim.get("claim_schema_version") != "1"
-            or claim.get("predicate") != "GRAPH_K_COLORABILITY_ENCODING"
-            or set(claim) != {"claim_schema_version", "predicate", "graph", "colors"}
-        ):
-            return _reject("unexpected graph-coloring claim")
+        detail = _claim_and_colors_detail(claim)
+        if detail is not None:
+            return _reject(detail)
         vertices, edges = _parse_graph(claim["graph"])
         colors = claim["colors"]
-        if type(colors) is not int or not 1 <= colors <= _MAX_COLORS:
-            return _reject("invalid graph-coloring color count")
-        if (
-            set(candidate) != {"candidate_schema_version", "cnf_uri", "scope_uri"}
-            or candidate.get("candidate_schema_version") != "1"
-            or not _artifact_uri(candidate.get("cnf_uri"))
-            or not _artifact_uri(candidate.get("scope_uri"))
-        ):
-            return _reject("malformed graph-coloring candidate")
-        if (
-            set(scope)
-            != {
-                "scope_schema_version",
-                "graph",
-                "colors",
-                "cnf_uri",
-                "cnf_object_digest",
-                "cnf",
-            }
-            or scope.get("scope_schema_version") != "1"
-            or scope.get("graph") != claim["graph"]
-            or scope.get("colors") != colors
-            or not _artifact_uri(scope.get("cnf_uri"))
-            or not _DIGEST.fullmatch(str(scope.get("cnf_object_digest")))
-        ):
-            return _reject("malformed graph-coloring scope")
-        if (
-            scope["cnf_uri"] != candidate["cnf_uri"]
-            or scope_artifact["artifact_uri"] != candidate["scope_uri"]
-        ):
-            return _reject("graph-coloring candidate pointers are inconsistent")
+        detail = _candidate_and_scope_detail(
+            candidate, scope, claim["graph"], colors, scope_artifact
+        )
+        if detail is not None:
+            return _reject(detail)
         expected_cnf = _expected_cnf(vertices, edges, colors)
         if scope["cnf"] != expected_cnf:
             return _reject("CNF does not encode the claimed graph colorability")
-        replay = certificate.get("payload")
-        if (
-            set(certificate)
-            != {
-                "evidence_schema_version",
-                "certificate_type",
-                "format_version",
-                "bindings",
-                "payload_digest",
-                "payload",
-            }
-            or certificate.get("evidence_schema_version") != "1"
-            or certificate.get("certificate_type") != "graph.coloring.encoding"
-            or certificate.get("format_version") != "1"
-            or certificate.get("bindings") != expected_bindings
-            or not isinstance(replay, dict)
-            or replay
-            != {
-                "method": "INDEPENDENT_GRAPH_COLORING_CNF_REPLAY",
-                "claim_uri": claim_artifact["artifact_uri"],
-                "candidate_uri": candidate_artifact["artifact_uri"],
-                "scope_uri": scope_artifact["artifact_uri"],
-            }
-            or certificate.get("payload_digest") != _sha256(_canonical_json(replay))
-        ):
-            return _reject("graph-coloring certificate is not exactly bound")
-        if not _DIGEST.fullmatch(str(expected_bindings.get("claim_digest"))):
-            return _reject("graph-coloring evidence bindings are malformed")
+        detail = _certificate_detail(
+            certificate,
+            expected_bindings,
+            claim_artifact,
+            candidate_artifact,
+            scope_artifact,
+        )
+        if detail is not None:
+            return _reject(detail)
         return {
             "accepted": True,
             "conclusion": "TRUE",

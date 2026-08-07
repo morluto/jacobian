@@ -68,6 +68,57 @@ def _derive(case: dict[str, Any]) -> tuple[list[str], str] | None:
     return None
 
 
+def _result_item_ok(item, case):
+    if (
+        not isinstance(item, dict)
+        or set(item) != {"id", "findings", "reason"}
+        or not isinstance(case, dict)
+    ):
+        return False
+    derived = _derive(case)
+    if derived is None:
+        return False
+    findings, _reason = derived
+    submitted_reason = item.get("reason")
+    if not isinstance(submitted_reason, str) or len(submitted_reason.strip()) < 12:
+        return False
+    reason_text = submitted_reason.casefold()
+    if (
+        findings
+        and "DIVISION_BY_ZERO" in findings
+        and (
+            not ("zero" in reason_text or "divisor" in reason_text)
+            or re.search(
+                r"(?:division|divisor|zero)[^.;\n]{0,60}"
+                r"(?:impossible|not possible|cannot|can['']?t|safe|never)\b",
+                reason_text,
+            )
+            or re.search(
+                r"\b(?:no|not)\b[^.;\n]{0,40}\b(?:division|divisor)\b",
+                reason_text,
+            )
+        )
+    ):
+        return False
+    if (
+        findings
+        and "INTEGER_DIVISION_TRUNCATION" in findings
+        and (
+            "truncat" not in reason_text
+            or re.search(
+                r"\b(?:no|not|never|doesn['']?t|cannot)\b[^.;\n]{0,30}truncat",
+                reason_text,
+            )
+        )
+    ):
+        return False
+    if not findings and not any(
+        term in reason_text for term in ("proof", "statement", "term")
+    ):
+        return False
+    return not (item.get("id") != case.get("id") or item.get("findings") != findings)
+
+
 def _result(value: object, source: dict[str, Any]) -> bool:
     if not isinstance(value, dict) or set(value) != {"cases"}:
         return False
@@ -81,54 +132,7 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     if provenance.get("revision") != "3e7e99d027fece04d9cd96288cdd040c366458e5":
         return False
     for item, case in zip(submitted, cases, strict=True):
-        if (
-            not isinstance(item, dict)
-            or set(item) != {"id", "findings", "reason"}
-            or not isinstance(case, dict)
-        ):
-            return False
-        derived = _derive(case)
-        if derived is None:
-            return False
-        findings, _reason = derived
-        submitted_reason = item.get("reason")
-        if not isinstance(submitted_reason, str) or len(submitted_reason.strip()) < 12:
-            return False
-        reason_text = submitted_reason.casefold()
-        if (
-            findings
-            and "DIVISION_BY_ZERO" in findings
-            and (
-                not ("zero" in reason_text or "divisor" in reason_text)
-                or re.search(
-                    r"(?:division|divisor|zero)[^.;\n]{0,60}"
-                    r"(?:impossible|not possible|cannot|can['']?t|safe|never)\b",
-                    reason_text,
-                )
-                or re.search(
-                    r"\b(?:no|not)\b[^.;\n]{0,40}\b(?:division|divisor)\b",
-                    reason_text,
-                )
-            )
-        ):
-            return False
-        if (
-            findings
-            and "INTEGER_DIVISION_TRUNCATION" in findings
-            and (
-                "truncat" not in reason_text
-                or re.search(
-                    r"\b(?:no|not|never|doesn['']?t|cannot)\b[^.;\n]{0,30}truncat",
-                    reason_text,
-                )
-            )
-        ):
-            return False
-        if not findings and not any(
-            term in reason_text for term in ("proof", "statement", "term")
-        ):
-            return False
-        if item.get("id") != case.get("id") or item.get("findings") != findings:
+        if not _result_item_ok(item, case):
             return False
     return True
 

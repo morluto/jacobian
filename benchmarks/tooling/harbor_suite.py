@@ -945,12 +945,16 @@ def _tests_dockerfile_copy_source_failures(
     return failures
 
 
-def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
+def _required_files_failures(task_dir: Path, rel: str) -> list[str]:
     failures: list[str] = []
-    rel = task_dir.relative_to(ROOT).as_posix()
     for name in ("README.md", "instruction.md", "task.toml"):
         if not (task_dir / name).is_file():
             failures.append(f"{rel}/{name}: required file missing")
+    return failures
+
+
+def _symlink_cache_failures(task_dir: Path, rel: str) -> list[str]:
+    failures: list[str] = []
     for path in task_dir.rglob("*"):
         if path.is_symlink():
             failures.append(f"{rel}: symlink is forbidden")
@@ -959,21 +963,24 @@ def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
         cache_failure = _python_cache_failure(path)
         if cache_failure is not None:
             failures.append(cache_failure)
-    try:
-        failures.extend(_task_manifest_failures(suite, task_dir, rel))
-    except HarborSuiteError as exc:
-        failures.append(str(exc))
-    failures.extend(_agent_environment_failures(suite, task_dir, rel))
-    tests = task_dir / "tests"
+    return failures
+
+
+def _tests_dir_failures(
+    suite: Suite, task_dir: Path, tests: Path, rel: str
+) -> list[str]:
     if not tests.is_dir():
-        failures.append(f"{rel}/tests: directory missing")
-    else:
-        for name in REQUIRED_TESTS:
-            if not _is_regular_file(tests / name):
-                failures.append(f"{rel}/tests/{name}: required file missing")
-        failures.extend(_tests_dockerfile_failures(suite, task_dir, tests, rel))
-    if not (task_dir / "solution").is_dir():
-        failures.append(f"{rel}/solution: directory missing")
+        return [f"{rel}/tests: directory missing"]
+    failures: list[str] = []
+    for name in REQUIRED_TESTS:
+        if not _is_regular_file(tests / name):
+            failures.append(f"{rel}/tests/{name}: required file missing")
+    failures.extend(_tests_dockerfile_failures(suite, task_dir, tests, rel))
+    return failures
+
+
+def _deprecated_fixture_failures(task_dir: Path) -> list[str]:
+    failures: list[str] = []
     for forbidden in (
         task_dir / "input.json",
         task_dir / "metadata.json",
@@ -983,6 +990,23 @@ def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
             failures.append(
                 f"{forbidden.relative_to(ROOT)}: deprecated duplicate fixture"
             )
+    return failures
+
+
+def validate_task_topology(suite: Suite, task_dir: Path) -> list[str]:
+    failures: list[str] = []
+    rel = task_dir.relative_to(ROOT).as_posix()
+    failures.extend(_required_files_failures(task_dir, rel))
+    failures.extend(_symlink_cache_failures(task_dir, rel))
+    try:
+        failures.extend(_task_manifest_failures(suite, task_dir, rel))
+    except HarborSuiteError as exc:
+        failures.append(str(exc))
+    failures.extend(_agent_environment_failures(suite, task_dir, rel))
+    failures.extend(_tests_dir_failures(suite, task_dir, task_dir / "tests", rel))
+    if not (task_dir / "solution").is_dir():
+        failures.append(f"{rel}/solution: directory missing")
+    failures.extend(_deprecated_fixture_failures(task_dir))
     return failures
 
 

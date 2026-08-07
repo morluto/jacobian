@@ -193,6 +193,108 @@ class BlobPublisher:
                 "and available disk space, then retry."
             ) from exc
 
+    def _check_existing_blob(
+        self,
+        target: Path,
+        digest: str,
+        data: bytes,
+    ) -> str | None:
+        """Return *digest* if *target* already stores *data*, or None if absent."""
+
+        if not target.exists():
+            return None
+        if target.is_symlink() or not target.is_file():
+            raise ArtifactIntegrityError(
+                f"existing blob does not match digest {digest}"
+            )
+        stat = target.stat()
+        signature = (
+            stat.st_dev,
+            stat.st_ino,
+            stat.st_size,
+            stat.st_mtime_ns,
+            stat.st_ctime_ns,
+        )
+        if self._validated_blobs.get(digest) == signature:
+            return digest
+        existing = target.read_bytes()
+        after = target.stat()
+        after_signature = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        if signature != after_signature or existing != data:
+            raise ArtifactIntegrityError(
+                f"existing blob does not match digest {digest}"
+            )
+        self._validated_blobs[digest] = after_signature
+        return digest
+
+    def _publish_new_blob(
+        self,
+        target: Path,
+        data: bytes,
+        digest: str,
+        *,
+        prefix_created: bool,
+    ) -> None:
+        """Write *data* to a temp file, hard-link to *target*, and sync."""
+
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=self.staging_root,
+            prefix="blob-",
+        )
+        temporary = Path(temporary_name)
+        reserved = False
+        published = False
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            self._adjust_blob_bytes_committed(
+                len(data),
+                reconciliation_required=True,
+            )
+            reserved = True
+            try:
+                os.link(temporary, target)
+                published = True
+            except FileExistsError as exc:
+                if target.is_symlink() or target.read_bytes() != data:
+                    raise ArtifactIntegrityError(
+                        f"concurrent blob does not match digest {digest}"
+                    ) from exc
+            self._sync_blob_publication_directories(
+                target.parent,
+                prefix_created=prefix_created,
+            )
+        finally:
+            temporary.unlink(missing_ok=True)
+            if reserved and not published:
+                try:
+                    self._adjust_blob_bytes_committed(
+                        -len(data),
+                        reconciliation_required=False,
+                    )
+                except (ArtifactIntegrityError, sqlite3.Error):
+                    _LOGGER.exception(
+                        "failed to release an unpublished blob quota reservation"
+                    )
+        if published:
+            self._mark_blob_quota_reconciled()
+        stat = target.stat()
+        self._validated_blobs[digest] = (
+            stat.st_dev,
+            stat.st_ino,
+            stat.st_size,
+            stat.st_mtime_ns,
+            stat.st_ctime_ns,
+        )
+
     def _write_blob_unchecked(self, data: bytes) -> str:
         digest = sha256_digest(data)
         target = self._blob_path(digest)
@@ -205,93 +307,15 @@ class BlobPublisher:
                 raise ArtifactIntegrityError(
                     f"blob prefix is not a local directory for {digest}"
                 )
-            if target.exists():
-                if target.is_symlink() or not target.is_file():
-                    raise ArtifactIntegrityError(
-                        f"existing blob does not match digest {digest}"
-                    )
-                stat = target.stat()
-                signature = (
-                    stat.st_dev,
-                    stat.st_ino,
-                    stat.st_size,
-                    stat.st_mtime_ns,
-                    stat.st_ctime_ns,
-                )
-                if self._validated_blobs.get(digest) == signature:
-                    return digest
-                existing = target.read_bytes()
-                after = target.stat()
-                after_signature = (
-                    after.st_dev,
-                    after.st_ino,
-                    after.st_size,
-                    after.st_mtime_ns,
-                    after.st_ctime_ns,
-                )
-                if signature != after_signature or existing != data:
-                    raise ArtifactIntegrityError(
-                        f"existing blob does not match digest {digest}"
-                    )
-                self._validated_blobs[digest] = after_signature
-                return digest
+            existing = self._check_existing_blob(target, digest, data)
+            if existing is not None:
+                return existing
             if (
                 self._blob_bytes_committed() + len(data)
                 > self.limits.max_total_blob_bytes
             ):
                 raise StorageLimitError("artifact store blob quota would be exceeded")
-
-            descriptor, temporary_name = tempfile.mkstemp(
-                dir=self.staging_root,
-                prefix="blob-",
-            )
-            temporary = Path(temporary_name)
-            reserved = False
-            published = False
-            try:
-                with os.fdopen(descriptor, "wb") as handle:
-                    handle.write(data)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                self._adjust_blob_bytes_committed(
-                    len(data),
-                    reconciliation_required=True,
-                )
-                reserved = True
-                try:
-                    os.link(temporary, target)
-                    published = True
-                except FileExistsError as exc:
-                    if target.is_symlink() or target.read_bytes() != data:
-                        raise ArtifactIntegrityError(
-                            f"concurrent blob does not match digest {digest}"
-                        ) from exc
-                self._sync_blob_publication_directories(
-                    target.parent,
-                    prefix_created=prefix_created,
-                )
-            finally:
-                temporary.unlink(missing_ok=True)
-                if reserved and not published:
-                    try:
-                        self._adjust_blob_bytes_committed(
-                            -len(data),
-                            reconciliation_required=False,
-                        )
-                    except (ArtifactIntegrityError, sqlite3.Error):
-                        _LOGGER.exception(
-                            "failed to release an unpublished blob quota reservation"
-                        )
-            if published:
-                self._mark_blob_quota_reconciled()
-            stat = target.stat()
-            self._validated_blobs[digest] = (
-                stat.st_dev,
-                stat.st_ino,
-                stat.st_size,
-                stat.st_mtime_ns,
-                stat.st_ctime_ns,
-            )
+            self._publish_new_blob(target, data, digest, prefix_created=prefix_created)
         return digest
 
     def _read_blob(self, digest: str) -> bytes:

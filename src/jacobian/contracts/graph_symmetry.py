@@ -45,6 +45,70 @@ class GraphEdgeColor(ContractModel):
         return self
 
 
+def _validate_graph_symmetry_bounds_and_colors(
+    vertices: tuple[GraphSymmetryLabel, ...],
+    edges: tuple[GraphSymmetryEdge, ...],
+    generators: tuple[GraphAutomorphismGenerator, ...],
+    vertex_colors: tuple[GraphVertexColor, ...],
+    edge_colors: tuple[GraphEdgeColor, ...],
+) -> None:
+    if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
+        raise ValueError(
+            f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
+        )
+    if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
+        raise ValueError(
+            f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
+        )
+    if any(not vertex or len(vertex) > 64 for vertex in vertices):
+        raise ValueError("graph symmetry vertex labels must contain 1-64 characters")
+    generator_ids = tuple(generator.generator_id for generator in generators)
+    if len(set(generator_ids)) != len(generator_ids):
+        raise ValueError("graph symmetry generator identifiers must be unique")
+
+    if vertex_colors and tuple(item.vertex for item in vertex_colors) != vertices:
+        raise ValueError(
+            "vertex colors must cover vertices in the graph's declared order"
+        )
+    if edge_colors and tuple(item.edge for item in edge_colors) != edges:
+        raise ValueError("edge colors must cover edges in the graph's declared order")
+
+
+def _validate_automorphism_generator(
+    generator: GraphAutomorphismGenerator,
+    vertices: tuple[GraphSymmetryLabel, ...],
+    edges: tuple[GraphSymmetryEdge, ...],
+    vertex_set: set[GraphSymmetryLabel],
+    edge_set: set[GraphSymmetryEdge],
+    vertex_colors: dict[GraphSymmetryLabel, GraphSymmetryColor],
+    edge_colors: dict[GraphSymmetryEdge, GraphSymmetryColor],
+) -> None:
+    mapping = generator.mapping
+    if set(mapping) != vertex_set or set(mapping.values()) != vertex_set:
+        raise ValueError(
+            "every graph symmetry generator must be a total vertex permutation"
+        )
+    if any(
+        vertex_colors[vertex] != vertex_colors[mapping[vertex]] for vertex in vertices
+    ):
+        raise ValueError(
+            "graph symmetry generators must preserve declared vertex colors"
+        )
+    mapped_edges = {
+        _canonical_edge(mapping[left], mapping[right]) for left, right in edges
+    }
+    if mapped_edges != edge_set:
+        raise ValueError(
+            "graph symmetry generators must preserve the complete edge set"
+        )
+    if any(
+        edge_colors[edge]
+        != edge_colors[_canonical_edge(mapping[edge[0]], mapping[edge[1]])]
+        for edge in edges
+    ):
+        raise ValueError("graph symmetry generators must preserve declared edge colors")
+
+
 class GraphSymmetryOrbitRequest(ContractModel):
     graph: SimpleUndirectedGraph
     generators: tuple[GraphAutomorphismGenerator, ...] = Field(
@@ -66,33 +130,13 @@ class GraphSymmetryOrbitRequest(ContractModel):
     def require_bounded_color_preserving_automorphisms(self) -> Self:
         vertices = self.graph.vertices
         edges = self.graph.edges
-        if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
-            raise ValueError(
-                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
-            )
-        if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
-            raise ValueError(
-                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
-            )
-        if any(not vertex or len(vertex) > 64 for vertex in vertices):
-            raise ValueError(
-                "graph symmetry vertex labels must contain 1-64 characters"
-            )
-        generator_ids = tuple(generator.generator_id for generator in self.generators)
-        if len(set(generator_ids)) != len(generator_ids):
-            raise ValueError("graph symmetry generator identifiers must be unique")
-
-        if (
-            self.vertex_colors
-            and tuple(item.vertex for item in self.vertex_colors) != vertices
-        ):
-            raise ValueError(
-                "vertex colors must cover vertices in the graph's declared order"
-            )
-        if self.edge_colors and tuple(item.edge for item in self.edge_colors) != edges:
-            raise ValueError(
-                "edge colors must cover edges in the graph's declared order"
-            )
+        _validate_graph_symmetry_bounds_and_colors(
+            vertices,
+            edges,
+            self.generators,
+            self.vertex_colors,
+            self.edge_colors,
+        )
 
         vertex_set = set(vertices)
         edge_set = set(edges)
@@ -107,33 +151,15 @@ class GraphSymmetryOrbitRequest(ContractModel):
             else dict.fromkeys(edges, "__UNCOLORED__")
         )
         for generator in self.generators:
-            mapping = generator.mapping
-            if set(mapping) != vertex_set or set(mapping.values()) != vertex_set:
-                raise ValueError(
-                    "every graph symmetry generator must be a total vertex permutation"
-                )
-            if any(
-                vertex_colors[vertex] != vertex_colors[mapping[vertex]]
-                for vertex in vertices
-            ):
-                raise ValueError(
-                    "graph symmetry generators must preserve declared vertex colors"
-                )
-            mapped_edges = {
-                _canonical_edge(mapping[left], mapping[right]) for left, right in edges
-            }
-            if mapped_edges != edge_set:
-                raise ValueError(
-                    "graph symmetry generators must preserve the complete edge set"
-                )
-            if any(
-                edge_colors[edge]
-                != edge_colors[_canonical_edge(mapping[edge[0]], mapping[edge[1]])]
-                for edge in edges
-            ):
-                raise ValueError(
-                    "graph symmetry generators must preserve declared edge colors"
-                )
+            _validate_automorphism_generator(
+                generator,
+                vertices,
+                edges,
+                vertex_set,
+                edge_set,
+                vertex_colors,
+                edge_colors,
+            )
         return self
 
 

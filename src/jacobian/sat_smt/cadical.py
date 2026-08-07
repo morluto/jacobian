@@ -134,6 +134,105 @@ class _CadicalBackend:
     ) -> _CadicalRun:
         return self._run(cnf, budget, produce_proof=True)
 
+    def _build_command(
+        self,
+        cnf_path: Path,
+        proof_path: Path,
+        budget: SatExplorationBudget,
+        *,
+        produce_proof: bool,
+    ) -> list[str]:
+        """Assemble the CaDiCaL command line for the given budget."""
+
+        command = [str(self.executable), "-q"]
+        if produce_proof:
+            command.append("--no-binary")
+        if budget.conflicts is not None:
+            command.extend(("-c", str(budget.conflicts)))
+        command.append(str(cnf_path))
+        if produce_proof:
+            command.append(str(proof_path))
+        return command
+
+    def _raw_proof_limit_exceeded(
+        self,
+        started: float,
+        completed: ProcessResult,
+        proof_path: Path,
+        *,
+        produce_proof: bool,
+    ) -> _CadicalRun | None:
+        """Return a failure if the raw proof file exceeded its size limit."""
+
+        if (
+            produce_proof
+            and completed.returncode not in {0, 10, 20}
+            and proof_path.is_file()
+            and proof_path.stat().st_size >= CADICAL_RAW_PROOF_LIMIT
+        ):
+            return _run_failure(
+                started,
+                code="CADICAL_RAW_PROOF_LIMIT_EXCEEDED",
+                stage="proof_capture",
+                message=(
+                    "CaDiCaL reached the operating-system raw proof file-size "
+                    "limit; no proof evidence was retained."
+                ),
+            )
+        return None
+
+    def _capture_proof(
+        self,
+        started: float,
+        proof_path: Path,
+    ) -> _CadicalRun | tuple[bytes, int]:
+        """Read and normalize the proof file, or return a failure run."""
+
+        try:
+            return _read_proof_file(proof_path)
+        except FileNotFoundError:
+            return _run_failure(
+                started,
+                code="CADICAL_PROOF_MISSING",
+                stage="proof_capture",
+                message=(
+                    "CaDiCaL reported UNSATISFIABLE without creating the "
+                    "requested DRAT proof file."
+                ),
+            )
+        except _CadicalRawProofLimitError:
+            return _run_failure(
+                started,
+                code="CADICAL_RAW_PROOF_LIMIT_EXCEEDED",
+                stage="proof_capture",
+                message=(
+                    "The raw CaDiCaL proof exceeded the bounded capture limit "
+                    "before normalization and was not retained."
+                ),
+            )
+        except _CadicalDurableProofLimitError:
+            return _run_failure(
+                started,
+                code="CADICAL_DURABLE_PROOF_LIMIT_EXCEEDED",
+                stage="proof_capture",
+                message=(
+                    "The addition-only normalized CaDiCaL proof still "
+                    "exceeded the durable artifact limit. Partition the "
+                    "search or use a smaller certificate; no conclusion "
+                    "follows."
+                ),
+            )
+        except OSError:
+            return _run_failure(
+                started,
+                code="INVALID_CADICAL_PROOF_FILE",
+                stage="proof_capture",
+                message=(
+                    "The CaDiCaL proof output was not a safe bounded regular "
+                    "file and was not retained."
+                ),
+            )
+
     def _run(
         self,
         cnf: CanonicalCnf,
@@ -158,14 +257,9 @@ class _CadicalBackend:
             cnf_path = root / "input.cnf"
             proof_path = root / "proof.drat"
             cnf_path.write_bytes(cnf.to_dimacs_bytes())
-            command = [str(self.executable), "-q"]
-            if produce_proof:
-                command.append("--no-binary")
-            if budget.conflicts is not None:
-                command.extend(("-c", str(budget.conflicts)))
-            command.append(str(cnf_path))
-            if produce_proof:
-                command.append(str(proof_path))
+            command = self._build_command(
+                cnf_path, proof_path, budget, produce_proof=produce_proof
+            )
             completed = execute_process(
                 ProcessRequest(
                     executable=command[0],
@@ -181,21 +275,11 @@ class _CadicalBackend:
                     ),
                 )
             )
-            if (
-                produce_proof
-                and completed.returncode not in {0, 10, 20}
-                and proof_path.is_file()
-                and proof_path.stat().st_size >= CADICAL_RAW_PROOF_LIMIT
-            ):
-                return _run_failure(
-                    started,
-                    code="CADICAL_RAW_PROOF_LIMIT_EXCEEDED",
-                    stage="proof_capture",
-                    message=(
-                        "CaDiCaL reached the operating-system raw proof file-size "
-                        "limit; no proof evidence was retained."
-                    ),
-                )
+            raw_limit = self._raw_proof_limit_exceeded(
+                started, completed, proof_path, produce_proof=produce_proof
+            )
+            if raw_limit is not None:
+                return raw_limit
             operational = _operational_failure(started, completed)
             if operational is not None:
                 return operational
@@ -225,51 +309,12 @@ class _CadicalBackend:
                     ),
                 )
             proof: bytes | None = None
+            removed_deletion_steps = 0
             if produce_proof and solver_status == "UNSATISFIABLE":
-                try:
-                    proof, removed_deletion_steps = _read_proof_file(proof_path)
-                except FileNotFoundError:
-                    return _run_failure(
-                        started,
-                        code="CADICAL_PROOF_MISSING",
-                        stage="proof_capture",
-                        message=(
-                            "CaDiCaL reported UNSATISFIABLE without creating the "
-                            "requested DRAT proof file."
-                        ),
-                    )
-                except _CadicalRawProofLimitError:
-                    return _run_failure(
-                        started,
-                        code="CADICAL_RAW_PROOF_LIMIT_EXCEEDED",
-                        stage="proof_capture",
-                        message=(
-                            "The raw CaDiCaL proof exceeded the bounded capture limit "
-                            "before normalization and was not retained."
-                        ),
-                    )
-                except _CadicalDurableProofLimitError:
-                    return _run_failure(
-                        started,
-                        code="CADICAL_DURABLE_PROOF_LIMIT_EXCEEDED",
-                        stage="proof_capture",
-                        message=(
-                            "The addition-only normalized CaDiCaL proof still "
-                            "exceeded the durable artifact limit. Partition the "
-                            "search or use a smaller certificate; no conclusion "
-                            "follows."
-                        ),
-                    )
-                except OSError:
-                    return _run_failure(
-                        started,
-                        code="INVALID_CADICAL_PROOF_FILE",
-                        stage="proof_capture",
-                        message=(
-                            "The CaDiCaL proof output was not a safe bounded regular "
-                            "file and was not retained."
-                        ),
-                    )
+                proof_result = self._capture_proof(started, proof_path)
+                if isinstance(proof_result, _CadicalRun):
+                    return proof_result
+                proof, removed_deletion_steps = proof_result
             return _CadicalRun(
                 execution_status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
@@ -731,14 +776,11 @@ def _run_failure(
     )
 
 
-def _parse_solver_output(
-    stdout: bytes,
-    returncode: int | None,
-) -> tuple[_SolverStatus, tuple[int, ...]]:
-    try:
-        text = stdout.decode("ascii")
-    except UnicodeDecodeError as exc:
-        raise ValueError("solver output is not ASCII") from exc
+def _parse_solver_lines(
+    text: str,
+) -> tuple[list[_SolverStatus], list[int]]:
+    """Parse solver output lines into declared statuses and model literals."""
+
     declared: list[_SolverStatus] = []
     model_tokens: list[int] = []
     for raw_line in text.splitlines():
@@ -755,6 +797,18 @@ def _parse_solver_output(
                 raise ValueError("model contains a noninteger token") from exc
             continue
         raise ValueError("unexpected solver output line")
+    return declared, model_tokens
+
+
+def _parse_solver_output(
+    stdout: bytes,
+    returncode: int | None,
+) -> tuple[_SolverStatus, tuple[int, ...]]:
+    try:
+        text = stdout.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise ValueError("solver output is not ASCII") from exc
+    declared, model_tokens = _parse_solver_lines(text)
     expected_by_returncode: dict[int, _SolverStatus] = {
         0: "UNKNOWN",
         10: "SATISFIABLE",

@@ -71,11 +71,7 @@ def _interval(value: object) -> tuple[Fraction, Fraction]:
     return lo, hi
 
 
-def _polynomial(
-    value: object,
-) -> tuple[str, dict[int, Fraction]]:
-    """Parse a univariate polynomial into ``{exponent: coefficient}`` form."""
-
+def _polynomial_header(value: object) -> str:
     if not isinstance(value, dict) or set(value) != {
         "polynomial_schema_version",
         "domain",
@@ -88,6 +84,40 @@ def _polynomial(
     variable = value["variable"]
     if not isinstance(variable, str) or _VARIABLE.fullmatch(variable) is None:
         raise ValueError("polynomial variable is not a valid identifier")
+    return variable
+
+
+def _polynomial_term(
+    term: object,
+    previous: int | None,
+) -> tuple[int, Fraction]:
+    if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
+        raise ValueError("malformed polynomial term")
+    coefficient = _rational(term["coefficient"])
+    exponents = term["exponents"]
+    if (
+        coefficient == 0
+        or not isinstance(exponents, list)
+        or len(exponents) != 1
+        or not isinstance(exponents[0], int)
+        or isinstance(exponents[0], bool)
+        or not 0 <= exponents[0] <= _MAX_DEGREE
+    ):
+        raise ValueError("invalid univariate polynomial term")
+    exponent = exponents[0]
+    if previous is not None and exponent >= previous:
+        raise ValueError("terms are not in canonical descending order")
+    return exponent, coefficient
+
+
+def _polynomial(
+    value: object,
+) -> tuple[str, dict[int, Fraction]]:
+    """Parse a univariate polynomial into ``{exponent: coefficient}`` form."""
+
+    if not isinstance(value, dict):
+        raise ValueError("univariate polynomial must contain the declared fields")
+    variable = _polynomial_header(value)
     body = value["polynomial"]
     if not isinstance(body, dict) or set(body) != {"terms"}:
         raise ValueError("polynomial body must contain terms")
@@ -97,22 +127,7 @@ def _polynomial(
     parsed: dict[int, Fraction] = {}
     previous: int | None = None
     for term in terms:
-        if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
-            raise ValueError("malformed polynomial term")
-        coefficient = _rational(term["coefficient"])
-        exponents = term["exponents"]
-        if (
-            coefficient == 0
-            or not isinstance(exponents, list)
-            or len(exponents) != 1
-            or not isinstance(exponents[0], int)
-            or isinstance(exponents[0], bool)
-            or not 0 <= exponents[0] <= _MAX_DEGREE
-        ):
-            raise ValueError("invalid univariate polynomial term")
-        exponent = exponents[0]
-        if previous is not None and exponent >= previous:
-            raise ValueError("terms are not in canonical descending order")
+        exponent, coefficient = _polynomial_term(term, previous)
         previous = exponent
         if exponent in parsed:
             raise ValueError("polynomial exponent tuples must be unique")
@@ -163,6 +178,144 @@ def _bernstein_coefficients(
     return tuple(coefficients)
 
 
+_ENCLOSURE_REPLAY_KEYS = {
+    "method",
+    "polynomial_uri",
+    "interval",
+    "degree",
+    "bernstein_coefficients",
+    "lo",
+    "hi",
+}
+
+
+def _check_enclosure_artifact_types(
+    claim_artifact: object,
+    candidate_artifact: object,
+    scope_artifact: object,
+    certificate: object,
+) -> str | None:
+    if (
+        not isinstance(claim_artifact, dict)
+        or not isinstance(candidate_artifact, dict)
+        or not isinstance(scope_artifact, dict)
+        or not isinstance(certificate, dict)
+    ):
+        return "enclosure replay artifacts are malformed"
+    return None
+
+
+def _check_enclosure_claim(
+    claim: object,
+    candidate: object,
+) -> str | None:
+    if (
+        not isinstance(claim, dict)
+        or not isinstance(candidate, dict)
+        or claim.get("claim_schema_version") != "1"
+        or claim.get("predicate") != "POLYNOMIAL_INTERVAL_BERNSTEIN_ENCLOSURE"
+        or claim.get("domain") != "QQ"
+    ):
+        return "unexpected polynomial interval enclosure claim"
+    return None
+
+
+def _check_enclosure_certificate(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if (
+        certificate.get("evidence_schema_version") != "1"
+        or certificate.get("certificate_type")
+        != "polynomial.interval_bernstein_enclosure_replay"
+        or certificate.get("format_version") != "1"
+        or certificate.get("bindings") != expected_bindings
+    ):
+        return "unexpected enclosure certificate format or bindings"
+    return None
+
+
+def _check_enclosure_replay(replay: object) -> str | None:
+    if (
+        not isinstance(replay, dict)
+        or set(replay) != _ENCLOSURE_REPLAY_KEYS
+        or replay.get("method") != "BERNSTEIN_COEFFICIENT_REPLAY"
+    ):
+        return "enclosure replay payload is malformed"
+    return None
+
+
+def _check_enclosure_certificate_and_replay(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    error = _check_enclosure_certificate(certificate, expected_bindings)
+    if error is not None:
+        return error
+    return _check_enclosure_replay(certificate.get("payload"))
+
+
+def _check_enclosure_identities(
+    claim: dict[str, Any],
+    replay: dict[str, Any],
+    polynomial_payload: object,
+    polynomial_uri: object,
+) -> str | None:
+    if (
+        not isinstance(polynomial_payload, dict)
+        or claim.get("polynomial_uri") != polynomial_uri
+        or replay.get("polynomial_uri") != polynomial_uri
+    ):
+        return "enclosure replay artifact identities do not match"
+    return None
+
+
+def _check_enclosure_degree_candidate_intervals(
+    replay: dict[str, Any],
+    candidate: dict[str, Any],
+    degree: int,
+    polynomial_uri: object,
+    claim: dict[str, Any],
+) -> str | None:
+    if replay.get("degree") != degree:
+        return "declared degree does not match the source polynomial"
+    if candidate.get("polynomial_uri") != polynomial_uri:
+        return "candidate enclosure does not bind the source polynomial"
+    claim_interval = claim.get("interval")
+    replay_interval = replay.get("interval")
+    candidate_interval = candidate.get("interval")
+    if claim_interval != replay_interval or claim_interval != candidate_interval:
+        return "declared intervals do not match across artifacts"
+    return None
+
+
+def _check_enclosure_coefficients(
+    replay: dict[str, Any],
+    candidate: dict[str, Any],
+    degree: int,
+) -> tuple[list[Fraction], Fraction, Fraction] | str:
+    claimed_coefficients = replay.get("bernstein_coefficients")
+    if (
+        not isinstance(claimed_coefficients, list)
+        or len(claimed_coefficients) != degree + 1
+    ):
+        return "claimed Bernstein coefficient count is inconsistent"
+    claimed_values = [_rational(value) for value in claimed_coefficients]
+    claimed_lo = _rational(replay.get("lo"))
+    claimed_hi = _rational(replay.get("hi"))
+    if claimed_lo != min(claimed_values) or claimed_hi != max(claimed_values):
+        return "claimed bounds do not match claimed coefficients"
+    if (
+        candidate.get("degree") != degree
+        or [_rational(value) for value in candidate.get("bernstein_coefficients", [])]
+        != claimed_values
+        or _rational(candidate.get("lo")) != claimed_lo
+        or _rational(candidate.get("hi")) != claimed_hi
+    ):
+        return "candidate enclosure does not match the replay payload"
+    return claimed_values, claimed_lo, claimed_hi
+
+
 def check_enclosure(request: dict[str, Any]) -> dict[str, Any]:
     """Replay one claimed Bernstein-coefficient enclosure independently."""
 
@@ -173,90 +326,42 @@ def check_enclosure(request: dict[str, Any]) -> dict[str, Any]:
         candidate_artifact = request["candidate"]
         scope_artifact = request["scope"]
         certificate = request["certificate"]["payload"]
-        if (
-            not isinstance(claim_artifact, dict)
-            or not isinstance(candidate_artifact, dict)
-            or not isinstance(scope_artifact, dict)
-            or not isinstance(certificate, dict)
-        ):
-            return _reject("enclosure replay artifacts are malformed")
+        error = _check_enclosure_artifact_types(
+            claim_artifact, candidate_artifact, scope_artifact, certificate
+        )
+        if error is not None:
+            return _reject(error)
         claim = claim_artifact.get("payload")
         candidate = candidate_artifact.get("payload")
         polynomial_payload = scope_artifact.get("payload")
-        if (
-            not isinstance(claim, dict)
-            or not isinstance(candidate, dict)
-            or claim.get("claim_schema_version") != "1"
-            or claim.get("predicate") != "POLYNOMIAL_INTERVAL_BERNSTEIN_ENCLOSURE"
-            or claim.get("domain") != "QQ"
-        ):
-            return _reject("unexpected polynomial interval enclosure claim")
-        if (
-            certificate.get("evidence_schema_version") != "1"
-            or certificate.get("certificate_type")
-            != "polynomial.interval_bernstein_enclosure_replay"
-            or certificate.get("format_version") != "1"
-            or certificate.get("bindings") != request.get("expected_bindings")
-        ):
-            return _reject("unexpected enclosure certificate format or bindings")
+        error = _check_enclosure_claim(claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_enclosure_certificate_and_replay(
+            certificate, request.get("expected_bindings")
+        )
+        if error is not None:
+            return _reject(error)
         replay = certificate.get("payload")
-        if (
-            not isinstance(replay, dict)
-            or set(replay)
-            != {
-                "method",
-                "polynomial_uri",
-                "interval",
-                "degree",
-                "bernstein_coefficients",
-                "lo",
-                "hi",
-            }
-            or replay.get("method") != "BERNSTEIN_COEFFICIENT_REPLAY"
-        ):
-            return _reject("enclosure replay payload is malformed")
         polynomial_uri = scope_artifact.get("artifact_uri")
         enclosure_uri = candidate_artifact.get("artifact_uri")
-        if (
-            not isinstance(polynomial_payload, dict)
-            or claim.get("polynomial_uri") != polynomial_uri
-            or replay.get("polynomial_uri") != polynomial_uri
-        ):
-            return _reject("enclosure replay artifact identities do not match")
+        error = _check_enclosure_identities(
+            claim, replay, polynomial_payload, polynomial_uri
+        )
+        if error is not None:
+            return _reject(error)
         _variable, parsed = _polynomial(polynomial_payload)
         degree = _degree(parsed)
-        if replay.get("degree") != degree:
-            return _reject("declared degree does not match the source polynomial")
-        if candidate.get("polynomial_uri") != polynomial_uri:
-            return _reject("candidate enclosure does not bind the source polynomial")
-        claim_interval = claim.get("interval")
-        replay_interval = replay.get("interval")
-        candidate_interval = candidate.get("interval")
-        if claim_interval != replay_interval or claim_interval != candidate_interval:
-            return _reject("declared intervals do not match across artifacts")
-        a, b = _interval(claim_interval)
-        claimed_coefficients = replay.get("bernstein_coefficients")
-        if (
-            not isinstance(claimed_coefficients, list)
-            or len(claimed_coefficients) != degree + 1
-        ):
-            return _reject("claimed Bernstein coefficient count is inconsistent")
-        claimed_values = [_rational(value) for value in claimed_coefficients]
-        claimed_lo = _rational(replay.get("lo"))
-        claimed_hi = _rational(replay.get("hi"))
-        if claimed_lo != min(claimed_values) or claimed_hi != max(claimed_values):
-            return _reject("claimed bounds do not match claimed coefficients")
-        if (
-            candidate.get("degree") != degree
-            or [
-                _rational(value)
-                for value in candidate.get("bernstein_coefficients", [])
-            ]
-            != claimed_values
-            or _rational(candidate.get("lo")) != claimed_lo
-            or _rational(candidate.get("hi")) != claimed_hi
-        ):
-            return _reject("candidate enclosure does not match the replay payload")
+        error = _check_enclosure_degree_candidate_intervals(
+            replay, candidate, degree, polynomial_uri, claim
+        )
+        if error is not None:
+            return _reject(error)
+        a, b = _interval(claim.get("interval"))
+        result = _check_enclosure_coefficients(replay, candidate, degree)
+        if isinstance(result, str):
+            return _reject(result)
+        claimed_values, _claimed_lo, _claimed_hi = result
         independent = _bernstein_coefficients(parsed, a, b)
         if tuple(claimed_values) == independent:
             return {

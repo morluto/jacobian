@@ -238,6 +238,91 @@ class CapabilityProviderDigestKind(StrEnum):
     COMPOSITE = "COMPOSITE"
 
 
+def _validate_distribution_probe_attributes(
+    distribution_required_attributes: tuple[str, ...],
+) -> None:
+    if len(set(distribution_required_attributes)) != len(
+        distribution_required_attributes
+    ):
+        raise ValueError("provider feature probe attributes must be unique")
+    if any(
+        not attribute.isidentifier() for attribute in distribution_required_attributes
+    ):
+        raise ValueError("provider feature probe attributes must be identifiers")
+
+
+def _validate_distribution_import_name(distribution_import_name: str | None) -> None:
+    if distribution_import_name is not None and any(
+        not component.isidentifier()
+        for component in distribution_import_name.split(".")
+    ):
+        raise ValueError("provider distribution import name is invalid")
+
+
+def _require_python_distribution_digest_for_probes(
+    distribution_import_name: str | None,
+    distribution_required_attributes: tuple[str, ...],
+    digest_kind: CapabilityProviderDigestKind | None,
+) -> None:
+    if (distribution_import_name is not None or distribution_required_attributes) and (
+        digest_kind is not CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
+    ):
+        raise ValueError(
+            "provider distribution probes require a Python distribution digest"
+        )
+
+
+def _validate_provider_availability_identity(
+    availability: CapabilityProviderAvailability,
+    version: str | None,
+    digest: Sha256Digest | None,
+    digest_kind: CapabilityProviderDigestKind | None,
+    diagnostic: str | None,
+) -> None:
+    if availability is CapabilityProviderAvailability.AVAILABLE:
+        if version is None or digest is None or digest_kind is None:
+            raise ValueError(
+                "available provider runtime requires version, digest, and digest kind"
+            )
+        if diagnostic is not None:
+            raise ValueError(
+                "available provider runtime cannot carry an unavailable diagnostic"
+            )
+    elif diagnostic is None:
+        raise ValueError("unavailable provider runtime requires a diagnostic")
+
+
+def _validate_provider_collection_uniqueness(
+    features: tuple[str, ...],
+    checker_ids: tuple[CheckerUri, ...],
+    license_files: tuple[str, ...],
+) -> None:
+    if len(set(features)) != len(features):
+        raise ValueError("provider features must be unique")
+    if len(set(checker_ids)) != len(checker_ids):
+        raise ValueError("provider checker IDs must be unique")
+    if len(set(license_files)) != len(license_files):
+        raise ValueError("provider license files must be unique")
+
+
+def _validate_provider_feature_labels(features: tuple[str, ...]) -> None:
+    for feature in features:
+        if not feature or len(feature) > 128:
+            raise ValueError("provider features must contain 1 to 128 characters")
+
+
+def _validate_provider_license_file_paths(license_files: tuple[str, ...]) -> None:
+    for license_file in license_files:
+        path = license_file.replace("\\", "/")
+        if (
+            not path
+            or len(path) > 256
+            or path.startswith("/")
+            or any(part in {"", ".", ".."} for part in path.split("/"))
+        ):
+            raise ValueError("provider license files must be normalized relative paths")
+
+
 class CapabilityProviderRuntime(ContractModel):
     """Exact runtime identity and operator-facing availability metadata."""
 
@@ -271,62 +356,27 @@ class CapabilityProviderRuntime(ContractModel):
 
     @model_validator(mode="after")
     def validate_runtime_identity(self) -> Self:
-        if len(set(self.distribution_required_attributes)) != len(
-            self.distribution_required_attributes
-        ):
-            raise ValueError("provider feature probe attributes must be unique")
-        if any(
-            not attribute.isidentifier()
-            for attribute in self.distribution_required_attributes
-        ):
-            raise ValueError("provider feature probe attributes must be identifiers")
-        if self.distribution_import_name is not None and any(
-            not component.isidentifier()
-            for component in self.distribution_import_name.split(".")
-        ):
-            raise ValueError("provider distribution import name is invalid")
-        if (
-            self.distribution_import_name is not None
-            or self.distribution_required_attributes
-        ) and (
-            self.digest_kind
-            is not CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
-        ):
-            raise ValueError(
-                "provider distribution probes require a Python distribution digest"
-            )
-        if self.availability is CapabilityProviderAvailability.AVAILABLE:
-            if self.version is None or self.digest is None or self.digest_kind is None:
-                raise ValueError(
-                    "available provider runtime requires version, digest, "
-                    "and digest kind"
-                )
-            if self.diagnostic is not None:
-                raise ValueError(
-                    "available provider runtime cannot carry an unavailable diagnostic"
-                )
-        elif self.diagnostic is None:
-            raise ValueError("unavailable provider runtime requires a diagnostic")
-        if len(set(self.features)) != len(self.features):
-            raise ValueError("provider features must be unique")
-        if len(set(self.checker_ids)) != len(self.checker_ids):
-            raise ValueError("provider checker IDs must be unique")
-        if len(set(self.license_files)) != len(self.license_files):
-            raise ValueError("provider license files must be unique")
-        for feature in self.features:
-            if not feature or len(feature) > 128:
-                raise ValueError("provider features must contain 1 to 128 characters")
-        for license_file in self.license_files:
-            path = license_file.replace("\\", "/")
-            if (
-                not path
-                or len(path) > 256
-                or path.startswith("/")
-                or any(part in {"", ".", ".."} for part in path.split("/"))
-            ):
-                raise ValueError(
-                    "provider license files must be normalized relative paths"
-                )
+        _validate_distribution_probe_attributes(self.distribution_required_attributes)
+        _validate_distribution_import_name(self.distribution_import_name)
+        _require_python_distribution_digest_for_probes(
+            self.distribution_import_name,
+            self.distribution_required_attributes,
+            self.digest_kind,
+        )
+        _validate_provider_availability_identity(
+            self.availability,
+            self.version,
+            self.digest,
+            self.digest_kind,
+            self.diagnostic,
+        )
+        _validate_provider_collection_uniqueness(
+            self.features,
+            self.checker_ids,
+            self.license_files,
+        )
+        _validate_provider_feature_labels(self.features)
+        _validate_provider_license_file_paths(self.license_files)
         canonicalize_json(self.configuration)
         return self
 
@@ -560,6 +610,83 @@ class CapabilityDiagnostic(ContractModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+def _validate_capability_execution_lane(
+    execution_status: str,
+    diagnostics: tuple[CapabilityDiagnostic, ...],
+    assurance_level: CapabilityAssuranceLevel,
+    mode: CapabilityMode,
+    completeness_status: CapabilityCompletenessStatus,
+    scope: CapabilityScope | None,
+) -> None:
+    if execution_status == "COMPLETED" and diagnostics:
+        raise ValueError("completed capability execution cannot carry diagnostics")
+    if (
+        assurance_level is CapabilityAssuranceLevel.VERIFIED
+        and mode is not CapabilityMode.VERIFY
+    ):
+        raise ValueError("the exploration lane cannot return verified assurance")
+    if (
+        execution_status != "COMPLETED"
+        and assurance_level is CapabilityAssuranceLevel.VERIFIED
+    ):
+        raise ValueError("failed capability execution cannot be verified")
+    if completeness_status is CapabilityCompletenessStatus.COMPLETE and scope is None:
+        raise ValueError("complete result requires explicit scope")
+    if (
+        execution_status != "COMPLETED"
+        and completeness_status is CapabilityCompletenessStatus.COMPLETE
+    ):
+        raise ValueError("failed execution cannot be complete")
+
+
+def _validate_verified_relationships(
+    relationships: tuple[CapabilityRelationship, ...],
+    assurance_level: CapabilityAssuranceLevel,
+    record_uri: ArtifactUri | None,
+) -> None:
+    for relationship in relationships:
+        if relationship.status is CapabilityRelationshipStatus.VERIFIED:
+            if assurance_level is not CapabilityAssuranceLevel.VERIFIED:
+                raise ValueError(
+                    "verified relationship requires verified result assurance"
+                )
+            if relationship.verification_record_uri != record_uri:
+                raise ValueError(
+                    "verified relationship must use the result verification record"
+                )
+
+
+def _validate_discharged_obligations(
+    obligations: tuple[CapabilityObligation, ...],
+    assurance_level: CapabilityAssuranceLevel,
+    record_uri: ArtifactUri | None,
+) -> None:
+    for obligation in obligations:
+        if obligation.status is CapabilityObligationStatus.DISCHARGED:
+            if assurance_level is not CapabilityAssuranceLevel.VERIFIED:
+                raise ValueError(
+                    "discharged obligation requires verified result assurance"
+                )
+            if obligation.verification_record_uri != record_uri:
+                raise ValueError(
+                    "discharged obligation must use the result verification record"
+                )
+
+
+def _validate_verified_completeness(
+    completeness: CapabilityCompleteness,
+    assurance_level: CapabilityAssuranceLevel,
+    record_uri: ArtifactUri | None,
+) -> None:
+    if completeness.assurance_level is CapabilityAssuranceLevel.VERIFIED:
+        if assurance_level is not CapabilityAssuranceLevel.VERIFIED:
+            raise ValueError("verified completeness requires verified result assurance")
+        if completeness.verification_record_uri != record_uri:
+            raise ValueError(
+                "verified completeness must use the result verification record"
+            )
+
+
 class CapabilityResult(ContractModel):
     """Capability invocation result."""
 
@@ -586,58 +713,30 @@ class CapabilityResult(ContractModel):
     @model_validator(mode="after")
     def enforce_lane_and_canonical_output(self) -> Self:
         canonicalize_json(self.output)
-        if self.execution.status.value == "COMPLETED" and self.diagnostics:
-            raise ValueError("completed capability execution cannot carry diagnostics")
-        if (
-            self.assurance.level is CapabilityAssuranceLevel.VERIFIED
-            and self.mode is not CapabilityMode.VERIFY
-        ):
-            raise ValueError("the exploration lane cannot return verified assurance")
-        if (
-            self.execution.status.value != "COMPLETED"
-            and self.assurance.level is CapabilityAssuranceLevel.VERIFIED
-        ):
-            raise ValueError("failed capability execution cannot be verified")
-        if (
-            self.completeness.status is CapabilityCompletenessStatus.COMPLETE
-            and self.scope is None
-        ):
-            raise ValueError("complete result requires explicit scope")
-        if (
-            self.execution.status.value != "COMPLETED"
-            and self.completeness.status is CapabilityCompletenessStatus.COMPLETE
-        ):
-            raise ValueError("failed execution cannot be complete")
+        _validate_capability_execution_lane(
+            self.execution.status.value,
+            self.diagnostics,
+            self.assurance.level,
+            self.mode,
+            self.completeness.status,
+            self.scope,
+        )
         record_uri = self.assurance.verification_record_uri
-        for relationship in self.relationships:
-            if relationship.status is CapabilityRelationshipStatus.VERIFIED:
-                if self.assurance.level is not CapabilityAssuranceLevel.VERIFIED:
-                    raise ValueError(
-                        "verified relationship requires verified result assurance"
-                    )
-                if relationship.verification_record_uri != record_uri:
-                    raise ValueError(
-                        "verified relationship must use the result verification record"
-                    )
-        for obligation in self.obligations:
-            if obligation.status is CapabilityObligationStatus.DISCHARGED:
-                if self.assurance.level is not CapabilityAssuranceLevel.VERIFIED:
-                    raise ValueError(
-                        "discharged obligation requires verified result assurance"
-                    )
-                if obligation.verification_record_uri != record_uri:
-                    raise ValueError(
-                        "discharged obligation must use the result verification record"
-                    )
-        if self.completeness.assurance_level is CapabilityAssuranceLevel.VERIFIED:
-            if self.assurance.level is not CapabilityAssuranceLevel.VERIFIED:
-                raise ValueError(
-                    "verified completeness requires verified result assurance"
-                )
-            if self.completeness.verification_record_uri != record_uri:
-                raise ValueError(
-                    "verified completeness must use the result verification record"
-                )
+        _validate_verified_relationships(
+            self.relationships,
+            self.assurance.level,
+            record_uri,
+        )
+        _validate_discharged_obligations(
+            self.obligations,
+            self.assurance.level,
+            record_uri,
+        )
+        _validate_verified_completeness(
+            self.completeness,
+            self.assurance.level,
+            record_uri,
+        )
         return self
 
 

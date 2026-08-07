@@ -135,12 +135,10 @@ def canonical_poset_ranks(
     )
 
 
-def _validated_presentation(
+def _validate_presentation_elements_and_pairs(
     elements: tuple[str, ...],
     relation: tuple[PresentationPair, ...],
-    interpretation: RelationInterpretation,
-    reflexive_pairs: ReflexivePairPolicy,
-) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+) -> tuple[tuple[str, str], ...]:
     if len(elements) != len(set(elements)):
         raise ValueError("poset elements must be unique")
     carrier = set(elements)
@@ -149,6 +147,15 @@ def _validated_presentation(
         raise ValueError("relation pairs must be unique")
     if any(lower not in carrier or upper not in carrier for lower, upper in pairs):
         raise ValueError("relation endpoints must be declared elements")
+    return pairs
+
+
+def _resolve_strict_pairs(
+    elements: tuple[str, ...],
+    pairs: tuple[tuple[str, str], ...],
+    interpretation: RelationInterpretation,
+    reflexive_pairs: ReflexivePairPolicy,
+) -> set[tuple[str, str]]:
     diagonal = {(element, element) for element in elements}
     supplied = set(pairs)
     if interpretation is RelationInterpretation.COVER_EDGES:
@@ -156,15 +163,21 @@ def _validated_presentation(
             raise ValueError("cover edges require reflexive pairs to be forbidden")
         if supplied & diagonal:
             raise ValueError("cover edges must be irreflexive")
-        strict = supplied
-    else:
-        present_diagonal = supplied & diagonal
-        if reflexive_pairs is ReflexivePairPolicy.FORBIDDEN:
-            if present_diagonal:
-                raise ValueError("reflexive comparable pairs are forbidden")
-        elif present_diagonal != diagonal:
-            raise ValueError("required reflexive pairs must cover the full carrier")
-        strict = supplied - diagonal
+        return supplied
+    present_diagonal = supplied & diagonal
+    if reflexive_pairs is ReflexivePairPolicy.FORBIDDEN:
+        if present_diagonal:
+            raise ValueError("reflexive comparable pairs are forbidden")
+    elif present_diagonal != diagonal:
+        raise ValueError("required reflexive pairs must cover the full carrier")
+    return supplied - diagonal
+
+
+def _validate_strict_order_shape(
+    elements: tuple[str, ...],
+    strict: set[tuple[str, str]],
+    interpretation: RelationInterpretation,
+) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
     if any((upper, lower) in strict for lower, upper in strict):
         raise ValueError("relation must be antisymmetric")
     closure = _strict_closure(elements, strict)
@@ -177,6 +190,17 @@ def _validated_presentation(
     elif strict != closure:
         raise ValueError("comparable-pair input must contain the complete strict order")
     return closure, reduction
+
+
+def _validated_presentation(
+    elements: tuple[str, ...],
+    relation: tuple[PresentationPair, ...],
+    interpretation: RelationInterpretation,
+    reflexive_pairs: ReflexivePairPolicy,
+) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    pairs = _validate_presentation_elements_and_pairs(elements, relation)
+    strict = _resolve_strict_pairs(elements, pairs, interpretation, reflexive_pairs)
+    return _validate_strict_order_shape(elements, strict, interpretation)
 
 
 class FinitePosetRequest(ContractModel):
@@ -233,6 +257,89 @@ def finite_poset_digest(
     return "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
 
 
+def _validate_canonical_poset_elements_and_pairs(
+    elements: tuple[str, ...],
+    strict_order_pairs: tuple[OrderedPair, ...],
+    cover_relations: tuple[OrderedPair, ...],
+) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    if tuple(sorted(set(elements))) != elements:
+        raise ValueError("poset elements must be unique and canonical")
+    strict = tuple((pair.lower, pair.upper) for pair in strict_order_pairs)
+    covers = tuple((pair.lower, pair.upper) for pair in cover_relations)
+    if strict != tuple(sorted(set(strict))) or covers != tuple(sorted(set(covers))):
+        raise ValueError("order and cover pairs must be unique and canonical")
+    return strict, covers
+
+
+def _validate_poset_incomparable_pairs(
+    elements: tuple[str, ...],
+    incomparable_pairs: tuple[IncomparablePair, ...],
+    closure: set[tuple[str, str]],
+) -> None:
+    expected_incomparable = tuple(
+        (left, right)
+        for index, left in enumerate(elements)
+        for right in elements[index + 1 :]
+        if (left, right) not in closure and (right, left) not in closure
+    )
+    actual_incomparable = tuple((pair.left, pair.right) for pair in incomparable_pairs)
+    if actual_incomparable != expected_incomparable:
+        raise ValueError("incomparable_pairs is not complete and canonical")
+
+
+def _compute_poset_extremal_elements(
+    elements: tuple[str, ...],
+    closure: set[tuple[str, str]],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    expected_minimal = tuple(
+        element
+        for element in elements
+        if not any(upper == element for _, upper in closure)
+    )
+    expected_maximal = tuple(
+        element
+        for element in elements
+        if not any(lower == element for lower, _ in closure)
+    )
+    return expected_minimal, expected_maximal
+
+
+def _validate_poset_extremal_elements(
+    minimal_elements: tuple[str, ...],
+    maximal_elements: tuple[str, ...],
+    expected_minimal: tuple[str, ...],
+    expected_maximal: tuple[str, ...],
+) -> None:
+    if minimal_elements != expected_minimal or maximal_elements != expected_maximal:
+        raise ValueError("minimal or maximal elements are incomplete")
+
+
+def _validate_poset_rank_structure(
+    elements: tuple[str, ...],
+    graded: bool,
+    ranks: tuple[ElementRank, ...] | None,
+    expected_ranks: tuple[ElementRank, ...] | None,
+    expected_minimal: tuple[str, ...],
+    expected_maximal: tuple[str, ...],
+    reduction: set[tuple[str, str]],
+) -> None:
+    if graded != (expected_ranks is not None):
+        raise ValueError("graded metadata does not match the canonical poset")
+    if ranks != expected_ranks:
+        raise ValueError("ranks do not match the canonical poset")
+    if expected_ranks is not None:
+        if tuple(rank.element for rank in expected_ranks) != elements:
+            raise ValueError("rank entries must cover the canonical carrier")
+        rank_for = {rank.element: rank.rank for rank in expected_ranks}
+        if any(rank_for[element] != 0 for element in expected_minimal):
+            raise ValueError("minimal elements must have rank zero")
+        if any(rank_for[upper] != rank_for[lower] + 1 for lower, upper in reduction):
+            raise ValueError("every cover must increase rank by one")
+        maximal_ranks = {rank_for[element] for element in expected_maximal}
+        if len(maximal_ranks) > 1:
+            raise ValueError("graded maximal elements must share one rank")
+
+
 class FinitePoset(ContractModel):
     poset_format: Literal["jacobian.finite-poset/v1"] = "jacobian.finite-poset/v1"
     elements: tuple[ElementLabel, ...] = Field(
@@ -259,12 +366,9 @@ class FinitePoset(ContractModel):
 
     @model_validator(mode="after")
     def require_complete_canonical_poset(self) -> Self:
-        if tuple(sorted(set(self.elements))) != self.elements:
-            raise ValueError("poset elements must be unique and canonical")
-        strict = tuple((pair.lower, pair.upper) for pair in self.strict_order_pairs)
-        covers = tuple((pair.lower, pair.upper) for pair in self.cover_relations)
-        if strict != tuple(sorted(set(strict))) or covers != tuple(sorted(set(covers))):
-            raise ValueError("order and cover pairs must be unique and canonical")
+        strict, covers = _validate_canonical_poset_elements_and_pairs(
+            self.elements, self.strict_order_pairs, self.cover_relations
+        )
         closure, reduction = _validated_presentation(
             self.elements,
             tuple(
@@ -275,50 +379,28 @@ class FinitePoset(ContractModel):
         )
         if set(covers) != reduction:
             raise ValueError("cover_relations is not the transitive reduction")
-        expected_incomparable = tuple(
-            (left, right)
-            for index, left in enumerate(self.elements)
-            for right in self.elements[index + 1 :]
-            if (left, right) not in closure and (right, left) not in closure
+        _validate_poset_incomparable_pairs(
+            self.elements, self.incomparable_pairs, closure
         )
-        actual_incomparable = tuple(
-            (pair.left, pair.right) for pair in self.incomparable_pairs
+        expected_minimal, expected_maximal = _compute_poset_extremal_elements(
+            self.elements, closure
         )
-        if actual_incomparable != expected_incomparable:
-            raise ValueError("incomparable_pairs is not complete and canonical")
-        expected_minimal = tuple(
-            element
-            for element in self.elements
-            if not any(upper == element for _, upper in closure)
+        _validate_poset_extremal_elements(
+            self.minimal_elements,
+            self.maximal_elements,
+            expected_minimal,
+            expected_maximal,
         )
-        expected_maximal = tuple(
-            element
-            for element in self.elements
-            if not any(lower == element for lower, _ in closure)
-        )
-        if (
-            self.minimal_elements != expected_minimal
-            or self.maximal_elements != expected_maximal
-        ):
-            raise ValueError("minimal or maximal elements are incomplete")
         expected_ranks = canonical_poset_ranks(self.elements, reduction)
-        if self.graded != (expected_ranks is not None):
-            raise ValueError("graded metadata does not match the canonical poset")
-        if self.ranks != expected_ranks:
-            raise ValueError("ranks do not match the canonical poset")
-        if expected_ranks is not None:
-            if tuple(rank.element for rank in expected_ranks) != self.elements:
-                raise ValueError("rank entries must cover the canonical carrier")
-            rank_for = {rank.element: rank.rank for rank in expected_ranks}
-            if any(rank_for[element] != 0 for element in expected_minimal):
-                raise ValueError("minimal elements must have rank zero")
-            if any(
-                rank_for[upper] != rank_for[lower] + 1 for lower, upper in reduction
-            ):
-                raise ValueError("every cover must increase rank by one")
-            maximal_ranks = {rank_for[element] for element in expected_maximal}
-            if len(maximal_ranks) > 1:
-                raise ValueError("graded maximal elements must share one rank")
+        _validate_poset_rank_structure(
+            self.elements,
+            self.graded,
+            self.ranks,
+            expected_ranks,
+            expected_minimal,
+            expected_maximal,
+            reduction,
+        )
         expected_digest = finite_poset_digest(
             elements=self.elements,
             strict_order_pairs=self.strict_order_pairs,

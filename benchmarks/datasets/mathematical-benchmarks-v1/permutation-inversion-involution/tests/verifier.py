@@ -44,38 +44,7 @@ def transform(name, p, multiplier, offset):
     return ()
 
 
-def valid(r):
-    keys = {
-        "transformation",
-        "value_multiplier",
-        "value_offset",
-        "pair_inversion_sum",
-        "fixed_point_count",
-        "pair_count",
-        "total_inversions",
-        "traces",
-    }
-    if not isinstance(r, dict) or set(r) != keys:
-        return False
-    name, mul, off = r["transformation"], r["value_multiplier"], r["value_offset"]
-    if not (
-        (name == "COMPLEMENT_VALUES" and (mul, off) == (-1, 8))
-        or (name == "REVERSE_POSITIONS" and (mul, off) == (1, 0))
-    ):
-        return False
-    perms = tuple(itertools.permutations(range(1, 8)))
-    images = [transform(name, p, mul, off) for p in perms]
-    if any(sorted(q) != list(range(1, 8)) for q in images):
-        return False
-    fixed = sum(p == q for p, q in zip(perms, images, strict=True))
-    if any(
-        transform(name, q, mul, off) != p for p, q in zip(perms, images, strict=True)
-    ):
-        return False
-    pair_sum = 21
-    if any(inv(p) + inv(q) != pair_sum for p, q in zip(perms, images, strict=True)):
-        return False
-    traces = r["traces"]
+def _traces_valid(traces, name, mul, off):
     if not isinstance(traces, list) or len(traces) != 6:
         return False
     seen = set()
@@ -110,6 +79,42 @@ def valid(r):
             or row["transformed_inversions"] != inv(q)
         ):
             return False
+    return True
+
+
+def valid(r):
+    keys = {
+        "transformation",
+        "value_multiplier",
+        "value_offset",
+        "pair_inversion_sum",
+        "fixed_point_count",
+        "pair_count",
+        "total_inversions",
+        "traces",
+    }
+    if not isinstance(r, dict) or set(r) != keys:
+        return False
+    name, mul, off = r["transformation"], r["value_multiplier"], r["value_offset"]
+    if not (
+        (name == "COMPLEMENT_VALUES" and (mul, off) == (-1, 8))
+        or (name == "REVERSE_POSITIONS" and (mul, off) == (1, 0))
+    ):
+        return False
+    perms = tuple(itertools.permutations(range(1, 8)))
+    images = [transform(name, p, mul, off) for p in perms]
+    if any(sorted(q) != list(range(1, 8)) for q in images):
+        return False
+    fixed = sum(p == q for p, q in zip(perms, images, strict=True))
+    if any(
+        transform(name, q, mul, off) != p for p, q in zip(perms, images, strict=True)
+    ):
+        return False
+    pair_sum = 21
+    if any(inv(p) + inv(q) != pair_sum for p, q in zip(perms, images, strict=True)):
+        return False
+    if not _traces_valid(r["traces"], name, mul, off):
+        return False
     total = sum(map(inv, perms))
     if not all(
         type(r[key]) is int

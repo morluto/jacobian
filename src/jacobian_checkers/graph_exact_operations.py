@@ -558,6 +558,98 @@ def _orbit_partition(
     )
 
 
+def _parse_symmetry_vertex_colors(
+    raw_vertex_colors: object,
+    vertices: tuple[str, ...],
+) -> dict[str, str] | None:
+    if not isinstance(raw_vertex_colors, list) or len(raw_vertex_colors) not in {
+        0,
+        len(vertices),
+    }:
+        return None
+    if raw_vertex_colors:
+        if any(
+            not isinstance(item, dict)
+            or set(item) != {"vertex", "color"}
+            or item["vertex"] != vertices[index]
+            or not isinstance(item["color"], str)
+            or not 0 < len(item["color"]) <= 128
+            for index, item in enumerate(raw_vertex_colors)
+        ):
+            return None
+        return {item["vertex"]: item["color"] for item in raw_vertex_colors}
+    return dict.fromkeys(vertices, "__UNCOLORED__")
+
+
+def _parse_symmetry_edge_colors(
+    raw_edge_colors: object,
+    edges: tuple[tuple[str, str], ...],
+) -> dict[tuple[str, str], str] | None:
+    if not isinstance(raw_edge_colors, list) or len(raw_edge_colors) not in {
+        0,
+        len(edges),
+    }:
+        return None
+    if raw_edge_colors:
+        if any(
+            not isinstance(item, dict)
+            or set(item) != {"edge", "color"}
+            or item["edge"] != list(edges[index])
+            or not isinstance(item["color"], str)
+            or not 0 < len(item["color"]) <= 128
+            for index, item in enumerate(raw_edge_colors)
+        ):
+            return None
+        return {
+            (item["edge"][0], item["edge"][1]): item["color"]
+            for item in raw_edge_colors
+        }
+    return dict.fromkeys(edges, "__UNCOLORED__")
+
+
+def _validate_symmetry_generator(
+    generator: object,
+    *,
+    vertices: tuple[str, ...],
+    vertex_set: set[str],
+    edges: tuple[tuple[str, str], ...],
+    normalized_edges: set[tuple[str, str]],
+    vertex_colors: dict[str, str],
+    edge_colors: dict[tuple[str, str], str],
+) -> tuple[str, dict[str, str], dict[tuple[str, str], tuple[str, str]]] | None:
+    if not isinstance(generator, dict) or set(generator) != {
+        "generator_id",
+        "mapping",
+    }:
+        return None
+    generator_id = generator["generator_id"]
+    mapping = generator["mapping"]
+    if (
+        not isinstance(generator_id, str)
+        or not 0 < len(generator_id) <= 64
+        or not isinstance(mapping, dict)
+        or set(mapping) != vertex_set
+        or set(mapping.values()) != vertex_set
+        or any(
+            not isinstance(source_vertex, str) or not isinstance(target_vertex, str)
+            for source_vertex, target_vertex in mapping.items()
+        )
+    ):
+        return None
+    if any(
+        vertex_colors[vertex] != vertex_colors[mapping[vertex]] for vertex in vertices
+    ):
+        return None
+    edge_action = {
+        edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges
+    }
+    if set(edge_action.values()) != normalized_edges or any(
+        edge_colors[edge] != edge_colors[edge_action[edge]] for edge in edges
+    ):
+        return None
+    return generator_id, mapping, edge_action
+
+
 def _graph_symmetry_generator_orbits(
     source: dict[str, Any],
     result: dict[str, Any],
@@ -588,48 +680,13 @@ def _graph_symmetry_generator_orbits(
     ):
         return False
 
-    raw_vertex_colors = source["vertex_colors"]
-    if not isinstance(raw_vertex_colors, list) or len(raw_vertex_colors) not in {
-        0,
-        len(vertices),
-    }:
+    vertex_colors = _parse_symmetry_vertex_colors(source["vertex_colors"], vertices)
+    if vertex_colors is None:
         return False
-    if raw_vertex_colors:
-        if any(
-            not isinstance(item, dict)
-            or set(item) != {"vertex", "color"}
-            or item["vertex"] != vertices[index]
-            or not isinstance(item["color"], str)
-            or not 0 < len(item["color"]) <= 128
-            for index, item in enumerate(raw_vertex_colors)
-        ):
-            return False
-        vertex_colors = {item["vertex"]: item["color"] for item in raw_vertex_colors}
-    else:
-        vertex_colors = dict.fromkeys(vertices, "__UNCOLORED__")
 
-    raw_edge_colors = source["edge_colors"]
-    if not isinstance(raw_edge_colors, list) or len(raw_edge_colors) not in {
-        0,
-        len(edges),
-    }:
+    edge_colors = _parse_symmetry_edge_colors(source["edge_colors"], edges)
+    if edge_colors is None:
         return False
-    if raw_edge_colors:
-        if any(
-            not isinstance(item, dict)
-            or set(item) != {"edge", "color"}
-            or item["edge"] != list(edges[index])
-            or not isinstance(item["color"], str)
-            or not 0 < len(item["color"]) <= 128
-            for index, item in enumerate(raw_edge_colors)
-        ):
-            return False
-        edge_colors = {
-            (item["edge"][0], item["edge"][1]): item["color"]
-            for item in raw_edge_colors
-        }
-    else:
-        edge_colors = dict.fromkeys(edges, "__UNCOLORED__")
 
     raw_generators = source["generators"]
     if not isinstance(raw_generators, list) or len(raw_generators) > 64:
@@ -639,40 +696,20 @@ def _graph_symmetry_generator_orbits(
     vertex_actions: list[dict[str, str]] = []
     edge_actions: list[dict[tuple[str, str], tuple[str, str]]] = []
     for generator in raw_generators:
-        if not isinstance(generator, dict) or set(generator) != {
-            "generator_id",
-            "mapping",
-        }:
+        parsed = _validate_symmetry_generator(
+            generator,
+            vertices=vertices,
+            vertex_set=vertex_set,
+            edges=edges,
+            normalized_edges=normalized_edges,
+            vertex_colors=vertex_colors,
+            edge_colors=edge_colors,
+        )
+        if parsed is None:
             return False
-        generator_id = generator["generator_id"]
-        mapping = generator["mapping"]
-        if (
-            not isinstance(generator_id, str)
-            or not 0 < len(generator_id) <= 64
-            or not isinstance(mapping, dict)
-            or set(mapping) != vertex_set
-            or set(mapping.values()) != vertex_set
-            or any(
-                not isinstance(source_vertex, str) or not isinstance(target_vertex, str)
-                for source_vertex, target_vertex in mapping.items()
-            )
-        ):
-            return False
-        if any(
-            vertex_colors[vertex] != vertex_colors[mapping[vertex]]
-            for vertex in vertices
-        ):
-            return False
-        edge_action = {
-            edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges
-        }
-        if set(edge_action.values()) != normalized_edges or any(
-            edge_colors[edge] != edge_colors[edge_action[edge]] for edge in edges
-        ):
-            return False
-        generator_ids.append(generator_id)
-        vertex_actions.append(mapping)
-        edge_actions.append(edge_action)
+        generator_ids.append(parsed[0])
+        vertex_actions.append(parsed[1])
+        edge_actions.append(parsed[2])
     if len(set(generator_ids)) != len(generator_ids):
         return False
 
@@ -701,8 +738,8 @@ def _graph_symmetry_generator_orbits(
         ],
         "vertex_orbit_count": len(vertex_orbits),
         "edge_orbit_count": len(edge_orbits),
-        "vertex_color_mode": "DECLARED" if raw_vertex_colors else "UNCOLORED",
-        "edge_color_mode": "DECLARED" if raw_edge_colors else "UNCOLORED",
+        "vertex_color_mode": "DECLARED" if source["vertex_colors"] else "UNCOLORED",
+        "edge_color_mode": "DECLARED" if source["edge_colors"] else "UNCOLORED",
         "action": "DECLARED_GENERATED_SUBGROUP",
         "generator_validation": ("ALL_DECLARED_GENERATORS_PRESERVE_GRAPH_AND_COLORS"),
         "orbit_completeness": "COMPLETE_FOR_DECLARED_GENERATORS",
@@ -823,13 +860,11 @@ def check_graph_radius(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
-    input_vertices, normalized_edges, adjacency = _finite_simple_graph(
-        source,
-        maximum_order=32,
-    )
-    vertices = tuple(sorted(input_vertices))
-    if (
+def _validate_distance_matrix_header(
+    result: dict[str, Any],
+    vertices: tuple[str, ...],
+) -> bool:
+    return not (
         set(result)
         != {
             "semantics_version",
@@ -846,11 +881,13 @@ def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
         or result["unreachable_representation"] != "JSON_NULL"
         or result["vertices"] != list(vertices)
         or type(result["connected"]) is not bool
-    ):
-        return False
+    )
 
-    matrix = result["distances"]
-    order = len(vertices)
+
+def _validate_distance_matrix_entries(
+    matrix: object,
+    order: int,
+) -> bool:
     if (
         not isinstance(matrix, list)
         or len(matrix) != order
@@ -870,13 +907,13 @@ def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
                 return False
             if distance != matrix[target_index][source_index]:
                 return False
+    return True
 
-    vertex_indices = {vertex: index for index, vertex in enumerate(vertices)}
-    if any(
-        matrix[vertex_indices[left]][vertex_indices[right]] != 1
-        for left, right in normalized_edges
-    ):
-        return False
+
+def _validate_distance_matrix_triangle(
+    matrix: list[list[int | None]],
+    order: int,
+) -> bool:
     for source_index in range(order):
         for intermediate_index in range(order):
             left = matrix[source_index][intermediate_index]
@@ -889,6 +926,31 @@ def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
                 direct = matrix[source_index][target_index]
                 if direct is None or direct > left + right:
                     return False
+    return True
+
+
+def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    input_vertices, normalized_edges, adjacency = _finite_simple_graph(
+        source,
+        maximum_order=32,
+    )
+    vertices = tuple(sorted(input_vertices))
+    if not _validate_distance_matrix_header(result, vertices):
+        return False
+
+    matrix = result["distances"]
+    order = len(vertices)
+    if not _validate_distance_matrix_entries(matrix, order):
+        return False
+
+    vertex_indices = {vertex: index for index, vertex in enumerate(vertices)}
+    if any(
+        matrix[vertex_indices[left]][vertex_indices[right]] != 1
+        for left, right in normalized_edges
+    ):
+        return False
+    if not _validate_distance_matrix_triangle(matrix, order):
+        return False
 
     expected = _all_sources_distance_rows(vertices, adjacency)
     expected_connected = bool(vertices) and all(
@@ -910,40 +972,38 @@ def check_graph_distance_matrix(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _induced_tree_maximum(
-    source: dict[str, Any],
-    result: dict[str, Any],
+def _is_induced_tree(
+    candidate: tuple[str, ...],
+    normalized_edges: set[tuple[str, str]],
+    adjacency: dict[str, set[str]],
 ) -> bool:
-    vertices, normalized_edges, adjacency = _finite_simple_graph(
-        source,
-        maximum_order=16,
+    if not candidate:
+        return False
+    selected = set(candidate)
+    edge_count = sum(
+        1 for left, right in normalized_edges if left in selected and right in selected
     )
-    vertex_set = set(vertices)
+    if edge_count != len(candidate) - 1:
+        return False
+    reached = {candidate[0]}
+    frontier = [candidate[0]]
+    while frontier:
+        current = frontier.pop()
+        for neighbor in adjacency[current] & selected:
+            if neighbor not in reached:
+                reached.add(neighbor)
+                frontier.append(neighbor)
+    return len(reached) == len(candidate)
 
-    def is_induced_tree(candidate: tuple[str, ...]) -> bool:
-        if not candidate:
-            return False
-        selected = set(candidate)
-        edge_count = sum(
-            1
-            for left, right in normalized_edges
-            if left in selected and right in selected
-        )
-        if edge_count != len(candidate) - 1:
-            return False
-        reached = {candidate[0]}
-        frontier = [candidate[0]]
-        while frontier:
-            current = frontier.pop()
-            for neighbor in adjacency[current] & selected:
-                if neighbor not in reached:
-                    reached.add(neighbor)
-                    frontier.append(neighbor)
-        return len(reached) == len(candidate)
 
+def _validate_induced_tree_result(
+    result: dict[str, Any],
+    vertices: tuple[str, ...],
+    vertex_set: set[str],
+) -> bool:
     claimed = result.get("optimum_value")
     witness = result.get("witness_vertices")
-    if (
+    return not (
         result.get("status") != "EXACT"
         or result.get("convention") != "NONEMPTY_CONNECTED_ACYCLIC_EMPTY_SOURCE_ZERO"
         or type(claimed) is not int
@@ -958,23 +1018,37 @@ def _induced_tree_maximum(
         or not all(isinstance(vertex, str) for vertex in witness)
         or len(witness) != len(set(witness))
         or any(vertex not in vertex_set for vertex in witness)
-    ):
+    )
+
+
+def _induced_tree_maximum(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    vertices, normalized_edges, adjacency = _finite_simple_graph(
+        source,
+        maximum_order=16,
+    )
+    vertex_set = set(vertices)
+    if not _validate_induced_tree_result(result, vertices, vertex_set):
         return False
+    claimed = result["optimum_value"]
+    witness = result["witness_vertices"]
     if claimed == 0:
         if vertices or witness:
             return False
-    elif not is_induced_tree(tuple(witness)):
+    elif not _is_induced_tree(tuple(witness), normalized_edges, adjacency):
         return False
 
     actual = 0
     for cardinality in range(len(vertices), 0, -1):
         if any(
-            is_induced_tree(candidate)
+            _is_induced_tree(candidate, normalized_edges, adjacency)
             for candidate in combinations(vertices, cardinality)
         ):
             actual = cardinality
             break
-    return actual == claimed
+    return bool(actual == claimed)
 
 
 def check_graph_induced_tree_maximum(request: dict[str, Any]) -> dict[str, Any]:
@@ -1083,6 +1157,87 @@ def check_graph_hamiltonian_path(request: dict[str, Any]) -> dict[str, Any]:
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
+def _parse_matching_witness(
+    witness: object,
+    claimed: int,
+    normalized_edges: set[tuple[str, str]],
+) -> list[tuple[str, str]] | None:
+    if not isinstance(witness, list):
+        return None
+    parsed_witness: list[tuple[str, str]] = []
+    used_vertices: set[str] = set()
+    for edge in witness:
+        if (
+            not isinstance(edge, list)
+            or len(edge) != 2
+            or not all(isinstance(endpoint, str) for endpoint in edge)
+            or edge[0] >= edge[1]
+            or (edge[0], edge[1]) not in normalized_edges
+            or edge[0] in used_vertices
+            or edge[1] in used_vertices
+        ):
+            return None
+        parsed_witness.append((edge[0], edge[1]))
+        used_vertices.update(edge)
+    if parsed_witness != sorted(parsed_witness):
+        return None
+    return parsed_witness
+
+
+def _validate_matching_certificate(
+    certificate: object,
+    vertex_set: set[str],
+) -> tuple[list[str], int, int] | None:
+    if not isinstance(certificate, dict) or set(certificate) != {
+        "certificate_schema_version",
+        "kind",
+        "barrier_vertices",
+        "odd_component_count",
+        "upper_bound",
+    }:
+        return None
+    barrier = certificate["barrier_vertices"]
+    declared_odd_components = certificate["odd_component_count"]
+    declared_upper_bound = certificate["upper_bound"]
+    if (
+        certificate["certificate_schema_version"] != "1"
+        or certificate["kind"] != "TUTTE_BERGE_BARRIER"
+        or not isinstance(barrier, list)
+        or not all(isinstance(vertex, str) for vertex in barrier)
+        or barrier != sorted(set(barrier))
+        or any(vertex not in vertex_set for vertex in barrier)
+        or type(declared_odd_components) is not int
+        or type(declared_upper_bound) is not int
+        or declared_odd_components < 0
+        or declared_upper_bound < 0
+    ):
+        return None
+    return barrier, declared_odd_components, declared_upper_bound
+
+
+def _count_odd_components(
+    vertex_set: set[str],
+    barrier_set: set[str],
+    adjacency: dict[str, set[str]],
+) -> int:
+    unseen = vertex_set - barrier_set
+    odd_component_count = 0
+    while unseen:
+        first = min(unseen)
+        unseen.remove(first)
+        component = {first}
+        frontier = [first]
+        while frontier:
+            current = frontier.pop()
+            for neighbor in adjacency[current] - barrier_set:
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    component.add(neighbor)
+                    frontier.append(neighbor)
+        odd_component_count += len(component) % 2
+    return odd_component_count
+
+
 def _maximum_matching(
     source: dict[str, Any],
     result: dict[str, Any],
@@ -1107,67 +1262,20 @@ def _maximum_matching(
         or len(witness) != claimed
     ):
         return False
-    parsed_witness: list[tuple[str, str]] = []
-    used_vertices: set[str] = set()
-    for edge in witness:
-        if (
-            not isinstance(edge, list)
-            or len(edge) != 2
-            or not all(isinstance(endpoint, str) for endpoint in edge)
-            or edge[0] >= edge[1]
-            or (edge[0], edge[1]) not in normalized_edges
-            or edge[0] in used_vertices
-            or edge[1] in used_vertices
-        ):
-            return False
-        parsed_witness.append((edge[0], edge[1]))
-        used_vertices.update(edge)
-    if parsed_witness != sorted(parsed_witness):
+    parsed_witness = _parse_matching_witness(witness, claimed, normalized_edges)
+    if parsed_witness is None:
         return False
 
-    certificate = result["certificate"]
-    if not isinstance(certificate, dict) or set(certificate) != {
-        "certificate_schema_version",
-        "kind",
-        "barrier_vertices",
-        "odd_component_count",
-        "upper_bound",
-    }:
-        return False
-    barrier = certificate["barrier_vertices"]
-    declared_odd_components = certificate["odd_component_count"]
-    declared_upper_bound = certificate["upper_bound"]
     vertex_set = set(vertices)
-    if (
-        certificate["certificate_schema_version"] != "1"
-        or certificate["kind"] != "TUTTE_BERGE_BARRIER"
-        or not isinstance(barrier, list)
-        or not all(isinstance(vertex, str) for vertex in barrier)
-        or barrier != sorted(set(barrier))
-        or any(vertex not in vertex_set for vertex in barrier)
-        or type(declared_odd_components) is not int
-        or type(declared_upper_bound) is not int
-        or declared_odd_components < 0
-        or declared_upper_bound < 0
-    ):
+    certificate_result = _validate_matching_certificate(
+        result["certificate"], vertex_set
+    )
+    if certificate_result is None:
         return False
+    barrier, declared_odd_components, declared_upper_bound = certificate_result
 
     barrier_set = set(barrier)
-    unseen = vertex_set - barrier_set
-    odd_component_count = 0
-    while unseen:
-        first = min(unseen)
-        unseen.remove(first)
-        component = {first}
-        frontier = [first]
-        while frontier:
-            current = frontier.pop()
-            for neighbor in adjacency[current] - barrier_set:
-                if neighbor in unseen:
-                    unseen.remove(neighbor)
-                    component.add(neighbor)
-                    frontier.append(neighbor)
-        odd_component_count += len(component) % 2
+    odd_component_count = _count_odd_components(vertex_set, barrier_set, adjacency)
 
     numerator = len(vertices) + len(barrier) - odd_component_count
     if numerator < 0 or numerator % 2:

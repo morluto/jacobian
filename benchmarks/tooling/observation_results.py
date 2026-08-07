@@ -236,6 +236,23 @@ def _timing_seconds(value: Any) -> float | None:
         return None
 
 
+_VALID_STATUSES = frozenset(
+    {"COMPLETED", "RUNNING", "PENDING", "FAILED", "ERROR", "TIMEOUT", "CANCELLED"}
+)
+
+
+def _resolve_verifier_status(verifier_result: dict[str, Any]) -> tuple[Any, str | None]:
+    """Return ``(raw_value, error)`` from the verifier result status/state keys."""
+    for key in ("status", "state"):
+        if key in verifier_result:
+            value = verifier_result[key]
+            if value is not None and not isinstance(value, str):
+                return value, "ERROR"
+            if value is not None:
+                return value, None
+    return None, None
+
+
 def _trial_status(
     trial: dict[str, Any],
     exception: Any,
@@ -246,36 +263,15 @@ def _trial_status(
     raw = trial.get("status")
     if exception is not None:
         return "ERROR"
-    if isinstance(raw, str) and raw in {
-        "COMPLETED",
-        "RUNNING",
-        "PENDING",
-        "FAILED",
-        "ERROR",
-        "TIMEOUT",
-        "CANCELLED",
-    }:
+    if isinstance(raw, str) and raw in _VALID_STATUSES:
         return raw
     if raw is not None:
         return "ERROR"
     verifier_result = _object(trial.get("verifier_result"))
-    verifier_status: Any = None
-    for key in ("status", "state"):
-        if key in verifier_result:
-            verifier_status = verifier_result[key]
-            if verifier_status is not None and not isinstance(verifier_status, str):
-                return "ERROR"
-            if verifier_status is not None:
-                break
-    if isinstance(verifier_status, str) and verifier_status in {
-        "COMPLETED",
-        "RUNNING",
-        "PENDING",
-        "FAILED",
-        "ERROR",
-        "TIMEOUT",
-        "CANCELLED",
-    }:
+    verifier_status, error = _resolve_verifier_status(verifier_result)
+    if error is not None:
+        return error
+    if isinstance(verifier_status, str) and verifier_status in _VALID_STATUSES:
         if verifier_status == "COMPLETED" and (
             job_stats is None
             or observed_trial_count is None

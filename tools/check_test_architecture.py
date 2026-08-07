@@ -166,6 +166,35 @@ class ArchitecturePolicyError(RuntimeError):
         super().__init__(report.render())
 
 
+def _collect_lane_entries(raw_lanes: Any, *, list_mode: bool) -> list[tuple[str, Any]]:
+    """Collect ``(name, value)`` lane entries from either TOML shape."""
+    entries: list[tuple[str, Any]] = []
+    if list_mode:
+        for value in raw_lanes:
+            if not isinstance(value, dict) or not isinstance(value.get("name"), str):
+                continue
+            entries.append((value["name"], value))
+    else:
+        for name, value in raw_lanes.items():
+            entries.append((str(name), value))
+    return entries
+
+
+def _lanes_from_entries(
+    entries: list[tuple[str, Any]],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, str]]:
+    lanes: dict[str, tuple[str, ...]] = {}
+    lane_tiers: dict[str, str] = {}
+    for name, value in entries:
+        patterns = _patterns_from_lane(value)
+        if patterns:
+            lanes[name] = patterns
+            tier = _tier_from_lane(value)
+            if tier:
+                lane_tiers[name] = tier
+    return lanes, lane_tiers
+
+
 def load_topology_manifest(path: Path) -> TopologyManifest | None:
     """Read a topology manifest, accepting the two common TOML shapes.
 
@@ -181,39 +210,22 @@ def load_topology_manifest(path: Path) -> TopologyManifest | None:
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise ValueError(f"cannot read topology manifest {path}: {exc}") from exc
 
-    lanes: dict[str, tuple[str, ...]] = {}
-    lane_tiers: dict[str, str] = {}
     raw_lanes = raw.get("lanes", {})
     if isinstance(raw_lanes, dict):
-        for name, value in raw_lanes.items():
-            patterns = _patterns_from_lane(value)
-            if patterns:
-                lanes[str(name)] = patterns
-                tier = _tier_from_lane(value)
-                if tier:
-                    lane_tiers[str(name)] = tier
+        entries = _collect_lane_entries(raw_lanes, list_mode=False)
     elif isinstance(raw_lanes, list):
-        for value in raw_lanes:
-            if not isinstance(value, dict) or not isinstance(value.get("name"), str):
-                continue
-            patterns = _patterns_from_lane(value)
-            if patterns:
-                lanes[value["name"]] = patterns
-                tier = _tier_from_lane(value)
-                if tier:
-                    lane_tiers[value["name"]] = tier
+        entries = _collect_lane_entries(raw_lanes, list_mode=True)
+    else:
+        entries = []
+    lanes, lane_tiers = _lanes_from_entries(entries)
 
     # A few manifests put lane tables at the top level.  Only consume tables
     # with a path-like field, so unrelated metadata is ignored.
     if not lanes:
-        for name, value in raw.items():
-            if isinstance(value, dict):
-                patterns = _patterns_from_lane(value)
-                if patterns:
-                    lanes[str(name)] = patterns
-                    tier = _tier_from_lane(value)
-                    if tier:
-                        lane_tiers[str(name)] = tier
+        top_entries = [
+            (str(name), value) for name, value in raw.items() if isinstance(value, dict)
+        ]
+        lanes, lane_tiers = _lanes_from_entries(top_entries)
     return TopologyManifest(lanes=lanes, path=path, lane_tiers=lane_tiers)
 
 
@@ -409,6 +421,210 @@ def _violation_key(item: Violation) -> str:
     return f"{item.path}:{item.line}:{item.code}"
 
 
+def _import_violations(
+    node: ast.Import | ast.ImportFrom,
+    relative: str,
+    path: PurePosixPath,
+    tier: str | None,
+) -> tuple[list[Violation], bool]:
+    """Return import violations and whether a runtime import was flagged."""
+    violations: list[Violation] = []
+    runtime_import_violation = False
+    module = _imported_module(node)
+    violations.extend(_conftest_import_violations(module, relative, node))
+    for alias in node.names:
+        imported = (
+            alias.name.split(".", 1)[0]
+            if isinstance(node, ast.ImportFrom)
+            else alias.name
+        )
+        imported_full = alias.name
+        if (
+            (
+                isinstance(node, ast.ImportFrom)
+                and module == "jacobian.runtime"
+                and imported == "create_runtime"
+            )
+            or (isinstance(node, ast.Import) and alias.name == "jacobian.runtime")
+        ) and not _runtime_allowed(path, tier):
+            violations.append(
+                Violation(
+                    relative,
+                    "runtime-usage",
+                    "create_runtime is reserved for composition, lifecycle boundaries, and end-to-end tests",
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+            runtime_import_violation = True
+        portfolio_import = _is_portfolio_import(module, imported_full)
+        if isinstance(node, ast.Import) and module in _BUILTIN_PORTFOLIO_MODULES:
+            portfolio_import = True
+        if tier in {"unit", "component", "domain"} and portfolio_import:
+            violations.append(
+                Violation(
+                    relative,
+                    "builtin-portfolio",
+                    "built-in portfolio installation is not allowed in lower-tier tests",
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+        if _provider_module(
+            module if isinstance(node, ast.ImportFrom) else imported_full
+        ) and not _provider_allowed(path, tier):
+            violations.append(
+                Violation(
+                    relative,
+                    "provider-import",
+                    "provider implementation imports belong in boundary or focused provider-component tests",
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+        sqlite_import = module == "sqlite3" or imported_full == "sqlite3"
+        sqlite_store_import = (
+            module == "jacobian.storage.repository" and imported == "ArtifactRepository"
+        ) or imported_full == "jacobian.storage.repository"
+        if tier == "unit" and (sqlite_import or sqlite_store_import):
+            violations.append(
+                Violation(
+                    relative,
+                    "sqlite-unit",
+                    "SQLite access is not allowed in unit tests",
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+        process_import = module == "subprocess" or imported_full == "subprocess"
+        if tier == "unit" and process_import:
+            violations.append(
+                Violation(
+                    relative,
+                    "process-unit",
+                    "subprocess access is not allowed in unit tests",
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+    return violations, runtime_import_violation
+
+
+def _call_violations(
+    node: ast.Call,
+    relative: str,
+    path: PurePosixPath,
+    tier: str | None,
+    runtime_import_violation: bool,
+) -> list[Violation]:
+    target = node.func
+    called_name = (
+        target.id
+        if isinstance(target, ast.Name)
+        else target.attr
+        if isinstance(target, ast.Attribute)
+        else ""
+    )
+    violations: list[Violation] = []
+    if (
+        called_name == "create_runtime"
+        and not _runtime_allowed(path, tier)
+        and not runtime_import_violation
+    ):
+        violations.append(
+            Violation(
+                relative,
+                "runtime-usage",
+                "create_runtime is reserved for composition, lifecycle boundaries, and end-to-end tests",
+                node.lineno,
+                node.col_offset,
+            )
+        )
+    if (
+        tier in {"unit", "component", "domain"}
+        and called_name in _BUILTIN_PORTFOLIO_NAMES
+    ):
+        violations.append(
+            Violation(
+                relative,
+                "builtin-portfolio",
+                "built-in portfolio installation is not allowed in lower-tier tests",
+                node.lineno,
+                node.col_offset,
+            )
+        )
+    return violations
+
+
+def _conftest_fixture_violations(tree: ast.AST, relative: str) -> list[Violation]:
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and _is_pytest_fixture(node)
+            and _fixture_is_high_cost(node)
+        ):
+            violations.append(
+                Violation(
+                    relative,
+                    "root-high-cost-fixture",
+                    f"high-cost fixture '{node.name}' must live in its owning tier",
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+    return violations
+
+
+def _file_violations(
+    file_path: Path,
+    project_root: Path,
+    manifest: TopologyManifest | None,
+) -> list[Violation]:
+    relative = file_path.relative_to(project_root).as_posix()
+    path = PurePosixPath(relative)
+    tier = _tier(path)
+    if tier is None and manifest is not None:
+        tier = manifest.tier_for(relative)
+    violations: list[Violation] = []
+    if manifest is not None:
+        owners = manifest.owners(relative)
+        if path.name.startswith("test_") and len(owners) != 1:
+            detail = (
+                "no topology lane claims this test file"
+                if not owners
+                else (
+                    "test file belongs to multiple topology lanes: " + ", ".join(owners)
+                )
+            )
+            violations.append(Violation(relative, "lane-ownership", detail))
+    try:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=relative)
+    except (OSError, SyntaxError) as exc:
+        violations.append(
+            Violation(relative, "parse-error", f"cannot parse test file: {exc}")
+        )
+        return violations
+    # An imported ``create_runtime`` and its call describe one policy
+    # violation.  Record import-level diagnostics so the call walk does
+    # not emit a duplicate for the same file; direct qualified calls with
+    # no import remain covered below.
+    runtime_import_violation = False
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            import_violations, flagged = _import_violations(node, relative, path, tier)
+            violations.extend(import_violations)
+            if flagged:
+                runtime_import_violation = True
+        if isinstance(node, ast.Call):
+            violations.extend(
+                _call_violations(node, relative, path, tier, runtime_import_violation)
+            )
+    if relative == "tests/conftest.py":
+        violations.extend(_conftest_fixture_violations(tree, relative))
+    return violations
+
+
 def check_test_architecture(
     root: Path | str,
     *,
@@ -451,180 +667,7 @@ def check_test_architecture(
         else []
     )
     for file_path in files:
-        relative = file_path.relative_to(project_root).as_posix()
-        path = PurePosixPath(relative)
-        tier = _tier(path)
-        if tier is None and manifest is not None:
-            tier = manifest.tier_for(relative)
-
-        if manifest is not None:
-            owners = manifest.owners(relative)
-            if path.name.startswith("test_") and len(owners) != 1:
-                detail = (
-                    "no topology lane claims this test file"
-                    if not owners
-                    else (
-                        "test file belongs to multiple topology lanes: "
-                        + ", ".join(owners)
-                    )
-                )
-                violations.append(Violation(relative, "lane-ownership", detail))
-
-        try:
-            tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=relative)
-        except (OSError, SyntaxError) as exc:
-            violations.append(
-                Violation(relative, "parse-error", f"cannot parse test file: {exc}")
-            )
-            continue
-
-        # An imported ``create_runtime`` and its call describe one policy
-        # violation.  Record import-level diagnostics so the call walk does
-        # not emit a duplicate for the same file; direct qualified calls with
-        # no import remain covered below.
-        runtime_import_violation = False
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                module = _imported_module(node)
-                violations.extend(_conftest_import_violations(module, relative, node))
-                for alias in node.names:
-                    imported = (
-                        alias.name.split(".", 1)[0]
-                        if isinstance(node, ast.ImportFrom)
-                        else alias.name
-                    )
-                    imported_full = alias.name
-                    if (
-                        (
-                            isinstance(node, ast.ImportFrom)
-                            and module == "jacobian.runtime"
-                            and imported == "create_runtime"
-                        )
-                        or (
-                            isinstance(node, ast.Import)
-                            and alias.name == "jacobian.runtime"
-                        )
-                    ) and not _runtime_allowed(path, tier):
-                        violations.append(
-                            Violation(
-                                relative,
-                                "runtime-usage",
-                                "create_runtime is reserved for composition, lifecycle boundaries, and end-to-end tests",
-                                node.lineno,
-                                node.col_offset,
-                            )
-                        )
-                        runtime_import_violation = True
-                    portfolio_import = _is_portfolio_import(module, imported_full)
-                    if (
-                        isinstance(node, ast.Import)
-                        and module in _BUILTIN_PORTFOLIO_MODULES
-                    ):
-                        portfolio_import = True
-                    if tier in {"unit", "component", "domain"} and portfolio_import:
-                        violations.append(
-                            Violation(
-                                relative,
-                                "builtin-portfolio",
-                                "built-in portfolio installation is not allowed in lower-tier tests",
-                                node.lineno,
-                                node.col_offset,
-                            )
-                        )
-                    if _provider_module(
-                        module if isinstance(node, ast.ImportFrom) else imported_full
-                    ) and not _provider_allowed(path, tier):
-                        violations.append(
-                            Violation(
-                                relative,
-                                "provider-import",
-                                "provider implementation imports belong in boundary or focused provider-component tests",
-                                node.lineno,
-                                node.col_offset,
-                            )
-                        )
-                    sqlite_import = module == "sqlite3" or imported_full == "sqlite3"
-                    sqlite_store_import = (
-                        module == "jacobian.storage.repository"
-                        and imported == "ArtifactRepository"
-                    ) or imported_full == "jacobian.storage.repository"
-                    if tier == "unit" and (sqlite_import or sqlite_store_import):
-                        violations.append(
-                            Violation(
-                                relative,
-                                "sqlite-unit",
-                                "SQLite access is not allowed in unit tests",
-                                node.lineno,
-                                node.col_offset,
-                            )
-                        )
-                    process_import = (
-                        module == "subprocess" or imported_full == "subprocess"
-                    )
-                    if tier == "unit" and process_import:
-                        violations.append(
-                            Violation(
-                                relative,
-                                "process-unit",
-                                "subprocess access is not allowed in unit tests",
-                                node.lineno,
-                                node.col_offset,
-                            )
-                        )
-
-            if isinstance(node, ast.Call):
-                target = node.func
-                called_name = (
-                    target.id
-                    if isinstance(target, ast.Name)
-                    else target.attr
-                    if isinstance(target, ast.Attribute)
-                    else ""
-                )
-                if (
-                    called_name == "create_runtime"
-                    and not _runtime_allowed(path, tier)
-                    and not runtime_import_violation
-                ):
-                    violations.append(
-                        Violation(
-                            relative,
-                            "runtime-usage",
-                            "create_runtime is reserved for composition, lifecycle boundaries, and end-to-end tests",
-                            node.lineno,
-                            node.col_offset,
-                        )
-                    )
-                if (
-                    tier in {"unit", "component", "domain"}
-                    and called_name in _BUILTIN_PORTFOLIO_NAMES
-                ):
-                    violations.append(
-                        Violation(
-                            relative,
-                            "builtin-portfolio",
-                            "built-in portfolio installation is not allowed in lower-tier tests",
-                            node.lineno,
-                            node.col_offset,
-                        )
-                    )
-
-        if relative == "tests/conftest.py":
-            for node in ast.walk(tree):
-                if (
-                    isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and _is_pytest_fixture(node)
-                    and _fixture_is_high_cost(node)
-                ):
-                    violations.append(
-                        Violation(
-                            relative,
-                            "root-high-cost-fixture",
-                            f"high-cost fixture '{node.name}' must live in its owning tier",
-                            node.lineno,
-                            node.col_offset,
-                        )
-                    )
+        violations.extend(_file_violations(file_path, project_root, manifest))
 
     all_violations = tuple(
         sorted(violations, key=lambda item: (item.path, item.line or 0, item.code))

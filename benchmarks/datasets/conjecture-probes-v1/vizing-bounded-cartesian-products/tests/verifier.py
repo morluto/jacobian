@@ -84,6 +84,25 @@ def _product(left: list[list[int]], right: list[list[int]]) -> list[list[int]]:
     return [sorted(neighbors) for neighbors in result]
 
 
+def _frozen_graphs(graphs: list[object]) -> dict[str, list[list[int]]] | None:
+    by_id: dict[str, list[list[int]]] = {}
+    for graph in graphs:
+        if (
+            not isinstance(graph, dict)
+            or set(graph) != {"id", "adjacency"}
+            or graph.get("id") not in GRAPH_IDS
+            or graph["id"] in by_id
+        ):
+            return None
+        adjacency = _adjacency(graph["adjacency"])
+        if adjacency is None:
+            return None
+        by_id[graph["id"]] = adjacency
+    if tuple(by_id) != GRAPH_IDS:
+        return None
+    return by_id
+
+
 def _frozen() -> dict[str, Any] | None:
     try:
         value = json.loads((TESTS / "input.json").read_text())
@@ -106,20 +125,8 @@ def _frozen() -> dict[str, Any] | None:
         or len(pairs) != 13
     ):
         return None
-    by_id: dict[str, list[list[int]]] = {}
-    for graph in graphs:
-        if (
-            not isinstance(graph, dict)
-            or set(graph) != {"id", "adjacency"}
-            or graph.get("id") not in GRAPH_IDS
-            or graph["id"] in by_id
-        ):
-            return None
-        adjacency = _adjacency(graph["adjacency"])
-        if adjacency is None:
-            return None
-        by_id[graph["id"]] = adjacency
-    if tuple(by_id) != GRAPH_IDS:
+    by_id = _frozen_graphs(graphs)
+    if by_id is None:
         return None
     actual = []
     for pair in pairs:
@@ -167,17 +174,11 @@ def _product_witness(
     )
 
 
-def _math(result: object, frozen: dict[str, Any]) -> bool:
-    if (
-        not isinstance(result, dict)
-        or set(result) != {"graphs", "pairs", "derived_conclusion", "scope_identity"}
-        or result.get("scope_identity") != SCOPE
-    ):
-        return False
-    graphs = frozen["graphs"]
-    expected = {name: _domination(graphs[name]) for name in GRAPH_IDS}
-    if any(value is None for value in expected.values()):
-        return False
+def _math_graphs(
+    result: dict[str, Any],
+    graphs: dict[str, list[list[int]]],
+    expected: dict[str, Any],
+) -> bool:
     rows = result.get("graphs")
     if not isinstance(rows, list) or len(rows) != 8:
         return False
@@ -204,11 +205,17 @@ def _math(result: object, frozen: dict[str, Any]) -> bool:
             or not _dominates(row["minimum_dominating_set"], gamma, adjacency)
         ):
             return False
-    if seen != set(GRAPH_IDS):
-        return False
+    return seen == set(GRAPH_IDS)
+
+
+def _math_pairs(
+    result: dict[str, Any],
+    graphs: dict[str, list[list[int]]],
+    expected: dict[str, Any],
+) -> bool | None:
     rows = result.get("pairs")
     if not isinstance(rows, list) or len(rows) != 13:
-        return False
+        return None
     seen_pairs: set[tuple[str, str]] = set()
     all_hold = True
     for row in rows:
@@ -226,10 +233,10 @@ def _math(result: object, frozen: dict[str, Any]) -> bool:
             "bound_holds",
         }
         if not isinstance(row, dict) or set(row) != required:
-            return False
+            return None
         pair = (row.get("left"), row.get("right"))
         if pair not in PAIR_IDS or pair in seen_pairs:
-            return False
+            return None
         seen_pairs.add(pair)
         left, right = pair
         left_adj, right_adj = graphs[left], graphs[right]
@@ -238,7 +245,7 @@ def _math(result: object, frozen: dict[str, Any]) -> bool:
         product_adj = _product(left_adj, right_adj)
         product_value = _domination(product_adj)
         if product_value is None:
-            return False
+            return None
         product_gamma = product_value[0]
         if (
             row["gamma_left"] != left_gamma
@@ -257,12 +264,31 @@ def _math(result: object, frozen: dict[str, Any]) -> bool:
                 len(right_adj),
             )
         ):
-            return False
+            return None
         holds = product_gamma >= left_gamma * right_gamma
         if row["bound_holds"] is not holds:
-            return False
+            return None
         all_hold = all_hold and holds
     if seen_pairs != set(PAIR_IDS):
+        return None
+    return all_hold
+
+
+def _math(result: object, frozen: dict[str, Any]) -> bool:
+    if (
+        not isinstance(result, dict)
+        or set(result) != {"graphs", "pairs", "derived_conclusion", "scope_identity"}
+        or result.get("scope_identity") != SCOPE
+    ):
+        return False
+    graphs = frozen["graphs"]
+    expected = {name: _domination(graphs[name]) for name in GRAPH_IDS}
+    if any(value is None for value in expected.values()):
+        return False
+    if not _math_graphs(result, graphs, expected):
+        return False
+    all_hold = _math_pairs(result, graphs, expected)
+    if all_hold is None:
         return False
     return result.get("derived_conclusion") == (
         "HOLDS_ON_FROZEN_PAIR_SET" if all_hold else "VIOLATION_IN_FROZEN_PAIR_SET"

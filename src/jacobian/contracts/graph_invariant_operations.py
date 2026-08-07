@@ -26,6 +26,55 @@ GraphDistanceRow = Annotated[
 ]
 
 
+def _validate_distance_matrix_shape(
+    vertices: tuple[GraphVertex, ...],
+    distances: tuple[GraphDistanceRow, ...],
+) -> int:
+    order = len(vertices)
+    if tuple(sorted(vertices)) != vertices or len(set(vertices)) != order:
+        raise ValueError("distance-matrix vertices must be unique and sorted")
+    if len(distances) != order or any(len(row) != order for row in distances):
+        raise ValueError("distance matrix must be square on the declared vertices")
+    return order
+
+
+def _validate_distance_matrix_diagonal_and_symmetry(
+    distances: tuple[GraphDistanceRow, ...],
+    order: int,
+) -> None:
+    for source in range(order):
+        for target in range(order):
+            distance = distances[source][target]
+            if source == target:
+                if distance != 0:
+                    raise ValueError("distance-matrix diagonal must be zero")
+            elif distance == 0:
+                raise ValueError("off-diagonal distances must be positive or null")
+            if distance != distances[target][source]:
+                raise ValueError("undirected distance matrix must be symmetric")
+
+
+def _validate_distance_matrix_triangle_inequality(
+    distances: tuple[GraphDistanceRow, ...],
+    order: int,
+) -> None:
+    for source in range(order):
+        for intermediate in range(order):
+            left = distances[source][intermediate]
+            if left is None:
+                continue
+            for target in range(order):
+                right = distances[intermediate][target]
+                if right is None:
+                    continue
+                direct = distances[source][target]
+                if direct is None or direct > left + right:
+                    raise ValueError(
+                        "finite distances must satisfy component closure and "
+                        "the triangle inequality"
+                    )
+
+
 class GraphDistanceMatrixResult(ContractModel):
     """All exact unweighted shortest-path distances in canonical vertex order."""
 
@@ -39,44 +88,9 @@ class GraphDistanceMatrixResult(ContractModel):
 
     @model_validator(mode="after")
     def bind_complete_metric(self) -> Self:
-        order = len(self.vertices)
-        if (
-            tuple(sorted(self.vertices)) != self.vertices
-            or len(set(self.vertices)) != order
-        ):
-            raise ValueError("distance-matrix vertices must be unique and sorted")
-        if len(self.distances) != order or any(
-            len(row) != order for row in self.distances
-        ):
-            raise ValueError("distance matrix must be square on the declared vertices")
-
-        for source in range(order):
-            for target in range(order):
-                distance = self.distances[source][target]
-                if source == target:
-                    if distance != 0:
-                        raise ValueError("distance-matrix diagonal must be zero")
-                elif distance == 0:
-                    raise ValueError("off-diagonal distances must be positive or null")
-                if distance != self.distances[target][source]:
-                    raise ValueError("undirected distance matrix must be symmetric")
-
-        for source in range(order):
-            for intermediate in range(order):
-                left = self.distances[source][intermediate]
-                if left is None:
-                    continue
-                for target in range(order):
-                    right = self.distances[intermediate][target]
-                    if right is None:
-                        continue
-                    direct = self.distances[source][target]
-                    if direct is None or direct > left + right:
-                        raise ValueError(
-                            "finite distances must satisfy component closure and "
-                            "the triangle inequality"
-                        )
-
+        order = _validate_distance_matrix_shape(self.vertices, self.distances)
+        _validate_distance_matrix_diagonal_and_symmetry(self.distances, order)
+        _validate_distance_matrix_triangle_inequality(self.distances, order)
         expected_connected = order > 0 and all(
             distance is not None for row in self.distances for distance in row
         )

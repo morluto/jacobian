@@ -249,22 +249,16 @@ def _load_exact_submission():
         return None
 
 
-def _evidence_valid(evidence, result):
-    # The published submission schema caps the evidence array at one descriptor,
-    # so require exactly one before awarding evidence validity.
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    descriptor = evidence[0]
-    if (
-        not isinstance(descriptor, dict)
-        or set(descriptor) != {"path", "sha256"}
-        or descriptor.get("path") != "evidence/answer.txt"
-        or not isinstance(descriptor.get("sha256"), str)
-    ):
-        return False
-    target = Path("/app") / "evidence" / "answer.txt"
-    if target is None:
-        return False
+def _evidence_descriptor_ok(descriptor):
+    return (
+        isinstance(descriptor, dict)
+        and set(descriptor) == {"path", "sha256"}
+        and descriptor.get("path") == "evidence/answer.txt"
+        and isinstance(descriptor.get("sha256"), str)
+    )
+
+
+def _evidence_file_stat_ok(target):
     try:
         if (
             target.is_symlink()
@@ -274,17 +268,19 @@ def _evidence_valid(evidence, result):
             return False
     except OSError:
         return False
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(descriptor, expected_path="evidence/answer.txt")
-    if target is None:
-        return False
+    return True
+
+
+def _evidence_target_text(target):
     try:
         if target.stat().st_size > 1_048_576:
-            return False
-        text = target.read_text().casefold()
+            return None
+        return target.read_text().casefold()
     except (OSError, UnicodeError):
-        return False
+        return None
+
+
+def _evidence_content_ok(text, result):
     if not all(term in text for term in ("exact cover", "set.range", "vacuously")):
         return False
     modulus = result.get("modulus") if isinstance(result, dict) else None
@@ -321,6 +317,30 @@ def _evidence_valid(evidence, result):
         "vacuously false",
     )
     return not any(contradiction in text for contradiction in contradictions)
+
+
+def _evidence_valid(evidence, result):
+    # The published submission schema caps the evidence array at one descriptor,
+    # so require exactly one before awarding evidence validity.
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    descriptor = evidence[0]
+    if not _evidence_descriptor_ok(descriptor):
+        return False
+    target = Path("/app") / "evidence" / "answer.txt"
+    if target is None:
+        return False
+    if not _evidence_file_stat_ok(target):
+        return False
+    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+        return False
+    target = resolve_evidence(descriptor, expected_path="evidence/answer.txt")
+    if target is None:
+        return False
+    text = _evidence_target_text(target)
+    if text is None:
+        return False
+    return _evidence_content_ok(text, result)
 
 
 def main():

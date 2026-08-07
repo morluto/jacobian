@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from tools.check_doc_commands import validate_documents
+from tools.makefile_catalog import MakefileCatalogError, discover_makefiles
 
 
 def _write_fixture(
@@ -32,6 +34,44 @@ make unit TESTS=tests/unit/test_example.py
     )
 
     assert validate_documents(root, (document,)) == []
+
+
+def test_validates_targets_and_required_variables_from_literal_includes(
+    tmp_path: Path,
+) -> None:
+    root, document = _write_fixture(
+        tmp_path,
+        "```sh\nmake deploy DATASET=mathematical-benchmarks-v1\n```\n",
+        makefile="include make/harbor.mk\n",
+    )
+    fragment = root / "make" / "harbor.mk"
+    fragment.parent.mkdir()
+    fragment.write_text(
+        'deploy:\n\t@test -n "$(DATASET)" || exit 2\n', encoding="utf-8"
+    )
+
+    assert validate_documents(root, (document,)) == []
+
+
+def test_rejects_dynamic_escaping_missing_and_cyclic_includes(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text("include $(FRAGMENT)\n", encoding="utf-8")
+    with pytest.raises(MakefileCatalogError, match="dynamic"):
+        discover_makefiles(tmp_path)
+
+    (tmp_path / "Makefile").write_text("include missing.mk\n", encoding="utf-8")
+    with pytest.raises(MakefileCatalogError, match="missing"):
+        discover_makefiles(tmp_path)
+
+    (tmp_path / "Makefile").write_text("include ../outside.mk\n", encoding="utf-8")
+    with pytest.raises(MakefileCatalogError, match="escapes"):
+        discover_makefiles(tmp_path)
+
+    (tmp_path / "Makefile").write_text("include make/child.mk\n", encoding="utf-8")
+    child = tmp_path / "make" / "child.mk"
+    child.parent.mkdir()
+    child.write_text("include ../Makefile\n", encoding="utf-8")
+    with pytest.raises(MakefileCatalogError, match="cyclic"):
+        discover_makefiles(tmp_path)
 
 
 def test_reports_unknown_target_and_missing_test_path(tmp_path: Path) -> None:

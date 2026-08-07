@@ -72,7 +72,7 @@ def _interval(value: object) -> tuple[Fraction, Fraction]:
     return lo, hi
 
 
-def _polynomial(value: object) -> Polynomial:
+def _polynomial_header(value: object) -> None:
     if not isinstance(value, dict) or set(value) != {
         "polynomial_schema_version",
         "domain",
@@ -85,6 +85,37 @@ def _polynomial(value: object) -> Polynomial:
     variable = value["variable"]
     if not isinstance(variable, str) or _VARIABLE.fullmatch(variable) is None:
         raise ValueError("polynomial variable is not a valid identifier")
+
+
+def _polynomial_term(
+    term: object,
+    previous: int | None,
+) -> tuple[int, Fraction]:
+    if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
+        raise ValueError("malformed polynomial term")
+    coefficient = _rational(term["coefficient"])
+    exponents = term["exponents"]
+    if (
+        coefficient == 0
+        or not isinstance(exponents, list)
+        or len(exponents) != 1
+        or not isinstance(exponents[0], int)
+        or isinstance(exponents[0], bool)
+        or not 0 <= exponents[0] <= _MAX_DEGREE
+    ):
+        raise ValueError("invalid univariate polynomial term")
+    exponent = exponents[0]
+    if previous is not None and exponent >= previous:
+        raise ValueError("terms are not in canonical descending order")
+    return exponent, coefficient
+
+
+def _polynomial(value: object) -> Polynomial:
+    """Parse a univariate polynomial into ``{exponent: coefficient}`` form."""
+
+    if not isinstance(value, dict):
+        raise ValueError("univariate polynomial must contain the declared fields")
+    _polynomial_header(value)
     body = value["polynomial"]
     if not isinstance(body, dict) or set(body) != {"terms"}:
         raise ValueError("polynomial body must contain terms")
@@ -94,22 +125,7 @@ def _polynomial(value: object) -> Polynomial:
     parsed: Polynomial = {}
     previous: int | None = None
     for term in terms:
-        if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
-            raise ValueError("malformed polynomial term")
-        coefficient = _rational(term["coefficient"])
-        exponents = term["exponents"]
-        if (
-            coefficient == 0
-            or not isinstance(exponents, list)
-            or len(exponents) != 1
-            or not isinstance(exponents[0], int)
-            or isinstance(exponents[0], bool)
-            or not 0 <= exponents[0] <= _MAX_DEGREE
-        ):
-            raise ValueError("invalid univariate polynomial term")
-        exponent = exponents[0]
-        if previous is not None and exponent >= previous:
-            raise ValueError("terms are not in canonical descending order")
+        exponent, coefficient = _polynomial_term(term, previous)
         previous = exponent
         if exponent in parsed:
             raise ValueError("polynomial exponent tuples must be unique")
@@ -218,6 +234,199 @@ def _decide_positivity(
     return (v_lo, v_hi, roots_in_open, endpoint_root, positive)
 
 
+_POSITIVITY_REPLAY_KEYS = {
+    "method",
+    "polynomial_uri",
+    "interval",
+    "degree",
+    "sturm_sequence_length",
+    "sign_changes_at_lo",
+    "sign_changes_at_hi",
+    "roots_in_open_interval",
+    "endpoint_root",
+    "positive",
+}
+
+
+def _check_positivity_artifact_types(
+    claim_artifact: object,
+    candidate_artifact: object,
+    scope_artifact: object,
+    certificate: object,
+) -> str | None:
+    if (
+        not isinstance(claim_artifact, dict)
+        or not isinstance(candidate_artifact, dict)
+        or not isinstance(scope_artifact, dict)
+        or not isinstance(certificate, dict)
+    ):
+        return "positivity replay artifacts are malformed"
+    return None
+
+
+def _check_positivity_claim(
+    claim: object,
+    candidate: object,
+) -> str | None:
+    if (
+        not isinstance(claim, dict)
+        or not isinstance(candidate, dict)
+        or claim.get("claim_schema_version") != "1"
+        or claim.get("predicate") != "POLYNOMIAL_INTERVAL_STRICT_POSITIVITY"
+        or claim.get("domain") != "QQ"
+    ):
+        return "unexpected polynomial positivity claim"
+    return None
+
+
+def _check_positivity_certificate(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if (
+        certificate.get("evidence_schema_version") != "1"
+        or certificate.get("certificate_type")
+        != "polynomial.interval_sturm_positivity_replay"
+        or certificate.get("format_version") != "1"
+        or certificate.get("bindings") != expected_bindings
+    ):
+        return "unexpected positivity certificate format or bindings"
+    return None
+
+
+def _check_positivity_replay(replay: object) -> str | None:
+    if (
+        not isinstance(replay, dict)
+        or set(replay) != _POSITIVITY_REPLAY_KEYS
+        or replay.get("method") != "STURM_SEQUENCE_REPLAY"
+    ):
+        return "positivity replay payload is malformed"
+    return None
+
+
+def _check_positivity_certificate_and_replay(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    error = _check_positivity_certificate(certificate, expected_bindings)
+    if error is not None:
+        return error
+    return _check_positivity_replay(certificate.get("payload"))
+
+
+def _check_positivity_identities(
+    claim: dict[str, Any],
+    replay: dict[str, Any],
+    polynomial_payload: object,
+    polynomial_uri: object,
+) -> str | None:
+    if (
+        not isinstance(polynomial_payload, dict)
+        or claim.get("polynomial_uri") != polynomial_uri
+        or replay.get("polynomial_uri") != polynomial_uri
+    ):
+        return "positivity replay artifact identities do not match"
+    return None
+
+
+def _check_positivity_degree_intervals(
+    replay: dict[str, Any],
+    candidate: dict[str, Any],
+    degree: int,
+    claim: dict[str, Any],
+) -> str | None:
+    if replay.get("degree") != degree:
+        return "declared degree does not match the source polynomial"
+    if candidate.get("degree") != degree:
+        return "candidate decision degree is inconsistent"
+    claim_interval = claim.get("interval")
+    replay_interval = replay.get("interval")
+    candidate_interval = candidate.get("interval")
+    if claim_interval != replay_interval or claim_interval != candidate_interval:
+        return "declared intervals do not match across artifacts"
+    return None
+
+
+def _check_positivity_replay_fields(
+    replay: dict[str, Any],
+) -> tuple[int, int, int, bool, bool] | str:
+    claimed_v_lo = replay.get("sign_changes_at_lo")
+    claimed_v_hi = replay.get("sign_changes_at_hi")
+    claimed_roots = replay.get("roots_in_open_interval")
+    claimed_endpoint_root = replay.get("endpoint_root")
+    claimed_positive = replay.get("positive")
+    if (
+        not isinstance(claimed_v_lo, int)
+        or not isinstance(claimed_v_hi, int)
+        or not isinstance(claimed_roots, int)
+        or not isinstance(claimed_endpoint_root, bool)
+        or not isinstance(claimed_positive, bool)
+        or claimed_v_lo < 0
+        or claimed_v_hi < 0
+        or claimed_roots < 0
+        or claimed_roots != claimed_v_lo - claimed_v_hi
+    ):
+        return "claimed replay fields are inconsistent"
+    return (
+        claimed_v_lo,
+        claimed_v_hi,
+        claimed_roots,
+        claimed_endpoint_root,
+        claimed_positive,
+    )
+
+
+def _check_positivity_replay_fields_and_candidate(
+    replay: dict[str, Any],
+    candidate: dict[str, Any],
+    claim: dict[str, Any],
+) -> tuple[int, int, int, bool, bool] | str:
+    result = _check_positivity_replay_fields(replay)
+    if isinstance(result, str):
+        return result
+    (
+        claimed_v_lo,
+        claimed_v_hi,
+        claimed_roots,
+        claimed_endpoint_root,
+        claimed_positive,
+    ) = result
+    error = _check_positivity_candidate_and_claim(
+        candidate,
+        claim,
+        claimed_v_lo,
+        claimed_v_hi,
+        claimed_roots,
+        claimed_endpoint_root,
+        claimed_positive,
+    )
+    if error is not None:
+        return error
+    return result
+
+
+def _check_positivity_candidate_and_claim(
+    candidate: dict[str, Any],
+    claim: dict[str, Any],
+    claimed_v_lo: int,
+    claimed_v_hi: int,
+    claimed_roots: int,
+    claimed_endpoint_root: bool,
+    claimed_positive: bool,
+) -> str | None:
+    if (
+        candidate.get("sign_changes_at_lo") != claimed_v_lo
+        or candidate.get("sign_changes_at_hi") != claimed_v_hi
+        or candidate.get("roots_in_open_interval") != claimed_roots
+        or candidate.get("endpoint_root") != claimed_endpoint_root
+        or candidate.get("positive") != claimed_positive
+    ):
+        return "candidate decision does not match the replay payload"
+    if claim.get("positive") != claimed_positive:
+        return "claim does not match the replay positivity decision"
+    return None
+
+
 def check_positivity(request: dict[str, Any]) -> dict[str, Any]:
     """Replay one claimed Sturm-sequence positivity decision independently."""
 
@@ -228,98 +437,46 @@ def check_positivity(request: dict[str, Any]) -> dict[str, Any]:
         candidate_artifact = request["candidate"]
         scope_artifact = request["scope"]
         certificate = request["certificate"]["payload"]
-        if (
-            not isinstance(claim_artifact, dict)
-            or not isinstance(candidate_artifact, dict)
-            or not isinstance(scope_artifact, dict)
-            or not isinstance(certificate, dict)
-        ):
-            return _reject("positivity replay artifacts are malformed")
+        error = _check_positivity_artifact_types(
+            claim_artifact, candidate_artifact, scope_artifact, certificate
+        )
+        if error is not None:
+            return _reject(error)
         claim = claim_artifact.get("payload")
         candidate = candidate_artifact.get("payload")
         polynomial_payload = scope_artifact.get("payload")
-        if (
-            not isinstance(claim, dict)
-            or not isinstance(candidate, dict)
-            or claim.get("claim_schema_version") != "1"
-            or claim.get("predicate") != "POLYNOMIAL_INTERVAL_STRICT_POSITIVITY"
-            or claim.get("domain") != "QQ"
-        ):
-            return _reject("unexpected polynomial positivity claim")
-        if (
-            certificate.get("evidence_schema_version") != "1"
-            or certificate.get("certificate_type")
-            != "polynomial.interval_sturm_positivity_replay"
-            or certificate.get("format_version") != "1"
-            or certificate.get("bindings") != request.get("expected_bindings")
-        ):
-            return _reject("unexpected positivity certificate format or bindings")
+        error = _check_positivity_claim(claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_positivity_certificate_and_replay(
+            certificate, request.get("expected_bindings")
+        )
+        if error is not None:
+            return _reject(error)
         replay = certificate.get("payload")
-        if (
-            not isinstance(replay, dict)
-            or set(replay)
-            != {
-                "method",
-                "polynomial_uri",
-                "interval",
-                "degree",
-                "sturm_sequence_length",
-                "sign_changes_at_lo",
-                "sign_changes_at_hi",
-                "roots_in_open_interval",
-                "endpoint_root",
-                "positive",
-            }
-            or replay.get("method") != "STURM_SEQUENCE_REPLAY"
-        ):
-            return _reject("positivity replay payload is malformed")
         polynomial_uri = scope_artifact.get("artifact_uri")
         decision_uri = candidate_artifact.get("artifact_uri")
-        if (
-            not isinstance(polynomial_payload, dict)
-            or claim.get("polynomial_uri") != polynomial_uri
-            or replay.get("polynomial_uri") != polynomial_uri
-        ):
-            return _reject("positivity replay artifact identities do not match")
+        error = _check_positivity_identities(
+            claim, replay, polynomial_payload, polynomial_uri
+        )
+        if error is not None:
+            return _reject(error)
         parsed = _polynomial(polynomial_payload)
         degree = _degree(parsed)
-        if replay.get("degree") != degree:
-            return _reject("declared degree does not match the source polynomial")
-        if candidate.get("degree") != degree:
-            return _reject("candidate decision degree is inconsistent")
-        claim_interval = claim.get("interval")
-        replay_interval = replay.get("interval")
-        candidate_interval = candidate.get("interval")
-        if claim_interval != replay_interval or claim_interval != candidate_interval:
-            return _reject("declared intervals do not match across artifacts")
-        a, b = _interval(claim_interval)
-        claimed_v_lo = replay.get("sign_changes_at_lo")
-        claimed_v_hi = replay.get("sign_changes_at_hi")
-        claimed_roots = replay.get("roots_in_open_interval")
-        claimed_endpoint_root = replay.get("endpoint_root")
-        claimed_positive = replay.get("positive")
-        if (
-            not isinstance(claimed_v_lo, int)
-            or not isinstance(claimed_v_hi, int)
-            or not isinstance(claimed_roots, int)
-            or not isinstance(claimed_endpoint_root, bool)
-            or not isinstance(claimed_positive, bool)
-            or claimed_v_lo < 0
-            or claimed_v_hi < 0
-            or claimed_roots < 0
-            or claimed_roots != claimed_v_lo - claimed_v_hi
-        ):
-            return _reject("claimed replay fields are inconsistent")
-        if (
-            candidate.get("sign_changes_at_lo") != claimed_v_lo
-            or candidate.get("sign_changes_at_hi") != claimed_v_hi
-            or candidate.get("roots_in_open_interval") != claimed_roots
-            or candidate.get("endpoint_root") != claimed_endpoint_root
-            or candidate.get("positive") != claimed_positive
-        ):
-            return _reject("candidate decision does not match the replay payload")
-        if claim.get("positive") != claimed_positive:
-            return _reject("claim does not match the replay positivity decision")
+        error = _check_positivity_degree_intervals(replay, candidate, degree, claim)
+        if error is not None:
+            return _reject(error)
+        a, b = _interval(claim.get("interval"))
+        result = _check_positivity_replay_fields_and_candidate(replay, candidate, claim)
+        if isinstance(result, str):
+            return _reject(result)
+        (
+            claimed_v_lo,
+            claimed_v_hi,
+            claimed_roots,
+            claimed_endpoint_root,
+            claimed_positive,
+        ) = result
         v_lo, v_hi, roots_in_open, endpoint_root, positive = _decide_positivity(
             parsed, a, b
         )

@@ -198,93 +198,112 @@ def _expression_artifact(
     return variables, polynomial, analysis
 
 
-def _expression(
-    value: object,
+def _expression_rational(
+    value: dict[str, Any],
+    zero_exponents: tuple[int, ...],
+) -> tuple[_Polynomial, _Analysis]:
+    if set(value) != {"kind", "value"}:
+        raise ValueError("rational node is malformed")
+    coefficient = _rational(value["value"])
+    literal_polynomial = {} if coefficient == 0 else {zero_exponents: coefficient}
+    analysis = _Analysis(
+        nodes=1,
+        depth=1,
+        term_upper_bound=int(coefficient != 0),
+        maximum_exponents=zero_exponents,
+        coefficient_digit_budget=(
+            len(value["value"]["num"].lstrip("-")) + len(value["value"]["den"])
+        ),
+    )
+    return literal_polynomial, analysis
+
+
+def _expression_variable(
+    value: dict[str, Any],
+    variable_indices: dict[str, int],
+    dimension: int,
+) -> tuple[_Polynomial, _Analysis]:
+    if set(value) != {"kind", "name"}:
+        raise ValueError("variable node is malformed")
+    name = value["name"]
+    if not isinstance(name, str) or name not in variable_indices:
+        raise ValueError("expression uses an undeclared variable")
+    exponents = [0] * dimension
+    exponents[variable_indices[name]] = 1
+    return {tuple(exponents): Fraction(1)}, _Analysis(
+        1,
+        1,
+        1,
+        tuple(exponents),
+        1,
+    )
+
+
+def _expression_negate(
+    value: dict[str, Any],
     variable_indices: dict[str, int],
 ) -> tuple[_Polynomial, _Analysis]:
-    if not isinstance(value, dict) or not isinstance(value.get("kind"), str):
-        raise ValueError("expression node is malformed")
-    dimension = len(variable_indices)
-    zero_exponents = (0,) * dimension
-    kind = value["kind"]
-    if kind == "rational":
-        if set(value) != {"kind", "value"}:
-            raise ValueError("rational node is malformed")
-        coefficient = _rational(value["value"])
-        literal_polynomial = {} if coefficient == 0 else {zero_exponents: coefficient}
-        analysis = _Analysis(
-            nodes=1,
-            depth=1,
-            term_upper_bound=int(coefficient != 0),
-            maximum_exponents=zero_exponents,
-            coefficient_digit_budget=(
-                len(value["value"]["num"].lstrip("-")) + len(value["value"]["den"])
-            ),
-        )
-        return literal_polynomial, analysis
-    if kind == "variable":
-        if set(value) != {"kind", "name"}:
-            raise ValueError("variable node is malformed")
-        name = value["name"]
-        if not isinstance(name, str) or name not in variable_indices:
-            raise ValueError("expression uses an undeclared variable")
-        exponents = [0] * dimension
-        exponents[variable_indices[name]] = 1
-        return {tuple(exponents): Fraction(1)}, _Analysis(
-            1,
-            1,
-            1,
-            tuple(exponents),
-            1,
-        )
-    if kind == "negate":
-        if set(value) != {"kind", "operand"}:
-            raise ValueError("negate node is malformed")
-        operand, child = _expression(value["operand"], variable_indices)
-        return {monomial: -coefficient for monomial, coefficient in operand.items()}, (
-            _Analysis(
-                1 + child.nodes,
-                1 + child.depth,
-                child.term_upper_bound,
-                child.maximum_exponents,
-                child.coefficient_digit_budget,
-            )
-        )
-    if kind == "power":
-        if set(value) != {"kind", "base", "exponent"}:
-            raise ValueError("power node is malformed")
-        exponent = value["exponent"]
-        if type(exponent) is not int or not 0 <= exponent <= _MAX_POWER:
-            raise ValueError("power exponent is outside the declared bound")
-        base, child = _expression(value["base"], variable_indices)
-        if exponent == 0:
-            terms = 1
-            degrees = zero_exponents
-            digit_budget = 1
-        elif child.term_upper_bound == 0:
-            terms = 0
-            degrees = zero_exponents
-            digit_budget = child.coefficient_digit_budget * exponent
-        else:
-            terms = min(
-                comb(child.term_upper_bound + exponent - 1, exponent),
-                _MAX_TERMS + 1,
-            )
-            degrees = tuple(
-                child_exponent * exponent for child_exponent in child.maximum_exponents
-            )
-            digit_budget = child.coefficient_digit_budget * exponent
-        analysis = _Analysis(
+    if set(value) != {"kind", "operand"}:
+        raise ValueError("negate node is malformed")
+    operand, child = _expression(value["operand"], variable_indices)
+    return {monomial: -coefficient for monomial, coefficient in operand.items()}, (
+        _Analysis(
             1 + child.nodes,
             1 + child.depth,
-            terms,
-            degrees,
-            digit_budget,
+            child.term_upper_bound,
+            child.maximum_exponents,
+            child.coefficient_digit_budget,
         )
-        _require_analysis_bounds(analysis)
-        return _power(base, exponent, dimension), analysis
-    if kind not in {"add", "multiply"}:
-        raise ValueError("expression node kind is unsupported")
+    )
+
+
+def _expression_power(
+    value: dict[str, Any],
+    variable_indices: dict[str, int],
+    dimension: int,
+    zero_exponents: tuple[int, ...],
+) -> tuple[_Polynomial, _Analysis]:
+    if set(value) != {"kind", "base", "exponent"}:
+        raise ValueError("power node is malformed")
+    exponent = value["exponent"]
+    if type(exponent) is not int or not 0 <= exponent <= _MAX_POWER:
+        raise ValueError("power exponent is outside the declared bound")
+    base, child = _expression(value["base"], variable_indices)
+    if exponent == 0:
+        terms = 1
+        degrees = zero_exponents
+        digit_budget = 1
+    elif child.term_upper_bound == 0:
+        terms = 0
+        degrees = zero_exponents
+        digit_budget = child.coefficient_digit_budget * exponent
+    else:
+        terms = min(
+            comb(child.term_upper_bound + exponent - 1, exponent),
+            _MAX_TERMS + 1,
+        )
+        degrees = tuple(
+            child_exponent * exponent for child_exponent in child.maximum_exponents
+        )
+        digit_budget = child.coefficient_digit_budget * exponent
+    analysis = _Analysis(
+        1 + child.nodes,
+        1 + child.depth,
+        terms,
+        degrees,
+        digit_budget,
+    )
+    _require_analysis_bounds(analysis)
+    return _power(base, exponent, dimension), analysis
+
+
+def _expression_variadic(
+    value: dict[str, Any],
+    variable_indices: dict[str, int],
+    dimension: int,
+    zero_exponents: tuple[int, ...],
+    kind: str,
+) -> tuple[_Polynomial, _Analysis]:
     if set(value) != {"kind", "operands"}:
         raise ValueError("variadic expression node is malformed")
     operands = value["operands"]
@@ -326,6 +345,30 @@ def _expression(
     analysis = _Analysis(nodes, depth, term_bound, degrees, digit_budget)
     _require_analysis_bounds(analysis)
     return combined_polynomial, analysis
+
+
+def _expression(
+    value: object,
+    variable_indices: dict[str, int],
+) -> tuple[_Polynomial, _Analysis]:
+    if not isinstance(value, dict) or not isinstance(value.get("kind"), str):
+        raise ValueError("expression node is malformed")
+    dimension = len(variable_indices)
+    zero_exponents = (0,) * dimension
+    kind = value["kind"]
+    if kind == "rational":
+        return _expression_rational(value, zero_exponents)
+    if kind == "variable":
+        return _expression_variable(value, variable_indices, dimension)
+    if kind == "negate":
+        return _expression_negate(value, variable_indices)
+    if kind == "power":
+        return _expression_power(value, variable_indices, dimension, zero_exponents)
+    if kind in {"add", "multiply"}:
+        return _expression_variadic(
+            value, variable_indices, dimension, zero_exponents, kind
+        )
+    raise ValueError("expression node kind is unsupported")
 
 
 def _require_analysis_bounds(analysis: _Analysis) -> None:
@@ -507,45 +550,149 @@ def _validate_candidate(
     return _normalized_polynomial(payload["normalized"], len(variables))
 
 
+_NORMALIZATION_REQUEST_KEYS = {
+    "request_version",
+    "claim",
+    "candidate",
+    "scope",
+    "witness",
+    "expected_bindings",
+}
+_NORMALIZATION_WITNESS_ENVELOPE_KEYS = {
+    "evidence_schema_version",
+    "witness_format",
+    "format_version",
+    "role",
+    "bindings",
+    "payload",
+}
+
+
+def _check_normalization_request_envelope(request: object) -> str | None:
+    if not isinstance(request, dict) or set(request) != _NORMALIZATION_REQUEST_KEYS:
+        return "malformed checker request"
+    if request["request_version"] != "1" or request["scope"] is not None:
+        return "unsupported checker request"
+    return None
+
+
+def _check_normalization_artifacts(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
+        return "checker artifact metadata is malformed"
+    if not valid_unscoped_unencoded_bindings(expected_bindings):
+        return "expected evidence bindings are malformed"
+    if (
+        claim["semantics_uri"] != candidate["semantics_uri"]
+        or claim["semantics_uri"] != witness["semantics_uri"]
+    ):
+        return "checker artifacts use different semantics"
+    return None
+
+
+def _check_normalization_digests(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness: dict[str, Any],
+) -> str | None:
+    for artifact, label in (
+        (claim, "source expression"),
+        (candidate, "normalization candidate"),
+        (witness, "normalization witness"),
+    ):
+        if artifact["payload_digest"] != _sha256(_canonical_json(artifact["payload"])):
+            return f"{label} payload digest does not match"
+    return None
+
+
+def _check_normalization_binding_match(
+    expected_bindings: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if (
+        expected_bindings["claim_digest"] != claim["object_digest"]
+        or expected_bindings["candidate_digest"] != candidate["object_digest"]
+    ):
+        return "expected evidence bindings do not match artifacts"
+    return None
+
+
+def _check_normalization_witness_envelope(
+    envelope: object,
+    expected_bindings: object,
+) -> str | None:
+    if (
+        not isinstance(envelope, dict)
+        or set(envelope) != _NORMALIZATION_WITNESS_ENVELOPE_KEYS
+    ):
+        return "normalization witness envelope is malformed"
+    if (
+        envelope["evidence_schema_version"] != "1"
+        or envelope["witness_format"] != "polynomial.expression_normalization"
+        or envelope["format_version"] != "1"
+        or envelope["role"] != "SUPPORTS_CLAIM"
+        or envelope["bindings"] != expected_bindings
+    ):
+        return "normalization witness is not exactly bound"
+    return None
+
+
+def _check_normalization_witness_payload(
+    witness: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if witness["payload"]["payload"] != {
+        "expression_uri": claim["artifact_uri"],
+        "normalization_uri": candidate["artifact_uri"],
+    }:
+        return "normalization witness points at different artifacts"
+    if not {
+        claim["artifact_uri"],
+        candidate["artifact_uri"],
+    }.issubset(set(witness["parents"])):
+        return "normalization witness is missing required lineage"
+    return None
+
+
+def _check_normalization_witness(
+    witness: dict[str, Any],
+    expected_bindings: object,
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    error = _check_normalization_witness_envelope(witness["payload"], expected_bindings)
+    if error is not None:
+        return error
+    return _check_normalization_witness_payload(witness, claim, candidate)
+
+
 def check_polynomial_expression_normalization(
     request: dict[str, Any],
 ) -> dict[str, Any]:
     """Accept only exact coefficient equality with the full typed AST."""
 
     try:
-        if not isinstance(request, dict) or set(request) != {
-            "request_version",
-            "claim",
-            "candidate",
-            "scope",
-            "witness",
-            "expected_bindings",
-        }:
-            return _reject("malformed checker request")
-        if request["request_version"] != "1" or request["scope"] is not None:
-            return _reject("unsupported checker request")
+        error = _check_normalization_request_envelope(request)
+        if error is not None:
+            return _reject(error)
         claim = request["claim"]
         candidate = request["candidate"]
         witness = request["witness"]
-        if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
-            return _reject("checker artifact metadata is malformed")
         expected_bindings = request["expected_bindings"]
-        if not valid_unscoped_unencoded_bindings(expected_bindings):
-            return _reject("expected evidence bindings are malformed")
-        if (
-            claim["semantics_uri"] != candidate["semantics_uri"]
-            or claim["semantics_uri"] != witness["semantics_uri"]
-        ):
-            return _reject("checker artifacts use different semantics")
-        for artifact, label in (
-            (claim, "source expression"),
-            (candidate, "normalization candidate"),
-            (witness, "normalization witness"),
-        ):
-            if artifact["payload_digest"] != _sha256(
-                _canonical_json(artifact["payload"])
-            ):
-                return _reject(f"{label} payload digest does not match")
+        error = _check_normalization_artifacts(
+            claim, candidate, witness, expected_bindings
+        )
+        if error is not None:
+            return _reject(error)
+        error = _check_normalization_digests(claim, candidate, witness)
+        if error is not None:
+            return _reject(error)
 
         variables, expanded, analysis = _expression_artifact(claim["payload"])
         normalized = _validate_candidate(
@@ -555,39 +702,14 @@ def check_polynomial_expression_normalization(
             variables=variables,
             analysis=analysis,
         )
-        if (
-            expected_bindings["claim_digest"] != claim["object_digest"]
-            or expected_bindings["candidate_digest"] != candidate["object_digest"]
-        ):
-            return _reject("expected evidence bindings do not match artifacts")
-        envelope = witness["payload"]
-        if not isinstance(envelope, dict) or set(envelope) != {
-            "evidence_schema_version",
-            "witness_format",
-            "format_version",
-            "role",
-            "bindings",
-            "payload",
-        }:
-            return _reject("normalization witness envelope is malformed")
-        if (
-            envelope["evidence_schema_version"] != "1"
-            or envelope["witness_format"] != "polynomial.expression_normalization"
-            or envelope["format_version"] != "1"
-            or envelope["role"] != "SUPPORTS_CLAIM"
-            or envelope["bindings"] != expected_bindings
-        ):
-            return _reject("normalization witness is not exactly bound")
-        if envelope["payload"] != {
-            "expression_uri": claim["artifact_uri"],
-            "normalization_uri": candidate["artifact_uri"],
-        }:
-            return _reject("normalization witness points at different artifacts")
-        if not {
-            claim["artifact_uri"],
-            candidate["artifact_uri"],
-        }.issubset(set(witness["parents"])):
-            return _reject("normalization witness is missing required lineage")
+        error = _check_normalization_binding_match(expected_bindings, claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_normalization_witness(
+            witness, expected_bindings, claim, candidate
+        )
+        if error is not None:
+            return _reject(error)
         if expanded != normalized:
             return _reject(
                 "canonical coefficients do not equal the full typed expression"

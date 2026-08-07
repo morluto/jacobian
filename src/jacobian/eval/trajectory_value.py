@@ -400,7 +400,7 @@ def _tfidf_vectors(
     }
     document_frequency: Counter[str] = Counter()
     for counts in term_counts.values():
-        document_frequency.update(counts)
+        document_frequency.update(counts.keys())
     document_count = len(observations)
     vectors: dict[str, dict[str, float]] = {}
     for observation_id, counts in term_counts.items():

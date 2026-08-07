@@ -193,8 +193,7 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
     for guidance in (
-        "requested outcomes separately.",
-        "over a generic arithmetic substep",
+        "Keep decomposition and routing decisions agent-owned",
         "composing already-known supporting operations remains allowed",
         "follow those fields",
         "retry within the task resource bounds",

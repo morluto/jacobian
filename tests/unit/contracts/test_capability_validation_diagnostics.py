@@ -107,3 +107,71 @@ def test_payload_validation_bounds_serialized_diagnostic_size() -> None:
     # failed_result serializes this diagnostic in both output.error and
     # diagnostics, so a bounded dump keeps the whole response bounded.
     assert len(diagnostic.model_dump_json()) <= 4096
+
+
+def test_payload_validation_reports_missing_nested_required_member() -> None:
+    """A nested object omitting a required member must name the missing key."""
+
+    with pytest.raises(PayloadValidationError) as error:
+        validate_payload(
+            {
+                "type": "object",
+                "properties": {
+                    "outer": {
+                        "type": "object",
+                        "properties": {"inner": {"type": "integer"}},
+                        "required": ["inner"],
+                    }
+                },
+                "required": ["outer"],
+                "additionalProperties": False,
+            },
+            {"outer": {}},
+        )
+
+    assert error.value.path == "outer"
+    assert error.value.details == {
+        "validator": "required",
+        "constraint": ["inner"],
+    }
+
+
+def test_payload_validation_reports_additional_properties_constraint() -> None:
+    """An unexpected key must surface the additionalProperties constraint."""
+
+    with pytest.raises(PayloadValidationError) as error:
+        validate_payload(
+            {
+                "type": "object",
+                "properties": {"known": {"type": "integer"}},
+                "required": ["known"],
+                "additionalProperties": False,
+            },
+            {"known": 1, "extra": "x"},
+        )
+
+    assert error.value.details == {
+        "validator": "additionalProperties",
+        "constraint": False,
+    }
+
+
+def test_payload_validation_bounds_large_required_constraint() -> None:
+    """A large required list must be summarized, not copied unbounded."""
+
+    required_keys = [f"key{i}" for i in range(2000)]
+    with pytest.raises(PayloadValidationError) as error:
+        validate_payload(
+            {
+                "type": "object",
+                "properties": {"key0": {"type": "integer"}},
+                "required": required_keys,
+            },
+            {"key0": 1},
+        )
+
+    assert error.value.details["validator"] == "required"
+    constraint = error.value.details["constraint"]
+    assert isinstance(constraint, str)
+    assert len(constraint) <= 1024
+    assert constraint.endswith("...")

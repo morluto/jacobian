@@ -124,6 +124,7 @@ def schema_violation_details(error: JsonSchemaValidationError) -> dict[str, obje
 
     details: dict[str, object] = {"validator": str(error.validator)}
     if error.validator in {
+        "additionalProperties",
         "minimum",
         "exclusiveMinimum",
         "maximum",
@@ -134,6 +135,7 @@ def schema_violation_details(error: JsonSchemaValidationError) -> dict[str, obje
         "maxItems",
         "multipleOf",
         "pattern",
+        "required",
         "enum",
         "const",
         "type",

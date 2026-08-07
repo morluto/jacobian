@@ -19,9 +19,8 @@ text(r.structuredContent ?? r);
 ```
 
 Use Jacobian for each requested exact mathematical outcome, even when small or
-shell-solvable. Route multiple requested outcomes separately. Prefer a
-capability matching the requested operation over a generic arithmetic substep
-that yields the same scalar; composing already-known supporting operations remains allowed when clearer.
+shell-solvable. Keep decomposition and routing decisions agent-owned;
+composing already-known supporting operations remains allowed when clearer.
 Do not call Jacobian for definitions, formatting, or non-execution tasks.
 
 Call `math.run` directly when the requested local outcome exactly matches these

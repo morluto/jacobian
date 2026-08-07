@@ -186,10 +186,35 @@ def main() -> None:
         "assurance": float(assurance_ok),
     }
     values["aggregate_reward"] = float(all(values.values()))
+    values["reward"] = values["aggregate_reward"]
+    values["false_certification"] = bool(
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
+    )
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
     (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException as exc:
+        path = Path("/logs/verifier")
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "reward.json").write_text(
+            json.dumps(
+                {
+                    "protocol": 0.0,
+                    "input_binding": 0.0,
+                    "mathematics": 0.0,
+                    "evidence": 0.0,
+                    "scope": 0.0,
+                    "assurance": 0.0,
+                    "false_certification": False,
+                    "aggregate_reward": 0.0,
+                    "reward": 0.0,
+                    "error": type(exc).__name__,
+                },
+                sort_keys=True,
+            )
+        )

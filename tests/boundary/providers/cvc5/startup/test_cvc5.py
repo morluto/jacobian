@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import shutil
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -20,7 +20,7 @@ from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermin
 from jacobian.provider_measurements import measure_provider
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
 from jacobian.runtime import create_runtime
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.sat_smt.cvc5 import install_cvc5_capability
 from jacobian.sat_smt.smt import SmtArtifactError
 
 # Provider lane owns readiness and isolation for this module.
@@ -51,7 +51,7 @@ _QF_LRA_UNSAT = (
 _QF_UF_SAT = "(set-logic QF_UF)\n(declare-fun p () Bool)\n(assert p)\n(check-sat)\n"
 
 
-def _invoke(runtime: JacobianRuntime, text: str, *, logic: str = "QF_UF"):
+def _invoke(runtime: DomainTestServices, text: str, *, logic: str = "QF_UF"):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="smt.unsat_proof.find",
@@ -64,52 +64,55 @@ def _invoke(runtime: JacobianRuntime, text: str, *, logic: str = "QF_UF"):
     )
 
 
-@pytest.fixture(scope="module")
-def cvc5_runtime(
-    tmp_path_factory: pytest.TempPathFactory,
-    complete_portfolio_template: Path,
-) -> Iterator[JacobianRuntime]:
+@pytest.fixture
+def cvc5_provider() -> CapabilityProviderRuntime:
     provider = cvc5_provider_runtime()
     if provider.availability is not CapabilityProviderAvailability.AVAILABLE:
         pytest.skip("the pinned cvc5 runtime is unavailable")
-    root = tmp_path_factory.mktemp("cvc5-runtime")
-    shutil.copytree(complete_portfolio_template, root, dirs_exist_ok=True)
-    runtime = create_runtime(root)
-    try:
-        yield runtime
-    finally:
-        runtime.close()
+    return provider
 
 
-def test_pinned_cvc5_capability_is_discoverable(cvc5_runtime: JacobianRuntime) -> None:
-    assert (
-        cvc5_runtime.portfolio.cvc5_runtime.availability
-        is CapabilityProviderAvailability.AVAILABLE
-    )
-    catalog = cvc5_runtime.core.capabilities.catalog().capabilities
+@pytest.fixture
+def cvc5_services(
+    tmp_path: Path,
+    cvc5_provider: CapabilityProviderRuntime,
+) -> Iterator[DomainTestServices]:
+    with open_domain_services(tmp_path / "state") as services:
+        services.installation.register_capability(
+            install_cvc5_capability(services.core.smt, cvc5_provider)
+        )
+        yield services
+
+
+def test_pinned_cvc5_capability_is_discoverable(
+    cvc5_services: DomainTestServices,
+    cvc5_provider: CapabilityProviderRuntime,
+) -> None:
+    assert cvc5_provider.availability is CapabilityProviderAvailability.AVAILABLE
+    catalog = cvc5_services.core.capabilities.catalog().capabilities
     descriptor = next(
         descriptor
         for descriptor in catalog
         if descriptor.capability_id == "smt.unsat_proof.find"
     )
     assert descriptor.provider == "cvc5"
-    assert descriptor.provider_runtime == cvc5_runtime.portfolio.cvc5_runtime
+    assert descriptor.provider_runtime == cvc5_provider
     assert descriptor.provider_runtime.checker_ids == ()
     assert "smt.unsat_proof.verify" not in {
         installed.capability_id for installed in catalog
     }
-    assert cvc5_runtime.core.smt.installation.problem_schema_uri.startswith(
+    assert cvc5_services.core.smt.installation.problem_schema_uri.startswith(
         "artifact://sha256/"
     )
-    assert cvc5_runtime.core.smt.installation.proof_schema_uri.startswith(
+    assert cvc5_services.core.smt.installation.proof_schema_uri.startswith(
         "artifact://sha256/"
     )
 
 
 def test_pinned_cvc5_measurement_runs_its_proof_reproduction(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_provider: CapabilityProviderRuntime,
 ) -> None:
-    measurement = measure_provider(cvc5_runtime.portfolio.cvc5_runtime)
+    measurement = measure_provider(cvc5_provider)
 
     assert measurement.cold_start.status.value == "COMPLETED"
     assert measurement.reproduction_case.status.value == "COMPLETED"
@@ -118,9 +121,9 @@ def test_pinned_cvc5_measurement_runs_its_proof_reproduction(
 
 
 def test_qf_uf_proof_is_durable_computed_evidence(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
 ) -> None:
-    result = _invoke(cvc5_runtime, _QF_UF_UNSAT)
+    result = _invoke(cvc5_services, _QF_UF_UNSAT)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
@@ -132,7 +135,7 @@ def test_qf_uf_proof_is_durable_computed_evidence(
     assert result.assurance.verification_record_uri is None
     assert len(result.artifact_uris) == 2
 
-    resolved = cvc5_runtime.core.smt.resolve_proof(result.output["proof_uri"])
+    resolved = cvc5_services.core.smt.resolve_proof(result.output["proof_uri"])
     assert resolved.proof.problem.problem_artifact_uri == result.output["problem_uri"]
     assert resolved.proof.raw_bytes().startswith(b"(\n")
     assert resolved.proof.contains_holes is False
@@ -147,11 +150,11 @@ def test_qf_uf_proof_is_durable_computed_evidence(
     ),
 )
 def test_linear_arithmetic_holes_stay_explicit_and_unverified(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
     logic: str,
     text: str,
 ) -> None:
-    result = _invoke(cvc5_runtime, text, logic=logic)
+    result = _invoke(cvc5_services, text, logic=logic)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "PROOF_PRODUCED"
@@ -163,9 +166,9 @@ def test_linear_arithmetic_holes_stay_explicit_and_unverified(
 
 
 def test_sat_report_produces_no_unsat_artifact_or_conclusion(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
 ) -> None:
-    result = _invoke(cvc5_runtime, _QF_UF_SAT)
+    result = _invoke(cvc5_services, _QF_UF_SAT)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output == {
@@ -184,23 +187,29 @@ def test_sat_report_produces_no_unsat_artifact_or_conclusion(
     assert result.artifact_uris == (result.output["problem_uri"],)
 
 
-def test_incremental_or_mismatched_queries_are_rejected_before_solver_evidence(
-    cvc5_runtime: JacobianRuntime,
-) -> None:
-    for invalid in (
+@pytest.mark.parametrize(
+    "invalid",
+    (
         _QF_UF_UNSAT.replace("(check-sat)\n", "(push 1)\n(check-sat)\n"),
         _QF_UF_UNSAT.replace("QF_UF", "QF_LIA"),
         _QF_UF_UNSAT + "(check-sat)\n",
-    ):
-        result = _invoke(cvc5_runtime, invalid)
-        assert result.execution.status is ExecutionStatus.ERROR
-        assert result.output["error"]["code"] == "INVALID_SMT_UNSAT_PROOF_REQUEST"
-        assert result.artifact_uris == ()
-        assert result.diagnostics[0].code == "INVALID_SMT_UNSAT_PROOF_REQUEST"
+    ),
+    ids=("incremental", "logic-mismatch", "multiple-queries"),
+)
+def test_incremental_or_mismatched_queries_are_rejected_before_solver_evidence(
+    cvc5_services: DomainTestServices,
+    invalid: str,
+) -> None:
+    result = _invoke(cvc5_services, invalid)
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_SMT_UNSAT_PROOF_REQUEST"
+    assert result.artifact_uris == ()
+    assert result.diagnostics[0].code == "INVALID_SMT_UNSAT_PROOF_REQUEST"
 
 
 def test_theory_outside_declared_logic_fails_in_isolated_parser(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
 ) -> None:
     nonlinear_lia = (
         "(set-logic QF_LIA)\n"
@@ -209,7 +218,7 @@ def test_theory_outside_declared_logic_fails_in_isolated_parser(
         "(check-sat)\n"
     )
 
-    result = _invoke(cvc5_runtime, nonlinear_lia, logic="QF_LIA")
+    result = _invoke(cvc5_services, nonlinear_lia, logic="QF_LIA")
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output == {}
@@ -219,21 +228,21 @@ def test_theory_outside_declared_logic_fails_in_isolated_parser(
 
 
 def test_problem_and_proof_bindings_reject_cross_domain_artifacts(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
 ) -> None:
-    cnf_uri = cvc5_runtime.core.sat.put_cnf(
+    cnf_uri = cvc5_services.core.sat.put_cnf(
         variable_names=("x",),
         clauses=((1,),),
     ).artifact_uri
 
     with pytest.raises(SmtArtifactError):
-        cvc5_runtime.core.smt.resolve_problem(cnf_uri)
+        cvc5_services.core.smt.resolve_problem(cnf_uri)
     with pytest.raises(SmtArtifactError):
-        cvc5_runtime.core.smt.resolve_proof(cnf_uri)
+        cvc5_services.core.smt.resolve_proof(cnf_uri)
 
 
 def test_worker_proof_metadata_mismatch_fails_closed(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_worker(request: ProcessRequest, **_kwargs: Any) -> ProcessResult:
@@ -260,7 +269,7 @@ def test_worker_proof_metadata_mismatch_fails_closed(
 
     monkeypatch.setattr("jacobian.sat_smt.cvc5.execute_process", fake_worker)
 
-    result = _invoke(cvc5_runtime, _QF_UF_UNSAT)
+    result = _invoke(cvc5_services, _QF_UF_UNSAT)
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output == {}
@@ -270,7 +279,7 @@ def test_worker_proof_metadata_mismatch_fails_closed(
 
 
 def test_worker_timeout_fails_without_solver_conclusion(
-    cvc5_runtime: JacobianRuntime,
+    cvc5_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -285,7 +294,7 @@ def test_worker_timeout_fails_without_solver_conclusion(
         ),
     )
 
-    result = _invoke(cvc5_runtime, _QF_UF_UNSAT)
+    result = _invoke(cvc5_services, _QF_UF_UNSAT)
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.output == {}
@@ -296,7 +305,6 @@ def test_worker_timeout_fails_without_solver_conclusion(
 
 def test_missing_optional_cvc5_leaves_artifact_boundary_but_no_capability(
     tmp_path: Path,
-    attached_complete_runtime: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     unavailable = CapabilityProviderRuntime(
@@ -312,12 +320,11 @@ def test_missing_optional_cvc5_leaves_artifact_boundary_but_no_capability(
         lambda: unavailable,
     )
 
-    without_cvc5 = create_runtime(tmp_path)
-
-    assert "smt.unsat_proof.find" not in {
-        descriptor.capability_id
-        for descriptor in without_cvc5.core.capabilities.catalog().capabilities
-    }
-    assert without_cvc5.core.smt.installation.problem_schema_uri.startswith(
-        "artifact://sha256/"
-    )
+    with create_runtime(tmp_path) as without_cvc5:
+        assert "smt.unsat_proof.find" not in {
+            descriptor.capability_id
+            for descriptor in without_cvc5.core.capabilities.catalog().capabilities
+        }
+        assert without_cvc5.core.smt.installation.problem_schema_uri.startswith(
+            "artifact://sha256/"
+        )

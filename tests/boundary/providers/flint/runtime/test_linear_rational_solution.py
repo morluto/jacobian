@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -12,6 +11,7 @@ import pytest
 from tests.support.capabilities import invoke_capability as _invoke
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import open_domain_services
+from tests.support.state import copy_template
 
 import jacobian.providers.flint_runtime as flint_runtime
 from jacobian.canonical import canonicalize_json
@@ -194,8 +194,8 @@ def test_verifier_authorization_is_separate_from_provider_availability(
 
     default_root = tmp_path / "default"
     authorized_root = tmp_path / "authorized"
-    shutil.copytree(complete_portfolio_template, default_root)
-    shutil.copytree(complete_portfolio_template, authorized_root)
+    copy_template(complete_portfolio_template, default_root)
+    copy_template(complete_portfolio_template, authorized_root)
     with create_runtime(default_root) as default:
         default_ids = {
             descriptor.capability_id

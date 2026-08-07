@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
 import sqlite3
 from pathlib import Path
 
-import pytest
+from tests.support.state import copy_template
 
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
@@ -31,36 +30,32 @@ def _audit_count(root: Path) -> int:
 
 
 def test_hydrate_authorized_matches_bundled_authority_without_audit(
-    tmp_path_factory: pytest.TempPathFactory,
+    tmp_path: Path,
 ) -> None:
-    seed = tmp_path_factory.mktemp("hydrate-seed")
-    authorized = create_runtime(
+    seed = tmp_path / "seed"
+    with create_runtime(
         seed, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    expected = _verify_ids(authorized)
-    baseline_audit = _audit_count(seed)
-    authorized.close()
+    ) as authorized:
+        expected = _verify_ids(authorized)
+        baseline_audit = _audit_count(seed)
 
-    attached = tmp_path_factory.mktemp("hydrate-attach")
-    shutil.copytree(seed, attached, dirs_exist_ok=True)
-    hydrated = create_runtime(
+    attached = copy_template(seed, tmp_path / "attached")
+    with create_runtime(
         attached, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
-    )
-
-    assert _verify_ids(hydrated) == expected
-    assert _audit_count(attached) == baseline_audit
+    ) as hydrated:
+        assert _verify_ids(hydrated) == expected
+        assert _audit_count(attached) == baseline_audit
 
 
 def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> None:
-    runtime = create_runtime(
+    with create_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
-    )
-
-    assert _audit_count(tmp_path) == 0
-    # Atomic / resource verify surfaces may still appear; domain checkers must not.
-    assert "polynomial.gcd.verify" not in _verify_ids(runtime)
-    assert "sat.model.verify" not in _verify_ids(runtime)
-    assert "matrix.determinant.verify" not in _verify_ids(runtime)
+    ) as runtime:
+        assert _audit_count(tmp_path) == 0
+        # Atomic / resource verify surfaces may still appear; domain checkers must not.
+        assert "polynomial.gcd.verify" not in _verify_ids(runtime)
+        assert "sat.model.verify" not in _verify_ids(runtime)
+        assert "matrix.determinant.verify" not in _verify_ids(runtime)
 
 
 def test_authorized_runtime_hydrates_reference_checkers(

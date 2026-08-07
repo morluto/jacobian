@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+import pytest
+from tests.support.state import copy_template
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -15,14 +19,22 @@ from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
 
-def test_graph_counterexample_shrink_records_verified_steps_and_exact_local_scope(
+@pytest.fixture
+def redundant_odd_cycle_runtime(
     tmp_path: Path,
     authorized_portfolio_template: Path,
-) -> None:
-    runtime, graph_uri = _runtime_with_redundant_odd_cycle(
+) -> Iterator[tuple[JacobianRuntime, str]]:
+    with _open_runtime_with_redundant_odd_cycle(
         tmp_path,
         template=authorized_portfolio_template,
-    )
+    ) as opened:
+        yield opened
+
+
+def test_graph_counterexample_shrink_records_verified_steps_and_exact_local_scope(
+    redundant_odd_cycle_runtime: tuple[JacobianRuntime, str],
+) -> None:
+    runtime, graph_uri = redundant_odd_cycle_runtime
 
     result = _shrink(runtime, graph_uri)
 
@@ -69,12 +81,9 @@ def test_graph_counterexample_shrink_records_verified_steps_and_exact_local_scop
 
 
 def test_graph_counterexample_shrink_budget_reports_only_tested_scope(
-    tmp_path: Path,
-    authorized_portfolio_template: Path,
+    redundant_odd_cycle_runtime: tuple[JacobianRuntime, str],
 ) -> None:
-    runtime, graph_uri = _runtime_with_redundant_odd_cycle(
-        tmp_path, template=authorized_portfolio_template
-    )
+    runtime, graph_uri = redundant_odd_cycle_runtime
 
     result = _shrink(runtime, graph_uri, evaluation_budget=2)
 
@@ -86,12 +95,9 @@ def test_graph_counterexample_shrink_budget_reports_only_tested_scope(
 
 
 def test_graph_counterexample_shrink_timeout_returns_incumbent_without_minimality(
-    tmp_path: Path,
-    authorized_portfolio_template: Path,
+    redundant_odd_cycle_runtime: tuple[JacobianRuntime, str],
 ) -> None:
-    runtime, graph_uri = _runtime_with_redundant_odd_cycle(
-        tmp_path, template=authorized_portfolio_template
-    )
+    runtime, graph_uri = redundant_odd_cycle_runtime
     runtime.services.shrinking.executor = _TimeoutExecutor()  # type: ignore[assignment]
 
     result = _shrink(runtime, graph_uri)
@@ -104,12 +110,9 @@ def test_graph_counterexample_shrink_timeout_returns_incumbent_without_minimalit
 
 
 def test_graph_counterexample_shrink_requires_compatible_registered_checker(
-    tmp_path: Path,
-    authorized_portfolio_template: Path,
+    redundant_odd_cycle_runtime: tuple[JacobianRuntime, str],
 ) -> None:
-    runtime, graph_uri = _runtime_with_redundant_odd_cycle(
-        tmp_path, template=authorized_portfolio_template
-    )
+    runtime, graph_uri = redundant_odd_cycle_runtime
     incompatible = runtime.portfolio.graph.degree_sequence_checker_id
     assert incompatible is not None
 
@@ -131,12 +134,9 @@ def test_graph_counterexample_shrink_requires_compatible_registered_checker(
 
 
 def test_graph_counterexample_shrink_fails_closed_on_tampered_graph(
-    tmp_path: Path,
-    authorized_portfolio_template: Path,
+    redundant_odd_cycle_runtime: tuple[JacobianRuntime, str],
 ) -> None:
-    runtime, graph_uri = _runtime_with_redundant_odd_cycle(
-        tmp_path, template=authorized_portfolio_template
-    )
+    runtime, graph_uri = redundant_odd_cycle_runtime
     graph = runtime.core.store.get(graph_uri)
     runtime.core.store._blob_path(graph.manifest.payload_digest).write_bytes(
         b"tampered"
@@ -150,12 +150,9 @@ def test_graph_counterexample_shrink_fails_closed_on_tampered_graph(
 
 
 def test_graph_counterexample_shrink_rejects_unrelated_reducer_edits(
-    tmp_path: Path,
-    authorized_portfolio_template: Path,
+    redundant_odd_cycle_runtime: tuple[JacobianRuntime, str],
 ) -> None:
-    runtime, graph_uri = _runtime_with_redundant_odd_cycle(
-        tmp_path, template=authorized_portfolio_template
-    )
+    runtime, graph_uri = redundant_odd_cycle_runtime
     runtime.services.shrinking.executor = _UnrelatedEditExecutor()  # type: ignore[assignment]
 
     result = _shrink(runtime, graph_uri)
@@ -172,31 +169,33 @@ def test_graph_counterexample_shrink_order_is_deterministic(
 ) -> None:
     first_root = tmp_path / "first"
     second_root = tmp_path / "second"
-    first, first_graph = _runtime_with_redundant_odd_cycle(
-        first_root, template=authorized_portfolio_template
-    )
-    second, second_graph = _runtime_with_redundant_odd_cycle(
-        second_root, template=authorized_portfolio_template
-    )
+    with (
+        _open_runtime_with_redundant_odd_cycle(
+            first_root, template=authorized_portfolio_template
+        ) as (first, first_graph),
+        _open_runtime_with_redundant_odd_cycle(
+            second_root, template=authorized_portfolio_template
+        ) as (second, second_graph),
+    ):
+        first_result = _shrink(first, first_graph)
+        second_result = _shrink(second, second_graph)
 
-    first_result = _shrink(first, first_graph)
-    second_result = _shrink(second, second_graph)
+        def signature(output: dict[str, Any]) -> list[tuple[Any, ...]]:
+            return [
+                (
+                    attempt["reducer"],
+                    attempt["deleted_vertex"],
+                    attempt["deleted_edge"],
+                    attempt["outcome"],
+                )
+                for attempt in output["attempts"]
+            ]
 
-    def signature(output: dict[str, Any]) -> list[tuple[Any, ...]]:
-        return [
-            (
-                attempt["reducer"],
-                attempt["deleted_vertex"],
-                attempt["deleted_edge"],
-                attempt["outcome"],
-            )
-            for attempt in output["attempts"]
-        ]
-
-    assert signature(first_result.output) == signature(second_result.output)
-    assert first.core.store.get(first_result.output["final_graph_uri"]).payload == (
-        second.core.store.get(second_result.output["final_graph_uri"]).payload
-    )
+        assert signature(first_result.output) == signature(second_result.output)
+        assert (
+            first.core.store.get(first_result.output["final_graph_uri"]).payload
+            == second.core.store.get(second_result.output["final_graph_uri"]).payload
+        )
 
 
 class _TimeoutExecutor:
@@ -239,27 +238,27 @@ class _UnrelatedEditExecutor:
         )
 
 
-def _runtime_with_redundant_odd_cycle(
+@contextmanager
+def _open_runtime_with_redundant_odd_cycle(
     root: Path,
     *,
     template: Path,
-) -> tuple[JacobianRuntime, str]:
-    root.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(template, root, dirs_exist_ok=True)
-    runtime = create_runtime(
+) -> Iterator[tuple[JacobianRuntime, str]]:
+    root = copy_template(template, root / "state")
+    with create_runtime(
         root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    graph = runtime.core.artifacts.put(
-        schema_uri=runtime.portfolio.graph.graph_schema_uri,
-        semantics_uri=runtime.portfolio.graph.semantics_uri,
-        payload={
-            "graph_schema_version": "1",
-            "vertices": ["a", "b", "c", "d"],
-            "edges": [["a", "b"], ["a", "c"], ["b", "c"], ["c", "d"]],
-        },
-        summary="non-bipartite graph with one redundant leaf",
-    )
-    return runtime, graph.artifact_uri
+    ) as runtime:
+        graph = runtime.core.artifacts.put(
+            schema_uri=runtime.portfolio.graph.graph_schema_uri,
+            semantics_uri=runtime.portfolio.graph.semantics_uri,
+            payload={
+                "graph_schema_version": "1",
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [["a", "b"], ["a", "c"], ["b", "c"], ["c", "d"]],
+            },
+            summary="non-bipartite graph with one redundant leaf",
+        )
+        yield runtime, graph.artifact_uri
 
 
 def _shrink(

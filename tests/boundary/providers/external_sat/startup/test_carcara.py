@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import shutil
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -13,41 +14,51 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import SmtResourceBudget
-from jacobian.providers.external_solver_runtime import carcara_provider_runtime
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.runtime.model import JacobianRuntime
-
-_FIXTURES = (
-    Path(__file__).resolve().parents[5]
-    / "tests"
-    / "boundary"
-    / "providers"
-    / "external_sat"
-    / "fixtures"
+from jacobian.providers.external_solver_runtime import (
+    carcara_provider_runtime,
+    cvc5_provider_runtime,
 )
+from jacobian.runtime.config import CheckerAuthorityMode
+from jacobian.sat_smt.cvc5 import install_cvc5_capability
+from jacobian.sat_smt.smt_capabilities import install_smt_unsat_proof_checker
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
-@pytest.fixture(scope="module")
-def carcara_runtime(
-    tmp_path_factory: pytest.TempPathFactory,
-    authorized_portfolio_template: Path,
-) -> JacobianRuntime:
-    runtime = carcara_provider_runtime()
-    if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
+@pytest.fixture
+def carcara_services(
+    tmp_path: Path,
+) -> Iterator[DomainTestServices]:
+    carcara = carcara_provider_runtime()
+    if carcara.availability is not CapabilityProviderAvailability.AVAILABLE:
         pytest.skip("the exact operator-provenanced Carcara runtime is unavailable")
-    root = tmp_path_factory.mktemp("carcara-runtime")
-    shutil.copytree(authorized_portfolio_template, root, dirs_exist_ok=True)
-    installed = create_runtime(
-        root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert installed.portfolio.carcara_runtime == runtime
-    try:
-        yield installed
-    finally:
-        installed.close()
+    cvc5 = cvc5_provider_runtime()
+    if cvc5.availability is not CapabilityProviderAvailability.AVAILABLE:
+        pytest.skip("the pinned cvc5 runtime is unavailable")
+    with open_domain_services(
+        tmp_path / "state",
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as services:
+        services.installation.register_capability(
+            install_cvc5_capability(services.core.smt, cvc5)
+        )
+        verifier, installation = install_smt_unsat_proof_checker(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+            services.core.smt,
+            services.application.verification,
+            services.core.checkers,
+            carcara,
+            authorize_checker=services.installation.authorizes_bundled_checkers,
+        )
+        assert verifier is not None
+        assert installation.checker_id is not None
+        services.installation.register_capability(verifier)
+        yield services
 
 
-def _produce(runtime: JacobianRuntime, logic: str, fixture: str):
+def _produce(runtime: DomainTestServices, logic: str, fixture: str):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="smt.unsat_proof.find",
@@ -60,7 +71,7 @@ def _produce(runtime: JacobianRuntime, logic: str, fixture: str):
     )
 
 
-def _verify(runtime: JacobianRuntime, proof_uri: str):
+def _verify(runtime: DomainTestServices, proof_uri: str):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="smt.unsat_proof.verify",
@@ -71,13 +82,13 @@ def _verify(runtime: JacobianRuntime, proof_uri: str):
 
 
 def test_zero_hole_qf_uf_proof_is_independently_verified(
-    carcara_runtime: JacobianRuntime,
+    carcara_services: DomainTestServices,
 ) -> None:
-    produced = _produce(carcara_runtime, "QF_UF", "qf_uf_equality_unsat.smt2")
+    produced = _produce(carcara_services, "QF_UF", "qf_uf_equality_unsat.smt2")
 
     assert produced.output["contains_holes"] is False
     assert produced.output["conclusion"] == "UNKNOWN"
-    verified = _verify(carcara_runtime, produced.output["proof_uri"])
+    verified = _verify(carcara_services, produced.output["proof_uri"])
 
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED_UNSAT"
@@ -94,15 +105,15 @@ def test_zero_hole_qf_uf_proof_is_independently_verified(
     ),
 )
 def test_holey_arithmetic_proofs_remain_unverified(
-    carcara_runtime: JacobianRuntime,
+    carcara_services: DomainTestServices,
     logic: str,
     fixture: str,
 ) -> None:
-    produced = _produce(carcara_runtime, logic, fixture)
+    produced = _produce(carcara_services, logic, fixture)
 
     assert produced.output["contains_holes"] is True
     assert produced.output["alethe_hole_count"] >= 1
-    checked = _verify(carcara_runtime, produced.output["proof_uri"])
+    checked = _verify(carcara_services, produced.output["proof_uri"])
 
     assert checked.execution.status is ExecutionStatus.COMPLETED
     assert checked.output["status"] == "REJECTED"
@@ -112,22 +123,22 @@ def test_holey_arithmetic_proofs_remain_unverified(
 
 
 def test_unknown_rule_is_not_silently_treated_as_verified(
-    carcara_runtime: JacobianRuntime,
+    carcara_services: DomainTestServices,
 ) -> None:
-    produced = _produce(carcara_runtime, "QF_UF", "qf_uf_equality_unsat.smt2")
-    resolved = carcara_runtime.core.smt.resolve_proof(produced.output["proof_uri"])
+    produced = _produce(carcara_services, "QF_UF", "qf_uf_equality_unsat.smt2")
+    resolved = carcara_services.core.smt.resolve_proof(produced.output["proof_uri"])
     unknown_rule = resolved.proof.raw_bytes().replace(
         b":rule resolution",
         b":rule jacobian_unknown_rule",
     )
-    mutated = carcara_runtime.core.smt.put_proof(
+    mutated = carcara_services.core.smt.put_proof(
         problem_uri=produced.output["problem_uri"],
         proof=unknown_rule,
-        producer=carcara_runtime.portfolio.cvc5_runtime,
+        producer=resolved.proof.producer,
         resource_budget=SmtResourceBudget(wall_seconds=5),
     )
 
-    checked = _verify(carcara_runtime, mutated.artifact_uri)
+    checked = _verify(carcara_services, mutated.artifact_uri)
 
     assert checked.execution.status is ExecutionStatus.COMPLETED
     assert checked.output["status"] == "REJECTED"

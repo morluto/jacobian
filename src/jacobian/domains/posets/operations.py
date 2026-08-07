@@ -330,6 +330,7 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
         tags=(
             "poset",
             "partial-order",
+            "partially-ordered-set",
             "hasse-diagram",
             "transitive-closure",
             "exact",

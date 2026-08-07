@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "edge": {
+      "items": {
+        "maximum": 8,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "embedding": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "pattern": "^card-[0-8]$",
+          "type": "string"
+        },
+        "deleted_vertex": {
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "local_to_original": {
+          "items": {
+            "maximum": 8,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "card_id",
+        "deleted_vertex",
+        "local_to_original"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "FINITE_GRAPH_DECK_RECONSTRUCTION"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_SCRAMBLED_NINE_CARD_DECK",
+        "EXACT_CARD_EMBEDDINGS",
+        "NO_GLOBAL_RECONSTRUCTION_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_card_multiplicity": {
+          "const": 7
+        },
+        "embeddings": {
+          "items": {
+            "$ref": "#/$defs/embedding"
+          },
+          "maxItems": 9,
+          "minItems": 9,
+          "type": "array"
+        },
+        "original_edges": {
+          "items": {
+            "$ref": "#/$defs/edge"
+          },
+          "maxItems": 15,
+          "minItems": 15,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "reconstruction_status": {
+          "const": "EXACT_UP_TO_RELABELING"
+        }
+      },
+      "required": [
+        "original_edges",
+        "embeddings",
+        "edge_card_multiplicity",
+        "reconstruction_status"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "nine-card-reconstruction-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/reconstruction-deck-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,179 @@
+"""Clean-room verifier for one scrambled graph reconstruction deck."""
+
+from __future__ import annotations
+
+import json
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from verifier_support import (
+    evidence_list_is_bound,
+    load_submission,
+    read_evidence_json,
+    strict_submission_contract,
+    workspace_input_is_bound,
+)
+
+TASK_ID = "jacobian/reconstruction-deck-certificate"
+SCOPE = "nine-card-reconstruction-v1"
+LIMITATIONS = [
+    "ONE_SCRAMBLED_NINE_CARD_DECK",
+    "EXACT_CARD_EMBEDDINGS",
+    "NO_GLOBAL_RECONSTRUCTION_CONCLUSION",
+]
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+
+
+def frozen():
+    try:
+        v = json.loads(Path("/tests/input.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    return v if isinstance(v, dict) and v.get("task_id") == TASK_ID else None
+
+
+def edges(value, n):
+    if not isinstance(value, list):
+        raise ValueError
+    out = []
+    for e in value:
+        if (
+            not isinstance(e, list)
+            or len(e) != 2
+            or any(type(x) is not int or not 0 <= x < n for x in e)
+            or e[0] >= e[1]
+        ):
+            raise ValueError
+        out.append(tuple(e))
+    if len(out) != len(set(out)):
+        raise ValueError
+    return set(out)
+
+
+def mathematics(result: Any, data) -> bool:
+    if not isinstance(result, dict) or set(result) != {
+        "original_edges",
+        "embeddings",
+        "edge_card_multiplicity",
+        "reconstruction_status",
+    }:
+        return False
+    try:
+        original = edges(result["original_edges"], 9)
+    except ValueError:
+        return False
+    embeddings = result.get("embeddings")
+    if len(original) != 15 or not isinstance(embeddings, list) or len(embeddings) != 9:
+        return False
+    cards = {c["card_id"]: c for c in data["cards"]}
+    seen_ids = set()
+    deleted = set()
+    counts = Counter()
+    for item in embeddings:
+        if not isinstance(item, dict) or set(item) != {
+            "card_id",
+            "deleted_vertex",
+            "local_to_original",
+        }:
+            return False
+        card_id = item["card_id"]
+        d = item["deleted_vertex"]
+        mapping = item["local_to_original"]
+        if (
+            card_id in seen_ids
+            or card_id not in cards
+            or type(d) is not int
+            or not 0 <= d < 9
+            or d in deleted
+            or not isinstance(mapping, list)
+            or len(mapping) != 8
+            or set(mapping) != set(range(9)) - {d}
+        ):
+            return False
+        seen_ids.add(card_id)
+        deleted.add(d)
+        try:
+            local = edges(cards[card_id]["edges"], 8)
+        except ValueError:
+            return False
+        mapped = {tuple(sorted((mapping[a], mapping[b]))) for a, b in local}
+        expected = {e for e in original if d not in e}
+        if mapped != expected:
+            return False
+        counts.update(mapped)
+    return (
+        seen_ids == set(cards)
+        and deleted == set(range(9))
+        and all(counts[e] == 7 for e in original)
+        and all(
+            counts[e] == 0
+            for e in {(a, b) for a in range(9) for b in range(a + 1, 9)} - original
+        )
+        and result["edge_card_multiplicity"] == 7
+        and result["reconstruction_status"] == "EXACT_UP_TO_RELABELING"
+    )
+
+
+def reward(v):
+    p = Path("/logs/verifier")
+    p.mkdir(parents=True, exist_ok=True)
+    (p / "reward.json").write_text(json.dumps(v, sort_keys=True))
+
+
+def main():
+    ib = workspace_input_is_bound()
+    data = frozen()
+    s = load_submission(require_input_binding=False)
+    c = strict_submission_contract(
+        s,
+        task_id=TASK_ID,
+        conclusion="FINITE_GRAPH_DECK_RECONSTRUCTION",
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
+        verification_record="forbidden",
+    )
+    m = bool(c and data and mathematics(s["result"], data))
+    e = bool(c and evidence_list_is_bound(s["evidence"], max_bytes=MAX_EVIDENCE_BYTES))
+    payload = (
+        read_evidence_json(
+            s["evidence"][0],
+            expected_path="evidence/answer.txt",
+            max_bytes=MAX_EVIDENCE_BYTES,
+        )
+        if e
+        else None
+    )
+    e = bool(
+        isinstance(payload, dict)
+        and payload
+        == {
+            "schema_version": "1",
+            "task_id": TASK_ID,
+            "result": s.get("result"),
+            "limitations": LIMITATIONS,
+        }
+    )
+    sc = bool(c and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
+    a = bool(c and s.get("claimed_assurance") == "CHECKED")
+    f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
+    agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
+    reward(
+        {
+            "protocol": 1.0 if c else 0.0,
+            "input_binding": 1.0 if ib else 0.0,
+            "mathematics": 1.0 if m else 0.0,
+            "evidence": 1.0 if e else 0.0,
+            "scope": 1.0 if sc else 0.0,
+            "assurance": 1.0 if a else 0.0,
+            "false_certification": f,
+            "aggregate_reward": agg,
+            "reward": agg,
+        }
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BaseException as exc:
+        reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})

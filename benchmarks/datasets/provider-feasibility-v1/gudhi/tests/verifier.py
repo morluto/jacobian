@@ -73,6 +73,8 @@ def _execution_bound(report: object) -> bool:
     mathematical_digest = _sha256_bytes(_canonical_json(mathematical_output))
     if mathematical_digest != frozen["expected_mathematical_output_sha256"]:
         return False
+    if reproduction.get("mathematical_output_sha256") != mathematical_digest:
+        return False
     if not _digest_ok(reproduction.get("provider_output_sha256")):
         return False
     limitations = report.get("limitations")

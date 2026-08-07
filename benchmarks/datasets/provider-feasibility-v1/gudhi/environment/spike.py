@@ -607,6 +607,10 @@ def run_spike(
             timeout_seconds=timeout_seconds,
         )
         provider_output = _parse_provider_output(output, pin)
+        mathematical_output = {
+            key: value for key, value in provider_output.items() if key != "runtime"
+        }
+        mathematical_digest = _sha256_bytes(_canonical_json(mathematical_output))
         prime = pin["reproduction"]["coefficient_prime"]
         independent = _independent_reduction(simplices, prime)
         if independent["pairs"] != provider_output["pairs"]:
@@ -638,6 +642,7 @@ def run_spike(
                 "rank_transport": "UNIQUE_INTEGER_RANKS_NOT_EXACT_VALUES",
                 "exact_value_source": "FROZEN_CANONICAL_INPUT",
                 "provider_output_sha256": _sha256_bytes(output),
+                "mathematical_output_sha256": mathematical_digest,
                 "pairs": provider_output["pairs"],
                 "filtration": provider_output["filtration"],
             },

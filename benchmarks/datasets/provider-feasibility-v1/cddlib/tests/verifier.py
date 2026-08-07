@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -14,6 +15,17 @@ if isinstance(submission, dict) and isinstance(submission.get("evidence"), list)
         expected_path="evidence/provider-report.json",
     )
 result = submission.get("result") if isinstance(submission, dict) else None
+
+
+def _canonical_json(payload: object) -> bytes:
+    return (
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        + "\n"
+    ).encode("ascii")
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 def _execution_bound(report: object) -> bool:
@@ -31,20 +43,45 @@ def _execution_bound(report: object) -> bool:
         return False
     provider = report.get("provider")
     reproduction = report.get("reproduction")
+    frozen = expected["reproduction"]
     if not isinstance(provider, dict) or not isinstance(reproduction, dict):
         return False
+    if not isinstance(frozen, dict):
+        return False
+    if reproduction.get("scope") != frozen["scope"]:
+        return False
     runtime = provider.get("runtime")
-    if not isinstance(runtime, dict) or not runtime:
+    versions = provider.get("versions")
+    if (
+        not isinstance(runtime, dict)
+        or not runtime
+        or versions != frozen["mathematical_output"]["versions"]
+    ):
+        return False
+    exact_arithmetic = reproduction.get("exact_arithmetic")
+    if not isinstance(exact_arithmetic, dict):
+        return False
+    if exact_arithmetic.get("large_fraction_input") != frozen["exact_arithmetic_probe"]:
+        return False
+    if (
+        exact_arithmetic.get("large_fraction_output")
+        != frozen["exact_arithmetic_probe"]
+    ):
         return False
     cases = reproduction.get("cases")
-    if not isinstance(cases, list) or not cases:
+    if cases != frozen["mathematical_output"]["cases"]:
         return False
-    output_digest = reproduction.get("provider_output_sha256")
-    if not (
-        isinstance(output_digest, str)
-        and output_digest.startswith("sha256:")
-        and len(output_digest) == 71
-    ):
+    mathematical_output = {
+        "contract": expected["contract"],
+        "provider": expected["provider"],
+        "versions": versions,
+        "exact_arithmetic": exact_arithmetic,
+        "cases": cases,
+    }
+    if mathematical_output != frozen["mathematical_output"]:
+        return False
+    mathematical_digest = _sha256_bytes(_canonical_json(mathematical_output))
+    if mathematical_digest != frozen["expected_mathematical_output_sha256"]:
         return False
     limitations = report.get("limitations")
     if not isinstance(limitations, list) or not limitations:

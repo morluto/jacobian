@@ -78,6 +78,21 @@ backend-native values and call typed mathematical kernels directly; they must
 not invoke `math.run`, construct a capability runtime, or expose MCP,
 artifact, provider-loading, or installation objects.
 
+### Mathematical interoperability
+
+Capabilities interoperate through shared, typed domain values and artifacts—not
+backend-specific objects, JSON round-trips, or wire encodings. Reuse existing
+contract models and typed kernels; add explicit domain-owned conversions when
+representations differ. Cover producer-to-consumer compatibility and canonical
+or backend-native round trips in tests. Architecture checks must reject internal
+JSON round-trips and unsafe canonical conversions.
+
+Canonical decimal strings are wire and persistence values, not computational
+values. Use the canonical conversion API before calling backends or constructing
+results. Do not directly apply `int()` or `str()` to canonical components or
+change `sys.set_int_max_str_digits()` as a workaround. Keep backend coercion in
+thin adapters, and test above 4,300 digits whenever the contract permits it.
+
 Keep Pydantic models authoritative at capability, persistence, artifact, and
 wire boundaries. Domain implementations and operation factories must preserve
 their concrete request, result, and obligation types: do not accept

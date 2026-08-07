@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -75,7 +77,7 @@ def mathematics(r: Any) -> bool:
     if (
         not isinstance(coeffs, list)
         or len(coeffs) != 10
-        or any(type(c) is not int or not -20 <= c <= 20 for c in coeffs)
+        or any(not isinstance(c, (int, float)) or c != int(c) or not -20 <= c <= 20 for c in coeffs)
         or not any(coeffs)
         or gcd(*coeffs) != 1
         or not isinstance(checks, list)
@@ -121,8 +123,11 @@ def reward(v):
 
 def _raw_submission() -> dict[str, Any] | None:
     """Read raw submission JSON before strict validation for false-certification detection."""
+    path = Path("/app/submission.json")
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
     try:
-        value = json.loads(Path("/app/submission.json").read_text())
+        value = json.loads(path.read_text())
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None

@@ -284,7 +284,10 @@ def _relation_set(poset: dict[str, Any]) -> set[tuple[str, str]]:
 
 
 def _replay_width(source: dict[str, Any], result: dict[str, Any]) -> bool:
-    if set(source) != {"poset"}:
+    if set(source) - {"poset", "poset_artifact_uri"}:
+        return False
+    if source.get("poset") is None or source.get("poset_artifact_uri") is not None:
+        # Independent width replay requires an inline finite poset claim.
         return False
     poset = _parse_poset(source["poset"])
     result = _result_with_meta(

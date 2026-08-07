@@ -65,6 +65,58 @@ def _decode_base64(value: str) -> bytes:
         raise ValueError("proof bytes must use valid canonical base64") from exc
 
 
+def _scan_smtlib_string_literal(
+    text: str, index: int, length: int, tokens: list[str]
+) -> int:
+    start = index
+    index += 1
+    while index < length:
+        if text[index] != '"':
+            index += 1
+            continue
+        if index + 1 < length and text[index + 1] == '"':
+            index += 2
+            continue
+        index += 1
+        tokens.append(text[start:index])
+        break
+    else:
+        raise ValueError("SMT-LIB input contains an unterminated string")
+    return index
+
+
+def _scan_smtlib_quoted_symbol(
+    text: str, index: int, length: int, tokens: list[str]
+) -> int:
+    start = index
+    index += 1
+    while index < length and text[index] != "|":
+        if text[index] == "\\":
+            raise ValueError(
+                "SMT-LIB quoted symbols in this profile cannot contain backslash"
+            )
+        index += 1
+    if index >= length:
+        raise ValueError("SMT-LIB input contains an unterminated quoted symbol")
+    index += 1
+    tokens.append(text[start:index])
+    return index
+
+
+def _scan_smtlib_simple_token(
+    text: str, index: int, length: int, tokens: list[str]
+) -> int:
+    start = index
+    while index < length and not text[index].isspace() and text[index] not in "();":
+        if text[index] in '"|':
+            raise ValueError("SMT-LIB token contains an unexpected quote")
+        index += 1
+    if start == index:
+        raise ValueError("SMT-LIB input contains an invalid token")
+    tokens.append(text[start:index])
+    return index
+
+
 def _smtlib_tokens(text: str) -> tuple[str, ...]:
     tokens: list[str] = []
     index = 0
@@ -83,44 +135,41 @@ def _smtlib_tokens(text: str) -> tuple[str, ...]:
             index += 1
             continue
         if character == '"':
-            start = index
-            index += 1
-            while index < length:
-                if text[index] != '"':
-                    index += 1
-                    continue
-                if index + 1 < length and text[index + 1] == '"':
-                    index += 2
-                    continue
-                index += 1
-                tokens.append(text[start:index])
-                break
-            else:
-                raise ValueError("SMT-LIB input contains an unterminated string")
+            index = _scan_smtlib_string_literal(text, index, length, tokens)
             continue
         if character == "|":
-            start = index
-            index += 1
-            while index < length and text[index] != "|":
-                if text[index] == "\\":
-                    raise ValueError(
-                        "SMT-LIB quoted symbols in this profile cannot contain backslash"
-                    )
-                index += 1
-            if index >= length:
-                raise ValueError("SMT-LIB input contains an unterminated quoted symbol")
-            index += 1
-            tokens.append(text[start:index])
+            index = _scan_smtlib_quoted_symbol(text, index, length, tokens)
             continue
-        start = index
-        while index < length and not text[index].isspace() and text[index] not in "();":
-            if text[index] in '"|':
-                raise ValueError("SMT-LIB token contains an unexpected quote")
-            index += 1
-        if start == index:
-            raise ValueError("SMT-LIB input contains an invalid token")
-        tokens.append(text[start:index])
+        index = _scan_smtlib_simple_token(text, index, length, tokens)
     return tuple(tokens)
+
+
+def _open_smtlib_command(
+    depth: int, direct_atoms: list[str] | None
+) -> tuple[int, list[str] | None]:
+    if depth == 0:
+        direct_atoms = []
+    depth += 1
+    if depth > 512:
+        raise ValueError("SMT-LIB input exceeds the profile nesting limit")
+    return depth, direct_atoms
+
+
+def _close_smtlib_command(
+    depth: int,
+    direct_atoms: list[str] | None,
+    commands: list[tuple[str, ...]],
+) -> tuple[int, list[str] | None]:
+    if depth == 0:
+        raise ValueError("SMT-LIB input contains an unmatched closing parenthesis")
+    if depth == 1:
+        assert direct_atoms is not None
+        if not direct_atoms:
+            raise ValueError("SMT-LIB top-level command cannot be empty")
+        commands.append(tuple(direct_atoms))
+        direct_atoms = None
+    depth -= 1
+    return depth, direct_atoms
 
 
 def _top_level_commands(text: str) -> tuple[tuple[str, ...], ...]:
@@ -129,24 +178,10 @@ def _top_level_commands(text: str) -> tuple[tuple[str, ...], ...]:
     depth = 0
     for token in _smtlib_tokens(text):
         if token == "(":
-            if depth == 0:
-                direct_atoms = []
-            depth += 1
-            if depth > 512:
-                raise ValueError("SMT-LIB input exceeds the profile nesting limit")
+            depth, direct_atoms = _open_smtlib_command(depth, direct_atoms)
             continue
         if token == ")":
-            if depth == 0:
-                raise ValueError(
-                    "SMT-LIB input contains an unmatched closing parenthesis"
-                )
-            if depth == 1:
-                assert direct_atoms is not None
-                if not direct_atoms:
-                    raise ValueError("SMT-LIB top-level command cannot be empty")
-                commands.append(tuple(direct_atoms))
-                direct_atoms = None
-            depth -= 1
+            depth, direct_atoms = _close_smtlib_command(depth, direct_atoms, commands)
             continue
         if depth == 0:
             raise ValueError("SMT-LIB input must contain only top-level commands")

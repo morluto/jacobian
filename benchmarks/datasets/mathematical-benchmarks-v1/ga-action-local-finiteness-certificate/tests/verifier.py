@@ -261,25 +261,9 @@ def _st_sum(polys):
     return result
 
 
-def _certificate_valid(result: object, source: dict) -> bool:
-    if not isinstance(result, dict) or set(result) != {
-        "basis",
-        "f_coordinates",
-        "action_matrix",
-    }:
-        return False
-    if (
-        source.get("required_basis_dimension") != DIMENSION
-        or source.get("coefficient_domain") != "QQ"
-    ):
-        return False
-    basis_raw, coordinates_raw, matrix_raw = (
-        result["basis"],
-        result["f_coordinates"],
-        result["action_matrix"],
-    )
+def _basis_and_coordinates_ok(basis_raw, coordinates_raw):
     if not isinstance(basis_raw, list) or len(basis_raw) != DIMENSION:
-        return False
+        return None
     basis = [_xy_poly(poly) for poly in basis_raw]
     coordinates = (
         [_rational(value) for value in coordinates_raw]
@@ -291,35 +275,26 @@ def _certificate_valid(result: object, source: dict) -> bool:
         or len(coordinates) != DIMENSION
         or any(value is None for value in coordinates)
     ):
-        return False
+        return None
     basis = [poly for poly in basis if poly is not None]
     coordinates = [value for value in coordinates if value is not None]
-    columns = [_vector(poly) for poly in basis]
-    coefficient_matrix = [
-        [columns[column][row] for column in range(DIMENSION)]
-        for row in range(DIMENSION)
-    ]
-    if _rank(coefficient_matrix) != DIMENSION:
-        return False
-    frozen = _xy_poly(source.get("f"))
-    if frozen is None:
-        return False
-    reconstructed = [
-        sum(coordinates[j] * columns[j][i] for j in range(DIMENSION))
-        for i in range(DIMENSION)
-    ]
-    if reconstructed != _vector(frozen):
-        return False
+    return basis, coordinates
+
+
+def _action_matrix_ok(matrix_raw):
     if (
         not isinstance(matrix_raw, list)
         or len(matrix_raw) != DIMENSION
         or any(not isinstance(row, list) or len(row) != DIMENSION for row in matrix_raw)
     ):
-        return False
+        return None
     matrix = [[_t_poly(entry) for entry in row] for row in matrix_raw]
     if any(entry is None for row in matrix for entry in row):
-        return False
-    matrix = [[entry for entry in row if entry is not None] for row in matrix]
+        return None
+    return [[entry for entry in row if entry is not None] for row in matrix]
+
+
+def _action_law_ok(basis, matrix):
     if any(
         _action(basis[j]) != _represented_column(basis, matrix, j)
         for j in range(DIMENSION)
@@ -340,6 +315,46 @@ def _certificate_valid(result: object, source: dict) -> bool:
             if left != right:
                 return False
     return True
+
+
+def _certificate_valid(result: object, source: dict) -> bool:
+    if not isinstance(result, dict) or set(result) != {
+        "basis",
+        "f_coordinates",
+        "action_matrix",
+    }:
+        return False
+    if (
+        source.get("required_basis_dimension") != DIMENSION
+        or source.get("coefficient_domain") != "QQ"
+    ):
+        return False
+    basis_and_coords = _basis_and_coordinates_ok(
+        result["basis"], result["f_coordinates"]
+    )
+    if basis_and_coords is None:
+        return False
+    basis, coordinates = basis_and_coords
+    columns = [_vector(poly) for poly in basis]
+    coefficient_matrix = [
+        [columns[column][row] for column in range(DIMENSION)]
+        for row in range(DIMENSION)
+    ]
+    if _rank(coefficient_matrix) != DIMENSION:
+        return False
+    frozen = _xy_poly(source.get("f"))
+    if frozen is None:
+        return False
+    reconstructed = [
+        sum(coordinates[j] * columns[j][i] for j in range(DIMENSION))
+        for i in range(DIMENSION)
+    ]
+    if reconstructed != _vector(frozen):
+        return False
+    matrix = _action_matrix_ok(result["action_matrix"])
+    if matrix is None:
+        return False
+    return _action_law_ok(basis, matrix)
 
 
 def _evidence_valid(evidence: object) -> bool:

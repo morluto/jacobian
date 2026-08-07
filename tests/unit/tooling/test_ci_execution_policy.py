@@ -47,10 +47,12 @@ def test_makefile_changes_do_not_route_to_unrelated_provider_lanes() -> None:
 
 def test_makefile_exposes_separate_local_and_hosted_plans() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
 
     assert "ci-plan:" in makefile
     assert "test-plan:" in makefile
-    assert "harbor-plan:" in makefile
+    assert "include make/harbor.mk" in makefile
+    assert "harbor-plan:" in harbor
 
 
 def test_domain_mathematical_sources_skip_storage_mcp_and_e2e() -> None:
@@ -253,15 +255,13 @@ def test_required_ci_gates_fail_when_the_plan_is_cancelled() -> None:
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    oracle = makefile.split("harbor-oracle:", 1)[1].split("harbor-oracle-task:", 1)[0]
-    runner = makefile.split("harbor-oracle-run:", 1)[1].split("harbor-oracle-all:", 1)[
-        0
-    ]
+    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
+    oracle = harbor.split("harbor-oracle:", 1)[1].split("harbor-oracle-task:", 1)[0]
+    runner = harbor.split("harbor-oracle-run:", 1)[1].split("harbor-oracle-all:", 1)[0]
 
     assert '"$(TASKS)" -o "$(FULL)" = "1"' in oracle
     assert '"$(TASKS)" -o "$(FULL)" = "1"' in runner
-    assert "DATASET=$$dataset FULL=1" in makefile
+    assert "DATASET=$$dataset FULL=1" in harbor
 
 
 def test_composition_lane_uses_timing_shards() -> None:
@@ -317,8 +317,9 @@ def test_ordering_lane_dispatches_through_the_semantic_runner() -> None:
 
 def test_static_validation_enforces_test_architecture() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    development = (ROOT / "make" / "development.mk").read_text(encoding="utf-8")
 
-    assert "test-architecture:" in makefile
+    assert "test-architecture:" in development
     assert "check-static: lint-full typecheck test-architecture" in makefile
 
 

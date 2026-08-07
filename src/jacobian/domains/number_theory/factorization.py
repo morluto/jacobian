@@ -5,6 +5,7 @@ from __future__ import annotations
 import signal
 import sys
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -51,48 +52,11 @@ def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
     )
 
 
-def _compute[ResultT: ContractModel](
-    operation: str,
-    result_model: type[ResultT],
-    request: FactorizationRequest | ArithmeticFunctionRequest,
-) -> ComputedOutcome[ResultT]:
-    if isinstance(request, FactorizationRequest) and int(request.value) == 0:
-        return ComputedNotApplicable(
-            _diagnostic(
-                "INTEGER_FACTORIZATION_NOT_APPLICABLE",
-                "Zero has no finite factorization or divisor enumeration.",
-            )
-        )
-    wall_seconds = int(request.resource_budget.wall_seconds)
-    completed = execute_process(
-        ProcessRequest(
-            executable=sys.executable,
-            arguments=(
-                "-I",
-                "-m",
-                "jacobian.domains.number_theory.factorization_worker",
-            ),
-            stdin_bytes=canonicalize_json(
-                {
-                    "operation": operation,
-                    "protocol": _PROTOCOL,
-                    "request": request.model_dump(
-                        mode="json",
-                        exclude={"resource_budget"},
-                    ),
-                }
-            ),
-            timeout_seconds=float(wall_seconds),
-            environment=worker_environment(locale="C"),
-            cwd=str(Path.cwd()),
-            stdout_limit_bytes=_STDOUT_LIMIT,
-            stderr_limit_bytes=_STDERR_LIMIT,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=wall_seconds + 1,
-                address_space_bytes=_ADDRESS_SPACE_LIMIT,
-            ),
-        )
-    )
+def _classify_termination(
+    completed: Any,
+) -> OperationExecutionFailure | None:
+    """Map a bounded worker termination to a failure outcome, or None if clean."""
+
     if completed.termination is ProcessTermination.START_FAILED:
         return OperationExecutionFailure(
             status=ExecutionStatus.ERROR,
@@ -136,6 +100,54 @@ def _compute[ResultT: ContractModel](
                 "The isolated SymPy computation failed without a conclusion.",
             ),
         )
+    return None
+
+
+def _compute[ResultT: ContractModel](
+    operation: str,
+    result_model: type[ResultT],
+    request: FactorizationRequest | ArithmeticFunctionRequest,
+) -> ComputedOutcome[ResultT]:
+    if isinstance(request, FactorizationRequest) and int(request.value) == 0:
+        return ComputedNotApplicable(
+            _diagnostic(
+                "INTEGER_FACTORIZATION_NOT_APPLICABLE",
+                "Zero has no finite factorization or divisor enumeration.",
+            )
+        )
+    wall_seconds = int(request.resource_budget.wall_seconds)
+    completed = execute_process(
+        ProcessRequest(
+            executable=sys.executable,
+            arguments=(
+                "-I",
+                "-m",
+                "jacobian.domains.number_theory.factorization_worker",
+            ),
+            stdin_bytes=canonicalize_json(
+                {
+                    "operation": operation,
+                    "protocol": _PROTOCOL,
+                    "request": request.model_dump(
+                        mode="json",
+                        exclude={"resource_budget"},
+                    ),
+                }
+            ),
+            timeout_seconds=float(wall_seconds),
+            environment=worker_environment(locale="C"),
+            cwd=str(Path.cwd()),
+            stdout_limit_bytes=_STDOUT_LIMIT,
+            stderr_limit_bytes=_STDERR_LIMIT,
+            resource_limits=ProcessResourceLimits(
+                cpu_seconds=wall_seconds + 1,
+                address_space_bytes=_ADDRESS_SPACE_LIMIT,
+            ),
+        )
+    )
+    failure = _classify_termination(completed)
+    if failure is not None:
+        return failure
     try:
         payload = loads_strict_json(completed.stdout)
         if not isinstance(payload, dict) or set(payload) != {"protocol", "result"}:

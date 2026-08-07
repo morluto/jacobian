@@ -427,6 +427,64 @@ def _fraction_strings(values: Sequence[Fraction]) -> list[str]:
     return [str(value) for value in values]
 
 
+def _summarize_h_rows(
+    rows: Sequence[Sequence[Fraction]],
+    linearity_rows: set[int],
+    ambient_dimension: int,
+) -> tuple[list[tuple[str, list[Fraction]]], int]:
+    entries: list[tuple[str, list[Fraction]]] = []
+    for index, row in enumerate(rows):
+        kind = "EQUALITY" if index in linearity_rows else "INEQUALITY"
+        normalized = _integer_normalize(row, sign_free=kind == "EQUALITY")
+        if not any(normalized):
+            raise ValueError("zero H row")
+        entries.append((kind, normalized))
+    equality_normals = [row[1:] for kind, row in entries if kind == "EQUALITY"]
+    affine_dimension = ambient_dimension - _rank(equality_normals)
+    return entries, affine_dimension
+
+
+def _summarize_v_rows(
+    rows: Sequence[Sequence[Fraction]],
+    linearity_rows: set[int],
+    ambient_dimension: int,
+) -> tuple[list[tuple[str, list[Fraction]]], int]:
+    entries: list[tuple[str, list[Fraction]]] = []
+    vertices: list[list[Fraction]] = []
+    directions: list[list[Fraction]] = []
+    for index, row in enumerate(rows):
+        leading = row[0]
+        if index in linearity_rows:
+            if leading:
+                raise ValueError("lineality row has nonzero homogenizing value")
+            kind = "LINEALITY"
+            normalized = _integer_normalize(row, sign_free=True)
+        elif leading == 1:
+            kind = "VERTEX"
+            normalized = list(row)
+        elif not leading:
+            kind = "RAY"
+            normalized = _integer_normalize(row, sign_free=False)
+        else:
+            raise ValueError("V row is not normalized to homogenizing value 0 or 1")
+        if not any(normalized):
+            raise ValueError("zero V row")
+        entries.append((kind, normalized))
+        if kind == "VERTEX":
+            vertices.append(normalized[1:])
+        else:
+            directions.append(normalized[1:])
+    base = vertices[0] if vertices else [Fraction(0)] * ambient_dimension
+    directions.extend(
+        [
+            [value - origin for value, origin in zip(vertex, base, strict=True)]
+            for vertex in vertices[1:]
+        ]
+    )
+    affine_dimension = _rank(directions)
+    return entries, affine_dimension
+
+
 def _summarize(
     representation: str,
     rows: Sequence[Sequence[Fraction]],
@@ -435,49 +493,14 @@ def _summarize(
 ) -> dict[str, Any]:
     if any(len(row) != ambient_dimension + 1 for row in rows):
         raise ValueError("wrong homogeneous row width")
-    entries: list[tuple[str, list[Fraction]]] = []
     if representation == "H":
-        for index, row in enumerate(rows):
-            kind = "EQUALITY" if index in linearity_rows else "INEQUALITY"
-            normalized = _integer_normalize(row, sign_free=kind == "EQUALITY")
-            if not any(normalized):
-                raise ValueError("zero H row")
-            entries.append((kind, normalized))
-        equality_normals = [row[1:] for kind, row in entries if kind == "EQUALITY"]
-        affine_dimension = ambient_dimension - _rank(equality_normals)
-    elif representation == "V":
-        vertices: list[list[Fraction]] = []
-        directions: list[list[Fraction]] = []
-        for index, row in enumerate(rows):
-            leading = row[0]
-            if index in linearity_rows:
-                if leading:
-                    raise ValueError("lineality row has nonzero homogenizing value")
-                kind = "LINEALITY"
-                normalized = _integer_normalize(row, sign_free=True)
-            elif leading == 1:
-                kind = "VERTEX"
-                normalized = list(row)
-            elif not leading:
-                kind = "RAY"
-                normalized = _integer_normalize(row, sign_free=False)
-            else:
-                raise ValueError("V row is not normalized to homogenizing value 0 or 1")
-            if not any(normalized):
-                raise ValueError("zero V row")
-            entries.append((kind, normalized))
-            if kind == "VERTEX":
-                vertices.append(normalized[1:])
-            else:
-                directions.append(normalized[1:])
-        base = vertices[0] if vertices else [Fraction(0)] * ambient_dimension
-        directions.extend(
-            [
-                [value - origin for value, origin in zip(vertex, base, strict=True)]
-                for vertex in vertices[1:]
-            ]
+        entries, affine_dimension = _summarize_h_rows(
+            rows, linearity_rows, ambient_dimension
         )
-        affine_dimension = _rank(directions)
+    elif representation == "V":
+        entries, affine_dimension = _summarize_v_rows(
+            rows, linearity_rows, ambient_dimension
+        )
     else:
         raise ValueError("unknown representation")
 
@@ -581,6 +604,79 @@ def _expected_mathematical(pin: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _soundness_h_check(
+    output_rows: list[tuple[str, list[Fraction]]],
+    constraints: list[tuple[str, list[Fraction]]],
+) -> int:
+    checks = 0
+    for output_kind, output_row in output_rows:
+        if output_kind not in {"VERTEX", "RAY", "LINEALITY"}:
+            raise CddlibSpikeError(
+                "REJECTED",
+                "INDEPENDENT_REPLAY_MISMATCH",
+                "H-to-V output contains a non-generator row.",
+            )
+        point_or_direction = output_row[1:]
+        for constraint_kind, constraint in constraints:
+            value = sum(
+                (
+                    coefficient * coordinate
+                    for coefficient, coordinate in zip(
+                        constraint[1:], point_or_direction, strict=True
+                    )
+                ),
+                constraint[0] if output_kind == "VERTEX" else Fraction(0),
+            )
+            if constraint_kind == "EQUALITY" or output_kind == "LINEALITY":
+                accepted = value == 0
+            else:
+                accepted = value >= 0
+            checks += 1
+            if not accepted:
+                raise CddlibSpikeError(
+                    "REJECTED",
+                    "INDEPENDENT_REPLAY_MISMATCH",
+                    "A provider generator violates an input H row.",
+                )
+    return checks
+
+
+def _soundness_v_check(
+    output_rows: list[tuple[str, list[Fraction]]],
+    generators: list[tuple[str, list[Fraction]]],
+) -> int:
+    checks = 0
+    for output_kind, output_row in output_rows:
+        if output_kind not in {"EQUALITY", "INEQUALITY"}:
+            raise CddlibSpikeError(
+                "REJECTED",
+                "INDEPENDENT_REPLAY_MISMATCH",
+                "V-to-H output contains a non-constraint row.",
+            )
+        for generator_kind, generator in generators:
+            value = sum(
+                (
+                    coefficient * coordinate
+                    for coefficient, coordinate in zip(
+                        output_row[1:], generator[1:], strict=True
+                    )
+                ),
+                output_row[0] if generator_kind == "VERTEX" else Fraction(0),
+            )
+            if output_kind == "EQUALITY" or generator_kind == "LINEALITY":
+                accepted = value == 0
+            else:
+                accepted = value >= 0
+            checks += 1
+            if not accepted:
+                raise CddlibSpikeError(
+                    "REJECTED",
+                    "INDEPENDENT_REPLAY_MISMATCH",
+                    "An output H row excludes an input generator.",
+                )
+    return checks
+
+
 def _independent_soundness(
     case: Mapping[str, Any], output: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -593,70 +689,14 @@ def _independent_soundness(
         case["ambient_dimension"],
     )
     output_rows = _parse_summary_rows(output)
-    checks = 0
 
     if input_representation == "H":
         constraints = _parse_summary_rows(input_summary)
-        for output_kind, output_row in output_rows:
-            if output_kind not in {"VERTEX", "RAY", "LINEALITY"}:
-                raise CddlibSpikeError(
-                    "REJECTED",
-                    "INDEPENDENT_REPLAY_MISMATCH",
-                    "H-to-V output contains a non-generator row.",
-                )
-            point_or_direction = output_row[1:]
-            for constraint_kind, constraint in constraints:
-                value = sum(
-                    (
-                        coefficient * coordinate
-                        for coefficient, coordinate in zip(
-                            constraint[1:], point_or_direction, strict=True
-                        )
-                    ),
-                    constraint[0] if output_kind == "VERTEX" else Fraction(0),
-                )
-                if constraint_kind == "EQUALITY" or output_kind == "LINEALITY":
-                    accepted = value == 0
-                else:
-                    accepted = value >= 0
-                checks += 1
-                if not accepted:
-                    raise CddlibSpikeError(
-                        "REJECTED",
-                        "INDEPENDENT_REPLAY_MISMATCH",
-                        "A provider generator violates an input H row.",
-                    )
+        checks = _soundness_h_check(output_rows, constraints)
         direction_summary = output
     else:
         generators = _parse_summary_rows(input_summary)
-        for output_kind, output_row in output_rows:
-            if output_kind not in {"EQUALITY", "INEQUALITY"}:
-                raise CddlibSpikeError(
-                    "REJECTED",
-                    "INDEPENDENT_REPLAY_MISMATCH",
-                    "V-to-H output contains a non-constraint row.",
-                )
-            for generator_kind, generator in generators:
-                value = sum(
-                    (
-                        coefficient * coordinate
-                        for coefficient, coordinate in zip(
-                            output_row[1:], generator[1:], strict=True
-                        )
-                    ),
-                    output_row[0] if generator_kind == "VERTEX" else Fraction(0),
-                )
-                if output_kind == "EQUALITY" or generator_kind == "LINEALITY":
-                    accepted = value == 0
-                else:
-                    accepted = value >= 0
-                checks += 1
-                if not accepted:
-                    raise CddlibSpikeError(
-                        "REJECTED",
-                        "INDEPENDENT_REPLAY_MISMATCH",
-                        "An output H row excludes an input generator.",
-                    )
+        checks = _soundness_v_check(output_rows, generators)
         direction_summary = input_summary
 
     if output.get("affine_dimension") != direction_summary["affine_dimension"]:

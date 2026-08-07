@@ -24,6 +24,46 @@ def rat(value):
     return Fraction(value["numerator"], value["denominator"])
 
 
+def _epsilon_witnesses_ok(eps, s, c):
+    if not isinstance(eps, list) or len(eps) != 8:
+        return False
+    for k, witness in enumerate(eps, 2):
+        if not isinstance(witness, dict) or set(witness) != {
+            "epsilon",
+            "index",
+            "distance_squared",
+        }:
+            return False
+        e, n, d = (
+            rat(witness["epsilon"]),
+            witness["index"],
+            rat(witness["distance_squared"]),
+        )
+        if (
+            e != Fraction(1, k)
+            or type(n) is not int
+            or n < 1
+            or d != Fraction(s * s, (n + c) ** 2)
+            or not d < e * e
+        ):
+            return False
+    return True
+
+
+def _separation_ok(sep, h):
+    if not isinstance(sep, dict) or set(sep) != {
+        "same_family_lower_bound_squared",
+        "cross_family_vertical_nonzero",
+        "closedness_reason",
+    }:
+        return False
+    return (
+        rat(sep["same_family_lower_bound_squared"]) == h * h
+        and sep["cross_family_vertical_nonzero"] is True
+        and sep["closedness_reason"] == "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+    )
+
+
 def result_ok(result):
     if not isinstance(result, dict) or set(result) != {
         "horizontal_step",
@@ -56,41 +96,12 @@ def result_ok(result):
     expected = [Fraction(s * s, (n + c) ** 2) for n in ns]
     if [rat(x) for x in distances] != expected:
         return False
-    eps = result["epsilon_witnesses"]
-    if not isinstance(eps, list) or len(eps) != 8:
+    if not _epsilon_witnesses_ok(result["epsilon_witnesses"], s, c):
         return False
-    for k, witness in enumerate(eps, 2):
-        if not isinstance(witness, dict) or set(witness) != {
-            "epsilon",
-            "index",
-            "distance_squared",
-        }:
-            return False
-        e, n, d = (
-            rat(witness["epsilon"]),
-            witness["index"],
-            rat(witness["distance_squared"]),
-        )
-        if (
-            e != Fraction(1, k)
-            or type(n) is not int
-            or n < 1
-            or d != Fraction(s * s, (n + c) ** 2)
-            or not d < e * e
-        ):
-            return False
-    sep = result["separation_certificate"]
-    if not isinstance(sep, dict) or set(sep) != {
-        "same_family_lower_bound_squared",
-        "cross_family_vertical_nonzero",
-        "closedness_reason",
-    }:
+    if not _separation_ok(result["separation_certificate"], h):
         return False
     return (
-        rat(sep["same_family_lower_bound_squared"]) == h * h
-        and sep["cross_family_vertical_nonzero"] is True
-        and sep["closedness_reason"] == "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
-        and result["formal_conclusion"] == "POSITIVE_DISTANCE"
+        result["formal_conclusion"] == "POSITIVE_DISTANCE"
         and result["corrected_conclusion"] == "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
     )
 

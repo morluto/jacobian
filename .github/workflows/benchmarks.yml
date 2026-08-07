@@ -119,6 +119,7 @@ jobs:
             --config benchmarks/environment-profiles.toml \
             --config .github/workflows/benchmarks.yml \
             --config Makefile \
+            --config make/harbor.mk \
             --config tools/check_benchmark_adapters.py \
             --config tools/check_benchmark_contracts.py \
             --config tools/check_benchmark_static.py \

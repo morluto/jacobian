@@ -71,39 +71,74 @@ def _neg(node):
     return {"op": "not", "args": [copy.deepcopy(node)]}
 
 
-def _rewrite(node, rule):
-    if rule == "DE_MORGAN_OR" and node.get("op") == "not":
-        child = node["args"][0]
-        if child.get("op") == "or":
-            return {"op": "and", "args": [_neg(item) for item in child["args"]]}
-    if rule == "NOT_IMPLICATION" and node.get("op") == "not":
-        child = node["args"][0]
-        if child.get("op") == "imp":
-            return {
-                "op": "and",
-                "args": [copy.deepcopy(child["args"][0]), _neg(child["args"][1])],
-            }
-    if rule == "DOUBLE_NEGATION" and node.get("op") == "not":
-        child = node["args"][0]
-        if child.get("op") == "not":
-            return copy.deepcopy(child["args"][0])
-    if rule == "FLATTEN_ASSOCIATIVE" and node.get("op") in {"and", "or"}:
-        operator = node["op"]
-        if any(child.get("op") == operator for child in node["args"]):
-            flattened = []
-            for child in node["args"]:
-                flattened.extend(
-                    child["args"] if child.get("op") == operator else [child]
-                )
-            return {"op": operator, "args": copy.deepcopy(flattened)}
-    if rule == "CONTRADICTION" and node.get("op") == "and":
-        args = node["args"]
-        for candidate in args:
-            if candidate.get("op") == "not" and candidate["args"][0] in args:
-                return {"op": "false"}
-            if _neg(candidate) in args:
-                return {"op": "false"}
+def _rewrite_de_morgan_or(node):
+    if node.get("op") != "not":
+        return None
+    child = node["args"][0]
+    if child.get("op") == "or":
+        return {"op": "and", "args": [_neg(item) for item in child["args"]]}
     return None
+
+
+def _rewrite_not_implication(node):
+    if node.get("op") != "not":
+        return None
+    child = node["args"][0]
+    if child.get("op") == "imp":
+        return {
+            "op": "and",
+            "args": [copy.deepcopy(child["args"][0]), _neg(child["args"][1])],
+        }
+    return None
+
+
+def _rewrite_double_negation(node):
+    if node.get("op") != "not":
+        return None
+    child = node["args"][0]
+    if child.get("op") == "not":
+        return copy.deepcopy(child["args"][0])
+    return None
+
+
+def _rewrite_flatten_associative(node):
+    if node.get("op") not in {"and", "or"}:
+        return None
+    operator = node["op"]
+    if any(child.get("op") == operator for child in node["args"]):
+        flattened = []
+        for child in node["args"]:
+            flattened.extend(child["args"] if child.get("op") == operator else [child])
+        return {"op": operator, "args": copy.deepcopy(flattened)}
+    return None
+
+
+def _rewrite_contradiction(node):
+    if node.get("op") != "and":
+        return None
+    args = node["args"]
+    for candidate in args:
+        if candidate.get("op") == "not" and candidate["args"][0] in args:
+            return {"op": "false"}
+        if _neg(candidate) in args:
+            return {"op": "false"}
+    return None
+
+
+_REWRITERS = {
+    "DE_MORGAN_OR": _rewrite_de_morgan_or,
+    "NOT_IMPLICATION": _rewrite_not_implication,
+    "DOUBLE_NEGATION": _rewrite_double_negation,
+    "FLATTEN_ASSOCIATIVE": _rewrite_flatten_associative,
+    "CONTRADICTION": _rewrite_contradiction,
+}
+
+
+def _rewrite(node, rule):
+    rewriter = _REWRITERS.get(rule)
+    if rewriter is None:
+        return None
+    return rewriter(node)
 
 
 def _trace_valid(result, frozen):

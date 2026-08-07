@@ -211,6 +211,29 @@ def _is_resolvent(
     return False
 
 
+def _replay_steps(
+    steps: object,
+    clauses: dict[int, tuple[Literal, ...]],
+    available: set[int],
+) -> set[int] | None:
+    derived: set[int] = set()
+    for step in steps:
+        if not isinstance(step, dict) or set(step) != {"child", "parents"}:
+            return None
+        child, parents = step.get("child"), step.get("parents")
+        if type(child) is not int or not isinstance(parents, list) or len(parents) != 2:
+            return None
+        if any(type(parent) is not int for parent in parents) or len(set(parents)) != 2:
+            return None
+        if child in available or child not in clauses or not set(parents) <= available:
+            return None
+        if not _is_resolvent(clauses[child], clauses[parents[0]], clauses[parents[1]]):
+            return None
+        available.add(child)
+        derived.add(child)
+    return derived
+
+
 def _replay(result: object, source: dict[str, object]) -> bool:
     if not isinstance(result, dict) or set(result) != {"axioms", "steps", "root"}:
         return False
@@ -234,21 +257,9 @@ def _replay(result: object, source: dict[str, object]) -> bool:
     if any(type(node) is not int for node in axioms) or len(axioms) != len(set(axioms)):
         return False
     available = set(axioms)
-    derived: set[int] = set()
-    for step in steps:
-        if not isinstance(step, dict) or set(step) != {"child", "parents"}:
-            return False
-        child, parents = step.get("child"), step.get("parents")
-        if type(child) is not int or not isinstance(parents, list) or len(parents) != 2:
-            return False
-        if any(type(parent) is not int for parent in parents) or len(set(parents)) != 2:
-            return False
-        if child in available or child not in clauses or not set(parents) <= available:
-            return False
-        if not _is_resolvent(clauses[child], clauses[parents[0]], clauses[parents[1]]):
-            return False
-        available.add(child)
-        derived.add(child)
+    derived = _replay_steps(steps, clauses, available)
+    if derived is None:
+        return False
     return bool(
         available == set(clauses)
         and set(axioms) == REQUIRED_AXIOMS

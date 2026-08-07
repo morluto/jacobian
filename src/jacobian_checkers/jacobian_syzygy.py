@@ -376,7 +376,7 @@ def _matrix_digest(
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
-def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
+def _validate_syzygy_request(source: dict[str, Any]) -> tuple[int, str]:
     if set(source) != {
         "polynomial",
         "linear_factors",
@@ -395,6 +395,12 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("graded syzygy request lies outside checker scope")
     if (source["polynomial"] is None) == (source["linear_factors"] is None):
         raise ValueError("graded syzygy request must select exactly one source")
+    return max_degree, detail
+
+
+def _parse_syzygy_source(
+    source: dict[str, Any],
+) -> tuple[tuple[str, str, str], dict[tuple[int, int, int], Fraction], str, int]:
     if source["polynomial"] is not None:
         if source["linear_factor_variables"] is not None:
             raise ValueError("expanded polynomial cannot carry factor variables")
@@ -414,6 +420,72 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
     homogeneous_degree = next(iter(degrees))
     if not 1 <= homogeneous_degree <= 16:
         raise ValueError("source degree lies outside checker scope")
+    return variables, polynomial, source_kind, homogeneous_degree
+
+
+def _compute_rank_minor(
+    matrix: list[list[Fraction]],
+    pivots: tuple[int, ...],
+    rank: int,
+) -> dict[str, Any] | None:
+    if not rank:
+        return None
+    selected_columns = [
+        [matrix[row][column] for column in pivots] for row in range(len(matrix))
+    ]
+    transposed = [
+        [selected_columns[row][column] for row in range(len(matrix))]
+        for column in range(rank)
+    ]
+    _, independent_rows = _rref(transposed)
+    minor = [[matrix[row][column] for column in pivots] for row in independent_rows]
+    determinant = _determinant(minor)
+    if determinant == 0:
+        raise ValueError("checker rank minor unexpectedly vanished")
+    return {
+        "row_indices": list(independent_rows),
+        "column_indices": list(pivots),
+        "determinant": _wire_rational(determinant),
+    }
+
+
+def _build_kernel_witness(
+    multiplier_degree: int,
+    reduced: list[list[Fraction]],
+    pivots: tuple[int, ...],
+    source_basis: tuple[tuple[int, int, int], ...],
+    variables: tuple[str, str, str],
+    column_count: int,
+) -> dict[str, Any]:
+    vector = _first_kernel(reduced, pivots, column_count)
+    if vector is None:
+        raise ValueError("rank and nullspace computation disagree")
+    block_size = len(source_basis)
+    multipliers = []
+    for component in range(3):
+        coefficients = vector[component * block_size : (component + 1) * block_size]
+        multiplier_terms = {
+            exponents: coefficient
+            for exponents, coefficient in zip(
+                source_basis,
+                coefficients,
+                strict=True,
+            )
+            if coefficient
+        }
+        multipliers.append(_wire_polynomial(variables, multiplier_terms))
+    return {
+        "multiplier_degree": multiplier_degree,
+        "coefficient_vector": [_wire_rational(value) for value in vector],
+        "multipliers": multipliers,
+    }
+
+
+def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
+    max_degree, detail = _validate_syzygy_request(source)
+    variables, polynomial, source_kind, homogeneous_degree = _parse_syzygy_source(
+        source
+    )
     partials = (
         _differentiate(polynomial, 0),
         _differentiate(polynomial, 1),
@@ -431,27 +503,7 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         reduced, pivots = _rref(matrix)
         rank = len(pivots)
         entries = _matrix_entries(matrix)
-        rank_minor: dict[str, Any] | None = None
-        if rank:
-            selected_columns = [
-                [matrix[row][column] for column in pivots] for row in range(len(matrix))
-            ]
-            transposed = [
-                [selected_columns[row][column] for row in range(len(matrix))]
-                for column in range(rank)
-            ]
-            _, independent_rows = _rref(transposed)
-            minor = [
-                [matrix[row][column] for column in pivots] for row in independent_rows
-            ]
-            determinant = _determinant(minor)
-            if determinant == 0:
-                raise ValueError("checker rank minor unexpectedly vanished")
-            rank_minor = {
-                "row_indices": list(independent_rows),
-                "column_indices": list(pivots),
-                "determinant": _wire_rational(determinant),
-            }
+        rank_minor = _compute_rank_minor(matrix, pivots, rank)
         nullity = len(matrix[0]) - rank
         degree_maps.append(
             {
@@ -487,30 +539,14 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         )
         if nullity:
             first_degree = multiplier_degree
-            vector = _first_kernel(reduced, pivots, len(matrix[0]))
-            if vector is None:
-                raise ValueError("rank and nullspace computation disagree")
-            block_size = len(source_basis)
-            multipliers = []
-            for component in range(3):
-                coefficients = vector[
-                    component * block_size : (component + 1) * block_size
-                ]
-                multiplier_terms = {
-                    exponents: coefficient
-                    for exponents, coefficient in zip(
-                        source_basis,
-                        coefficients,
-                        strict=True,
-                    )
-                    if coefficient
-                }
-                multipliers.append(_wire_polynomial(variables, multiplier_terms))
-            kernel_witness = {
-                "multiplier_degree": multiplier_degree,
-                "coefficient_vector": [_wire_rational(value) for value in vector],
-                "multipliers": multipliers,
-            }
+            kernel_witness = _build_kernel_witness(
+                multiplier_degree,
+                reduced,
+                pivots,
+                source_basis,
+                variables,
+                len(matrix[0]),
+            )
             break
     searched_through = first_degree if first_degree is not None else max_degree
     return {

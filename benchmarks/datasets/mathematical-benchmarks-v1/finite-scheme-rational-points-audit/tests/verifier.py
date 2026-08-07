@@ -169,6 +169,32 @@ def valid_morphism(columns, a_table, b_table, a_unit, b_unit):
     return True
 
 
+def _induced_point_map_ok(a_pts, b_pts, columns):
+    induced = []
+    for point in a_pts:
+        pullback = [dot(point, column) for column in columns]
+        if pullback not in b_pts:
+            return None
+        induced.append(b_pts.index(pullback))
+    return induced
+
+
+def _nilpotent_witness_ok(witness, a_table):
+    vector = witness.get("vector") if isinstance(witness, dict) else None
+    if not _is_int_vector(vector, 5, 0, P - 1) or vector == [0] * 5:
+        return False
+    power2 = multiply(vector, vector, a_table)
+    power3 = multiply(power2, vector, a_table)
+    if witness != {
+        "vector": vector,
+        "power2": power2,
+        "power3": power3,
+        "exact_order": 3,
+    }:
+        return False
+    return not (power2 == [0] * 5 or power3 != [0] * 5)
+
+
 def valid_result(result):
     if not isinstance(result, dict) or set(result) != {
         "field_prime",
@@ -211,28 +237,14 @@ def valid_result(result):
         return False
     if sorted(a_pts) != sorted(a_points) or sorted(b_pts) != sorted(b_points):
         return False
-    induced = []
-    for point in a_pts:
-        pullback = [dot(point, column) for column in columns]
-        if pullback not in b_pts:
-            return False
-        induced.append(b_pts.index(pullback))
-    if result["induced_point_map"] != induced or sorted(induced) != [0, 1, 2]:
+    induced = _induced_point_map_ok(a_pts, b_pts, columns)
+    if (
+        induced is None
+        or result["induced_point_map"] != induced
+        or sorted(induced) != [0, 1, 2]
+    ):
         return False
-    witness = result["nilpotent"]
-    vector = witness.get("vector") if isinstance(witness, dict) else None
-    if not _is_int_vector(vector, 5, 0, P - 1) or vector == [0] * 5:
-        return False
-    power2 = multiply(vector, vector, a_table)
-    power3 = multiply(power2, vector, a_table)
-    if witness != {
-        "vector": vector,
-        "power2": power2,
-        "power3": power3,
-        "exact_order": 3,
-    }:
-        return False
-    if power2 == [0] * 5 or power3 != [0] * 5:
+    if not _nilpotent_witness_ok(result["nilpotent"], a_table):
         return False
     b_has_nilpotent = any(
         multiply(

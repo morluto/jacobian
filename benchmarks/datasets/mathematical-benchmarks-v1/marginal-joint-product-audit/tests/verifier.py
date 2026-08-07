@@ -87,66 +87,76 @@ _EVIDENCE_CONTRADICTIONS = (
 )
 
 
+def _evidence_scan(prose, carry, contradicted, matched):
+    if not prose:
+        return carry, contradicted
+    window = (carry + "".join(prose)).lower()
+    prose.clear()
+    contradicted = contradicted or any(
+        pattern.search(window) for pattern in _EVIDENCE_CONTRADICTIONS
+    )
+    for name, alternatives in _EVIDENCE_FACTS.items():
+        if not matched[name] and any(
+            pattern.search(window) for pattern in alternatives
+        ):
+            matched[name] = True
+    return window[-256:], contradicted
+
+
+def _evidence_process_char(character, state):
+    if character == "\n":
+        if not state["skip_line"]:
+            if state["at_line_start"]:
+                state["prose"].extend(state["line_prefix"])
+            state["prose"].append(character)
+        state["line_prefix"] = ""
+        state["at_line_start"] = True
+        state["skip_line"] = False
+    elif state["skip_line"]:
+        pass
+    elif state["at_line_start"]:
+        state["line_prefix"] += character
+        marker = "RESULT_JSON:"
+        if marker.startswith(state["line_prefix"]):
+            if state["line_prefix"] == marker:
+                state["skip_line"] = True
+                state["at_line_start"] = False
+                state["line_prefix"] = ""
+        else:
+            state["prose"].extend(state["line_prefix"])
+            state["line_prefix"] = ""
+            state["at_line_start"] = False
+    else:
+        state["prose"].append(character)
+
+
 def _evidence_explains_clauses(path: Path) -> bool:
     """Stream prose while ignoring private RESULT_JSON marker lines."""
 
     matched = dict.fromkeys(_EVIDENCE_FACTS, False)
     contradicted = False
     carry = ""
-    prose: list[str] = []
-    line_prefix = ""
-    at_line_start = True
-    skip_line = False
-
-    def scan() -> None:
-        nonlocal carry, contradicted
-        if not prose:
-            return
-        window = (carry + "".join(prose)).lower()
-        prose.clear()
-        contradicted = contradicted or any(
-            pattern.search(window) for pattern in _EVIDENCE_CONTRADICTIONS
-        )
-        for name, alternatives in _EVIDENCE_FACTS.items():
-            if not matched[name] and any(
-                pattern.search(window) for pattern in alternatives
-            ):
-                matched[name] = True
-        carry = window[-256:]
+    state = {
+        "prose": [],
+        "line_prefix": "",
+        "at_line_start": True,
+        "skip_line": False,
+    }
 
     try:
         with path.open("r", encoding="utf-8") as stream:
             while chunk := stream.read(65_536):
                 for character in chunk:
-                    if character == "\n":
-                        if not skip_line:
-                            if at_line_start:
-                                prose.extend(line_prefix)
-                            prose.append(character)
-                        line_prefix = ""
-                        at_line_start = True
-                        skip_line = False
-                    elif skip_line:
-                        continue
-                    elif at_line_start:
-                        line_prefix += character
-                        marker = "RESULT_JSON:"
-                        if marker.startswith(line_prefix):
-                            if line_prefix == marker:
-                                skip_line = True
-                                at_line_start = False
-                                line_prefix = ""
-                        else:
-                            prose.extend(line_prefix)
-                            line_prefix = ""
-                            at_line_start = False
-                    else:
-                        prose.append(character)
-                    if len(prose) >= 65_536:
-                        scan()
-            if not skip_line and at_line_start:
-                prose.extend(line_prefix)
-            scan()
+                    _evidence_process_char(character, state)
+                    if len(state["prose"]) >= 65_536:
+                        carry, contradicted = _evidence_scan(
+                            state["prose"], carry, contradicted, matched
+                        )
+            if not state["skip_line"] and state["at_line_start"]:
+                state["prose"].extend(state["line_prefix"])
+            carry, contradicted = _evidence_scan(
+                state["prose"], carry, contradicted, matched
+            )
     except (OSError, UnicodeError, MemoryError):
         return False
     return not contradicted and all(matched.values())

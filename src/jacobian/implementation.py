@@ -121,29 +121,7 @@ def _package_entries(module_name: str) -> list[tuple[str, Path]]:
         roots = [Path(location) for location in locations]
         if not _module_exists_in_roots(roots, remaining):
             raise ImplementationError(f"cannot resolve module {module_name!r}")
-        entries: list[tuple[str, Path]] = []
-        for root_index, root in enumerate(roots):
-            if root.is_symlink() or not root.is_dir():
-                raise ImplementationError(
-                    f"package root is not a regular directory: {root}"
-                )
-            for directory, names, files in os.walk(root, followlinks=False):
-                directory_path = Path(directory)
-                names[:] = [name for name in names if name != "__pycache__"]
-                for name in names:
-                    child = directory_path / name
-                    if child.is_symlink():
-                        raise ImplementationError(
-                            f"package contains a symlink: {child}"
-                        )
-                for name in files:
-                    entry = directory_path / name
-                    if entry.is_symlink() or not entry.is_file():
-                        raise ImplementationError(
-                            f"package entry is not a regular file: {entry}"
-                        )
-                    relative = entry.relative_to(root).as_posix()
-                    entries.append((f"{root_index}:{top_level}/{relative}", entry))
+        entries = _walk_package_roots(top_level, roots)
         if not entries:
             raise ImplementationError(f"package {top_level!r} has no files")
         return sorted(entries)
@@ -158,6 +136,31 @@ def _package_entries(module_name: str) -> list[tuple[str, Path]]:
             f"module source is not a regular Python file: {source}"
         )
     return [(f"{top_level}.py", source)]
+
+
+def _walk_package_roots(top_level: str, roots: list[Path]) -> list[tuple[str, Path]]:
+    entries: list[tuple[str, Path]] = []
+    for root_index, root in enumerate(roots):
+        if root.is_symlink() or not root.is_dir():
+            raise ImplementationError(
+                f"package root is not a regular directory: {root}"
+            )
+        for directory, names, files in os.walk(root, followlinks=False):
+            directory_path = Path(directory)
+            names[:] = [name for name in names if name != "__pycache__"]
+            for name in names:
+                child = directory_path / name
+                if child.is_symlink():
+                    raise ImplementationError(f"package contains a symlink: {child}")
+            for name in files:
+                entry = directory_path / name
+                if entry.is_symlink() or not entry.is_file():
+                    raise ImplementationError(
+                        f"package entry is not a regular file: {entry}"
+                    )
+                relative = entry.relative_to(root).as_posix()
+                entries.append((f"{root_index}:{top_level}/{relative}", entry))
+    return entries
 
 
 def _module_exists_in_roots(roots: list[Path], remaining: list[str]) -> bool:

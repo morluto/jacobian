@@ -302,6 +302,12 @@ def _write_validator_tree(tmp_path: Path) -> None:
     (tmp_path / "Makefile").write_text(
         (ROOT / "Makefile").read_text("utf-8"), encoding="utf-8"
     )
+    fragments = tmp_path / "make"
+    fragments.mkdir()
+    for name in ("development.mk", "harbor.mk", "evaluations.mk"):
+        (fragments / name).write_text(
+            (ROOT / "make" / name).read_text("utf-8"), encoding="utf-8"
+        )
 
 
 def test_ci_validator_enforces_local_only_deploy_catalog_contract(

@@ -107,6 +107,40 @@ def _family(value: object) -> set[int] | None:
     return residues
 
 
+def _residue_lists_match(
+    value: dict[str, Any], image: list[int], excluded: list[int]
+) -> bool:
+    return (
+        _strict_int_list(value["image_residues_mod_9"])
+        and _strict_int_list(value["excluded_residues_mod_9"])
+        and value["image_residues_mod_9"] == image
+        and value["excluded_residues_mod_9"] == excluded
+    )
+
+
+def _collect_family_coverage(
+    families: list[object], excluded: list[int]
+) -> tuple[set[int], set[int]] | None:
+    covers: set[int] = set()
+    covered_values: set[int] = set()
+    for family in families:
+        residues = _family(family)
+        if residues is None or residues & set(excluded):
+            return None
+        covers.update(residues)
+        target = _affine(family["value"])
+        assert target is not None
+        if target[1] == 0:
+            if 0 <= target[0] <= 500:
+                covered_values.add(target[0])
+            continue
+        for parameter in range(family["parameter_min"], 501):
+            candidate = target[0] + target[1] * parameter
+            if 0 <= candidate <= 500:
+                covered_values.add(candidate)
+    return covers, covered_values
+
+
 def _result(value: object, source: dict[str, Any]) -> bool:
     if not isinstance(value, dict) or set(value) != {
         "factorization",
@@ -132,33 +166,15 @@ def _result(value: object, source: dict[str, Any]) -> bool:
         }
     )
     excluded = sorted(set(range(9)) - set(image))
-    if (
-        not _strict_int_list(value["image_residues_mod_9"])
-        or not _strict_int_list(value["excluded_residues_mod_9"])
-        or value["image_residues_mod_9"] != image
-        or value["excluded_residues_mod_9"] != excluded
-    ):
+    if not _residue_lists_match(value, image, excluded):
         return False
     families = value["families"]
     if not isinstance(families, list) or len(families) < 3:
         return False
-    covers: set[int] = set()
-    covered_values: set[int] = set()
-    for family in families:
-        residues = _family(family)
-        if residues is None or residues & set(excluded):
-            return False
-        covers.update(residues)
-        target = _affine(family["value"])
-        assert target is not None
-        if target[1] == 0:
-            if 0 <= target[0] <= 500:
-                covered_values.add(target[0])
-            continue
-        for parameter in range(family["parameter_min"], 501):
-            candidate = target[0] + target[1] * parameter
-            if 0 <= candidate <= 500:
-                covered_values.add(candidate)
+    coverage = _collect_family_coverage(families, excluded)
+    if coverage is None:
+        return False
+    covers, covered_values = coverage
     return covers == set(image) and all(
         value in covered_values for value in range(501) if value % 9 in image
     )

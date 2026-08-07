@@ -429,7 +429,9 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
     assert telemetry["mcp_resource_digest_preservation_successes"] == 2
 
 
-def test_agent_telemetry_handles_non_hashable_resource_tool_field(tmp_path: Path) -> None:
+def test_agent_telemetry_handles_non_hashable_resource_tool_field(
+    tmp_path: Path,
+) -> None:
     uri = "artifact://sha256/" + ("f" * 64)
     malformed_tool_event = {
         "type": "item.completed",

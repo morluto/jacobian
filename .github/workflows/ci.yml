@@ -118,6 +118,9 @@ jobs:
             --config .github/scripts/validate-ci-plan \
             --config .github/workflows/ci.yml \
             --config Makefile \
+            --config make/development.mk \
+            --config make/harbor.mk \
+            --config make/evaluations.mk \
             --plan-file "$plan_dir/plan.txt" \
             --paths-file "$plan_dir/changed-paths.txt" \
             --output "$plan_dir/plan-receipt.json"

@@ -85,13 +85,13 @@ def _suite_inventory(suite: Suite) -> dict[str, Any]:
     }
 
 
-def build_inventory(
+def _filter_suites(
+    suites: tuple[Suite, ...],
     *,
-    dataset: str | None = None,
-    primary_domain: str | None = None,
-    field: str | None = None,
-) -> dict[str, Any]:
-    suites = load_registry()
+    dataset: str | None,
+    primary_domain: str | None,
+    field: str | None,
+) -> tuple[Suite, ...]:
     if dataset is not None:
         short_dataset = dataset.removeprefix("jacobian/")
         matches = [suite for suite in suites if suite.id == short_dataset]
@@ -107,21 +107,47 @@ def build_inventory(
         if field not in known:
             raise ValueError(f"unknown field filter: {field}")
     if primary_domain is not None or field is not None:
-        filtered = []
-        for suite in suites:
-            refs = tuple(
-                ref
-                for ref in suite.tasks
-                if (primary_domain is None or ref.primary_domain == primary_domain)
-                and (field is None or ref.field == field)
-            )
-            if refs:
-                filtered.append(dataclasses.replace(suite, tasks=refs))
-        suites = tuple(filtered)
-        if not suites:
-            raise ValueError(
-                "primary_domain/field filters select no tasks; check the combination"
-            )
+        suites = _filter_by_domain_field(
+            suites, primary_domain=primary_domain, field=field
+        )
+    return suites
+
+
+def _filter_by_domain_field(
+    suites: tuple[Suite, ...],
+    *,
+    primary_domain: str | None,
+    field: str | None,
+) -> tuple[Suite, ...]:
+    filtered = []
+    for suite in suites:
+        refs = tuple(
+            ref
+            for ref in suite.tasks
+            if (primary_domain is None or ref.primary_domain == primary_domain)
+            and (field is None or ref.field == field)
+        )
+        if refs:
+            filtered.append(dataclasses.replace(suite, tasks=refs))
+    if not filtered:
+        raise ValueError(
+            "primary_domain/field filters select no tasks; check the combination"
+        )
+    return tuple(filtered)
+
+
+def build_inventory(
+    *,
+    dataset: str | None = None,
+    primary_domain: str | None = None,
+    field: str | None = None,
+) -> dict[str, Any]:
+    suites = _filter_suites(
+        load_registry(),
+        dataset=dataset,
+        primary_domain=primary_domain,
+        field=field,
+    )
     datasets = [_suite_inventory(suite) for suite in suites]
     inventory = {
         "schema_version": "2",

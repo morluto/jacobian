@@ -152,6 +152,296 @@ class PolynomialMapInverseSynthesizeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
+    def _run_synthesis(
+        self,
+        validated: PolynomialMapInverseSynthesisRequest,
+        supports: tuple[tuple[tuple[int, ...], ...], ...],
+        coefficient_names: tuple[tuple[str, ...], ...],
+        unknown_names: tuple[str, ...],
+        started: float,
+    ) -> tuple[
+        PolynomialInverseSynthesisStatus,
+        tuple[PolynomialInverseCoefficientEquation, ...],
+        RationalPolynomialMap | None,
+        tuple[SparseRationalPolynomial, ...],
+        tuple[SparseRationalPolynomial, ...],
+        dict[str, Any] | None,
+        str | None,
+        str | None,
+        int,
+    ]:
+        """Orchestrate the bounded coefficient-system solve and return outcomes."""
+
+        equations: tuple[PolynomialInverseCoefficientEquation, ...] = ()
+        candidate: RationalPolynomialMap | None = None
+        left_residuals: tuple[SparseRationalPolynomial, ...] = ()
+        right_residuals: tuple[SparseRationalPolynomial, ...] = ()
+        verification_output: dict[str, Any] | None = None
+        verification_artifact_uri: str | None = None
+        verification_failure: str | None = None
+        residual_term_count = 0
+
+        if validated.solver != "sympy.solve":
+            status = PolynomialInverseSynthesisStatus.UNSUPPORTED
+            verification_failure = (
+                f"solver {validated.solver!r} is unsupported; use 'sympy.solve'"
+            )
+        elif validated.limits.timeout_ms == 0:
+            status = PolynomialInverseSynthesisStatus.TIMEOUT
+        elif len(unknown_names) > validated.limits.max_unknown_coefficients:
+            status = PolynomialInverseSynthesisStatus.BUDGET_EXHAUSTED
+            verification_failure = "ansatz unknown count exceeds the declared limit"
+        else:
+            (
+                pre_status,
+                pre_failure,
+                equations,
+                residual_term_count,
+                solve_status,
+                solution,
+                ansatz_expressions,
+                unknown_symbols,
+            ) = self._solve_coefficient_system(
+                validated, supports, coefficient_names, started
+            )
+            if pre_status is not None:
+                status = pre_status
+                verification_failure = pre_failure
+            else:
+                (
+                    status,
+                    verification_failure,
+                    candidate,
+                    left_residuals,
+                    right_residuals,
+                    verification_output,
+                    verification_artifact_uri,
+                ) = self._classify_solution(
+                    validated,
+                    ansatz_expressions,
+                    unknown_symbols,
+                    solution,
+                    solve_status,
+                )
+
+        return (
+            status,
+            equations,
+            candidate,
+            left_residuals,
+            right_residuals,
+            verification_output,
+            verification_artifact_uri,
+            verification_failure,
+            residual_term_count,
+        )
+
+    def _solve_coefficient_system(
+        self,
+        validated: PolynomialMapInverseSynthesisRequest,
+        supports: tuple[tuple[tuple[int, ...], ...], ...],
+        coefficient_names: tuple[tuple[str, ...], ...],
+        started: float,
+    ) -> tuple[
+        PolynomialInverseSynthesisStatus | None,
+        str | None,
+        tuple[PolynomialInverseCoefficientEquation, ...],
+        int,
+        str | None,
+        dict[str, Any] | None,
+        tuple[Any, ...],
+        tuple[Any, ...],
+    ]:
+        """Derive and solve the coefficient system.
+
+        Returns ``(status, failure, equations, residual_term_count,
+        solve_status, solution, ansatz_expressions, unknown_symbols)``.
+        A non-None *status* means the solve was short-circuited.
+        """
+
+        forward_degree = max(
+            (
+                sum(term.exponents)
+                for coordinate in validated.forward_map.coordinates
+                for term in coordinate.terms
+            ),
+            default=0,
+        )
+        residual_term_bound = _inverse_residual_term_bound(validated, supports)
+        precheck_exhausted = (
+            forward_degree * validated.inverse_degree_bound
+            > validated.limits.max_composition_degree
+            or residual_term_bound > validated.limits.max_residual_terms
+        )
+
+        ansatz_expressions: tuple[Any, ...] = ()
+        unknown_symbols: tuple[Any, ...] = ()
+        equations: tuple[PolynomialInverseCoefficientEquation, ...] = ()
+        residual_term_count = 0
+
+        if precheck_exhausted:
+            return (
+                PolynomialInverseSynthesisStatus.BUDGET_EXHAUSTED,
+                (
+                    "conservative composition degree or residual-term bound "
+                    "exceeds a declared limit"
+                ),
+                equations,
+                residual_term_count,
+                None,
+                None,
+                ansatz_expressions,
+                unknown_symbols,
+            )
+
+        (
+            ansatz_expressions,
+            unknown_symbols,
+            equations,
+            residual_term_count,
+        ) = _inverse_coefficient_system(
+            validated,
+            supports,
+            coefficient_names,
+        )
+        if (
+            residual_term_count > validated.limits.max_residual_terms
+            or len(equations) > validated.limits.max_coefficient_equations
+        ):
+            return (
+                PolynomialInverseSynthesisStatus.BUDGET_EXHAUSTED,
+                (
+                    "derived coefficient system exceeds a declared residual "
+                    "or equation limit"
+                ),
+                equations,
+                residual_term_count,
+                None,
+                None,
+                ansatz_expressions,
+                unknown_symbols,
+            )
+        if not equations:
+            return (
+                PolynomialInverseSynthesisStatus.UNDERDETERMINED,
+                "the ansatz produced no coefficient equations",
+                equations,
+                residual_term_count,
+                None,
+                None,
+                ansatz_expressions,
+                unknown_symbols,
+            )
+
+        remaining_ms = validated.limits.timeout_ms - int(
+            (time.monotonic() - started) * 1000
+        )
+        if remaining_ms <= 0:
+            solve_status, solution = "TIMEOUT", None
+        else:
+            solve_status, solution = _solve_inverse_system(
+                equations,
+                tuple(name for row in coefficient_names for name in row),
+                timeout_ms=remaining_ms,
+            )
+        return (
+            None,
+            None,
+            equations,
+            residual_term_count,
+            solve_status,
+            solution,
+            ansatz_expressions,
+            unknown_symbols,
+        )
+
+    def _classify_solution(
+        self,
+        validated: PolynomialMapInverseSynthesisRequest,
+        ansatz_expressions: tuple[Any, ...],
+        unknown_symbols: tuple[Any, ...],
+        solution: dict[str, Any] | None,
+        solve_status: str | None,
+    ) -> tuple[
+        PolynomialInverseSynthesisStatus,
+        str | None,
+        RationalPolynomialMap | None,
+        tuple[SparseRationalPolynomial, ...],
+        tuple[SparseRationalPolynomial, ...],
+        dict[str, Any] | None,
+        str | None,
+    ]:
+        """Classify the solver result and run independent verification."""
+
+        candidate: RationalPolynomialMap | None = None
+        left_residuals: tuple[SparseRationalPolynomial, ...] = ()
+        right_residuals: tuple[SparseRationalPolynomial, ...] = ()
+        verification_output: dict[str, Any] | None = None
+        verification_artifact_uri: str | None = None
+        verification_failure: str | None = None
+
+        if solve_status == "TIMEOUT":
+            status = PolynomialInverseSynthesisStatus.TIMEOUT
+        elif solve_status == "ERROR":
+            status = PolynomialInverseSynthesisStatus.UNSUPPORTED
+            verification_failure = "the configured exact solver failed"
+        elif solution is None:
+            status = PolynomialInverseSynthesisStatus.NO_CANDIDATE_WITHIN_ANSATZ
+        elif any(value.free_symbols for value in solution.values()) or set(
+            solution
+        ) != set(unknown_symbols):
+            status = PolynomialInverseSynthesisStatus.UNDERDETERMINED
+            verification_failure = "the coefficient equations have free parameters"
+        elif not all(value.is_Rational for value in solution.values()):
+            status = PolynomialInverseSynthesisStatus.UNSUPPORTED
+            verification_failure = "the selected solution is not rational over QQ"
+        else:
+            candidate = _inverse_candidate_map(
+                validated,
+                ansatz_expressions,
+                solution,
+            )
+            verify_request = PolynomialMapInverseVerifyRequest(
+                forward_map=validated.forward_map,
+                inverse_map=candidate,
+                source_variables=validated.source_variables,
+                target_variables=validated.target_variables,
+            )
+            left_residuals, right_residuals = _map_inverse_residuals(verify_request)
+            status = PolynomialInverseSynthesisStatus.FOUND
+            try:
+                verified = PolynomialMapInverseVerifyAdapter(self.resources).invoke(
+                    CapabilityRequest(
+                        capability_id="polynomial.map.inverse.verify",
+                        mode=CapabilityMode.VERIFY,
+                        input=verify_request.model_dump(mode="json"),
+                    )
+                )
+                verification_output = verified.output
+                artifact = verified.output.get(
+                    "verification_record_uri"
+                ) or verified.output.get("certificate_uri")
+                verification_artifact_uri = (
+                    artifact if isinstance(artifact, str) else None
+                )
+                if verified.output.get("inverse_verified") is not True:
+                    verification_failure = (
+                        "the independent two-sided verifier rejected "
+                        "the synthesized candidate"
+                    )
+            except CapabilityInvocationError as exc:
+                verification_failure = exc.diagnostic.message
+
+        return (
+            status,
+            verification_failure,
+            candidate,
+            left_residuals,
+            right_residuals,
+            verification_output,
+            verification_artifact_uri,
+        )
+
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         started = time.monotonic()
         validated = _validate_request(
@@ -181,145 +471,19 @@ class PolynomialMapInverseSynthesizeAdapter:
         )
         unknown_names = tuple(name for row in coefficient_names for name in row)
 
-        status: PolynomialInverseSynthesisStatus
-        equations: tuple[PolynomialInverseCoefficientEquation, ...] = ()
-        candidate: RationalPolynomialMap | None = None
-        left_residuals: tuple[SparseRationalPolynomial, ...] = ()
-        right_residuals: tuple[SparseRationalPolynomial, ...] = ()
-        verification_output: dict[str, Any] | None = None
-        verification_artifact_uri: str | None = None
-        verification_failure: str | None = None
-        residual_term_count = 0
-
-        if validated.solver != "sympy.solve":
-            status = PolynomialInverseSynthesisStatus.UNSUPPORTED
-            verification_failure = (
-                f"solver {validated.solver!r} is unsupported; use 'sympy.solve'"
-            )
-        elif validated.limits.timeout_ms == 0:
-            status = PolynomialInverseSynthesisStatus.TIMEOUT
-        elif len(unknown_names) > validated.limits.max_unknown_coefficients:
-            status = PolynomialInverseSynthesisStatus.BUDGET_EXHAUSTED
-            verification_failure = "ansatz unknown count exceeds the declared limit"
-        else:
-            forward_degree = max(
-                (
-                    sum(term.exponents)
-                    for coordinate in validated.forward_map.coordinates
-                    for term in coordinate.terms
-                ),
-                default=0,
-            )
-            residual_term_bound = _inverse_residual_term_bound(validated, supports)
-            precheck_exhausted = (
-                forward_degree * validated.inverse_degree_bound
-                > validated.limits.max_composition_degree
-                or residual_term_bound > validated.limits.max_residual_terms
-            )
-            if precheck_exhausted:
-                status = PolynomialInverseSynthesisStatus.BUDGET_EXHAUSTED
-                verification_failure = (
-                    "conservative composition degree or residual-term bound "
-                    "exceeds a declared limit"
-                )
-                ansatz_expressions = ()
-                unknown_symbols = ()
-            else:
-                (
-                    ansatz_expressions,
-                    unknown_symbols,
-                    equations,
-                    residual_term_count,
-                ) = _inverse_coefficient_system(
-                    validated,
-                    supports,
-                    coefficient_names,
-                )
-            if precheck_exhausted:
-                pass
-            elif (
-                residual_term_count > validated.limits.max_residual_terms
-                or len(equations) > validated.limits.max_coefficient_equations
-            ):
-                status = PolynomialInverseSynthesisStatus.BUDGET_EXHAUSTED
-                verification_failure = (
-                    "derived coefficient system exceeds a declared residual "
-                    "or equation limit"
-                )
-            elif not equations:
-                status = PolynomialInverseSynthesisStatus.UNDERDETERMINED
-                verification_failure = "the ansatz produced no coefficient equations"
-            else:
-                remaining_ms = validated.limits.timeout_ms - int(
-                    (time.monotonic() - started) * 1000
-                )
-                if remaining_ms <= 0:
-                    solve_status, solution = "TIMEOUT", None
-                else:
-                    solve_status, solution = _solve_inverse_system(
-                        equations,
-                        unknown_names,
-                        timeout_ms=remaining_ms,
-                    )
-                if solve_status == "TIMEOUT":
-                    status = PolynomialInverseSynthesisStatus.TIMEOUT
-                elif solve_status == "ERROR":
-                    status = PolynomialInverseSynthesisStatus.UNSUPPORTED
-                    verification_failure = "the configured exact solver failed"
-                elif solution is None:
-                    status = PolynomialInverseSynthesisStatus.NO_CANDIDATE_WITHIN_ANSATZ
-                elif any(value.free_symbols for value in solution.values()) or set(
-                    solution
-                ) != set(unknown_symbols):
-                    status = PolynomialInverseSynthesisStatus.UNDERDETERMINED
-                    verification_failure = (
-                        "the coefficient equations have free parameters"
-                    )
-                elif not all(value.is_Rational for value in solution.values()):
-                    status = PolynomialInverseSynthesisStatus.UNSUPPORTED
-                    verification_failure = (
-                        "the selected solution is not rational over QQ"
-                    )
-                else:
-                    candidate = _inverse_candidate_map(
-                        validated,
-                        ansatz_expressions,
-                        solution,
-                    )
-                    verify_request = PolynomialMapInverseVerifyRequest(
-                        forward_map=validated.forward_map,
-                        inverse_map=candidate,
-                        source_variables=validated.source_variables,
-                        target_variables=validated.target_variables,
-                    )
-                    left_residuals, right_residuals = _map_inverse_residuals(
-                        verify_request
-                    )
-                    status = PolynomialInverseSynthesisStatus.FOUND
-                    try:
-                        verified = PolynomialMapInverseVerifyAdapter(
-                            self.resources
-                        ).invoke(
-                            CapabilityRequest(
-                                capability_id="polynomial.map.inverse.verify",
-                                mode=CapabilityMode.VERIFY,
-                                input=verify_request.model_dump(mode="json"),
-                            )
-                        )
-                        verification_output = verified.output
-                        artifact = verified.output.get(
-                            "verification_record_uri"
-                        ) or verified.output.get("certificate_uri")
-                        verification_artifact_uri = (
-                            artifact if isinstance(artifact, str) else None
-                        )
-                        if verified.output.get("inverse_verified") is not True:
-                            verification_failure = (
-                                "the independent two-sided verifier rejected "
-                                "the synthesized candidate"
-                            )
-                    except CapabilityInvocationError as exc:
-                        verification_failure = exc.diagnostic.message
+        (
+            status,
+            equations,
+            candidate,
+            left_residuals,
+            right_residuals,
+            verification_output,
+            verification_artifact_uri,
+            verification_failure,
+            residual_term_count,
+        ) = self._run_synthesis(
+            validated, supports, coefficient_names, unknown_names, started
+        )
 
         elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
         provenance = PolynomialInverseSolverProvenance(

@@ -133,6 +133,27 @@ def rank(rows, q):
     return pivot_row
 
 
+def _elements_and_vectors_ok(elements_raw, vectors_raw, generated, q, contract):
+    if not isinstance(elements_raw, list) or not isinstance(vectors_raw, list):
+        return False
+    elements = [matrix(item, q) for item in elements_raw]
+    vectors = [vector(item, q) for item in vectors_raw]
+    if (
+        not contract["minimum_group_order"]
+        <= len(generated)
+        <= contract["maximum_group_order"]
+    ):
+        return False
+    if elements != generated or len(vectors) != len(elements):
+        return False
+    if any(determinant(item, q) != 1 for item in elements):
+        return False
+    return not any(
+        v == (0, 0, 0) or apply(a, v, q) != v
+        for a, v in zip(elements, vectors, strict=True)
+    )
+
+
 def certificate_valid(result, frozen):
     try:
         if not isinstance(result, dict) or set(result) != {
@@ -154,25 +175,8 @@ def certificate_valid(result, frozen):
         if any(determinant(item, q) != 1 for item in generators):
             return False
         generated = closure(generators, q, contract["maximum_group_order"])
-        elements_raw = result["group_elements"]
-        vectors_raw = result["fixed_vectors"]
-        if not isinstance(elements_raw, list) or not isinstance(vectors_raw, list):
-            return False
-        elements = [matrix(item, q) for item in elements_raw]
-        vectors = [vector(item, q) for item in vectors_raw]
-        if (
-            not contract["minimum_group_order"]
-            <= len(generated)
-            <= contract["maximum_group_order"]
-        ):
-            return False
-        if elements != generated or len(vectors) != len(elements):
-            return False
-        if any(determinant(item, q) != 1 for item in elements):
-            return False
-        if any(
-            v == (0, 0, 0) or apply(a, v, q) != v
-            for a, v in zip(elements, vectors, strict=True)
+        if not _elements_and_vectors_ok(
+            result["group_elements"], result["fixed_vectors"], generated, q, contract
         ):
             return False
         fixed_equations = [

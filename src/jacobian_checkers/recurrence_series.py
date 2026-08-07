@@ -120,6 +120,54 @@ def _run(
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
+def _validate_recurrence_scope(
+    source: dict[str, Any],
+    raw_indices: list[Any],
+) -> list[int] | None:
+    if source["scope"] == "PREFIX":
+        term_count = source["term_count"]
+        if type(term_count) is not int or not 1 <= term_count <= 513 or raw_indices:
+            return None
+        return list(range(term_count))
+    if source["scope"] == "INDICES":
+        if source["term_count"] is not None or not raw_indices:
+            return None
+        if any(
+            type(index) is not int or not 0 <= index <= 512 for index in raw_indices
+        ) or raw_indices != sorted(set(raw_indices)):
+            return None
+        return raw_indices
+    return None
+
+
+def _validate_recurrence_values(
+    result: dict[str, Any],
+    requested: list[int],
+    replay: list[Fraction],
+    end: int,
+) -> bool:
+    raw_replay = result["replay_prefix"]
+    if (
+        result["replay_scope_end"] != end
+        or not isinstance(raw_replay, list)
+        or len(raw_replay) != end + 1
+        or [_fraction(item, max_digits=32_768) for item in raw_replay] != replay
+    ):
+        return False
+    values = result["values"]
+    if not isinstance(values, list) or len(values) != len(requested):
+        return False
+    for item, index in zip(values, requested, strict=True):
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"index", "value"}
+            or item["index"] != index
+            or _fraction(item["value"], max_digits=32_768) != replay[index]
+        ):
+            return False
+    return True
+
+
 def _replay_linear_recurrence(
     source: dict[str, Any],
     result: dict[str, Any],
@@ -165,20 +213,8 @@ def _replay_linear_recurrence(
     raw_indices = source["indices"]
     if not isinstance(raw_indices, list) or len(raw_indices) > 256:
         return False
-    if source["scope"] == "PREFIX":
-        term_count = source["term_count"]
-        if type(term_count) is not int or not 1 <= term_count <= 513 or raw_indices:
-            return False
-        requested = list(range(term_count))
-    elif source["scope"] == "INDICES":
-        if source["term_count"] is not None or not raw_indices:
-            return False
-        if any(
-            type(index) is not int or not 0 <= index <= 512 for index in raw_indices
-        ) or raw_indices != sorted(set(raw_indices)):
-            return False
-        requested = raw_indices
-    else:
+    requested = _validate_recurrence_scope(source, raw_indices)
+    if requested is None:
         return False
     end = requested[-1]
     replay = initial[: end + 1]
@@ -192,26 +228,7 @@ def _replay_linear_recurrence(
                 start=Fraction(),
             )
         )
-    raw_replay = result["replay_prefix"]
-    if (
-        result["replay_scope_end"] != end
-        or not isinstance(raw_replay, list)
-        or len(raw_replay) != end + 1
-        or [_fraction(item, max_digits=32_768) for item in raw_replay] != replay
-    ):
-        return False
-    values = result["values"]
-    if not isinstance(values, list) or len(values) != len(requested):
-        return False
-    for item, index in zip(values, requested, strict=True):
-        if (
-            not isinstance(item, dict)
-            or set(item) != {"index", "value"}
-            or item["index"] != index
-            or _fraction(item["value"], max_digits=32_768) != replay[index]
-        ):
-            return False
-    return True
+    return _validate_recurrence_values(result, requested, replay, end)
 
 
 def _canonical_polynomial(value: object) -> list[Fraction]:

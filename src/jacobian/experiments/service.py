@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import threading
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import ValidationError
@@ -87,6 +88,29 @@ def _decode_experiment_snapshot(
         )
     except PersistenceCorruptionError as exc:
         raise ExperimentCorruptionError(exc) from exc
+
+
+@dataclass
+class _EnumerationRunState:
+    page_uris: list[str] = field(default_factory=list)
+    seen_keys: set[str] = field(default_factory=set)
+    raw_candidates: int = 0
+    unique_candidates: int = 0
+    duplicate_candidates: int = 0
+    evaluated_candidates: int = 0
+    pages: int = 0
+    cursor: dict[str, Any] | None = None
+    scope_bytes: bytes | None = None
+    scope_uri: str | None = None
+
+    def accounting(self) -> EnumerationAccounting:
+        return EnumerationAccounting(
+            raw_candidates=self.raw_candidates,
+            unique_candidates=self.unique_candidates,
+            duplicate_candidates=self.duplicate_candidates,
+            evaluated_candidates=self.evaluated_candidates,
+            pages=self.pages,
+        )
 
 
 class ExperimentService:
@@ -506,20 +530,331 @@ class ExperimentService:
             detail="cancellation requested",
         )
 
+    def _check_enumeration_termination(
+        self,
+        run_state: _EnumerationRunState,
+        experiment_uri: str,
+        started: float,
+        request: SearchEnumerateRequest,
+        remaining_wall: float,
+    ) -> bool:
+        """Return True when cancel, wall-time, or candidate-limit stops the run."""
+
+        if self._cancel_requested(experiment_uri):
+            self._finish(
+                experiment_uri,
+                state=ExperimentState.CANCELLED,
+                stop_reason=EnumerationStopReason.CANCELLED,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=False,
+                accounting=run_state.accounting(),
+                detail="experiment cancelled",
+            )
+            return True
+        if remaining_wall <= 0:
+            self._finish(
+                experiment_uri,
+                state=ExperimentState.TIMEOUT,
+                stop_reason=EnumerationStopReason.WALL_TIME_LIMIT,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=False,
+                accounting=run_state.accounting(),
+                detail="experiment wall-clock budget exhausted",
+            )
+            return True
+        remaining_candidates = request.budget.candidates_max - run_state.raw_candidates
+        if remaining_candidates <= 0:
+            self._finish(
+                experiment_uri,
+                state=ExperimentState.COMPLETED,
+                stop_reason=EnumerationStopReason.CANDIDATE_LIMIT,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=False,
+                accounting=run_state.accounting(),
+                detail="candidate limit reached before completeness",
+            )
+            return True
+        return False
+
+    def _run_enumerator_page(
+        self,
+        run_state: _EnumerationRunState,
+        experiment_uri: str,
+        started: float,
+        request: SearchEnumerateRequest,
+        enumerator: Any,
+        remaining_wall: float,
+    ) -> PluginEnumerationPage | None:
+        """Execute one enumerator page, validate it, and bind its scope."""
+
+        remaining_candidates = request.budget.candidates_max - run_state.raw_candidates
+        fixed_page_parents = 1 if not run_state.page_uris else 2
+        page_size = min(
+            request.budget.page_size,
+            remaining_candidates,
+            self.evaluation.max_batch_size,
+            self.store.limits.max_parents - fixed_page_parents,
+        )
+        execution = self.executor.run(
+            entrypoint=enumerator.descriptor.entrypoint,
+            implementation_digest=enumerator.implementation_digest,
+            request={
+                "request_version": "1",
+                "bounds": request.bounds,
+                "cursor": run_state.cursor,
+                "page_size": page_size,
+                "seed": request.seed,
+            },
+            timeout_seconds=remaining_wall,
+        )
+        if execution.status != ExecutionStatus.COMPLETED:
+            terminal_state = (
+                ExperimentState.TIMEOUT
+                if execution.status == ExecutionStatus.TIMEOUT
+                else ExperimentState.ERROR
+            )
+            reason = (
+                EnumerationStopReason.WALL_TIME_LIMIT
+                if terminal_state == ExperimentState.TIMEOUT
+                else EnumerationStopReason.ERROR
+            )
+            self._finish(
+                experiment_uri,
+                state=terminal_state,
+                stop_reason=reason,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=False,
+                accounting=run_state.accounting(),
+                detail=execution.detail or "enumerator execution failed",
+            )
+            return None
+        page = PluginEnumerationPage.model_validate(execution.output)
+        run_state.pages += 1
+        encoded_scope = canonicalize_json(page.scope)
+        if run_state.scope_bytes is None:
+            run_state.scope_bytes = encoded_scope
+            scope = self._put_internal_artifact(
+                schema_uri=self.scope_schema_uri,
+                payload={
+                    "plugin_id": request.plugin_id,
+                    "bounds": request.bounds,
+                    "enumerator_scope": page.scope,
+                    "enumerator_digest": enumerator.implementation_digest,
+                },
+                parents=(request.claim_uri, request.plugin_id),
+                summary="enumeration scope reported by untrusted plugin",
+            )
+            run_state.scope_uri = scope.artifact_uri
+        elif encoded_scope != run_state.scope_bytes:
+            raise ExperimentError("enumerator changed scope between pages")
+        if not page.candidates and not page.complete:
+            raise ExperimentError(
+                "incomplete enumerator page made no candidate progress"
+            )
+        if len(page.candidates) > page_size:
+            raise ExperimentError("enumerator returned more candidates than requested")
+        return page
+
+    def _collect_unique_candidates(
+        self,
+        run_state: _EnumerationRunState,
+        request: SearchEnumerateRequest,
+        page: PluginEnumerationPage,
+        remaining_wall: float,
+    ) -> tuple[list[str], list[str]]:
+        """Validate, canonicalize, and deduplicate candidates from one page."""
+
+        selected_uris: list[str] = []
+        selected_keys: list[str] = []
+        manifest = self.plugins.get(request.plugin_id)
+        self.store.get_descriptor(
+            manifest.semantics_uri,
+            expected_kind="semantics",
+        )
+        for payload in page.candidates:
+            normalized_payload = self.schemas.validate(
+                manifest.candidate_schema_uri,
+                payload,
+            )
+            candidate = self.store.put(
+                schema_uri=manifest.candidate_schema_uri,
+                semantics_uri=manifest.semantics_uri,
+                payload=normalized_payload,
+                summary="enumerated candidate",
+            )
+            selected_uri = candidate.artifact_uri
+            canonical_key = candidate.object_digest
+            if request.quotient_by_isomorphism:
+                canonical = self.structures.canonicalize(
+                    structure_uri=candidate.artifact_uri,
+                    plugin_id=request.plugin_id,
+                    wall_seconds=max(1, int(remaining_wall)),
+                )
+                if (
+                    canonical.result.execution.status != ExecutionStatus.COMPLETED
+                    or canonical.result.input.status != InputStatus.ACCEPTED
+                    or canonical.canonical_uri is None
+                    or canonical.canonical_key is None
+                ):
+                    raise ExperimentError(
+                        canonical.result.execution.detail
+                        or "; ".join(canonical.result.input.errors)
+                        or "canonicalization failed"
+                    )
+                selected_uri = canonical.canonical_uri
+                canonical_key = canonical.canonical_key
+            run_state.raw_candidates += 1
+            if canonical_key in run_state.seen_keys:
+                run_state.duplicate_candidates += 1
+                continue
+            run_state.seen_keys.add(canonical_key)
+            run_state.unique_candidates += 1
+            selected_uris.append(selected_uri)
+            selected_keys.append(canonical_key)
+        return selected_uris, selected_keys
+
+    def _archive_evaluation_page(
+        self,
+        run_state: _EnumerationRunState,
+        request: SearchEnumerateRequest,
+        selected_uris: list[str],
+        selected_keys: list[str],
+        experiment_uri: str,
+        started: float,
+    ) -> None:
+        """Evaluate and durably archive one page of unique candidates."""
+
+        if not selected_uris:
+            return
+        evaluation = self.evaluation.evaluate_batch(
+            claim_uri=request.claim_uri,
+            candidate_uris=tuple(selected_uris),
+            plugin_id=request.plugin_id,
+            profile=request.profile,
+            seed=request.seed,
+            wall_seconds=max(
+                1,
+                int(request.budget.wall_seconds - (time.monotonic() - started)),
+            ),
+        )
+        require_complete_evaluation_batch(evaluation, selected_uris)
+        run_state.evaluated_candidates += len(selected_uris)
+        evaluation_artifact = self._put_internal_artifact(
+            schema_uri=self.evaluation_schema_uri,
+            payload=evaluation.model_dump(mode="json"),
+            parents=(request.claim_uri,),
+            summary="untrusted enumeration evaluation batch",
+        )
+        archive_page = EnumerationArchive(
+            experiment_uri=experiment_uri,
+            page_index=len(run_state.page_uris),
+            candidate_uris=tuple(selected_uris),
+            evaluation_uris=tuple(
+                evaluation_artifact.artifact_uri for _ in selected_uris
+            ),
+            canonical_keys=tuple(selected_keys),
+        )
+        stored_page = self._put_internal_artifact(
+            schema_uri=self.archive_page_schema_uri,
+            payload=archive_page.model_dump(mode="json"),
+            parents=(
+                evaluation_artifact.artifact_uri,
+                *selected_uris,
+                *run_state.page_uris[-1:],
+            ),
+            summary="enumeration archive page",
+        )
+        run_state.page_uris.append(stored_page.artifact_uri)
+
+    def _commit_progress_and_check(
+        self,
+        run_state: _EnumerationRunState,
+        experiment_uri: str,
+        started: float,
+        request: SearchEnumerateRequest,
+        page: PluginEnumerationPage,
+    ) -> bool:
+        """Commit durable progress and return True when the run should stop."""
+
+        accounting = run_state.accounting()
+        current = self.inspect(experiment_uri)
+        progress_committed = self._replace_running(
+            _updated(
+                current,
+                updated_at=_now(),
+                scope_uri=run_state.scope_uri,
+                archive_page_uris=tuple(run_state.page_uris),
+                accounting=accounting,
+            )
+        )
+        if not progress_committed:
+            self._finish(
+                experiment_uri,
+                state=ExperimentState.CANCELLED,
+                stop_reason=EnumerationStopReason.CANCELLED,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=False,
+                accounting=accounting,
+                detail="experiment cancelled",
+            )
+            return True
+        if time.monotonic() - started >= request.budget.wall_seconds:
+            self._finish(
+                experiment_uri,
+                state=ExperimentState.TIMEOUT,
+                stop_reason=EnumerationStopReason.WALL_TIME_LIMIT,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=False,
+                accounting=accounting,
+                detail="experiment wall-clock budget exhausted",
+            )
+            return True
+        if page.complete:
+            self._finish(
+                experiment_uri,
+                state=ExperimentState.COMPLETED,
+                stop_reason=EnumerationStopReason.COMPLETE,
+                started=started,
+                request=request,
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                complete=True,
+                accounting=accounting,
+                detail="enumerator reported complete bounded scope",
+            )
+            return True
+        if page.next_cursor is None:
+            raise ExperimentError("incomplete enumerator page requires next_cursor")
+        if run_state.cursor is not None and canonicalize_json(
+            page.next_cursor
+        ) == canonicalize_json(run_state.cursor):
+            raise ExperimentError("enumerator cursor did not advance")
+        run_state.cursor = page.next_cursor
+        return False
+
     def _run_enumeration(self, experiment_uri: str) -> None:
         snapshot = self.inspect(experiment_uri)
         request = snapshot.request
         started = time.monotonic()
-        page_uris: list[str] = []
-        seen_keys: set[str] = set()
-        raw_candidates = 0
-        unique_candidates = 0
-        duplicate_candidates = 0
-        evaluated_candidates = 0
-        pages = 0
-        cursor: dict[str, Any] | None = None
-        scope_bytes: bytes | None = None
-        scope_uri: str | None = None
+        run_state = _EnumerationRunState()
 
         try:
             enumerator = self.plugins.resolve(
@@ -563,309 +898,38 @@ class ExperimentService:
                 return
 
             while True:
-                if self._cancel_requested(experiment_uri):
-                    self._finish(
-                        experiment_uri,
-                        state=ExperimentState.CANCELLED,
-                        stop_reason=EnumerationStopReason.CANCELLED,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=False,
-                        accounting=EnumerationAccounting(
-                            raw_candidates=raw_candidates,
-                            unique_candidates=unique_candidates,
-                            duplicate_candidates=duplicate_candidates,
-                            evaluated_candidates=evaluated_candidates,
-                            pages=pages,
-                        ),
-                        detail="experiment cancelled",
-                    )
-                    return
-                elapsed = time.monotonic() - started
-                remaining_wall = request.budget.wall_seconds - elapsed
-                if remaining_wall <= 0:
-                    self._finish(
-                        experiment_uri,
-                        state=ExperimentState.TIMEOUT,
-                        stop_reason=EnumerationStopReason.WALL_TIME_LIMIT,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=False,
-                        accounting=EnumerationAccounting(
-                            raw_candidates=raw_candidates,
-                            unique_candidates=unique_candidates,
-                            duplicate_candidates=duplicate_candidates,
-                            evaluated_candidates=evaluated_candidates,
-                            pages=pages,
-                        ),
-                        detail="experiment wall-clock budget exhausted",
-                    )
-                    return
-                remaining_candidates = request.budget.candidates_max - raw_candidates
-                if remaining_candidates <= 0:
-                    self._finish(
-                        experiment_uri,
-                        state=ExperimentState.COMPLETED,
-                        stop_reason=EnumerationStopReason.CANDIDATE_LIMIT,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=False,
-                        accounting=EnumerationAccounting(
-                            raw_candidates=raw_candidates,
-                            unique_candidates=unique_candidates,
-                            duplicate_candidates=duplicate_candidates,
-                            evaluated_candidates=evaluated_candidates,
-                            pages=pages,
-                        ),
-                        detail="candidate limit reached before completeness",
-                    )
-                    return
-
-                fixed_page_parents = 1 if not page_uris else 2
-                page_size = min(
-                    request.budget.page_size,
-                    remaining_candidates,
-                    self.evaluation.max_batch_size,
-                    self.store.limits.max_parents - fixed_page_parents,
+                remaining_wall = request.budget.wall_seconds - (
+                    time.monotonic() - started
                 )
-                execution = self.executor.run(
-                    entrypoint=enumerator.descriptor.entrypoint,
-                    implementation_digest=enumerator.implementation_digest,
-                    request={
-                        "request_version": "1",
-                        "bounds": request.bounds,
-                        "cursor": cursor,
-                        "page_size": page_size,
-                        "seed": request.seed,
-                    },
-                    timeout_seconds=remaining_wall,
-                )
-                if execution.status != ExecutionStatus.COMPLETED:
-                    state = (
-                        ExperimentState.TIMEOUT
-                        if execution.status == ExecutionStatus.TIMEOUT
-                        else ExperimentState.ERROR
-                    )
-                    reason = (
-                        EnumerationStopReason.WALL_TIME_LIMIT
-                        if state == ExperimentState.TIMEOUT
-                        else EnumerationStopReason.ERROR
-                    )
-                    self._finish(
-                        experiment_uri,
-                        state=state,
-                        stop_reason=reason,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=False,
-                        accounting=EnumerationAccounting(
-                            raw_candidates=raw_candidates,
-                            unique_candidates=unique_candidates,
-                            duplicate_candidates=duplicate_candidates,
-                            evaluated_candidates=evaluated_candidates,
-                            pages=pages,
-                        ),
-                        detail=execution.detail or "enumerator execution failed",
-                    )
+                if self._check_enumeration_termination(
+                    run_state, experiment_uri, started, request, remaining_wall
+                ):
                     return
-
-                page = PluginEnumerationPage.model_validate(execution.output)
-                pages += 1
-                encoded_scope = canonicalize_json(page.scope)
-                if scope_bytes is None:
-                    scope_bytes = encoded_scope
-                    scope = self._put_internal_artifact(
-                        schema_uri=self.scope_schema_uri,
-                        payload={
-                            "plugin_id": request.plugin_id,
-                            "bounds": request.bounds,
-                            "enumerator_scope": page.scope,
-                            "enumerator_digest": enumerator.implementation_digest,
-                        },
-                        parents=(request.claim_uri, request.plugin_id),
-                        summary="enumeration scope reported by untrusted plugin",
-                    )
-                    scope_uri = scope.artifact_uri
-                elif encoded_scope != scope_bytes:
-                    raise ExperimentError("enumerator changed scope between pages")
-                if not page.candidates and not page.complete:
-                    raise ExperimentError(
-                        "incomplete enumerator page made no candidate progress"
-                    )
-                if len(page.candidates) > page_size:
-                    raise ExperimentError(
-                        "enumerator returned more candidates than requested"
-                    )
-
-                selected_uris: list[str] = []
-                selected_keys: list[str] = []
-                manifest = self.plugins.get(request.plugin_id)
-                self.store.get_descriptor(
-                    manifest.semantics_uri,
-                    expected_kind="semantics",
+                page = self._run_enumerator_page(
+                    run_state,
+                    experiment_uri,
+                    started,
+                    request,
+                    enumerator,
+                    remaining_wall,
                 )
-                for payload in page.candidates:
-                    normalized_payload = self.schemas.validate(
-                        manifest.candidate_schema_uri,
-                        payload,
-                    )
-                    candidate = self.store.put(
-                        schema_uri=manifest.candidate_schema_uri,
-                        semantics_uri=manifest.semantics_uri,
-                        payload=normalized_payload,
-                        summary="enumerated candidate",
-                    )
-                    selected_uri = candidate.artifact_uri
-                    canonical_key = candidate.object_digest
-                    if request.quotient_by_isomorphism:
-                        canonical = self.structures.canonicalize(
-                            structure_uri=candidate.artifact_uri,
-                            plugin_id=request.plugin_id,
-                            wall_seconds=max(1, int(remaining_wall)),
-                        )
-                        if (
-                            canonical.result.execution.status
-                            != ExecutionStatus.COMPLETED
-                            or canonical.result.input.status != InputStatus.ACCEPTED
-                            or canonical.canonical_uri is None
-                            or canonical.canonical_key is None
-                        ):
-                            raise ExperimentError(
-                                canonical.result.execution.detail
-                                or "; ".join(canonical.result.input.errors)
-                                or "canonicalization failed"
-                            )
-                        selected_uri = canonical.canonical_uri
-                        canonical_key = canonical.canonical_key
-                    raw_candidates += 1
-                    if canonical_key in seen_keys:
-                        duplicate_candidates += 1
-                        continue
-                    seen_keys.add(canonical_key)
-                    unique_candidates += 1
-                    selected_uris.append(selected_uri)
-                    selected_keys.append(canonical_key)
-
-                if selected_uris:
-                    evaluation = self.evaluation.evaluate_batch(
-                        claim_uri=request.claim_uri,
-                        candidate_uris=tuple(selected_uris),
-                        plugin_id=request.plugin_id,
-                        profile=request.profile,
-                        seed=request.seed,
-                        wall_seconds=max(
-                            1,
-                            int(
-                                request.budget.wall_seconds
-                                - (time.monotonic() - started)
-                            ),
-                        ),
-                    )
-                    require_complete_evaluation_batch(evaluation, selected_uris)
-                    evaluated_candidates += len(selected_uris)
-                    evaluation_artifact = self._put_internal_artifact(
-                        schema_uri=self.evaluation_schema_uri,
-                        payload=evaluation.model_dump(mode="json"),
-                        parents=(request.claim_uri,),
-                        summary="untrusted enumeration evaluation batch",
-                    )
-                    archive_page = EnumerationArchive(
-                        experiment_uri=experiment_uri,
-                        page_index=len(page_uris),
-                        candidate_uris=tuple(selected_uris),
-                        evaluation_uris=tuple(
-                            evaluation_artifact.artifact_uri for _ in selected_uris
-                        ),
-                        canonical_keys=tuple(selected_keys),
-                    )
-                    stored_page = self._put_internal_artifact(
-                        schema_uri=self.archive_page_schema_uri,
-                        payload=archive_page.model_dump(mode="json"),
-                        parents=(
-                            evaluation_artifact.artifact_uri,
-                            *selected_uris,
-                            *page_uris[-1:],
-                        ),
-                        summary="enumeration archive page",
-                    )
-                    page_uris.append(stored_page.artifact_uri)
-
-                accounting = EnumerationAccounting(
-                    raw_candidates=raw_candidates,
-                    unique_candidates=unique_candidates,
-                    duplicate_candidates=duplicate_candidates,
-                    evaluated_candidates=evaluated_candidates,
-                    pages=pages,
+                if page is None:
+                    return
+                selected_uris, selected_keys = self._collect_unique_candidates(
+                    run_state, request, page, remaining_wall
                 )
-                current = self.inspect(experiment_uri)
-                progress_committed = self._replace_running(
-                    _updated(
-                        current,
-                        updated_at=_now(),
-                        scope_uri=scope_uri,
-                        archive_page_uris=tuple(page_uris),
-                        accounting=accounting,
-                    )
+                self._archive_evaluation_page(
+                    run_state,
+                    request,
+                    selected_uris,
+                    selected_keys,
+                    experiment_uri,
+                    started,
                 )
-                if not progress_committed:
-                    self._finish(
-                        experiment_uri,
-                        state=ExperimentState.CANCELLED,
-                        stop_reason=EnumerationStopReason.CANCELLED,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=False,
-                        accounting=accounting,
-                        detail="experiment cancelled",
-                    )
+                if self._commit_progress_and_check(
+                    run_state, experiment_uri, started, request, page
+                ):
                     return
-                if time.monotonic() - started >= request.budget.wall_seconds:
-                    self._finish(
-                        experiment_uri,
-                        state=ExperimentState.TIMEOUT,
-                        stop_reason=EnumerationStopReason.WALL_TIME_LIMIT,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=False,
-                        accounting=accounting,
-                        detail="experiment wall-clock budget exhausted",
-                    )
-                    return
-                if page.complete:
-                    self._finish(
-                        experiment_uri,
-                        state=ExperimentState.COMPLETED,
-                        stop_reason=EnumerationStopReason.COMPLETE,
-                        started=started,
-                        request=request,
-                        scope_uri=scope_uri,
-                        page_uris=page_uris,
-                        complete=True,
-                        accounting=accounting,
-                        detail="enumerator reported complete bounded scope",
-                    )
-                    return
-                if page.next_cursor is None:
-                    raise ExperimentError(
-                        "incomplete enumerator page requires next_cursor"
-                    )
-                if cursor is not None and canonicalize_json(
-                    page.next_cursor
-                ) == canonicalize_json(cursor):
-                    raise ExperimentError("enumerator cursor did not advance")
-                cursor = page.next_cursor
         except (
             ExperimentError,
             PluginRegistryError,
@@ -878,15 +942,9 @@ class ExperimentService:
             self._finish_if_possible(
                 experiment_uri,
                 started=started,
-                scope_uri=scope_uri,
-                page_uris=page_uris,
-                accounting=EnumerationAccounting(
-                    raw_candidates=raw_candidates,
-                    unique_candidates=unique_candidates,
-                    duplicate_candidates=duplicate_candidates,
-                    evaluated_candidates=evaluated_candidates,
-                    pages=pages,
-                ),
+                scope_uri=run_state.scope_uri,
+                page_uris=run_state.page_uris,
+                accounting=run_state.accounting(),
                 detail=detail,
             )
         finally:

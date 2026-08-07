@@ -57,32 +57,32 @@ def test_observation_job_keeps_the_minimal_jacobian_treatment() -> None:
 
 
 def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    evaluations = (ROOT / "make" / "evaluations.mk").read_text(encoding="utf-8")
 
-    assert '--ak "web_search=$(CODEX_WEB_SEARCH)"' in makefile
-    assert "JACOBIAN_EVAL_PROXY" in makefile
+    assert '--ak "web_search=$(CODEX_WEB_SEARCH)"' in evaluations
+    assert "JACOBIAN_EVAL_PROXY" in evaluations
     assert (
         "JACOBIAN_EVAL_HTTP_PROXY ?= $(call _jacobian_eval_container_proxy,$(HTTP_PROXY))"
-        in makefile
+        in evaluations
     )
     assert (
         "JACOBIAN_EVAL_HTTPS_PROXY ?= $(call _jacobian_eval_container_proxy,$(HTTPS_PROXY))"
-        in makefile
+        in evaluations
     )
     assert (
         "JACOBIAN_EVAL_ALL_PROXY ?= $(call _jacobian_eval_container_proxy,$(ALL_PROXY))"
-        in makefile
+        in evaluations
     )
-    assert "JACOBIAN_EVAL_CODEX_BINARY" in makefile
-    assert "benchmarks.tooling.codex_binary" in makefile
-    assert "JACOBIAN_EVAL_UPSTREAM_PROXY" in makefile
-    assert "benchmarks.tooling.harbor_proxy" in makefile
-    assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in makefile
-    assert 'JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)"' in makefile
-    assert "mathematical-benchmarks-v1-control-proxy.json" in makefile
-    assert "jacobian-observation-proxy.json" in makefile
-    assert "jacobian-loopback.mcp.json" in makefile
-    validate_recipe = makefile.split("agent-eval-validate:", maxsplit=1)[1].split(
+    assert "JACOBIAN_EVAL_CODEX_BINARY" in evaluations
+    assert "benchmarks.tooling.codex_binary" in evaluations
+    assert "JACOBIAN_EVAL_UPSTREAM_PROXY" in evaluations
+    assert "benchmarks.tooling.harbor_proxy" in evaluations
+    assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in evaluations
+    assert 'JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)"' in evaluations
+    assert "mathematical-benchmarks-v1-control-proxy.json" in evaluations
+    assert "jacobian-observation-proxy.json" in evaluations
+    assert "jacobian-loopback.mcp.json" in evaluations
+    validate_recipe = evaluations.split("agent-eval-validate:", maxsplit=1)[1].split(
         "\n\n", maxsplit=1
     )[0]
     assert "$(HARBOR_PROJECT_PYTHON) -m benchmarks.tooling.observation_results" in (

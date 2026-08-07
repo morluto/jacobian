@@ -135,6 +135,53 @@ def _same_ideal(generators: object, frozen: dict[str, Any]) -> bool:
         return False
 
 
+def _expected_fiber_points(
+    points: list[object],
+) -> set[tuple[Fraction, Fraction]] | None:
+    expected: set[tuple[Fraction, Fraction]] = set()
+    for point in points:
+        if not isinstance(point, dict):
+            return None
+        x_value, y_value = _q(point.get("x")), _q(point.get("y"))
+        if x_value is None or y_value is None:
+            return None
+        expected.add((x_value, y_value))
+    return expected
+
+
+def _fiber_check_ok(
+    check: object,
+    seen: set[tuple[Fraction, Fraction]],
+    expected_points: set[tuple[Fraction, Fraction]],
+    matrix: Matrix,
+    target_rank: int,
+) -> bool:
+    if not isinstance(check, dict) or set(check) != {
+        "point",
+        "matrix_rank",
+        "cokernel_dimension",
+    }:
+        return False
+    point = check.get("point")
+    if not isinstance(point, dict) or set(point) != {"x", "y"}:
+        return False
+    x_value, y_value = _q(point.get("x")), _q(point.get("y"))
+    if x_value is None or y_value is None:
+        return False
+    key = (x_value, y_value)
+    if key in seen or key not in expected_points:
+        return False
+    seen.add(key)
+    specialized = matrix.subs({X: x_value, Y: y_value})
+    rank = specialized.rank()
+    if type(check.get("matrix_rank")) is not int or check["matrix_rank"] != rank:
+        return False
+    return (
+        type(check.get("cokernel_dimension")) is int
+        and check["cokernel_dimension"] == target_rank - rank
+    )
+
+
 def _fiber_checks(value: object, frozen: dict[str, Any]) -> bool:
     points = frozen.get("fiber_points")
     matrix = _frozen_matrix(frozen)
@@ -152,40 +199,12 @@ def _fiber_checks(value: object, frozen: dict[str, Any]) -> bool:
         or type(target_rank) is not int
     ):
         return False
-    expected_points: set[tuple[Fraction, Fraction]] = set()
-    for point in points:
-        if not isinstance(point, dict):
-            return False
-        x_value, y_value = _q(point.get("x")), _q(point.get("y"))
-        if x_value is None or y_value is None:
-            return False
-        expected_points.add((x_value, y_value))
+    expected_points = _expected_fiber_points(points)
+    if expected_points is None:
+        return False
     seen: set[tuple[Fraction, Fraction]] = set()
     for check in value:
-        if not isinstance(check, dict) or set(check) != {
-            "point",
-            "matrix_rank",
-            "cokernel_dimension",
-        }:
-            return False
-        point = check.get("point")
-        if not isinstance(point, dict) or set(point) != {"x", "y"}:
-            return False
-        x_value, y_value = _q(point.get("x")), _q(point.get("y"))
-        if x_value is None or y_value is None:
-            return False
-        key = (x_value, y_value)
-        if key in seen or key not in expected_points:
-            return False
-        seen.add(key)
-        specialized = matrix.subs({X: x_value, Y: y_value})
-        rank = specialized.rank()
-        if type(check.get("matrix_rank")) is not int or check["matrix_rank"] != rank:
-            return False
-        if (
-            type(check.get("cokernel_dimension")) is not int
-            or check["cokernel_dimension"] != target_rank - rank
-        ):
+        if not _fiber_check_ok(check, seen, expected_points, matrix, target_rank):
             return False
     return seen == expected_points
 

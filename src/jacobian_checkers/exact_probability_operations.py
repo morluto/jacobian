@@ -349,10 +349,10 @@ def _replay_convolution(source: dict[str, Any], result: dict[str, Any]) -> bool:
     )
 
 
-def _replay_gaussian_polynomial_moment(
+def _gaussian_moment_header(
     source: dict[str, Any],
     result: dict[str, Any],
-) -> bool:
+) -> int | None:
     if set(source) != {"polynomial", "order"} or set(result) != {
         "order",
         "moment",
@@ -361,18 +361,31 @@ def _replay_gaussian_polynomial_moment(
         "contractions",
         *_GAUSSIAN_META,
     }:
-        return False
+        return None
     if any(result.get(key) != value for key, value in _GAUSSIAN_META.items()):
-        return False
+        return None
     order = source["order"]
     if type(order) is not int or not 0 <= order <= 16 or result["order"] != order:
-        return False
+        return None
+    return order
+
+
+def _parse_gaussian_polynomial(
+    source: dict[str, Any],
+    order: int,
+) -> (
+    tuple[
+        list[tuple[tuple[int, ...], tuple[Fraction, Fraction]]],
+        int,
+    ]
+    | None
+):
     polynomial = source["polynomial"]
     if not isinstance(polynomial, dict) or set(polynomial) != {
         "variable_count",
         "terms",
     }:
-        return False
+        return None
     variable_count = polynomial["variable_count"]
     terms = polynomial["terms"]
     if (
@@ -382,12 +395,12 @@ def _replay_gaussian_polynomial_moment(
         or not 1 <= len(terms) <= 16
         or len(terms) ** order > _GAUSSIAN_EXPANSION_PATHS_BOUND
     ):
-        return False
+        return None
     base: list[tuple[tuple[int, ...], tuple[Fraction, Fraction]]] = []
     previous_exponents: tuple[int, ...] | None = None
     for term in terms:
         if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
-            return False
+            return None
         raw_exponents = term["exponents"]
         if (
             not isinstance(raw_exponents, list)
@@ -397,16 +410,23 @@ def _replay_gaussian_polynomial_moment(
             )
             or sum(raw_exponents) > 8
         ):
-            return False
+            return None
         exponents = tuple(raw_exponents)
         if previous_exponents is not None and exponents <= previous_exponents:
-            return False
+            return None
         previous_exponents = exponents
         coefficient = _complex_fraction(term["coefficient"])
         if coefficient == (Fraction(), Fraction()):
-            return False
+            return None
         base.append((exponents, coefficient))
+    return base, variable_count
 
+
+def _expand_gaussian_polynomial(
+    base: list[tuple[tuple[int, ...], tuple[Fraction, Fraction]]],
+    order: int,
+    variable_count: int,
+) -> dict[tuple[int, ...], tuple[Fraction, Fraction]]:
     expanded: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (0,) * variable_count: (Fraction(1), Fraction())
     }
@@ -436,7 +456,59 @@ def _replay_gaussian_polynomial_moment(
             for exponents, coefficient in next_expanded.items()
             if coefficient != (Fraction(), Fraction())
         }
+    return expanded
 
+
+def _gaussian_contribution(
+    exponents: tuple[int, ...],
+    coefficient: tuple[Fraction, Fraction],
+) -> tuple[tuple[int, ...], int, tuple[Fraction, Fraction]]:
+    factors = tuple(_gaussian_univariate_moment(exponent) for exponent in exponents)
+    gaussian_factor = 1
+    for factor in factors:
+        gaussian_factor *= factor
+    contribution = (
+        coefficient[0] * gaussian_factor,
+        coefficient[1] * gaussian_factor,
+    )
+    return factors, gaussian_factor, contribution
+
+
+def _validate_gaussian_contraction(
+    item: object,
+    exponents: tuple[int, ...],
+    coefficient: tuple[Fraction, Fraction],
+) -> tuple[Fraction, Fraction] | None:
+    if not isinstance(item, dict) or set(item) != {
+        "exponents",
+        "expanded_coefficient",
+        "variable_moment_factors",
+        "gaussian_moment_factor",
+        "contribution",
+    }:
+        return None
+    factors, gaussian_factor, contribution = _gaussian_contribution(
+        exponents, coefficient
+    )
+    raw_factors = item["variable_moment_factors"]
+    if (
+        item["exponents"] != list(exponents)
+        or _complex_fraction(item["expanded_coefficient"]) != coefficient
+        or not isinstance(raw_factors, list)
+        or tuple(_integer(value) for value in raw_factors) != factors
+        or _integer(item["gaussian_moment_factor"]) != gaussian_factor
+        or _complex_fraction(item["contribution"]) != contribution
+    ):
+        return None
+    return contribution
+
+
+def _validate_gaussian_contractions(
+    result: dict[str, Any],
+    expanded: dict[tuple[int, ...], tuple[Fraction, Fraction]],
+    base: list[tuple[tuple[int, ...], tuple[Fraction, Fraction]]],
+    order: int,
+) -> tuple[Fraction, Fraction] | None:
     contractions = result["contractions"]
     if (
         result["expansion_path_count"] != len(base) ** order
@@ -444,40 +516,35 @@ def _replay_gaussian_polynomial_moment(
         or not isinstance(contractions, list)
         or len(contractions) != len(expanded)
     ):
-        return False
+        return None
     total = (Fraction(), Fraction())
     for item, (exponents, coefficient) in zip(
         contractions,
         sorted(expanded.items()),
         strict=True,
     ):
-        if not isinstance(item, dict) or set(item) != {
-            "exponents",
-            "expanded_coefficient",
-            "variable_moment_factors",
-            "gaussian_moment_factor",
-            "contribution",
-        }:
-            return False
-        factors = tuple(_gaussian_univariate_moment(exponent) for exponent in exponents)
-        gaussian_factor = 1
-        for factor in factors:
-            gaussian_factor *= factor
-        contribution = (
-            coefficient[0] * gaussian_factor,
-            coefficient[1] * gaussian_factor,
-        )
-        raw_factors = item["variable_moment_factors"]
-        if (
-            item["exponents"] != list(exponents)
-            or _complex_fraction(item["expanded_coefficient"]) != coefficient
-            or not isinstance(raw_factors, list)
-            or tuple(_integer(value) for value in raw_factors) != factors
-            or _integer(item["gaussian_moment_factor"]) != gaussian_factor
-            or _complex_fraction(item["contribution"]) != contribution
-        ):
-            return False
+        contribution = _validate_gaussian_contraction(item, exponents, coefficient)
+        if contribution is None:
+            return None
         total = (total[0] + contribution[0], total[1] + contribution[1])
+    return total
+
+
+def _replay_gaussian_polynomial_moment(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    order = _gaussian_moment_header(source, result)
+    if order is None:
+        return False
+    parsed = _parse_gaussian_polynomial(source, order)
+    if parsed is None:
+        return False
+    base, variable_count = parsed
+    expanded = _expand_gaussian_polynomial(base, order, variable_count)
+    total = _validate_gaussian_contractions(result, expanded, base, order)
+    if total is None:
+        return False
     return _complex_fraction(result["moment"]) == total
 
 
@@ -541,7 +608,7 @@ def _connected(
     return terminals[1] in seen
 
 
-def _replay_graph_connection_probability(
+def _graph_reliability_header(
     source: dict[str, Any],
     result: dict[str, Any],
 ) -> bool:
@@ -558,9 +625,13 @@ def _replay_graph_connection_probability(
         result.get(key) != value for key, value in _GRAPH_RELIABILITY_META.items()
     ):
         return False
-    if source["event"] != "TERMINALS_CONNECTED":
-        return False
-    vertices, edges = _canonical_graph(source["graph"])
+    return bool(source["event"] == "TERMINALS_CONNECTED")
+
+
+def _graph_terminals(
+    source: dict[str, Any],
+    vertices: list[str],
+) -> tuple[str, str] | None:
     raw_terminals = source["terminals"]
     if (
         not isinstance(raw_terminals, list)
@@ -568,59 +639,119 @@ def _replay_graph_connection_probability(
         or raw_terminals[0] == raw_terminals[1]
         or any(terminal not in vertices for terminal in raw_terminals)
     ):
-        return False
-    terminals = (raw_terminals[0], raw_terminals[1])
-    raw_probabilities = source["edge_probabilities"]
+        return None
+    return (raw_terminals[0], raw_terminals[1])
+
+
+def _graph_edge_probabilities(
+    edges: list[tuple[str, str]],
+    raw_probabilities: object,
+) -> list[Fraction] | None:
     if not isinstance(raw_probabilities, list) or len(raw_probabilities) != len(edges):
-        return False
+        return None
     probabilities: list[Fraction] = []
     for expected_edge, item in zip(edges, raw_probabilities, strict=True):
         if not isinstance(item, dict) or set(item) != {"edge", "open_probability"}:
-            return False
+            return None
         if item["edge"] != list(expected_edge):
-            return False
+            return None
         probability = _fraction(item["open_probability"])
         if not 0 <= probability <= 1:
-            return False
+            return None
         probabilities.append(probability)
+    return probabilities
+
+
+def _graph_state_header(
+    result: dict[str, Any],
+    terminals: tuple[str, str],
+    edges: list[tuple[str, str]],
+    expected_count: int,
+) -> bool:
     raw_states = result["states"]
-    expected_count = 1 << len(edges)
+    return (
+        result["terminals"] == list(terminals)
+        and type(result["edge_count"]) is int
+        and type(result["visited_states"]) is int
+        and result["edge_count"] == len(edges)
+        and result["visited_states"] == expected_count
+        and isinstance(raw_states, list)
+        and len(raw_states) == expected_count
+    )
+
+
+def _state_open_edges(
+    state_index: int,
+    edges: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    return [edge for index, edge in enumerate(edges) if state_index & (1 << index)]
+
+
+def _state_probability(
+    state_index: int,
+    probabilities: list[Fraction],
+) -> Fraction:
+    probability = Fraction(1)
+    for index, edge_probability in enumerate(probabilities):
+        probability *= (
+            edge_probability if state_index & (1 << index) else 1 - edge_probability
+        )
+    return probability
+
+
+def _validate_graph_state(
+    item: object,
+    state_index: int,
+    edges: list[tuple[str, str]],
+    probabilities: list[Fraction],
+    vertices: list[str],
+    terminals: tuple[str, str],
+) -> tuple[Fraction, bool] | None:
+    if not isinstance(item, dict) or set(item) != {
+        "state_index",
+        "open_edges",
+        "terminals_connected",
+        "state_probability",
+    }:
+        return None
+    open_edges = _state_open_edges(state_index, edges)
+    probability = _state_probability(state_index, probabilities)
+    connected = _connected(vertices, open_edges, terminals)
     if (
-        result["terminals"] != list(terminals)
-        or type(result["edge_count"]) is not int
-        or type(result["visited_states"]) is not int
-        or result["edge_count"] != len(edges)
-        or result["visited_states"] != expected_count
-        or not isinstance(raw_states, list)
-        or len(raw_states) != expected_count
+        type(item["state_index"]) is not int
+        or item["state_index"] != state_index
+        or item["open_edges"] != [list(edge) for edge in open_edges]
+        or item["terminals_connected"] is not connected
+        or _fraction(item["state_probability"]) != probability
     ):
+        return None
+    return probability, connected
+
+
+def _replay_graph_connection_probability(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    if not _graph_reliability_header(source, result):
+        return False
+    vertices, edges = _canonical_graph(source["graph"])
+    terminals = _graph_terminals(source, vertices)
+    if terminals is None:
+        return False
+    probabilities = _graph_edge_probabilities(edges, source["edge_probabilities"])
+    if probabilities is None:
+        return False
+    expected_count = 1 << len(edges)
+    if not _graph_state_header(result, terminals, edges, expected_count):
         return False
     connected_mass = Fraction()
-    for state_index, item in enumerate(raw_states):
-        if not isinstance(item, dict) or set(item) != {
-            "state_index",
-            "open_edges",
-            "terminals_connected",
-            "state_probability",
-        }:
+    for state_index, item in enumerate(result["states"]):
+        validated = _validate_graph_state(
+            item, state_index, edges, probabilities, vertices, terminals
+        )
+        if validated is None:
             return False
-        open_edges = [
-            edge for index, edge in enumerate(edges) if state_index & (1 << index)
-        ]
-        probability = Fraction(1)
-        for index, edge_probability in enumerate(probabilities):
-            probability *= (
-                edge_probability if state_index & (1 << index) else 1 - edge_probability
-            )
-        connected = _connected(vertices, open_edges, terminals)
-        if (
-            type(item["state_index"]) is not int
-            or item["state_index"] != state_index
-            or item["open_edges"] != [list(edge) for edge in open_edges]
-            or item["terminals_connected"] is not connected
-            or _fraction(item["state_probability"]) != probability
-        ):
-            return False
+        probability, connected = validated
         if connected:
             connected_mass += probability
     return _fraction(result["connection_probability"]) == connected_mass

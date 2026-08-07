@@ -91,21 +91,7 @@ class ClaimValidationService:
             ValueError,
         ) as exc:
             _LOGGER.warning("claim validation failed", exc_info=exc)
-            if isinstance(exc, StorageError):
-                errors.append(
-                    "The claim or its semantics artifact is unavailable. Check the "
-                    "artifact URI, then retry."
-                )
-            elif isinstance(exc, PluginRegistryError):
-                errors.append(
-                    "The selected plugin is unavailable. Call math.find, "
-                    "choose an installed reference domain, and retry."
-                )
-            else:
-                errors.append(
-                    "The claim does not match the selected reference contract. "
-                    "Recreate it from that contract, then retry."
-                )
+            errors.append(_claim_validation_error_message(exc))
 
         missing = tuple(
             sorted(
@@ -137,3 +123,20 @@ class ClaimValidationService:
             available_capabilities=available,
             missing_capabilities=missing,
         )
+
+
+def _claim_validation_error_message(exc: Exception) -> str:
+    if isinstance(exc, StorageError):
+        return (
+            "The claim or its semantics artifact is unavailable. Check the "
+            "artifact URI, then retry."
+        )
+    if isinstance(exc, PluginRegistryError):
+        return (
+            "The selected plugin is unavailable. Call math.find, "
+            "choose an installed reference domain, and retry."
+        )
+    return (
+        "The claim does not match the selected reference contract. "
+        "Recreate it from that contract, then retry."
+    )

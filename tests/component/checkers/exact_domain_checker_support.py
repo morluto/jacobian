@@ -161,32 +161,43 @@ def _request(
 
 def _mutate_numeric_leaf(value: object) -> bool:
     if isinstance(value, dict):
-        if set(value) == {"num", "den"}:
-            mutated = int(value["num"]) + 1
-            if mutated == 0:
-                mutated = 1
-            value["num"] = str(mutated)
+        if _mutate_rational(value):
             return True
-        for key, item in value.items():
-            if _mutate_numeric_leaf(item):
-                return True
-            if type(item) is int:
-                value[key] = item + 1
-                return True
-        return False
+        return _mutate_mapping_item(value)
     if isinstance(value, list):
-        for index, item in enumerate(value):
-            if _mutate_numeric_leaf(item):
-                return True
-            if isinstance(item, str) and item.lstrip("-").isdigit():
-                mutated = int(item) + 1
-                if mutated == 0:
-                    mutated = 1
-                value[index] = str(mutated)
-                return True
-            if type(item) is int:
-                value[index] = item + 1
-                return True
+        return _mutate_sequence_item(value)
+    return False
+
+
+def _mutate_rational(value: dict[object, object]) -> bool:
+    if set(value) != {"num", "den"}:
+        return False
+    numerator = int(value["num"]) + 1
+    value["num"] = str(numerator or 1)
+    return True
+
+
+def _mutate_mapping_item(value: dict[object, object]) -> bool:
+    for key, item in value.items():
+        if _mutate_numeric_leaf(item):
+            return True
+        if type(item) is int:
+            value[key] = item + 1
+            return True
+    return False
+
+
+def _mutate_sequence_item(value: list[object]) -> bool:
+    for index, item in enumerate(value):
+        if _mutate_numeric_leaf(item):
+            return True
+        if isinstance(item, str) and item.lstrip("-").isdigit():
+            incremented = int(item) + 1
+            value[index] = str(incremented or 1)
+            return True
+        if type(item) is int:
+            value[index] = item + 1
+            return True
     return False
 
 

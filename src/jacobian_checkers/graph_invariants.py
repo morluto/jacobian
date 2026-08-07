@@ -187,6 +187,67 @@ def check_neighborhood_independence(request: dict[str, Any]) -> dict[str, Any]:
         return _reject("malformed graph neighborhood-independence request")
 
 
+def _validate_candidate_metadata(
+    value: dict[str, Any],
+    *,
+    source_graph_uri: object,
+    vertices: tuple[str, ...],
+) -> list[Any]:
+    records = value["records"]
+    if (
+        value["invariant_schema_version"] != "1"
+        or value["graph_uri"] != source_graph_uri
+        or value["maximum_neighborhood_order"] != _MAX_NEIGHBORHOOD_ORDER
+        or value["backend"] != "networkx"
+        or not isinstance(value["backend_version"], str)
+        or not value["backend_version"]
+        or not isinstance(records, list)
+        or len(records) != len(vertices)
+    ):
+        raise ValueError("graph invariant metadata does not match the source")
+    return records
+
+
+def _validate_neighborhood_record(
+    record: object,
+    adjacency: dict[str, set[str]],
+) -> tuple[str, int]:
+    if not isinstance(record, dict) or set(record) != {
+        "vertex",
+        "neighborhood",
+        "independent_set",
+        "independence_number",
+    }:
+        raise ValueError("malformed neighborhood record")
+    vertex = record["vertex"]
+    neighborhood = record["neighborhood"]
+    witness = record["independent_set"]
+    optimum = record["independence_number"]
+    if (
+        not isinstance(vertex, str)
+        or vertex not in adjacency
+        or not isinstance(neighborhood, list)
+        or neighborhood != sorted(adjacency[vertex])
+        or len(neighborhood) > _MAX_NEIGHBORHOOD_ORDER
+        or not isinstance(witness, list)
+        or witness != sorted(set(witness))
+        or not set(witness) <= set(neighborhood)
+        or not isinstance(optimum, int)
+        or isinstance(optimum, bool)
+        or optimum != len(witness)
+    ):
+        raise ValueError("invalid neighborhood optimum record")
+    if any(
+        right in adjacency[left]
+        for index, left in enumerate(witness)
+        for right in witness[index + 1 :]
+    ):
+        raise ValueError("declared local witness is not independent")
+    if optimum != _maximum_independent_set_size(tuple(neighborhood), adjacency):
+        raise ValueError("declared local independence number is not optimal")
+    return vertex, optimum
+
+
 def _replay_candidate(
     value: object,
     *,
@@ -205,54 +266,15 @@ def _replay_candidate(
         "backend_version",
     }:
         raise ValueError("malformed graph invariant candidate")
-    records = value["records"]
-    if (
-        value["invariant_schema_version"] != "1"
-        or value["graph_uri"] != source_graph_uri
-        or value["maximum_neighborhood_order"] != _MAX_NEIGHBORHOOD_ORDER
-        or value["backend"] != "networkx"
-        or not isinstance(value["backend_version"], str)
-        or not value["backend_version"]
-        or not isinstance(records, list)
-        or len(records) != len(vertices)
-    ):
-        raise ValueError("graph invariant metadata does not match the source")
+    records = _validate_candidate_metadata(
+        value,
+        source_graph_uri=source_graph_uri,
+        vertices=vertices,
+    )
     total = 0
     recorded_vertices: list[str] = []
     for record in records:
-        if not isinstance(record, dict) or set(record) != {
-            "vertex",
-            "neighborhood",
-            "independent_set",
-            "independence_number",
-        }:
-            raise ValueError("malformed neighborhood record")
-        vertex = record["vertex"]
-        neighborhood = record["neighborhood"]
-        witness = record["independent_set"]
-        optimum = record["independence_number"]
-        if (
-            not isinstance(vertex, str)
-            or vertex not in adjacency
-            or not isinstance(neighborhood, list)
-            or neighborhood != sorted(adjacency[vertex])
-            or len(neighborhood) > _MAX_NEIGHBORHOOD_ORDER
-            or not isinstance(witness, list)
-            or witness != sorted(set(witness))
-            or not set(witness) <= set(neighborhood)
-            or not isinstance(optimum, int)
-            or isinstance(optimum, bool)
-            or optimum != len(witness)
-        ):
-            raise ValueError("invalid neighborhood optimum record")
-        if any(
-            right in adjacency[left]
-            for index, left in enumerate(witness)
-            for right in witness[index + 1 :]
-        ):
-            raise ValueError("declared local witness is not independent")
-        if optimum != _maximum_independent_set_size(tuple(neighborhood), adjacency):
-            raise ValueError("declared local independence number is not optimal")
+        vertex, optimum = _validate_neighborhood_record(record, adjacency)
         total += optimum
         recorded_vertices.append(vertex)
     if tuple(recorded_vertices) != vertices:

@@ -108,7 +108,7 @@ select = [
 ignore = ["E501"]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 28
+max-complexity = 10
 
 [tool.mypy]
 python_version = "3.12"

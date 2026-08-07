@@ -415,7 +415,8 @@
     {
       "name": "makefile",
       "patterns": [
-        "Makefile"
+        "Makefile",
+        "make/**"
       ],
       "suites": [
         "static",

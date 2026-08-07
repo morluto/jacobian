@@ -333,41 +333,149 @@ def _validate_inconsistency(
     return [_rational(value) for value in values], pairing
 
 
+_LINEAR_REQUEST_KEYS = {
+    "request_version",
+    "claim",
+    "candidate",
+    "scope",
+    "witness",
+    "expected_bindings",
+}
+_LINEAR_WITNESS_ENVELOPE_KEYS = {
+    "evidence_schema_version",
+    "witness_format",
+    "format_version",
+    "role",
+    "bindings",
+    "payload",
+}
+
+
+def _check_linear_request_envelope(request: object) -> str | None:
+    if not isinstance(request, dict) or set(request) != _LINEAR_REQUEST_KEYS:
+        return "malformed checker request"
+    if request["request_version"] != "1" or request["scope"] is not None:
+        return "unsupported checker request"
+    return None
+
+
+def _check_linear_artifacts(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
+        return "checker artifact metadata is malformed"
+    if not valid_unscoped_unencoded_bindings(expected_bindings):
+        return "expected evidence bindings are malformed"
+    if (
+        claim["semantics_uri"] != candidate["semantics_uri"]
+        or claim["semantics_uri"] != witness["semantics_uri"]
+    ):
+        return "checker artifacts use different semantics"
+    return None
+
+
+def _check_linear_digests(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness: dict[str, Any],
+    candidate_label: str,
+) -> str | None:
+    for artifact, label in (
+        (claim, "linear-system"),
+        (candidate, candidate_label),
+        (witness, "linear witness"),
+    ):
+        if artifact["payload_digest"] != _sha256(_canonical_json(artifact["payload"])):
+            return f"{label} payload digest does not match"
+    return None
+
+
+def _check_linear_binding_match(
+    expected_bindings: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if (
+        expected_bindings["claim_digest"] != claim["object_digest"]
+        or expected_bindings["candidate_digest"] != candidate["object_digest"]
+    ):
+        return "expected evidence bindings do not match artifacts"
+    return None
+
+
+def _check_linear_witness_envelope(
+    envelope: object,
+    expected_bindings: object,
+    witness_format: str,
+) -> str | None:
+    if not isinstance(envelope, dict) or set(envelope) != _LINEAR_WITNESS_ENVELOPE_KEYS:
+        return "linear witness envelope is malformed"
+    if (
+        envelope["evidence_schema_version"] != "1"
+        or envelope["witness_format"] != witness_format
+        or envelope["format_version"] != "1"
+        or envelope["role"] != "SUPPORTS_CLAIM"
+        or envelope["bindings"] != expected_bindings
+    ):
+        return "linear witness envelope is not exactly bound"
+    return None
+
+
+def _check_linear_witness_payload(
+    witness: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    candidate_key: str,
+) -> str | None:
+    if witness["payload"]["payload"] != {
+        "system_uri": claim["artifact_uri"],
+        candidate_key: candidate["artifact_uri"],
+    }:
+        return "linear witness points at different artifacts"
+    if not {
+        claim["artifact_uri"],
+        candidate["artifact_uri"],
+    }.issubset(set(witness["parents"])):
+        return "linear witness is missing required lineage"
+    return None
+
+
+def _check_linear_witness(
+    witness: dict[str, Any],
+    expected_bindings: object,
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness_format: str,
+    candidate_key: str,
+) -> str | None:
+    error = _check_linear_witness_envelope(
+        witness["payload"], expected_bindings, witness_format
+    )
+    if error is not None:
+        return error
+    return _check_linear_witness_payload(witness, claim, candidate, candidate_key)
+
+
 def check_rational_solution(request: dict[str, Any]) -> dict[str, Any]:
     """Accept only a total exact vector satisfying every bound equation."""
 
     try:
-        if not isinstance(request, dict) or set(request) != {
-            "request_version",
-            "claim",
-            "candidate",
-            "scope",
-            "witness",
-            "expected_bindings",
-        }:
-            return _reject("malformed checker request")
-        if request["request_version"] != "1" or request["scope"] is not None:
-            return _reject("unsupported checker request")
+        error = _check_linear_request_envelope(request)
+        if error is not None:
+            return _reject(error)
         claim = request["claim"]
         candidate = request["candidate"]
         witness = request["witness"]
-        if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
-            return _reject("checker artifact metadata is malformed")
-        if not valid_unscoped_unencoded_bindings(request["expected_bindings"]):
-            return _reject("expected evidence bindings are malformed")
-        if (
-            claim["semantics_uri"] != candidate["semantics_uri"]
-            or claim["semantics_uri"] != witness["semantics_uri"]
-        ):
-            return _reject("checker artifacts use different semantics")
-        if claim["payload_digest"] != _sha256(_canonical_json(claim["payload"])):
-            return _reject("linear-system payload digest does not match")
-        if candidate["payload_digest"] != _sha256(
-            _canonical_json(candidate["payload"])
-        ):
-            return _reject("solution payload digest does not match")
-        if witness["payload_digest"] != _sha256(_canonical_json(witness["payload"])):
-            return _reject("linear witness payload digest does not match")
+        expected_bindings = request["expected_bindings"]
+        error = _check_linear_artifacts(claim, candidate, witness, expected_bindings)
+        if error is not None:
+            return _reject(error)
+        error = _check_linear_digests(claim, candidate, witness, "solution")
+        if error is not None:
+            return _reject(error)
 
         coefficients, rhs, variables = _validate_system(claim["payload"])
         values = _validate_solution(
@@ -378,41 +486,19 @@ def check_rational_solution(request: dict[str, Any]) -> dict[str, Any]:
             columns=len(variables),
             variables=variables,
         )
-        expected_bindings = request["expected_bindings"]
-        if (
-            expected_bindings["claim_digest"] != claim["object_digest"]
-            or expected_bindings["candidate_digest"] != candidate["object_digest"]
-        ):
-            return _reject("expected evidence bindings do not match artifacts")
-        envelope = witness["payload"]
-        if not isinstance(envelope, dict) or set(envelope) != {
-            "evidence_schema_version",
-            "witness_format",
-            "format_version",
-            "role",
-            "bindings",
-            "payload",
-        }:
-            return _reject("linear witness envelope is malformed")
-        if (
-            envelope["evidence_schema_version"] != "1"
-            or envelope["witness_format"] != "linear.rational_solution"
-            or envelope["format_version"] != "1"
-            or envelope["role"] != "SUPPORTS_CLAIM"
-            or envelope["bindings"] != expected_bindings
-        ):
-            return _reject("linear witness envelope is not exactly bound")
-        witness_payload = envelope["payload"]
-        if not isinstance(witness_payload, dict) or witness_payload != {
-            "system_uri": claim["artifact_uri"],
-            "solution_uri": candidate["artifact_uri"],
-        }:
-            return _reject("linear witness points at different artifacts")
-        if not {
-            claim["artifact_uri"],
-            candidate["artifact_uri"],
-        }.issubset(set(witness["parents"])):
-            return _reject("linear witness is missing required lineage")
+        error = _check_linear_binding_match(expected_bindings, claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_linear_witness(
+            witness,
+            expected_bindings,
+            claim,
+            candidate,
+            "linear.rational_solution",
+            "solution_uri",
+        )
+        if error is not None:
+            return _reject(error)
 
         for row, expected in zip(coefficients, rhs, strict=True):
             if (
@@ -445,39 +531,19 @@ def check_rational_inconsistency(request: dict[str, Any]) -> dict[str, Any]:
     """Accept only a left witness proving the exact bound system inconsistent."""
 
     try:
-        if not isinstance(request, dict) or set(request) != {
-            "request_version",
-            "claim",
-            "candidate",
-            "scope",
-            "witness",
-            "expected_bindings",
-        }:
-            return _reject("malformed checker request")
-        if request["request_version"] != "1" or request["scope"] is not None:
-            return _reject("unsupported checker request")
+        error = _check_linear_request_envelope(request)
+        if error is not None:
+            return _reject(error)
         claim = request["claim"]
         candidate = request["candidate"]
         witness = request["witness"]
-        if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
-            return _reject("checker artifact metadata is malformed")
         expected_bindings = request["expected_bindings"]
-        if not valid_unscoped_unencoded_bindings(expected_bindings):
-            return _reject("expected evidence bindings are malformed")
-        if (
-            claim["semantics_uri"] != candidate["semantics_uri"]
-            or claim["semantics_uri"] != witness["semantics_uri"]
-        ):
-            return _reject("checker artifacts use different semantics")
-        for artifact, label in (
-            (claim, "linear-system"),
-            (candidate, "inconsistency"),
-            (witness, "linear witness"),
-        ):
-            if artifact["payload_digest"] != _sha256(
-                _canonical_json(artifact["payload"])
-            ):
-                return _reject(f"{label} payload digest does not match")
+        error = _check_linear_artifacts(claim, candidate, witness, expected_bindings)
+        if error is not None:
+            return _reject(error)
+        error = _check_linear_digests(claim, candidate, witness, "inconsistency")
+        if error is not None:
+            return _reject(error)
 
         coefficients, rhs, variables = _validate_system(claim["payload"])
         values, declared_pairing = _validate_inconsistency(
@@ -488,39 +554,19 @@ def check_rational_inconsistency(request: dict[str, Any]) -> dict[str, Any]:
             columns=len(variables),
             variables=variables,
         )
-        if (
-            expected_bindings["claim_digest"] != claim["object_digest"]
-            or expected_bindings["candidate_digest"] != candidate["object_digest"]
-        ):
-            return _reject("expected evidence bindings do not match artifacts")
-        envelope = witness["payload"]
-        if not isinstance(envelope, dict) or set(envelope) != {
-            "evidence_schema_version",
-            "witness_format",
-            "format_version",
-            "role",
-            "bindings",
-            "payload",
-        }:
-            return _reject("linear witness envelope is malformed")
-        if (
-            envelope["evidence_schema_version"] != "1"
-            or envelope["witness_format"] != "linear.rational_inconsistency"
-            or envelope["format_version"] != "1"
-            or envelope["role"] != "SUPPORTS_CLAIM"
-            or envelope["bindings"] != expected_bindings
-        ):
-            return _reject("linear witness envelope is not exactly bound")
-        if envelope["payload"] != {
-            "system_uri": claim["artifact_uri"],
-            "certificate_uri": candidate["artifact_uri"],
-        }:
-            return _reject("linear witness points at different artifacts")
-        if not {
-            claim["artifact_uri"],
-            candidate["artifact_uri"],
-        }.issubset(set(witness["parents"])):
-            return _reject("linear witness is missing required lineage")
+        error = _check_linear_binding_match(expected_bindings, claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_linear_witness(
+            witness,
+            expected_bindings,
+            claim,
+            candidate,
+            "linear.rational_inconsistency",
+            "certificate_uri",
+        )
+        if error is not None:
+            return _reject(error)
 
         for column in range(len(variables)):
             if (

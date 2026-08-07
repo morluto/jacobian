@@ -44,126 +44,18 @@ class CapabilityDispatchMixin:
         try:
             adapter: AdapterLike = self._adapters[request.capability_id]
         except KeyError:
-            result = resolution_failure(
-                request=request,
-                capability_version="not-installed",
-                diagnostic=CapabilityDiagnostic(
-                    code="UNKNOWN_CAPABILITY",
-                    stage="capability_resolution",
-                    message=(f"Capability {request.capability_id!r} is not installed."),
-                    hint=(
-                        "Call math.find without capability_id to list "
-                        "installed capabilities, then retry with one of those IDs."
-                    ),
-                ),
-                context={
-                    "available_capability_ids": [
-                        descriptor.capability_id
-                        for descriptor in self.catalog().capabilities
-                    ],
-                },
-            )
+            result = _unknown_capability_failure(self, request)
             log_invocation(result, started)
             return result
         descriptor = adapter.descriptor
-        policy_reasons = self.policy.denial_reasons(
-            descriptor,
-            mode=request.mode,
-        )
-        if policy_reasons:
-            result = resolution_failure(
-                request=request,
-                capability_version=descriptor.version,
-                diagnostic=CapabilityDiagnostic(
-                    code="CAPABILITY_POLICY_DENIED",
-                    stage="capability_policy",
-                    message=(
-                        f"Capability {request.capability_id!r} is denied by the "
-                        "operator-controlled capability policy."
-                    ),
-                    hint=(
-                        "Choose a capability visible in math.find, or ask "
-                        "the operator to change the evaluation/runtime policy."
-                    ),
-                    details={
-                        "policy_profile": self.policy.profile,
-                        "policy_digest": self.policy.digest,
-                        "reasons": list(policy_reasons),
-                        "checker_authorization_affected": False,
-                    },
-                ),
-                context={"capability_policy": self.policy.definition},
-            )
-            result = result.model_copy(update=provider_provenance(descriptor))
-            log_invocation(result, started)
-            return result
-        if request.mode not in descriptor.modes:
-            result = resolution_failure(
-                request=request,
-                capability_version=descriptor.version,
-                diagnostic=CapabilityDiagnostic(
-                    code="UNSUPPORTED_MODE",
-                    stage="capability_resolution",
-                    message=(
-                        f"Capability {request.capability_id!r} does not support "
-                        f"{request.mode.value} mode."
-                    ),
-                    hint=(
-                        "Call math.find for this capability, then retry "
-                        "with one of its advertised modes."
-                    ),
-                ),
-                context={"available_modes": [mode.value for mode in descriptor.modes]},
-            )
-            result = result.model_copy(update=provider_provenance(descriptor))
-            log_invocation(result, started)
-            return result
+        resolution = _capability_resolution_failure(self, request, descriptor)
+        if resolution is not None:
+            log_invocation(resolution, started)
+            return resolution
         try:
             normalized_input = validate_payload(descriptor.input_schema, request.input)
         except CapabilityError as exc:
-            path = (
-                exc.path if isinstance(exc, PayloadValidationError) else error_path(exc)
-            )
-            result = failed_result(
-                descriptor=descriptor,
-                request=request,
-                diagnostic=CapabilityDiagnostic(
-                    code="INVALID_REQUEST",
-                    stage="capability_input_validation",
-                    message=(
-                        "The capability input does not match its advertised schema"
-                        + (f" at {path}." if path else ".")
-                    ),
-                    path=path,
-                    expected=(
-                        exc.expected
-                        if isinstance(exc, PayloadValidationError)
-                        else "input matching the capability descriptor JSON Schema"
-                    ),
-                    actual_type=(
-                        exc.actual_type
-                        if isinstance(exc, PayloadValidationError)
-                        else json_value_type(request.input)
-                    ),
-                    hint=(
-                        "Correct the reported field. The exact violated constraint "
-                        "and any required or missing top-level fields are included "
-                        "in diagnostic details."
-                    ),
-                    details={
-                        "required_fields": descriptor.input_schema.get("required", []),
-                        "missing_fields": sorted(
-                            set(descriptor.input_schema.get("required", []))
-                            - set(request.input)
-                        ),
-                        **(
-                            exc.details
-                            if isinstance(exc, PayloadValidationError)
-                            else {}
-                        ),
-                    },
-                ),
-            )
+            result = _input_validation_failure(descriptor, request, exc)
             log_invocation(result, started)
             return result
         normalized_request = request.model_copy(update={"input": normalized_input})
@@ -194,71 +86,16 @@ class CapabilityDispatchMixin:
                 ),
             )
         except Exception as exc:
-            _LOGGER.warning(
-                "capability %s stopped during execution",
-                request.capability_id,
-                exc_info=exc,
-            )
-            result = failed_result(
-                descriptor=descriptor,
-                request=request,
-                diagnostic=CapabilityDiagnostic(
-                    code="ADAPTER_EXECUTION_FAILED",
-                    stage="adapter_execution",
-                    message="The capability stopped before returning a result.",
-                    hint=(
-                        "Retry once. If it fails again, inspect the local Jacobian "
-                        "log for this capability."
-                    ),
-                ),
-            )
-        if (
-            result.capability_id != descriptor.capability_id
-            or result.capability_version != descriptor.version
-            or result.mode is not request.mode
-        ):
-            result = failed_result(
-                descriptor=descriptor,
-                request=request,
-                diagnostic=CapabilityDiagnostic(
-                    code="ADAPTER_RESULT_INVALID",
-                    stage="adapter_execution",
-                    message="The adapter returned a result with a mismatched identity.",
-                    hint="The capability adapter produced a result for a different capability or mode.",
-                ),
-            )
-            log_invocation(result, started)
-            return result
-        if result.provider is not None and result.provider != descriptor.provider:
-            result = failed_result(
-                descriptor=descriptor,
-                request=request,
-                diagnostic=CapabilityDiagnostic(
-                    code="ADAPTER_RESULT_INVALID",
-                    stage="adapter_execution",
-                    message="The adapter returned a result from a different provider runtime.",
-                    hint="The capability adapter produced a result from a provider that differs from its descriptor.",
-                ),
-            )
-            log_invocation(result, started)
-            return result
+            result = _adapter_execution_failure(descriptor, request, exc)
+        invalid = _adapter_result_identity_failure(
+            descriptor=descriptor,
+            request=request,
+            result=result,
+        )
+        if invalid is not None:
+            log_invocation(invalid, started)
+            return invalid
         provenance = provider_provenance(descriptor)
-        if (
-            result.provider_digest is not None
-            and result.provider_digest != provenance["provider_digest"]
-        ):
-            result = failed_result(
-                descriptor=descriptor,
-                request=request,
-                diagnostic=CapabilityDiagnostic(
-                    code="ADAPTER_RESULT_INVALID",
-                    stage="adapter_execution",
-                    message="The adapter returned a result with a mismatched provider digest.",
-                    hint="The capability adapter produced a result with a provider digest that differs from its descriptor.",
-                ),
-            )
-            log_invocation(result, started)
-            return result
         result = result.model_copy(update=provenance)
         if result.execution.status is ExecutionStatus.COMPLETED:
             result = _normalize_completed_adapter_output(
@@ -273,6 +110,205 @@ class CapabilityDispatchMixin:
         self._validate_verified_result(result)
         log_invocation(result, started)
         return result
+
+
+def _unknown_capability_failure(
+    dispatch: Any, request: CapabilityRequest
+) -> CapabilityResult:
+    return resolution_failure(
+        request=request,
+        capability_version="not-installed",
+        diagnostic=CapabilityDiagnostic(
+            code="UNKNOWN_CAPABILITY",
+            stage="capability_resolution",
+            message=(f"Capability {request.capability_id!r} is not installed."),
+            hint=(
+                "Call math.find without capability_id to list "
+                "installed capabilities, then retry with one of those IDs."
+            ),
+        ),
+        context={
+            "available_capability_ids": [
+                descriptor.capability_id
+                for descriptor in dispatch.catalog().capabilities
+            ],
+        },
+    )
+
+
+def _capability_resolution_failure(
+    dispatch: Any,
+    request: CapabilityRequest,
+    descriptor: Any,
+) -> CapabilityResult | None:
+    policy_reasons = dispatch.policy.denial_reasons(
+        descriptor,
+        mode=request.mode,
+    )
+    if policy_reasons:
+        result = resolution_failure(
+            request=request,
+            capability_version=descriptor.version,
+            diagnostic=CapabilityDiagnostic(
+                code="CAPABILITY_POLICY_DENIED",
+                stage="capability_policy",
+                message=(
+                    f"Capability {request.capability_id!r} is denied by the "
+                    "operator-controlled capability policy."
+                ),
+                hint=(
+                    "Choose a capability visible in math.find, or ask "
+                    "the operator to change the evaluation/runtime policy."
+                ),
+                details={
+                    "policy_profile": dispatch.policy.profile,
+                    "policy_digest": dispatch.policy.digest,
+                    "reasons": list(policy_reasons),
+                    "checker_authorization_affected": False,
+                },
+            ),
+            context={"capability_policy": dispatch.policy.definition},
+        )
+        return result.model_copy(update=provider_provenance(descriptor))
+    if request.mode not in descriptor.modes:
+        result = resolution_failure(
+            request=request,
+            capability_version=descriptor.version,
+            diagnostic=CapabilityDiagnostic(
+                code="UNSUPPORTED_MODE",
+                stage="capability_resolution",
+                message=(
+                    f"Capability {request.capability_id!r} does not support "
+                    f"{request.mode.value} mode."
+                ),
+                hint=(
+                    "Call math.find for this capability, then retry "
+                    "with one of its advertised modes."
+                ),
+            ),
+            context={"available_modes": [mode.value for mode in descriptor.modes]},
+        )
+        return result.model_copy(update=provider_provenance(descriptor))
+    return None
+
+
+def _adapter_execution_failure(
+    descriptor: Any,
+    request: CapabilityRequest,
+    exc: Exception,
+) -> CapabilityResult:
+    _LOGGER.warning(
+        "capability %s stopped during execution",
+        request.capability_id,
+        exc_info=exc,
+    )
+    return failed_result(
+        descriptor=descriptor,
+        request=request,
+        diagnostic=CapabilityDiagnostic(
+            code="ADAPTER_EXECUTION_FAILED",
+            stage="adapter_execution",
+            message="The capability stopped before returning a result.",
+            hint=(
+                "Retry once. If it fails again, inspect the local Jacobian "
+                "log for this capability."
+            ),
+        ),
+    )
+
+
+def _input_validation_failure(
+    descriptor: Any,
+    request: CapabilityRequest,
+    exc: CapabilityError,
+) -> CapabilityResult:
+    path = exc.path if isinstance(exc, PayloadValidationError) else error_path(exc)
+    return failed_result(
+        descriptor=descriptor,
+        request=request,
+        diagnostic=CapabilityDiagnostic(
+            code="INVALID_REQUEST",
+            stage="capability_input_validation",
+            message=(
+                "The capability input does not match its advertised schema"
+                + (f" at {path}." if path else ".")
+            ),
+            path=path,
+            expected=(
+                exc.expected
+                if isinstance(exc, PayloadValidationError)
+                else "input matching the capability descriptor JSON Schema"
+            ),
+            actual_type=(
+                exc.actual_type
+                if isinstance(exc, PayloadValidationError)
+                else json_value_type(request.input)
+            ),
+            hint=(
+                "Correct the reported field. The exact violated constraint "
+                "and any required or missing top-level fields are included "
+                "in diagnostic details."
+            ),
+            details={
+                "required_fields": descriptor.input_schema.get("required", []),
+                "missing_fields": sorted(
+                    set(descriptor.input_schema.get("required", []))
+                    - set(request.input)
+                ),
+                **(exc.details if isinstance(exc, PayloadValidationError) else {}),
+            },
+        ),
+    )
+
+
+def _adapter_result_identity_failure(
+    *,
+    descriptor: Any,
+    request: CapabilityRequest,
+    result: CapabilityResult,
+) -> CapabilityResult | None:
+    if (
+        result.capability_id != descriptor.capability_id
+        or result.capability_version != descriptor.version
+        or result.mode is not request.mode
+    ):
+        return failed_result(
+            descriptor=descriptor,
+            request=request,
+            diagnostic=CapabilityDiagnostic(
+                code="ADAPTER_RESULT_INVALID",
+                stage="adapter_execution",
+                message="The adapter returned a result with a mismatched identity.",
+                hint="The capability adapter produced a result for a different capability or mode.",
+            ),
+        )
+    if result.provider is not None and result.provider != descriptor.provider:
+        return failed_result(
+            descriptor=descriptor,
+            request=request,
+            diagnostic=CapabilityDiagnostic(
+                code="ADAPTER_RESULT_INVALID",
+                stage="adapter_execution",
+                message="The adapter returned a result from a different provider runtime.",
+                hint="The capability adapter produced a result from a provider that differs from its descriptor.",
+            ),
+        )
+    provenance = provider_provenance(descriptor)
+    if (
+        result.provider_digest is not None
+        and result.provider_digest != provenance["provider_digest"]
+    ):
+        return failed_result(
+            descriptor=descriptor,
+            request=request,
+            diagnostic=CapabilityDiagnostic(
+                code="ADAPTER_RESULT_INVALID",
+                stage="adapter_execution",
+                message="The adapter returned a result with a mismatched provider digest.",
+                hint="The capability adapter produced a result with a provider digest that differs from its descriptor.",
+            ),
+        )
+    return None
 
 
 def _normalize_completed_adapter_output(

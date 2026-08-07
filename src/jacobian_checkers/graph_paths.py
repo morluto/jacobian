@@ -28,70 +28,36 @@ def check_omitted_path(request: dict[str, Any]) -> dict[str, Any]:
         expected_bindings = request["expected_bindings"]
         if request.get("request_version") != "1":
             return _reject("unsupported request version")
-        if witness.get("witness_format") != "graph.omitted_path":
-            return _reject("unexpected witness format")
-        if witness.get("format_version") != "1":
-            return _reject("unsupported witness format version")
-        if witness.get("role") != "DEFEATS_CANDIDATE":
-            return _reject("witness role does not defeat the candidate")
-        if witness.get("bindings") != expected_bindings:
-            return _reject("witness bindings do not match the request")
+        rejection = _validate_witness_header(
+            witness,
+            expected_bindings,
+            witness_format="graph.omitted_path",
+            role="DEFEATS_CANDIDATE",
+            role_message="witness role does not defeat the candidate",
+        )
+        if rejection is not None:
+            return rejection
         claim_payload = _claim_view(claim["payload"])
-        if claim_payload.get("predicate") != "intended_paths_complete":
-            return _reject("unsupported claim predicate")
-        if claim_payload.get("simple") is not True:
-            return _reject("checker supports simple-path semantics only")
+        rejection = _validate_path_claim(claim_payload)
+        if rejection is not None:
+            return rejection
 
         graph = candidate["payload"]
-        vertices = graph.get("vertices")
-        arcs = graph.get("arcs")
-        source = graph.get("source")
-        terminals = graph.get("terminals")
-        intended_paths = graph.get("intended_paths")
-        if (
-            not isinstance(vertices, list)
-            or not all(isinstance(vertex, str) for vertex in vertices)
-            or len(vertices) != len(set(vertices))
-        ):
-            return _reject("vertices must be a unique string list")
-        vertex_set = set(vertices)
-        if source not in vertex_set:
-            return _reject("source is not a graph vertex")
-        if (
-            not isinstance(terminals, list)
-            or not terminals
-            or not all(terminal in vertex_set for terminal in terminals)
-        ):
-            return _reject("terminals are invalid")
-        if not isinstance(arcs, list):
-            return _reject("arcs must be a list")
-        arc_pairs: list[tuple[str, str]] = []
-        for arc in arcs:
-            if (
-                not isinstance(arc, list)
-                or len(arc) != 2
-                or arc[0] not in vertex_set
-                or arc[1] not in vertex_set
-            ):
-                return _reject("arc is malformed or out of domain")
-            arc_pairs.append((arc[0], arc[1]))
-        if len(arc_pairs) != len(set(arc_pairs)):
-            return _reject("duplicate arcs are not allowed")
-        arc_set = set(arc_pairs)
+        parsed = _parse_omitted_path_graph(graph)
+        if isinstance(parsed, dict):
+            return parsed
+        vertex_set, arc_set, source, terminals, intended_paths = parsed
 
-        if not isinstance(intended_paths, list):
-            return _reject("intended_paths must be a list")
-        normalized_intended: set[tuple[str, ...]] = set()
-        for intended in intended_paths:
-            if not _is_valid_path(
-                intended,
-                vertex_set=vertex_set,
-                arc_set=arc_set,
-                source=source,
-                terminals=set(terminals),
-            ):
-                return _reject("an intended path is invalid")
-            normalized_intended.add(tuple(intended))
+        normalized = _normalize_intended_paths(
+            intended_paths,
+            vertex_set=vertex_set,
+            arc_set=arc_set,
+            source=source,
+            terminals=terminals,
+        )
+        if isinstance(normalized, dict):
+            return normalized
+        normalized_intended = normalized
 
         path = witness.get("payload", {}).get("path")
         if not _is_valid_path(
@@ -125,25 +91,17 @@ def check_path_enumeration(request: dict[str, Any]) -> dict[str, Any]:
         expected_bindings = request["expected_bindings"]
         if request.get("request_version") != "1":
             return _reject("unsupported request version")
-        if certificate.get("certificate_type") != "graph.path_enumeration":
-            return _reject("unexpected certificate format")
-        if certificate.get("format_version") != "1":
-            return _reject("unsupported certificate format version")
-        if certificate.get("bindings") != expected_bindings:
-            return _reject("certificate bindings do not match the request")
+        rejection = _validate_enumeration_certificate(certificate, expected_bindings)
+        if rejection is not None:
+            return rejection
         claim_payload = _claim_view(claim["payload"])
-        if claim_payload.get("predicate") != "intended_paths_complete":
-            return _reject("unsupported claim predicate")
-        if claim_payload.get("simple") is not True:
-            return _reject("checker supports simple-path semantics only")
-        if scope is None:
-            return _reject("path enumeration requires a bound scope")
-        scope_payload = scope["payload"]
-        if scope_payload.get("simple") is not True:
-            return _reject("scope must request simple paths")
-        max_length = scope_payload.get("max_length")
-        if not isinstance(max_length, int) or isinstance(max_length, bool):
-            return _reject("scope max_length must be an integer")
+        rejection = _validate_path_claim(claim_payload)
+        if rejection is not None:
+            return rejection
+        scope_result = _validate_enumeration_scope(scope)
+        if isinstance(scope_result, dict):
+            return scope_result
+        max_length = scope_result
 
         graph = candidate["payload"]
         parsed = _parse_graph(graph)
@@ -161,21 +119,16 @@ def check_path_enumeration(request: dict[str, Any]) -> dict[str, Any]:
             max_length=max_length,
         )
         supplied_paths = certificate.get("payload", {}).get("actual_paths")
-        if not isinstance(supplied_paths, list):
-            return _reject("certificate path table is missing")
-        supplied_tuples: list[tuple[str, ...]] = []
-        for path in supplied_paths:
-            if not _is_valid_path(
-                path,
-                vertex_set=vertex_set,
-                arc_set=arc_set,
-                source=source,
-                terminals=terminals,
-            ):
-                return _reject("certificate contains an invalid path")
-            supplied_tuples.append(tuple(path))
-        if len(supplied_tuples) != len(set(supplied_tuples)):
-            return _reject("certificate path table contains duplicates")
+        supplied_result = _validate_supplied_paths(
+            supplied_paths,
+            vertex_set=vertex_set,
+            arc_set=arc_set,
+            source=source,
+            terminals=terminals,
+        )
+        if isinstance(supplied_result, dict):
+            return supplied_result
+        supplied_tuples = supplied_result
         if set(supplied_tuples) != computed_paths:
             return _reject("certificate path table is incomplete or contains extras")
         conclusion = "TRUE" if computed_paths == intended_paths else "FALSE"
@@ -202,14 +155,15 @@ def check_odd_cycle(request: dict[str, Any]) -> dict[str, Any]:
         witness = request["witness"]["payload"]
         if claim.get("predicate") != "is_bipartite":
             return _reject("unsupported claim predicate")
-        if witness.get("witness_format") != "graph.odd_cycle":
-            return _reject("unexpected witness format")
-        if witness.get("format_version") != "1":
-            return _reject("unsupported witness format version")
-        if witness.get("role") != "DEFEATS_CANDIDATE":
-            return _reject("witness role does not defeat the candidate")
-        if witness.get("bindings") != request["expected_bindings"]:
-            return _reject("witness bindings do not match the request")
+        rejection = _validate_witness_header(
+            witness,
+            request["expected_bindings"],
+            witness_format="graph.odd_cycle",
+            role="DEFEATS_CANDIDATE",
+            role_message="witness role does not defeat the candidate",
+        )
+        if rejection is not None:
+            return rejection
         vertices = candidate.get("vertices")
         arcs = candidate.get("arcs")
         if (
@@ -266,14 +220,15 @@ def check_two_coloring(request: dict[str, Any]) -> dict[str, Any]:
         witness = request["witness"]["payload"]
         if claim.get("predicate") != "is_bipartite":
             return _reject("unsupported claim predicate")
-        if witness.get("witness_format") != "graph.2coloring":
-            return _reject("unexpected witness format")
-        if witness.get("format_version") != "1":
-            return _reject("unsupported witness format version")
-        if witness.get("role") != "SUPPORTS_CLAIM":
-            return _reject("witness role does not support the claim")
-        if witness.get("bindings") != request["expected_bindings"]:
-            return _reject("witness bindings do not match the request")
+        rejection = _validate_witness_header(
+            witness,
+            request["expected_bindings"],
+            witness_format="graph.2coloring",
+            role="SUPPORTS_CLAIM",
+            role_message="witness role does not support the claim",
+        )
+        if rejection is not None:
+            return rejection
         vertices = candidate.get("vertices")
         arcs = candidate.get("arcs")
         coloring = witness.get("payload", {}).get("coloring")
@@ -322,14 +277,11 @@ def check_counterexample_preservation(
         claim = _claim_view(request["claim"]["payload"])
         reduced = request["reduced"]["payload"]
         evidence = request["preservation"]["payload"]
-        if evidence.get("preservation_format") != ("graph.counterexample_preservation"):
-            return _reject_preservation("unexpected preservation format")
-        if evidence.get("format_version") != "1":
-            return _reject_preservation("unsupported preservation version")
-        if evidence.get("bindings") != request["expected_bindings"]:
-            return _reject_preservation(
-                "preservation bindings do not match the request"
-            )
+        rejection = _validate_preservation_evidence(
+            evidence, request["expected_bindings"]
+        )
+        if rejection is not None:
+            return rejection
         predicate = claim.get("predicate")
         if predicate == "intended_paths_complete":
             parsed = _parse_graph(reduced)
@@ -475,33 +427,24 @@ def _parse_graph(
         return None
     if not isinstance(arcs, list):
         return None
-    arc_pairs: list[tuple[str, str]] = []
-    for arc in arcs:
-        if (
-            not isinstance(arc, list)
-            or len(arc) != 2
-            or arc[0] not in vertex_set
-            or arc[1] not in vertex_set
-        ):
-            return None
-        arc_pairs.append((arc[0], arc[1]))
+    arc_pairs = _parse_graph_arcs(arcs, vertex_set)
+    if arc_pairs is None:
+        return None
     if len(arc_pairs) != len(set(arc_pairs)) or not isinstance(intended, list):
         return None
     arc_set = set(arc_pairs)
     terminal_set: set[str] = set(terminals)
     if source in terminal_set:
         return None
-    intended_set: set[tuple[str, ...]] = set()
-    for path in intended:
-        if not _is_valid_path(
-            path,
-            vertex_set=vertex_set,
-            arc_set=arc_set,
-            source=source,
-            terminals=terminal_set,
-        ):
-            return None
-        intended_set.add(tuple(path))
+    intended_set = _parse_intended_paths(
+        intended,
+        vertex_set=vertex_set,
+        arc_set=arc_set,
+        source=source,
+        terminal_set=terminal_set,
+    )
+    if intended_set is None:
+        return None
     return vertex_set, arc_set, source, terminal_set, intended_set
 
 
@@ -552,3 +495,203 @@ def _is_valid_path(
     ):
         return False
     return all((left, right) in arc_set for left, right in pairwise(path))
+
+
+def _validate_witness_header(
+    witness: dict[str, Any],
+    expected_bindings: object,
+    *,
+    witness_format: str,
+    role: str,
+    role_message: str,
+) -> dict[str, Any] | None:
+    if witness.get("witness_format") != witness_format:
+        return _reject("unexpected witness format")
+    if witness.get("format_version") != "1":
+        return _reject("unsupported witness format version")
+    if witness.get("role") != role:
+        return _reject(role_message)
+    if witness.get("bindings") != expected_bindings:
+        return _reject("witness bindings do not match the request")
+    return None
+
+
+def _validate_path_claim(claim_payload: dict[str, Any]) -> dict[str, Any] | None:
+    if claim_payload.get("predicate") != "intended_paths_complete":
+        return _reject("unsupported claim predicate")
+    if claim_payload.get("simple") is not True:
+        return _reject("checker supports simple-path semantics only")
+    return None
+
+
+def _parse_omitted_path_graph(
+    graph: dict[str, Any],
+) -> tuple[set[str], set[tuple[str, str]], str, list[str], Any] | dict[str, Any]:
+    vertices = graph.get("vertices")
+    arcs = graph.get("arcs")
+    source = graph.get("source")
+    terminals = graph.get("terminals")
+    intended_paths = graph.get("intended_paths")
+    if (
+        not isinstance(vertices, list)
+        or not all(isinstance(vertex, str) for vertex in vertices)
+        or len(vertices) != len(set(vertices))
+    ):
+        return _reject("vertices must be a unique string list")
+    vertex_set = set(vertices)
+    if not isinstance(source, str) or source not in vertex_set:
+        return _reject("source is not a graph vertex")
+    if (
+        not isinstance(terminals, list)
+        or not terminals
+        or not all(terminal in vertex_set for terminal in terminals)
+    ):
+        return _reject("terminals are invalid")
+    if not isinstance(arcs, list):
+        return _reject("arcs must be a list")
+    arc_pairs: list[tuple[str, str]] = []
+    for arc in arcs:
+        if (
+            not isinstance(arc, list)
+            or len(arc) != 2
+            or arc[0] not in vertex_set
+            or arc[1] not in vertex_set
+        ):
+            return _reject("arc is malformed or out of domain")
+        arc_pairs.append((arc[0], arc[1]))
+    if len(arc_pairs) != len(set(arc_pairs)):
+        return _reject("duplicate arcs are not allowed")
+    arc_set = set(arc_pairs)
+    terminal_list = [terminal for terminal in terminals if isinstance(terminal, str)]
+    return vertex_set, arc_set, source, terminal_list, intended_paths
+
+
+def _normalize_intended_paths(
+    intended_paths: object,
+    *,
+    vertex_set: set[str],
+    arc_set: set[tuple[str, str]],
+    source: str,
+    terminals: list[str],
+) -> set[tuple[str, ...]] | dict[str, Any]:
+    if not isinstance(intended_paths, list):
+        return _reject("intended_paths must be a list")
+    normalized_intended: set[tuple[str, ...]] = set()
+    for intended in intended_paths:
+        if not _is_valid_path(
+            intended,
+            vertex_set=vertex_set,
+            arc_set=arc_set,
+            source=source,
+            terminals=set(terminals),
+        ):
+            return _reject("an intended path is invalid")
+        normalized_intended.add(tuple(intended))
+    return normalized_intended
+
+
+def _validate_enumeration_certificate(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> dict[str, Any] | None:
+    if certificate.get("certificate_type") != "graph.path_enumeration":
+        return _reject("unexpected certificate format")
+    if certificate.get("format_version") != "1":
+        return _reject("unsupported certificate format version")
+    if certificate.get("bindings") != expected_bindings:
+        return _reject("certificate bindings do not match the request")
+    return None
+
+
+def _validate_enumeration_scope(scope: object) -> int | dict[str, Any]:
+    if not isinstance(scope, dict):
+        return _reject("path enumeration requires a bound scope")
+    scope_payload = scope["payload"]
+    if scope_payload.get("simple") is not True:
+        return _reject("scope must request simple paths")
+    max_length = scope_payload.get("max_length")
+    if not isinstance(max_length, int) or isinstance(max_length, bool):
+        return _reject("scope max_length must be an integer")
+    return max_length
+
+
+def _validate_supplied_paths(
+    supplied_paths: object,
+    *,
+    vertex_set: set[str],
+    arc_set: set[tuple[str, str]],
+    source: str,
+    terminals: set[str],
+) -> list[tuple[str, ...]] | dict[str, Any]:
+    if not isinstance(supplied_paths, list):
+        return _reject("certificate path table is missing")
+    supplied_tuples: list[tuple[str, ...]] = []
+    for path in supplied_paths:
+        if not _is_valid_path(
+            path,
+            vertex_set=vertex_set,
+            arc_set=arc_set,
+            source=source,
+            terminals=terminals,
+        ):
+            return _reject("certificate contains an invalid path")
+        supplied_tuples.append(tuple(path))
+    if len(supplied_tuples) != len(set(supplied_tuples)):
+        return _reject("certificate path table contains duplicates")
+    return supplied_tuples
+
+
+def _validate_preservation_evidence(
+    evidence: dict[str, Any],
+    expected_bindings: object,
+) -> dict[str, Any] | None:
+    if evidence.get("preservation_format") != ("graph.counterexample_preservation"):
+        return _reject_preservation("unexpected preservation format")
+    if evidence.get("format_version") != "1":
+        return _reject_preservation("unsupported preservation version")
+    if evidence.get("bindings") != expected_bindings:
+        return _reject_preservation("preservation bindings do not match the request")
+    return None
+
+
+def _parse_graph_arcs(
+    arcs: object,
+    vertex_set: set[str],
+) -> list[tuple[str, str]] | None:
+    if not isinstance(arcs, list):
+        return None
+    arc_pairs: list[tuple[str, str]] = []
+    for arc in arcs:
+        if (
+            not isinstance(arc, list)
+            or len(arc) != 2
+            or arc[0] not in vertex_set
+            or arc[1] not in vertex_set
+        ):
+            return None
+        arc_pairs.append((arc[0], arc[1]))
+    return arc_pairs
+
+
+def _parse_intended_paths(
+    intended: object,
+    *,
+    vertex_set: set[str],
+    arc_set: set[tuple[str, str]],
+    source: str,
+    terminal_set: set[str],
+) -> set[tuple[str, ...]] | None:
+    if not isinstance(intended, list):
+        return None
+    intended_set: set[tuple[str, ...]] = set()
+    for path in intended:
+        if not _is_valid_path(
+            path,
+            vertex_set=vertex_set,
+            arc_set=arc_set,
+            source=source,
+            terminals=terminal_set,
+        ):
+            return None
+        intended_set.add(tuple(path))
+    return intended_set

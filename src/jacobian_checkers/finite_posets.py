@@ -143,22 +143,20 @@ def _ranks(
     return [{"element": element, "rank": rank_for[element]} for element in elements]
 
 
-def _expected_poset_from_presentation(source: object) -> dict[str, Any]:
-    if not isinstance(source, dict) or set(source) != {
-        "elements",
-        "relation",
-        "interpretation",
-        "reflexive_pairs",
-    }:
-        raise ValueError("finite-poset presentation is malformed")
+def _parse_poset_elements(source: dict[str, Any]) -> list[str]:
     raw_elements = source["elements"]
     if not isinstance(raw_elements, list) or len(raw_elements) > _MAX_ELEMENTS:
         raise ValueError("finite-poset carrier is malformed")
     input_elements = [_label(value) for value in raw_elements]
     if len(input_elements) != len(set(input_elements)):
         raise ValueError("finite-poset carrier repeats a label")
-    elements = sorted(input_elements)
-    carrier = set(elements)
+    return sorted(input_elements)
+
+
+def _parse_poset_relation(
+    source: dict[str, Any],
+    carrier: set[str],
+) -> list[tuple[str, str]]:
     raw_relation = source["relation"]
     if not isinstance(raw_relation, list) or len(raw_relation) > _MAX_RELATIONS:
         raise ValueError("finite-poset relation is malformed")
@@ -170,6 +168,104 @@ def _expected_poset_from_presentation(source: object) -> dict[str, Any]:
         if lower not in carrier or upper not in carrier:
             raise ValueError("relation endpoint is outside the carrier")
         supplied_list.append((lower, upper))
+    return supplied_list
+
+
+def _resolve_strict_order(
+    supplied: set[tuple[str, str]],
+    diagonal: set[tuple[str, str]],
+    interpretation: str,
+    reflexive: str,
+) -> set[tuple[str, str]]:
+    if interpretation == "COVER_EDGES":
+        if reflexive != "FORBIDDEN" or supplied & diagonal:
+            raise ValueError("cover relation has invalid reflexive semantics")
+        return supplied
+    if reflexive == "FORBIDDEN" and supplied & diagonal:
+        raise ValueError("forbidden diagonal is present")
+    if reflexive == "REQUIRED" and supplied & diagonal != diagonal:
+        raise ValueError("required diagonal is incomplete")
+    return supplied - diagonal
+
+
+def _validate_relation_completeness(
+    strict: set[tuple[str, str]],
+    closure: set[tuple[str, str]],
+    covers: set[tuple[str, str]],
+    interpretation: str,
+) -> None:
+    if interpretation == "COVER_EDGES" and strict != covers:
+        raise ValueError("cover relation is transitively redundant")
+    if interpretation == "COMPARABLE_PAIRS" and strict != closure:
+        raise ValueError("comparable relation is not transitively complete")
+
+
+def _incomparable_pairs(
+    elements: list[str],
+    closure: set[tuple[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        {"left": left, "right": right}
+        for index, left in enumerate(elements)
+        for right in elements[index + 1 :]
+        if (left, right) not in closure and (right, left) not in closure
+    ]
+
+
+def _extremal_elements(
+    elements: list[str],
+    closure: set[tuple[str, str]],
+    *,
+    maximal: bool,
+) -> list[str]:
+    if maximal:
+        return [
+            element
+            for element in elements
+            if not any(lower == element for lower, _ in closure)
+        ]
+    return [
+        element
+        for element in elements
+        if not any(upper == element for _, upper in closure)
+    ]
+
+
+def _build_poset_payload(
+    elements: list[str],
+    closure: set[tuple[str, str]],
+    covers: set[tuple[str, str]],
+    ranks: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    payload = {
+        "poset_format": "jacobian.finite-poset/v1",
+        "elements": elements,
+        "strict_order_pairs": [
+            {"lower": lower, "upper": upper} for lower, upper in sorted(closure)
+        ],
+        "cover_relations": [
+            {"lower": lower, "upper": upper} for lower, upper in sorted(covers)
+        ],
+        "incomparable_pairs": _incomparable_pairs(elements, closure),
+        "minimal_elements": _extremal_elements(elements, closure, maximal=False),
+        "maximal_elements": _extremal_elements(elements, closure, maximal=True),
+        "graded": ranks is not None,
+        "ranks": ranks,
+    }
+    return {**payload, "poset_digest": _digest(payload)}
+
+
+def _expected_poset_from_presentation(source: object) -> dict[str, Any]:
+    if not isinstance(source, dict) or set(source) != {
+        "elements",
+        "relation",
+        "interpretation",
+        "reflexive_pairs",
+    }:
+        raise ValueError("finite-poset presentation is malformed")
+    elements = _parse_poset_elements(source)
+    carrier = set(elements)
+    supplied_list = _parse_poset_relation(source, carrier)
     if len(supplied_list) != len(set(supplied_list)):
         raise ValueError("finite-poset relation repeats a pair")
     supplied = set(supplied_list)
@@ -180,55 +276,14 @@ def _expected_poset_from_presentation(source: object) -> dict[str, Any]:
     if reflexive not in {"FORBIDDEN", "REQUIRED"}:
         raise ValueError("unknown reflexive policy")
     diagonal = {(element, element) for element in elements}
-    if interpretation == "COVER_EDGES":
-        if reflexive != "FORBIDDEN" or supplied & diagonal:
-            raise ValueError("cover relation has invalid reflexive semantics")
-        strict = supplied
-    else:
-        if reflexive == "FORBIDDEN" and supplied & diagonal:
-            raise ValueError("forbidden diagonal is present")
-        if reflexive == "REQUIRED" and supplied & diagonal != diagonal:
-            raise ValueError("required diagonal is incomplete")
-        strict = supplied - diagonal
+    strict = _resolve_strict_order(supplied, diagonal, interpretation, reflexive)
     if any((upper, lower) in strict for lower, upper in strict):
         raise ValueError("relation is not antisymmetric")
     closure = _closure(elements, strict)
     covers = _reduction(elements, closure)
-    if interpretation == "COVER_EDGES" and strict != covers:
-        raise ValueError("cover relation is transitively redundant")
-    if interpretation == "COMPARABLE_PAIRS" and strict != closure:
-        raise ValueError("comparable relation is not transitively complete")
+    _validate_relation_completeness(strict, closure, covers, interpretation)
     ranks = _ranks(elements, covers)
-    incomparable = [
-        {"left": left, "right": right}
-        for index, left in enumerate(elements)
-        for right in elements[index + 1 :]
-        if (left, right) not in closure and (right, left) not in closure
-    ]
-    payload = {
-        "poset_format": "jacobian.finite-poset/v1",
-        "elements": elements,
-        "strict_order_pairs": [
-            {"lower": lower, "upper": upper} for lower, upper in sorted(closure)
-        ],
-        "cover_relations": [
-            {"lower": lower, "upper": upper} for lower, upper in sorted(covers)
-        ],
-        "incomparable_pairs": incomparable,
-        "minimal_elements": [
-            element
-            for element in elements
-            if not any(upper == element for _, upper in closure)
-        ],
-        "maximal_elements": [
-            element
-            for element in elements
-            if not any(lower == element for lower, _ in closure)
-        ],
-        "graded": ranks is not None,
-        "ranks": ranks,
-    }
-    return {**payload, "poset_digest": _digest(payload)}
+    return _build_poset_payload(elements, closure, covers, ranks)
 
 
 def _parse_poset(value: object) -> dict[str, Any]:
@@ -291,6 +346,123 @@ def _inline_poset_claim(source: dict[str, Any]) -> Any | None:
     return source["poset"]
 
 
+def _antichain_fields_are_valid(
+    result: dict[str, Any],
+    poset: dict[str, Any],
+    width: int,
+    antichain: object,
+    chains: object,
+) -> bool:
+    return (
+        result["poset_digest"] == poset["poset_digest"]
+        and result["certificate"] == "DILWORTH_ANTICHAIN_CHAIN_COVER"
+        and 0 <= width <= len(poset["elements"])
+        and isinstance(antichain, list)
+        and antichain == sorted(set(antichain))
+        and len(antichain) == width
+        and isinstance(chains, list)
+        and len(chains) == width
+    )
+
+
+def _antichain_is_valid(
+    result: dict[str, Any],
+    poset: dict[str, Any],
+    carrier: set[str],
+    relation: set[tuple[str, str]],
+    width: int,
+    antichain: object,
+    chains: object,
+) -> bool:
+    if not _antichain_fields_are_valid(result, poset, width, antichain, chains):
+        return False
+    if not isinstance(antichain, list):
+        return False
+    if any(_label(element) not in carrier for element in antichain):
+        return False
+    return not any(
+        (left, right) in relation or (right, left) in relation
+        for index, left in enumerate(antichain)
+        for right in antichain[index + 1 :]
+    )
+
+
+def _chain_members_are_valid(
+    members: object,
+    carrier: set[str],
+    relation: set[tuple[str, str]],
+) -> bool:
+    return (
+        isinstance(members, list)
+        and bool(members)
+        and all(_label(member) in carrier for member in members)
+        and all((lower, upper) in relation for lower, upper in pairwise(members))
+    )
+
+
+def _validate_chain_cover(
+    chains: object,
+    carrier: set[str],
+    relation: set[tuple[str, str]],
+    elements: list[str],
+) -> tuple[list[str], set[tuple[str, str]], bool]:
+    flattened: list[str] = []
+    transitions: set[tuple[str, str]] = set()
+    if not isinstance(chains, list):
+        return flattened, transitions, False
+    for chain in chains:
+        if not isinstance(chain, dict) or set(chain) != {"elements"}:
+            return flattened, transitions, False
+        members = chain["elements"]
+        if not _chain_members_are_valid(members, carrier, relation):
+            return flattened, transitions, False
+        flattened.extend(members)
+        transitions.update(pairwise(members))
+    if sorted(flattened) != elements or len(flattened) != len(set(flattened)):
+        return flattened, transitions, False
+    return flattened, transitions, True
+
+
+def _matching_pairs_are_valid(
+    matching_pairs: list[tuple[str, str]],
+    transitions: set[tuple[str, str]],
+    matching_size: int,
+    width: int,
+    elements: list[str],
+) -> bool:
+    return (
+        matching_pairs == sorted(set(matching_pairs))
+        and len({left for left, _ in matching_pairs}) == len(matching_pairs)
+        and len({right for _, right in matching_pairs}) == len(matching_pairs)
+        and set(matching_pairs) == transitions
+        and matching_size == len(matching_pairs)
+        and matching_size + width == len(elements)
+    )
+
+
+def _matching_is_valid(
+    matching: object,
+    relation: set[tuple[str, str]],
+    transitions: set[tuple[str, str]],
+    matching_size: int,
+    width: int,
+    elements: list[str],
+) -> bool:
+    if not isinstance(matching, list):
+        return False
+    matching_pairs: list[tuple[str, str]] = []
+    for edge in matching:
+        if not isinstance(edge, dict) or set(edge) != {"left", "right"}:
+            return False
+        pair = (_label(edge["left"]), _label(edge["right"]))
+        if pair not in relation:
+            return False
+        matching_pairs.append(pair)
+    return _matching_pairs_are_valid(
+        matching_pairs, transitions, matching_size, width, elements
+    )
+
+
 def _replay_width(source: dict[str, Any], result: dict[str, Any]) -> bool:
     poset_claim = _inline_poset_claim(source)
     if poset_claim is None:
@@ -316,58 +488,18 @@ def _replay_width(source: dict[str, Any], result: dict[str, Any]) -> bool:
     antichain = result["maximum_antichain"]
     chains = result["minimum_chain_cover"]
     matching = result["matching"]
-    if (
-        result["poset_digest"] != poset["poset_digest"]
-        or result["certificate"] != "DILWORTH_ANTICHAIN_CHAIN_COVER"
-        or not 0 <= width <= len(elements)
-        or not isinstance(antichain, list)
-        or antichain != sorted(set(antichain))
-        or any(_label(element) not in carrier for element in antichain)
-        or len(antichain) != width
-        or any(
-            (left, right) in relation or (right, left) in relation
-            for index, left in enumerate(antichain)
-            for right in antichain[index + 1 :]
-        )
-        or not isinstance(chains, list)
-        or len(chains) != width
+    if not _antichain_is_valid(
+        result, poset, carrier, relation, width, antichain, chains
     ):
         return False
-    flattened: list[str] = []
-    transitions: set[tuple[str, str]] = set()
-    for chain in chains:
-        if not isinstance(chain, dict) or set(chain) != {"elements"}:
-            return False
-        members = chain["elements"]
-        if (
-            not isinstance(members, list)
-            or not members
-            or any(_label(member) not in carrier for member in members)
-            or any((lower, upper) not in relation for lower, upper in pairwise(members))
-        ):
-            return False
-        flattened.extend(members)
-        transitions.update(pairwise(members))
-    if sorted(flattened) != elements or len(flattened) != len(set(flattened)):
+    _flattened, transitions, valid = _validate_chain_cover(
+        chains, carrier, relation, elements
+    )
+    if not valid:
         return False
-    if not isinstance(matching, list):
-        return False
-    matching_pairs: list[tuple[str, str]] = []
-    for edge in matching:
-        if not isinstance(edge, dict) or set(edge) != {"left", "right"}:
-            return False
-        pair = (_label(edge["left"]), _label(edge["right"]))
-        if pair not in relation:
-            return False
-        matching_pairs.append(pair)
     matching_size = _strict_int(result["matching_size"])
-    return (
-        matching_pairs == sorted(set(matching_pairs))
-        and len({left for left, _ in matching_pairs}) == len(matching_pairs)
-        and len({right for _, right in matching_pairs}) == len(matching_pairs)
-        and set(matching_pairs) == transitions
-        and matching_size == len(matching_pairs)
-        and matching_size + width == len(elements)
+    return _matching_is_valid(
+        matching, relation, transitions, matching_size, width, elements
     )
 
 

@@ -39,6 +39,56 @@ def _factor(value):
     return factors
 
 
+def _validate_value_row(row, integer):
+    if set(row) != {
+        "value",
+        "factors",
+        "is_powerful",
+        "violating_primes",
+    }:
+        raise ValueError
+    if (
+        type(row["is_powerful"]) is not bool
+        or not isinstance(row["factors"], list)
+        or not isinstance(row["violating_primes"], list)
+        or any(
+            not isinstance(factor, dict)
+            or set(factor) != {"prime", "power"}
+            or type(factor["prime"]) is not str
+            or type(factor["power"]) is not int
+            or isinstance(factor["power"], bool)
+            for factor in row["factors"]
+        )
+        or any(type(prime) is not str for prime in row["violating_primes"])
+    ):
+        raise ValueError
+    parsed = _positive_integer(row["value"])
+    factors = _factor(integer)
+    violating = [item["prime"] for item in factors if item["power"] < 2]
+    powerful = not violating
+    # Normalize nested factor collections: the instruction and public
+    # evidence schema do not specify an ordering, so compare by prime
+    # and reject duplicates rather than requiring the verifier's
+    # sorted presentation.
+    submitted_factors = sorted(
+        row["factors"], key=lambda f: _positive_integer(f["prime"])
+    )
+    if len(submitted_factors) != len({f["prime"] for f in submitted_factors}):
+        raise ValueError
+    submitted_violating = sorted(row["violating_primes"], key=_positive_integer)
+    if len(submitted_violating) != len(set(submitted_violating)):
+        raise ValueError
+    if (
+        parsed != integer
+        or row["value"] != str(integer)
+        or submitted_factors != factors
+        or row["is_powerful"] != powerful
+        or submitted_violating != violating
+    ):
+        raise ValueError
+    return powerful
+
+
 def _value_decisions(rows, expected_values):
     if not isinstance(rows, list) or len(rows) != len(expected_values):
         raise ValueError
@@ -52,53 +102,7 @@ def _value_decisions(rows, expected_values):
         raise ValueError
     decisions = {}
     for row, integer in zip(normalized, sorted(expected_values), strict=True):
-        if set(row) != {
-            "value",
-            "factors",
-            "is_powerful",
-            "violating_primes",
-        }:
-            raise ValueError
-        if (
-            type(row["is_powerful"]) is not bool
-            or not isinstance(row["factors"], list)
-            or not isinstance(row["violating_primes"], list)
-            or any(
-                not isinstance(factor, dict)
-                or set(factor) != {"prime", "power"}
-                or type(factor["prime"]) is not str
-                or type(factor["power"]) is not int
-                or isinstance(factor["power"], bool)
-                for factor in row["factors"]
-            )
-            or any(type(prime) is not str for prime in row["violating_primes"])
-        ):
-            raise ValueError
-        parsed = _positive_integer(row["value"])
-        factors = _factor(integer)
-        violating = [item["prime"] for item in factors if item["power"] < 2]
-        powerful = not violating
-        # Normalize nested factor collections: the instruction and public
-        # evidence schema do not specify an ordering, so compare by prime
-        # and reject duplicates rather than requiring the verifier's
-        # sorted presentation.
-        submitted_factors = sorted(
-            row["factors"], key=lambda f: _positive_integer(f["prime"])
-        )
-        if len(submitted_factors) != len({f["prime"] for f in submitted_factors}):
-            raise ValueError
-        submitted_violating = sorted(row["violating_primes"], key=_positive_integer)
-        if len(submitted_violating) != len(set(submitted_violating)):
-            raise ValueError
-        if (
-            parsed != integer
-            or row["value"] != str(integer)
-            or submitted_factors != factors
-            or row["is_powerful"] != powerful
-            or submitted_violating != violating
-        ):
-            raise ValueError
-        decisions[integer] = powerful
+        decisions[integer] = _validate_value_row(row, integer)
     return decisions
 
 

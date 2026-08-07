@@ -50,6 +50,31 @@ def _load_lock(lock_path: Path) -> tuple[dict[str, object] | None, list[str]]:
     return lock, failures
 
 
+def _parity_evidence_failures(
+    lock_path: Path, evidence_path: Path, payload: dict[str, object]
+) -> list[str]:
+    failures: list[str] = []
+    expected_digest = payload.get("task_digest")
+    if payload.get("task_digest_matches") is False:
+        failures.append(
+            f"{_display(lock_path)}: {_display(evidence_path)} reports "
+            "task_digest_matches=false"
+        )
+    for key in ("source_task_digest", "generated_task_digest", "task_digest"):
+        value = payload.get(key)
+        if (
+            value is not None
+            and expected_digest is not None
+            and value != expected_digest
+        ):
+            failures.append(
+                f"{_display(lock_path)}: {_display(evidence_path)} {key} "
+                f"{value!r} does not match lock output task_digest "
+                f"{expected_digest!r}"
+            )
+    return failures
+
+
 def _evidence_failures(
     adapter: Path, lock_path: Path, output: dict[str, object]
 ) -> list[str]:
@@ -107,23 +132,9 @@ def _evidence_failures(
                 f"{expected_digest!r}"
             )
         if filename == "parity-evidence.json":
-            if payload.get("task_digest_matches") is False:
-                failures.append(
-                    f"{_display(lock_path)}: {_display(evidence_path)} reports "
-                    "task_digest_matches=false"
-                )
-            for key in ("source_task_digest", "generated_task_digest", "task_digest"):
-                value = payload.get(key)
-                if (
-                    value is not None
-                    and expected_digest is not None
-                    and value != expected_digest
-                ):
-                    failures.append(
-                        f"{_display(lock_path)}: {_display(evidence_path)} {key} "
-                        f"{value!r} does not match lock output task_digest "
-                        f"{expected_digest!r}"
-                    )
+            failures.extend(
+                _parity_evidence_failures(lock_path, evidence_path, payload)
+            )
     return failures
 
 

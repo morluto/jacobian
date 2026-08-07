@@ -16,6 +16,95 @@ def _reject(detail: str) -> dict[str, Any]:
     }
 
 
+def _certificate_detail(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+    claim_uri: object,
+) -> str | None:
+    if certificate.get("certificate_type") != "finite.partition":
+        return "unexpected certificate type"
+    if certificate.get("format_version") != "1":
+        return "unsupported certificate format"
+    if certificate.get("bindings") != expected_bindings:
+        return "certificate bindings do not match request"
+    certificate_payload = certificate.get("payload")
+    if (
+        not isinstance(certificate_payload, dict)
+        or certificate_payload.get("relation_id") != "case.relation.partitions"
+        or certificate_payload.get("obligation_uri") != claim_uri
+    ):
+        return "certificate relationship metadata is not bound"
+    return None
+
+
+def _scope_and_cases_detail(universe: object, cases: object) -> str | None:
+    if (
+        not isinstance(universe, list)
+        or not all(isinstance(item, str) for item in universe)
+        or len(universe) != len(set(universe))
+        or not isinstance(cases, list)
+    ):
+        return "scope or partition is malformed"
+    return None
+
+
+def _case_fields_detail(
+    case_id: object,
+    members: object,
+    seen_case_ids: set[str],
+) -> str | None:
+    if (
+        not isinstance(case_id, str)
+        or not case_id
+        or case_id in seen_case_ids
+        or not isinstance(members, list)
+        or not all(isinstance(member, str) for member in members)
+        or len(members) != len(set(members))
+    ):
+        return "case identifiers or members are malformed"
+    return None
+
+
+def _validate_case_memberships(
+    members: list[str],
+    universe_set: set[str],
+    memberships: dict[str, str],
+    case_id: str,
+    require_disjoint: bool,
+) -> str | None:
+    for member in members:
+        if member not in universe_set:
+            return "partition contains an element outside the scope"
+        if require_disjoint and member in memberships:
+            return "partition cases overlap"
+        memberships[member] = case_id
+    return None
+
+
+def _validate_cases(
+    cases: list[Any],
+    universe_set: set[str],
+    require_disjoint: bool,
+) -> tuple[dict[str, str], str | None]:
+    seen_case_ids: set[str] = set()
+    memberships: dict[str, str] = {}
+    for case in cases:
+        if not isinstance(case, dict) or set(case) != {"case_id", "members"}:
+            return memberships, "case is malformed"
+        case_id = case["case_id"]
+        members = case["members"]
+        detail = _case_fields_detail(case_id, members, seen_case_ids)
+        if detail is not None:
+            return memberships, detail
+        seen_case_ids.add(case_id)
+        detail = _validate_case_memberships(
+            members, universe_set, memberships, case_id, require_disjoint
+        )
+        if detail is not None:
+            return memberships, detail
+    return memberships, None
+
+
 def check_partition(request: dict[str, Any]) -> dict[str, Any]:
     """Recompute finite coverage and disjointness from bound artifacts."""
 
@@ -28,53 +117,23 @@ def check_partition(request: dict[str, Any]) -> dict[str, Any]:
         certificate = request["certificate"]["payload"]
         if claim.get("predicate") != "finite_partition":
             return _reject("unsupported claim predicate")
-        if certificate.get("certificate_type") != "finite.partition":
-            return _reject("unexpected certificate type")
-        if certificate.get("format_version") != "1":
-            return _reject("unsupported certificate format")
-        if certificate.get("bindings") != request["expected_bindings"]:
-            return _reject("certificate bindings do not match request")
-        certificate_payload = certificate.get("payload")
         claim_uri = request["claim"].get("artifact_uri")
-        if (
-            not isinstance(certificate_payload, dict)
-            or certificate_payload.get("relation_id") != "case.relation.partitions"
-            or certificate_payload.get("obligation_uri") != claim_uri
-        ):
-            return _reject("certificate relationship metadata is not bound")
+        detail = _certificate_detail(
+            certificate, request["expected_bindings"], claim_uri
+        )
+        if detail is not None:
+            return _reject(detail)
         universe = scope.get("elements")
         cases = partition.get("cases")
-        if (
-            not isinstance(universe, list)
-            or not all(isinstance(item, str) for item in universe)
-            or len(universe) != len(set(universe))
-            or not isinstance(cases, list)
-        ):
-            return _reject("scope or partition is malformed")
+        detail = _scope_and_cases_detail(universe, cases)
+        if detail is not None:
+            return _reject(detail)
         universe_set = set(universe)
-        seen_case_ids: set[str] = set()
-        memberships: dict[str, str] = {}
-        for case in cases:
-            if not isinstance(case, dict) or set(case) != {"case_id", "members"}:
-                return _reject("case is malformed")
-            case_id = case["case_id"]
-            members = case["members"]
-            if (
-                not isinstance(case_id, str)
-                or not case_id
-                or case_id in seen_case_ids
-                or not isinstance(members, list)
-                or not all(isinstance(member, str) for member in members)
-                or len(members) != len(set(members))
-            ):
-                return _reject("case identifiers or members are malformed")
-            seen_case_ids.add(case_id)
-            for member in members:
-                if member not in universe_set:
-                    return _reject("partition contains an element outside the scope")
-                if claim.get("require_disjoint", True) and member in memberships:
-                    return _reject("partition cases overlap")
-                memberships[member] = case_id
+        memberships, detail = _validate_cases(
+            cases, universe_set, claim.get("require_disjoint", True)
+        )
+        if detail is not None:
+            return _reject(detail)
         if set(memberships) != universe_set:
             return _reject("partition does not cover the exact finite scope")
         return {

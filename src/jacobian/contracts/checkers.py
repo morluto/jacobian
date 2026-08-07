@@ -108,6 +108,67 @@ class CheckerAuditEvent(ContractModel):
     recorded_at: str
 
 
+def _validate_rejected_checker_evidence(
+    accepted: bool,
+    conclusion: Conclusion,
+    relation_id: CapabilityId | None,
+    relationship_source_artifact_uris: tuple[ArtifactUri, ...],
+    relationship_target_artifact_uris: tuple[ArtifactUri, ...],
+    obligation_uri: ArtifactUri | None,
+) -> None:
+    if not accepted and conclusion not in {
+        Conclusion.UNKNOWN,
+        Conclusion.NOT_APPLICABLE,
+    }:
+        raise ValueError("a rejected checker input cannot decide the claim")
+    if not accepted and (
+        relation_id is not None
+        or relationship_source_artifact_uris
+        or relationship_target_artifact_uris
+        or obligation_uri is not None
+    ):
+        raise ValueError("rejected evidence cannot certify relationship metadata")
+
+
+def _validate_certified_relationship_endpoints(
+    relation_id: CapabilityId | None,
+    relationship_source_artifact_uris: tuple[ArtifactUri, ...],
+    relationship_target_artifact_uris: tuple[ArtifactUri, ...],
+) -> None:
+    if relation_id is None and (
+        relationship_source_artifact_uris or relationship_target_artifact_uris
+    ):
+        raise ValueError("relationship endpoints require a relation ID")
+    if relation_id is not None and (
+        not relationship_source_artifact_uris or not relationship_target_artifact_uris
+    ):
+        raise ValueError("a certified relationship requires exact endpoints")
+    if len(set(relationship_source_artifact_uris)) != len(
+        relationship_source_artifact_uris
+    ) or len(set(relationship_target_artifact_uris)) != len(
+        relationship_target_artifact_uris
+    ):
+        raise ValueError("certified relationship endpoints must be unique")
+
+
+def _validate_accepted_checker_evidence(
+    conclusion: Conclusion,
+    arithmetic: Arithmetic,
+    coverage: Coverage,
+    method: Method,
+) -> None:
+    if conclusion not in {Conclusion.TRUE, Conclusion.FALSE}:
+        raise ValueError("accepted checker evidence requires a decisive conclusion")
+    if arithmetic == Arithmetic.FLOATING_HEURISTIC:
+        raise ValueError("a checker cannot accept floating heuristic evidence")
+    if coverage in {Coverage.RESTRICTED, Coverage.SAMPLED}:
+        raise ValueError("a checker cannot accept restricted or sampled evidence")
+    if method == Method.DIRECT_WITNESS and coverage != Coverage.NOT_APPLICABLE:
+        raise ValueError("a direct witness checker cannot claim coverage")
+    if method == Method.EXHAUSTIVE_FINITE and coverage != Coverage.EXHAUSTIVE:
+        raise ValueError("exhaustive checker acceptance requires exhaustive coverage")
+
+
 class CheckerDecision(ContractModel):
     accepted: bool
     conclusion: Conclusion
@@ -122,55 +183,24 @@ class CheckerDecision(ContractModel):
 
     @model_validator(mode="after")
     def rejected_evidence_has_no_mathematical_conclusion(self) -> Self:
-        if not self.accepted and self.conclusion not in {
-            Conclusion.UNKNOWN,
-            Conclusion.NOT_APPLICABLE,
-        }:
-            raise ValueError("a rejected checker input cannot decide the claim")
-        if not self.accepted and (
-            self.relation_id is not None
-            or self.relationship_source_artifact_uris
-            or self.relationship_target_artifact_uris
-            or self.obligation_uri is not None
-        ):
-            raise ValueError("rejected evidence cannot certify relationship metadata")
-        if self.relation_id is None and (
-            self.relationship_source_artifact_uris
-            or self.relationship_target_artifact_uris
-        ):
-            raise ValueError("relationship endpoints require a relation ID")
-        if self.relation_id is not None and (
-            not self.relationship_source_artifact_uris
-            or not self.relationship_target_artifact_uris
-        ):
-            raise ValueError("a certified relationship requires exact endpoints")
-        if len(set(self.relationship_source_artifact_uris)) != len(
-            self.relationship_source_artifact_uris
-        ) or len(set(self.relationship_target_artifact_uris)) != len(
-            self.relationship_target_artifact_uris
-        ):
-            raise ValueError("certified relationship endpoints must be unique")
+        _validate_rejected_checker_evidence(
+            self.accepted,
+            self.conclusion,
+            self.relation_id,
+            self.relationship_source_artifact_uris,
+            self.relationship_target_artifact_uris,
+            self.obligation_uri,
+        )
+        _validate_certified_relationship_endpoints(
+            self.relation_id,
+            self.relationship_source_artifact_uris,
+            self.relationship_target_artifact_uris,
+        )
         if self.accepted:
-            if self.conclusion not in {Conclusion.TRUE, Conclusion.FALSE}:
-                raise ValueError(
-                    "accepted checker evidence requires a decisive conclusion"
-                )
-            if self.arithmetic == Arithmetic.FLOATING_HEURISTIC:
-                raise ValueError("a checker cannot accept floating heuristic evidence")
-            if self.coverage in {Coverage.RESTRICTED, Coverage.SAMPLED}:
-                raise ValueError(
-                    "a checker cannot accept restricted or sampled evidence"
-                )
-            if (
-                self.method == Method.DIRECT_WITNESS
-                and self.coverage != Coverage.NOT_APPLICABLE
-            ):
-                raise ValueError("a direct witness checker cannot claim coverage")
-            if (
-                self.method == Method.EXHAUSTIVE_FINITE
-                and self.coverage != Coverage.EXHAUSTIVE
-            ):
-                raise ValueError(
-                    "exhaustive checker acceptance requires exhaustive coverage"
-                )
+            _validate_accepted_checker_evidence(
+                self.conclusion,
+                self.arithmetic,
+                self.coverage,
+                self.method,
+            )
         return self

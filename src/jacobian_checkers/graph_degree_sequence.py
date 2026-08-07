@@ -93,6 +93,54 @@ def _expected_erdos_gallai(
     return lhs, rhs
 
 
+def _check_odd_sum_obstruction(
+    obstruction: dict[str, Any],
+    sequence: tuple[int, ...],
+) -> str:
+    if set(obstruction) != {"kind", "degree_sum"}:
+        raise ValueError("malformed odd-sum obstruction")
+    degree_sum = obstruction["degree_sum"]
+    if degree_sum != sum(sequence) or degree_sum % 2 != 1:
+        raise ValueError("odd-sum obstruction does not replay")
+    return "odd degree sum proves the sequence is non-graphical"
+
+
+def _check_max_degree_obstruction(
+    obstruction: dict[str, Any],
+    sequence: tuple[int, ...],
+) -> str:
+    if set(obstruction) != {"kind", "index", "degree", "order"}:
+        raise ValueError("malformed maximum-degree obstruction")
+    index = obstruction["index"]
+    degree = obstruction["degree"]
+    order = obstruction["order"]
+    if (
+        not isinstance(index, int)
+        or isinstance(index, bool)
+        or not 0 <= index < len(sequence)
+        or degree != sequence[index]
+        or order != len(sequence)
+        or degree < order
+    ):
+        raise ValueError("maximum-degree obstruction does not replay")
+    return "a degree exceeds the simple-graph maximum"
+
+
+def _check_erdos_gallai_obstruction(
+    obstruction: dict[str, Any],
+    sequence: tuple[int, ...],
+) -> str:
+    if set(obstruction) != {"kind", "k", "lhs", "rhs"}:
+        raise ValueError("malformed Erdos-Gallai obstruction")
+    k = obstruction["k"]
+    if not isinstance(k, int) or isinstance(k, bool):
+        raise ValueError("invalid Erdos-Gallai index")
+    lhs, rhs = _expected_erdos_gallai(sequence, k)
+    if obstruction["lhs"] != lhs or obstruction["rhs"] != rhs or lhs <= rhs:
+        raise ValueError("Erdos-Gallai obstruction does not replay")
+    return f"Erdos-Gallai inequality fails at k={k}"
+
+
 def _check_obstruction(
     sequence: tuple[int, ...],
     obstruction: object,
@@ -102,39 +150,140 @@ def _check_obstruction(
         raise ValueError("missing non-graphical obstruction")
     kind = obstruction.get("kind")
     if kind == "ODD_SUM" and method == "ODD_SUM_OBSTRUCTION":
-        if set(obstruction) != {"kind", "degree_sum"}:
-            raise ValueError("malformed odd-sum obstruction")
-        degree_sum = obstruction["degree_sum"]
-        if degree_sum != sum(sequence) or degree_sum % 2 != 1:
-            raise ValueError("odd-sum obstruction does not replay")
-        return "odd degree sum proves the sequence is non-graphical"
+        return _check_odd_sum_obstruction(obstruction, sequence)
     if kind == "MAX_DEGREE" and method == "MAX_DEGREE_OBSTRUCTION":
-        if set(obstruction) != {"kind", "index", "degree", "order"}:
-            raise ValueError("malformed maximum-degree obstruction")
-        index = obstruction["index"]
-        degree = obstruction["degree"]
-        order = obstruction["order"]
-        if (
-            not isinstance(index, int)
-            or isinstance(index, bool)
-            or not 0 <= index < len(sequence)
-            or degree != sequence[index]
-            or order != len(sequence)
-            or degree < order
-        ):
-            raise ValueError("maximum-degree obstruction does not replay")
-        return "a degree exceeds the simple-graph maximum"
+        return _check_max_degree_obstruction(obstruction, sequence)
     if kind == "ERDOS_GALLAI" and method == "ERDOS_GALLAI_OBSTRUCTION":
-        if set(obstruction) != {"kind", "k", "lhs", "rhs"}:
-            raise ValueError("malformed Erdos-Gallai obstruction")
-        k = obstruction["k"]
-        if not isinstance(k, int) or isinstance(k, bool):
-            raise ValueError("invalid Erdos-Gallai index")
-        lhs, rhs = _expected_erdos_gallai(sequence, k)
-        if obstruction["lhs"] != lhs or obstruction["rhs"] != rhs or lhs <= rhs:
-            raise ValueError("Erdos-Gallai obstruction does not replay")
-        return f"Erdos-Gallai inequality fails at k={k}"
+        return _check_erdos_gallai_obstruction(obstruction, sequence)
     raise ValueError("obstruction kind differs from the replay method")
+
+
+def _artifact_shape_detail(
+    claim_artifact: object,
+    candidate_artifact: object,
+    certificate: object,
+) -> str | None:
+    if (
+        not isinstance(claim_artifact, dict)
+        or not isinstance(candidate_artifact, dict)
+        or not isinstance(certificate, dict)
+    ):
+        return "degree-sequence replay artifacts are malformed"
+    return None
+
+
+def _claim_candidate_detail(claim: object, candidate: object) -> str | None:
+    if (
+        not isinstance(claim, dict)
+        or claim.get("claim_schema_version") != "1"
+        or claim.get("predicate") != "SIMPLE_GRAPH_DEGREE_SEQUENCE"
+        or not isinstance(candidate, dict)
+        or candidate.get("result_schema_version") != "1"
+    ):
+        return "unexpected degree-sequence claim or candidate"
+    return None
+
+
+def _certificate_detail(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if (
+        certificate.get("evidence_schema_version") != "1"
+        or certificate.get("certificate_type") != "graph.degree_sequence"
+        or certificate.get("format_version") != "1"
+        or certificate.get("bindings") != expected_bindings
+    ):
+        return "unexpected degree-sequence certificate or bindings"
+    return None
+
+
+def _artifact_and_claim_detail(
+    claim_artifact: object,
+    candidate_artifact: object,
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    detail = _artifact_shape_detail(claim_artifact, candidate_artifact, certificate)
+    if detail is not None:
+        return detail
+    if not isinstance(claim_artifact, dict) or not isinstance(candidate_artifact, dict):
+        return "degree-sequence replay artifacts are malformed"
+    claim = claim_artifact.get("payload")
+    candidate = candidate_artifact.get("payload")
+    detail = _claim_candidate_detail(claim, candidate)
+    if detail is not None:
+        return detail
+    return _certificate_detail(certificate, expected_bindings)
+
+
+def _consistency_detail(
+    candidate: dict[str, Any],
+    payload: dict[str, Any],
+    sequence: tuple[int, ...],
+) -> str | None:
+    if (
+        _sequence(candidate.get("degree_sequence")) != sequence
+        or _sequence(payload.get("degree_sequence")) != sequence
+        or candidate.get("conclusion") != payload.get("conclusion")
+        or candidate.get("graph_uri") != payload.get("graph_uri")
+        or candidate.get("obstruction") != payload.get("obstruction")
+    ):
+        return "claim, candidate, and certificate differ"
+    return None
+
+
+def _graphical_detail(
+    candidate: dict[str, Any],
+    payload: dict[str, Any],
+    sequence: tuple[int, ...],
+) -> str | None:
+    if (
+        payload.get("method") != "EXACT_DEGREE_REPLAY"
+        or candidate.get("obstruction") is not None
+        or payload.get("obstruction") is not None
+        or candidate.get("graph_uri") is None
+    ):
+        return "graphical certificate is malformed"
+    realized = _graph_degree_sequence(candidate.get("graph"))
+    if realized != tuple(sorted(sequence, reverse=True)):
+        return "graph degrees differ from the claimed sequence"
+    return None
+
+
+def _non_graphical_detail(
+    candidate: dict[str, Any],
+    payload: dict[str, Any],
+) -> str | None:
+    if (
+        candidate.get("graph_uri") is not None
+        or candidate.get("graph") is not None
+        or payload.get("graph_uri") is not None
+    ):
+        return "non-graphical certificate carries a graph"
+    return None
+
+
+def _conclusion_result(
+    candidate: dict[str, Any],
+    payload: dict[str, Any],
+    sequence: tuple[int, ...],
+) -> dict[str, Any] | None:
+    conclusion = candidate.get("conclusion")
+    if conclusion == "GRAPHICAL":
+        detail = _graphical_detail(candidate, payload, sequence)
+        if detail is not None:
+            return _reject(detail)
+        return _decision("TRUE", "simple graph degrees replayed exactly")
+    if conclusion == "NON_GRAPHICAL":
+        detail = _non_graphical_detail(candidate, payload)
+        if detail is not None:
+            return _reject(detail)
+        obstruction_detail = _check_obstruction(
+            sequence, candidate.get("obstruction"), payload.get("method")
+        )
+        return _decision("FALSE", obstruction_detail)
+    return None
 
 
 def check_degree_sequence(request: dict[str, Any]) -> dict[str, Any]:
@@ -146,67 +295,26 @@ def check_degree_sequence(request: dict[str, Any]) -> dict[str, Any]:
         claim_artifact = request["claim"]
         candidate_artifact = request["candidate"]
         certificate = request["certificate"]["payload"]
-        if (
-            not isinstance(claim_artifact, dict)
-            or not isinstance(candidate_artifact, dict)
-            or not isinstance(certificate, dict)
-        ):
-            return _reject("degree-sequence replay artifacts are malformed")
+        detail = _artifact_and_claim_detail(
+            claim_artifact,
+            candidate_artifact,
+            certificate,
+            request.get("expected_bindings"),
+        )
+        if detail is not None:
+            return _reject(detail)
         claim = claim_artifact.get("payload")
         candidate = candidate_artifact.get("payload")
-        if (
-            not isinstance(claim, dict)
-            or claim.get("claim_schema_version") != "1"
-            or claim.get("predicate") != "SIMPLE_GRAPH_DEGREE_SEQUENCE"
-            or not isinstance(candidate, dict)
-            or candidate.get("result_schema_version") != "1"
-        ):
-            return _reject("unexpected degree-sequence claim or candidate")
-        if (
-            certificate.get("evidence_schema_version") != "1"
-            or certificate.get("certificate_type") != "graph.degree_sequence"
-            or certificate.get("format_version") != "1"
-            or certificate.get("bindings") != request.get("expected_bindings")
-        ):
-            return _reject("unexpected degree-sequence certificate or bindings")
         payload = certificate.get("payload")
         if not isinstance(payload, dict):
             return _reject("degree-sequence replay payload is malformed")
         sequence = _sequence(claim.get("degree_sequence"))
-        if (
-            _sequence(candidate.get("degree_sequence")) != sequence
-            or _sequence(payload.get("degree_sequence")) != sequence
-            or candidate.get("conclusion") != payload.get("conclusion")
-            or candidate.get("graph_uri") != payload.get("graph_uri")
-            or candidate.get("obstruction") != payload.get("obstruction")
-        ):
-            return _reject("claim, candidate, and certificate differ")
-        conclusion = candidate.get("conclusion")
-        if conclusion == "GRAPHICAL":
-            if (
-                payload.get("method") != "EXACT_DEGREE_REPLAY"
-                or candidate.get("obstruction") is not None
-                or payload.get("obstruction") is not None
-                or candidate.get("graph_uri") is None
-            ):
-                return _reject("graphical certificate is malformed")
-            realized = _graph_degree_sequence(candidate.get("graph"))
-            if realized != tuple(sorted(sequence, reverse=True)):
-                return _reject("graph degrees differ from the claimed sequence")
-            return _decision("TRUE", "simple graph degrees replayed exactly")
-        if conclusion == "NON_GRAPHICAL":
-            if (
-                candidate.get("graph_uri") is not None
-                or candidate.get("graph") is not None
-                or payload.get("graph_uri") is not None
-            ):
-                return _reject("non-graphical certificate carries a graph")
-            detail = _check_obstruction(
-                sequence,
-                candidate.get("obstruction"),
-                payload.get("method"),
-            )
-            return _decision("FALSE", detail)
+        detail = _consistency_detail(candidate, payload, sequence)
+        if detail is not None:
+            return _reject(detail)
+        result = _conclusion_result(candidate, payload, sequence)
+        if result is not None:
+            return result
         return _reject("unknown degree-sequence conclusion")
     except (KeyError, TypeError, ValueError):
         return _reject("degree-sequence replay failed")

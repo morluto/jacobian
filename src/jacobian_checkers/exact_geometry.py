@@ -439,180 +439,285 @@ def _expected(operation: str, claim: object) -> dict[str, object]:
     raise ValueError("unsupported exact geometry operation")
 
 
+def _squared_distance_candidate(payload: dict[str, object]) -> dict[str, object]:
+    if set(payload) != {"value"}:
+        raise ValueError("squared-distance candidate has an invalid shape")
+    return {"value": _rational(payload["value"])}
+
+
+def _point_candidate(payload: dict[str, object]) -> dict[str, object]:
+    if set(payload) != {"point"}:
+        raise ValueError("point candidate has an invalid shape")
+    return {"point": _point(payload["point"])}
+
+
+def _segment_intersection_candidate(
+    payload: dict[str, object],
+) -> dict[str, object]:
+    if set(payload) != {"status", "point", "contact_kind", "overlap"}:
+        raise ValueError("segment-intersection candidate has an invalid shape")
+    status = payload["status"]
+    if status not in {"DISJOINT", "POINT", "OVERLAP"}:
+        raise ValueError("segment-intersection status is invalid")
+    return {
+        "status": status,
+        "point": None if payload["point"] is None else _point(payload["point"]),
+        "contact_kind": payload["contact_kind"],
+        "overlap": (
+            None if payload["overlap"] is None else _segment(payload["overlap"])
+        ),
+    }
+
+
+def _polygon_witness(witness: object) -> dict[str, object]:
+    if not isinstance(witness, dict) or set(witness) != {
+        "first_edge_index",
+        "second_edge_index",
+        "intersection",
+    }:
+        raise ValueError("polygon witness has an invalid shape")
+    if (
+        type(witness["first_edge_index"]) is not int
+        or type(witness["second_edge_index"]) is not int
+    ):
+        raise ValueError("polygon witness indices are invalid")
+    return {
+        "first_edge_index": witness["first_edge_index"],
+        "second_edge_index": witness["second_edge_index"],
+        "intersection": _candidate(
+            witness["intersection"],
+            "geometry.segments.intersection.compute",
+        ),
+    }
+
+
+def _simple_polygon_candidate(payload: dict[str, object]) -> dict[str, object]:
+    if set(payload) != {
+        "vertex_count",
+        "is_simple",
+        "checked_edge_pairs",
+        "witness",
+    }:
+        raise ValueError("simple-polygon candidate has an invalid shape")
+    if (
+        type(payload["vertex_count"]) is not int
+        or type(payload["is_simple"]) is not bool
+        or type(payload["checked_edge_pairs"]) is not int
+    ):
+        raise ValueError("simple-polygon decision fields are invalid")
+    witness = payload["witness"]
+    parsed_witness: dict[str, object] | None = (
+        None if witness is None else _polygon_witness(witness)
+    )
+    return {
+        "vertex_count": payload["vertex_count"],
+        "is_simple": payload["is_simple"],
+        "checked_edge_pairs": payload["checked_edge_pairs"],
+        "witness": parsed_witness,
+    }
+
+
+def _point_classification_candidate(
+    payload: dict[str, object],
+) -> dict[str, object]:
+    if set(payload) != {
+        "polygon_vertex_count",
+        "classification",
+        "boundary_edge_index",
+    }:
+        raise ValueError("point-classification candidate has an invalid shape")
+    if type(payload["polygon_vertex_count"]) is not int:
+        raise ValueError("polygon vertex count is invalid")
+    if payload["classification"] not in {"INSIDE", "BOUNDARY", "OUTSIDE"}:
+        raise ValueError("point classification is invalid")
+    boundary = payload["boundary_edge_index"]
+    if boundary is not None and type(boundary) is not int:
+        raise ValueError("boundary edge index is invalid")
+    return {
+        "polygon_vertex_count": payload["polygon_vertex_count"],
+        "classification": payload["classification"],
+        "boundary_edge_index": boundary,
+    }
+
+
+def _orientation_candidate(payload: dict[str, object]) -> dict[str, object]:
+    if set(payload) != {"orientation"} or type(payload["orientation"]) is not int:
+        raise ValueError("orientation candidate has an invalid shape")
+    return {"orientation": payload["orientation"]}
+
+
 def _candidate(payload: object, operation: str) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError("candidate has an invalid shape")
     if operation == "geometry.points.compute.squared_distance":
-        if set(payload) != {"value"}:
-            raise ValueError("squared-distance candidate has an invalid shape")
-        return {"value": _rational(payload["value"])}
+        return _squared_distance_candidate(payload)
     if operation == "geometry.points.compute.convex_hull":
         return {"points": _points(payload)}
     if operation in {
         "geometry.segment.compute.midpoint",
         "geometry.triangle.compute.centroid",
     }:
-        if set(payload) != {"point"}:
-            raise ValueError("point candidate has an invalid shape")
-        return {"point": _point(payload["point"])}
+        return _point_candidate(payload)
     if operation == "geometry.segments.intersection.compute":
-        if set(payload) != {"status", "point", "contact_kind", "overlap"}:
-            raise ValueError("segment-intersection candidate has an invalid shape")
-        status = payload["status"]
-        if status not in {"DISJOINT", "POINT", "OVERLAP"}:
-            raise ValueError("segment-intersection status is invalid")
-        return {
-            "status": status,
-            "point": None if payload["point"] is None else _point(payload["point"]),
-            "contact_kind": payload["contact_kind"],
-            "overlap": (
-                None if payload["overlap"] is None else _segment(payload["overlap"])
-            ),
-        }
+        return _segment_intersection_candidate(payload)
     if operation == "geometry.polygon.simple.decide":
-        if set(payload) != {
-            "vertex_count",
-            "is_simple",
-            "checked_edge_pairs",
-            "witness",
-        }:
-            raise ValueError("simple-polygon candidate has an invalid shape")
-        if (
-            type(payload["vertex_count"]) is not int
-            or type(payload["is_simple"]) is not bool
-            or type(payload["checked_edge_pairs"]) is not int
-        ):
-            raise ValueError("simple-polygon decision fields are invalid")
-        witness = payload["witness"]
-        parsed_witness: dict[str, object] | None
-        if witness is None:
-            parsed_witness = None
-        else:
-            if not isinstance(witness, dict) or set(witness) != {
-                "first_edge_index",
-                "second_edge_index",
-                "intersection",
-            }:
-                raise ValueError("polygon witness has an invalid shape")
-            if (
-                type(witness["first_edge_index"]) is not int
-                or type(witness["second_edge_index"]) is not int
-            ):
-                raise ValueError("polygon witness indices are invalid")
-            parsed_witness = {
-                "first_edge_index": witness["first_edge_index"],
-                "second_edge_index": witness["second_edge_index"],
-                "intersection": _candidate(
-                    witness["intersection"],
-                    "geometry.segments.intersection.compute",
-                ),
-            }
-        return {
-            "vertex_count": payload["vertex_count"],
-            "is_simple": payload["is_simple"],
-            "checked_edge_pairs": payload["checked_edge_pairs"],
-            "witness": parsed_witness,
-        }
+        return _simple_polygon_candidate(payload)
     if operation == "geometry.polygon.point.classify":
-        if set(payload) != {
-            "polygon_vertex_count",
-            "classification",
-            "boundary_edge_index",
-        }:
-            raise ValueError("point-classification candidate has an invalid shape")
-        if type(payload["polygon_vertex_count"]) is not int:
-            raise ValueError("polygon vertex count is invalid")
-        if payload["classification"] not in {"INSIDE", "BOUNDARY", "OUTSIDE"}:
-            raise ValueError("point classification is invalid")
-        boundary = payload["boundary_edge_index"]
-        if boundary is not None and type(boundary) is not int:
-            raise ValueError("boundary edge index is invalid")
-        return {
-            "polygon_vertex_count": payload["polygon_vertex_count"],
-            "classification": payload["classification"],
-            "boundary_edge_index": boundary,
+        return _point_classification_candidate(payload)
+    return _orientation_candidate(payload)
+
+
+def _request_shape_detail(request: object) -> str | None:
+    if not isinstance(request, dict) or set(request) != {
+        "request_version",
+        "claim",
+        "candidate",
+        "semantics",
+        "scope",
+        "witness",
+        "expected_bindings",
+    }:
+        return "malformed checker request"
+    if request["request_version"] != "1" or request["scope"] is not None:
+        return "unsupported checker request"
+    return None
+
+
+def _artifact_metadata_detail(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    semantics: dict[str, Any],
+    witness: dict[str, Any],
+    bindings: object,
+) -> str | None:
+    if not all(
+        _valid_artifact(item) for item in (claim, candidate, semantics, witness)
+    ):
+        return "checker artifact metadata is malformed"
+    if not valid_unscoped_unencoded_bindings(bindings):
+        return "expected evidence bindings are malformed"
+    return None
+
+
+def _binding_match_detail(
+    bindings: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    semantics: dict[str, Any],
+    witness: dict[str, Any],
+) -> str | None:
+    if (
+        bindings["claim_digest"] != claim["object_digest"]
+        or bindings["candidate_digest"] != candidate["object_digest"]
+        or bindings["semantics_digest"] != semantics["object_digest"]
+        or semantics["artifact_uri"] != claim["semantics_uri"]
+    ):
+        return "expected evidence bindings do not match artifacts"
+    if (
+        claim["semantics_uri"] != candidate["semantics_uri"]
+        or claim["semantics_uri"] != witness["semantics_uri"]
+        or candidate["parents"] != [claim["artifact_uri"]]
+    ):
+        return "candidate is not exactly bound to the geometry input"
+    return None
+
+
+def _artifact_digest_detail(
+    artifacts: tuple[dict[str, Any], ...],
+) -> str | None:
+    for artifact in artifacts:
+        if artifact["payload_digest"] != _sha256(_canonical_json(artifact["payload"])):
+            return "artifact payload digest does not match"
+    return None
+
+
+def _witness_envelope_fields(
+    envelope: object,
+    bindings: dict[str, Any],
+) -> bool:
+    return (
+        isinstance(envelope, dict)
+        and set(envelope)
+        == {
+            "evidence_schema_version",
+            "witness_format",
+            "format_version",
+            "role",
+            "bindings",
+            "payload",
         }
-    if set(payload) != {"orientation"} or type(payload["orientation"]) is not int:
-        raise ValueError("orientation candidate has an invalid shape")
-    return {"orientation": payload["orientation"]}
+        and envelope["evidence_schema_version"] == "1"
+        and envelope["witness_format"] == "geometry.exact_rational_result"
+        and envelope["format_version"] == "1"
+        and envelope["role"] == "SUPPORTS_CLAIM"
+        and envelope["bindings"] == bindings
+    )
+
+
+def _witness_envelope_detail(
+    envelope: object,
+    bindings: dict[str, Any],
+    witness: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if not _witness_envelope_fields(envelope, bindings):
+        return "geometry witness envelope is malformed or rebound"
+    if len(witness["parents"]) != 2 or set(witness["parents"]) != {
+        claim["artifact_uri"],
+        candidate["artifact_uri"],
+    }:
+        return "geometry witness envelope is malformed or rebound"
+    return None
+
+
+def _witness_payload_detail(
+    payload: object,
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"operation_id", "input_uri", "result_uri"}
+        or payload["operation_id"] not in _OPERATIONS
+        or payload["input_uri"] != claim["artifact_uri"]
+        or payload["result_uri"] != candidate["artifact_uri"]
+    ):
+        return "geometry witness payload is malformed or rebound"
+    return None
 
 
 def check_exact_geometry(request: dict[str, Any]) -> dict[str, Any]:
     """Accept a bound result exactly when direct rational replay agrees."""
 
     try:
-        if not isinstance(request, dict) or set(request) != {
-            "request_version",
-            "claim",
-            "candidate",
-            "semantics",
-            "scope",
-            "witness",
-            "expected_bindings",
-        }:
-            return _reject("malformed checker request")
-        if request["request_version"] != "1" or request["scope"] is not None:
-            return _reject("unsupported checker request")
+        detail = _request_shape_detail(request)
+        if detail is not None:
+            return _reject(detail)
         claim = request["claim"]
         candidate = request["candidate"]
         semantics = request["semantics"]
         witness = request["witness"]
-        if not all(
-            _valid_artifact(item) for item in (claim, candidate, semantics, witness)
-        ):
-            return _reject("checker artifact metadata is malformed")
         bindings = request["expected_bindings"]
-        if not valid_unscoped_unencoded_bindings(bindings):
-            return _reject("expected evidence bindings are malformed")
-        if (
-            bindings["claim_digest"] != claim["object_digest"]
-            or bindings["candidate_digest"] != candidate["object_digest"]
-            or bindings["semantics_digest"] != semantics["object_digest"]
-            or semantics["artifact_uri"] != claim["semantics_uri"]
-        ):
-            return _reject("expected evidence bindings do not match artifacts")
-        if (
-            claim["semantics_uri"] != candidate["semantics_uri"]
-            or claim["semantics_uri"] != witness["semantics_uri"]
-            or candidate["parents"] != [claim["artifact_uri"]]
-        ):
-            return _reject("candidate is not exactly bound to the geometry input")
-        for artifact in (claim, candidate, semantics, witness):
-            if artifact["payload_digest"] != _sha256(
-                _canonical_json(artifact["payload"])
-            ):
-                return _reject("artifact payload digest does not match")
+        detail = _artifact_metadata_detail(
+            claim, candidate, semantics, witness, bindings
+        )
+        if detail is not None:
+            return _reject(detail)
+        detail = _binding_match_detail(bindings, claim, candidate, semantics, witness)
+        if detail is not None:
+            return _reject(detail)
+        detail = _artifact_digest_detail((claim, candidate, semantics, witness))
+        if detail is not None:
+            return _reject(detail)
         envelope = witness["payload"]
-        if (
-            not isinstance(envelope, dict)
-            or set(envelope)
-            != {
-                "evidence_schema_version",
-                "witness_format",
-                "format_version",
-                "role",
-                "bindings",
-                "payload",
-            }
-            or envelope["evidence_schema_version"] != "1"
-            or envelope["witness_format"] != "geometry.exact_rational_result"
-            or envelope["format_version"] != "1"
-            or envelope["role"] != "SUPPORTS_CLAIM"
-            or envelope["bindings"] != bindings
-            or len(witness["parents"]) != 2
-            or set(witness["parents"])
-            != {claim["artifact_uri"], candidate["artifact_uri"]}
-        ):
-            return _reject("geometry witness envelope is malformed or rebound")
+        detail = _witness_envelope_detail(envelope, bindings, witness, claim, candidate)
+        if detail is not None:
+            return _reject(detail)
         payload = envelope["payload"]
-        if (
-            not isinstance(payload, dict)
-            or set(payload) != {"operation_id", "input_uri", "result_uri"}
-            or payload["operation_id"] not in _OPERATIONS
-            or payload["input_uri"] != claim["artifact_uri"]
-            or payload["result_uri"] != candidate["artifact_uri"]
-        ):
-            return _reject("geometry witness payload is malformed or rebound")
+        detail = _witness_payload_detail(payload, claim, candidate)
+        if detail is not None:
+            return _reject(detail)
         operation = payload["operation_id"]
         if _candidate(candidate["payload"], operation) != _expected(
             operation, claim["payload"]

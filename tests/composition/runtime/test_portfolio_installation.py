@@ -19,6 +19,27 @@ class _RecordingContext:
         self.events.append(f"exit:{self.name}")
 
 
+class _Resolver:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        events.append("resolver:init")
+
+    def resolve(self) -> str:
+        self.events.append("resolver:resolve")
+        return "runtimes"
+
+
+def _installer(
+    events: list[str], name: str, *, install_event: str | None = None
+) -> SimpleNamespace:
+    events.append(f"{name}:init")
+    return SimpleNamespace(
+        install=lambda *_args, **_kwargs: events.append(
+            install_event or f"{name}:install"
+        )
+    )
+
+
 def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None:
     events: list[str] = []
     store = SimpleNamespace(
@@ -31,47 +52,33 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
     application = SimpleNamespace(core=core)
     context = SimpleNamespace(store=store)
 
-    class Resolver:
-        def __init__(self) -> None:
-            events.append("resolver:init")
-
-        def resolve(self):
-            events.append("resolver:resolve")
-            return "runtimes"
-
-    class Foundation:
-        def __init__(self, _context) -> None:
-            events.append("foundation:init")
-
-        def install(self, _core, _result, _runtimes) -> None:
-            events.append("foundation:install")
-
-    class Core:
-        def __init__(self, _context) -> None:
-            events.append("core:init")
-
-        def install(self, _application, _result) -> None:
-            events.append("core:install")
-
-    class Resource:
-        def __init__(self, _context) -> None:
-            events.append("resource:init")
-
-        def install(self, _result) -> None:
-            events.append("resource:install")
-
-    class Reference:
-        def __init__(self, _context, _resolver) -> None:
-            events.append("reference:init")
-
-        def install(self, _application, _result, *, capability_adapter_entrypoints):
-            events.append(f"reference:install:{capability_adapter_entrypoints}")
-
-    monkeypatch.setattr(assembler, "ProviderAvailabilityResolver", Resolver)
-    monkeypatch.setattr(assembler, "FoundationInstaller", Foundation)
-    monkeypatch.setattr(assembler, "CoreApplicationInstaller", Core)
-    monkeypatch.setattr(assembler, "ResourceCapabilityInstaller", Resource)
-    monkeypatch.setattr(assembler, "ReferenceLeanInstaller", Reference)
+    monkeypatch.setattr(
+        assembler, "ProviderAvailabilityResolver", lambda: _Resolver(events)
+    )
+    monkeypatch.setattr(
+        assembler,
+        "FoundationInstaller",
+        lambda _context: _installer(events, "foundation"),
+    )
+    monkeypatch.setattr(
+        assembler,
+        "CoreApplicationInstaller",
+        lambda _context: _installer(events, "core"),
+    )
+    monkeypatch.setattr(
+        assembler,
+        "ResourceCapabilityInstaller",
+        lambda _context: _installer(events, "resource"),
+    )
+    monkeypatch.setattr(
+        assembler,
+        "ReferenceLeanInstaller",
+        lambda _context, _resolver: _installer(
+            events,
+            "reference",
+            install_event="reference:install:('fixture:adapter',)",
+        ),
+    )
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
     result = assembler.install_portfolio(

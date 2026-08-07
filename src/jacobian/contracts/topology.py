@@ -341,6 +341,30 @@ class BoundarySquareLedgerEntry(ContractModel):
     product_is_zero: Literal[True] = True
 
 
+def _resolve_chain_coefficient_values(
+    coefficient_ring: ChainCoefficientRing,
+    prime: StrictInt | None,
+) -> set[int]:
+    if coefficient_ring is ChainCoefficientRing.INTEGER:
+        if prime is not None:
+            raise ValueError("integer result must not declare a prime")
+        return {-1, 1}
+    if prime is None or not is_bounded_prime(prime):
+        raise ValueError("prime-field result requires a bounded prime")
+    return set(range(1, prime))
+
+
+def _validate_chain_convention_augmentation(
+    convention: HomologyConvention,
+    augmentation: SparseBoundaryMatrix | None,
+) -> None:
+    if convention is HomologyConvention.REDUCED:
+        if augmentation is None:
+            raise ValueError("reduced chains require the augmentation map")
+    elif augmentation is not None:
+        raise ValueError("unreduced chains must not include an augmentation")
+
+
 class ChainComplexResult(TopologyExactResult):
     complex_digest: Sha256Digest
     coefficient_ring: ChainCoefficientRing
@@ -362,14 +386,9 @@ class ChainComplexResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_coherent_chain_contract(self) -> Self:
-        if self.coefficient_ring is ChainCoefficientRing.INTEGER:
-            if self.prime is not None:
-                raise ValueError("integer result must not declare a prime")
-            allowed_values = {-1, 1}
-        else:
-            if self.prime is None or not is_bounded_prime(self.prime):
-                raise ValueError("prime-field result requires a bounded prime")
-            allowed_values = set(range(1, self.prime))
+        allowed_values = _resolve_chain_coefficient_values(
+            self.coefficient_ring, self.prime
+        )
         dimensions = tuple(item.dimension for item in self.simplex_bases)
         if dimensions != tuple(range(len(self.simplex_bases))):
             raise ValueError("simplex bases must cover contiguous dimensions")
@@ -380,11 +399,7 @@ class ChainComplexResult(TopologyExactResult):
         for matrix in self.boundary_matrices:
             if any(entry.value not in allowed_values for entry in matrix.entries):
                 raise ValueError("boundary coefficient is outside its coefficient ring")
-        if self.convention is HomologyConvention.REDUCED:
-            if self.augmentation is None:
-                raise ValueError("reduced chains require the augmentation map")
-        elif self.augmentation is not None:
-            raise ValueError("unreduced chains must not include an augmentation")
+        _validate_chain_convention_augmentation(self.convention, self.augmentation)
         expected_ledger = tuple(range(1, len(self.simplex_bases)))
         if tuple(item.upper_dimension for item in self.boundary_squared_zero) != (
             expected_ledger

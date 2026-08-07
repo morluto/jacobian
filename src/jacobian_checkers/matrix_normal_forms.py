@@ -307,43 +307,156 @@ def _is_row_hnf(matrix: list[list[int]]) -> bool:
     )
 
 
+_HNF_REQUEST_KEYS = {
+    "request_version",
+    "claim",
+    "candidate",
+    "scope",
+    "witness",
+    "expected_bindings",
+}
+_HNF_WITNESS_ENVELOPE_KEYS = {
+    "evidence_schema_version",
+    "witness_format",
+    "format_version",
+    "role",
+    "bindings",
+    "payload",
+}
+
+
+def _check_hnf_request_envelope(request: object) -> str | None:
+    if not isinstance(request, dict) or set(request) != _HNF_REQUEST_KEYS:
+        return "malformed checker request"
+    if request["request_version"] != "1" or request["scope"] is not None:
+        return "unsupported checker request"
+    return None
+
+
+def _check_hnf_artifacts(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
+        return "checker artifact metadata is malformed"
+    if not valid_unscoped_unencoded_bindings(expected_bindings):
+        return "expected evidence bindings are malformed"
+    if (
+        claim["semantics_uri"] != candidate["semantics_uri"]
+        or claim["semantics_uri"] != witness["semantics_uri"]
+    ):
+        return "checker artifacts use different semantics"
+    return None
+
+
+def _check_hnf_digests(
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+    witness: dict[str, Any],
+) -> str | None:
+    for artifact, label in (
+        (claim, "source matrix"),
+        (candidate, "HNF candidate"),
+        (witness, "HNF witness"),
+    ):
+        if artifact["payload_digest"] != _sha256(_canonical_json(artifact["payload"])):
+            return f"{label} payload digest does not match"
+    return None
+
+
+def _check_hnf_binding_match(
+    expected_bindings: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if (
+        expected_bindings["claim_digest"] != claim["object_digest"]
+        or expected_bindings["candidate_digest"] != candidate["object_digest"]
+    ):
+        return "expected evidence bindings do not match artifacts"
+    return None
+
+
+def _check_hnf_witness_envelope(
+    envelope: object,
+    expected_bindings: object,
+) -> str | None:
+    if not isinstance(envelope, dict) or set(envelope) != _HNF_WITNESS_ENVELOPE_KEYS:
+        return "HNF witness envelope is malformed"
+    if (
+        envelope["evidence_schema_version"] != "1"
+        or envelope["witness_format"] != "matrix.normal_form.hermite"
+        or envelope["format_version"] != "1"
+        or envelope["role"] != "SUPPORTS_CLAIM"
+        or envelope["bindings"] != expected_bindings
+    ):
+        return "HNF witness envelope is not exactly bound"
+    return None
+
+
+def _check_hnf_witness_payload(
+    witness: dict[str, Any],
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    if witness["payload"]["payload"] != {
+        "matrix_uri": claim["artifact_uri"],
+        "normal_form_uri": candidate["artifact_uri"],
+    }:
+        return "HNF witness points at different artifacts"
+    if not {
+        claim["artifact_uri"],
+        candidate["artifact_uri"],
+    }.issubset(set(witness["parents"])):
+        return "HNF witness is missing required lineage"
+    return None
+
+
+def _check_hnf_witness(
+    witness: dict[str, Any],
+    expected_bindings: object,
+    claim: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str | None:
+    error = _check_hnf_witness_envelope(witness["payload"], expected_bindings)
+    if error is not None:
+        return error
+    return _check_hnf_witness_payload(witness, claim, candidate)
+
+
+def _check_hnf_math(
+    transformation: list[list[int]],
+    source: list[list[int]],
+    normal_form: list[list[int]],
+) -> str | None:
+    if _multiply(transformation, source) != normal_form:
+        return "the proposed exact relation H = U A does not hold"
+    if abs(_determinant_bareiss(transformation)) != 1:
+        return "the proposed left transformation is not unimodular"
+    if not _is_row_hnf(normal_form):
+        return "the candidate does not satisfy FLINT row-HNF conditions"
+    return None
+
+
 def check_hermite_normal_form(request: dict[str, Any]) -> dict[str, Any]:
     """Accept only exact row-HNF evidence with a unimodular left transform."""
 
     try:
-        if not isinstance(request, dict) or set(request) != {
-            "request_version",
-            "claim",
-            "candidate",
-            "scope",
-            "witness",
-            "expected_bindings",
-        }:
-            return _reject("malformed checker request")
-        if request["request_version"] != "1" or request["scope"] is not None:
-            return _reject("unsupported checker request")
+        error = _check_hnf_request_envelope(request)
+        if error is not None:
+            return _reject(error)
         claim = request["claim"]
         candidate = request["candidate"]
         witness = request["witness"]
-        if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
-            return _reject("checker artifact metadata is malformed")
         expected_bindings = request["expected_bindings"]
-        if not valid_unscoped_unencoded_bindings(expected_bindings):
-            return _reject("expected evidence bindings are malformed")
-        if (
-            claim["semantics_uri"] != candidate["semantics_uri"]
-            or claim["semantics_uri"] != witness["semantics_uri"]
-        ):
-            return _reject("checker artifacts use different semantics")
-        for artifact, label in (
-            (claim, "source matrix"),
-            (candidate, "HNF candidate"),
-            (witness, "HNF witness"),
-        ):
-            if artifact["payload_digest"] != _sha256(
-                _canonical_json(artifact["payload"])
-            ):
-                return _reject(f"{label} payload digest does not match")
+        error = _check_hnf_artifacts(claim, candidate, witness, expected_bindings)
+        if error is not None:
+            return _reject(error)
+        error = _check_hnf_digests(claim, candidate, witness)
+        if error is not None:
+            return _reject(error)
 
         source = _matrix(claim["payload"])
         normal_form, transformation = _validate_candidate(
@@ -353,46 +466,15 @@ def check_hermite_normal_form(request: dict[str, Any]) -> dict[str, Any]:
             rows=len(source),
             columns=len(source[0]),
         )
-        if (
-            expected_bindings["claim_digest"] != claim["object_digest"]
-            or expected_bindings["candidate_digest"] != candidate["object_digest"]
-        ):
-            return _reject("expected evidence bindings do not match artifacts")
-        envelope = witness["payload"]
-        if not isinstance(envelope, dict) or set(envelope) != {
-            "evidence_schema_version",
-            "witness_format",
-            "format_version",
-            "role",
-            "bindings",
-            "payload",
-        }:
-            return _reject("HNF witness envelope is malformed")
-        if (
-            envelope["evidence_schema_version"] != "1"
-            or envelope["witness_format"] != "matrix.normal_form.hermite"
-            or envelope["format_version"] != "1"
-            or envelope["role"] != "SUPPORTS_CLAIM"
-            or envelope["bindings"] != expected_bindings
-        ):
-            return _reject("HNF witness envelope is not exactly bound")
-        if envelope["payload"] != {
-            "matrix_uri": claim["artifact_uri"],
-            "normal_form_uri": candidate["artifact_uri"],
-        }:
-            return _reject("HNF witness points at different artifacts")
-        if not {
-            claim["artifact_uri"],
-            candidate["artifact_uri"],
-        }.issubset(set(witness["parents"])):
-            return _reject("HNF witness is missing required lineage")
-
-        if _multiply(transformation, source) != normal_form:
-            return _reject("the proposed exact relation H = U A does not hold")
-        if abs(_determinant_bareiss(transformation)) != 1:
-            return _reject("the proposed left transformation is not unimodular")
-        if not _is_row_hnf(normal_form):
-            return _reject("the candidate does not satisfy FLINT row-HNF conditions")
+        error = _check_hnf_binding_match(expected_bindings, claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_hnf_witness(witness, expected_bindings, claim, candidate)
+        if error is not None:
+            return _reject(error)
+        error = _check_hnf_math(transformation, source, normal_form)
+        if error is not None:
+            return _reject(error)
         return {
             "accepted": True,
             "conclusion": "TRUE",

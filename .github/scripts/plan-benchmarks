@@ -66,6 +66,7 @@ BENCHMARK_CONTROL_PATHS = frozenset(
         ".github/workflows/benchmarks.yml",
         ".github/workflows/heldout-benchmarks.yml",
         "Makefile",
+        "make/harbor.mk",
         "tools/check_benchmark_adapters.py",
         "tools/benchmark_pr_status.py",
         "tools/check_benchmark_contracts.py",

@@ -123,6 +123,56 @@ def determinant(matrix: Matrix) -> int:
     return sign * work[-1][-1]
 
 
+def _reduce_pivot_to_unit(
+    augmented: list[list[int]],
+    *,
+    column: int,
+    size: int,
+) -> None:
+    """Reduce one diagonal entry to +/-1 by exact integer row reduction."""
+
+    while abs(augmented[column][column]) != 1:
+        selected = next(
+            (row for row in range(column + 1, size) if augmented[row][column] != 0),
+            None,
+        )
+        if selected is None:
+            raise ValueError("matrix is not unimodular")
+        quotient = augmented[column][column] // augmented[selected][column]
+        augmented[column] = [
+            value - quotient * other
+            for value, other in zip(augmented[column], augmented[selected], strict=True)
+        ]
+        augmented[column], augmented[selected] = (
+            augmented[selected],
+            augmented[column],
+        )
+
+
+def _eliminate_column_entries(
+    augmented: list[list[int]],
+    *,
+    column: int,
+    size: int,
+) -> None:
+    """Clear every off-diagonal entry in one column using its +/-1 pivot."""
+
+    pivot = augmented[column][column]
+    if pivot == -1:
+        augmented[column] = [-value for value in augmented[column]]
+    for row in range(size):
+        if row == column:
+            continue
+        factor = augmented[row][column]
+        if factor:
+            augmented[row] = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(
+                    augmented[row], augmented[column], strict=True
+                )
+            ]
+
+
 def inverse_unimodular(matrix: Matrix) -> Matrix:
     """Invert a unimodular integer matrix by exact Gauss-Jordan elimination."""
 
@@ -146,38 +196,8 @@ def inverse_unimodular(matrix: Matrix) -> Matrix:
             augmented[selected],
             augmented[column],
         )
-        while abs(augmented[column][column]) != 1:
-            selected = next(
-                (row for row in range(column + 1, size) if augmented[row][column] != 0),
-                None,
-            )
-            if selected is None:
-                raise ValueError("matrix is not unimodular")
-            quotient = augmented[column][column] // augmented[selected][column]
-            augmented[column] = [
-                value - quotient * other
-                for value, other in zip(
-                    augmented[column], augmented[selected], strict=True
-                )
-            ]
-            augmented[column], augmented[selected] = (
-                augmented[selected],
-                augmented[column],
-            )
-        pivot = augmented[column][column]
-        if pivot == -1:
-            augmented[column] = [-value for value in augmented[column]]
-        for row in range(size):
-            if row == column:
-                continue
-            factor = augmented[row][column]
-            if factor:
-                augmented[row] = [
-                    value - factor * pivot_value
-                    for value, pivot_value in zip(
-                        augmented[row], augmented[column], strict=True
-                    )
-                ]
+        _reduce_pivot_to_unit(augmented, column=column, size=size)
+        _eliminate_column_entries(augmented, column=column, size=size)
     return [row[size:] for row in augmented]
 
 

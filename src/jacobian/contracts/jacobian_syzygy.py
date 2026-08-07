@@ -16,6 +16,34 @@ from jacobian.contracts.results import ContractModel
 ExponentTriple = tuple[int, int, int]
 
 
+def _compute_homogeneous_source_degree(
+    polynomial: RationalPolynomial | None,
+    linear_factors: tuple[RationalProjectiveLine, ...] | None,
+) -> int:
+    if polynomial is not None:
+        terms = polynomial.polynomial.terms
+        if not terms:
+            raise ValueError("the source homogeneous polynomial must be nonzero")
+        degrees = {sum(term.exponents) for term in terms}
+        if len(degrees) != 1:
+            raise ValueError("the source polynomial must be homogeneous")
+        return next(iter(degrees))
+    assert linear_factors is not None
+    return len(linear_factors)
+
+
+def _require_coefficient_map_entry_budget(source_degree: int, max_degree: int) -> None:
+    aggregate_entries = 0
+    for degree in range(max_degree + 1):
+        columns = 3 * comb(degree + 2, 2)
+        rows = comb(source_degree + degree + 1, 2)
+        aggregate_entries += rows * columns
+    if aggregate_entries > 250_000:
+        raise ValueError(
+            "graded coefficient maps exceed the 250000-entry exact rank budget"
+        )
+
+
 class GradedJacobianSyzygyRequest(ContractModel):
     """Search the homogeneous Jacobian map through one explicit degree bound."""
 
@@ -48,7 +76,6 @@ class GradedJacobianSyzygyRequest(ContractModel):
                     "linear_factor_variables is only valid with linear_factors"
                 )
             polynomial = self.polynomial
-            terms = polynomial.polynomial.terms
             variables = polynomial.variables
         else:
             if self.linear_factor_variables is None:
@@ -58,32 +85,16 @@ class GradedJacobianSyzygyRequest(ContractModel):
             if len(labels) != len(set(labels)):
                 raise ValueError("labelled linear-factor names must be unique")
             variables = self.linear_factor_variables
-            terms = ()
         if len(variables) != 3:
             raise ValueError(
                 "graded Jacobian syzygies currently require exactly three variables"
             )
-        if self.polynomial is not None:
-            if not terms:
-                raise ValueError("the source homogeneous polynomial must be nonzero")
-            degrees = {sum(term.exponents) for term in terms}
-            if len(degrees) != 1:
-                raise ValueError("the source polynomial must be homogeneous")
-            source_degree = next(iter(degrees))
-        else:
-            assert self.linear_factors is not None
-            source_degree = len(self.linear_factors)
+        source_degree = _compute_homogeneous_source_degree(
+            self.polynomial, self.linear_factors
+        )
         if source_degree < 1 or source_degree > 16:
             raise ValueError("the source homogeneous degree must lie between 1 and 16")
-        aggregate_entries = 0
-        for degree in range(self.max_degree + 1):
-            columns = 3 * comb(degree + 2, 2)
-            rows = comb(source_degree + degree + 1, 2)
-            aggregate_entries += rows * columns
-        if aggregate_entries > 250_000:
-            raise ValueError(
-                "graded coefficient maps exceed the 250000-entry exact rank budget"
-            )
+        _require_coefficient_map_entry_budget(source_degree, self.max_degree)
         return self
 
 

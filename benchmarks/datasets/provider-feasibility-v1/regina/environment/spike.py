@@ -480,9 +480,7 @@ class _UnionFind:
             self.parent[right_root] = left_root
 
 
-def _replay_triangulation(case: Mapping[str, Any]) -> dict[str, Any]:
-    tetrahedra = case.get("tetrahedra")
-    gluings = case.get("facet_gluings")
+def _validate_gluing_shape(tetrahedra: Any, gluings: Any) -> None:
     if (
         type(tetrahedra) is not int
         or not 1 <= tetrahedra <= 8
@@ -495,47 +493,77 @@ def _replay_triangulation(case: Mapping[str, Any]) -> dict[str, Any]:
             "INDEPENDENT_REPLAY_MISMATCH",
             "The Regina gluing table has an invalid bounded shape.",
         )
+
+
+def _gluing_is_malformed(gluing: Any) -> bool:
+    return not isinstance(gluing, dict) or set(gluing) != {
+        "tetrahedron",
+        "facet",
+        "permutation",
+    }
+
+
+def _gluing_out_of_scope(
+    gluing: Mapping[str, Any], facet: int, tetrahedra: int
+) -> bool:
+    target = gluing["tetrahedron"]
+    target_facet = gluing["facet"]
+    permutation = gluing["permutation"]
+    return (
+        type(target) is not int
+        or not 0 <= target < tetrahedra
+        or type(target_facet) is not int
+        or not 0 <= target_facet < 4
+        or not isinstance(permutation, list)
+        or sorted(permutation) != [0, 1, 2, 3]
+        or permutation[facet] != target_facet
+    )
+
+
+def _gluing_not_reciprocal(
+    gluings: list,
+    source: int,
+    facet: int,
+    target: int,
+    target_facet: int,
+    permutation: list,
+) -> bool:
+    reverse = gluings[target][target_facet]
+    return (
+        not isinstance(reverse, dict)
+        or reverse.get("tetrahedron") != source
+        or reverse.get("facet") != facet
+        or not isinstance(reverse.get("permutation"), list)
+        or any(
+            reverse["permutation"][permutation[vertex]] != vertex for vertex in range(4)
+        )
+    )
+
+
+def _validate_facet_gluings(gluings: list, tetrahedra: int) -> None:
     for source, row in enumerate(gluings):
         for facet, gluing in enumerate(row):
             if gluing is None:
                 continue
-            if not isinstance(gluing, dict) or set(gluing) != {
-                "tetrahedron",
-                "facet",
-                "permutation",
-            }:
+            if _gluing_is_malformed(gluing):
                 raise ReginaSpikeError(
                     "REJECTED",
                     "INDEPENDENT_REPLAY_MISMATCH",
                     "A Regina facet gluing is malformed.",
                 )
-            target = gluing["tetrahedron"]
-            target_facet = gluing["facet"]
-            permutation = gluing["permutation"]
-            if (
-                type(target) is not int
-                or not 0 <= target < tetrahedra
-                or type(target_facet) is not int
-                or not 0 <= target_facet < 4
-                or not isinstance(permutation, list)
-                or sorted(permutation) != [0, 1, 2, 3]
-                or permutation[facet] != target_facet
-            ):
+            if _gluing_out_of_scope(gluing, facet, tetrahedra):
                 raise ReginaSpikeError(
                     "REJECTED",
                     "INDEPENDENT_REPLAY_MISMATCH",
                     "A Regina facet gluing lies outside the replay scope.",
                 )
-            reverse = gluings[target][target_facet]
-            if (
-                not isinstance(reverse, dict)
-                or reverse.get("tetrahedron") != source
-                or reverse.get("facet") != facet
-                or not isinstance(reverse.get("permutation"), list)
-                or any(
-                    reverse["permutation"][permutation[vertex]] != vertex
-                    for vertex in range(4)
-                )
+            if _gluing_not_reciprocal(
+                gluings,
+                source,
+                facet,
+                gluing["tetrahedron"],
+                gluing["facet"],
+                gluing["permutation"],
             ):
                 raise ReginaSpikeError(
                     "REJECTED",
@@ -543,6 +571,8 @@ def _replay_triangulation(case: Mapping[str, Any]) -> dict[str, Any]:
                     "The Regina facet gluings are not reciprocal.",
                 )
 
+
+def _compute_f_vector(gluings: list, tetrahedra: int) -> list[int]:
     nodes = [
         (tetrahedron, dimension, vertices)
         for tetrahedron in range(tetrahedra)
@@ -571,6 +601,15 @@ def _replay_triangulation(case: Mapping[str, Any]) -> dict[str, Any]:
         for dimension in range(3)
     ]
     f_vector.append(tetrahedra)
+    return f_vector
+
+
+def _replay_triangulation(case: Mapping[str, Any]) -> dict[str, Any]:
+    tetrahedra = case.get("tetrahedra")
+    gluings = case.get("facet_gluings")
+    _validate_gluing_shape(tetrahedra, gluings)
+    _validate_facet_gluings(gluings, tetrahedra)
+    f_vector = _compute_f_vector(gluings, tetrahedra)
     if case.get("f_vector") != f_vector:
         raise ReginaSpikeError(
             "REJECTED",

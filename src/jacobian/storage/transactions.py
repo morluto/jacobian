@@ -86,6 +86,85 @@ class TransactionCoordinator:
 
         return self.database.transaction_identity
 
+    def _rollback_transaction(self, connection: sqlite3.Connection) -> None:
+        """Roll back, close the connection, and reconcile blob quota on failure."""
+
+        cleanup_error: BaseException | None = None
+        try:
+            connection.rollback()
+        except BaseException as exc:
+            cleanup_error = exc
+        if cleanup_error is None:
+            try:
+                self._flush_transaction_directories()
+            except BaseException as exc:
+                cleanup_error = exc
+        try:
+            self.database.close_connection(connection)
+        except BaseException as exc:
+            cleanup_error = cleanup_error or exc
+        finally:
+            self._clear_transaction_state()
+        if cleanup_error is not None:
+            self._recovery_required = True
+            raise StorageError(
+                "artifact transaction cleanup was not durable; "
+                "reopen the store to recover"
+            ) from cleanup_error
+        try:
+            self._reconcile_blob_quota(force=True)
+        except BaseException:
+            self._recovery_required = True
+            raise
+
+    def _commit_transaction(self, connection: sqlite3.Connection) -> None:
+        """Flush directories, commit, and remove the recovery marker."""
+
+        try:
+            self._flush_transaction_directories()
+            connection.commit()
+            self.database.close_connection(connection)
+        except BaseException as exc:
+            self._recovery_required = True
+            try:
+                self.database.close_connection(connection)
+            except BaseException:
+                _LOGGER.exception("failed to close an uncertain artifact transaction")
+            raise StorageError(
+                "artifact transaction commit was not durable; "
+                "reopen the store to recover"
+            ) from exc
+        finally:
+            self._clear_transaction_state()
+        try:
+            self._remove_transaction_recovery_marker()
+        except BaseException:
+            self._recovery_required = True
+            raise
+
+    def _handle_transaction_failure(
+        self,
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Clean up a connection after a transaction setup or body failure."""
+
+        if self.database.transaction_active:
+            try:
+                self.database.close_connection(connection)
+            except BaseException:
+                _LOGGER.exception(
+                    "failed to close artifact transaction during setup cleanup"
+                )
+            self._clear_transaction_state()
+        elif self.transaction_recovery_path.exists() and not self._recovery_required:
+            try:
+                self.database.close_connection(connection)
+            except BaseException:
+                _LOGGER.exception(
+                    "failed to close artifact transaction after setup failure"
+                )
+            self._recovery_required = True
+
     @contextmanager
     def transaction(self) -> Iterator[None]:
         """Commit related store operations through one SQLite transaction.
@@ -120,78 +199,12 @@ class TransactionCoordinator:
                 try:
                     yield
                 except BaseException:
-                    cleanup_error: BaseException | None = None
-                    try:
-                        connection.rollback()
-                    except BaseException as exc:
-                        cleanup_error = exc
-                    if cleanup_error is None:
-                        try:
-                            self._flush_transaction_directories()
-                        except BaseException as exc:
-                            cleanup_error = exc
-                    try:
-                        self.database.close_connection(connection)
-                    except BaseException as exc:
-                        cleanup_error = cleanup_error or exc
-                    finally:
-                        self._clear_transaction_state()
-                    if cleanup_error is not None:
-                        self._recovery_required = True
-                        raise StorageError(
-                            "artifact transaction cleanup was not durable; "
-                            "reopen the store to recover"
-                        ) from cleanup_error
-                    try:
-                        self._reconcile_blob_quota(force=True)
-                    except BaseException:
-                        self._recovery_required = True
-                        raise
+                    self._rollback_transaction(connection)
                     raise
                 else:
-                    try:
-                        self._flush_transaction_directories()
-                        connection.commit()
-                        self.database.close_connection(connection)
-                    except BaseException as exc:
-                        self._recovery_required = True
-                        try:
-                            self.database.close_connection(connection)
-                        except BaseException:
-                            _LOGGER.exception(
-                                "failed to close an uncertain artifact transaction"
-                            )
-                        raise StorageError(
-                            "artifact transaction commit was not durable; "
-                            "reopen the store to recover"
-                        ) from exc
-                    finally:
-                        self._clear_transaction_state()
-                    try:
-                        self._remove_transaction_recovery_marker()
-                    except BaseException:
-                        self._recovery_required = True
-                        raise
+                    self._commit_transaction(connection)
             except BaseException:
-                if self.database.transaction_active:
-                    try:
-                        self.database.close_connection(connection)
-                    except BaseException:
-                        _LOGGER.exception(
-                            "failed to close artifact transaction during setup cleanup"
-                        )
-                    self._clear_transaction_state()
-                elif (
-                    self.transaction_recovery_path.exists()
-                    and not self._recovery_required
-                ):
-                    try:
-                        self.database.close_connection(connection)
-                    except BaseException:
-                        _LOGGER.exception(
-                            "failed to close artifact transaction after setup failure"
-                        )
-                    self._recovery_required = True
+                self._handle_transaction_failure(connection)
                 raise
 
     def _clear_transaction_state(self) -> None:

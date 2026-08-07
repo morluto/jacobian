@@ -144,6 +144,58 @@ def test_checker_accepts_vector_satisfying_every_exact_equation() -> None:
     assert decision["method"] == "DIRECT_WITNESS"
 
 
+def _mutate_system(request: dict[str, Any], mutation: str) -> None:
+    system = request["claim"]["payload"]
+    if mutation == "omit_equation":
+        system["coefficients"]["entries"].pop()
+        system["rhs"].pop()
+    elif mutation == "change_rhs":
+        system["rhs"][0] = _q(6)
+    elif mutation == "change_variable_order":
+        system["variables"] = ["y", "x"]
+    request["claim"]["payload_digest"] = _digest(system)
+
+
+def _mutate_solution(request: dict[str, Any], mutation: str) -> None:
+    solution = request["candidate"]["payload"]
+    if mutation == "wrong_value":
+        solution["values"][0] = _q(3)
+    elif mutation == "partial_vector":
+        solution["values"].pop()
+    elif mutation == "noncanonical_rational":
+        solution["values"][0] = {"num": "4", "den": "2"}
+    elif mutation == "change_source_uri":
+        solution["system"]["system_artifact_uri"] = "artifact://sha256/" + "9" * 64
+    elif mutation == "wrong_provider":
+        solution["producer"]["provider"] = "sympy"
+    elif mutation == "extra_candidate_field":
+        solution["verification"] = "VERIFIED"
+    request["candidate"]["payload_digest"] = _digest(solution)
+
+
+def _apply_solution_mutation(mutation: str, request: dict[str, Any]) -> None:
+    if mutation in {"omit_equation", "change_rhs", "change_variable_order"}:
+        _mutate_system(request, mutation)
+    elif mutation in {
+        "wrong_value",
+        "partial_vector",
+        "noncanonical_rational",
+        "change_source_uri",
+        "wrong_provider",
+        "extra_candidate_field",
+    }:
+        _mutate_solution(request, mutation)
+    elif mutation == "mismatched_bindings":
+        request["witness"]["payload"]["bindings"]["candidate_digest"] = (
+            "sha256:" + "9" * 64
+        )
+        request["witness"]["payload_digest"] = _digest(request["witness"]["payload"])
+    elif mutation == "missing_candidate_lineage":
+        request["candidate"]["parents"] = []
+    elif mutation == "missing_witness_lineage":
+        request["witness"]["parents"] = [_SOLUTION_URI]
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
@@ -165,45 +217,7 @@ def test_checker_rejects_mutated_or_misbound_solution_evidence(
     mutation: str,
 ) -> None:
     request = _request()
-    system = request["claim"]["payload"]
-    solution = request["candidate"]["payload"]
-    if mutation == "wrong_value":
-        solution["values"][0] = _q(3)
-        request["candidate"]["payload_digest"] = _digest(solution)
-    elif mutation == "omit_equation":
-        system["coefficients"]["entries"].pop()
-        system["rhs"].pop()
-        request["claim"]["payload_digest"] = _digest(system)
-    elif mutation == "change_rhs":
-        system["rhs"][0] = _q(6)
-        request["claim"]["payload_digest"] = _digest(system)
-    elif mutation == "change_variable_order":
-        system["variables"] = ["y", "x"]
-        request["claim"]["payload_digest"] = _digest(system)
-    elif mutation == "partial_vector":
-        solution["values"].pop()
-        request["candidate"]["payload_digest"] = _digest(solution)
-    elif mutation == "noncanonical_rational":
-        solution["values"][0] = {"num": "4", "den": "2"}
-        request["candidate"]["payload_digest"] = _digest(solution)
-    elif mutation == "change_source_uri":
-        solution["system"]["system_artifact_uri"] = "artifact://sha256/" + "9" * 64
-        request["candidate"]["payload_digest"] = _digest(solution)
-    elif mutation == "mismatched_bindings":
-        request["witness"]["payload"]["bindings"]["candidate_digest"] = (
-            "sha256:" + "9" * 64
-        )
-        request["witness"]["payload_digest"] = _digest(request["witness"]["payload"])
-    elif mutation == "missing_candidate_lineage":
-        request["candidate"]["parents"] = []
-    elif mutation == "missing_witness_lineage":
-        request["witness"]["parents"] = [_SOLUTION_URI]
-    elif mutation == "wrong_provider":
-        solution["producer"]["provider"] = "sympy"
-        request["candidate"]["payload_digest"] = _digest(solution)
-    else:
-        solution["verification"] = "VERIFIED"
-        request["candidate"]["payload_digest"] = _digest(solution)
+    _apply_solution_mutation(mutation, request)
 
     decision = check_rational_solution(request)
 

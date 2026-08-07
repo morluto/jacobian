@@ -76,79 +76,112 @@ class CapabilityVerificationMixin:
             raise CapabilityError(
                 "verified capability result omits verification-bound artifacts"
             )
-        projected_record = result.output.get("verification_record_uri")
-        if projected_record is not None and projected_record != record_uri:
-            raise CapabilityError(
-                "verified capability output projects a different verification record"
-            )
-        projected_conclusion = result.output.get("conclusion")
-        if (
-            projected_conclusion is not None
-            and projected_conclusion != record.conclusion.value
-        ):
-            raise CapabilityError(
-                "verified capability output differs from the checked conclusion"
-            )
+        _validate_projected_output(result, record_uri, record)
         record_parents = set(record_artifact.manifest.parents)
-        for relationship in result.relationships:
-            if relationship.status is not CapabilityRelationshipStatus.VERIFIED:
-                continue
-            bound_artifacts = {
-                *relationship.source_artifact_uris,
-                *relationship.target_artifact_uris,
-                *relationship.obligation_uris,
-            }
-            if not bound_artifacts.issubset(record_parents):
-                raise CapabilityError(
-                    "verified relationship record does not bind its artifacts"
-                )
-            if record_artifact.payload.get("relation_id") != relationship.relation_id:
-                raise CapabilityError(
-                    "verified relationship differs from the checked relation"
-                )
-            if (
-                record.relationship_source_artifact_uris
-                != relationship.source_artifact_uris
-                or record.relationship_target_artifact_uris
-                != relationship.target_artifact_uris
-            ):
-                raise CapabilityError(
-                    "verified relationship endpoints differ from the checked relation"
-                )
-            checked_obligations = (
-                (record.obligation_uri,) if record.obligation_uri is not None else ()
+        _validate_verified_relationships(
+            result, record_artifact, record, record_parents
+        )
+        _validate_discharged_obligations(result, record_artifact, record_parents)
+        _validate_verified_completeness(result, record, record_parents)
+
+
+def _validate_projected_output(
+    result: CapabilityResult,
+    record_uri: str,
+    record: VerificationRecord,
+) -> None:
+    projected_record = result.output.get("verification_record_uri")
+    if projected_record is not None and projected_record != record_uri:
+        raise CapabilityError(
+            "verified capability output projects a different verification record"
+        )
+    projected_conclusion = result.output.get("conclusion")
+    if (
+        projected_conclusion is not None
+        and projected_conclusion != record.conclusion.value
+    ):
+        raise CapabilityError(
+            "verified capability output differs from the checked conclusion"
+        )
+
+
+def _validate_verified_relationships(
+    result: CapabilityResult,
+    record_artifact: Any,
+    record: VerificationRecord,
+    record_parents: set[str],
+) -> None:
+    for relationship in result.relationships:
+        if relationship.status is not CapabilityRelationshipStatus.VERIFIED:
+            continue
+        bound_artifacts = {
+            *relationship.source_artifact_uris,
+            *relationship.target_artifact_uris,
+            *relationship.obligation_uris,
+        }
+        if not bound_artifacts.issubset(record_parents):
+            raise CapabilityError(
+                "verified relationship record does not bind its artifacts"
             )
-            if relationship.obligation_uris != checked_obligations:
-                raise CapabilityError(
-                    "verified relationship obligations differ from the checked relation"
-                )
-        for obligation in result.obligations:
-            if obligation.status is not CapabilityObligationStatus.DISCHARGED:
-                continue
-            if (
-                obligation.obligation_uri not in record_parents
-                or record_artifact.payload.get("obligation_uri")
-                != obligation.obligation_uri
-            ):
-                raise CapabilityError(
-                    "discharged obligation differs from the checked obligation"
-                )
+        if record_artifact.payload.get("relation_id") != relationship.relation_id:
+            raise CapabilityError(
+                "verified relationship differs from the checked relation"
+            )
         if (
-            result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-            and result.completeness.assurance_level is CapabilityAssuranceLevel.VERIFIED
+            record.relationship_source_artifact_uris
+            != relationship.source_artifact_uris
+            or record.relationship_target_artifact_uris
+            != relationship.target_artifact_uris
         ):
-            if (
-                result.scope is None
-                or result.scope.artifact_uri is None
-                or result.scope.artifact_uri not in record_parents
-            ):
-                raise CapabilityError(
-                    "verified completeness requires a checker-bound scope artifact"
-                )
-            if record.coverage not in {Coverage.EXHAUSTIVE, Coverage.BOUNDED}:
-                raise CapabilityError(
-                    "verified completeness differs from checked coverage"
-                )
+            raise CapabilityError(
+                "verified relationship endpoints differ from the checked relation"
+            )
+        checked_obligations = (
+            (record.obligation_uri,) if record.obligation_uri is not None else ()
+        )
+        if relationship.obligation_uris != checked_obligations:
+            raise CapabilityError(
+                "verified relationship obligations differ from the checked relation"
+            )
+
+
+def _validate_discharged_obligations(
+    result: CapabilityResult,
+    record_artifact: Any,
+    record_parents: set[str],
+) -> None:
+    for obligation in result.obligations:
+        if obligation.status is not CapabilityObligationStatus.DISCHARGED:
+            continue
+        if (
+            obligation.obligation_uri not in record_parents
+            or record_artifact.payload.get("obligation_uri")
+            != obligation.obligation_uri
+        ):
+            raise CapabilityError(
+                "discharged obligation differs from the checked obligation"
+            )
+
+
+def _validate_verified_completeness(
+    result: CapabilityResult,
+    record: VerificationRecord,
+    record_parents: set[str],
+) -> None:
+    if (
+        result.completeness.status is CapabilityCompletenessStatus.COMPLETE
+        and result.completeness.assurance_level is CapabilityAssuranceLevel.VERIFIED
+    ):
+        if (
+            result.scope is None
+            or result.scope.artifact_uri is None
+            or result.scope.artifact_uri not in record_parents
+        ):
+            raise CapabilityError(
+                "verified completeness requires a checker-bound scope artifact"
+            )
+        if record.coverage not in {Coverage.EXHAUSTIVE, Coverage.BOUNDED}:
+            raise CapabilityError("verified completeness differs from checked coverage")
 
 
 __all__ = ["CapabilityVerificationMixin"]

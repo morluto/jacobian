@@ -398,40 +398,42 @@ def load_static_token_file(path: str | Path) -> tuple[StaticTokenGrant, ...]:
         raise ValueError("token file tokens must be an array")
     grants: list[StaticTokenGrant] = []
     for index, record in enumerate(records, start=1):
-        if not isinstance(record, dict):
-            raise ValueError(f"token grant {index} must be a JSON object")
-        extra_fields = set(record) - {
-            "tenant_id",
-            "token",
-            "scopes",
-        }
-        if extra_fields:
-            fields = ", ".join(repr(field) for field in sorted(extra_fields))
-            raise ValueError(
-                f"unsupported field {fields} in token grant {index}; "
-                "use only tenant_id, token, and scopes"
-            )
-        tenant_id = record.get("tenant_id")
-        token = record.get("token")
-        scopes = record.get("scopes", ["jacobian:use"])
-        if not isinstance(tenant_id, str):
-            raise ValueError(f"tenant_id in token grant {index} must be a string")
-        if not isinstance(token, str):
-            raise ValueError(f"token in token grant {index} must be a string")
-        if not isinstance(scopes, list) or not all(
-            isinstance(scope, str) and scope for scope in scopes
-        ):
-            raise ValueError(
-                f"scopes in token grant {index} must be an array of non-empty strings"
-            )
-        try:
-            grants.append(
-                StaticTokenGrant(
-                    tenant_id=tenant_id,
-                    token=token,
-                    scopes=tuple(scopes),
-                )
-            )
-        except ValueError as exc:
-            raise ValueError(f"token grant {index}: {exc}") from exc
+        grants.append(_parse_token_record(index, record))
     return tuple(grants)
+
+
+def _parse_token_record(index: int, record: Any) -> StaticTokenGrant:
+    if not isinstance(record, dict):
+        raise ValueError(f"token grant {index} must be a JSON object")
+    extra_fields = set(record) - {
+        "tenant_id",
+        "token",
+        "scopes",
+    }
+    if extra_fields:
+        fields = ", ".join(repr(field) for field in sorted(extra_fields))
+        raise ValueError(
+            f"unsupported field {fields} in token grant {index}; "
+            "use only tenant_id, token, and scopes"
+        )
+    tenant_id = record.get("tenant_id")
+    token = record.get("token")
+    scopes = record.get("scopes", ["jacobian:use"])
+    if not isinstance(tenant_id, str):
+        raise ValueError(f"tenant_id in token grant {index} must be a string")
+    if not isinstance(token, str):
+        raise ValueError(f"token in token grant {index} must be a string")
+    if not isinstance(scopes, list) or not all(
+        isinstance(scope, str) and scope for scope in scopes
+    ):
+        raise ValueError(
+            f"scopes in token grant {index} must be an array of non-empty strings"
+        )
+    try:
+        return StaticTokenGrant(
+            tenant_id=tenant_id,
+            token=token,
+            scopes=tuple(scopes),
+        )
+    except ValueError as exc:
+        raise ValueError(f"token grant {index}: {exc}") from exc

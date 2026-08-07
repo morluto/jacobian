@@ -27,7 +27,7 @@ from jacobian.portfolio.builtin import build_builtin_portfolio
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.portfolio.result import PortfolioInstallation
-from jacobian.runtime.services import ApplicationServices
+from jacobian.runtime.services import ApplicationServices, CoreServices
 from jacobian.universal_algebra_capabilities import (
     install_universal_algebra_capabilities,
 )
@@ -38,6 +38,87 @@ class CoreApplicationInstaller:
     """Install core application adapters and domain-dependent checkers."""
 
     context: InstallationContext
+
+    def _install_graph_capabilities(
+        self,
+        ctx: InstallationContext,
+        core: CoreServices,
+        application: ApplicationServices,
+        result: PortfolioInstallation,
+    ) -> None:
+        """Install graph search, shrinking, and coloring capabilities."""
+
+        graph_adapters, result.graph = install_graph_capabilities(
+            ctx.store,
+            ctx.schemas,
+            ctx.artifacts,
+            ctx.checkers,
+            authorize_checker=ctx.authorizes_bundled_checkers,
+        )
+        for graph_adapter in graph_adapters:
+            self.context.register_capability(graph_adapter)
+        graph_shrinking_adapter, result.graph_shrinking = install_graph_shrinking(
+            ctx.store,
+            ctx.schemas,
+            ctx.artifacts,
+            core.plugins,
+            ctx.checkers,
+            application.shrinking,
+            result.graph,
+            application.reference_installer,
+            authorize_checker=ctx.authorizes_bundled_checkers,
+        )
+        self.context.register_capability(graph_shrinking_adapter)
+
+        coloring_adapters, result.graph_coloring = install_graph_coloring_capabilities(
+            ctx.store,
+            ctx.schemas,
+            ctx.artifacts,
+            core.sat,
+            ctx.checkers,
+            authorize_checker=ctx.authorizes_bundled_checkers,
+        )
+        for coloring_adapter in coloring_adapters:
+            self.context.register_capability(coloring_adapter)
+
+    def _install_matrix_capabilities(
+        self,
+        ctx: InstallationContext,
+        result: PortfolioInstallation,
+    ) -> None:
+        """Install matrix search, determinant, and rank capabilities."""
+
+        matrix_adapters, result.matrix = install_matrix_capabilities(
+            ctx.store,
+            ctx.schemas,
+            ctx.artifacts,
+        )
+        for matrix_adapter in matrix_adapters:
+            self.context.register_capability(matrix_adapter)
+        determinant_adapter, result.matrix_determinant_checker = (
+            install_matrix_determinant_checker(
+                ctx.store,
+                ctx.schemas,
+                ctx.artifacts,
+                result.matrix,
+                ctx.verification,
+                ctx.checkers,
+                authorize_checker=ctx.authorizes_bundled_checkers,
+            )
+        )
+        if determinant_adapter is not None:
+            self.context.register_capability(determinant_adapter)
+        rank_adapter, result.matrix_rank_checker = install_matrix_rank_checker(
+            ctx.store,
+            ctx.schemas,
+            ctx.artifacts,
+            result.matrix,
+            ctx.verification,
+            ctx.checkers,
+            authorize_checker=ctx.authorizes_bundled_checkers,
+        )
+        if rank_adapter is not None:
+            self.context.register_capability(rank_adapter)
 
     def install(
         self,
@@ -74,38 +155,7 @@ class CoreApplicationInstaller:
         if finite_coverage_adapter is not None:
             self.context.register_capability(finite_coverage_adapter)
 
-        graph_adapters, result.graph = install_graph_capabilities(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        for graph_adapter in graph_adapters:
-            self.context.register_capability(graph_adapter)
-        graph_shrinking_adapter, result.graph_shrinking = install_graph_shrinking(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            core.plugins,
-            ctx.checkers,
-            application.shrinking,
-            result.graph,
-            application.reference_installer,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        self.context.register_capability(graph_shrinking_adapter)
-
-        coloring_adapters, result.graph_coloring = install_graph_coloring_capabilities(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            core.sat,
-            ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        for coloring_adapter in coloring_adapters:
-            self.context.register_capability(coloring_adapter)
+        self._install_graph_capabilities(ctx, core, application, result)
 
         portfolio = build_builtin_portfolio()
         bundle_result = DomainBundleInstaller(ctx).install(portfolio)
@@ -117,17 +167,20 @@ class CoreApplicationInstaller:
         )
         self.install_domain_verification(result, portfolio)
 
-        graph_isomorphism_adapter, result.graph_isomorphism = install_graph_isomorphism(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            ctx.verification,
-            ctx.checkers,
-            result.graph,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        if graph_isomorphism_adapter is not None:
-            self.context.register_capability(graph_isomorphism_adapter)
+        if result.graph is not None:
+            graph_isomorphism_adapter, result.graph_isomorphism = (
+                install_graph_isomorphism(
+                    ctx.store,
+                    ctx.schemas,
+                    ctx.artifacts,
+                    ctx.verification,
+                    ctx.checkers,
+                    result.graph,
+                    authorize_checker=ctx.authorizes_bundled_checkers,
+                )
+            )
+            if graph_isomorphism_adapter is not None:
+                self.context.register_capability(graph_isomorphism_adapter)
 
         polynomial_adapters, result.polynomial = install_polynomial_capabilities(
             ctx.store,
@@ -140,37 +193,7 @@ class CoreApplicationInstaller:
         for polynomial_adapter in polynomial_adapters:
             self.context.register_capability(polynomial_adapter)
 
-        matrix_adapters, result.matrix = install_matrix_capabilities(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-        )
-        for matrix_adapter in matrix_adapters:
-            self.context.register_capability(matrix_adapter)
-        determinant_adapter, result.matrix_determinant_checker = (
-            install_matrix_determinant_checker(
-                ctx.store,
-                ctx.schemas,
-                ctx.artifacts,
-                result.matrix,
-                ctx.verification,
-                ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
-            )
-        )
-        if determinant_adapter is not None:
-            self.context.register_capability(determinant_adapter)
-        rank_adapter, result.matrix_rank_checker = install_matrix_rank_checker(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            result.matrix,
-            ctx.verification,
-            ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        if rank_adapter is not None:
-            self.context.register_capability(rank_adapter)
+        self._install_matrix_capabilities(ctx, result)
 
         polynomial_system_adapter, result.polynomial_system = (
             install_polynomial_system_capabilities(

@@ -28,6 +28,62 @@ def _reject(
     }
 
 
+def _check_matrix_witness_header(
+    witness: dict[str, Any],
+    expected_bindings: object,
+    witness_format: str,
+    role: str,
+    role_error: str,
+) -> str | None:
+    if witness.get("witness_format") != witness_format:
+        return "unexpected witness format"
+    if witness.get("format_version") != "1":
+        return "unsupported witness format version"
+    if witness.get("role") != role:
+        return role_error
+    if witness.get("bindings") != expected_bindings:
+        return "witness bindings do not match the request"
+    return None
+
+
+def _check_kernel_vector_header(
+    claim: dict[str, Any],
+    witness: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if claim.get("predicate") != "is_nonsingular":
+        return "unsupported claim predicate"
+    return _check_matrix_witness_header(
+        witness,
+        expected_bindings,
+        "matrix.kernel_vector",
+        "DEFEATS_CANDIDATE",
+        "witness role does not defeat the candidate",
+    )
+
+
+def _check_kernel_vector_membership(
+    matrix: list[list[int]],
+    vector: list[Fraction],
+) -> str | None:
+    if len(matrix) != len(matrix[0]):
+        return "nonsingularity requires a square matrix"
+    if len(vector) != len(matrix[0]):
+        return "kernel vector dimension does not match matrix"
+    if all(value == 0 for value in vector):
+        return "kernel vector must be nonzero"
+    for row in matrix:
+        if (
+            sum(
+                Fraction(coefficient) * value
+                for coefficient, value in zip(row, vector, strict=True)
+            )
+            != 0
+        ):
+            return "vector is not in the matrix kernel"
+    return None
+
+
 def check_kernel_vector(request: dict[str, Any]) -> dict[str, Any]:
     """Verify a nonzero rational vector lies in an integer matrix kernel."""
 
@@ -36,36 +92,19 @@ def check_kernel_vector(request: dict[str, Any]) -> dict[str, Any]:
             return _reject("unsupported request version")
         claim = _claim_view(request["claim"]["payload"])
         witness = request["witness"]["payload"]
-        if claim.get("predicate") != "is_nonsingular":
-            return _reject("unsupported claim predicate")
-        if witness.get("witness_format") != "matrix.kernel_vector":
-            return _reject("unexpected witness format")
-        if witness.get("format_version") != "1":
-            return _reject("unsupported witness format version")
-        if witness.get("role") != "DEFEATS_CANDIDATE":
-            return _reject("witness role does not defeat the candidate")
-        if witness.get("bindings") != request["expected_bindings"]:
-            return _reject("witness bindings do not match the request")
+        error = _check_kernel_vector_header(
+            claim, witness, request["expected_bindings"]
+        )
+        if error is not None:
+            return _reject(error)
         matrix = _parse_matrix(request["candidate"]["payload"])
-        if len(matrix) != len(matrix[0]):
-            return _reject("nonsingularity requires a square matrix")
         vector_data = witness.get("payload", {}).get("vector")
         if not isinstance(vector_data, list):
             return _reject("kernel vector must be a list")
         vector = [_parse_rational(value) for value in vector_data]
-        if len(vector) != len(matrix[0]):
-            return _reject("kernel vector dimension does not match matrix")
-        if all(value == 0 for value in vector):
-            return _reject("kernel vector must be nonzero")
-        for row in matrix:
-            if (
-                sum(
-                    Fraction(coefficient) * value
-                    for coefficient, value in zip(row, vector, strict=True)
-                )
-                != 0
-            ):
-                return _reject("vector is not in the matrix kernel")
+        error = _check_kernel_vector_membership(matrix, vector)
+        if error is not None:
+            return _reject(error)
         return {
             "accepted": True,
             "conclusion": "FALSE",
@@ -76,6 +115,21 @@ def check_kernel_vector(request: dict[str, Any]) -> dict[str, Any]:
         }
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         return _reject("malformed checker request")
+
+
+def _check_row_major_transformation_header(
+    transformation: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if transformation.get("transform_format") != "matrix.row_major":
+        return "unexpected transformation format"
+    if transformation.get("format_version") != "1":
+        return "unsupported transformation version"
+    if transformation.get("relation") != "EQUIVALENT":
+        return "row-major checker only certifies equivalence"
+    if transformation.get("bindings") != expected_bindings:
+        return "transformation bindings do not match the request"
+    return None
 
 
 def check_row_major_transformation(
@@ -90,26 +144,11 @@ def check_row_major_transformation(
                 method="CHECKED_CERTIFICATE",
             )
         transformation = request["transformation"]["payload"]
-        if transformation.get("transform_format") != "matrix.row_major":
-            return _reject(
-                "unexpected transformation format",
-                method="CHECKED_CERTIFICATE",
-            )
-        if transformation.get("format_version") != "1":
-            return _reject(
-                "unsupported transformation version",
-                method="CHECKED_CERTIFICATE",
-            )
-        if transformation.get("relation") != "EQUIVALENT":
-            return _reject(
-                "row-major checker only certifies equivalence",
-                method="CHECKED_CERTIFICATE",
-            )
-        if transformation.get("bindings") != request["expected_bindings"]:
-            return _reject(
-                "transformation bindings do not match the request",
-                method="CHECKED_CERTIFICATE",
-            )
+        error = _check_row_major_transformation_header(
+            transformation, request["expected_bindings"]
+        )
+        if error is not None:
+            return _reject(error, method="CHECKED_CERTIFICATE")
 
         matrix = _parse_matrix(request["source"]["payload"])
         target = request["target"]["payload"]
@@ -159,6 +198,71 @@ def check_row_major_transformation(
         )
 
 
+def _check_matrix_in_scope(
+    matrix: list[list[int]],
+    rows: int,
+    cols: int,
+    values: tuple[int, ...],
+    label: str,
+) -> str | None:
+    if len(matrix) != rows or len(matrix[0]) != cols:
+        return f"{label} dimensions do not match scope"
+    if any(entry not in values for row in matrix for entry in row):
+        return f"{label} entry is outside scope"
+    return None
+
+
+def _check_maximizer_matrices(
+    candidate: list[list[int]],
+    proposed: list[list[int]],
+    rows: int,
+    cols: int,
+    values: tuple[int, ...],
+) -> str | None:
+    for matrix, label in ((candidate, "candidate"), (proposed, "proposed matrix")):
+        error = _check_matrix_in_scope(matrix, rows, cols, values, label)
+        if error is not None:
+            return error
+    return None
+
+
+def _check_scope_square_and_limit(
+    rows: int,
+    cols: int,
+    values: tuple[int, ...],
+) -> str | None:
+    if rows != cols:
+        return "determinant scope must be square"
+    if len(values) ** (rows * cols) > MAX_ENUMERATED_MATRICES:
+        return "scope exceeds the independent checker limit"
+    return None
+
+
+def _enumerate_max_determinant(
+    rows: int,
+    cols: int,
+    values: tuple[int, ...],
+) -> int:
+    maximum = -1
+    for flat in itertools.product(values, repeat=rows * cols):
+        matrix = [
+            list(flat[index * cols : (index + 1) * cols]) for index in range(rows)
+        ]
+        maximum = max(maximum, abs(_determinant(matrix)))
+    return maximum
+
+
+def _check_maximizer_result(
+    proposed_value: int,
+    candidate_value: int,
+    declared: Fraction,
+    maximum: int,
+) -> str | None:
+    if proposed_value != maximum or candidate_value != maximum or declared != maximum:
+        return "proposed matrix or bound candidate is not a scoped maximizer"
+    return None
+
+
 def check_maximizer_witness(request: dict[str, Any]) -> dict[str, Any]:
     """Exhaustively verify that a proposed matrix maximizes the scoped objective."""
 
@@ -175,40 +279,22 @@ def check_maximizer_witness(request: dict[str, Any]) -> dict[str, Any]:
                 "unsupported claim predicate",
                 method="EXHAUSTIVE_FINITE",
             )
-        if witness.get("witness_format") != "matrix.maximizer":
-            return _reject(
-                "unexpected witness format",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if witness.get("format_version") != "1":
-            return _reject(
-                "unsupported witness format version",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if witness.get("role") != "SUPPORTS_CLAIM":
-            return _reject(
-                "witness role does not support the claim",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if witness.get("bindings") != request["expected_bindings"]:
-            return _reject(
-                "witness bindings do not match the request",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_matrix_witness_header(
+            witness,
+            request["expected_bindings"],
+            "matrix.maximizer",
+            "SUPPORTS_CLAIM",
+            "witness role does not support the claim",
+        )
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
 
         scope = claim.get("scope")
         rows, cols, values = _parse_scope(scope)
-        if rows != cols:
-            return _reject(
-                "determinant scope must be square",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_scope_square_and_limit(rows, cols, values)
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
         total = len(values) ** (rows * cols)
-        if total > MAX_ENUMERATED_MATRICES:
-            return _reject(
-                "scope exceeds the independent checker limit",
-                method="EXHAUSTIVE_FINITE",
-            )
 
         inner = witness.get("payload")
         if not isinstance(inner, dict):
@@ -218,26 +304,9 @@ def check_maximizer_witness(request: dict[str, Any]) -> dict[str, Any]:
             )
         proposed = _parse_matrix(inner.get("matrix"))
         candidate = _parse_matrix(request["candidate"]["payload"])
-        if len(candidate) != rows or len(candidate[0]) != cols:
-            return _reject(
-                "candidate dimensions do not match scope",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if any(entry not in values for row in candidate for entry in row):
-            return _reject(
-                "candidate entry is outside scope",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if len(proposed) != rows or len(proposed[0]) != cols:
-            return _reject(
-                "proposed matrix dimensions do not match scope",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if any(entry not in values for row in proposed for entry in row):
-            return _reject(
-                "proposed matrix entry is outside scope",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_maximizer_matrices(candidate, proposed, rows, cols, values)
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
         declared = _parse_rational(inner.get("objective_value"))
         if declared.denominator != 1:
             return _reject(
@@ -245,23 +314,14 @@ def check_maximizer_witness(request: dict[str, Any]) -> dict[str, Any]:
                 method="EXHAUSTIVE_FINITE",
             )
 
-        maximum = -1
-        for flat in itertools.product(values, repeat=rows * cols):
-            matrix = [
-                list(flat[index * cols : (index + 1) * cols]) for index in range(rows)
-            ]
-            maximum = max(maximum, abs(_determinant(matrix)))
+        maximum = _enumerate_max_determinant(rows, cols, values)
         proposed_value = abs(_determinant(proposed))
         candidate_value = abs(_determinant(candidate))
-        if (
-            proposed_value != maximum
-            or candidate_value != maximum
-            or declared != maximum
-        ):
-            return _reject(
-                "proposed matrix or bound candidate is not a scoped maximizer",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_maximizer_result(
+            proposed_value, candidate_value, declared, maximum
+        )
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
         return {
             "accepted": True,
             "conclusion": "TRUE",
@@ -275,6 +335,45 @@ def check_maximizer_witness(request: dict[str, Any]) -> dict[str, Any]:
             "malformed checker request",
             method="EXHAUSTIVE_FINITE",
         )
+
+
+def _check_maxdet_certificate_header(
+    certificate: dict[str, Any],
+    expected_bindings: object,
+) -> str | None:
+    if certificate.get("certificate_type") != "matrix.maxdet_enumeration":
+        return "unexpected certificate format"
+    if certificate.get("format_version") != "1":
+        return "unsupported certificate version"
+    if certificate.get("bindings") != expected_bindings:
+        return "certificate bindings do not match the request"
+    return None
+
+
+def _check_maxdet_scope_candidate_limit(
+    rows: int,
+    cols: int,
+    values: tuple[int, ...],
+    candidate: list[list[int]],
+) -> str | None:
+    if rows != cols:
+        return "determinant scope must be square"
+    error = _check_matrix_in_scope(candidate, rows, cols, values, "candidate")
+    if error is not None:
+        return error
+    if len(values) ** (rows * cols) > MAX_ENUMERATED_MATRICES:
+        return "scope exceeds the independent checker limit"
+    return None
+
+
+def _check_maxdet_result(
+    maximum: int,
+    declared_maximum: Fraction,
+    candidate_value: int,
+) -> str | None:
+    if maximum != declared_maximum or candidate_value != maximum:
+        return "declared maximum or bound candidate is incorrect"
+    return None
 
 
 def check_maxdet_enumeration(request: dict[str, Any]) -> dict[str, Any]:
@@ -293,45 +392,18 @@ def check_maxdet_enumeration(request: dict[str, Any]) -> dict[str, Any]:
                 "unsupported claim predicate",
                 method="EXHAUSTIVE_FINITE",
             )
-        if certificate.get("certificate_type") != "matrix.maxdet_enumeration":
-            return _reject(
-                "unexpected certificate format",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if certificate.get("format_version") != "1":
-            return _reject(
-                "unsupported certificate version",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if certificate.get("bindings") != request["expected_bindings"]:
-            return _reject(
-                "certificate bindings do not match the request",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_maxdet_certificate_header(
+            certificate, request["expected_bindings"]
+        )
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
         candidate = _parse_matrix(request["candidate"]["payload"])
         scope = claim.get("scope")
         rows, cols, values = _parse_scope(scope)
-        if rows != cols:
-            return _reject(
-                "determinant scope must be square",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if len(candidate) != rows or len(candidate[0]) != cols:
-            return _reject(
-                "candidate dimensions do not match scope",
-                method="EXHAUSTIVE_FINITE",
-            )
-        if any(entry not in values for row in candidate for entry in row):
-            return _reject(
-                "candidate entry is outside scope",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_maxdet_scope_candidate_limit(rows, cols, values, candidate)
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
         total = len(values) ** (rows * cols)
-        if total > MAX_ENUMERATED_MATRICES:
-            return _reject(
-                "scope exceeds the independent checker limit",
-                method="EXHAUSTIVE_FINITE",
-            )
         inner = certificate.get("payload")
         if not isinstance(inner, dict):
             return _reject(
@@ -344,18 +416,11 @@ def check_maxdet_enumeration(request: dict[str, Any]) -> dict[str, Any]:
                 "integer determinant maximum must be integral",
                 method="EXHAUSTIVE_FINITE",
             )
-        maximum = -1
-        for flat in itertools.product(values, repeat=rows * cols):
-            matrix = [
-                list(flat[index * cols : (index + 1) * cols]) for index in range(rows)
-            ]
-            maximum = max(maximum, abs(_determinant(matrix)))
+        maximum = _enumerate_max_determinant(rows, cols, values)
         candidate_value = abs(_determinant(candidate))
-        if maximum != declared_maximum or candidate_value != maximum:
-            return _reject(
-                "declared maximum or bound candidate is incorrect",
-                method="EXHAUSTIVE_FINITE",
-            )
+        error = _check_maxdet_result(maximum, declared_maximum, candidate_value)
+        if error is not None:
+            return _reject(error, method="EXHAUSTIVE_FINITE")
         if inner.get("objects_checked") != total:
             return _reject(
                 "certificate enumeration count is incorrect",

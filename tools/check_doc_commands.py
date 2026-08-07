@@ -5,10 +5,16 @@ from __future__ import annotations
 import argparse
 import re
 import shlex
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.makefile_catalog import MakefileCatalogError, discover_makefiles
+
 DEFAULT_DOCUMENTS = (
     Path("CONTRIBUTING.md"),
     Path("docs/reference/testing-strategy.md"),
@@ -27,11 +33,11 @@ class CommandExample:
     in_fence: bool
 
 
-def make_targets(makefile: Path) -> set[str]:
+def make_targets(root: Path) -> set[str]:
     """Return concrete targets declared by a Makefile."""
 
     target_names: set[str] = set()
-    for line in makefile.read_text(encoding="utf-8").splitlines():
+    for line in discover_makefiles(root).text().splitlines():
         if line[:1].isspace():
             continue
         name, separator, _ = line.partition(":")
@@ -44,7 +50,7 @@ _REQUIRED_VAR = re.compile(r'@?test\s+-n\s+"\$\((\w+)\)"')
 _CHAINED_REQUIRED = re.compile(r'-a\s+-n\s+"\$\((\w+)\)"')
 
 
-def required_variables(makefile: Path) -> dict[str, set[str]]:
+def required_variables(root: Path) -> dict[str, set[str]]:
     """Return targets mapped to their unconditionally required variables.
 
     A variable is required when the recipe begins with one or more
@@ -54,18 +60,18 @@ def required_variables(makefile: Path) -> dict[str, set[str]]:
     Guards chained with ``-a`` (AND) are all required.
     """
 
-    direct = _direct_required_variables(makefile)
-    dependencies = _target_dependencies(makefile)
+    direct = _direct_required_variables(root)
+    dependencies = _target_dependencies(root)
     return _inherited_required_variables(direct, dependencies)
 
 
-def _direct_required_variables(makefile: Path) -> dict[str, set[str]]:
+def _direct_required_variables(root: Path) -> dict[str, set[str]]:
     """Return variables guarded directly by each target's recipe."""
 
     result: dict[str, set[str]] = {}
     current_target: str | None = None
     recipe_lines: list[str] = []
-    for line in makefile.read_text(encoding="utf-8").splitlines():
+    for line in discover_makefiles(root).text().splitlines():
         if line[:1].isspace():
             if current_target is not None:
                 recipe_lines.append(line)
@@ -88,11 +94,11 @@ def _direct_required_variables(makefile: Path) -> dict[str, set[str]]:
     return result
 
 
-def _target_dependencies(makefile: Path) -> dict[str, set[str]]:
+def _target_dependencies(root: Path) -> dict[str, set[str]]:
     """Return concrete Make prerequisites for each target."""
 
     dependencies: dict[str, set[str]] = {}
-    for line in makefile.read_text(encoding="utf-8").splitlines():
+    for line in discover_makefiles(root).text().splitlines():
         if line[:1].isspace():
             continue
         name, separator, prerequisites = line.partition(":")
@@ -282,8 +288,11 @@ def validate_documents(
 ) -> list[str]:
     """Return stable diagnostics for invalid Make targets, TESTS paths, or missing required variables."""
 
-    targets = make_targets(root / "Makefile")
-    required_vars = required_variables(root / "Makefile")
+    try:
+        targets = make_targets(root)
+        required_vars = required_variables(root)
+    except MakefileCatalogError as exc:
+        return [str(exc)]
     failures: list[str] = []
     for relative_document in documents:
         document = (

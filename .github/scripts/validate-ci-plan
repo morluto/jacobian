@@ -11,6 +11,10 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.makefile_catalog import MakefileCatalogError, discover_makefiles
 
 BOOLEAN_KEYS = (
     "run-python",
@@ -117,7 +121,7 @@ def _validate_catalog() -> None:
         targets = set(
             re.findall(
                 r"(?m)^([A-Za-z0-9_.-]+):(?:[^=]|$)",
-                (ROOT / "Makefile").read_text(encoding="utf-8"),
+                discover_makefiles(ROOT).text(),
             )
         )
         for name, entry in catalog.items():
@@ -177,7 +181,14 @@ def _validate_catalog() -> None:
                 "CI catalog must keep a local-only deploy gate "
                 "with command 'make deploy-check'"
             )
-    except (OSError, KeyError, TypeError, ValueError, tomllib.TOMLDecodeError) as exc:
+    except (
+        MakefileCatalogError,
+        OSError,
+        KeyError,
+        TypeError,
+        ValueError,
+        tomllib.TOMLDecodeError,
+    ) as exc:
         fail(f"invalid CI validation catalog: {exc}")
 
 

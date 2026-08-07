@@ -55,6 +55,82 @@ def _read_bounded(path: Path) -> bytes:
     return value
 
 
+def _parse_and_solve(
+    solver: Any,
+    parser: Any,
+    expected_logic: str,
+) -> tuple[list[str], str | None]:
+    """Parse and invoke SMT-LIB commands, returning command names and status."""
+
+    command_names: list[str] = []
+    status_text: str | None = None
+    while True:
+        command = parser.nextCommand()
+        if command.isNull():
+            break
+        name = str(command.getCommandName())
+        if name not in _ALLOWED_PARSED_COMMANDS:
+            raise Cvc5WorkerError("CVC5_COMMAND_OUTSIDE_PROFILE")
+        if status_text is not None:
+            raise Cvc5WorkerError("CVC5_COMMAND_AFTER_CHECK_SAT")
+        result = str(command.invoke(solver, parser.getSymbolManager()))
+        command_names.append(name)
+        if name == "set-logic" and str(solver.getLogic()) != expected_logic:
+            raise Cvc5WorkerError("CVC5_LOGIC_MISMATCH")
+        if name == "check-sat":
+            status_text = result.strip()
+    return command_names, status_text
+
+
+def _validate_query_profile(
+    command_names: list[str],
+    status_text: str | None,
+) -> str:
+    """Validate the command sequence and return the mapped solver status."""
+
+    if (
+        not command_names
+        or command_names[0] != "set-logic"
+        or command_names.count("set-logic") != 1
+        or command_names[-1] != "check-sat"
+        or command_names.count("check-sat") != 1
+        or status_text not in _STATUS_MAP
+    ):
+        raise Cvc5WorkerError("CVC5_QUERY_OUTSIDE_PROFILE")
+    assert status_text is not None
+    return _STATUS_MAP[status_text]
+
+
+def _capture_cvc5_proof(
+    cvc5: Any,
+    solver: Any,
+    proof_path: Path,
+) -> int:
+    """Capture the Alethe proof and return the hole count."""
+
+    try:
+        proofs = solver.getProof(cvc5.ProofComponent.FULL)
+        if len(proofs) != 1:
+            raise Cvc5WorkerError("CVC5_PROOF_COUNT_INVALID")
+        proof = solver.proofToString(proofs[0], cvc5.ProofFormat.ALETHE)
+        if not isinstance(proof, bytes):
+            raise Cvc5WorkerError("CVC5_PROOF_NOT_BYTES")
+        if len(proof) > CVC5_PROOF_LIMIT:
+            raise Cvc5WorkerError("CVC5_PROOF_LIMIT_EXCEEDED")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        descriptor = os.open(proof_path, flags, 0o600)
+        try:
+            with os.fdopen(descriptor, "wb", closefd=False) as stream:
+                stream.write(proof)
+        finally:
+            os.close(descriptor)
+    except Cvc5WorkerError:
+        raise
+    except (OSError, RuntimeError, TypeError) as exc:
+        raise Cvc5WorkerError("CVC5_PROOF_CAPTURE_FAILED") from exc
+    return proof.count(b":rule hole")
+
+
 def _run(
     *,
     input_path: Path,
@@ -79,67 +155,23 @@ def _run(
             smtlib_text,
             "jacobian-input.smt2",
         )
-        command_names: list[str] = []
-        status_text: str | None = None
-        while True:
-            command = parser.nextCommand()
-            if command.isNull():
-                break
-            name = str(command.getCommandName())
-            if name not in _ALLOWED_PARSED_COMMANDS:
-                raise Cvc5WorkerError("CVC5_COMMAND_OUTSIDE_PROFILE")
-            if status_text is not None:
-                raise Cvc5WorkerError("CVC5_COMMAND_AFTER_CHECK_SAT")
-            result = str(command.invoke(solver, parser.getSymbolManager()))
-            command_names.append(name)
-            if name == "set-logic" and str(solver.getLogic()) != expected_logic:
-                raise Cvc5WorkerError("CVC5_LOGIC_MISMATCH")
-            if name == "check-sat":
-                status_text = result.strip()
+        command_names, status_text = _parse_and_solve(solver, parser, expected_logic)
     except Cvc5WorkerError:
         raise
     except (AttributeError, ImportError, OSError, RuntimeError, TypeError) as exc:
         raise Cvc5WorkerError("CVC5_REJECTED_INPUT_OR_FAILED") from exc
-    if (
-        not command_names
-        or command_names[0] != "set-logic"
-        or command_names.count("set-logic") != 1
-        or command_names[-1] != "check-sat"
-        or command_names.count("check-sat") != 1
-        or status_text not in _STATUS_MAP
-    ):
-        raise Cvc5WorkerError("CVC5_QUERY_OUTSIDE_PROFILE")
-    solver_status = _STATUS_MAP[status_text]
+    solver_status = _validate_query_profile(command_names, status_text)
     if solver_status != "UNSATISFIABLE":
         return {
             "solver_status": solver_status,
             "proof_written": False,
             "alethe_hole_count": None,
         }
-    try:
-        proofs = solver.getProof(cvc5.ProofComponent.FULL)
-        if len(proofs) != 1:
-            raise Cvc5WorkerError("CVC5_PROOF_COUNT_INVALID")
-        proof = solver.proofToString(proofs[0], cvc5.ProofFormat.ALETHE)
-        if not isinstance(proof, bytes):
-            raise Cvc5WorkerError("CVC5_PROOF_NOT_BYTES")
-        if len(proof) > CVC5_PROOF_LIMIT:
-            raise Cvc5WorkerError("CVC5_PROOF_LIMIT_EXCEEDED")
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-        descriptor = os.open(proof_path, flags, 0o600)
-        try:
-            with os.fdopen(descriptor, "wb", closefd=False) as stream:
-                stream.write(proof)
-        finally:
-            os.close(descriptor)
-    except Cvc5WorkerError:
-        raise
-    except (OSError, RuntimeError, TypeError) as exc:
-        raise Cvc5WorkerError("CVC5_PROOF_CAPTURE_FAILED") from exc
+    alethe_hole_count = _capture_cvc5_proof(cvc5, solver, proof_path)
     return {
         "solver_status": solver_status,
         "proof_written": True,
-        "alethe_hole_count": proof.count(b":rule hole"),
+        "alethe_hole_count": alethe_hole_count,
     }
 
 

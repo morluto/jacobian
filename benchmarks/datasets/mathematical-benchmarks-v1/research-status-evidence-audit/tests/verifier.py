@@ -3,7 +3,7 @@ from pathlib import Path
 
 from verifier_support import (
     evidence_list_is_bound,
-    load_submission,
+    load_submission_raw,
     resolve_evidence,
     strict_submission_contract,
 )
@@ -49,7 +49,7 @@ def load_submission_bounded():
             or path.stat().st_size > MAX_SUBMISSION_BYTES
         ):
             return None
-        return load_submission(path)
+        return load_submission_raw(path)
     except (OSError, RecursionError):
         return None
 

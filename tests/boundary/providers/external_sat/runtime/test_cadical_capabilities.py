@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import threading
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def _fake_cadical(tmp_path: Path, body: str) -> Path:
     executable = tmp_path / "fake-cadical"
     executable.write_text(
         (
-            "#!/usr/bin/python3\n"
+            f"#!{sys.executable}\n"
             "import pathlib\n"
             "import sys\n"
             "import time\n"

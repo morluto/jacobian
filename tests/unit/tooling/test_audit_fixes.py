@@ -9,8 +9,8 @@ These tests serve as formal validation that:
 
 import json
 import sys
+import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -96,7 +96,6 @@ def test_registry_cache_invalidation():
 # Bug TOCTOU: install_source_only_importer should purge sys.modules
 def test_source_only_importer_purges_sys_modules():
     """Formally prove that pre-imported modules are purged."""
-    import importlib
     from jacobian.implementation import install_source_only_importer
 
     # Create a fake module in sys.modules that looks like the target package

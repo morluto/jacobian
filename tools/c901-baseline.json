@@ -153,14 +153,39 @@
       "complexity": 13
     },
     {
+      "path": "benchmarks/datasets/provider-feasibility-v1/cddlib/tests/verifier.py",
+      "symbol": "_execution_bound",
+      "complexity": 11
+    },
+    {
+      "path": "benchmarks/datasets/provider-feasibility-v1/cgal/tests/verifier.py",
+      "symbol": "_execution_bound",
+      "complexity": 11
+    },
+    {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/environment/spike.py",
       "symbol": "_independent_reduction",
+      "complexity": 11
+    },
+    {
+      "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/tests/verifier.py",
+      "symbol": "_execution_bound",
+      "complexity": 11
+    },
+    {
+      "path": "benchmarks/datasets/provider-feasibility-v1/nauty/tests/verifier.py",
+      "symbol": "_execution_bound",
       "complexity": 11
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/regina/environment/spike.py",
       "symbol": "_replay_triangulation",
       "complexity": 14
+    },
+    {
+      "path": "benchmarks/datasets/provider-feasibility-v1/regina/tests/verifier.py",
+      "symbol": "_execution_bound",
+      "complexity": 11
     },
     {
       "path": "benchmarks/datasets/public-reproductions-v1/superposition-proof-replay/tests/verifier.py",
@@ -181,6 +206,11 @@
       "path": "benchmarks/tooling/harbor_suite.py",
       "symbol": "validate_task_topology",
       "complexity": 13
+    },
+    {
+      "path": "benchmarks/tooling/observation_results.py",
+      "symbol": "_trial_status",
+      "complexity": 12
     },
     {
       "path": "src/jacobian/adapters/mcp/remote.py",
@@ -681,6 +711,11 @@
       "path": "tests/composition/runtime/test_portfolio_installation.py",
       "symbol": "test_install_portfolio_owns_transaction_and_phase_order",
       "complexity": 11
+    },
+    {
+      "path": "tools/check_benchmark_adapters.py",
+      "symbol": "_evidence_failures",
+      "complexity": 12
     },
     {
       "path": "tools/check_test_architecture.py",

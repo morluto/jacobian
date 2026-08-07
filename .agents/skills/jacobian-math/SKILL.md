@@ -7,6 +7,18 @@ description: Use Jacobian for specialized exact mathematics, including matrix de
 
 <!-- Managed by Jacobian's Codex integration. -->
 
+In Codex Code Mode, call the nested methods
+`tools.mcp__jacobian__math_find(...)` and
+`tools.mcp__jacobian__math_run(...)` directly. Do not enumerate, filter, or
+print `ALL_TOOLS` merely to locate them; that needlessly adds every matching
+tool description to the model context. Return only the typed projection when
+available, for example:
+
+```js
+const r = await tools.mcp__jacobian__math_find({query: "...", limit: 3});
+text(r.structuredContent ?? r);
+```
+
 Call `math.run` directly when the requested local outcome exactly matches one of
 these stable built-in contracts; replace the example values but preserve the
 shown JSON types:
@@ -37,5 +49,9 @@ searches, and missing witnesses as non-conclusions.
 
 When independent checking is requested, calculations or programs authored by
 the same model are not independent checker evidence. Use an installed `VERIFY`
-capability when available. Claim `VERIFIED` only when the result has assurance
-level `VERIFIED` and a local verification record.
+capability when available. An artifact URI or checker-result summary is not a
+task-local verification-record file: never reconstruct or paraphrase such a
+record from the returned fields. Claim `VERIFIED` only when the result has
+assurance level `VERIFIED`, the exact record bytes are available, and any
+required task authorization and bindings are preserved. Otherwise use a lower
+assurance permitted by the task.

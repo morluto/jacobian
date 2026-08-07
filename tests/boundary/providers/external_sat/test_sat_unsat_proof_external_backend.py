@@ -16,8 +16,6 @@ from jacobian.providers.external_solver_runtime import (
     drat_trim_provider_runtime,
 )
 
-pytestmark = []
-
 
 def test_cadical_text_proof_replays_in_pinned_drat_trim(
     authorized_complete_runtime,

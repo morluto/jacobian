@@ -20,24 +20,22 @@ _PUBLIC_TASKS = (
     / "datasets"
     / "public-reproductions-v1"
 )
-_OVERLAP_CASES = []
-for _slug in (
-    "recurrence-fibonacci",
-    "recurrence-linear-eval",
-    "recurrence-lucas",
-    "recurrence-rational-series",
-):
-    _task = _PUBLIC_TASKS / _slug
-    _OVERLAP_CASES.append(
-        {
-            "query": json.loads((_task / "environment" / "input.json").read_text())[
-                "query"
-            ],
-            "expected_first": json.loads(
-                (_task / "tests" / "expected.json").read_text()
-            )["expected_first"],
-        }
+_OVERLAP_CASES = [
+    {
+        "query": json.loads(
+            (_PUBLIC_TASKS / slug / "environment" / "input.json").read_text()
+        )["query"],
+        "expected_first": json.loads(
+            (_PUBLIC_TASKS / slug / "tests" / "expected.json").read_text()
+        )["expected_first"],
+    }
+    for slug in (
+        "recurrence-fibonacci",
+        "recurrence-linear-eval",
+        "recurrence-lucas",
+        "recurrence-rational-series",
     )
+]
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:

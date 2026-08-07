@@ -27,8 +27,6 @@ from jacobian.plugins.registry import PluginRegistryError
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-pytestmark = []
-
 
 @pytest.fixture
 def plugin_runtime(

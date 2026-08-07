@@ -111,3 +111,27 @@ def test_makefile_change_remains_fail_closed_without_hunk_ownership(
     assert plan.reasons == (
         "shared verifier execution harness requires full host validation: Makefile",
     )
+
+
+def test_conjecture_probes_task_change_selects_leaf(tmp_path: Path) -> None:
+    task = "perfect-cuboid-scope-audit"
+    leaf = (
+        tmp_path
+        / "benchmarks/validation/conjecture_probes_v1/test_perfect_cuboid_scope_audit.py"
+    )
+    leaf.parent.mkdir(parents=True)
+    leaf.write_text("", encoding="utf-8")
+    suite = SimpleNamespace(tasks=(SimpleNamespace(path=Path(task)),))
+
+    plan = host_validation_plan(
+        tmp_path,
+        [f"benchmarks/datasets/conjecture-probes-v1/{task}/tests/verifier.py"],
+        {"conjecture-probes-v1": suite},
+    )
+
+    assert [entry.selector for entry in plan.entries] == [
+        "benchmarks/validation/conjecture_probes_v1/test_perfect_cuboid_scope_audit.py",
+    ]
+    assert all(
+        reason.startswith("focused host validation:") for reason in plan.reasons
+    )

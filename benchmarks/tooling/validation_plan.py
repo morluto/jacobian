@@ -196,6 +196,24 @@ def task_host_validation(
             )
         )
         return tuple(entries)
+    if dataset == "conjecture-probes-v1":
+        dedicated = (
+            root
+            / "benchmarks"
+            / "validation"
+            / "conjecture_probes_v1"
+            / f"test_{task.replace('-', '_')}.py"
+        )
+        entries: list[HostValidation] = []
+        if dedicated.is_file():
+            entries.append(
+                _entry(
+                    name=f"{task}-specific",
+                    selector=dedicated.relative_to(root).as_posix(),
+                    timings=timings,
+                )
+            )
+        return tuple(entries)
     if dataset == "public-reproductions-v1" and task == "sat-erdos-schur-f4":
         return (
             _entry(

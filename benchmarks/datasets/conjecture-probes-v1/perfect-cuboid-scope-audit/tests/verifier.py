@@ -161,10 +161,15 @@ def main() -> None:
         allowed_assurances=scoreable_assurances,
         verification_record="forbidden",
     )
+    # Compute the mathematics diagnostic from the raw submission so that an
+    # envelope error (bad scope, evidence descriptor, etc.) does not mask a
+    # correct result.  When the strict submission is valid it is identical to
+    # the raw one, so this is a pure superset of the previous behaviour.
+    math_source = submission if isinstance(submission, dict) else raw_submission
     mathematics = bool(
         frozen
-        and isinstance(submission, dict)
-        and _mathematics(submission.get("result"), frozen)
+        and isinstance(math_source, dict)
+        and _mathematics(math_source.get("result"), frozen)
     )
     evidence = bool(
         isinstance(submission, dict)

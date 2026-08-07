@@ -137,3 +137,14 @@ def test_oversized_evidence_fails_closed(tmp_path: Path) -> None:
     reward = _run(app, logs)
     assert reward["evidence"] == 0.0
     assert reward["aggregate_reward"] == 0.0
+
+
+def test_bad_scope_does_not_mask_mathematics(tmp_path: Path) -> None:
+    """The mathematics diagnostic must survive an unrelated envelope error."""
+    app, logs, submission = _case(tmp_path)
+    submission["scope"] = "all-positive-integer-cuboids"
+    _write(app, submission)
+    reward = _run(app, logs)
+    assert reward["mathematics"] == 1.0
+    assert reward["scope"] == 0.0
+    assert reward["aggregate_reward"] == 0.0

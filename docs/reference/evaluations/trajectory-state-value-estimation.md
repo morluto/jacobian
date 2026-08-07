@@ -9,9 +9,9 @@ from [Numca and Hista](https://arxiv.org/abs/2605.29782), but does not use model
 hidden states, train a critic, update model weights, or authorize mathematical
 assurance.
 
-The work is staged. The version 1 extractor and deterministic offline value
-comparison are now defined. Observation-only runtime scoring and repeated
-Codex experiments remain later stages.
+The work is staged. The version 1 extractor, deterministic offline value
+comparison, and observation-only replay scorer are defined. The repeated Codex
+study is separately preregistered before its labels are collected.
 
 ## Version 1 state contract
 
@@ -231,6 +231,71 @@ reward. It also shows that cumulative milestone credit need not equal the
 last-minus-first value when intervening non-milestone value changes are
 intentionally excluded. These are scorer semantics, not evidence that the
 drop predicts real failure.
+
+## PR4 preregistered real-Codex study
+
+[`trajectory-value-study-v1.schema.json`](schemas/trajectory-value-study-v1.schema.json)
+defines the closed study protocol. The frozen
+[`trajectory-value-study-v1.json`](../../../benchmarks/config/trajectory-value-study-v1.json)
+selects the exact locally catalogued `gpt-5.4-mini` model at medium reasoning
+effort with Codex CLI 0.147.0. The runner refuses a missing model, unsupported
+reasoning level, CLI-version drift, a dirty source tree, an existing result
+directory, or model execution without an explicit `--execute` flag. It never
+substitutes a model alias.
+
+The study fixes four task groups and four independent rollouts per group:
+
+| Task group | Exact terminal object |
+| --- | --- |
+| integer Bézout | gcd plus any valid pair of Bézout coefficients |
+| matrix determinant | exact determinant of a fixed 5 by 5 integer matrix |
+| polynomial gcd | monic gcd plus any exact polynomial Bézout pair over `QQ` |
+| graph independent set | any maximum independent set and its optimum size |
+
+Every rollout receives an isolated temporary workspace, a separate Jacobian
+state directory, a REQUIRED reasoning-log server, and an ephemeral Codex
+session. User configuration and repository rules are not loaded. The task owns
+its input and submission schema; the agent may choose any mathematical method.
+Tool count, tokens, latency, and log length are diagnostics only. The scorer is
+not visible to the model and cannot intervene.
+
+The terminal verifier in
+`benchmarks.tooling.trajectory_value_study_verifier` uses only the Python
+standard library and does not import Jacobian, the runner, the extractor, the
+evaluator, or a mathematical backend. It independently recomputes each exact
+relation or optimum and accepts alternate valid witnesses. It digest-binds the
+exact task and regular submission before interpreting the answer. A bound wrong
+or malformed answer is `REJECTED`; a missing artifact, substituted input,
+non-completed Codex command, or verifier failure is `INCONCLUSIVE` and cannot
+be coerced to failure.
+
+The analysis is frozen before labels. It compares all five PR2 estimators,
+replays every estimator without intervention, evaluates a strictly negative
+preterminal value delta as a failure warning, measures same-typed/different-text
+pairs, identifies text-cluster aliases separated by scope, assurance, checker,
+obligation, completeness, or binding state, and computes leave-one-trajectory-
+out univariate signal for each hard-state dimension. No threshold is tuned
+after labels.
+
+Codex CLI cannot resume an arbitrary intermediate tool boundary. The declared
+Monte-Carlo-style surrogate is therefore the leave-one-trajectory-out terminal
+success frequency of independently sampled compatible cross-rollout states.
+It is not an exact continuation value and does not support a causal claim.
+
+Before preregistration, a non-study gcd infrastructure smoke exercised the same
+runner path. It completed one PLAN, two bound capability cycles, two AFTER_TOOL
+entries, and one FINAL; the exact verifier accepted the artifact and the
+extractor emitted two eligible typed milestones. That smoke is not part of the
+study corpus and cannot affect metrics.
+
+After committing the preregistration boundary, the operator command is:
+
+```sh
+uv run python -m benchmarks.tooling.trajectory_value_study run \
+  --spec benchmarks/config/trajectory-value-study-v1.json \
+  --output benchmarks/studies/trajectory-state-value-codex-v1 \
+  --execute
+```
 
 ## Current limitations
 

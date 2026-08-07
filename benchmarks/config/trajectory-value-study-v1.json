@@ -1,0 +1,187 @@
+{
+  "agent_instructions": "Solve only the exact mathematical task in task.json. Read submission-schema.json and write the final artifact to submission.json with no extra top-level fields. Do not inspect files outside this isolated workspace, use the internet, or look for verifier material. Choose any mathematical method and use the available Jacobian tools when useful; tool calls, token count, and log length receive no reward. The Jacobian server enforces its external reasoning-log protocol: write one concise PLAN before work, bind every math.run with the required BEFORE_TOOL and AFTER_TOOL entries, and write one FINAL audit before answering. These summaries are operational external notes, not hidden chain-of-thought. Do not infer correctness from a timeout, incomplete search, or tool status alone.",
+  "evaluator_config": {
+    "config_schema_version": "1",
+    "linkage": "average",
+    "state_selection": "plan-milestone-and-post-milestone-after-tool",
+    "text_ngram_range": "word-1-2",
+    "text_similarity_threshold_millionths": 350000,
+    "trajectory_metric_weighting": "equal",
+    "validation": "leave-one-trajectory-out"
+  },
+  "exact_resume_supported": false,
+  "intermediate_value_surrogate": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_task": 4,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "study_id": "trajectory-state-value-codex-v1",
+  "tasks": [
+    {
+      "answer_contract": {
+        "additionalProperties": false,
+        "properties": {
+          "gcd": {
+            "pattern": "^-?(0|[1-9][0-9]*)$",
+            "type": "string"
+          },
+          "left_coefficient": {
+            "pattern": "^-?(0|[1-9][0-9]*)$",
+            "type": "string"
+          },
+          "right_coefficient": {
+            "pattern": "^-?(0|[1-9][0-9]*)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gcd",
+          "left_coefficient",
+          "right_coefficient"
+        ],
+        "type": "object"
+      },
+      "kind": "INTEGER_BEZOUT",
+      "payload": {
+        "left": "918273645546372819",
+        "right": "192837465564738291"
+      },
+      "statement": "Compute the nonnegative gcd of the two supplied integers and give any exact Bezout coefficients u and v satisfying left*u + right*v = gcd.",
+      "task_family": "exact-integer-bezout",
+      "task_group": "integer-bezout-01",
+      "task_id": "integer-bezout-01"
+    },
+    {
+      "answer_contract": {
+        "additionalProperties": false,
+        "properties": {
+          "determinant": {
+            "pattern": "^-?(0|[1-9][0-9]*)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "determinant"
+        ],
+        "type": "object"
+      },
+      "kind": "MATRIX_DETERMINANT",
+      "payload": {
+        "entries": [
+          ["17", "-3", "8", "5", "11"],
+          ["4", "19", "-7", "2", "13"],
+          ["9", "6", "23", "-5", "1"],
+          ["-2", "14", "3", "29", "7"],
+          ["12", "1", "-4", "10", "31"]
+        ]
+      },
+      "statement": "Compute the exact determinant of the supplied square integer matrix.",
+      "task_family": "exact-matrix-determinant",
+      "task_group": "matrix-determinant-01",
+      "task_id": "matrix-determinant-01"
+    },
+    {
+      "answer_contract": {
+        "additionalProperties": false,
+        "properties": {
+          "gcd": {
+            "items": {
+              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "left_bezout": {
+            "items": {
+              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "right_bezout": {
+            "items": {
+              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "gcd",
+          "left_bezout",
+          "right_bezout"
+        ],
+        "type": "object"
+      },
+      "kind": "POLYNOMIAL_GCD_BEZOUT",
+      "payload": {
+        "coefficient_order": "low-to-high",
+        "domain": "QQ",
+        "left_coefficients_low_to_high": ["3", "1", "1", "-2", "1", "1", "1"],
+        "right_coefficients_low_to_high": ["-4", "-4", "-3", "2", "2", "1"],
+        "variable": "x"
+      },
+      "statement": "Over QQ, compute the monic gcd of the two supplied univariate polynomials and any exact Bezout coefficient polynomials s and t satisfying s*left + t*right = gcd. Encode every coefficient array from lowest to highest degree.",
+      "task_family": "exact-polynomial-gcd-bezout",
+      "task_group": "polynomial-gcd-bezout-01",
+      "task_id": "polynomial-gcd-bezout-01"
+    },
+    {
+      "answer_contract": {
+        "additionalProperties": false,
+        "properties": {
+          "optimum": {
+            "maximum": 12,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "vertices": {
+            "items": {
+              "enum": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]
+            },
+            "maxItems": 12,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "vertices",
+          "optimum"
+        ],
+        "type": "object"
+      },
+      "kind": "GRAPH_MAXIMUM_INDEPENDENT_SET",
+      "payload": {
+        "edges": [
+          ["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"],
+          ["e", "f"], ["f", "g"], ["g", "h"], ["h", "i"],
+          ["i", "j"], ["j", "k"], ["k", "l"], ["l", "a"],
+          ["a", "g"], ["b", "h"], ["c", "i"], ["d", "j"],
+          ["e", "k"], ["f", "l"], ["a", "d"], ["b", "e"],
+          ["c", "f"], ["g", "j"], ["h", "k"], ["i", "l"]
+        ],
+        "vertices": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]
+      },
+      "statement": "Find any maximum independent vertex set of the supplied finite simple graph and report its exact optimum cardinality.",
+      "task_family": "exact-graph-maximum-independent-set",
+      "task_group": "graph-independent-set-01",
+      "task_id": "graph-independent-set-01"
+    }
+  ],
+  "timeout_seconds": 300,
+  "tool_mode": "direct",
+  "training_performed": false,
+  "web_search": "disabled"
+}

@@ -116,6 +116,41 @@ def test_triangle_and_duplicate_edge_fail(tmp_path):
     assert run(app, logs)["aggregate_reward"] == 0.0
 
 
+def test_malformed_assurance_keeps_diagnostics(tmp_path):
+    app, logs, s = case(tmp_path)
+    # A schema-invalid list/object assurance must not raise TypeError and
+    # erase the otherwise valid mathematics/evidence/scope diagnostics.
+    s["claimed_assurance"] = ["CHECKED"]
+    write(app, s)
+    r = run(app, logs)
+    assert (
+        r["mathematics"] == 1.0
+        and r["evidence"] == 1.0
+        and r["scope"] == 1.0
+        and r["assurance"] == 0.0
+        and r["aggregate_reward"] == 0.0
+        and "error" not in r
+    )
+
+
+def test_nonfinite_json_rejected_in_raw_parse(tmp_path):
+    app, logs, s = case(tmp_path)
+    # NaN in an extra envelope field is invalid JSON; the raw parser must
+    # reject it deterministically instead of crediting raw-derived metrics.
+    (app / "submission.json").write_text(
+        json.dumps({**s, "extra": float("nan")}) + "\n"
+    )
+    r = run(app, logs)
+    assert (
+        r["mathematics"] == 0.0
+        and r["evidence"] == 0.0
+        and r["scope"] == 0.0
+        and r["assurance"] == 0.0
+        and r["aggregate_reward"] == 0.0
+        and "error" not in r
+    )
+
+
 def test_false_verified_and_tampered_input_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["claimed_assurance"] = "VERIFIED"

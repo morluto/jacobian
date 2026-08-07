@@ -60,9 +60,16 @@ def test_visible_submission_contracts_match_evidence_and_assurance_limits() -> N
             assurance = properties["claimed_assurance"]
             contract_path = task.path / "tests" / "public_contract.json"
             if contract_path.is_file():
-                assert assurance.get("enum") == list(ASSURANCE_ORDER), task.path
                 public_contract = json.loads(contract_path.read_text())
-                advertised = public_contract["allowed_assurance"]
+                if "allowed_assurance" in public_contract:
+                    # Modern public contracts advertise the full assurance ladder
+                    # in the agent-visible schema and constrain the ceiling through
+                    # allowed_assurance.
+                    assert assurance.get("enum") == list(ASSURANCE_ORDER), task.path
+                    advertised = public_contract["allowed_assurance"]
+                else:
+                    # Legacy contracts only mirror the submission schema.
+                    advertised = assurance.get("enum", [assurance.get("const")])
             else:
                 advertised = assurance.get("enum", [assurance.get("const")])
             ceiling_index = ASSURANCE_ORDER.index(ceiling)

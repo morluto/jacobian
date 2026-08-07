@@ -25,6 +25,13 @@ Jacobian tooling
   └─ records agent-image digest and MCP-server identity in observation evidence
 ```
 
+Formal-provider tasks use the same identity discipline but a different trust
+boundary: the agent image may carry an exploratory provider, while a separate
+digest-pinned checker image replays the submitted source artifact. A successful
+provider trace alone remains diagnostic evidence, not independent verification.
+The maintained Lean bases and their publication evidence are documented in
+[benchmark contracts](../reference/evaluations/benchmark-contracts.md#reusable-evaluation-images).
+
 ## Repository hooks (current)
 
 - Task environments resolve through

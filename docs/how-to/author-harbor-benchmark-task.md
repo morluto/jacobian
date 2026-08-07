@@ -26,6 +26,9 @@ task input and schemas; they do not run `apt-get`. Provider-specific tasks may
 install the dependencies that define that provider experiment. Use Harbor's
 native `public`, `no-network`, or `allowlist` task network policy. Proxy-backed
 operation belongs in the Harbor job composition and does not select an image.
+For a shared checker or provider runtime, keep the agent and verifier images
+separate and pin the published `@sha256:` reference; see
+[reusable evaluation images](../reference/evaluations/benchmark-contracts.md#reusable-evaluation-images).
 
 Run `make harbor-plan BASE=origin/main`, inspect the prospective digest and
 exact changed-task lane, then validate and Oracle only the task being authored:

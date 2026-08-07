@@ -79,6 +79,23 @@ def test_sat_assignment_verifier_declares_its_typed_artifact_route(
     )
 
 
+def test_invalid_assignment_diagnostic_routes_through_public_capabilities(
+    authorized_complete_runtime,
+) -> None:
+    result = _verify(
+        authorized_complete_runtime,
+        "artifact://sha256/" + "0" * 64,
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_SAT_ASSIGNMENT"
+    hint = result.diagnostics[0].hint or ""
+    assert "math.find" in hint
+    assert "sat.model.find" in hint
+    assert "CaDiCaL" in hint
+    assert "SatArtifactService" not in hint
+
+
 def test_sat_assignment_is_verified_by_an_authorized_clean_process(
     authorized_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,

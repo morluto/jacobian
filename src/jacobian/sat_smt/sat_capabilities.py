@@ -417,8 +417,10 @@ class SatAssignmentVerificationAdapter:
                         "to one canonical CNF"
                     ),
                     hint=(
-                        "Create the assignment with SatArtifactService.put_assignment "
-                        "against the intended canonical CNF."
+                        "Use math.find for sat.model.find to produce an assignment "
+                        "artifact for the intended canonical CNF. If that optional "
+                        "producer is unavailable, install the CaDiCaL provider; do "
+                        "not invent an assignment URI."
                     ),
                 )
             ) from exc
@@ -630,8 +632,10 @@ class SatUnsatProofVerificationAdapter:
                         "lineage to one canonical CNF"
                     ),
                     hint=(
-                        "Create the proof with SatArtifactService.put_proof against "
-                        "the intended canonical CNF."
+                        "Use math.find for sat.unsat_proof.find to produce a proof "
+                        "artifact for the intended canonical CNF. If that optional "
+                        "producer is unavailable, install the CaDiCaL provider; do "
+                        "not invent a proof URI."
                     ),
                 )
             ) from exc

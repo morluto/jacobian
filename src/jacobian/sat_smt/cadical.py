@@ -544,8 +544,9 @@ def _resolve_request(
                 schema_uri=sat.installation.cnf_schema_uri,
                 expected="one valid canonical CNF artifact and enforceable budget",
                 hint=(
-                    "Create the instance with SatArtifactService.put_cnf and use "
-                    "only the advertised wall-time and conflict limits."
+                    "Use math.find for sat.cnf.materialize to create the canonical "
+                    "CNF, then pass its cnf_uri with only the advertised wall-time "
+                    "and conflict limits."
                 ),
             )
         ) from exc

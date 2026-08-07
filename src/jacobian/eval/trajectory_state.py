@@ -219,9 +219,7 @@ class CleanRoomTerminalEvidence(ContractModel):
     claim_digest: str | None = Field(default=None, pattern=_DIGEST_PATTERN)
     candidate_digest: str | None = Field(default=None, pattern=_DIGEST_PATTERN)
     artifact_uris: tuple[str, ...] = ()
-    verification_record_uri: str | None = Field(
-        default=None, pattern=_ARTIFACT_PATTERN
-    )
+    verification_record_uri: str | None = Field(default=None, pattern=_ARTIFACT_PATTERN)
     input_binding_valid: bool | None = None
     artifact_binding_valid: bool | None = None
 
@@ -732,7 +730,10 @@ def _record_obligations(
                 state.open_obligations.discard(uri)
                 state.discharged_obligations.add(uri)
                 kinds.add(MilestoneKind.OBLIGATION_DISCHARGED)
-        elif uri not in state.discharged_obligations and uri not in state.open_obligations:
+        elif (
+            uri not in state.discharged_obligations
+            and uri not in state.open_obligations
+        ):
             # Discharge is terminal for a URI: replaying the original OPEN
             # producer result must not re-open an already-discharged
             # obligation.
@@ -816,8 +817,7 @@ def _record_checker(
         if checked_candidate is not None:
             state.candidate_state = (
                 CandidateState.VERIFIED
-                if state.assurance_level == "VERIFIED"
-                and isinstance(record_uri, str)
+                if state.assurance_level == "VERIFIED" and isinstance(record_uri, str)
                 else CandidateState.CHECKED
             )
             if (

@@ -507,6 +507,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
         acceptance=TerminalAcceptance.ACCEPTED,
         input_binding_valid=True,
         artifact_binding_valid=True,
+        source_digest="sha256:" + "f" * 64,
     )
 
     extraction = extract_codex_trajectory(
@@ -525,6 +526,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
             clean_room=True,
             verifier_execution_status="TIMEOUT",
             acceptance=TerminalAcceptance.ACCEPTED,
+            source_digest="sha256:" + "f" * 64,
         )
     with pytest.raises(ValidationError, match="invalid bindings"):
         CleanRoomTerminalEvidence(
@@ -533,6 +535,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
             verifier_execution_status="COMPLETED",
             acceptance=TerminalAcceptance.ACCEPTED,
             input_binding_valid=False,
+            source_digest="sha256:" + "f" * 64,
         )
 
 

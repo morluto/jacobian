@@ -18,10 +18,33 @@
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
     "max_items": 1,
     "media_types": [
-      "text/plain"
+      "application/json"
     ],
     "min_items": 1,
-    "payload_shape": null
+    "payload_shape": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/bsd-infinite-order-certificate"
+        },
+        "result": {
+          "type": "object"
+        },
+        "limitations": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "limitations": {
     "const": [

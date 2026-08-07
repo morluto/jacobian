@@ -10,8 +10,9 @@ does not divide the absolute discriminant. The verifier independently checks
 the curve equation, nonsingularity, divisibility obstruction, and both group
 law computations. Lutz–Nagell itself is a declared trusted theorem.
 
-`evidence/answer.txt` is a JSON object with exactly `schema_version`, `task_id`,
-`result`, and `limitations`, matching the submission, and at most 2 MiB.
+`evidence/answer.txt` is a JSON object (`application/json`) with exactly
+`schema_version` (the string `"1"`), `task_id`, `result`, and `limitations`,
+matching the submission.
 
 This proves only that one authored elliptic curve has a rational point of
 infinite order. It does not compute an L-function, determine the full rank, or
@@ -29,6 +30,7 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Scope:** the exact value declared in `submission_schema.json`
 - **Completeness:** `COMPLETE`.
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
+- **Evidence media types:** `application/json`.
+- **Evidence payload:** JSON object with exactly `schema_version` (string `"1"`), `task_id`, `result`, and `limitations`.
 - **Required artifact filenames:** `evidence/answer.txt`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

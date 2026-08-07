@@ -22,7 +22,6 @@ LIMITATIONS = [
     "LUTZ_NAGELL_TRUSTED",
     "NO_BSD_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 
 
 def _rat(value: object) -> Fraction:
@@ -126,16 +125,18 @@ def main() -> None:
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    mathematics = bool(contract and _mathematics(submission["result"]))
+    mathematics = bool(
+        isinstance(submission, dict) and _mathematics(submission.get("result"))
+    )
     evidence = bool(
-        contract
-        and evidence_list_is_bound(submission["evidence"], max_bytes=MAX_EVIDENCE_BYTES)
+        isinstance(submission, dict)
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
             submission["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if evidence
         else None
@@ -151,11 +152,14 @@ def main() -> None:
         }
     )
     scope = bool(
-        contract
+        isinstance(submission, dict)
         and submission.get("scope") == SCOPE
         and submission.get("limitations") == LIMITATIONS
     )
-    assurance = bool(contract and submission.get("claimed_assurance") == "CHECKED")
+    assurance = bool(
+        isinstance(submission, dict)
+        and submission.get("claimed_assurance") == "CHECKED"
+    )
     false_certification = bool(
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "VERIFIED"

@@ -98,13 +98,7 @@ def load_submission(
     *,
     require_input_binding: bool = True,
 ) -> dict[str, Any] | None:
-    """Parse one bounded submission object without scoring diagnostics.
-
-    Schema validity belongs to ``strict_submission_contract`` /
-    ``_public_submission_is_valid``. When ``require_input_binding`` is true,
-    an unbound workspace input yields ``None``; callers that score
-    ``input_binding`` separately should pass ``require_input_binding=False``.
-    """
+    """Parse and completely validate one bounded submission object."""
 
     if require_input_binding and not workspace_input_is_bound():
         return None
@@ -121,7 +115,11 @@ def load_submission(
         )
     except (OSError, ValueError, RecursionError, MemoryError, TypeError):
         return None
-    return value if isinstance(value, dict) else None
+    return (
+        value
+        if isinstance(value, dict) and _public_submission_is_valid(value)
+        else None
+    )
 
 
 def _public_submission_is_valid(submission: object) -> bool:

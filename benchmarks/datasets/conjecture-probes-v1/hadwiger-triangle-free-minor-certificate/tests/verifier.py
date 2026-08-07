@@ -180,6 +180,24 @@ def mathematics(r: Any) -> bool:
     )
 
 
+def _json_equal(a: Any, b: Any) -> bool:
+    """Return whether two JSON-decoded values are identical, types included.
+
+    Python ``==`` treats booleans as integers (``False == 0``) and integral
+    floats as integers (``4.0 == 4``), but the evidence contract requires the
+    payload to exactly copy the submitted ``result`` with concrete JSON types.
+    """
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, dict):
+        return set(a) == set(b) and all(_json_equal(a[k], b[k]) for k in a)
+    if isinstance(a, list):
+        return len(a) == len(b) and all(
+            _json_equal(x, y) for x, y in zip(a, b, strict=True)
+        )
+    return a == b
+
+
 def _raw_submission() -> dict[str, Any] | None:
     path = Path("/app/submission.json")
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
@@ -227,7 +245,7 @@ def main():
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
+        and _json_equal(payload.get("result"), raw.get("result"))
         and payload.get("limitations") == LIMITATIONS
     )
     sc = bool(

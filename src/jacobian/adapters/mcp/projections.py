@@ -14,6 +14,12 @@ from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityDiscoveryCursorError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
+    CapabilityDiscoveryBrowseRecoveryPath,
+    CapabilityDiscoveryInspectCatalogRecoveryPath,
+    CapabilityDiscoveryRecoveryPath,
+    CapabilityDiscoveryReformulateQueryRecoveryPath,
+    CapabilityDiscoveryRemoveFiltersRecoveryPath,
+    CapabilityDiscoveryRemoveUnknownDomainRecoveryPath,
     CapabilityDiscoveryRequest,
     CapabilityInputKind,
     CapabilityMode,
@@ -258,7 +264,7 @@ def _discovery_recovery_paths(
     domain_filter_status: str,
     portfolio_fit: str,
     routing_status: str,
-) -> list[dict[str, Any]]:
+) -> tuple[CapabilityDiscoveryRecoveryPath, ...]:
     """Return unranked access choices for weak, empty, or incompatible discovery."""
 
     if (
@@ -266,24 +272,19 @@ def _discovery_recovery_paths(
         and portfolio_fit not in {"ONLY_WEAK_LEXICAL_MATCHES", "NO_LEXICAL_MATCHES"}
         and routing_status != "NO_ROUTE"
     ):
-        return []
-    paths: list[dict[str, Any]] = []
+        return ()
+    paths: list[CapabilityDiscoveryRecoveryPath] = []
     if request.query is not None:
         paths.append(
-            {
-                "action": "reformulate_query",
-                "tool": "math.find",
-                "change": "Use different or broader mathematical language for query.",
-            }
+            CapabilityDiscoveryReformulateQueryRecoveryPath(action="reformulate_query")
         )
     if domain_filter_status == "UNKNOWN":
+        if request.domain is None:
+            raise ValueError("an unknown domain filter requires a supplied domain")
         paths.append(
-            {
-                "action": "remove_unknown_domain_filter",
-                "tool": "math.find",
-                "rejected_domain": request.domain,
-                "change": "Retry without the unrecognized domain filter.",
-            }
+            CapabilityDiscoveryRemoveUnknownDomainRecoveryPath(
+                action="remove_unknown_domain_filter", rejected_domain=request.domain
+            )
         )
     if domain_filter_status != "UNKNOWN" and any(
         value is not None
@@ -295,26 +296,15 @@ def _discovery_recovery_paths(
         )
     ):
         paths.append(
-            {
-                "action": "remove_filters",
-                "tool": "math.find",
-                "change": "Remove domain, mode, input_kind, or artifact_type filters.",
-            }
+            CapabilityDiscoveryRemoveFiltersRecoveryPath(action="remove_filters")
         )
     paths.extend(
         (
-            {
-                "action": "browse",
-                "tool": "math.find",
-                "arguments": {},
-            },
-            {
-                "action": "inspect_catalog",
-                "resource_uri": "capability://catalog",
-            },
+            CapabilityDiscoveryBrowseRecoveryPath(action="browse"),
+            CapabilityDiscoveryInspectCatalogRecoveryPath(action="inspect_catalog"),
         )
     )
-    return paths
+    return tuple(paths)
 
 
 def _capability_descriptor_view(
@@ -449,12 +439,15 @@ def _capability_discovery_response(
         )
         for match in cast(list[dict[str, Any]], discovered_payload["matches"])
     ]
-    recovery_paths = _discovery_recovery_paths(
-        discovery_request,
-        domain_filter_status=discovered.domain_filter_status,
-        portfolio_fit=discovered.portfolio_fit,
-        routing_status=discovered.routing_status,
-    )
+    recovery_paths = [
+        path.model_dump(mode="json")
+        for path in _discovery_recovery_paths(
+            discovery_request,
+            domain_filter_status=discovered.domain_filter_status,
+            portfolio_fit=discovered.portfolio_fit,
+            routing_status=discovered.routing_status,
+        )
+    ]
     response = {
         "kind": "discovery",
         "catalog_version": catalog.catalog_version,

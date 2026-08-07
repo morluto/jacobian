@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -121,6 +123,18 @@ def reward(v):
     (p / "reward.json").write_text(json.dumps(v, sort_keys=True))
 
 
+def _raw_submission() -> dict[str, Any] | None:
+    """Read raw submission JSON before strict validation for false-certification detection."""
+    path = Path("/app/submission.json")
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def main():
     ib = workspace_input_is_bound()
     data = frozen()
@@ -166,7 +180,8 @@ def main():
         and s.get("limitations") == LIMITATIONS
     )
     a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
-    f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
+    raw = _raw_submission()
+    f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
         {

@@ -1,5 +1,5 @@
 {
-  "adapter_source_sha256": "sha256:efbfb51037f7976a43b0e56bd5a4b98ffb0fada9f0a9ab1db0b6fd5d3ffcd981",
+  "adapter_source_sha256": "sha256:e017a6f203585eacf2e57551aba282af510635e45bade5e5d722e1fee724d005",
   "contract": "jacobian.regina-outcomes-spike/v1",
   "distribution_version": "7.4.1",
   "documentation_url": "https://regina-normal.github.io/engine-docs/",

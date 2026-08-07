@@ -22,7 +22,14 @@ from benchmarks.tooling.command_runner import (
 
 PIN_PATH = Path(__file__).with_name("pin.json")
 ADAPTER_SOURCE = Path(__file__)
-_ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
+# Worker re-exec replaces the process environment; keep the image PYTHONPATH so
+# `benchmarks.tooling.command_runner` remains importable inside --worker mode.
+_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "PYTHONPATH": "/opt",
+}
 _KIND_ORDER = {
     "EQUALITY": 0,
     "INEQUALITY": 1,

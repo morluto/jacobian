@@ -33,7 +33,14 @@ _SOURCE_MEMBERS = {
     "triangulation": (f"{_SOURCE_ROOT}/engine/triangulation/dim3/triangulation3.h"),
     "normal_surfaces": f"{_SOURCE_ROOT}/engine/surface/normalsurfaces.h",
 }
-_ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
+# Worker re-exec replaces the process environment; keep the image PYTHONPATH so
+# `benchmarks.tooling.command_runner` remains importable inside --worker mode.
+_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "PYTHONPATH": "/opt",
+}
 _INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
 ProcessRunner = Callable[..., ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "

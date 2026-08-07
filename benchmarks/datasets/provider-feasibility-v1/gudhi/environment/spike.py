@@ -32,7 +32,14 @@ _SOURCE_MEMBERS = {
         "Persistent_cohomology.h"
     ),
 }
-_ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
+# Worker re-exec replaces the process environment; keep the image PYTHONPATH so
+# `benchmarks.tooling.command_runner` remains importable inside --worker mode.
+_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "PYTHONPATH": "/opt",
+}
 ProcessRunner = Callable[..., ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 

@@ -181,6 +181,7 @@ def _product_is_zero(
 
 def _chain_result(request: ChainComplexRequest) -> ChainComplexResult:
     complex_ = request.complex
+    assert complex_ is not None
     bases = tuple(
         SimplexBasis(dimension=item.dimension, simplices=item.faces)
         for item in complex_.faces_by_dimension
@@ -237,7 +238,41 @@ def _chain_result(request: ChainComplexRequest) -> ChainComplexResult:
 def _chain(
     request: ChainComplexRequest,
 ) -> ComputedSuccess[ChainComplexResult]:
+    assert request.complex is not None
     return ComputedSuccess(_chain_result(request))
+
+
+def _convert_materialized_chain(
+    request: ChainComplexRequest,
+    payload: SimplicialComplexMaterializationResult,
+) -> tuple[ChainComplexRequest, tuple[str, ...]]:
+    return ChainComplexRequest(
+        complex=payload.complex,
+        coefficient_ring=request.coefficient_ring,
+        prime=request.prime,
+        convention=request.convention,
+    ), ((request.complex_artifact_uri,) if request.complex_artifact_uri else ())
+
+
+def _convert_materialized_homology(
+    request: SimplicialHomologyRequest,
+    payload: SimplicialComplexMaterializationResult,
+) -> tuple[SimplicialHomologyRequest, tuple[str, ...]]:
+    return SimplicialHomologyRequest(
+        complex=payload.complex,
+        prime=request.prime,
+        convention=request.convention,
+    ), ((request.complex_artifact_uri,) if request.complex_artifact_uri else ())
+
+
+def _convert_materialized_integral_homology(
+    request: IntegralSimplicialHomologyRequest,
+    payload: SimplicialComplexMaterializationResult,
+) -> tuple[IntegralSimplicialHomologyRequest, tuple[str, ...]]:
+    return IntegralSimplicialHomologyRequest(
+        complex=payload.complex,
+        convention=request.convention,
+    ), ((request.complex_artifact_uri,) if request.complex_artifact_uri else ())
 
 
 def _domain_matrix(
@@ -393,6 +428,7 @@ def _quotient_basis(
 def _homology(
     request: SimplicialHomologyRequest,
 ) -> ComputedSuccess[SimplicialHomologyResult]:
+    assert request.complex is not None
     chain = _chain_result(
         ChainComplexRequest(
             complex=request.complex,
@@ -499,6 +535,7 @@ def _integral_vector(values: list[int]) -> IntegralVector:
 def _integral_homology(
     request: IntegralSimplicialHomologyRequest,
 ) -> ComputedSuccess[IntegralSimplicialHomologyResult]:
+    assert request.complex is not None
     chain = _chain_result(
         ChainComplexRequest(
             complex=request.complex,
@@ -679,6 +716,10 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
         result_model=ChainComplexResult,
         implementation=_chain,
         relation_id="topology.simplicial_complex.chain_complex.relation",
+        accepted_result_capability_ids=("topology.simplicial_complex.materialize",),
+        artifact_converter=_convert_materialized_chain,
+        artifact_payload_model=SimplicialComplexMaterializationResult,
+        artifact_uri_field="complex_artifact_uri",
         tags=(
             "topology",
             "simplicial-complex",
@@ -686,7 +727,7 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
             "boundary-matrix",
             "exact",
         ),
-        version="3",
+        version="4",
     ),
     MaterializedOperation(
         capability_id="topology.simplicial_homology.compute",
@@ -699,6 +740,10 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
         result_model=SimplicialHomologyResult,
         implementation=_homology,
         relation_id="topology.simplicial_homology.relation",
+        accepted_result_capability_ids=("topology.simplicial_complex.materialize",),
+        artifact_converter=_convert_materialized_homology,
+        artifact_payload_model=SimplicialComplexMaterializationResult,
+        artifact_uri_field="complex_artifact_uri",
         tags=(
             "topology",
             "simplicial-homology",
@@ -707,7 +752,7 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
             "prime-field",
             "exact",
         ),
-        version="3",
+        version="4",
     ),
     MaterializedOperation(
         capability_id="topology.simplicial_homology.integral.compute",
@@ -721,6 +766,10 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
         result_model=IntegralSimplicialHomologyResult,
         implementation=_integral_homology,
         relation_id="topology.simplicial_homology.integral.relation",
+        accepted_result_capability_ids=("topology.simplicial_complex.materialize",),
+        artifact_converter=_convert_materialized_integral_homology,
+        artifact_payload_model=SimplicialComplexMaterializationResult,
+        artifact_uri_field="complex_artifact_uri",
         tags=(
             "topology",
             "simplicial-homology",
@@ -770,7 +819,7 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
                 },
             ),
         ),
-        version="3",
+        version="4",
     ),
 )
 

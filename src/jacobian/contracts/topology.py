@@ -14,7 +14,7 @@ from jacobian.contracts.certified_snf import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
-from jacobian.contracts.common import Sha256Digest
+from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.exact import CanonicalInteger
 from jacobian.contracts.results import ContractModel
 
@@ -279,8 +279,20 @@ def require_linear_algebra_bounds(complex_: FiniteSimplicialComplex) -> None:
         )
 
 
-class ChainComplexRequest(ContractModel):
-    complex: FiniteSimplicialComplex
+class SimplicialComplexSource(ContractModel):
+    """Select one inline or previously materialized simplicial complex."""
+
+    complex: FiniteSimplicialComplex | None = None
+    complex_artifact_uri: ArtifactUri | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="after")
+    def require_exactly_one_complex_source(self) -> Self:
+        if (self.complex is None) == (self.complex_artifact_uri is None):
+            raise ValueError("provide exactly one of complex or complex_artifact_uri")
+        return self
+
+
+class ChainComplexRequest(SimplicialComplexSource):
     coefficient_ring: ChainCoefficientRing = ChainCoefficientRing.INTEGER
     prime: StrictInt | None = Field(default=None, ge=2, le=MAX_TOPOLOGY_PRIME)
     convention: HomologyConvention = HomologyConvention.UNREDUCED
@@ -292,7 +304,8 @@ class ChainComplexRequest(ContractModel):
                 raise ValueError("integer chain complexes must not declare a prime")
         elif self.prime is None or not is_bounded_prime(self.prime):
             raise ValueError("prime-field chain complexes require a bounded prime")
-        require_linear_algebra_bounds(self.complex)
+        if self.complex is not None:
+            require_linear_algebra_bounds(self.complex)
         return self
 
 
@@ -408,8 +421,7 @@ class ChainComplexResult(TopologyExactResult):
         return self
 
 
-class SimplicialHomologyRequest(ContractModel):
-    complex: FiniteSimplicialComplex
+class SimplicialHomologyRequest(SimplicialComplexSource):
     prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
     convention: HomologyConvention = HomologyConvention.UNREDUCED
 
@@ -417,7 +429,8 @@ class SimplicialHomologyRequest(ContractModel):
     def require_prime_and_bounds(self) -> Self:
         if not is_bounded_prime(self.prime):
             raise ValueError("homology coefficients require a bounded prime")
-        require_linear_algebra_bounds(self.complex)
+        if self.complex is not None:
+            require_linear_algebra_bounds(self.complex)
         return self
 
 
@@ -509,12 +522,13 @@ class SimplicialHomologyResult(TopologyExactResult):
         return self
 
 
-class IntegralSimplicialHomologyRequest(ContractModel):
-    complex: FiniteSimplicialComplex
+class IntegralSimplicialHomologyRequest(SimplicialComplexSource):
     convention: HomologyConvention = HomologyConvention.UNREDUCED
 
     @model_validator(mode="after")
     def require_integral_certificate_bounds(self) -> Self:
+        if self.complex is None:
+            return self
         require_linear_algebra_bounds(self.complex)
         if any(
             size > MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP for size in self.complex.f_vector

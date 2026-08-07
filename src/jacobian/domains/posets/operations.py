@@ -176,14 +176,18 @@ def _resolve_poset_request(
     request: PosetRequest,
     store: ArtifactRepository,
     accepted_artifact_types: tuple[str, ...],
+    semantics_uri: str,
 ) -> tuple[PosetRequest, tuple[str, ...]]:
     if request.poset is not None:
         return request, ()
     if request.poset_artifact_uri is None:
         raise ValueError("poset artifact URI is required")
     artifact = store.get(request.poset_artifact_uri)
-    if artifact.manifest.schema_uri not in accepted_artifact_types:
-        raise ValueError("artifact schema is not a compatible finite poset")
+    if (
+        artifact.manifest.schema_uri not in accepted_artifact_types
+        or artifact.manifest.semantics_uri != semantics_uri
+    ):
+        raise ValueError("artifact is not a compatible finite poset")
     materialized = FinitePosetMaterializationResult.model_validate(artifact.payload)
     return PosetRequest(poset=materialized.poset), (request.poset_artifact_uri,)
 

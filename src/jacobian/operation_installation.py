@@ -337,6 +337,7 @@ class MaterializedOperationAdapter:
                     validated_request,
                     self.resources.artifacts.store,
                     self._descriptor.accepted_artifact_types,
+                    self.resources.semantics_uri,
                 )
         except (StorageError, ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
@@ -442,6 +443,9 @@ class BoundedSearchOperationAdapter:
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(operation.result_model),
             tags=operation.tags,
+            produced_artifact_types=(
+                resources.result_schema_uris[operation.capability_id],
+            ),
             invocation_examples=operation.invocation_examples,
         )
 

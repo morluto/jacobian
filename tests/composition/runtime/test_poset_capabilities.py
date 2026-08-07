@@ -160,6 +160,42 @@ def test_width_rejects_an_incompatible_artifact_before_writes(
     assert result.artifact_uris == ()
 
 
+def test_width_rejects_a_schema_compatible_artifact_with_foreign_semantics(
+    fresh_complete_runtime,
+) -> None:
+    materialized = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.finite.materialize",
+            input=_DIAMOND,
+        )
+    )
+    result_uri = materialized.output["result_uri"]
+    result_artifact = fresh_complete_runtime.core.store.get(result_uri)
+    foreign_semantics = fresh_complete_runtime.core.store.register_descriptor(
+        kind="semantics",
+        name="foreign-poset-semantics",
+        version="1",
+        definition={"type": "object"},
+    )
+    foreign_uri = fresh_complete_runtime.core.artifacts.put(
+        schema_uri=result_artifact.manifest.schema_uri,
+        semantics_uri=foreign_semantics,
+        payload=result_artifact.payload,
+        summary="schema-compatible artifact under a foreign semantics",
+    ).artifact_uri
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.width.compute",
+            input={"poset_artifact_uri": foreign_uri},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
+    assert result.artifact_uris == ()
+
+
 @pytest.mark.parametrize(
     ("presentation", "expected_width", "expected_count"),
     (

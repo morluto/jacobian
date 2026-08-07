@@ -232,6 +232,7 @@ def _discovery_operation_card(
             kind.value for kind in descriptor.accepted_input_kinds
         ],
         "accepted_artifact_types": list(descriptor.accepted_artifact_types),
+        "produced_artifact_types": list(descriptor.produced_artifact_types),
         "output_schema_summary": _output_schema_summary(descriptor.output_schema),
         "scope": "EXACT_SUPPLIED_INPUT_OR_CLAIM",
         "assurance_ceiling": (
@@ -337,6 +338,7 @@ def _capability_descriptor_view(
                 kind.value for kind in descriptor.accepted_input_kinds
             ],
             "accepted_artifact_types": list(descriptor.accepted_artifact_types),
+            "produced_artifact_types": list(descriptor.produced_artifact_types),
             "input_schema_summary": _input_schema_summary(descriptor.input_schema),
             "output_schema_summary": _output_schema_summary(descriptor.output_schema),
             "has_invocation_examples": bool(descriptor.invocation_examples),
@@ -368,6 +370,7 @@ def _capability_descriptor_view(
             kind.value for kind in descriptor.accepted_input_kinds
         ],
         "accepted_artifact_types": list(descriptor.accepted_artifact_types),
+        "produced_artifact_types": list(descriptor.produced_artifact_types),
         "input_schema": _compact_json_schema(descriptor.input_schema),
         "output_schema_summary": _output_schema_summary(descriptor.output_schema),
     }

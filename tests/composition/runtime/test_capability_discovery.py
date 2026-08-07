@@ -110,6 +110,36 @@ def test_storage_primitive_is_catalogued_but_not_discovered(
     assert "artifact.put" not in discovered_ids
 
 
+def test_bounded_search_producers_advertise_produced_artifact_types(
+    authorized_complete_runtime: JacobianRuntime,
+) -> None:
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in (
+            authorized_complete_runtime.core.capabilities.catalog().capabilities
+        )
+    }
+    induced_tree = descriptors["graph.induced_tree.maximum.compute"]
+    assert induced_tree.produced_artifact_types, (
+        "bounded-search producers must advertise their materialized result schema"
+    )
+
+
+def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
+    authorized_complete_runtime: JacobianRuntime,
+) -> None:
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in (
+            authorized_complete_runtime.core.capabilities.catalog().capabilities
+        )
+    }
+    produced = descriptors["poset.finite.materialize"].produced_artifact_types
+    accepted = descriptors["poset.width.compute"].accepted_artifact_types
+    assert produced
+    assert produced == accepted
+
+
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:

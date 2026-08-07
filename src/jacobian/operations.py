@@ -99,7 +99,7 @@ class MaterializedOperation[
     accepted_result_capability_ids: tuple[str, ...] = ()
     input_resolver: (
         Callable[
-            [RequestT, ArtifactRepository, tuple[str, ...]],
+            [RequestT, ArtifactRepository, tuple[str, ...], str],
             tuple[RequestT, tuple[str, ...]],
         ]
         | None

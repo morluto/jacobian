@@ -907,6 +907,26 @@ def _unsafe_rational_render_nodes(
     return ()
 
 
+def _direct_output_value(node: ast.AST) -> ast.AST | None:
+    if isinstance(node, (ast.Assign, ast.AnnAssign, ast.Return)):
+        return node.value
+    return None
+
+
+def _canonical_rational_sink_values(node: ast.AST) -> tuple[ast.AST, ...]:
+    if isinstance(node, ast.Call):
+        return tuple(
+            keyword.value for keyword in node.keywords if keyword.arg in {"num", "den"}
+        )
+    if isinstance(node, ast.Dict):
+        return tuple(
+            value
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Constant) and key.value in {"num", "den"}
+        )
+    return ()
+
+
 def _unsafe_canonical_rational_output_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -915,25 +935,16 @@ def _unsafe_canonical_rational_output_violations(
 
     unsafe_values: dict[int, ast.AST] = {}
     for node in ast.walk(tree):
-        assigned_or_returned: ast.AST | None = None
-        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.Return)):
-            assigned_or_returned = node.value
-        if assigned_or_returned is not None:
+        direct_output = _direct_output_value(node)
+        if direct_output is not None:
             for value in _unsafe_rational_render_nodes(
-                assigned_or_returned,
+                direct_output,
                 attributes=_DESCRIPTIVE_RATIONAL_COMPONENT_ATTRIBUTES,
             ):
                 unsafe_values[id(value)] = value
-        if isinstance(node, ast.Call):
-            for keyword in node.keywords:
-                if keyword.arg in {"num", "den"}:
-                    for value in _unsafe_rational_render_nodes(keyword.value):
-                        unsafe_values[id(value)] = value
-        elif isinstance(node, ast.Dict):
-            for key, value in zip(node.keys, node.values, strict=True):
-                if isinstance(key, ast.Constant) and key.value in {"num", "den"}:
-                    for unsafe_value in _unsafe_rational_render_nodes(value):
-                        unsafe_values[id(unsafe_value)] = unsafe_value
+        for sink_value in _canonical_rational_sink_values(node):
+            for value in _unsafe_rational_render_nodes(sink_value):
+                unsafe_values[id(value)] = value
 
     return tuple(
         Violation(

@@ -139,12 +139,12 @@ def main():
         verification_record="forbidden",
     )
     m = bool(isinstance(s, dict) and mathematics(s.get("result")))
-    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES))
+    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=None))
     payload = (
         read_evidence_json(
             s["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if e
         else None

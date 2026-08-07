@@ -113,6 +113,33 @@ def test_makefile_change_remains_fail_closed_without_hunk_ownership(
     )
 
 
+def test_focused_host_matrix_over_limit_escalates_to_full_suite(
+    tmp_path: Path,
+) -> None:
+    """Portfolio-wide task support migrations must not exceed the matrix cap."""
+    from benchmarks.tooling.validation_plan import HOST_VALIDATION_MAX_JOBS
+
+    tasks = tuple(f"task-{index:03d}" for index in range(HOST_VALIDATION_MAX_JOBS + 1))
+    suite = SimpleNamespace(
+        tasks=tuple(SimpleNamespace(path=Path(task)) for task in tasks)
+    )
+    paths = [
+        f"benchmarks/datasets/mathematical-benchmarks-v1/{task}/tests/verifier_support.py"
+        for task in tasks
+    ]
+
+    plan = host_validation_plan(
+        tmp_path,
+        paths,
+        {"mathematical-benchmarks-v1": suite},
+    )
+
+    assert len(plan.entries) == 4
+    assert plan.reasons == (
+        "focused host validation exceeded matrix job limit; using full suite",
+    )
+
+
 def test_conjecture_probes_v1_task_change_selects_only_leaf(tmp_path: Path) -> None:
     """A conjecture-probes-v1 task change must select its dedicated leaf test
     when one exists, rather than escalating to full host validation."""

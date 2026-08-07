@@ -746,10 +746,10 @@ def _sturm_positivity(
     b = interval.hi.as_fraction()
     sp = _sympy.get()
     generator: Symbol = sp.symbols(polynomial.variable)
-    terms = {
-        term.exponents: sp.QQ(int(term.coefficient.num), int(term.coefficient.den))
-        for term in polynomial.polynomial.terms
-    }
+    terms = {}
+    for term in polynomial.polynomial.terms:
+        coefficient = term.coefficient.as_fraction()
+        terms[term.exponents] = sp.QQ(coefficient.numerator, coefficient.denominator)
     source = sp.Poly.from_dict(terms, generator, domain=sp.QQ)
     degree = polynomial.degree
     if degree == 0:

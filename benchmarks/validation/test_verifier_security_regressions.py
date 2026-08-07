@@ -63,6 +63,68 @@ def test_provider_separate_verifier_publishes_bound_input_artifact(
     assert text.index('"/app/input.json"') < text.index('"/app/submission.json"')
 
 
+def test_provider_feasibility_task_descriptions_are_provider_specific() -> None:
+    """Provider-feasibility task descriptions must identify their own provider.
+
+    A copy/paste from cddlib left five tasks advertising a cddlib H/V
+    polyhedra contract they do not exercise.  Each task's ``description`` and
+    ``keywords`` must reference its own ``required_provider`` so catalog
+    consumers can distinguish the tasks without reading their implementation.
+    """
+
+    import re
+    import tomllib
+
+    def _normalize_tokens(text: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9]+", text.lower().replace("-", " ")))
+
+    for task_name in PROVIDER_TASKS:
+        task = DATASETS / "provider-feasibility-v1" / task_name
+        cfg = tomllib.loads((task / "task.toml").read_text(encoding="utf-8"))
+        provider = cfg["metadata"]["required_provider"]
+        description = cfg["task"]["description"]
+        keywords = cfg["task"]["keywords"]
+        description_tokens = _normalize_tokens(description)
+        keyword_tokens = set().union(*(_normalize_tokens(k) for k in keywords))
+        provider_tokens = _normalize_tokens(provider)
+        # Every provider's description must mention every token of its own
+        # provider name (e.g. "lean" and "repl" for "lean-repl").
+        missing_in_description = provider_tokens - description_tokens
+        assert not missing_in_description, (
+            f"{task_name}: description does not mention required_provider "
+            f"{provider!r} tokens {sorted(missing_in_description)}: "
+            f"{description!r}"
+        )
+        missing_in_keywords = provider_tokens - keyword_tokens
+        assert not missing_in_keywords, (
+            f"{task_name}: keywords do not include required_provider "
+            f"{provider!r} tokens {sorted(missing_in_keywords)}: {keywords!r}"
+        )
+        # No task may advertise another provider's full name in its
+        # description or keywords.  Check the contiguous normalized form so
+        # "cgal" is not flagged by the word "c" in an unrelated description.
+        description_norm = " ".join(
+            description.lower().replace("-", " ").replace("_", " ").split()
+        )
+        keywords_norm = " ".join(
+            " ".join(k.lower().replace("-", " ").split()) for k in keywords
+        )
+        for other in PROVIDER_TASKS:
+            other_norm = " ".join(other.lower().replace("-", " ").split())
+            if other_norm == " ".join(provider.lower().replace("-", " ").split()):
+                continue
+            if other_norm in description_norm:
+                raise AssertionError(
+                    f"{task_name}: description references unrelated provider "
+                    f"{other!r}: {description!r}"
+                )
+            if other_norm in keywords_norm:
+                raise AssertionError(
+                    f"{task_name}: keywords reference unrelated provider "
+                    f"{other!r}: {keywords!r}"
+                )
+
+
 def test_reliability_recomputes_input_and_rejects_coerced_state_count(
     tmp_path: Path,
 ) -> None:
@@ -601,3 +663,58 @@ def test_nauty_rejects_unbound_canonicalization(tmp_path: Path) -> None:
     task, app, logs = _provider_report_case(tmp_path, "nauty", report)
     rejected = support._run_verifier(task, app, logs)
     assert rejected["reward"] == 0.0
+
+
+def _minimal_report(task_name: str) -> dict:
+    """Return the smallest report that passes the evidence digest binding."""
+
+    expected = json.loads(
+        (
+            DATASETS / "provider-feasibility-v1" / task_name / "tests" / "expected.json"
+        ).read_text()
+    )
+    return {
+        "contract": expected["contract"],
+        "status": "COMPLETED",
+        "conclusion": expected["report_conclusion"],
+        "assurance": expected["report_assurance"],
+        "provider": {"runtime": {"python": "3.12.0"}},
+        "reproduction": {"scope": "fabricated"},
+        "limitations": ["fabricated"],
+        "extra": True,
+    }
+
+
+def _verified_claim_case(tmp_path: Path, task_name: str) -> tuple:
+    """Build a structurally valid provider submission that claims VERIFIED.
+
+    The public schema only allows ``UNVERIFIED`` and ``COMPUTED``, so
+    ``load_submission`` returns ``None`` for this fixture.  The verifier must
+    still detect the ``VERIFIED`` claim from the raw submission bytes and
+    report ``false_certification: true`` while keeping reward at zero.
+    """
+
+    task, app, logs = _provider_report_case(
+        tmp_path, task_name, _minimal_report(task_name)
+    )
+    submission = json.loads((app / "submission.json").read_text())
+    submission["claimed_assurance"] = "VERIFIED"
+    _write_json(app / "submission.json", submission)
+    return task, app, logs
+
+
+@pytest.mark.parametrize("task_name", PROVIDER_TASKS)
+def test_provider_verifier_flags_verified_claim_as_false_certification(
+    task_name: str, tmp_path: Path
+) -> None:
+    """A VERIFIED claim must produce false_certification=true and reward=0.
+
+    The public schema rejects ``VERIFIED`` so ``load_submission`` returns
+    ``None``, but the verifier must inspect the raw submission to expose
+    the assurance miscalibration diagnostic without awarding any reward.
+    """
+
+    task, app, logs = _verified_claim_case(tmp_path, task_name)
+    result = support._run_verifier(task, app, logs)
+    assert result["reward"] == 0.0
+    assert result["false_certification"] is True

@@ -22,6 +22,7 @@ P0 = {"x": ZERO, "y": ZERO}
 PX = {"x": TWO, "y": ZERO}
 PY = {"x": ZERO, "y": TWO}
 PXY = {"x": TWO, "y": TWO}
+LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
 
 
 def _point(x: int, y: int) -> dict[str, dict[str, str]]:
@@ -98,6 +99,21 @@ def test_geometry_exact_outputs_are_inline(domain_services) -> None:
     }
     assert distance.artifact_uris == ()
     assert circle.artifact_uris == ()
+
+
+def test_squared_distance_accepts_contract_sized_coordinates(domain_services) -> None:
+    coordinate = {"num": LARGE_CANONICAL_INTEGER, "den": "1"}
+    point = {"x": coordinate, "y": ZERO}
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.points.compute.squared_distance",
+            input={"first": point, "second": point},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == {"value": ZERO}
 
 
 def test_convex_hull_returns_segment_endpoints_for_two_points(

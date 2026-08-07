@@ -4,8 +4,8 @@ artifacts = ["/app/input.json", "/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/gudhi"
 version = "1.0.0"
-description = "Reproduce the pinned cddlib H/V feasibility contract."
-keywords = ["provider", "cddlib", "polyhedra", "feasibility"]
+description = "Reproduce the pinned GUDHI 3.13.0 persistent homology spike."
+keywords = ["provider", "gudhi", "persistent-homology", "topological-data-analysis"]
 
 [metadata]
 author_name = "Jacobian contributors"

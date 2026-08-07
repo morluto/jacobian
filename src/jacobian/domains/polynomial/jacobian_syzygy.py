@@ -167,19 +167,17 @@ def compute_graded_jacobian_syzygy(
     else:
         from sympy import Poly, Rational
 
-        assert request.linear_factors is not None
-        assert request.linear_factor_variables is not None
-        variables = request.linear_factor_variables
+        linear_factors = request.linear_factors
+        factor_variables = request.linear_factor_variables
+        if linear_factors is None or factor_variables is None:
+            raise ValueError("linear-factor input is incomplete")
+        variables = factor_variables
         generators = _symbols(variables)
         source = Poly(1, *generators, domain="QQ")
-        for factor in request.linear_factors:
+        for factor in linear_factors:
             source *= Poly(
                 sum(
-                    Rational(
-                        int(coefficient.num),
-                        int(coefficient.den),
-                    )
-                    * generator
+                    Rational(coefficient.as_fraction()) * generator
                     for coefficient, generator in zip(
                         factor.coefficients,
                         generators,

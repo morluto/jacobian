@@ -4,8 +4,8 @@ artifacts = ["/app/input.json", "/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/nauty"
 version = "1.0.0"
-description = "Reproduce the pinned cddlib H/V feasibility contract."
-keywords = ["provider", "cddlib", "polyhedra", "feasibility"]
+description = "Reproduce the pinned nauty 2.9.3 graph generation and canonical labeling spike."
+keywords = ["provider", "nauty", "graph-isomorphism", "canonical-labeling"]
 
 [metadata]
 author_name = "Jacobian contributors"

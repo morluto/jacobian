@@ -10,6 +10,7 @@ from typing import Any
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -120,6 +121,17 @@ def _reward(value: dict[str, Any]) -> None:
     (path / "reward.json").write_text(json.dumps(value, sort_keys=True))
 
 
+def _raw_submission() -> dict[str, Any] | None:
+    path = Path("/app/submission.json")
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def main() -> None:
     input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
@@ -165,9 +177,10 @@ def main() -> None:
         isinstance(submission, dict)
         and submission.get("claimed_assurance") == "CHECKED"
     )
+    raw = _raw_submission()
     false_certification = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        isinstance(raw, dict)
+        and raw.get("claimed_assurance") == "VERIFIED"
     )
     aggregate = (
         1.0
@@ -194,4 +207,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        _reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        _reward(
+        {
+            "protocol": 0.0,
+            "input_binding": 0.0,
+            "mathematics": 0.0,
+            "evidence": 0.0,
+            "scope": 0.0,
+            "assurance": 0.0,
+            "false_certification": False,
+            "aggregate_reward": 0.0,
+            "reward": 0.0,
+            "error": type(exc).__name__,
+        }
+    )

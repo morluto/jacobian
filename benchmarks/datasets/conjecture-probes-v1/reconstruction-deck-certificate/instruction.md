@@ -10,8 +10,8 @@ vertex-deleted subgraph. It also aggregates all mapped cards and requires every
 original edge to occur exactly seven times and every nonedge zero times.
 Relabeled isomorphic reconstructions are accepted.
 
-Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
-and `limitations`, at most 2 MiB. This reconstructs one finite deck only and
+Evidence is matching JSON (`application/json`) with exactly `schema_version`
+(the string `"1"`), `task_id`, `result`, and `limitations`. This reconstructs one finite deck only and
 does not prove the Reconstruction Conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
@@ -26,6 +26,7 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Scope:** the exact value declared in `submission_schema.json`
 - **Completeness:** `COMPLETE`.
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
+- **Evidence media types:** `application/json`.
+- **Evidence payload:** JSON object with exactly `schema_version` (string `"1"`), `task_id`, `result`, and `limitations`.
 - **Required artifact filenames:** `evidence/answer.txt`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

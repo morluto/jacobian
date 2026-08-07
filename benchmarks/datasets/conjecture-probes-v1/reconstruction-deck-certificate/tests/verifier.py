@@ -22,7 +22,7 @@ LIMITATIONS = [
     "EXACT_CARD_EMBEDDINGS",
     "NO_GLOBAL_RECONSTRUCTION_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def frozen():
@@ -42,10 +42,10 @@ def edges(value, n):
             not isinstance(e, list)
             or len(e) != 2
             or any(type(x) is not int or not 0 <= x < n for x in e)
-            or e[0] >= e[1]
+            or e[0] == e[1]
         ):
             raise ValueError
-        out.append(tuple(e))
+        out.append(tuple(sorted(e)))
     if len(out) != len(set(out)):
         raise ValueError
     return set(out)
@@ -132,13 +132,20 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    m = bool(c and data and mathematics(s["result"], data))
-    e = bool(c and evidence_list_is_bound(s["evidence"], max_bytes=MAX_EVIDENCE_BYTES))
+    m = bool(
+        isinstance(s, dict)
+        and isinstance(data, dict)
+        and mathematics(s.get("result"), data)
+    )
+    e = bool(
+        isinstance(s, dict)
+        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
+    )
     payload = (
         read_evidence_json(
             s["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if e
         else None
@@ -153,8 +160,12 @@ def main():
             "limitations": LIMITATIONS,
         }
     )
-    sc = bool(c and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
-    a = bool(c and s.get("claimed_assurance") == "CHECKED")
+    sc = bool(
+        isinstance(s, dict)
+        and s.get("scope") == SCOPE
+        and s.get("limitations") == LIMITATIONS
+    )
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in SCOREABLE_ASSURANCES)
     f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

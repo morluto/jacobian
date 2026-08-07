@@ -33,9 +33,9 @@ def test_wrong_evidence_digest_zeros_reward_with_visible_diagnostics(
     task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
     accepted = support._run_verifier(task, app, logs)
     assert accepted["reward"] == pytest.approx(1.0)
-    assert accepted.get("evidence_validity", accepted.get("evidence", 1.0)) == pytest.approx(
-        1.0
-    )
+    assert accepted.get(
+        "evidence_validity", accepted.get("evidence", 1.0)
+    ) == pytest.approx(1.0)
 
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text(encoding="utf-8"))

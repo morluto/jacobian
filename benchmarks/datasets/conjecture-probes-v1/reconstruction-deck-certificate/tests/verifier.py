@@ -146,10 +146,11 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
+    raw = _raw_submission()
     m = bool(
-        isinstance(s, dict)
+        isinstance(raw, dict)
         and isinstance(data, dict)
-        and mathematics(s.get("result"), data)
+        and mathematics(raw.get("result"), data)
     )
     e = bool(
         isinstance(s, dict)
@@ -180,7 +181,6 @@ def main():
         and s.get("limitations") == LIMITATIONS
     )
     a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
-    raw = _raw_submission()
     f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
@@ -202,4 +202,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

@@ -788,9 +788,7 @@ def _record_checker(
 ) -> set[MilestoneKind]:
     kinds: set[MilestoneKind] = set()
     checker = _checker_outcome(capability_id, validated)
-    if checker is not None and not _checker_binds_to_candidate(
-        state, arguments
-    ):
+    if checker is not None and not _checker_binds_to_candidate(state, arguments):
         return kinds
     if checker is CheckerState.REJECTED and state.checker_state is not checker:
         state.checker_state = checker

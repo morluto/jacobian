@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import itertools
 import hashlib
+import itertools
 import json
 import os
 import shutil
@@ -519,9 +519,9 @@ def _run_one(
         task_payload = _task_payload(task)
         verifier = verify_workspace(task_payload, workspace)
         _write_json(run_dir / "verifier.json", verifier)
-        source_binding_digest = "sha256:" + hashlib.sha256(
-            transcript.read_bytes()
-        ).hexdigest()
+        source_binding_digest = (
+            "sha256:" + hashlib.sha256(transcript.read_bytes()).hexdigest()
+        )
         terminal = _terminal_evidence(
             command.status,
             command.exit_code,

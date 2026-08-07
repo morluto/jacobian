@@ -110,7 +110,12 @@ def schema_expectation(error: JsonSchemaValidationError) -> str:
     }
     label = constraint_labels.get(str(error.validator))
     if label is not None:
-        return f"{label} {json.dumps(error.validator_value, ensure_ascii=False)}"
+        rendered = json.dumps(error.validator_value, ensure_ascii=False)
+        # Truncate to stay within CapabilityDiagnostic.expected's 1024-char limit
+        max_value = 1024 - len(label) - 1
+        if len(rendered) > max_value:
+            rendered = rendered[: max(0, max_value - 3)] + "..."
+        return f"{label} {rendered}"
     return "input matching the capability descriptor JSON Schema"
 
 

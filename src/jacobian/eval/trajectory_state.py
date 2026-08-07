@@ -342,7 +342,7 @@ def _candidate_values(value: object, prefix: str = "output") -> list[tuple[str, 
         for key, item in value.items():
             path = f"{prefix}.{key}"
             key_parts = set(key.lower().replace("-", "_").split("_"))
-            if key_parts & _CANDIDATE_FIELD_PARTS and item not in (None, {}, []):
+            if key_parts & _CANDIDATE_FIELD_PARTS and _is_candidate_payload(item):
                 found.append((path, item))
             else:
                 found.extend(_candidate_values(item, path))
@@ -350,6 +350,19 @@ def _candidate_values(value: object, prefix: str = "output") -> list[tuple[str, 
         for index, item in enumerate(value):
             found.extend(_candidate_values(item, f"{prefix}[{index}]"))
     return found
+
+
+def _is_candidate_payload(item: object) -> bool:
+    """Reject metadata flags, artifact URIs, and scalar availability markers.
+
+    A real candidate is a structured object (dict or non-empty list) carrying
+    mathematical content, not a boolean, string, or numeric flag.
+    """
+    if not isinstance(item, (dict, list)):
+        return False
+    if isinstance(item, list):
+        return len(item) > 0
+    return len(item) > 0
 
 
 def _is_checker(capability_id: str) -> bool:
@@ -771,9 +784,14 @@ def _record_checker(
     state: _MutableState,
     capability_id: str,
     validated: CapabilityResult | None,
+    arguments: dict[str, Any],
 ) -> set[MilestoneKind]:
     kinds: set[MilestoneKind] = set()
     checker = _checker_outcome(capability_id, validated)
+    if checker is not None and not _checker_binds_to_candidate(
+        state, arguments
+    ):
+        return kinds
     if checker is CheckerState.REJECTED and state.checker_state is not checker:
         state.checker_state = checker
         if state.candidate_digest is not None:
@@ -798,6 +816,30 @@ def _record_checker(
                 kinds.add(MilestoneKind.BINDING_BECAME_VALID)
         kinds.add(MilestoneKind.CHECKER_ACCEPTED)
     return kinds
+
+
+def _checker_binds_to_candidate(
+    state: _MutableState,
+    arguments: dict[str, Any],
+) -> bool:
+    """Only promote a candidate when the checker request references it.
+
+    When the checker payload is empty (legacy protocol), accept the binding
+    for backward compatibility. When the payload is non-empty, it must
+    contain a candidate value that digests to the current candidate.
+    """
+    if state.candidate_digest is None:
+        return True
+    payload = arguments.get("payload")
+    if not isinstance(payload, dict) or not payload:
+        return True
+    candidates = _candidate_values(payload, "payload")
+    if not candidates:
+        return True
+    for _, candidate in candidates:
+        if _digest(candidate) == state.candidate_digest:
+            return True
+    return False
 
 
 def _record_math_result(
@@ -838,7 +880,7 @@ def _record_math_result(
     kinds.update(_record_artifacts(state, capability_id, response))
     kinds.update(_record_obligations(state, response))
     kinds.update(_record_scope_completeness_assurance(state, response))
-    kinds.update(_record_checker(state, capability_id, validated))
+    kinds.update(_record_checker(state, capability_id, validated, arguments))
     return tuple(sorted(kinds, key=str))
 
 

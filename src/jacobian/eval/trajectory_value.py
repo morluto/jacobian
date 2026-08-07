@@ -369,14 +369,14 @@ def _observations(corpus: TrajectoryValueCorpus) -> tuple[_Observation, ...]:
         seen_numbers: set[str] = set()
         previous: ExtractedTrajectoryState | None = None
         for state in trajectory.extraction.states:
-            for number in _NUMBER_PATTERN.findall(_boundary_summary(state)):
-                if number not in seen_numbers:
-                    seen_numbers.add(number)
-                    numbers.append(number)
             selected = _selected_state(state, previous)
             previous = state
             if not selected:
                 continue
+            for number in _NUMBER_PATTERN.findall(_boundary_summary(state)):
+                if number not in seen_numbers:
+                    seen_numbers.add(number)
+                    numbers.append(number)
             typed = _typed_payload(state)
             text = _reasoning_text(state)
             observations.append(

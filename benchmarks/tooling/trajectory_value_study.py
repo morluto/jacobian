@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import itertools
+import hashlib
 import json
 import os
 import shutil
@@ -55,6 +56,7 @@ from jacobian.eval.trajectory_state import (
     StateBoundary,
     TerminalAcceptance,
     TrajectoryExtraction,
+    TrajectoryStateError,
     extract_codex_trajectory,
 )
 from jacobian.eval.trajectory_value import (
@@ -428,6 +430,8 @@ def _terminal_evidence(
     command_status: ToolCommandStatus,
     exit_code: int | None,
     verifier: Mapping[str, Any],
+    *,
+    source_binding_digest: str,
 ) -> CleanRoomTerminalEvidence:
     if command_status is ToolCommandStatus.TIMED_OUT:
         status: Literal["COMPLETED", "TIMEOUT", "CANCELLED", "ERROR"] = "TIMEOUT"
@@ -453,6 +457,7 @@ def _terminal_evidence(
             if status == "COMPLETED"
             else None
         ),
+        source_binding_digest=source_binding_digest,
     )
 
 
@@ -514,12 +519,36 @@ def _run_one(
         task_payload = _task_payload(task)
         verifier = verify_workspace(task_payload, workspace)
         _write_json(run_dir / "verifier.json", verifier)
-        terminal = _terminal_evidence(command.status, command.exit_code, verifier)
-        extraction = extract_codex_trajectory(
-            transcript,
-            task_family=task.task_family,
-            terminal_evidence=terminal,
+        source_binding_digest = "sha256:" + hashlib.sha256(
+            transcript.read_bytes()
+        ).hexdigest()
+        terminal = _terminal_evidence(
+            command.status,
+            command.exit_code,
+            verifier,
+            source_binding_digest=source_binding_digest,
         )
+        extraction = None
+        if command.status is ToolCommandStatus.EXITED and command.exit_code == 0:
+            extraction = extract_codex_trajectory(
+                transcript,
+                task_family=task.task_family,
+                terminal_evidence=terminal,
+            )
+        else:
+            with suppress(TrajectoryStateError):
+                extraction = extract_codex_trajectory(
+                    transcript,
+                    task_family=task.task_family,
+                    terminal_evidence=terminal,
+                )
+            if extraction is None:
+                extraction = TrajectoryExtraction(
+                    source_digest=source_binding_digest,
+                    task_family=task.task_family,
+                    states=(),
+                    terminal_evidence=terminal,
+                )
         _write_json(run_dir / "extraction.json", extraction.model_dump(mode="json"))
         telemetry = parse_agent_transcript(transcript)
         record = {

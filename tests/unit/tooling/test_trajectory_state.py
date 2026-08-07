@@ -657,10 +657,10 @@ def test_domain_specific_verified_status_recognizes_via_assurance_contract(
                 "matrix.determinant.compute",
                 output={
                     "determinant": "42",
-                    "certificate_available": False,
+                    "certificate": {"value": "42", "method": "cofactor"},
                 },
             ),
-            after="A determinant was computed without a certificate.",
+            after="A determinant was computed with a certificate payload.",
         )
     )
     events.extend(

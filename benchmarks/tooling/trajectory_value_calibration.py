@@ -522,12 +522,30 @@ def summarize(
 ) -> dict[str, Any]:
     """Apply the preregistered difficulty-selection rule without label tuning."""
 
-    rows: list[dict[str, Any]] = []
-    selected: list[dict[str, Any]] = []
+    # Validate the complete calibration rollout matrix: each candidate
+    # must have exactly ``repetitions_per_candidate`` records, with no
+    # duplicates or substituted records under distinct paths.
     by_task: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for record in records:
         key = (str(record["dataset_id"]), str(record["task_id"]))
         by_task.setdefault(key, []).append(record)
+    for candidate in spec.candidates:
+        task_records = by_task.get((candidate.dataset_id, candidate.task_id), [])
+        expected = spec.repetitions_per_candidate
+        if len(task_records) != expected:
+            raise ValueError(
+                f"Candidate {candidate.dataset_id}/{candidate.task_id} has "
+                f"{len(task_records)} rollout records, expected {expected}"
+            )
+        trajectory_ids = [str(r.get("trajectory_id", "")) for r in task_records]
+        if len(set(trajectory_ids)) != len(trajectory_ids):
+            raise ValueError(
+                f"Candidate {candidate.dataset_id}/{candidate.task_id} has "
+                f"duplicate trajectory IDs"
+            )
+
+    rows: list[dict[str, Any]] = []
+    selected: list[dict[str, Any]] = []
     minimum = spec.selection_rule.minimum_success_rate_millionths / 1_000_000
     maximum = spec.selection_rule.maximum_success_rate_millionths / 1_000_000
     for candidate in spec.candidates:

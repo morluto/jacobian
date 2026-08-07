@@ -332,13 +332,24 @@ class MaterializedOperationAdapter:
                 request.input
             )
             source_artifact_uris: tuple[str, ...] = ()
-            if self.operation.input_resolver is not None:
-                validated_request, source_artifact_uris = self.operation.input_resolver(
-                    validated_request,
-                    self.resources.artifacts.store,
-                    self._descriptor.accepted_artifact_types,
-                    self.resources.semantics_uri,
-                )
+            if self.operation.artifact_converter is not None:
+                uri_field = self.operation.artifact_uri_field
+                payload_model = self.operation.artifact_payload_model
+                assert uri_field is not None and payload_model is not None
+                artifact_uri = getattr(validated_request, uri_field)
+                if artifact_uri is not None:
+                    artifact = self.resources.artifacts.store.get(artifact_uri)
+                    if (
+                        artifact.manifest.schema_uri
+                        not in self._descriptor.accepted_artifact_types
+                        or artifact.manifest.semantics_uri
+                        != self.resources.semantics_uri
+                    ):
+                        raise ValueError("artifact is not a compatible producer result")
+                    payload = payload_model.model_validate(artifact.payload)
+                    validated_request, source_artifact_uris = (
+                        self.operation.artifact_converter(validated_request, payload)
+                    )
         except (StorageError, ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
                 self.operation.invalid_request

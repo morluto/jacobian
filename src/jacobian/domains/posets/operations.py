@@ -32,7 +32,6 @@ from jacobian.contracts.posets import (
 )
 from jacobian.domains._examples import example
 from jacobian.operations import ComputedSuccess, MaterializedOperation
-from jacobian.storage.repository import ArtifactRepository
 
 
 def _presentation_graph(request: FinitePosetRequest) -> nx.DiGraph[str]:
@@ -172,24 +171,20 @@ def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
     )
 
 
-def _resolve_poset_request(
+def _convert_materialized_poset(
     request: PosetRequest,
-    store: ArtifactRepository,
-    accepted_artifact_types: tuple[str, ...],
-    semantics_uri: str,
+    payload: FinitePosetMaterializationResult,
 ) -> tuple[PosetRequest, tuple[str, ...]]:
-    if request.poset is not None:
-        return request, ()
-    if request.poset_artifact_uri is None:
-        raise ValueError("poset artifact URI is required")
-    artifact = store.get(request.poset_artifact_uri)
-    if (
-        artifact.manifest.schema_uri not in accepted_artifact_types
-        or artifact.manifest.semantics_uri != semantics_uri
-    ):
-        raise ValueError("artifact is not a compatible finite poset")
-    materialized = FinitePosetMaterializationResult.model_validate(artifact.payload)
-    return PosetRequest(poset=materialized.poset), (request.poset_artifact_uri,)
+    """Convert a materialized poset artifact into a domain request.
+
+    This is a pure typed conversion with no storage dependency; the installer
+    handles artifact retrieval, schema/semantics validation, and payload
+    deserialization before calling this converter.
+    """
+
+    return PosetRequest(poset=payload.poset), (
+        request.poset_artifact_uri,
+    ) if request.poset_artifact_uri else ()
 
 
 def _linear_extensions(
@@ -378,7 +373,9 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
         implementation=_width,
         relation_id="poset.width.dilworth.relation",
         accepted_result_capability_ids=("poset.finite.materialize",),
-        input_resolver=_resolve_poset_request,
+        artifact_converter=_convert_materialized_poset,
+        artifact_payload_model=FinitePosetMaterializationResult,
+        artifact_uri_field="poset_artifact_uri",
         tags=(
             "poset",
             "width",

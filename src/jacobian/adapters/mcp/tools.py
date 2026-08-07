@@ -90,6 +90,7 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
                         "modes",
                         "accepted_input_kinds",
                         "accepted_artifact_types",
+                        "produced_artifact_types",
                         "input_schema_summary",
                         "output_schema_summary",
                         "scope",
@@ -122,6 +123,7 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             "modes",
             "accepted_input_kinds",
             "accepted_artifact_types",
+            "produced_artifact_types",
             "input_schema_summary",
             "output_schema_summary",
         )

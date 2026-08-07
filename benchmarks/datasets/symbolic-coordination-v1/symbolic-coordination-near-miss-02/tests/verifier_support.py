@@ -428,6 +428,7 @@ def aggregate_reward(
         raise ValueError("soft assurance weights must not exceed 1.0 in total")
     return soft_assurance_base + soft_assurance_weight * assurance_score
 
+
 __all__ = [
     "ASSURANCE_LEVELS",
     "MAX_INPUT_BYTES",

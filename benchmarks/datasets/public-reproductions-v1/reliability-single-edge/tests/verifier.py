@@ -27,9 +27,10 @@ def _math(s, x, e):
     states = r.get("states")
     if type(states) is not int:
         return False
-    return _frac(r.get("probability")) == _frac(
-        e["expected_probability"]
-    ) and states == e["expected_states"]
+    return (
+        _frac(r.get("probability")) == _frac(e["expected_probability"])
+        and states == e["expected_states"]
+    )
 
 
 def main():

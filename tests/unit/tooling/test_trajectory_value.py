@@ -529,10 +529,10 @@ def test_terminal_evidence_bound_to_exact_trajectory_source_digest() -> None:
     foreign_binding = evidence.model_copy(
         update={"source_binding_digest": _sha("foreign-source")}
     )
-    foreign = valid.extraction.model_copy(
-        update={"terminal_evidence": foreign_binding}
-    )
-    with pytest.raises(ValidationError, match="bound to the exact extracted trajectory"):
+    foreign = valid.extraction.model_copy(update={"terminal_evidence": foreign_binding})
+    with pytest.raises(
+        ValidationError, match="bound to the exact extracted trajectory"
+    ):
         LabelledTrajectory(
             trajectory_id="foreign-bound",
             task_group="checker-scope",

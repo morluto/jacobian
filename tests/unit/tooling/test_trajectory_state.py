@@ -249,7 +249,9 @@ def test_volatile_output_metadata_does_not_create_a_new_typed_object(
 ) -> None:
     capability_id = "integer.compute.gcd"
     base_output = {"result": {"value": "6"}, "backend_version": "sympy-v1"}
-    events = [_reasoning("PLAN", "Compute the same result twice with volatile metadata.")]
+    events = [
+        _reasoning("PLAN", "Compute the same result twice with volatile metadata.")
+    ]
     events.extend(
         _cycle(
             CALL_IDS[0],
@@ -630,10 +632,7 @@ def test_foreign_mcp_server_tool_calls_are_not_trajectory_state(
     )
     for event in events:
         item = event.get("item", {})
-        if (
-            isinstance(item, dict)
-            and item.get("tool") == "math.run"
-        ):
+        if isinstance(item, dict) and item.get("tool") == "math.run":
             item["server"] = "foreign-mcp-server"
     path = _write(tmp_path, events)
     extraction = extract_codex_trajectory(path, task_family="foreign-server-test")

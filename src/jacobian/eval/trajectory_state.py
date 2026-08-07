@@ -790,10 +790,11 @@ def _record_checker(
                 state.candidate_state = CandidateState.CHECKED
             else:
                 state.candidate_state = (
-                CandidateState.VERIFIED
-                if state.assurance_level == "VERIFIED" and isinstance(record_uri, str)
-                else CandidateState.CHECKED
-            )
+                    CandidateState.VERIFIED
+                    if state.assurance_level == "VERIFIED"
+                    and isinstance(record_uri, str)
+                    else CandidateState.CHECKED
+                )
             if (
                 state.candidate_state is CandidateState.VERIFIED
                 and state.binding_validity is not BindingValidity.VALID

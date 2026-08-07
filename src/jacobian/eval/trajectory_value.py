@@ -227,9 +227,12 @@ class EstimatorEvaluation(ContractModel):
                 or sum(
                     e.value_source is ValueSource.TASK_GROUP_PRIOR
                     for e in self.estimates
-                ) != self.metrics.task_group_fallback_count
-                or _round_metric(sum(trajectory_brier) / len(trajectory_brier)) != self.metrics.brier_score
-                or _round_metric(sum(trajectory_mae) / len(trajectory_mae)) != self.metrics.mean_absolute_error
+                )
+                != self.metrics.task_group_fallback_count
+                or _round_metric(sum(trajectory_brier) / len(trajectory_brier))
+                != self.metrics.brier_score
+                or _round_metric(sum(trajectory_mae) / len(trajectory_mae))
+                != self.metrics.mean_absolute_error
             ):
                 raise ValueError("persisted metrics do not match recomputed estimates")
         return self

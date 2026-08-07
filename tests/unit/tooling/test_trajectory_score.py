@@ -87,8 +87,12 @@ def _comparison(*, reward: Literal[0, 1] = 1) -> OfflineValueComparison:
                     trajectory_count=3,
                     cluster_count=1,
                     task_group_fallback_count=0,
-                    brier_score=round(sum((values[i] - reward) ** 2 for i in range(4)) / 4, 12),
-                    mean_absolute_error=round(sum(abs(values[i] - reward) for i in range(4)) / 4, 12),
+                    brier_score=round(
+                        sum((values[i] - reward) ** 2 for i in range(4)) / 4, 12
+                    ),
+                    mean_absolute_error=round(
+                        sum(abs(values[i] - reward) for i in range(4)) / 4, 12
+                    ),
                 ),
             )
         )

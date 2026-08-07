@@ -589,10 +589,7 @@ def test_foreign_mcp_server_tool_calls_are_not_trajectory_state(
     )
     for event in events:
         item = event.get("item", {})
-        if (
-            isinstance(item, dict)
-            and item.get("tool") == "math.run"
-        ):
+        if isinstance(item, dict) and item.get("tool") == "math.run":
             item["server"] = "foreign-mcp-server"
     path = _write(tmp_path, events)
     extraction = extract_codex_trajectory(path, task_family="foreign-server-test")

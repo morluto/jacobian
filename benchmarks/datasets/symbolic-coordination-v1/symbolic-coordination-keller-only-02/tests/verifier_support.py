@@ -68,6 +68,17 @@ def _finite_json_float(value: str) -> float:
     return parsed
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject JSON objects with duplicate names at any nesting level."""
+
+    seen: set[str] = set()
+    for key, _ in pairs:
+        if key in seen:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        seen.add(key)
+    return dict(pairs)
+
+
 def _load_public_contract(
     path: Path = TESTS / "public_contract.json",
 ) -> dict[str, Any] | None:
@@ -76,6 +87,7 @@ def _load_public_contract(
     try:
         contract = json.loads(
             path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_json,
             parse_float=_finite_json_float,
         )
@@ -110,6 +122,7 @@ def load_submission(
     try:
         value = json.loads(
             path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_json,
             parse_float=_finite_json_float,
         )
@@ -136,6 +149,7 @@ def load_submission_raw(
     try:
         value = json.loads(
             path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_json,
             parse_float=_finite_json_float,
         )
@@ -295,7 +309,10 @@ def read_evidence_json(
     if target is None:
         return None
     try:
-        value = json.loads(target.read_text())
+        value = json.loads(
+            target.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
@@ -334,7 +351,10 @@ def authorized_record_is_bound(
         expected_path="evidence/verification-record.json",
     )
     try:
-        authorized = json.loads(authorized_path.read_text())
+        authorized = json.loads(
+            authorized_path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
     except (OSError, ValueError):
         return False
     if not isinstance(actual, dict) or not isinstance(authorized, dict):

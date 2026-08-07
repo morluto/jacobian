@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomial_positivity_capabilities import (
+    PolynomialIntervalPositivityVerifyAdapter,
     install_polynomial_positivity_capabilities,
 )
 from jacobian_checkers.polynomial_positivity import check_positivity
@@ -268,6 +270,19 @@ def installation(tmp_path: Path):
         tmp_path, install_polynomial_positivity_capabilities
     ) as bundle:
         yield bundle
+
+
+def test_verify_adapter_rejects_missing_authorized_checker(installation) -> None:
+    adapters, _installed, _store = installation
+    _decide, verify = adapters
+    assert verify is not None
+    resources = replace(
+        verify.resources,
+        installation=replace(verify.resources.installation, checker_id=None),
+    )
+
+    with pytest.raises(RuntimeError, match="requires an authorized checker"):
+        PolynomialIntervalPositivityVerifyAdapter(resources)
 
 
 def test_decide_capability_finds_positive_linear(installation) -> None:

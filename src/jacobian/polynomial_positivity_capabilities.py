@@ -436,7 +436,10 @@ class PolynomialIntervalPositivityVerifyAdapter:
     def __init__(self, resources: PolynomialPositivityResources) -> None:
         self.resources = resources
         checker_id = resources.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError(
+                "polynomial positivity verify adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="polynomial.interval.positivity.verify",
             version="1",
@@ -483,7 +486,12 @@ class PolynomialIntervalPositivityVerifyAdapter:
         )
         installation = self.resources.installation
         checker_id = installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise _positivity_error(
+                "POLYNOMIAL_POSITIVITY_CHECKER_UNAVAILABLE",
+                "positivity_verification",
+                "The independent positivity checker is not installed in this runtime.",
+            )
         polynomial = validated.polynomial
         interval = validated.interval
         polynomial_artifact = self.resources.artifacts.put(

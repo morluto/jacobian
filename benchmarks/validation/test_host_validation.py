@@ -75,6 +75,48 @@ def test_full_shard_uses_ci_timing_shape_and_least_duration(tmp_path: Path) -> N
     assert "--store-durations" not in arguments
 
 
+def test_all_shards_receive_same_deterministic_seed(tmp_path: Path) -> None:
+    """Every full-host shard must get the same pytest-randomly seed so that
+    pytest-split sees an identical collection order across CI runners."""
+
+    entries = full_host_validation()
+    seeds: set[str] = set()
+    for entry in entries:
+        arguments = pytest_arguments(
+            entry,
+            timing_path=tmp_path / "timings.json",
+            workers=2,
+            store_durations=False,
+        )
+        seed_index = arguments.index("--randomly-seed")
+        seeds.add(arguments[seed_index + 1])
+    assert len(seeds) == 1
+    assert seeds.pop() == "0"
+
+
+def test_keyword_filtered_entry_also_receives_deterministic_seed(
+    tmp_path: Path,
+) -> None:
+    from benchmarks.tooling.validation_plan import task_host_validation
+
+    entries = task_host_validation(
+        Path(__file__).resolve().parents[2],
+        "mathematical-benchmarks-v1",
+        "algebraic-independence-transfer-audit",
+    )
+    assert entries
+    for entry in entries:
+        arguments = pytest_arguments(
+            entry,
+            timing_path=tmp_path / "timings.json",
+            workers=1,
+            store_durations=False,
+        )
+        assert "--randomly-seed" in arguments
+        seed_index = arguments.index("--randomly-seed")
+        assert arguments[seed_index + 1] == "0"
+
+
 def test_local_full_run_uses_empty_timing_fallback_and_writes_bound_receipts(
     tmp_path: Path,
 ) -> None:

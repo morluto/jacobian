@@ -124,7 +124,7 @@ def main():
     reward = (
         0.0
         if not math_correct or not ev or false_cert
-        else 0.7 + 0.1 * ev + 0.1 * scope + 0.1 * assurance
+        else 0.8 + 0.1 * scope + 0.1 * assurance
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(

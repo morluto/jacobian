@@ -565,7 +565,7 @@ def main():
     reward = (
         0.0
         if not aggregate_eligible
-        else 0.7 + 0.1 * evidence_valid + 0.1 * scope_correct + 0.1 * assurance_correct
+        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
     )
     output = Path("/logs/verifier/reward.json")
     output.parent.mkdir(parents=True, exist_ok=True)

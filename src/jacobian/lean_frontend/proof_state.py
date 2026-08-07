@@ -35,6 +35,7 @@ from jacobian.contracts.lean_exploration import (
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend.artifacts import (
     _environment_digest,
+    _environment_imports,
     _proof_state_command,
     _source_digest,
     _state_digest_payload,
@@ -92,7 +93,8 @@ class LeanProofStateAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    @staticmethod
+    def _validate_request(request: CapabilityRequest) -> LeanProofStateRequest:
         try:
             validated = LeanProofStateRequest.model_validate(request.input)
             if validated.statement is not None:
@@ -114,6 +116,10 @@ class LeanProofStateAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        validated = self._validate_request(request)
         started = time.monotonic()
         installation = self.resources.installations[validated.environment]
         environment_digest = _environment_digest(
@@ -200,6 +206,18 @@ class LeanProofStateAdapter:
                         pickle_path=pickle_path,
                         request=validated,
                     )
+                except _exploration_support.LeanHelperError as exc:
+                    raise CapabilityInvocationError(
+                        CapabilityDiagnostic(
+                            code=exc.code,
+                            stage="proof_state_extraction",
+                            message=(f"Lean helper reported an error: {exc.code}."),
+                            hint=(
+                                "Retry with smaller goal/context bounds or verify "
+                                "that the pinned proof-state helper is installed."
+                            ),
+                        )
+                    ) from exc
                 except RuntimeError as exc:
                     raise CapabilityInvocationError(
                         CapabilityDiagnostic(
@@ -408,9 +426,15 @@ class LeanProofStateAdapter:
                     hint="Use a state URI returned by this capability.",
                 )
             ) from exc
+        installation = self.resources.installations[expected_environment]
+        expected_imports = _environment_imports(expected_environment)
         if (
             state.environment is not expected_environment
             or state.environment_digest != expected_environment_digest
+            or state.imports != expected_imports
+            or state.lean_version != installation.lean_version
+            or state.lean_commit != installation.lean_commit
+            or state.mathlib_commit != installation.mathlib_commit
             or state.source_digest
             != _source_digest(state.statement, state.tactic_prefix)
             or state.state_digest != _state_digest_payload(state)

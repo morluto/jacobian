@@ -6,7 +6,7 @@ from typing import Any
 
 from verifier_support import (
     false_verified_claim,
-    load_submission,
+    load_submission_raw,
     read_evidence_json,
     strict_submission_contract,
     valid_sha256_uri,
@@ -266,9 +266,7 @@ def _evidence_schema(value: object) -> bool:
 
 
 def main() -> None:
-    # Parse the submission even when /app/input.json is unbound so mathematical
-    # correctness stays an independent diagnostic from input_binding.
-    submission = load_submission(require_input_binding=False)
+    submission = load_submission_raw(require_input_binding=False)
     data = submission if isinstance(submission, dict) else {}
     expected = json.loads((TESTS / "expected.json").read_text())
     contract = bool(

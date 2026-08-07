@@ -254,7 +254,7 @@ def _convolution(
 def _gaussian_polynomial_moment(
     request: GaussianPolynomialMomentRequest,
 ) -> ComputedOutcome[GaussianPolynomialMomentResult]:
-    from flint import fmpq
+    from flint import fmpq, fmpq_mpoly_ctx
 
     zero = fmpq(0)
     one = fmpq(1)
@@ -269,30 +269,67 @@ def _gaussian_polynomial_moment(
         )
         for term in request.polynomial.terms
     )
-    expanded: dict[tuple[int, ...], tuple[Any, Any]] = {(0,) * dimension: (one, zero)}
-    for _ in range(request.order):
-        next_expanded: dict[tuple[int, ...], tuple[Any, Any]] = {}
-        for left_exponents, left_coefficient in sorted(expanded.items()):
-            for right_exponents, right_coefficient in base:
-                exponents = tuple(
-                    left + right
-                    for left, right in zip(
-                        left_exponents,
-                        right_exponents,
-                        strict=True,
-                    )
-                )
-                product = _complex_multiply(left_coefficient, right_coefficient)
-                previous = next_expanded.get(exponents, (zero, zero))
-                next_expanded[exponents] = (
-                    previous[0] + product[0],
-                    previous[1] + product[1],
-                )
-        expanded = {
-            exponents: coefficient
-            for exponents, coefficient in next_expanded.items()
-            if coefficient != (zero, zero)
+
+    # Power the complex-coefficient polynomial via FLINT fmpq_mpoly binary
+    # exponentiation.  A complex coefficient (a + b i) is represented as a
+    # pair of real fmpq_mpoly (real_part, imag_part); complex multiplication
+    # is (r1*r2 - i1*i2, r1*i2 + i1*r2).  This replaces the previous
+    # path-by-path dictionary expansion with native FLINT arithmetic.
+    names = tuple(f"x{index}" for index in range(dimension))
+    ctx = fmpq_mpoly_ctx.get(names, "lex")
+    real_base = ctx.from_dict(
+        {
+            term.exponents: _fmpq(term.coefficient.real)
+            for term in request.polynomial.terms
         }
+    )
+    imag_base = ctx.from_dict(
+        {
+            term.exponents: _fmpq(term.coefficient.imaginary)
+            for term in request.polynomial.terms
+        }
+    )
+
+    def _complex_poly_multiply(
+        left: Any,
+        right: tuple[Any, Any],
+    ) -> tuple[Any, Any]:
+        left_real, left_imag = left
+        right_real, right_imag = right
+        return (
+            left_real * right_real - left_imag * right_imag,
+            left_real * right_imag + left_imag * right_real,
+        )
+
+    constant_one = ctx.from_dict({(0,) * dimension: one})
+    constant_zero = ctx.from_dict({})
+    powered: tuple[Any, Any] = (constant_one, constant_zero)
+    if request.order > 0:
+        powered = (real_base, imag_base)
+        remaining = request.order - 1
+        while remaining:
+            if remaining & 1:
+                powered = _complex_poly_multiply(powered, (real_base, imag_base))
+            remaining >>= 1
+            if remaining:
+                real_base, imag_base = _complex_poly_multiply(
+                    (real_base, imag_base), (real_base, imag_base)
+                )
+
+    real_poly, imag_poly = powered
+    real_terms = {
+        tuple(int(value) for value in exps): coeff for exps, coeff in real_poly.terms()
+    }
+    imag_terms = {
+        tuple(int(value) for value in exps): coeff for exps, coeff in imag_poly.terms()
+    }
+
+    expanded: dict[tuple[int, ...], tuple[Any, Any]] = {}
+    for exponents in sorted(set(real_terms) | set(imag_terms)):
+        real_coeff = real_terms.get(exponents, zero)
+        imag_coeff = imag_terms.get(exponents, zero)
+        if real_coeff != zero or imag_coeff != zero:
+            expanded[exponents] = (real_coeff, imag_coeff)
 
     contractions: list[GaussianMomentContraction] = []
     total = (zero, zero)

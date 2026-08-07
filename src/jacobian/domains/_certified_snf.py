@@ -1,4 +1,12 @@
-"""Bounded elementary-operation Smith reduction used by trusted producers."""
+"""Smith normal decomposition used by trusted producers.
+
+The canonical Smith diagonal and divisibility chain are mathematical
+invariants.  The unimodular transformations ``U`` and ``V`` and every
+representative derived from them are deterministic for the pinned SymPy
+version but are **not** byte-identical across backend versions: compatibility
+is semantic (``D = U A V``, unimodularity, canonical diagonal) rather than
+representational.
+"""
 
 from __future__ import annotations
 
@@ -173,42 +181,24 @@ def inverse_unimodular(matrix: Matrix) -> Matrix:
     return [row[size:] for row in augmented]
 
 
-def _swap_rows(matrix: Matrix, left: int, right: int) -> None:
-    matrix[left], matrix[right] = matrix[right], matrix[left]
-
-
-def _swap_columns(matrix: Matrix, left: int, right: int) -> None:
-    for row in matrix:
-        row[left], row[right] = row[right], row[left]
-
-
-def _add_row_multiple(
-    matrix: Matrix, target: int, source: int, multiplier: int
-) -> None:
-    matrix[target] = [
-        value + multiplier * other
-        for value, other in zip(matrix[target], matrix[source], strict=True)
-    ]
-
-
-def _add_column_multiple(
-    matrix: Matrix, target: int, source: int, multiplier: int
-) -> None:
-    for row in matrix:
-        row[target] += multiplier * row[source]
-
-
-def _negate_row(matrix: Matrix, row: int) -> None:
-    matrix[row] = [-value for value in matrix[row]]
-
-
 def smith_reduce(
     source: Matrix,
     *,
     row_count: int | None = None,
     column_count: int | None = None,
 ) -> SmithReduction:
-    """Return a canonical Smith diagonal and explicit elementary transformations."""
+    """Return a canonical Smith diagonal and explicit unimodular transformations.
+
+    Delegates the decomposition to SymPy's ``smith_normal_decomp`` over ``ZZ``
+    and converts the result to native integer matrices.  The canonical diagonal
+    and invariant factors are mathematical invariants; ``U`` and ``V`` are
+    deterministic for the pinned SymPy version but may differ from other
+    backends.  Fail-closed checks verify ``D = U A V``, unimodularity, and the
+    positive divisibility chain before returning.
+    """
+
+    import sympy
+    from sympy.matrices.normalforms import smith_normal_decomp
 
     rows = len(source) if row_count is None else row_count
     columns = (
@@ -217,99 +207,51 @@ def smith_reduce(
     if len(source) != rows or any(len(row) != columns for row in source):
         raise ValueError("source entries do not match the declared matrix shape")
     original = [row[:] for row in source]
-    matrix = [row[:] for row in source]
-    left = identity_matrix(rows)
-    right = identity_matrix(columns)
+
+    # smith_normal_decomp accepts a plain SymPy Matrix and handles every shape,
+    # including 0xm and nx0 matrices, returning identity transformations for
+    # the empty side.
+    if rows and columns:
+        sympy_source = sympy.Matrix([[int(value) for value in row] for row in original])
+    else:
+        sympy_source = sympy.Matrix(rows, columns, [])
+
+    diagonal, left, right = smith_normal_decomp(sympy_source, domain=sympy.ZZ)
+
+    diagonal_matrix = [
+        [int(diagonal[row, column]) for column in range(columns)] for row in range(rows)
+    ]
+    left_matrix = [
+        [int(left[row, column]) for column in range(rows)] for row in range(rows)
+    ]
+    right_matrix = [
+        [int(right[row, column]) for column in range(columns)] for row in range(columns)
+    ]
+
     diagonal_count = min(rows, columns)
-
-    for pivot in range(diagonal_count):
-        selected = min(
-            (
-                (abs(matrix[row][column]), row, column)
-                for row in range(pivot, rows)
-                for column in range(pivot, columns)
-                if matrix[row][column] != 0
-            ),
-            default=None,
-        )
-        if selected is None:
-            break
-        _, selected_row, selected_column = selected
-        if selected_row != pivot:
-            _swap_rows(matrix, pivot, selected_row)
-            _swap_rows(left, pivot, selected_row)
-        if selected_column != pivot:
-            _swap_columns(matrix, pivot, selected_column)
-            _swap_columns(right, pivot, selected_column)
-
-        while True:
-            changed = False
-            for row in range(pivot + 1, rows):
-                while matrix[row][pivot] != 0:
-                    quotient = matrix[row][pivot] // matrix[pivot][pivot]
-                    _add_row_multiple(matrix, row, pivot, -quotient)
-                    _add_row_multiple(left, row, pivot, -quotient)
-                    if matrix[row][pivot] != 0 and abs(matrix[row][pivot]) < abs(
-                        matrix[pivot][pivot]
-                    ):
-                        _swap_rows(matrix, row, pivot)
-                        _swap_rows(left, row, pivot)
-                    changed = True
-            for column in range(pivot + 1, columns):
-                while matrix[pivot][column] != 0:
-                    quotient = matrix[pivot][column] // matrix[pivot][pivot]
-                    _add_column_multiple(matrix, column, pivot, -quotient)
-                    _add_column_multiple(right, column, pivot, -quotient)
-                    if matrix[pivot][column] != 0 and abs(matrix[pivot][column]) < abs(
-                        matrix[pivot][pivot]
-                    ):
-                        _swap_columns(matrix, column, pivot)
-                        _swap_columns(right, column, pivot)
-                    changed = True
-            offender = next(
-                (
-                    (row, column)
-                    for row in range(pivot + 1, rows)
-                    for column in range(pivot + 1, columns)
-                    if matrix[row][column] % matrix[pivot][pivot]
-                ),
-                None,
-            )
-            if offender is not None:
-                _add_row_multiple(matrix, pivot, offender[0], 1)
-                _add_row_multiple(left, pivot, offender[0], 1)
-                changed = True
-                continue
-            if not changed:
-                break
-            if all(matrix[row][pivot] == 0 for row in range(pivot + 1, rows)) and all(
-                matrix[pivot][column] == 0 for column in range(pivot + 1, columns)
-            ):
-                break
-        if matrix[pivot][pivot] < 0:
-            _negate_row(matrix, pivot)
-            _negate_row(left, pivot)
-
     factors = tuple(
-        matrix[index][index]
+        diagonal_matrix[index][index]
         for index in range(diagonal_count)
-        if matrix[index][index] != 0
+        if diagonal_matrix[index][index] != 0
     )
     if any(value <= 0 for value in factors) or any(
         right_factor % left_factor for left_factor, right_factor in pairwise(factors)
     ):
         raise ArithmeticError("Smith reduction did not produce a canonical diagonal")
-    if matrix_multiply(matrix_multiply(left, original), right) != matrix:
+    if (
+        matrix_multiply(matrix_multiply(left_matrix, original), right_matrix)
+        != diagonal_matrix
+    ):
         raise ArithmeticError("Smith transformations do not bind the source")
-    left_determinant = determinant(left)
-    right_determinant = determinant(right)
+    left_determinant = determinant(left_matrix)
+    right_determinant = determinant(right_matrix)
     if abs(left_determinant) != 1 or abs(right_determinant) != 1:
         raise ArithmeticError("Smith transformations are not unimodular")
     return SmithReduction(
         source=original,
-        diagonal=matrix,
-        left=left,
-        right=right,
+        diagonal=diagonal_matrix,
+        left=left_matrix,
+        right=right_matrix,
         rank=len(factors),
         invariant_factors=factors,
         left_determinant=left_determinant,

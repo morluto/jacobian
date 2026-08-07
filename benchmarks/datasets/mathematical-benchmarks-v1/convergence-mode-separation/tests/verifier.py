@@ -381,11 +381,7 @@ def main():
         and limitations_correct
         and not false_certification
     )
-    reward = (
-        0
-        if not correct
-        else 0.7 + 0.1 * evidence_valid + 0.1 * scope_correct + 0.1 * assurance_correct
-    )
+    reward = 0.0 if not correct else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(

@@ -3,9 +3,11 @@
 [Documentation home](../../index.md)
 
 - Status: Current implementation reference; contracts are experimental
-- Matrix producer backend: bounded standard-library elementary operations
+- Matrix producer backend: SymPy `smith_normal_decomp` over `ZZ`; canonical
+  diagonal and invariant factors, noncanonical unimodular transformations
 - Topology producer backend: exact integer chain arithmetic over canonical
-  simplex bases
+  simplex bases; integral homology derives cycle bases and generator
+  coordinates from the certified Smith transformations
 - Checker backend: isolated standard-library replay with no producer or public
   contract imports
 
@@ -65,13 +67,25 @@ zero dimensions for reuse in chain-complex witnesses. Every output integer is
 bounded to 32,768 digits. Complete request validation occurs before computation
 or artifact writes.
 
-The implementation uses exact elementary row and column operations and has no
-optional-provider availability gate. Python-FLINT 0.9.0's Python API exposes a
-diagonal-only `snf()` operation even though current FLINT C documentation also
-describes `fmpz_mat_snf_transform`; SymPy's public normal-form API likewise
-returns the Smith form without full transformations. Those systems are
-independent test oracles for invariant factors, not hidden runtime
-dependencies of this producer.
+The producer delegates the Smith decomposition to SymPy's
+`smith_normal_decomp` over `ZZ` and has no optional-provider availability gate.
+The canonical diagonal \(D\) and the invariant factors \(d_1,\ldots,d_r\) are
+mathematical invariants: they are determined by the determinantal divisors of
+\(A\) and do not depend on the backend. The unimodular transformations
+\(U\) and \(V\), and every representative derived from them (kernel bases,
+cycle coordinates, generator coordinates, bounding chains), are deterministic
+for the pinned SymPy version but are **not** canonical: a different Smith
+backend or SymPy release may produce different \(U,V\) that satisfy the same
+relation \(D=UAV\). Compatibility is therefore semantic—the relation, both
+unimodular determinants, and the positive divisibility diagonal—rather than
+byte-identical transformations. The producer fail-closed checks verify all
+three before returning, and the independent checker replays them without
+calling the producer.
+
+Python-FLINT 0.9.0's Python API exposes a diagonal-only `snf()` operation
+even though current FLINT C documentation also describes
+`fmpz_mat_snf_transform`. FLINT and SymPy are independent test oracles for
+invariant factors, not hidden runtime dependencies of the checker.
 
 ## Integral simplicial homology
 
@@ -189,8 +203,10 @@ and reconsider the bounds only with new artifact-size and runtime evidence.
 This family does not provide persistent homology, a homology ring, cup
 products, canonical generators independent of the declared simplex
 orientation, manifold recognition, a preferred proof strategy, or conclusions
-beyond the supplied bounded complex. It does not make optional FLINT or SymPy
-providers authoritative checkers.
+beyond the supplied bounded complex. SymPy is the producer backend for the
+Smith decomposition; it is not an authoritative checker. The independent
+checker uses only standard-library integer arithmetic and never imports the
+producer or SymPy.
 
 ## Primary references
 

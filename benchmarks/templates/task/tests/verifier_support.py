@@ -98,13 +98,7 @@ def load_submission(
     *,
     require_input_binding: bool = True,
 ) -> dict[str, Any] | None:
-    """Parse one bounded submission object without scoring diagnostics.
-
-    Schema validity belongs to ``strict_submission_contract`` /
-    ``_public_submission_is_valid``. When ``require_input_binding`` is true,
-    an unbound workspace input yields ``None``; callers that score
-    ``input_binding`` separately should pass ``require_input_binding=False``.
-    """
+    """Parse and completely validate one bounded submission object."""
 
     if require_input_binding and not workspace_input_is_bound():
         return None
@@ -112,6 +106,32 @@ def load_submission(
         return None
     contract = _load_public_contract()
     if contract is None:
+        return None
+    try:
+        value = json.loads(
+            path.read_text(),
+            parse_constant=_reject_nonfinite_json,
+            parse_float=_finite_json_float,
+        )
+    except (OSError, ValueError, RecursionError, MemoryError, TypeError):
+        return None
+    return (
+        value
+        if isinstance(value, dict) and _public_submission_is_valid(value)
+        else None
+    )
+
+
+def load_submission_raw(
+    path: Path = WORKSPACE / "submission.json",
+    *,
+    require_input_binding: bool = True,
+) -> dict[str, Any] | None:
+    """Parse one bounded submission without applying its public schema."""
+
+    if require_input_binding and not workspace_input_is_bound():
+        return None
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
         value = json.loads(
@@ -416,6 +436,7 @@ __all__ = [
     "false_verified_claim",
     "is_regular_bounded_file",
     "load_submission",
+    "load_submission_raw",
     "read_evidence_json",
     "resolve_evidence",
     "sha256_uri",

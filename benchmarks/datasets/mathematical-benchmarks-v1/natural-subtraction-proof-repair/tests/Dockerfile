@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact AST and rational linear-combination verifier for a proof repair.
 LABEL jacobian.task="jacobian/natural-subtraction-proof-repair" \
-      jacobian.checksum="5e3c50bd6ba6e2c43293514cc44688132e0473b5879d0851686687309992d180"
+      jacobian.checksum="25f710038563e1d3ccb5bf313dc73ba5b2272260625fe4f3ac8fca0adb2e9c15"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

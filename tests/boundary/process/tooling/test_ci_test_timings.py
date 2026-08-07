@@ -192,7 +192,7 @@ def test_emit_plan_outputs_exposes_ci_config_ssot() -> None:
     )
 
 
-def test_merge_rejects_duplicate_node_ids(tmp_path: Path) -> None:
+def test_merge_keeps_max_duration_for_duplicate_node_ids(tmp_path: Path) -> None:
     count = shard_count()
     inputs: list[str] = []
     for shard in range(1, count + 1):
@@ -219,5 +219,54 @@ def test_merge_rejects_duplicate_node_ids(tmp_path: Path) -> None:
         pinned_pytest_split_version(),
     )
 
-    assert result.returncode != 0
-    assert "duplicate" in result.stderr.lower() or result.stderr
+    assert result.returncode == 0, result.stderr
+    assert "duplicate" in result.stderr.lower()
+    payload = json.loads((tmp_path / "output.json").read_text(encoding="utf-8"))
+    assert payload["durations"]["tests/domain/test_shared.py::test_case"] == float(
+        count
+    )
+
+
+def test_merge_handles_partial_overlap_across_shards(tmp_path: Path) -> None:
+    """Duplicate entries from pytest-split overlap should keep max duration."""
+    count = shard_count()
+    inputs: list[str] = []
+    shard_data: list[dict[str, float]] = [
+        {
+            "tests/domain/test_a.py::test_one": 1.0,
+            "tests/domain/test_b.py::test_two": 2.0,
+        },
+        {
+            "tests/domain/test_a.py::test_one": 3.0,
+            "tests/domain/test_c.py::test_three": 4.0,
+        },
+    ]
+    while len(shard_data) < count:
+        shard_data.append({"tests/domain/test_d.py::test_d": 0.5})
+    for shard, durations in enumerate(shard_data, start=1):
+        path = tmp_path / f"shard-{shard}.json"
+        path.write_text(json.dumps(durations), encoding="utf-8")
+        inputs.extend(["--input", str(path)])
+
+    result = run_ci_script(
+        "manage-test-timings",
+        "merge",
+        *inputs,
+        "--output",
+        str(tmp_path / "output.json"),
+        "--source-sha",
+        "a" * 40,
+        "--python-version",
+        "3.12",
+        "--suite",
+        "domain",
+        "--pytest-split-version",
+        pinned_pytest_split_version(),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "duplicate" in result.stderr.lower()
+    payload = json.loads((tmp_path / "output.json").read_text(encoding="utf-8"))
+    assert payload["durations"]["tests/domain/test_a.py::test_one"] == 3.0
+    assert payload["durations"]["tests/domain/test_b.py::test_two"] == 2.0
+    assert payload["durations"]["tests/domain/test_c.py::test_three"] == 4.0

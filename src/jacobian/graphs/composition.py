@@ -562,7 +562,7 @@ def _backend_suffix(operation: str) -> str:
     if operation == "DISJOINT_UNION":
         return "disjoint_union"
     if operation == "JOIN":
-        return "join"
+        return "full_join"
     if operation == "COMPLEMENT":
         return "complement"
     if operation == "LEXICOGRAPHIC_PRODUCT":
@@ -591,20 +591,16 @@ def _apply_composition(
 
 
 def _join(left: nx.Graph[Any], right: nx.Graph[Any]) -> nx.Graph[Any]:
-    """Construct the graph join: disjoint union plus all cross edges.
+    """Construct the graph join via the NetworkX ``full_join`` backend.
 
-    NetworkX does not expose ``nx.join`` directly.  The join of G and H is
-    the disjoint union of G and H with every vertex of G adjacent to every
-    vertex of H.
+    Source graphs share the canonical ``v*`` label space, so disjoint
+    ``rename`` prefixes keep the input node sets disjoint for
+    ``full_join``; ``graph_payload`` re-canonicalizes the merged result.
     """
-    result = cast("nx.Graph[Any]", networkx_loader.get().disjoint_union(left, right))
-    left_count = left.number_of_nodes()
-    right_count = right.number_of_nodes()
-    cross_edges = [
-        (i, left_count + j) for i in range(left_count) for j in range(right_count)
-    ]
-    result.add_edges_from(cross_edges)
-    return result
+    return cast(
+        "nx.Graph[Any]",
+        networkx_loader.get().full_join(left, right, rename=("L", "R")),
+    )
 
 
 def _composition_parents(

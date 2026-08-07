@@ -4,7 +4,7 @@ from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.domains.certified_snf.checkers import CERTIFIED_SNF_EXACT_REPLAY_CHECKERS
 from jacobian.domains.certified_snf.operations import CERTIFIED_SNF_CAPABILITIES
 from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import known_provider_runtime
+from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_certified_snf_bundle() -> DomainBundle:
@@ -31,17 +31,16 @@ def build_certified_snf_bundle() -> DomainBundle:
             },
         ),
         provider_runtime=known_provider_runtime(
-            "jacobian.certified-snf",
+            "jacobian.sympy",
             features=(
                 "exact-integer",
-                "elementary-row-operations",
-                "elementary-column-operations",
+                "sympy-smith-normal-decomposition",
                 "left-unimodular-transformation",
                 "right-unimodular-transformation",
                 "smith-divisibility-chain",
             ),
         ),
-        backend_version="jacobian.certified-snf/1",
+        backend_version=SYMPY_VERSION,
         capabilities=CERTIFIED_SNF_CAPABILITIES,
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
@@ -56,12 +55,15 @@ def build_certified_snf_bundle() -> DomainBundle:
         ),
         scope_description="the complete supplied bounded integer matrix",
         completeness_basis=(
-            "elementary row and column operations produced both full basis changes "
-            "and the complete canonical Smith diagonal"
+            "SymPy's smith_normal_decomp over ZZ produced both full unimodular "
+            "basis changes and the complete canonical Smith diagonal; the producer "
+            "fail-closed checks verified D = U A V, both unimodular determinants, "
+            "and the positive divisibility chain"
         ),
         assurance_basis=(
-            "exact integer computation capped at COMPUTED; independent certificate "
-            "replay is available through matrix.normal_form.smith.certified.verify"
+            "exact SymPy smith_normal_decomp capped at COMPUTED; independent "
+            "certificate replay is available through "
+            "matrix.normal_form.smith.certified.verify"
         ),
         checker_declarations=CERTIFIED_SNF_EXACT_REPLAY_CHECKERS,
     )

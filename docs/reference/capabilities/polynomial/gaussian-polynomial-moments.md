@@ -30,7 +30,7 @@ The request bounds are:
 | Nonzero sparse terms | 1–16 |
 | Total degree of each input term | at most 8 |
 | Fixed moment order \(m\) | 0–16 |
-| Raw ordered expansion paths | `term_count ** m <= 4096` |
+| Raw ordered expansion paths | `term_count ** m <= 65536` |
 | Input rational numerator/denominator | at most 128 decimal digits |
 
 Terms use exponent vectors of length `variable_count`, in strictly increasing
@@ -39,8 +39,10 @@ lexicographic order. A coefficient has separate canonical rational `real` and
 exponents, inconsistent dimensions, and requests beyond the complete-expansion
 bound fail validation before computation or artifact writes.
 
-The producer exactly expands \(P^m\), merges equal exponent vectors, and removes
-zero coefficients. For every remaining exponent vector
+The producer exactly expands \(P^m\) via pinned Python-FLINT `fmpq_mpoly`
+binary exponentiation over a typed real/imaginary coefficient pair,
+merges equal exponent vectors, and removes zero coefficients. For every
+remaining exponent vector
 \(\alpha=(\alpha_1,\ldots,\alpha_n)\), its ledger records:
 
 - the exact expanded coefficient;

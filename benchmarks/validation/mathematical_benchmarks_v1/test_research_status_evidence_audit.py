@@ -29,7 +29,7 @@ def test_accepts_equivalent_case_order(tmp_path: Path) -> None:
     assert accepted["reward"] == pytest.approx(1.0)
 
 
-def test_rejects_wrong_scope_without_base_reward(tmp_path: Path) -> None:
+def test_rejects_wrong_scope_with_soft_scope_term(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["scope"] = "wrong scope"
@@ -38,7 +38,8 @@ def test_rejects_wrong_scope_without_base_reward(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["scope_accuracy"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.2)
+    # Evidence remains valid, so reward keeps the hard base plus assurance.
+    assert rejected["reward"] == pytest.approx(0.9)
 
 
 def test_rejects_escaped_evidence_with_zero_aggregate_reward(tmp_path: Path) -> None:
@@ -53,12 +54,12 @@ def test_rejects_escaped_evidence_with_zero_aggregate_reward(tmp_path: Path) -> 
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
     assert rejected["reward"] == 0.0
 
 
-def test_rejects_wrong_assurance_without_base_reward(tmp_path: Path) -> None:
+def test_rejects_wrong_assurance_with_soft_assurance_term(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["claimed_assurance"] = "UNVERIFIED"
@@ -67,7 +68,8 @@ def test_rejects_wrong_assurance_without_base_reward(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["assurance_calibration"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.2)
+    # Evidence remains valid, so reward keeps the hard base plus scope.
+    assert rejected["reward"] == pytest.approx(0.9)
 
 
 def test_rejects_tampered_frozen_input(tmp_path: Path) -> None:
@@ -120,7 +122,7 @@ def test_rejects_escaped_semantics_in_result_marker(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.2)
+    assert rejected["reward"] == pytest.approx(0.0)
 
 
 def test_oversized_evidence_does_not_block_reward_record(tmp_path: Path) -> None:
@@ -135,7 +137,7 @@ def test_oversized_evidence_does_not_block_reward_record(tmp_path: Path) -> None
     rejected = support._run_verifier(task, app, logs)
     assert rejected["correctness"] == 1.0
     assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == pytest.approx(0.2)
+    assert rejected["reward"] == pytest.approx(0.0)
 
 
 def test_rejects_deeply_nested_submission(tmp_path: Path) -> None:

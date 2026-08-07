@@ -87,4 +87,5 @@ def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:
             edge_orbit_count=1,
             vertex_color_mode="UNCOLORED",
             edge_color_mode="UNCOLORED",
+            backend_version="3.6.1",
         )

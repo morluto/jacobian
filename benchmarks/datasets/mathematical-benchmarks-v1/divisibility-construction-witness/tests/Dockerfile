@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact construction-witness verifier image.
 LABEL jacobian.task="jacobian/divisibility-construction-witness" \
-      jacobian.checksum="6d886411a29c163f0517ce924ed67488e12e8145cd72f323686acc1015bb3d28"
+      jacobian.checksum="41a1d192ca70bad01bdd2bfd3e737c6cf96c1c2ab03bb376769ca09d977bc42a"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

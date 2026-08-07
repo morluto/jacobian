@@ -12,6 +12,7 @@ from jacobian.contracts.graph_symmetry import (
     GraphVertexOrbit,
 )
 from jacobian.domains._examples import example
+from jacobian.graphs.artifacts import nx
 from jacobian.operations import ComputedSuccess, MaterializedOperation
 
 
@@ -23,33 +24,11 @@ def _orbit_components[Element: Hashable](
     elements: tuple[Element, ...],
     actions: tuple[Mapping[Element, Element], ...],
 ) -> tuple[tuple[Element, ...], ...]:
-    parent = {element: element for element in elements}
-
-    def find(element: Element) -> Element:
-        root = element
-        while parent[root] != root:
-            root = parent[root]
-        while parent[element] != element:
-            next_element = parent[element]
-            parent[element] = root
-            element = next_element
-        return root
-
-    def union(left: Element, right: Element) -> None:
-        left_root = find(left)
-        right_root = find(right)
-        if left_root == right_root:
-            return
-        parent[right_root] = left_root
-
+    union_find = nx().utils.UnionFind(elements)
     for action in actions:
         for element in elements:
-            union(element, action[element])
-
-    members_by_root: dict[Element, list[Element]] = {}
-    for element in elements:
-        members_by_root.setdefault(find(element), []).append(element)
-    return tuple(tuple(members) for members in members_by_root.values())
+            union_find.union(element, action[element])
+    return tuple(tuple(members) for members in union_find.to_sets())
 
 
 def _vertex_orbits(
@@ -124,6 +103,7 @@ def _generator_orbits(
             edge_orbit_count=len(edge_orbits),
             vertex_color_mode=("DECLARED" if request.vertex_colors else "UNCOLORED"),
             edge_color_mode="DECLARED" if request.edge_colors else "UNCOLORED",
+            backend_version=nx().__version__,
         )
     )
 
@@ -178,7 +158,7 @@ GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = 
                 },
             ),
         ),
-        version="3",
+        version="4",
     ),
 )
 

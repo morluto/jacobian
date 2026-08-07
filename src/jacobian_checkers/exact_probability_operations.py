@@ -30,6 +30,9 @@ _GAUSSIAN_META = {
     "backend_version": "0.9.0",
     "verification": "UNVERIFIED",
 }
+# Independent bound mirror: the checker must not import producer contracts.
+# This must match MAX_GAUSSIAN_EXPANSION_PATHS in jacobian.contracts.probability.
+_GAUSSIAN_EXPANSION_PATHS_BOUND = 65536
 _GRAPH_RELIABILITY_META = {
     "event": "TERMINALS_CONNECTED",
     "edge_independence": "INDEPENDENT_BERNOULLI",
@@ -377,7 +380,7 @@ def _replay_gaussian_polynomial_moment(
         or not 1 <= variable_count <= 8
         or not isinstance(terms, list)
         or not 1 <= len(terms) <= 16
-        or len(terms) ** order > 4096
+        or len(terms) ** order > _GAUSSIAN_EXPANSION_PATHS_BOUND
     ):
         return False
     base: list[tuple[tuple[int, ...], tuple[Fraction, Fraction]]] = []

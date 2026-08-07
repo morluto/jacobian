@@ -151,7 +151,7 @@ def test_compose_join_adds_all_cross_edges(tmp_path: Path) -> None:
     assert len(payload["edges"]) >= 9
 
     composition = runtime.core.store.get(result.output["composition_artifact_uri"])
-    assert composition.payload["backend"] == "networkx.join"
+    assert composition.payload["backend"] == "networkx.full_join"
 
 
 def test_compose_lexicographic_product_doubles_vertex_count(tmp_path: Path) -> None:

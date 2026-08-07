@@ -276,7 +276,6 @@ def test_rejects_noncanonical_basis_coefficient(tmp_path: Path) -> None:
 
 def test_task_metadata_declares_input_binding_decoupled() -> None:
     """Input-binding decoupling is declared in task-local metadata, not a global registry."""
-    assert TASK not in support.INPUT_BINDING_DECOUPLED_TASKS
     assert support.is_input_binding_decoupled(TASK) is True
     metadata = support.load_task_contract_metadata(TASK)
     assert metadata.get("input_binding_decoupled") is True

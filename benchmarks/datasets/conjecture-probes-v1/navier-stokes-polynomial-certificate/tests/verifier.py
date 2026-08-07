@@ -9,8 +9,8 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -24,19 +24,25 @@ LIMITATIONS = [
     "NO_GLOBAL_NAVIER_STOKES_REGULARITY_CONCLUSION",
 ]
 MAX_EVIDENCE_BYTES = None
-SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def _rat(value: object, num_bound: int = 50, den_bound: int = 20) -> Fraction:
     if not isinstance(value, str) or len(value) > 32:
         raise ValueError
     parsed = Fraction(value)
-    if str(parsed) != value or abs(parsed.numerator) > num_bound or parsed.denominator > den_bound:
+    if (
+        str(parsed) != value
+        or abs(parsed.numerator) > num_bound
+        or parsed.denominator > den_bound
+    ):
         raise ValueError
     return parsed
 
 
-def _vector(value: object, length: int, num_bound: int = 50, den_bound: int = 20) -> list[Fraction]:
+def _vector(
+    value: object, length: int, num_bound: int = 50, den_bound: int = 20
+) -> list[Fraction]:
     if not isinstance(value, list) or len(value) != length:
         raise ValueError
     return [_rat(item, num_bound, den_bound) for item in value]
@@ -100,7 +106,9 @@ def _mathematics(result: Any, num_bound: int = 50, den_bound: int = 20) -> bool:
 
 
 def _raw_submission() -> dict[str, Any] | None:
-    if not is_regular_bounded_file(Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES):
+    if not is_regular_bounded_file(
+        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
+    ):
         return None
     try:
         value = json.loads(Path("/app/submission.json").read_text())
@@ -163,7 +171,7 @@ def main() -> None:
     )
     assurance = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCES
+        and submission.get("claimed_assurance") in scoreable_assurances
     )
     raw_submission = _raw_submission()
     false_certification = bool(

@@ -460,7 +460,9 @@ def test_bounded_adapter_preserves_the_rejected_field_and_constraint(
         description="Exercise bounded-search request validation diagnostics.",
         request_model=_SyntheticRequest,
         result_model=_BoundedResult,
-        implementation=lambda _request: BoundedSearchWitness(_BoundedResult(complete=True)),
+        implementation=lambda _request: BoundedSearchWitness(
+            _BoundedResult(complete=True)
+        ),
         relation_id="synthetic.search.validate.relation",
         scope_parameters=lambda _request, _result: {},
         is_complete=lambda result: result.complete,

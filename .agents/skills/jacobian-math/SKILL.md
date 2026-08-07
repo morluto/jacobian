@@ -59,7 +59,7 @@ and retry within the task resource bounds as further errors appear. If one
 provider is unavailable, continue with other installed routes that can produce
 the outcome. Treat timeouts as non-conclusions. Accept only a completed result
 whose scope covers the supplied input, and carry forward the smallest decisive
-value, witness, status, assurance, completeness, and open obligations.
+value, witness, status, assurance, completeness, open obligations, and first-class artifact references (including verification record URIs) so artifact-backed results remain evidence-bound.
 
 Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned. Treat timeouts, errors, incomplete

@@ -35,7 +35,11 @@ from jacobian.adapters.mcp.guidance import (
     operating_guide,
     server_instructions,
 )
-from jacobian.adapters.mcp.remote import TenantRuntimeRouter
+from jacobian.adapters.mcp.remote import (
+    DEFAULT_MAX_TENANT_RUNTIMES,
+    DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
+    TenantRuntimeRouter,
+)
 from jacobian.adapters.mcp.resources import (
     _register_reasoning_resource,
     _register_resources_and_prompts,
@@ -401,24 +405,6 @@ def create_server(
     selected_reasoning_mode = _normalize_reasoning_log_mode(reasoning_log_mode)
     if tenant_isolation and capability_exclusions:
         raise ValueError("capability exclusions are supported only by local evaluation")
-
-    # Keep ``--help`` and ``--version`` independent of the MCP runtime's
-    # heavier imports and shutdown hooks.
-    from mcp.server.mcpserver import Context
-
-    from jacobian.adapters.mcp.remote import (
-        DEFAULT_MAX_TENANT_RUNTIMES,
-        DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
-        TenantRuntimeRouter,
-    )
-    from jacobian.runtime.model import JacobianRuntime
-
-    globals().update(
-        {
-            "Context": Context,
-            "JacobianRuntime": JacobianRuntime,
-        }
-    )
 
     selected_authority = _selected_checker_authority(checker_authority)
     configured_root = _configured_root(state_dir)

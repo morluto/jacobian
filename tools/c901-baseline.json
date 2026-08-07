@@ -165,11 +165,7 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/cgal/tests/verifier.py",
       "symbol": "_execution_bound",
-<<<<<<< HEAD
-      "complexity": 11
-=======
       "complexity": 16
->>>>>>> c1d1fab9 (Bind provider verifier evidence to frozen outputs)
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/environment/spike.py",
@@ -179,20 +175,12 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/tests/verifier.py",
       "symbol": "_execution_bound",
-<<<<<<< HEAD
-      "complexity": 11
-=======
       "complexity": 16
->>>>>>> c1d1fab9 (Bind provider verifier evidence to frozen outputs)
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/nauty/tests/verifier.py",
       "symbol": "_execution_bound",
-<<<<<<< HEAD
-      "complexity": 11
-=======
       "complexity": 25
->>>>>>> c1d1fab9 (Bind provider verifier evidence to frozen outputs)
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/regina/environment/spike.py",

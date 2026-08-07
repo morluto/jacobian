@@ -6,6 +6,7 @@ These tests serve as formal validation that:
 3. _load_registry_cache provides invalidation (Bug 3a)
 4. install_source_only_importer purges sys.modules (Bug TOCTOU)
 """
+
 import json
 import sys
 from pathlib import Path
@@ -21,8 +22,18 @@ def test_observation_pair_failures_fails_closed_on_non_dict(tmp_path):
 
     # When treatment/control JSON is a valid JSON but not a dict (e.g., a list),
     # _observation_pair_failures should return failures, not empty list.
-    treatment_path = Path(benchmark_contracts.BENCHMARKS) / "datasets" / "mathematical-benchmarks-v1" / "jobs" / "jacobian-observation.json"
-    control_path = Path(benchmark_contracts.BENCHMARKS) / "config" / "mathematical-benchmarks-v1-control.json"
+    treatment_path = (
+        Path(benchmark_contracts.BENCHMARKS)
+        / "datasets"
+        / "mathematical-benchmarks-v1"
+        / "jobs"
+        / "jacobian-observation.json"
+    )
+    control_path = (
+        Path(benchmark_contracts.BENCHMARKS)
+        / "config"
+        / "mathematical-benchmarks-v1-control.json"
+    )
 
     # Mock _read_json to return non-dict values
     original_read_json = benchmark_contracts._read_json
@@ -31,6 +42,7 @@ def test_observation_pair_failures_fails_closed_on_non_dict(tmp_path):
         # Test: JSON array instead of object
         def mock_read_json_array(path):
             return []
+
         benchmark_contracts._read_json = mock_read_json_array
         failures = benchmark_contracts._observation_pair_failures()
         assert len(failures) > 0, "Bug 1a: malformed JSON should not silently pass"
@@ -39,6 +51,7 @@ def test_observation_pair_failures_fails_closed_on_non_dict(tmp_path):
         # Test: JSON null
         def mock_read_json_null(path):
             return None
+
         benchmark_contracts._read_json = mock_read_json_null
         failures = benchmark_contracts._observation_pair_failures()
         assert len(failures) > 0, "Bug 1a: null JSON should not silently pass"
@@ -53,6 +66,7 @@ def test_usage_rejects_non_dict_stats():
 
     # Create a temporary result file with stats as null
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
         json.dump({"stats": None}, f)
         path = Path(f.name)
@@ -70,9 +84,13 @@ def test_registry_cache_invalidation():
     """Formally prove that cache invalidation works."""
     from benchmarks.tooling import harbor_suite
 
-    assert hasattr(harbor_suite, "invalidate_registry_cache"), "invalidate_registry_cache should exist"
+    assert hasattr(harbor_suite, "invalidate_registry_cache"), (
+        "invalidate_registry_cache should exist"
+    )
     harbor_suite.invalidate_registry_cache()
-    assert harbor_suite._load_registry_cache == {}, "Cache should be empty after invalidation"
+    assert harbor_suite._load_registry_cache == {}, (
+        "Cache should be empty after invalidation"
+    )
 
 
 # Bug TOCTOU: install_source_only_importer should purge sys.modules
@@ -89,14 +107,21 @@ def test_source_only_importer_purges_sys_modules():
 
     try:
         install_source_only_importer("fake_test_package:main")
-        assert "fake_test_package" not in sys.modules, "Pre-imported module should be purged"
-        assert "fake_test_package.helper" not in sys.modules, "Pre-imported submodule should be purged"
+        assert "fake_test_package" not in sys.modules, (
+            "Pre-imported module should be purged"
+        )
+        assert "fake_test_package.helper" not in sys.modules, (
+            "Pre-imported submodule should be purged"
+        )
     finally:
         sys.modules.pop("fake_test_package", None)
         sys.modules.pop("fake_test_package.helper", None)
         # Clean up meta_path
         from jacobian.implementation import _SourceOnlyFinder
-        sys.meta_path = [f for f in sys.meta_path if not isinstance(f, _SourceOnlyFinder)]
+
+        sys.meta_path = [
+            f for f in sys.meta_path if not isinstance(f, _SourceOnlyFinder)
+        ]
 
 
 if __name__ == "__main__":

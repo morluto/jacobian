@@ -76,9 +76,7 @@ class LeanProofStateInspectAdapter:
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         try:
-            validated = LeanProofStateInspectRequest.model_validate(
-                request.input
-            )
+            validated = LeanProofStateInspectRequest.model_validate(request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(

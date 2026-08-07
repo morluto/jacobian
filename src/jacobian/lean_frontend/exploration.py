@@ -340,9 +340,7 @@ def _parse_typed_goal_envelope(
                 error_lines[0].removeprefix(error_marker)
             )
         except CanonicalizationError as exc:
-            raise RuntimeError(
-                "Lean typed proof-state extraction failed"
-            ) from exc
+            raise RuntimeError("Lean typed proof-state extraction failed") from exc
         if isinstance(error_envelope, dict):
             code = error_envelope.get("code")
             message = error_envelope.get("message", "")

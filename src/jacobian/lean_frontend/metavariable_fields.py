@@ -90,17 +90,13 @@ class LeanMetavariableFieldsAdapter:
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         try:
-            validated = LeanMetavariableFieldsRequest.model_validate(
-                request.input
-            )
+            validated = LeanMetavariableFieldsRequest.model_validate(request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_LEAN_METAVARIABLE_FIELDS_REQUEST",
                     stage="request_validation",
-                    message=(
-                        "The Lean metavariable-fields request is invalid."
-                    ),
+                    message=("The Lean metavariable-fields request is invalid."),
                     hint="Supply a state_uri returned by a proof-state capability.",
                 )
             ) from exc
@@ -177,9 +173,7 @@ class LeanMetavariableFieldsAdapter:
                     CapabilityDiagnostic(
                         code=exc.code,
                         stage="metavariable_field_extraction",
-                        message=(
-                            f"Lean helper reported an error: {exc.code}."
-                        ),
+                        message=(f"Lean helper reported an error: {exc.code}."),
                         hint=(
                             "Retry with smaller goal/context bounds or verify "
                             "that the pinned proof-state helper is installed."
@@ -192,8 +186,7 @@ class LeanMetavariableFieldsAdapter:
                         code="LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED",
                         stage="metavariable_field_extraction",
                         message=(
-                            "Lean could not produce the structured "
-                            "metavariable fields."
+                            "Lean could not produce the structured metavariable fields."
                         ),
                         hint=(
                             "Retry with smaller goal/context bounds or verify "
@@ -232,9 +225,7 @@ class LeanMetavariableFieldsAdapter:
                 CapabilityDiagnostic(
                     code="LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED",
                     stage="metavariable_field_extraction",
-                    message=(
-                        "Lean returned invalid structured metavariable fields."
-                    ),
+                    message=("Lean returned invalid structured metavariable fields."),
                     hint="Retry with smaller goal/context bounds.",
                 )
             ) from exc
@@ -246,9 +237,7 @@ class LeanMetavariableFieldsAdapter:
             state_digest=bound_state.state_digest,
             structured_metavariables=structured,
             elaboration_context=elaboration,
-            coercion_provenance=payload.get(
-                "coercion_provenance", "UNAVAILABLE"
-            ),
+            coercion_provenance=payload.get("coercion_provenance", "UNAVAILABLE"),
             coercion_provenance_basis=str(
                 payload.get(
                     "coercion_provenance_basis",

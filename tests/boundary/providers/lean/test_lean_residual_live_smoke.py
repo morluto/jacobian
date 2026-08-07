@@ -40,7 +40,9 @@ def _installation(environment: LeanEnvironment) -> LeanCheckerInstallation:
         lean_commit="68218e876d2a38b1985b8590fff244a83c321783",
         import_name=None if environment is LeanEnvironment.CORE else "Mathlib",
         mathlib_commit=(
-            None if environment is LeanEnvironment.CORE else "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
+            None
+            if environment is LeanEnvironment.CORE
+            else "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
         ),
         allowed_axioms=(),
         checker_timeout_seconds=30,

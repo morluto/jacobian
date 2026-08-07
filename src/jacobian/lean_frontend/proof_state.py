@@ -205,9 +205,7 @@ class LeanProofStateAdapter:
                         CapabilityDiagnostic(
                             code=exc.code,
                             stage="proof_state_extraction",
-                            message=(
-                                f"Lean helper reported an error: {exc.code}."
-                            ),
+                            message=(f"Lean helper reported an error: {exc.code}."),
                             hint=(
                                 "Retry with smaller goal/context bounds or verify "
                                 "that the pinned proof-state helper is installed."

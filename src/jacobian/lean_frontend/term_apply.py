@@ -102,10 +102,7 @@ class LeanTermApplyAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_LEAN_TERM_APPLY_REQUEST",
                     stage="request_validation",
-                    message=(
-                        "The term contains a forbidden Lean command or "
-                        "syntax."
-                    ),
+                    message=("The term contains a forbidden Lean command or syntax."),
                     hint=(
                         "Provide a term that does not use sorry, admit, "
                         "set_option, unsafe, or other forbidden commands."

@@ -63,7 +63,9 @@ def _installation(environment: LeanEnvironment) -> LeanCheckerInstallation:
     )
 
 
-def _adapters(tmp_path: Path) -> tuple[
+def _adapters(
+    tmp_path: Path,
+) -> tuple[
     LeanProofStateAdapter,
     LeanTermApplyAdapter,
     LeanProofStateInspectAdapter,
@@ -397,9 +399,7 @@ def test_inspect_rejects_stale_state(
 # ---------------------------------------------------------------------------
 
 
-def _metavariable_fixture() -> tuple[
-    list[dict[str, Any]], dict[str, Any]
-]:
+def _metavariable_fixture() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     structured = [
         {
             "goal_index": 0,
@@ -564,10 +564,7 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )
-    assert (
-        raised.value.diagnostic.code
-        == "LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED"
-    )
+    assert raised.value.diagnostic.code == "LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED"
 
 
 # ---------------------------------------------------------------------------
@@ -694,7 +691,7 @@ def test_helper_error_envelope_preserves_specific_code() -> None:
 
     # Simulate helper stderr that emits an error envelope with a specific code
     error_output = (
-        b'JACOBIAN_PROOF_STATE_ERROR '
+        b"JACOBIAN_PROOF_STATE_ERROR "
         b'{"request_id":"abc","code":"LEAN_PROOF_STATE_GOAL_LIMIT",'
         b'"message":"typed proof-state extraction failed"}\n'
     )
@@ -707,7 +704,7 @@ def test_helper_error_envelope_preserves_unknown_mode_code() -> None:
     from jacobian.lean_frontend.exploration import LeanHelperError
 
     error_output = (
-        b'JACOBIAN_PROOF_STATE_ERROR '
+        b"JACOBIAN_PROOF_STATE_ERROR "
         b'{"request_id":"xyz","code":"LEAN_PROOF_STATE_UNKNOWN_MODE",'
         b'"message":"typed proof-state extraction failed"}\n'
     )
@@ -720,7 +717,7 @@ def test_helper_error_envelope_rejects_mismatched_request_id() -> None:
     from jacobian.lean_frontend.exploration import LeanHelperError
 
     error_output = (
-        b'JACOBIAN_PROOF_STATE_ERROR '
+        b"JACOBIAN_PROOF_STATE_ERROR "
         b'{"request_id":"other","code":"LEAN_PROOF_STATE_GOAL_LIMIT",'
         b'"message":"typed proof-state extraction failed"}\n'
     )
@@ -734,7 +731,7 @@ def test_helper_error_envelope_rejects_mismatched_request_id() -> None:
 
 def test_helper_result_envelope_still_parses_normally() -> None:
     payload = _parse_typed_goal_envelope_public(
-        b'JACOBIAN_PROOF_STATE_RESULT '
+        b"JACOBIAN_PROOF_STATE_RESULT "
         b'{"request_id":"req1","payload":{"expression_serialization":'
         b'"LEAN_PRETTY_PRINTED_EXPR","typed_goals":[]}}\n',
         request_id="req1",

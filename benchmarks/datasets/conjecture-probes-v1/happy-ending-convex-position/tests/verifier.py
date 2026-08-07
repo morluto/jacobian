@@ -208,22 +208,25 @@ def main() -> None:
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
+    raw_submission = _raw_submission()
+    # Derive independent diagnostics from the raw submission so that a
+    # schema-level envelope error does not erase mathematics, evidence,
+    # scope, or assurance dimensions.
+    base = raw_submission if isinstance(raw_submission, dict) else {}
     mathematics = bool(
         frozen
-        and isinstance(submission, dict)
-        and _mathematics(submission.get("result"), frozen)
+        and _mathematics(base.get("result"), frozen)
     )
     evidence = bool(
-        isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"), max_bytes=2 * 1024 * 1024)
+        evidence_list_is_bound(base.get("evidence"), max_bytes=2 * 1024 * 1024)
     )
     payload = (
         read_evidence_json(
-            submission["evidence"][0],
+            base["evidence"][0],
             expected_path="evidence/answer.txt",
             max_bytes=2 * 1024 * 1024,
         )
-        if evidence and isinstance(submission, dict) and submission.get("evidence")
+        if evidence and base.get("evidence")
         else None
     )
     evidence = bool(
@@ -231,19 +234,16 @@ def main() -> None:
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == submission.get("result")
+        and payload.get("result") == base.get("result")
         and payload.get("limitations") == LIMITATIONS
     )
     scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == SCOPE
-        and submission.get("limitations") == LIMITATIONS
+        base.get("scope") == SCOPE
+        and base.get("limitations") == LIMITATIONS
     )
     assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") in scoreable_assurances
+        base.get("claimed_assurance") in scoreable_assurances
     )
-    raw_submission = _raw_submission()
     false_certification = bool(
         isinstance(raw_submission, dict)
         and raw_submission.get("claimed_assurance") == "VERIFIED"

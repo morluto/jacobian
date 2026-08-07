@@ -315,18 +315,6 @@ class TenantRuntimeRouter:
             entry.last_used = self._clock()
             self._condition.notify_all()
 
-    def _claim_shutdown(self) -> bool:
-        with self._condition:
-            if self._closed:
-                return False
-            while self._shutdown_in_flight:
-                self._condition.wait()
-                if self._closed:
-                    return False
-            self._closing = True
-            self._shutdown_in_flight = True
-            return True
-
     def _collect_shutdown_runtimes(
         self,
     ) -> tuple[tuple[str, _TenantRuntimeEntry], ...]:
@@ -372,13 +360,23 @@ class TenantRuntimeRouter:
     def close(self) -> None:
         """Close every tenant runtime owned by this router."""
 
-        if not self._claim_shutdown():
-            return
+        owns_shutdown = False
         try:
+            with self._condition:
+                if self._closed:
+                    return
+                while self._shutdown_in_flight:
+                    self._condition.wait()
+                    if self._closed:
+                        return
+                self._closing = True
+                owns_shutdown = True
+                self._shutdown_in_flight = True
             self._close_runtime_entries(self._collect_shutdown_runtimes())
             self._finish_shutdown()
         except BaseException:
-            self._abort_shutdown()
+            if owns_shutdown:
+                self._abort_shutdown()
             raise
 
 

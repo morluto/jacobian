@@ -64,6 +64,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/e2e/verified_results/test_reference_runtime.py"),
         # Process boundary tests directly exercise subprocess seams.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
+        PurePosixPath("tests/boundary/process/test_cvc5_worker_command_profile.py"),
         PurePosixPath("tests/boundary/process/test_process_policy.py"),
         PurePosixPath("tests/boundary/process/test_rational_lp_worker_protocol.py"),
         PurePosixPath("tests/boundary/process/test_worker_error_protocol.py"),

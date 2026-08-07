@@ -151,4 +151,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

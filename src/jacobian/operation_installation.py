@@ -43,8 +43,8 @@ from jacobian.operations import (
     OperationExecutionFailure,
 )
 from jacobian.schema_registry import SchemaRegistry, model_schema
-from jacobian.storage.repository import ArtifactRepository
 from jacobian.storage.errors import StorageError
+from jacobian.storage.repository import ArtifactRepository
 
 
 @dataclass(frozen=True, slots=True)

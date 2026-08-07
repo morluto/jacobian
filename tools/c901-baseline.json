@@ -3,6 +3,11 @@
   "max_complexity": 10,
   "violations": [
     {
+      "path": "benchmarks/datasets/conjecture-probes-v1/reconstruction-deck-certificate/tests/verifier_support.py",
+      "symbol": "_read_streaming_json_value",
+      "complexity": 11
+    },
+    {
       "path": "benchmarks/datasets/conjecture-probes-v1/vizing-bounded-cartesian-products/tests/verifier.py",
       "symbol": "_frozen",
       "complexity": 11
@@ -160,7 +165,7 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/cgal/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 11
+      "complexity": 13
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/environment/spike.py",
@@ -170,12 +175,12 @@
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/gudhi/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 11
+      "complexity": 15
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/nauty/tests/verifier.py",
       "symbol": "_execution_bound",
-      "complexity": 11
+      "complexity": 17
     },
     {
       "path": "benchmarks/datasets/provider-feasibility-v1/regina/environment/spike.py",

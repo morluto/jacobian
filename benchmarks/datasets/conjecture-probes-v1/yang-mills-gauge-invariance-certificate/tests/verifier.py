@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
+    is_regular_bounded_file,
     evidence_list_is_bound,
     load_submission,
     read_evidence_json,
@@ -120,6 +122,8 @@ def mathematics(result: Any) -> bool:
 
 
 def _raw_submission() -> dict[str, Any] | None:
+    if not is_regular_bounded_file(Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES):
+        return None
     try:
         value = json.loads(Path("/app/submission.json").read_text())
     except (OSError, ValueError, RecursionError, MemoryError):
@@ -144,12 +148,12 @@ def main():
         verification_record="forbidden",
     )
     m = bool(isinstance(s, dict) and mathematics(s.get("result")))
-    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES))
+    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=None))
     payload = (
         read_evidence_json(
             s["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if e
         else None

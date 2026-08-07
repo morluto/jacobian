@@ -204,6 +204,24 @@ def task_host_validation(
                 timings=timings,
             ),
         )
+    if dataset == "conjecture-probes-v1":
+        dedicated = (
+            root
+            / "benchmarks"
+            / "validation"
+            / "conjecture_probes_v1"
+            / f"test_{task.replace('-', '_')}.py"
+        )
+        entries: list[HostValidation] = []
+        if dedicated.is_file():
+            entries.append(
+                _entry(
+                    name=f"{task}-specific",
+                    selector=dedicated.relative_to(root).as_posix(),
+                    timings=timings,
+                )
+            )
+        return tuple(entries) or dataset_host_validation(dataset, timings=timings)
     return dataset_host_validation(dataset, timings=timings)
 
 

@@ -111,3 +111,33 @@ def test_makefile_change_remains_fail_closed_without_hunk_ownership(
     assert plan.reasons == (
         "shared verifier execution harness requires full host validation: Makefile",
     )
+
+
+def test_conjecture_probes_v1_task_change_selects_only_leaf(tmp_path: Path) -> None:
+    """A conjecture-probes-v1 task change must select its dedicated leaf test
+    when one exists, rather than escalating to full host validation."""
+    from types import SimpleNamespace
+
+    from benchmarks.tooling.validation_plan import host_validation_plan
+
+    task = "hadwiger-triangle-free-minor-certificate"
+    leaf = (
+        tmp_path
+        / "benchmarks/validation/conjecture_probes_v1"
+        / "test_hadwiger_triangle_free_minor_certificate.py"
+    )
+    leaf.parent.mkdir(parents=True)
+    leaf.write_text("", encoding="utf-8")
+    suite = SimpleNamespace(tasks=(SimpleNamespace(path=Path(task)),))
+
+    plan = host_validation_plan(
+        tmp_path,
+        [f"benchmarks/datasets/conjecture-probes-v1/{task}/tests/verifier.py"],
+        {"conjecture-probes-v1": suite},
+    )
+
+    assert [entry.selector for entry in plan.entries] == [
+        "benchmarks/validation/conjecture_probes_v1/"
+        "test_hadwiger_triangle_free_minor_certificate.py",
+    ]
+    assert all(reason.startswith("focused host validation:") for reason in plan.reasons)

@@ -135,8 +135,8 @@ def _connected_branch_sets(branches, adj):
         if (
             not isinstance(branch, list)
             or not branch
+            or not all(type(v) is int and 0 <= v < 11 for v in branch)
             or len(branch) != len(set(branch))
-            or any(type(v) is not int or not 0 <= v < 11 for v in branch)
         ):
             return None
         s = set(branch)
@@ -172,7 +172,12 @@ def mathematics(r: Any) -> bool:
     sets = _connected_branch_sets(branches, adj)
     if sets is None or not _branch_sets_form_k4_minor(sets, adj):
         return False
-    return r["chromatic_number"] == 4 and r["minor_order"] == 4
+    return (
+        type(r.get("chromatic_number")) is int
+        and r["chromatic_number"] == 4
+        and type(r.get("minor_order")) is int
+        and r["minor_order"] == 4
+    )
 
 
 def _raw_submission() -> dict[str, Any] | None:
@@ -205,12 +210,12 @@ def main():
     raw = _raw_submission()
     m = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     e = bool(
-        isinstance(s, dict)
-        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
+        isinstance(raw, dict)
+        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            s["evidence"][0],
+            raw["evidence"][0],
             expected_path="evidence/answer.txt",
             max_bytes=None,
         )
@@ -222,16 +227,18 @@ def main():
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == s.get("result")
+        and payload.get("result") == raw.get("result")
         and payload.get("limitations") == LIMITATIONS
     )
     sc = bool(
-        isinstance(s, dict)
-        and s.get("scope") == SCOPE
-        and s.get("limitations") == LIMITATIONS
+        isinstance(raw, dict)
+        and raw.get("scope") == SCOPE
+        and raw.get("limitations") == LIMITATIONS
     )
     scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
+    a = bool(
+        isinstance(raw, dict) and raw.get("claimed_assurance") in scoreable_assurances
+    )
     f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(

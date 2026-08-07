@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from verifier_support import (
+    evidence_list_is_bound,
+    load_submission,
+    read_evidence_json,
+    strict_submission_contract,
+    workspace_input_is_bound,
+)
+
+TASK_ID = "jacobian/tutte-flow-domain-audit"
+SCOPE = "petersen-nowhere-zero-five-flow-audit-v1"
+LIMITATIONS = [
+    "ONE_PETERSEN_GRAPH_INSTANCE",
+    "MODULAR_FLOW_DOMAIN_AUDIT_ONLY",
+    "TUTTE_FIVE_FLOW_CONJECTURE_NOT_ASSESSED",
+]
+EDGES = [
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 4),
+    (5, 7),
+    (7, 9),
+    (6, 9),
+    (6, 8),
+    (5, 8),
+    (0, 5),
+    (1, 6),
+    (2, 7),
+    (3, 8),
+    (4, 9),
+]
+
+
+def _balances(flow: object) -> list[int] | None:
+    if (
+        not isinstance(flow, list)
+        or len(flow) != 15
+        or not all(type(v) is int and 0 <= v < 5 for v in flow)
+    ):
+        return None
+    result = [0] * 10
+    for value, (source, target) in zip(flow, EDGES, strict=True):
+        result[source] = (result[source] + value) % 5
+        result[target] = (result[target] - value) % 5
+    return result
+
+
+def mathematics(result: object) -> bool:
+    if not isinstance(result, dict) or set(result) != {
+        "flawed_flow",
+        "flawed_balances",
+        "zero_edge_index",
+        "repair_flow",
+        "repair_balances",
+    }:
+        return False
+    flawed = _balances(result["flawed_flow"])
+    repair = _balances(result["repair_flow"])
+    if flawed is None or repair is None:
+        return False
+    zeros = [i for i, v in enumerate(result["flawed_flow"]) if v == 0]
+    return (
+        flawed == [0] * 10
+        and repair == [0] * 10
+        and len(zeros) == 1
+        and result["zero_edge_index"] == zeros[0]
+        and result["flawed_balances"] == flawed
+        and result["repair_balances"] == repair
+        and all(result["repair_flow"])
+    )
+
+
+def _raw():
+    try:
+        value = json.loads(Path("/app/submission.json").read_text())
+    except (OSError, ValueError, MemoryError, RecursionError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _write(values):
+    path = Path("/logs/verifier")
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+
+
+def main():
+    raw = _raw()
+    submission = load_submission(require_input_binding=False)
+    contract = strict_submission_contract(
+        submission,
+        task_id=TASK_ID,
+        conclusion="CONSERVATION_ONLY_IS_UNSOUND_AND_REPAIRED",
+        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
+        verification_record="forbidden",
+    )
+    evidence_ok = bool(
+        isinstance(raw, dict)
+        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+    )
+    payload = (
+        read_evidence_json(
+            raw["evidence"][0], expected_path="evidence/answer.txt", max_bytes=None
+        )
+        if evidence_ok
+        else None
+    )
+    evidence_ok = bool(
+        isinstance(payload, dict)
+        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and payload.get("schema_version") == "1"
+        and payload.get("task_id") == TASK_ID
+        and payload.get("result") == raw.get("result")
+        and payload.get("limitations") == LIMITATIONS
+    )
+    values = {
+        "input_binding": float(workspace_input_is_bound()),
+        "protocol": float(bool(contract)),
+        "mathematics": float(
+            bool(isinstance(raw, dict) and mathematics(raw.get("result")))
+        ),
+        "evidence": float(evidence_ok),
+        "scope": float(
+            bool(
+                isinstance(raw, dict)
+                and raw.get("scope") == SCOPE
+                and raw.get("completeness") == "COMPLETE"
+                and raw.get("limitations") == LIMITATIONS
+            )
+        ),
+        "assurance": float(
+            bool(
+                contract
+                and isinstance(raw, dict)
+                and raw.get("claimed_assurance")
+                in {"UNVERIFIED", "COMPUTED", "CHECKED"}
+            )
+        ),
+    }
+    reward = float(all(values.values()))
+    values.update(
+        {
+            "aggregate_reward": reward,
+            "reward": reward,
+            "false_certification": bool(
+                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
+            ),
+        }
+    )
+    _write(values)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BaseException as exc:
+        _write(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "false_certification": False,
+                "error": type(exc).__name__,
+            }
+        )

@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from itertools import product
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
     CapabilityAssuranceLevel,
@@ -311,7 +312,10 @@ class PolynomialCollisionSearchAdapter:
         started = time.monotonic()
         polynomial_map, map_uri = _materialize_map(self.resources, validated.map)
         scalar_values = tuple(
-            CanonicalRational(num=str(value.numerator), den=str(value.denominator))
+            CanonicalRational(
+                num=format_canonical_integer(value.numerator),
+                den=format_canonical_integer(value.denominator),
+            )
             for value in bounded_rational_scalars(
                 validated.max_abs_numerator, validated.max_denominator
             )

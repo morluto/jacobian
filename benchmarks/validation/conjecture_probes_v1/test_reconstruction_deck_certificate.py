@@ -217,3 +217,25 @@ def test_evidence_trailing_garbage_still_rejected(tmp_path):
     (app / "submission.json").write_text(json.dumps(s) + "\n")
     r = run(app, logs)
     assert r["evidence"] == 0.0 and r["aggregate_reward"] == 0.0
+
+
+def test_duplicate_json_object_member_in_submission_rejected(tmp_path):
+    """A duplicate JSON object member must not bypass the raw submission parser.
+
+    Python's default ``json.loads`` applies last-key-wins semantics.  Without
+    an ``object_pairs_hook`` that rejects duplicate names, a submission with
+    conflicting ``task_id`` values (wrong first, canonical second) would parse
+    to the canonical value and earn full reward despite being malformed.
+    """
+    app, logs, _ = case(tmp_path)
+    raw = (app / "submission.json").read_text()
+    duplicate = raw.replace(
+        '"task_id": "jacobian/reconstruction-deck-certificate"',
+        '"task_id": "wrong", "task_id": "jacobian/reconstruction-deck-certificate"',
+    )
+    assert duplicate != raw, "replacement target not found in canonical submission"
+    (app / "submission.json").write_text(duplicate)
+    r = run(app, logs)
+    assert r["protocol"] == 0.0
+    assert r["aggregate_reward"] == 0.0
+    assert r["reward"] == 0.0

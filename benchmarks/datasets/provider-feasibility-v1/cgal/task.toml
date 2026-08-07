@@ -4,8 +4,8 @@ artifacts = ["/app/input.json", "/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/cgal"
 version = "1.0.0"
-description = "Reproduce the pinned cddlib H/V feasibility contract."
-keywords = ["provider", "cddlib", "polyhedra", "feasibility"]
+description = "Reproduce the pinned CGAL 6.2 exact-Delaunay triangulation spike."
+keywords = ["provider", "cgal", "computational-geometry", "delaunay-triangulation"]
 
 [metadata]
 author_name = "Jacobian contributors"

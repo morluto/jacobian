@@ -11,6 +11,7 @@ from typing import Any
 from jacobian.canonical import (
     CanonicalizationError,
     canonicalize_json,
+    format_canonical_integer,
     loads_strict_json,
 )
 
@@ -213,7 +214,10 @@ def _run(request: dict[str, Any]) -> dict[str, object]:
             "status": "CERTIFICATE_PRODUCED",
             "backend_version": "0.9.0",
             "left_witness": [
-                {"num": str(value.numerator), "den": str(value.denominator)}
+                {
+                    "num": format_canonical_integer(value.numerator),
+                    "den": format_canonical_integer(value.denominator),
+                }
                 for value in values
             ],
             "rhs_pairing": {"num": "1", "den": "1"},
@@ -222,7 +226,10 @@ def _run(request: dict[str, Any]) -> dict[str, object]:
         "status": "SOLUTION_PRODUCED",
         "backend_version": "0.9.0",
         "values": [
-            {"num": str(value.numerator), "den": str(value.denominator)}
+            {
+                "num": format_canonical_integer(value.numerator),
+                "den": format_canonical_integer(value.denominator),
+            }
             for value in values
         ],
     }

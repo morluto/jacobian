@@ -10,7 +10,7 @@ from typing import Literal, cast
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -406,7 +406,10 @@ def _evaluate_request(
             ):
                 value *= coordinate**exponent
             total += value
-        return CanonicalRational(num=str(total.numerator), den=str(total.denominator))
+        return CanonicalRational(
+            num=format_canonical_integer(total.numerator),
+            den=format_canonical_integer(total.denominator),
+        )
 
     return (
         tuple(evaluate(polynomial) for polynomial in request.system.equations),

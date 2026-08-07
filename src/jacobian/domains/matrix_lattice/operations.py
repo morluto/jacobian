@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.matrix_operations import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
@@ -32,8 +33,8 @@ from jacobian.math import matrices as native_matrices
 def _rational(value: Any) -> OutputRational:
     fraction = Fraction(value)
     return OutputRational(
-        num=str(fraction.numerator),
-        den=str(fraction.denominator),
+        num=format_canonical_integer(fraction.numerator),
+        den=format_canonical_integer(fraction.denominator),
     )
 
 
@@ -42,7 +43,7 @@ def _qq_matrix(matrix: RationalMatrix) -> Any:
 
     return sympy.Matrix(
         [
-            [sympy.Rational(int(value.num), int(value.den)) for value in row]
+            [sympy.Rational(value.as_fraction()) for value in row]
             for row in matrix.entries
         ]
     )
@@ -190,9 +191,7 @@ def compute_rational_linear_solve(
     import sympy
 
     source = _qq_matrix(request.matrix)
-    rhs = sympy.Matrix(
-        [sympy.Rational(int(value.num), int(value.den)) for value in request.rhs]
-    )
+    rhs = sympy.Matrix([sympy.Rational(value.as_fraction()) for value in request.rhs])
     solution, parameters = source.gauss_jordan_solve(rhs)
     if parameters.rows:
         raise ValueError("linear system does not have a unique solution")

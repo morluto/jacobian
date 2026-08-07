@@ -8,7 +8,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
 from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.results import ContractModel
@@ -36,8 +36,8 @@ def _require_bounded_fraction(
     label: str,
 ) -> None:
     if (
-        len(str(abs(value.numerator))) > max_digits
-        or len(str(value.denominator)) > max_digits
+        len(format_canonical_integer(abs(value.numerator))) > max_digits
+        or len(format_canonical_integer(value.denominator)) > max_digits
     ):
         raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
 
@@ -324,13 +324,25 @@ class GraphConnectionProbabilityRequest(ContractModel):
         )
         probability_numerator_digits = sum(
             max(
-                len(str(item.open_probability.as_fraction().numerator)),
-                len(str((1 - item.open_probability.as_fraction()).numerator)),
+                len(
+                    format_canonical_integer(
+                        item.open_probability.as_fraction().numerator
+                    )
+                ),
+                len(
+                    format_canonical_integer(
+                        (1 - item.open_probability.as_fraction()).numerator
+                    )
+                ),
             )
             for item in self.edge_probabilities
         )
         probability_denominator_digits = sum(
-            len(str(item.open_probability.as_fraction().denominator))
+            len(
+                format_canonical_integer(
+                    item.open_probability.as_fraction().denominator
+                )
+            )
             for item in self.edge_probabilities
         )
         maximum_state = {

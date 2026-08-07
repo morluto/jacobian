@@ -31,6 +31,8 @@ from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
 from jacobian.verification import VerificationService
 
+_LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
+
 
 def _rational(value: int | Fraction) -> dict[str, str]:
     exact = Fraction(value)
@@ -289,6 +291,27 @@ def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
     rank_artifact = runtime.core.store.get(result.output["rank_uri"])
     assert rank_artifact.payload["backend"] == "sympy"
     assert rank_artifact.payload["backend_version"] == sympy.__version__
+
+
+def test_matrix_rank_accepts_contract_sized_rational_entries(
+    matrix_services: _MatrixRuntime,
+) -> None:
+    result = matrix_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.rank.compute",
+            input={
+                "matrix": {
+                    "matrix_schema_version": "1",
+                    "domain": "QQ",
+                    "entries": [[{"num": _LARGE_CANONICAL_INTEGER, "den": "1"}]],
+                }
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["rank"] == 1
+    assert result.output["pivot_columns"] == [0]
 
 
 def test_matrix_determinant_rejects_rectangular_input(

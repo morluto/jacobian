@@ -240,6 +240,11 @@ def _boundary(
     ring: str,
     prime: int | None,
 ) -> dict[str, Any]:
+    field_prime: int | None = None
+    if ring == "PRIME_FIELD":
+        if prime is None:
+            raise ValueError("prime-field boundary requires a prime")
+        field_prime = prime
     source = [
         tuple(face) for face in complex_["faces_by_dimension"][dimension]["faces"]
     ]
@@ -260,9 +265,8 @@ def _boundary(
         for removed in range(len(simplex)):
             face = simplex[:removed] + simplex[removed + 1 :]
             coefficient = 1 if removed % 2 == 0 else -1
-            if ring == "PRIME_FIELD":
-                assert prime is not None
-                coefficient %= prime
+            if field_prime is not None:
+                coefficient %= field_prime
             entries.append(
                 {
                     "row": row_for_face[face],
@@ -386,7 +390,8 @@ def _chain_expected(
             if upper_dimension == 1 and augmentation is not None
             else boundaries[upper_dimension - 1]
         )
-        assert lower is not None
+        if lower is None:
+            raise ValueError("reconstructed boundary sequence is incomplete")
         if not _matrix_product_is_zero(
             _dense(lower, prime=prime),
             _dense(boundaries[upper_dimension], prime=prime),

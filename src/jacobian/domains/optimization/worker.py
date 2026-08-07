@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from jacobian.canonical import (
     CanonicalizationError,
     canonicalize_json,
+    format_canonical_integer,
     loads_strict_json,
 )
 from jacobian.contracts.exact import CanonicalRational
@@ -19,14 +20,17 @@ from jacobian.contracts.validated_analysis import RationalLinearProgramRequest
 def _rational(value: CanonicalRational) -> Any:
     import sympy
 
-    return sympy.Rational(int(value.num), int(value.den))
+    return sympy.Rational(value.as_fraction())
 
 
 def _wire(value: Any) -> dict[str, str]:
     import sympy
 
     rational = sympy.Rational(value)
-    return {"num": str(rational.p), "den": str(rational.q)}
+    return {
+        "num": format_canonical_integer(int(rational.p)),
+        "den": format_canonical_integer(int(rational.q)),
+    }
 
 
 def _linear_program(request: RationalLinearProgramRequest) -> dict[str, Any]:

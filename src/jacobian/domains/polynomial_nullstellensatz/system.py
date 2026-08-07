@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from fractions import Fraction
 from typing import Literal
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.nullstellensatz import (
     BoundedRationalPolynomial,
@@ -57,8 +58,8 @@ def _polynomial(
         terms=tuple(
             BoundedRationalPolynomialTerm(
                 coefficient=CanonicalRational(
-                    num=str(coefficient.numerator),
-                    den=str(coefficient.denominator),
+                    num=format_canonical_integer(coefficient.numerator),
+                    den=format_canonical_integer(coefficient.denominator),
                 ),
                 exponents=exponent,
             )

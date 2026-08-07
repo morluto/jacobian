@@ -200,7 +200,7 @@ def _smtlib_close_paren(
 
 def _top_level_commands(text: str) -> tuple[tuple[str, ...], ...]:
     commands: list[tuple[str, ...]] = []
-    direct_atoms: list[str] | None = None
+    direct_atoms: list[str] | None = []
     depth = 0
     for token in _smtlib_tokens(text):
         if token == "(":
@@ -212,7 +212,6 @@ def _top_level_commands(text: str) -> tuple[tuple[str, ...], ...]:
         if depth == 0:
             raise ValueError("SMT-LIB atom outside a command")
         if depth == 1:
-            assert direct_atoms is not None
             direct_atoms.append(token)
     if depth:
         raise ValueError("unmatched SMT-LIB opening parenthesis")

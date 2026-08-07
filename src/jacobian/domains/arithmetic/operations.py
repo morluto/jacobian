@@ -16,6 +16,7 @@ import math
 from fractions import Fraction
 from typing import Literal
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.arithmetic import (
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
@@ -109,13 +110,13 @@ def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
 
 
 def _fraction(value: CanonicalRational) -> Fraction:
-    return Fraction(int(value.num), int(value.den))
+    return value.as_fraction()
 
 
 def _wire(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=str(value.numerator),
-        den=str(value.denominator),
+        num=format_canonical_integer(value.numerator),
+        den=format_canonical_integer(value.denominator),
     )
 
 

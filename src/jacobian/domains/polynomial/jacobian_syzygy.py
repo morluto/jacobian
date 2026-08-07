@@ -7,7 +7,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Any, Literal, cast
 
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityInvocationExample,
     CapabilityMode,
@@ -40,7 +40,10 @@ def _homogeneous_basis(degree: int) -> tuple[tuple[int, int, int], ...]:
 
 def _fraction_text(value: Any) -> str:
     fraction = Fraction(value)
-    return f"{fraction.numerator}/{fraction.denominator}"
+    return (
+        f"{format_canonical_integer(fraction.numerator)}/"
+        f"{format_canonical_integer(fraction.denominator)}"
+    )
 
 
 def _matrix_digest(
@@ -97,8 +100,8 @@ def _multiplier_polynomial(
             terms=tuple(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(
-                        num=str(coefficient.numerator),
-                        den=str(coefficient.denominator),
+                        num=format_canonical_integer(coefficient.numerator),
+                        den=format_canonical_integer(coefficient.denominator),
                     ),
                     exponents=exponents,
                 )
@@ -164,19 +167,17 @@ def compute_graded_jacobian_syzygy(
     else:
         from sympy import Poly, Rational
 
-        assert request.linear_factors is not None
-        assert request.linear_factor_variables is not None
-        variables = request.linear_factor_variables
+        linear_factors = request.linear_factors
+        factor_variables = request.linear_factor_variables
+        if linear_factors is None or factor_variables is None:
+            raise ValueError("linear-factor input is incomplete")
+        variables = factor_variables
         generators = _symbols(variables)
         source = Poly(1, *generators, domain="QQ")
-        for factor in request.linear_factors:
+        for factor in linear_factors:
             source *= Poly(
                 sum(
-                    Rational(
-                        int(coefficient.num),
-                        int(coefficient.den),
-                    )
-                    * generator
+                    Rational(coefficient.as_fraction()) * generator
                     for coefficient, generator in zip(
                         factor.coefficients,
                         generators,
@@ -271,8 +272,8 @@ def compute_graded_jacobian_syzygy(
                 multiplier_degree=multiplier_degree,
                 coefficient_vector=tuple(
                     CanonicalRational(
-                        num=str(value.numerator),
-                        den=str(value.denominator),
+                        num=format_canonical_integer(value.numerator),
+                        den=format_canonical_integer(value.denominator),
                     )
                     for value in vector
                 ),

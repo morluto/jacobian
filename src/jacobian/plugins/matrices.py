@@ -18,6 +18,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.plugin_matrices import (
     MatrixCandidate,
     MatrixCapabilityRequest,
@@ -56,7 +57,10 @@ def _candidate_matrix(candidate: MatrixCandidate) -> list[list[int]]:
 
 
 def _canonical_rational(frac: Fraction) -> dict[str, str]:
-    return {"num": str(frac.numerator), "den": str(frac.denominator)}
+    return {
+        "num": format_canonical_integer(frac.numerator),
+        "den": format_canonical_integer(frac.denominator),
+    }
 
 
 def _enumerate_typed(

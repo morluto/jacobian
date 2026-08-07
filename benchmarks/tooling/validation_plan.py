@@ -9,6 +9,8 @@ from typing import Any
 
 HOST_VALIDATION_ROOT = "benchmarks/validation"
 HOST_VALIDATION_FULL_SHARDS = 4
+# GitHub Actions matrix jobs are capped at 256; stay at or below that limit.
+HOST_VALIDATION_MAX_JOBS = 256
 HOST_VALIDATION_DATASET_FILES = {
     "conjecture-probes-v1": (
         "benchmarks/validation/conjecture_probes_v1/"
@@ -356,12 +358,18 @@ def host_validation_plan(
     ordered = tuple(
         sorted(unique.values(), key=lambda entry: (entry.selector, entry.keyword))
     )
+    if len(ordered) > HOST_VALIDATION_MAX_JOBS:
+        return HostValidationPlan(
+            full_host_validation(timings=timings),
+            ("focused host validation exceeded matrix job limit; using full suite",),
+        )
     reasons = tuple(f"focused host validation: {entry.name}" for entry in ordered)
     return HostValidationPlan(ordered, reasons)
 
 
 __all__ = [
     "CONTROL_PLANE_HOST_TESTS",
+    "HOST_VALIDATION_MAX_JOBS",
     "HostValidation",
     "HostValidationPlan",
     "dataset_host_validation",

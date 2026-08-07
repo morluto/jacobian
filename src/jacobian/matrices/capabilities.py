@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
+from jacobian.canonical import format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
@@ -316,15 +317,15 @@ def _sympy_matrix(matrix: ExactRationalMatrix) -> Matrix:
     from sympy import Matrix, Rational
 
     return Matrix(
-        [
-            [Rational(int(entry.num), int(entry.den)) for entry in row]
-            for row in matrix.entries
-        ]
+        [[Rational(entry.as_fraction()) for entry in row] for row in matrix.entries]
     )
 
 
 def _wire(value: Rational) -> CanonicalRational:
-    return CanonicalRational(num=str(value.p), den=str(value.q))
+    return CanonicalRational(
+        num=format_canonical_integer(int(value.p)),
+        den=format_canonical_integer(int(value.q)),
+    )
 
 
 def _computed_result(

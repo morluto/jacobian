@@ -4,8 +4,8 @@ artifacts = ["/app/input.json", "/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/lean-repl"
 version = "1.0.0"
-description = "Reproduce the pinned cddlib H/V feasibility contract."
-keywords = ["provider", "cddlib", "polyhedra", "feasibility"]
+description = "Reproduce the pinned Lean 4.31.0 REPL proof-state transport spike."
+keywords = ["provider", "lean-repl", "interactive-theorem-proving", "proof-state"]
 
 [metadata]
 author_name = "Jacobian contributors"

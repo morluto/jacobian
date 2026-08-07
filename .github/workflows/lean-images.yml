@@ -1,0 +1,153 @@
+name: Lean Evaluation Images
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "containers/lean-checker/**"
+      - "containers/lean-repl-agent/**"
+      - ".github/workflows/lean-images.yml"
+  push:
+    branches: [main]
+    paths:
+      - "containers/lean-checker/**"
+      - "containers/lean-repl-agent/**"
+      - ".github/workflows/lean-images.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: lean-images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  PLATFORM: linux/amd64
+
+jobs:
+  build-pr:
+    name: Build ${{ matrix.image }}
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: jacobian-lean-checker
+            directory: lean-checker
+          - image: jacobian-lean-repl-agent
+            directory: lean-repl-agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Build and load image for measurement
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: containers/${{ matrix.directory }}/Dockerfile
+          platforms: ${{ env.PLATFORM }}
+          load: true
+          push: false
+          tags: local/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Record unpacked image size
+        env:
+          IMAGE: local/${{ matrix.image }}:${{ github.sha }}
+        run: |
+          bytes=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          jq -n \
+            --arg image "$IMAGE" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg platform "$PLATFORM" \
+            --argjson unpacked_size_bytes "$bytes" \
+            '{image: $image, source_sha: $source_sha, platform: $platform, unpacked_size_bytes: $unpacked_size_bytes}' \
+            | tee "$RUNNER_TEMP/${{ matrix.image }}-size.json" \
+            >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload size evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.image }}-size-${{ github.sha }}
+          path: ${{ runner.temp }}/${{ matrix.image }}-size.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    name: Publish ${{ matrix.image }}
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: jacobian-lean-checker
+            directory: lean-checker
+          - image: jacobian-lean-repl-agent
+            directory: lean-repl-agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=sha-${{ github.sha }}
+            type=raw,value=main
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            io.jacobian.source-dirty=false
+      - id: build
+        name: Build and publish
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: containers/${{ matrix.directory }}/Dockerfile
+          platforms: ${{ env.PLATFORM }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: mode=max
+          sbom: true
+      - name: Record digest and unpacked size
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker pull "$IMAGE@$DIGEST"
+          size=$(docker image inspect "$IMAGE@$DIGEST" --format '{{.Size}}')
+          jq -n \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg image "$IMAGE@$DIGEST" \
+            --arg image_digest "$DIGEST" \
+            --arg platform "$PLATFORM" \
+            --argjson unpacked_size_bytes "$size" \
+            '{source_sha: $source_sha, image: $image, image_digest: $image_digest, platform: $platform, unpacked_size_bytes: $unpacked_size_bytes}' \
+            | tee "$RUNNER_TEMP/${{ matrix.image }}-publication.json" \
+            >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.image }}-publication-${{ github.sha }}
+          path: ${{ runner.temp }}/${{ matrix.image }}-publication.json
+          if-no-files-found: error
+          retention-days: 90

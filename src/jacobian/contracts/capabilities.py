@@ -105,6 +105,64 @@ class CapabilityDiscoveryRequest(ContractModel):
         return self
 
 
+class CapabilityDiscoveryReformulateQueryRecoveryPath(ContractModel):
+    """Offer a differently worded query without prescribing one."""
+
+    action: Literal["reformulate_query"]
+    tool: Literal["math.find"] = "math.find"
+    change: Literal["Use different or broader mathematical language for query."] = (
+        "Use different or broader mathematical language for query."
+    )
+
+
+class CapabilityDiscoveryRemoveUnknownDomainRecoveryPath(ContractModel):
+    """Expose the rejected domain filter as one removable constraint."""
+
+    action: Literal["remove_unknown_domain_filter"]
+    tool: Literal["math.find"] = "math.find"
+    rejected_domain: str = Field(
+        pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
+    )
+    change: Literal["Retry without the unrecognized domain filter."] = (
+        "Retry without the unrecognized domain filter."
+    )
+
+
+class CapabilityDiscoveryRemoveFiltersRecoveryPath(ContractModel):
+    """Offer unfiltered discovery without ranking it above other choices."""
+
+    action: Literal["remove_filters"]
+    tool: Literal["math.find"] = "math.find"
+    change: Literal["Remove domain, mode, input_kind, or artifact_type filters."] = (
+        "Remove domain, mode, input_kind, or artifact_type filters."
+    )
+
+
+class CapabilityDiscoveryBrowseRecoveryPath(ContractModel):
+    """Expose the existing empty-query browse operation."""
+
+    action: Literal["browse"]
+    tool: Literal["math.find"] = "math.find"
+    arguments: dict[str, Any] = Field(default_factory=dict, max_length=0)
+
+
+class CapabilityDiscoveryInspectCatalogRecoveryPath(ContractModel):
+    """Expose the complete catalog resource as an alternative access path."""
+
+    action: Literal["inspect_catalog"]
+    resource_uri: Literal["capability://catalog"] = "capability://catalog"
+
+
+CapabilityDiscoveryRecoveryPath = Annotated[
+    CapabilityDiscoveryReformulateQueryRecoveryPath
+    | CapabilityDiscoveryRemoveUnknownDomainRecoveryPath
+    | CapabilityDiscoveryRemoveFiltersRecoveryPath
+    | CapabilityDiscoveryBrowseRecoveryPath
+    | CapabilityDiscoveryInspectCatalogRecoveryPath,
+    Field(discriminator="action"),
+]
+
+
 class CapabilityDiscoveryMatch(ContractModel):
     """One compact installed outcome returned by capability discovery."""
 

@@ -8,6 +8,7 @@ from fractions import Fraction
 from functools import reduce
 from itertools import pairwise
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.sequences import (
     FrequencyEntry,
@@ -67,8 +68,8 @@ def sequence_mean(request: IntegerSequenceRequest) -> IntegerSequenceRationalRes
     fraction = Fraction(sum(values), len(values))
     return IntegerSequenceRationalResult(
         value=CanonicalRational(
-            num=str(fraction.numerator),
-            den=str(fraction.denominator),
+            num=format_canonical_integer(fraction.numerator),
+            den=format_canonical_integer(fraction.denominator),
         )
     )
 
@@ -82,8 +83,8 @@ def sequence_median(request: IntegerSequenceRequest) -> IntegerSequenceRationalR
         fraction = Fraction(values[middle - 1] + values[middle], 2)
     return IntegerSequenceRationalResult(
         value=CanonicalRational(
-            num=str(fraction.numerator),
-            den=str(fraction.denominator),
+            num=format_canonical_integer(fraction.numerator),
+            den=format_canonical_integer(fraction.denominator),
         )
     )
 

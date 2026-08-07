@@ -4,8 +4,8 @@ artifacts = ["/app/input.json", "/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/regina"
 version = "1.0.0"
-description = "Reproduce the pinned cddlib H/V feasibility contract."
-keywords = ["provider", "cddlib", "polyhedra", "feasibility"]
+description = "Reproduce the pinned Regina 7.4.1 3-manifold triangulation and normal surface spike."
+keywords = ["provider", "regina", "low-dimensional-topology", "normal-surfaces"]
 
 [metadata]
 author_name = "Jacobian contributors"

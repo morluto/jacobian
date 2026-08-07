@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import reduce
 from operator import mul
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.combinatorics import (
     FibonacciPairRequest,
     FibonacciPairResult,
@@ -168,7 +169,10 @@ def bernoulli(request: NonnegativeIntegerRequest) -> RationalResult:
     n = request.n
     value = sympy.bernoulli(n)
     return RationalResult(
-        value=CanonicalRational(num=str(value.p), den=str(value.q)),
+        value=CanonicalRational(
+            num=format_canonical_integer(int(value.p)),
+            den=format_canonical_integer(int(value.q)),
+        ),
     )
 
 

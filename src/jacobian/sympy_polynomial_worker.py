@@ -9,7 +9,11 @@ import sympy
 from pydantic import ValidationError
 from sympy import QQ, Poly
 
-from jacobian.canonical import canonicalize_json, loads_strict_json
+from jacobian.canonical import (
+    canonicalize_json,
+    format_canonical_integer,
+    loads_strict_json,
+)
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.polynomial_expressions import (
     PolynomialAddExpression,
@@ -36,7 +40,7 @@ def _sympy_expression(
     symbols: dict[str, Any],
 ) -> Any:
     if isinstance(expression, PolynomialRationalExpression):
-        return sympy.Rational(int(expression.value.num), int(expression.value.den))
+        return sympy.Rational(expression.value.as_fraction())
     if isinstance(expression, PolynomialVariableExpression):
         return symbols[expression.name]
     if isinstance(expression, PolynomialAddExpression):
@@ -62,8 +66,8 @@ def _wire_polynomial(polynomial: Poly) -> SparseRationalPolynomial:
         terms=tuple(
             RationalPolynomialTerm(
                 coefficient=CanonicalRational(
-                    num=str(coefficient.numerator),
-                    den=str(coefficient.denominator),
+                    num=format_canonical_integer(coefficient.numerator),
+                    den=format_canonical_integer(coefficient.denominator),
                 ),
                 exponents=tuple(int(exponent) for exponent in exponents),
             )

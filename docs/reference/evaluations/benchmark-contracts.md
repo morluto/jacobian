@@ -48,6 +48,33 @@ digest-bound evidence, optional verification record, and limitations. Unknown
 fields fail closed. Task-specific schemas may narrow the result but cannot
 weaken the envelope.
 
+### Reusable evaluation images
+
+Use a shared image only when its toolchain is part of the task's reproducible
+runtime. The image digest, platform, toolchain version, and task digest together
+identify the executable evaluation; a tag is only a human-facing discovery
+label. Task Dockerfiles and environment profiles therefore use
+`name@sha256:<digest>`, never `main`, a version tag, or an unpinned base.
+
+Keep agent/provider images separate from verifier images. An agent image may
+contain an exploratory service such as Lean REPL. A verifier image contains
+only the independently needed checker and its pinned dependencies, then
+replays a submitted artifact. Provider telemetry, tactic traces, and a
+successful agent-side process are useful diagnostics but do not authorize a
+mathematical conclusion.
+
+The controlled `main`-only image workflow publishes the reusable Lean bases:
+
+- `ghcr.io/morluto/jacobian-lean-checker` for Lean-source replay; and
+- `ghcr.io/morluto/jacobian-lean-repl-agent` for the pinned provider runtime.
+
+Publication records the immutable image digest, source revision, platform,
+SBOM/provenance attestations, and unpacked image size. Measure runtime writable
+storage separately in the actual Harbor runner before setting `storage_mb`:
+image-layer size and writable-layer accounting are different quantities. Update
+an image pin only in a deliberate task-contract change, recompute prospective
+task digests, and rerun the selected Oracle.
+
 ## Task and verifier validation
 
 Task and verifier validation is separate from model observation. For an

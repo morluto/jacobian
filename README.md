@@ -5,7 +5,7 @@
 <h1 align="center">Jacobian</h1>
 
 <p align="center">
-  <strong>Jacobian gives AI agents reliable mathematical tools that produce evidence an independent checker can verify.</strong>
+  <strong>Pure mathematics for agents: search for examples and counterexamples, compute exactly, and independently check what a result proves.</strong>
 </p>
 
 <p align="center">

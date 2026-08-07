@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -36,7 +37,13 @@ class JacobianGroup(TyperGroup):
         finally:
             state = ctx.obj
             if isinstance(state, CliState):
-                state.close()
+                command_failure = sys.exception()
+                try:
+                    state.close()
+                except BaseException as cleanup_exc:
+                    if command_failure is None:
+                        raise
+                    command_failure.add_note(f"CLI cleanup also failed: {cleanup_exc}")
 
 
 app = typer.Typer(

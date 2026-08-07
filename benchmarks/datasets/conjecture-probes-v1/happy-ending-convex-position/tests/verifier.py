@@ -22,6 +22,15 @@ TASK_ID = "jacobian/happy-ending-convex-position"
 SCOPE = "happy-ending-convex-position:points-v1"
 LIMITATIONS = ["THIRTEEN_FROZEN_POINTS", "NO_GENERAL_ERDOS_SZEKERES_CONCLUSION"]
 scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+RESULT_KEYS = frozenset(
+    {
+        "general_position",
+        "convex_subset_counts",
+        "maximum_convex_size",
+        "maximum_witness_cyclic",
+        "scope_identity",
+    }
+)
 
 
 def _cross(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> int:
@@ -77,21 +86,17 @@ def _cyclic(witness: list[tuple[int, int]]) -> bool:
     return False
 
 
-def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
-    if not isinstance(result, dict) or set(result) != {
-        "general_position",
-        "convex_subset_counts",
-        "maximum_convex_size",
-        "maximum_witness_cyclic",
-        "scope_identity",
-    }:
-        return False
-    records = frozen["points"]
+def _convex_profile(
+    records: list[dict[str, Any]],
+) -> (
+    tuple[list[str], list[tuple[int, int]], dict[int, int], int, set[frozenset[str]]]
+    | None
+):
     ids = [record["id"] for record in records]
     points = [(record["x"], record["y"]) for record in records]
-    general = all(_cross(*triple) != 0 for triple in itertools.combinations(points, 3))
-    if result.get("general_position") is not general or not general:
-        return False
+    if not all(_cross(*triple) != 0 for triple in itertools.combinations(points, 3)):
+        return None
+
     counts: dict[int, int] = {}
     maximum = 2
     maximum_sets: set[frozenset[str]] = set()
@@ -107,9 +112,13 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
                 if size == maximum:
                     maximum_sets.add(frozenset(ids[index] for index in subset))
         counts[size] = count
-    rows = result.get("convex_subset_counts")
+    return ids, points, counts, maximum, maximum_sets
+
+
+def _submitted_counts(rows: Any) -> dict[int, int] | None:
     if not isinstance(rows, list) or len(rows) != 11:
-        return False
+        return None
+
     submitted: dict[int, int] = {}
     for row in rows:
         if (
@@ -119,17 +128,48 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
             or type(row["count"]) is not int
             or row["size"] in submitted
         ):
-            return False
+            return None
         submitted[row["size"]] = row["count"]
-    witness = result.get("maximum_witness_cyclic")
+    return submitted
+
+
+def _witness_coordinates(
+    witness: Any,
+    *,
+    ids: list[str],
+    points: list[tuple[int, int]],
+    maximum: int,
+) -> list[tuple[int, int]] | None:
     if (
         not isinstance(witness, list)
         or len(witness) != maximum
         or len(set(witness)) != maximum
         or any(name not in ids for name in witness)
     ):
+        return None
+    return [points[ids.index(name)] for name in witness]
+
+
+def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
+    if not isinstance(result, dict) or set(result) != RESULT_KEYS:
         return False
-    coordinates = [points[ids.index(name)] for name in witness]
+
+    profile = _convex_profile(frozen["points"])
+    if profile is None or result.get("general_position") is not True:
+        return False
+
+    ids, points, counts, maximum, maximum_sets = profile
+    submitted = _submitted_counts(result.get("convex_subset_counts"))
+    coordinates = _witness_coordinates(
+        result.get("maximum_witness_cyclic"),
+        ids=ids,
+        points=points,
+        maximum=maximum,
+    )
+    if submitted is None or coordinates is None:
+        return False
+
+    witness = result["maximum_witness_cyclic"]
     return (
         submitted == counts
         and result.get("maximum_convex_size") == maximum

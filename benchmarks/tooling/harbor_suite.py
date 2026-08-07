@@ -887,6 +887,32 @@ def _tests_dockerfile_failures(
         failures.append(f"{rel}/tests/Dockerfile: missing verifier checksum label")
     elif checksum.group(1) != expected_checksum:
         failures.append(f"{rel}/tests/Dockerfile: verifier checksum label is stale")
+    failures.extend(_tests_dockerfile_copy_source_failures(tests, rel, docker_text))
+    return failures
+
+
+def _tests_dockerfile_copy_source_failures(
+    tests: Path, rel: str, docker_text: str
+) -> list[str]:
+    """Require every tests/Dockerfile COPY source to exist in the build context."""
+
+    failures: list[str] = []
+    for line in docker_text.splitlines():
+        source = line.split("#", 1)[0].strip()
+        if not source.upper().startswith("COPY "):
+            continue
+        parts = source.split()[1:]
+        if len(parts) < 2:
+            continue
+        for part in parts[:-1]:
+            if part.startswith("--") or part.startswith("/"):
+                continue
+            candidate = tests / part
+            if not _is_regular_file(candidate):
+                failures.append(
+                    f"{rel}/tests/Dockerfile: COPY source {part!r} is missing "
+                    f"from the verifier build context"
+                )
     return failures
 
 

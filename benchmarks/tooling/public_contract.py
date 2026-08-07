@@ -111,6 +111,25 @@ class ScopeRule(BaseModel):
         return fragment
 
 
+# JSON Schema document keywords. ``payload_shape`` is a map of evidence-item
+# field names to schema fragments, not a schema for the evidence file body.
+_PAYLOAD_SHAPE_SCHEMA_DOCUMENT_KEYS = frozenset(
+    {
+        "$defs",
+        "$schema",
+        "additionalProperties",
+        "allOf",
+        "anyOf",
+        "definitions",
+        "items",
+        "oneOf",
+        "properties",
+        "required",
+        "type",
+    }
+)
+
+
 class EvidenceRule(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -125,6 +144,22 @@ class EvidenceRule(BaseModel):
     def _max_ge_min(self) -> EvidenceRule:
         if self.max_items < self.min_items:
             raise ValueError("evidence.max_items must be >= min_items")
+        return self
+
+    @model_validator(mode="after")
+    def _payload_shape_is_field_map(self) -> EvidenceRule:
+        if not self.payload_shape:
+            return self
+        keys = set(self.payload_shape)
+        if keys and keys <= _PAYLOAD_SHAPE_SCHEMA_DOCUMENT_KEYS:
+            raise ValueError(
+                "evidence.payload_shape must map submission evidence-item "
+                "field names to JSON Schema fragments; it is not a schema "
+                "for the evidence file body. Leave payload_shape null and "
+                "document file-body shape in instruction.md / public_notes, "
+                "or declare extra envelope fields such as "
+                "{'solution': {'type': 'string'}}."
+            )
         return self
 
     def item_schema(self) -> dict[str, Any]:

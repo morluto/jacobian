@@ -268,6 +268,23 @@ class TestModelValidation:
         }
         PublicContract.model_validate(data)
 
+    def test_evidence_file_body_schema_is_rejected_as_payload_shape(self) -> None:
+        data = _base_contract_dict() | {
+            "evidence": {
+                "min_items": 1,
+                "max_items": 1,
+                "allowed_paths": ["evidence/answer.txt"],
+                "media_types": ["application/json"],
+                "payload_shape": {
+                    "type": "object",
+                    "properties": {"schema_version": {"const": "1"}},
+                    "required": ["schema_version"],
+                },
+            },
+        }
+        with pytest.raises(ValueError, match="evidence-item field names"):
+            PublicContract.model_validate(data)
+
     def test_envelope_field_not_forbidden(self) -> None:
         """``verification_record_uri`` is an envelope descriptor, not hidden."""
         data = _verified_contract_dict()

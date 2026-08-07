@@ -227,7 +227,7 @@ def test_duplicate_json_object_member_in_submission_rejected(tmp_path):
     conflicting ``task_id`` values (wrong first, canonical second) would parse
     to the canonical value and earn full reward despite being malformed.
     """
-    app, logs, s = case(tmp_path)
+    app, logs, _ = case(tmp_path)
     raw = (app / "submission.json").read_text()
     duplicate = raw.replace(
         '"task_id": "jacobian/reconstruction-deck-certificate"',

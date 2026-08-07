@@ -63,7 +63,7 @@ CERTIFIED_SNF_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = (
                 },
             ),
         ),
-        version="3",
+        version="4",
     ),
 )
 

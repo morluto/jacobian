@@ -383,6 +383,8 @@ def test_gaussian_expansion_above_bound_fails_before_artifact_writes(
                         {"coefficient": _complex(1), "exponents": [0]},
                         {"coefficient": _complex(1), "exponents": [1]},
                         {"coefficient": _complex(1), "exponents": [2]},
+                        {"coefficient": _complex(1), "exponents": [3]},
+                        {"coefficient": _complex(1), "exponents": [4]},
                     ],
                 },
                 "order": 8,
@@ -393,6 +395,137 @@ def test_gaussian_expansion_above_bound_fails_before_artifact_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_FINITE_PROBABILITY_REQUEST"
     assert result.artifact_uris == ()
+
+
+def test_gaussian_expansion_at_raised_bound_succeeds(
+    domain_services: DomainTestServices,
+) -> None:
+    """4 terms at order 8 = 65536 paths, exactly the raised bound."""
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.gaussian_polynomial.moment.compute",
+            input={
+                "polynomial": {
+                    "variable_count": 1,
+                    "terms": [
+                        {"coefficient": _complex(1), "exponents": [0]},
+                        {"coefficient": _complex(1), "exponents": [1]},
+                        {"coefficient": _complex(1), "exponents": [2]},
+                        {"coefficient": _complex(1), "exponents": [3]},
+                    ],
+                },
+                "order": 8,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    computed = result.output["result"]
+    assert computed["expansion_path_count"] == 65536
+    assert computed["expanded_monomial_count"] == len(computed["contractions"])
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.artifact_uris == ()
+
+
+def test_gaussian_complex_coefficient_ledger_matches_stdlib_replay(
+    domain_services: DomainTestServices,
+) -> None:
+    """Nontrivial complex coefficients: FLINT fmpq_mpoly pair must match the
+    independent stdlib Fraction contraction for the full moment and ledger."""
+    from fractions import Fraction
+
+    def _gaussian_univariate_moment(exponent: int) -> int:
+        if exponent % 2:
+            return 0
+        result = 1
+        for factor in range(1, exponent, 2):
+            result *= factor
+        return result
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.gaussian_polynomial.moment.compute",
+            input={
+                "polynomial": {
+                    "variable_count": 2,
+                    "terms": [
+                        {"coefficient": _complex(1, -1), "exponents": [0, 1]},
+                        {"coefficient": _complex(2, 1), "exponents": [1, 0]},
+                    ],
+                },
+                "order": 4,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    computed = result.output["result"]
+
+    # Independent stdlib replay
+    base = [
+        ((0, 1), (Fraction(1), Fraction(-1))),
+        ((1, 0), (Fraction(2), Fraction(1))),
+    ]
+    expanded: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
+        (0, 0): (Fraction(1), Fraction(0)),
+    }
+    for _ in range(4):
+        nxt: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {}
+        for left_exponents, left_coefficient in expanded.items():
+            for right_exponents, right_coefficient in base:
+                exponents = tuple(
+                    left + right
+                    for left, right in zip(left_exponents, right_exponents, strict=True)
+                )
+                product = (
+                    left_coefficient[0] * right_coefficient[0]
+                    - left_coefficient[1] * right_coefficient[1],
+                    left_coefficient[0] * right_coefficient[1]
+                    + left_coefficient[1] * right_coefficient[0],
+                )
+                previous = nxt.get(exponents, (Fraction(), Fraction()))
+                nxt[exponents] = (previous[0] + product[0], previous[1] + product[1])
+        expanded = {
+            exponents: coefficient
+            for exponents, coefficient in nxt.items()
+            if coefficient != (Fraction(), Fraction())
+        }
+
+    total = (Fraction(), Fraction())
+    for exponents, coefficient in sorted(expanded.items()):
+        gaussian_factor = 1
+        for exponent in exponents:
+            gaussian_factor *= _gaussian_univariate_moment(exponent)
+        total = (
+            total[0] + coefficient[0] * gaussian_factor,
+            total[1] + coefficient[1] * gaussian_factor,
+        )
+
+    flint_real = Fraction(
+        int(computed["moment"]["real"]["num"]), int(computed["moment"]["real"]["den"])
+    )
+    flint_imag = Fraction(
+        int(computed["moment"]["imaginary"]["num"]),
+        int(computed["moment"]["imaginary"]["den"]),
+    )
+    assert flint_real == total[0]
+    assert flint_imag == total[1]
+
+    flint_exponents = [tuple(item["exponents"]) for item in computed["contractions"]]
+    stdlib_exponents = sorted(expanded.keys())
+    assert flint_exponents == stdlib_exponents
+    for item, exponents in zip(computed["contractions"], stdlib_exponents, strict=True):
+        stdlib_coeff = expanded[exponents]
+        flint_coeff_real = Fraction(
+            int(item["expanded_coefficient"]["real"]["num"]),
+            int(item["expanded_coefficient"]["real"]["den"]),
+        )
+        flint_coeff_imag = Fraction(
+            int(item["expanded_coefficient"]["imaginary"]["num"]),
+            int(item["expanded_coefficient"]["imaginary"]["den"]),
+        )
+        assert flint_coeff_real == stdlib_coeff[0]
+        assert flint_coeff_imag == stdlib_coeff[1]
 
 
 def test_gaussian_denominator_growth_fails_before_artifact_writes(

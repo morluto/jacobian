@@ -300,10 +300,16 @@ def merge(
         payload = load_json_bytes(path.read_bytes(), str(path))
         durations = validate_durations(payload, str(path), suite)
         duplicates = merged.keys() & durations.keys()
-        if duplicates:
-            duplicate = min(duplicates)
-            raise ValueError(f"duplicate timing entry across shards: {duplicate}")
-        merged.update(durations)
+        for nodeid in sorted(duplicates):
+            previous = merged[nodeid]
+            incoming = durations[nodeid]
+            if incoming > previous:
+                merged[nodeid] = incoming
+            warning(
+                f"duplicate timing entry across shards for {nodeid}; "
+                f"keeping max({previous}, {incoming})"
+            )
+        merged.update({k: v for k, v in durations.items() if k not in duplicates})
 
     envelope = {
         "version": 1,

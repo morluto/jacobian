@@ -240,43 +240,43 @@ def _chain(
     return ComputedSuccess(_chain_result(request))
 
 
+def _domain_matrix(
+    matrix: Sequence[Sequence[int]],
+    *,
+    rows: int,
+    columns: int,
+    prime: int,
+) -> Any:
+    """Build a SymPy ``DomainMatrix`` over ``GF(prime)`` with residues in ``[0, p)``."""
+
+    import sympy
+    from sympy.polys.matrices import DomainMatrix
+
+    field = sympy.GF(prime)
+    entries = [[int(value) % prime for value in row[:columns]] for row in matrix[:rows]]
+    return DomainMatrix(entries, (rows, columns), field)
+
+
 def _rref(
     matrix: Sequence[Sequence[int]],
     *,
     columns: int,
     prime: int,
 ) -> tuple[list[list[int]], tuple[int, ...]]:
-    rows = [[value % prime for value in row] for row in matrix]
-    pivots: list[int] = []
-    pivot_row = 0
-    for column in range(columns):
-        selected = next(
-            (row for row in range(pivot_row, len(rows)) if rows[row][column] % prime),
-            None,
-        )
-        if selected is None:
-            continue
-        rows[pivot_row], rows[selected] = rows[selected], rows[pivot_row]
-        inverse = pow(rows[pivot_row][column], -1, prime)
-        rows[pivot_row] = [value * inverse % prime for value in rows[pivot_row]]
-        for row in range(len(rows)):
-            if row == pivot_row:
-                continue
-            factor = rows[row][column] % prime
-            if factor:
-                rows[row] = [
-                    (value - factor * pivot) % prime
-                    for value, pivot in zip(
-                        rows[row],
-                        rows[pivot_row],
-                        strict=True,
-                    )
-                ]
-        pivots.append(column)
-        pivot_row += 1
-        if pivot_row == len(rows):
-            break
-    return rows, tuple(pivots)
+    row_count = len(matrix)
+    # Explicitly handle empty shapes: DomainMatrix requires consistent row
+    # lists, so a 0xm matrix is an empty row list and an nx0 matrix is n
+    # empty row lists.
+    if row_count == 0 or columns == 0:
+        return [[0] * columns for _ in range(row_count)], ()
+    domain = _domain_matrix(matrix, rows=row_count, columns=columns, prime=prime)
+    reduced_domain, pivot_columns = domain.rref()
+    reduced_matrix = reduced_domain.to_Matrix()
+    rows_out = [
+        [int(reduced_matrix[row, column]) % prime for column in range(columns)]
+        for row in range(row_count)
+    ]
+    return rows_out, tuple(int(pivot) for pivot in pivot_columns)
 
 
 def _rank(
@@ -285,7 +285,11 @@ def _rank(
     columns: int,
     prime: int,
 ) -> int:
-    return len(_rref(matrix, columns=columns, prime=prime)[1])
+    row_count = len(matrix)
+    if row_count == 0 or columns == 0:
+        return 0
+    domain = _domain_matrix(matrix, rows=row_count, columns=columns, prime=prime)
+    return int(domain.rank())
 
 
 def _nullspace(

@@ -469,6 +469,35 @@ def test_partial_bootstrap_failure_releases_owned_store(
     reopened.close()
 
 
+def test_bootstrap_cleanup_failure_preserves_primary_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.storage.repository import ArtifactRepository
+
+    def failing_install(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("bootstrap failure")
+
+    original_close = ArtifactRepository.close
+
+    def close_then_fail(store: ArtifactRepository) -> None:
+        original_close(store)
+        raise OSError("store close failure")
+
+    monkeypatch.setattr(
+        "jacobian.runtime.bootstrap.install_sat_artifacts",
+        failing_install,
+    )
+    monkeypatch.setattr(ArtifactRepository, "close", close_then_fail)
+
+    with pytest.raises(RuntimeError, match="bootstrap failure") as caught:
+        create_runtime(tmp_path)
+
+    assert caught.value.__notes__ == [
+        "service bootstrap cleanup also failed: store close failure"
+    ]
+
+
 def test_close_failure_keeps_store_closable_on_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

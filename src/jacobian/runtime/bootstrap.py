@@ -68,6 +68,9 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
             capabilities=capabilities,
             reasoning_log=reasoning_log,
         )
-    except BaseException:
-        store.close()
+    except BaseException as exc:
+        try:
+            store.close()
+        except BaseException as cleanup_exc:
+            exc.add_note(f"service bootstrap cleanup also failed: {cleanup_exc}")
         raise

@@ -184,7 +184,7 @@ def test_system_elan_uses_the_original_user_toolchain_home(
     monkeypatch.setenv("HOME", "/tmp/jacobian-test-home")
 
     assert _elan_home(("/usr/bin/elan", "run", LEAN_TOOLCHAIN, "lean")) == (
-        "/home/jacobian/.elan"
+        "/tmp/jacobian-test-home/.elan"
     )
 
 

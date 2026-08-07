@@ -187,10 +187,20 @@ def _convert_materialized_poset(
     ) if request.poset_artifact_uri else ()
 
 
+def _convert_materialized_linear_extension(
+    request: LinearExtensionRequest,
+    payload: FinitePosetMaterializationResult,
+) -> tuple[LinearExtensionRequest, tuple[str, ...]]:
+    return LinearExtensionRequest(poset=payload.poset), (
+        request.poset_artifact_uri,
+    ) if request.poset_artifact_uri else ()
+
+
 def _linear_extensions(
     request: LinearExtensionRequest,
 ) -> ComputedSuccess[LinearExtensionCountResult]:
     poset = request.poset
+    assert poset is not None
     elements = poset.elements
     index = {element: position for position, element in enumerate(elements)}
     predecessor_masks = [0] * len(elements)
@@ -400,6 +410,10 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...]
         result_model=LinearExtensionCountResult,
         implementation=_linear_extensions,
         relation_id="poset.linear_extensions.ideal_dp.relation",
+        accepted_result_capability_ids=("poset.finite.materialize",),
+        artifact_converter=_convert_materialized_linear_extension,
+        artifact_payload_model=FinitePosetMaterializationResult,
+        artifact_uri_field="poset_artifact_uri",
         tags=(
             "poset",
             "linear-extension",

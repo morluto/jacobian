@@ -551,9 +551,10 @@ def _replay_linear_extensions(
     source: dict[str, Any],
     result: dict[str, Any],
 ) -> bool:
-    if set(source) != {"poset"}:
+    inline = _inline_poset_claim(source)
+    if inline is None:
         return False
-    poset = _parse_poset(source["poset"])
+    poset = _parse_poset(inline)
     states = _linear_state_table(poset)
     full_mask = (1 << len(poset["elements"])) - 1
     expected = {

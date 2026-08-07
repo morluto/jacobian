@@ -8,6 +8,8 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
+    _finite_json_float,
+    _reject_nonfinite_json,
     evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
@@ -203,7 +205,11 @@ def _raw_submission() -> dict[str, Any] | None:
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(
+            path.read_text(),
+            parse_constant=_reject_nonfinite_json,
+            parse_float=_finite_json_float,
+        )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
@@ -254,10 +260,9 @@ def main():
         and raw.get("limitations") == LIMITATIONS
     )
     scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
-    a = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") in scoreable_assurances
-    )
-    f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
+    claimed = raw.get("claimed_assurance") if isinstance(raw, dict) else None
+    a = bool(isinstance(claimed, str) and claimed in scoreable_assurances)
+    f = bool(claimed == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
         {

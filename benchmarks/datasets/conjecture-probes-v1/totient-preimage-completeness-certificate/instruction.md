@@ -1,0 +1,31 @@
+# Classify every integer with Euler totient 48
+
+Submit a complete, duplicate-free classification of all positive integers
+`n` satisfying `phi(n)=48`. The certificate must not rely on an arbitrary
+search cutoff. Derive the complete candidate-prime set from `p-1 | 48` for
+every prime divisor `p | n`, list every admissible prime-power exponent whose
+totient contribution divides 48, enumerate the full Cartesian product of those
+options, and provide the factorization and exact totient contribution for every
+accepted integer.
+
+The verifier independently tests primality, reconstructs the candidate primes,
+derives exponent options, enumerates all 288 branches, recomputes every totient,
+and checks exact equality with the submitted classification. This is a closed
+finite preimage audit and makes no claim about whether infinitely many totient
+values have a unique preimage.
+
+<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
+## Submission
+
+Exact preimage classification for phi(n)=48 only; no global Carmichael conclusion.
+
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+
+- **Conclusion:** exactly `PHI_48_COMPLETE_PREIMAGE_CLASSIFICATION`
+- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED`, `CHECKED` (ceiling `CHECKED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
+- **Scope:** the exact value declared in `submission_schema.json`
+- **Completeness:** `COMPLETE`.
+- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
+- **Evidence media types:** `text/plain`.
+- **Required artifact filenames:** `evidence/answer.txt`.
+<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

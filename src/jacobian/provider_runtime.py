@@ -677,7 +677,7 @@ def known_provider_runtime(
                 license_id="MIT",
                 diagnostic=(
                     "Z3 is installed but does not match the pinned "
-                    f"{Z3_SOLVER_VERSION} graph-search profile."
+                    f"{Z3_SOLVER_VERSION} SMT solver profile."
                 ),
             )
         return runtime

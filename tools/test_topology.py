@@ -50,6 +50,7 @@ _LANE_ENVIRONMENT_ALLOWLIST: Mapping[str, tuple[str, ...]] = {
         "ELAN_HOME",
         "JACOBIAN_CHECKER_EXECUTABLE",
         "JACOBIAN_CHECKER_RUNTIME_DIGEST",
+        "JACOBIAN_CHECKER_LAKE_DIGEST",
         "JACOBIAN_LEAN_RUNTIME",
     ),
 }

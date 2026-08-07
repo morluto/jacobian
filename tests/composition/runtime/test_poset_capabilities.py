@@ -115,6 +115,87 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     )
 
 
+def test_materialized_poset_is_directly_consumable_by_width(
+    fresh_complete_runtime,
+) -> None:
+    materialized = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.finite.materialize",
+            input=_DIAMOND,
+        )
+    )
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.width.compute",
+            input={"poset_artifact_uri": materialized.output["result_uri"]},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert _result_payload(fresh_complete_runtime, result)["width"] == 2
+    assert materialized.output["result_uri"] in result.artifact_uris
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+    }
+    assert descriptors["poset.finite.materialize"].produced_artifact_types == (
+        descriptors["poset.width.compute"].accepted_artifact_types
+    )
+
+
+def test_width_rejects_an_incompatible_artifact_before_writes(
+    fresh_complete_runtime,
+) -> None:
+    poset = _materialize(fresh_complete_runtime, _DIAMOND)
+    width = _invoke(fresh_complete_runtime, "poset.width.compute", poset)
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.width.compute",
+            input={"poset_artifact_uri": width.output["result_uri"]},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_width_rejects_a_schema_compatible_artifact_with_foreign_semantics(
+    fresh_complete_runtime,
+) -> None:
+    materialized = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.finite.materialize",
+            input=_DIAMOND,
+        )
+    )
+    result_uri = materialized.output["result_uri"]
+    result_artifact = fresh_complete_runtime.core.store.get(result_uri)
+    foreign_semantics = fresh_complete_runtime.core.store.register_descriptor(
+        kind="semantics",
+        name="foreign-poset-semantics",
+        version="1",
+        definition={"type": "object"},
+    )
+    foreign_uri = fresh_complete_runtime.core.artifacts.put(
+        schema_uri=result_artifact.manifest.schema_uri,
+        semantics_uri=foreign_semantics,
+        payload=result_artifact.payload,
+        summary="schema-compatible artifact under a foreign semantics",
+    ).artifact_uri
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.width.compute",
+            input={"poset_artifact_uri": foreign_uri},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
+    assert result.artifact_uris == ()
+
+
 @pytest.mark.parametrize(
     ("presentation", "expected_width", "expected_count"),
     (
@@ -364,3 +445,33 @@ def test_invalid_poset_request_fails_before_artifact_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
     assert result.artifact_uris == ()
+
+
+def test_artifact_put_is_hidden_from_discovery_but_remains_dispatchable(
+    fresh_complete_runtime,
+) -> None:
+    catalog_ids = {
+        descriptor.capability_id
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+    }
+    assert "artifact.put" in catalog_ids
+
+    discovered = fresh_complete_runtime.core.capabilities.discover(
+        CapabilityDiscoveryRequest(query="store artifact", limit=20)
+    )
+    assert not any(
+        match.capability_id == "artifact.put" for match in discovered.matches
+    )
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="artifact.put",
+            input={
+                "schema_uri": "artifact://sha256/" + "0" * 64,
+                "semantics_uri": "artifact://sha256/" + "0" * 64,
+                "payload": {},
+            },
+        )
+    )
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code != "UNKNOWN_CAPABILITY"

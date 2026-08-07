@@ -122,6 +122,28 @@ def load_submission(
     )
 
 
+def load_submission_raw(
+    path: Path = WORKSPACE / "submission.json",
+    *,
+    require_input_binding: bool = True,
+) -> dict[str, Any] | None:
+    """Parse one bounded submission without applying its public schema."""
+
+    if require_input_binding and not workspace_input_is_bound():
+        return None
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
+    try:
+        value = json.loads(
+            path.read_text(),
+            parse_constant=_reject_nonfinite_json,
+            parse_float=_finite_json_float,
+        )
+    except (OSError, ValueError, RecursionError, MemoryError, TypeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def _public_submission_is_valid(submission: object) -> bool:
     contract = _load_public_contract()
     if contract is None:
@@ -414,6 +436,7 @@ __all__ = [
     "false_verified_claim",
     "is_regular_bounded_file",
     "load_submission",
+    "load_submission_raw",
     "read_evidence_json",
     "resolve_evidence",
     "sha256_uri",

@@ -17,8 +17,6 @@ from jacobian.providers.external_solver_runtime import carcara_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-pytestmark = []
-
 _FIXTURES = (
     Path(__file__).resolve().parents[5]
     / "tests"

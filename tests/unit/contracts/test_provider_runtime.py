@@ -32,7 +32,10 @@ from jacobian.providers.flint_runtime import (
     exact_domain_checker_provider_runtime,
     python_flint_exact_checker_provider_runtime,
 )
-from jacobian.providers.lean_runtime import lean_frontend_provider_runtime
+from jacobian.providers.lean_runtime import (
+    lean_frontend_provider_runtime,
+    lean_provider_runtime,
+)
 
 
 def _runtime(**updates: object) -> CapabilityProviderRuntime:
@@ -360,3 +363,87 @@ def test_lean_frontend_runtime_bounds_probe_diagnostic(
     assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
     assert runtime.diagnostic is not None
     assert len(runtime.diagnostic) == 512
+
+
+def test_lean_mathlib_runtime_binds_the_lake_launcher(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable = tmp_path / "lean"
+    executable.write_bytes(b"pinned-lean")
+    lake = tmp_path / "lake"
+    lake.write_bytes(b"pinned-lake")
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, tmp_path) if require_mathlib else (executable, None)
+        ),
+    )
+
+    runtime = lean_provider_runtime(
+        profiles={
+            "mathlib": {"mathlib_commit": "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"}
+        },
+        checker_ids=(),
+    )
+
+    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE
+    assert runtime.configuration["executable"] == str(executable)
+    assert runtime.configuration["lake_executable"] == str(lake)
+    assert runtime.configuration["lake_digest"] == provider_runtime._sha256_file(lake)
+
+
+def test_lean_mathlib_runtime_is_unavailable_without_a_lake_sibling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable = tmp_path / "lean"
+    executable.write_bytes(b"pinned-lean")
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, tmp_path) if require_mathlib else (executable, None)
+        ),
+    )
+
+    runtime = lean_provider_runtime(
+        profiles={"mathlib": {"mathlib_commit": "pinned"}},
+        checker_ids=(),
+    )
+
+    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+
+
+def test_lean_core_runtime_does_not_bind_a_lake_launcher(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable = tmp_path / "lean"
+    executable.write_bytes(b"pinned-lean")
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            pytest.fail("CORE must not require Mathlib")
+            if require_mathlib
+            else (executable, None)
+        ),
+    )
+
+    runtime = lean_provider_runtime(
+        profiles={"core": {"mathlib_commit": None}},
+        checker_ids=(),
+    )
+
+    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert "lake_executable" not in runtime.configuration
+    assert "lake_digest" not in runtime.configuration

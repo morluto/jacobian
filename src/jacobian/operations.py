@@ -79,6 +79,7 @@ class MaterializedOperation[
     RequestT: ContractModel,
     ArtifactT: ContractModel,
     PreviewT: ContractModel,
+    PayloadT: ContractModel,
 ]:
     """One deterministic producer whose durable result is materialized."""
 
@@ -95,11 +96,29 @@ class MaterializedOperation[
     preview_model: type[PreviewT] | None = None
     preview: Callable[[ArtifactT], PreviewT] | None = None
     preview_complete: bool = False
+    accepted_result_capability_ids: tuple[str, ...] = ()
+    artifact_converter: (
+        Callable[[RequestT, PayloadT], tuple[RequestT, tuple[str, ...]]] | None
+    ) = None
+    artifact_payload_model: type[PayloadT] | None = None
+    artifact_uri_field: str | None = None
     version: str = "2"
 
     def __post_init__(self) -> None:
         if self.preview_complete and self.preview is None:
             raise ValueError("a complete materialized preview requires a preview")
+        has_converter = self.artifact_converter is not None
+        if bool(self.accepted_result_capability_ids) != has_converter:
+            raise ValueError(
+                "accepted result capabilities and an artifact converter must be "
+                "declared together"
+            )
+        if has_converter and (
+            self.artifact_payload_model is None or self.artifact_uri_field is None
+        ):
+            raise ValueError(
+                "an artifact converter requires a payload model and URI field"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,7 +202,7 @@ class MaterializedOperationFactory:
         preview: Callable[[ResultT], ResultT] | None = None,
         preview_complete: bool = False,
         version: str = "2",
-    ) -> MaterializedOperation[RequestT, ResultT, ResultT]:
+    ) -> MaterializedOperation[RequestT, ResultT, ResultT, ContractModel]:
         def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
             try:
                 return ComputedSuccess(operation(request))
@@ -321,7 +340,7 @@ class DomainDiagnostics:
 
 type DomainOperation = (
     ComputedOperation[Any, Any]
-    | MaterializedOperation[Any, Any, Any]
+    | MaterializedOperation[Any, Any, Any, Any]
     | BoundedSearchOperation[Any, Any, Any]
 )
 

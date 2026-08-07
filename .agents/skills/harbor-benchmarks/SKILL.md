@@ -130,6 +130,35 @@ planner. The general `make test-plan BASE=...` may classify task bundles as
 documentation because they are evaluation assets; that classification does not
 replace the benchmark contract, host, and Oracle plan.
 
+### Distinguish static contracts from executable host validation
+
+Static benchmark validation proves repository topology, schemas, metadata,
+digests, checksum labels, and other source-readable contracts. It does not
+prove that a task-local verifier imports successfully or behaves correctly in
+its executable host environment. Treat host validation as a separate semantic
+gate, not as a repetition of static validation.
+
+When aggregate host validation fails, collect the complete failure set before
+editing shared support. Reproduce each failure through its owning per-task leaf
+or the narrowest selected host-validation entry, and confirm whether the
+failure follows the task-local verifier, its frozen support, or shared host
+tooling. A broad command that exposes a task-local failure is not evidence that
+the aggregate runner, cache, or static contract is the root cause.
+
+Benchmark host shards must partition one deterministic collection. Every shard
+must receive the same `--randomly-seed`, sourced from
+`pytest_randomly_shard_seed` in `.github/ci-config.json`, before
+`pytest-split` selects its group. When shard command construction changes, add
+or run a focused regression proving that every generated shard command carries
+the configured seed. Different per-runner collection orders can create
+overlapping groups even when every individual shard succeeds.
+
+Published duration maps are merged by test node ID. Duplicate observations are
+reconciled conservatively by retaining the maximum duration and emitting a
+warning so one overlap cannot discard otherwise valid timing evidence. This is
+a defensive publication rule, not a substitute for deterministic shard
+ownership: fix missing seed propagation or other producer-side overlap first.
+
 `harbor-prepare-task` is the explicitly mutating authoring step. It formats only
 the selected task Python and dedicated validation leaf, performs scoped public
 contract and verifier checksum synchronization, and reports exactly which

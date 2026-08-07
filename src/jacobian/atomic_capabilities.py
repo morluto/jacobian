@@ -86,6 +86,7 @@ class AtomicServiceAdapter:
         ),
         unverified_basis: str = "deterministic local service result",
         read_only: bool = False,
+        discovery_visible: bool = True,
         tags: tuple[str, ...] = (),
         provider: str = "jacobian.runtime",
     ) -> None:
@@ -100,6 +101,7 @@ class AtomicServiceAdapter:
             input_schema=input_schema,
             output_schema=output_schema,
             read_only=read_only,
+            discovery_visible=discovery_visible,
             tags=tags,
         )
         self._invoke = invoke
@@ -205,6 +207,7 @@ def install_atomic_capabilities(
                 parents=tuple(p.get("parents", ())),
                 summary=p.get("summary", ""),
             ),
+            discovery_visible=False,
             tags=("artifact", "storage"),
         ),
         _adapter(

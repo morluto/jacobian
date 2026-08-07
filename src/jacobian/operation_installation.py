@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
@@ -42,6 +43,7 @@ from jacobian.operations import (
     OperationExecutionFailure,
 )
 from jacobian.schema_registry import SchemaRegistry, model_schema
+from jacobian.storage.errors import ArtifactIntegrityError, ArtifactNotFoundError
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -281,7 +283,7 @@ class MaterializedOperationAdapter:
 
     def __init__(
         self,
-        operation: MaterializedOperation[Any, Any, Any],
+        operation: MaterializedOperation[Any, Any, Any, Any],
         bundle: DomainBundle,
         resources: _OperationResources,
     ) -> None:
@@ -290,6 +292,10 @@ class MaterializedOperationAdapter:
         self.resources = resources
         self.preview_model = operation.preview_model or operation.result_model
         self.output_model = MaterializedOperationOutput[self.preview_model]  # type: ignore[name-defined]
+        accepted_artifact_types = tuple(
+            resources.result_schema_uris[capability_id]
+            for capability_id in operation.accepted_result_capability_ids
+        )
         self._descriptor = CapabilityDescriptor(
             capability_id=operation.capability_id,
             version=operation.version,
@@ -301,6 +307,18 @@ class MaterializedOperationAdapter:
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             tags=operation.tags,
+            accepted_input_kinds=(
+                (
+                    CapabilityInputKind.STRUCTURED_REQUEST,
+                    CapabilityInputKind.TYPED_ARTIFACT,
+                )
+                if accepted_artifact_types
+                else (CapabilityInputKind.STRUCTURED_REQUEST,)
+            ),
+            accepted_artifact_types=accepted_artifact_types,
+            produced_artifact_types=(
+                resources.result_schema_uris[operation.capability_id],
+            ),
             invocation_examples=operation.invocation_examples,
         )
 
@@ -313,7 +331,31 @@ class MaterializedOperationAdapter:
             validated_request = self.operation.request_model.model_validate(
                 request.input
             )
-        except ValidationError as exc:
+            source_artifact_uris: tuple[str, ...] = ()
+            if self.operation.artifact_converter is not None:
+                uri_field = self.operation.artifact_uri_field
+                payload_model = self.operation.artifact_payload_model
+                assert uri_field is not None and payload_model is not None
+                artifact_uri = getattr(validated_request, uri_field)
+                if artifact_uri is not None:
+                    artifact = self.resources.artifacts.store.get(artifact_uri)
+                    if (
+                        artifact.manifest.schema_uri
+                        not in self._descriptor.accepted_artifact_types
+                        or artifact.manifest.semantics_uri
+                        != self.resources.semantics_uri
+                    ):
+                        raise ValueError("artifact is not a compatible producer result")
+                    payload = payload_model.model_validate(artifact.payload)
+                    validated_request, source_artifact_uris = (
+                        self.operation.artifact_converter(validated_request, payload)
+                    )
+        except (
+            ArtifactNotFoundError,
+            ArtifactIntegrityError,
+            ValidationError,
+            ValueError,
+        ) as exc:
             raise CapabilityInvocationError(
                 self.operation.invalid_request
                 or self.bundle.diagnostics.invalid_request
@@ -336,6 +378,7 @@ class MaterializedOperationAdapter:
             schema_uri=self.resources.input_schema_uris[self.operation.request_model],
             semantics_uri=self.resources.semantics_uri,
             payload=validated_request.model_dump(mode="json"),
+            parents=source_artifact_uris,
             summary=f"{self.operation.capability_id} materialized input",
         ).artifact_uri
         result_uri = self.resources.artifacts.put(
@@ -389,7 +432,7 @@ class MaterializedOperationAdapter:
                 level=CapabilityAssuranceLevel.COMPUTED,
                 basis=self.bundle.assurance_basis,
             ),
-            artifact_uris=(input_uri, result_uri),
+            artifact_uris=(*source_artifact_uris, input_uri, result_uri),
         )
 
 
@@ -416,6 +459,9 @@ class BoundedSearchOperationAdapter:
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(operation.result_model),
             tags=operation.tags,
+            produced_artifact_types=(
+                resources.result_schema_uris[operation.capability_id],
+            ),
             invocation_examples=operation.invocation_examples,
         )
 

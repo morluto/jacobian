@@ -168,12 +168,17 @@ def test_compare_evidence_tolerates_missing_optional_metrics() -> None:
     assert report["metrics"]["evidence_validity"]["pair_count"] == 0
 
 
-def test_mkstemp_fd_closed_on_fdopen_failure() -> None:
-    """If os.fdopen fails after mkstemp, the fd must be closed."""
+def test_mkstemp_fd_closed_on_fdopen_failure_source_guard() -> None:
+    """Guardrail: statement.py must close the mkstemp fd if os.fdopen fails.
+
+    A full behavior test requires a Lean runtime to exercise the mkstemp path.
+    This source-level guardrail ensures the fd-close fix is not accidentally removed.
+    """
     statement_path = (
         Path(__file__).parents[3] / "src/jacobian/lean_frontend/statement.py"
     )
     source = statement_path.read_text(encoding="utf-8")
-    assert "os.close(fd)" in source, (
+    # The fix pattern: os.close(fd) in an except block after os.fdopen.
+    assert "except OSError:" in source and "os.close(fd)" in source, (
         "statement.py must close the mkstemp fd if os.fdopen fails"
     )

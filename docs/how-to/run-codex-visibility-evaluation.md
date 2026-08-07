@@ -24,6 +24,12 @@ make codex-visibility VISIBILITY_EXECUTE=1 \
   VISIBILITY_OUTPUT=benchmarks/results/visibility-skill
 ```
 
+Set `VISIBILITY_TOOL_MODE=unified_exec` to reproduce Codex Code Mode's nested
+tool dispatch, as used by the Harbor adapter. This matters for cost testing:
+Code Mode exposes nested methods through `tools`, and a model can otherwise
+print matching entries from `ALL_TOOLS` into its own context before calling
+them.
+
 The runner refuses to overwrite an existing output directory. Each output binds
 the prompt-suite digest, Git revision, Codex version, model, reasoning effort,
 skill digest, evaluator and telemetry-parser digests, MCP server metadata, tool
@@ -45,6 +51,23 @@ independent diagnostics rather than proxies for mathematical correctness. The
 cumulative Codex input-token count may grow much faster than MCP payload bytes
 because each later model turn includes earlier tool results; compare both
 dimensions rather than treating adoption alone as a win.
+
+For Harbor ATIF trajectories, measure that projection directly rather than
+inferring it from token totals:
+
+```sh
+make codex-tool-context \
+  TRAJECTORIES="benchmarks/results/<job>/<trial>/agent/trajectory.json" \
+  LABEL=skill-treatment \
+  OUTPUT=benchmarks/results/tool-context-treatment.json
+```
+
+The report counts `exec` source that references `ALL_TOOLS`, binds the matching
+observation bytes by tool-call ID, and reports cached and uncached prompt-token
+medians separately. Missing call-ID bindings are reported rather than silently
+treated as measured zero-byte projections. It is a client-behavior diagnostic,
+not a correctness score or proof that a prompt change caused the observed
+difference.
 
 For an A/B claim, hold the suite digest, Codex version, model, reasoning effort,
 MCP catalog, budgets, and repetition count fixed. Change only the visibility

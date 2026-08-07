@@ -89,7 +89,7 @@ def materialized_polynomial_operation[
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
     relation_id: str | None = None,
     version: str = "2",
-) -> MaterializedOperation[RequestT, ResultT, ResultT]:
+) -> MaterializedOperation[RequestT, ResultT, ResultT, ContractModel]:
     """Declare an exact polynomial operation with durable result lineage."""
 
     declared = _materialized_polynomial_operation_factory(

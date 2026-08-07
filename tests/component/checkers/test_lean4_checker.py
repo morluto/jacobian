@@ -80,6 +80,93 @@ def test_lean_checker_uses_worker_authorized_executable(
     assert lean4_checker._lean_command("lean") == (str(executable),)
 
 
+def test_lean_checker_binds_authorized_lake_launcher(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "lean"
+    executable.write_bytes(b"lean-runtime")
+    lake = tmp_path / "lake"
+    lake.write_bytes(b"lake-runtime")
+    monkeypatch.setenv("JACOBIAN_CHECKER_EXECUTABLE", str(executable))
+    monkeypatch.setenv(
+        "JACOBIAN_CHECKER_RUNTIME_DIGEST",
+        "sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest(),
+    )
+    monkeypatch.setenv(
+        "JACOBIAN_CHECKER_LAKE_DIGEST",
+        "sha256:" + hashlib.sha256(lake.read_bytes()).hexdigest(),
+    )
+    monkeypatch.setattr(lean4_checker.shutil, "which", lambda _name: None)
+
+    assert lean4_checker._lean_command("lake") == (str(lake),)
+
+
+def test_lean_checker_rejects_replaced_authorized_lake_launcher(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "lean"
+    executable.write_bytes(b"lean-runtime")
+    lake = tmp_path / "lake"
+    lake.write_bytes(b"authorized-lake")
+    monkeypatch.setenv("JACOBIAN_CHECKER_EXECUTABLE", str(executable))
+    monkeypatch.setenv(
+        "JACOBIAN_CHECKER_RUNTIME_DIGEST",
+        "sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest(),
+    )
+    monkeypatch.setenv(
+        "JACOBIAN_CHECKER_LAKE_DIGEST",
+        "sha256:" + hashlib.sha256(lake.read_bytes()).hexdigest(),
+    )
+    lake.write_bytes(b"replaced-lake")
+
+    with pytest.raises(RuntimeError, match="lake launcher digest changed"):
+        lean4_checker._lean_command("lake")
+
+
+def test_lean_checker_refuses_unbound_lake_in_authorized_mode(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "lean"
+    executable.write_bytes(b"lean-runtime")
+    # A sibling lake is present on disk but no digest authorizes it.
+    (tmp_path / "lake").write_bytes(b"hostile-lake")
+    monkeypatch.setenv("JACOBIAN_CHECKER_EXECUTABLE", str(executable))
+    monkeypatch.setenv(
+        "JACOBIAN_CHECKER_RUNTIME_DIGEST",
+        "sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest(),
+    )
+    monkeypatch.delenv("JACOBIAN_CHECKER_LAKE_DIGEST", raising=False)
+    monkeypatch.setattr(lean4_checker.shutil, "which", lambda _name: None)
+
+    with pytest.raises(RuntimeError, match="lake launcher is not authorized"):
+        lean4_checker._lean_command("lake")
+
+
+def test_lake_launcher_path_resolves_the_toolchain_sibling(
+    tmp_path,
+) -> None:
+    lean = tmp_path / "lean"
+    lean.write_bytes(b"lean")
+    (tmp_path / "lake").write_bytes(b"lake")
+
+    assert lean4_checker.lake_launcher_path(lean) == tmp_path / "lake"
+
+
+def test_lake_launcher_path_rejects_a_symlinked_sibling(
+    tmp_path,
+) -> None:
+    lean = tmp_path / "lean"
+    lean.write_bytes(b"lean")
+    target = tmp_path / "lake-target"
+    target.write_bytes(b"lake")
+    (tmp_path / "lake").symlink_to(target)
+
+    assert lean4_checker.lake_launcher_path(lean) is None
+
+
 def test_lean_checker_rejects_replaced_authorized_executable(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

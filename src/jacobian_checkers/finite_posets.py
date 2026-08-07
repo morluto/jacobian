@@ -283,10 +283,20 @@ def _relation_set(poset: dict[str, Any]) -> set[tuple[str, str]]:
     return {(item["lower"], item["upper"]) for item in poset["strict_order_pairs"]}
 
 
+def _inline_poset_claim(source: dict[str, Any]) -> Any | None:
+    if set(source) - {"poset", "poset_artifact_uri"}:
+        return None
+    if source.get("poset") is None or source.get("poset_artifact_uri") is not None:
+        return None
+    return source["poset"]
+
+
 def _replay_width(source: dict[str, Any], result: dict[str, Any]) -> bool:
-    if set(source) != {"poset"}:
+    poset_claim = _inline_poset_claim(source)
+    if poset_claim is None:
+        # Independent width replay requires an inline finite poset claim.
         return False
-    poset = _parse_poset(source["poset"])
+    poset = _parse_poset(poset_claim)
     result = _result_with_meta(
         result,
         {

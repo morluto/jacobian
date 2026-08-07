@@ -64,6 +64,29 @@ the Harbor skill owns dataset layout and repository commands.
    mathematical-correctness score; report it as a separate `input_binding`
    dimension and gate only aggregate reward on it.
 
+   When independent diagnostics must remain observable for a schema-invalid
+   submission, parse only through the verifier-owned bounded raw parser, such
+   as `load_submission_raw(...)`. Raw parsing may establish a bounded JSON
+   object for diagnostic computation; it must not establish public-protocol
+   validity, evidence validity, or reward eligibility. Use
+   `require_input_binding=False` only when input binding is deliberately an
+   independent diagnostic and the mathematical source is still read from the
+   bound frozen verifier copy.
+
+   Keep `load_submission(...)` strict. Do not weaken the authoritative typed
+   loader to preserve diagnostics. Evaluate `strict_submission_contract(...)`
+   separately and make its result a hard gate on aggregate reward. A raw object
+   that supports a mathematical diagnostic is still an invalid submission when
+   its public envelope, types, evidence descriptors, scope, or assurance claim
+   violates the published contract.
+
+   Raw parsing must also fail closed. Malformed JSON, an invalid top-level
+   shape, an oversized submission, or unsafe values must produce deterministic
+   diagnostics and a zero aggregate reward rather than an exception, partial
+   acceptance, or fallback to unchecked input. Never index, hash, normalize, or
+   perform task mathematics on raw fields before their diagnostic-specific
+   shape and bounds have been validated.
+
 5. Make prose requirements structural. Do not award credit because a response
    contains words such as “duplicate”, “line”, or “region”. Prefer typed result
    fields, exact evidence bindings, frozen limitation values, and clause-aware
@@ -103,6 +126,15 @@ the Harbor skill owns dataset layout and repository commands.
    descriptors, missing limitations, false `VERIFIED`, and assertions that the
    verifier still emits `reward.json` without crashing. Include a large valid
    evidence artifact to prove that no undocumented byte cap is present.
+
+   For a verifier that separates raw diagnostic parsing from strict acceptance,
+   add paired fixtures proving the boundary: a schema-invalid submission whose
+   independently valid mathematical fields remain diagnostically observable
+   but receive zero aggregate reward; malformed JSON and wrong top-level shapes
+   that emit `reward.json` without crashing; and a mathematically correct
+   submission with invalid evidence, scope, or assurance that cannot bypass the
+   strict public-contract gate. Also assert that the canonical valid submission
+   still receives its intended diagnostics and reward.
 
    Include at least one terse numeric or structural explanation fixture built
    independently from the public contract. It must express the required facts

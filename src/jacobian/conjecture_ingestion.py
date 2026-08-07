@@ -134,6 +134,7 @@ class ExternalConjectureIngestAdapter:
             input_schema=ExternalConjectureIngestRequest.model_json_schema(),
             output_schema=ExternalConjectureIngestOutput.model_json_schema(),
             tags=("conjecture", "dataset", "ingestion", "license", "provenance"),
+            produced_artifact_types=(self.artifact_schema_uri,),
             invocation_examples=(
                 example(
                     "openconjecture_cc_by",

@@ -709,8 +709,8 @@ def _graph_symmetry_generator_orbits(
         "automorphism_group_completeness": ("FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"),
         "exactness": "EXACT_COMBINATORIAL",
         "determinism": "DETERMINISTIC",
-        "backend": "jacobian-stdlib",
-        "backend_version": "1",
+        "backend": "networkx",
+        "backend_version": "3.6.1",
         "verification": "UNVERIFIED",
     }
     return result == expected

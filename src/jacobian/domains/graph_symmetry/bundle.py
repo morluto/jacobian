@@ -6,7 +6,7 @@ from jacobian.domains.graph_symmetry.checkers import (
 )
 from jacobian.domains.graph_symmetry.operations import GRAPH_SYMMETRY_CAPABILITIES
 from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import known_provider_runtime
+from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
 
 def build_graph_symmetry_bundle() -> DomainBundle:
@@ -34,16 +34,16 @@ def build_graph_symmetry_bundle() -> DomainBundle:
             },
         ),
         provider_runtime=known_provider_runtime(
-            "jacobian.graph-symmetry",
+            "jacobian.networkx",
             features=(
                 "declared-graph-automorphisms",
                 "color-preserving-actions",
                 "vertex-orbit-partition",
                 "edge-orbit-partition",
-                "standard-library-exact",
+                "union-find-orbit-closure",
             ),
         ),
-        backend_version="jacobian.graph-symmetry/1",
+        backend_version=NETWORKX_VERSION,
         capabilities=GRAPH_SYMMETRY_CAPABILITIES,
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
@@ -61,11 +61,12 @@ def build_graph_symmetry_bundle() -> DomainBundle:
             "generator"
         ),
         completeness_basis=(
-            "finite orbit closure under every declared generator and its inverse"
+            "finite orbit closure under every declared generator and its inverse "
+            "via NetworkX UnionFind"
         ),
         assurance_basis=(
-            "exact standard-library computation capped at COMPUTED; independent replay "
-            "is available through graph.symmetry.generator_orbits.verify"
+            "exact NetworkX UnionFind computation capped at COMPUTED; independent "
+            "replay is available through graph.symmetry.generator_orbits.verify"
         ),
         checker_declarations=GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
     )

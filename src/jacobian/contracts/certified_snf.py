@@ -143,8 +143,8 @@ class CertifiedSmithNormalFormResult(ContractModel):
     certificate: SmithNormalFormCertificate
     exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["jacobian-stdlib-elementary-operations"] = (
-        "jacobian-stdlib-elementary-operations"
+    backend: Literal["jacobian-sympy-smith-normal-decomposition"] = (
+        "jacobian-sympy-smith-normal-decomposition"
     )
     backend_version: Literal["1"] = "1"
     completeness: Literal["FULL_MATRIX_TRANSFORMATIONS"] = "FULL_MATRIX_TRANSFORMATIONS"

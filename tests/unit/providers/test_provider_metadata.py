@@ -21,17 +21,20 @@ class _Distribution:
         return f"1.0-{self.requested_name}"
 
 
-@pytest.fixture
-def isolated_metadata_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture(autouse=True)
+def _isolated_metadata_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reset the version and summary caches before each test.
+
+    This fixture is autouse so every test in this module gets a clean cache
+    without each test needing to declare and then ``del`` the fixture.
+    """
     monkeypatch.setattr(provider_metadata, "_version_cache", {})
     monkeypatch.setattr(provider_metadata, "_summary_cache", {})
 
 
 def test_distribution_summary_computes_identical_identity_once(
-    isolated_metadata_cache: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    del isolated_metadata_cache
     requested: list[str] = []
 
     def lookup(name: str) -> _Distribution:
@@ -48,10 +51,8 @@ def test_distribution_summary_computes_identical_identity_once(
 
 
 def test_distribution_summary_keeps_distinct_inputs_distinct(
-    isolated_metadata_cache: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    del isolated_metadata_cache
     requested: list[str] = []
 
     def lookup(name: str) -> _Distribution:
@@ -68,10 +69,8 @@ def test_distribution_summary_keeps_distinct_inputs_distinct(
 
 
 def test_missing_distribution_is_not_cached(
-    isolated_metadata_cache: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    del isolated_metadata_cache
     calls = 0
 
     def lookup(name: str) -> _Distribution:
@@ -104,11 +103,9 @@ class _NamelessDistribution:
 
 @pytest.mark.parametrize("recorded", [None, ""])
 def test_distribution_summary_falls_back_to_requested_name_when_name_missing_or_empty(
-    isolated_metadata_cache: None,
     monkeypatch: pytest.MonkeyPatch,
     recorded: object,
 ) -> None:
-    del isolated_metadata_cache
     monkeypatch.setattr(
         provider_metadata,
         "distribution",
@@ -121,10 +118,8 @@ def test_distribution_summary_falls_back_to_requested_name_when_name_missing_or_
 
 
 def test_distribution_summary_falls_back_when_name_is_non_str(
-    isolated_metadata_cache: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    del isolated_metadata_cache
     monkeypatch.setattr(
         provider_metadata,
         "distribution",

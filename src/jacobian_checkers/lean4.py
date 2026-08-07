@@ -143,27 +143,107 @@ def _source(statement: str, proof: str, import_name: str | None) -> str:
     return "\n".join(lines)
 
 
-def _authorized_lean_runtime() -> Path:
-    executable = os.environ.get("JACOBIAN_CHECKER_EXECUTABLE")
-    expected_digest = os.environ.get("JACOBIAN_CHECKER_RUNTIME_DIGEST")
+def _authorized_executable(
+    *,
+    executable_env: str,
+    digest_env: str,
+    label: str,
+) -> Path:
+    executable = os.environ.get(executable_env)
+    expected_digest = os.environ.get(digest_env)
     if (
         executable is None
         or expected_digest is None
         or _DIGEST.fullmatch(expected_digest) is None
     ):
-        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean runtime is not authorized")
+        raise _LeanSetupError(f"TOOLCHAIN_RESOLUTION: Lean {label} is not authorized")
     path = Path(executable).resolve(strict=True)
     if str(path) != executable or not path.is_file() or path.is_symlink():
-        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean runtime path is not exact")
+        raise _LeanSetupError(f"TOOLCHAIN_RESOLUTION: Lean {label} path is not exact")
     actual_digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     if actual_digest != expected_digest:
-        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean runtime digest changed")
+        raise _LeanSetupError(f"TOOLCHAIN_RESOLUTION: Lean {label} digest changed")
     return path
 
 
+def _toolchain_sibling(name: str, lean_executable: Path) -> Path:
+    """Return ``name`` from the same toolchain bin directory as *lean_executable*."""
+
+    candidate = lean_executable.with_name(
+        f"{name}.exe" if lean_executable.suffix.lower() == ".exe" else name
+    )
+    if not candidate.is_file():
+        raise _LeanSetupError(
+            f"TOOLCHAIN_RESOLUTION: The pinned Lean {LEAN_VERSION} {name} "
+            "launcher is unavailable. Install "
+            f"it with `elan toolchain install {LEAN_TOOLCHAIN}`, then retry."
+        )
+    return candidate
+
+
+def _authorized_lean_runtime() -> Path:
+    return _authorized_executable(
+        executable_env="JACOBIAN_CHECKER_EXECUTABLE",
+        digest_env="JACOBIAN_CHECKER_RUNTIME_DIGEST",
+        label="runtime",
+    )
+
+
+def _authorized_lake_runtime(lean: Path) -> Path:
+    """Bind the Lake launcher sibling to the authorized Lean runtime identity.
+
+    The launcher path is derived from the digest-verified ``lean`` sibling so
+    it can never be supplied independently, and its on-disk digest is checked
+    against the operator-authorized ``JACOBIAN_CHECKER_LAKE_DIGEST`` so a Lake
+    binary swapped after provider inspection is rejected before it can drive a
+    MATHLIB compile.
+    """
+    candidate = _toolchain_sibling("lake", lean)
+    expected_digest = os.environ.get("JACOBIAN_CHECKER_LAKE_DIGEST")
+    if expected_digest is None or _DIGEST.fullmatch(expected_digest) is None:
+        raise _LeanSetupError(
+            "TOOLCHAIN_RESOLUTION: Lean lake launcher is not authorized"
+        )
+    if candidate.is_symlink() or not candidate.is_file():
+        raise _LeanSetupError(
+            "TOOLCHAIN_RESOLUTION: Lean lake launcher path is not exact"
+        )
+    actual_digest = "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest()
+    if actual_digest != expected_digest:
+        raise _LeanSetupError("TOOLCHAIN_RESOLUTION: Lean lake launcher digest changed")
+    return candidate
+
+
+def lake_launcher_path(lean_executable: Path) -> Path | None:
+    """Return the lake launcher sibling of a resolved Lean executable, if exact.
+
+    The lake launcher lives next to ``lean`` in the pinned toolchain bin
+    directory.  A missing or non-regular sibling means the toolchain cannot
+    drive a MATHLIB compile; callers must treat that as unavailable rather
+    than fall back to an unauthenticated ``PATH`` lookup.
+    """
+    resolved = lean_executable.resolve()
+    candidate = resolved.with_name(
+        "lake.exe" if resolved.suffix.lower() == ".exe" else "lake"
+    )
+    try:
+        if candidate.is_file() and not candidate.is_symlink():
+            return candidate
+    except OSError:
+        return None
+    return None
+
+
 def _lean_command(name: str) -> tuple[str, ...]:
-    if name == "lean" and os.environ.get("JACOBIAN_CHECKER_EXECUTABLE") is not None:
-        return (str(_authorized_lean_runtime()),)
+    if os.environ.get("JACOBIAN_CHECKER_EXECUTABLE") is not None:
+        lean = _authorized_lean_runtime()
+        if name == "lean":
+            return (str(lean),)
+        if name == "lake":
+            return (str(_authorized_lake_runtime(lean)),)
+        raise _LeanSetupError(
+            f"TOOLCHAIN_RESOLUTION: Lean {name} launcher is not authorized"
+        )
     elan = shutil.which("elan")
     if elan is not None:
         return (elan, "run", LEAN_TOOLCHAIN, name)
@@ -373,6 +453,73 @@ def _mathlib_runtime() -> Path:
     return runtime
 
 
+def _resolve_elan_toolchain_executable(command: tuple[str, ...]) -> Path:
+    """Resolve the pinned toolchain ``lean`` binary, not the elan multi-call proxy.
+
+    ``elan run <toolchain> which lean`` can return ``$ELAN_HOME/bin/lean``, which is
+    the elan proxy. That proxy requires a default toolchain and breaks under the
+    isolated ``HOME`` used by CORE checkers and declaration/elaboration workers.
+    ``lean --print-prefix`` returns the toolchain root that contains the real
+    ``bin/lean`` launcher.
+    """
+
+    elan_home = _elan_home(command)
+    overrides: dict[str, str] = {"ELAN_TOOLCHAIN": LEAN_TOOLCHAIN}
+    if elan_home is not None:
+        overrides["ELAN_HOME"] = elan_home
+    environment = worker_environment(
+        extra_variables=("PATH", "HOME"),
+        overrides=overrides,
+    )
+    try:
+        prefix_result = execute_process(
+            ProcessRequest(
+                executable=command[0],
+                arguments=(*command[1:], "--print-prefix"),
+                environment=environment,
+                cwd=str(Path.cwd()),
+                timeout_seconds=5.0,
+                stdin_bytes=b"",
+                stdout_limit_bytes=4096,
+                stderr_limit_bytes=4096,
+            )
+        )
+    except OSError as exc:
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+        ) from exc
+    if (
+        prefix_result.termination is not ProcessTermination.EXITED
+        or prefix_result.returncode != 0
+    ):
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+        )
+    prefix = prefix_result.stdout.decode("utf-8", errors="replace").strip()
+    if not prefix or "\n" in prefix or "\x00" in prefix:
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+        )
+    executable = Path(prefix) / "bin" / "lean"
+    if not executable.is_file():
+        raise _LeanSetupError(
+            f"The pinned Lean {LEAN_VERSION} executable is unavailable."
+        )
+    elan = shutil.which("elan")
+    if elan is not None:
+        try:
+            if executable.samefile(elan):
+                raise _LeanSetupError(
+                    f"The pinned Lean {LEAN_VERSION} executable resolved to the "
+                    "elan proxy rather than the toolchain binary."
+                )
+        except OSError as exc:
+            raise _LeanSetupError(
+                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
+            ) from exc
+    return executable
+
+
 def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
     """Validate the pinned runtime and return the exact executable and profile root."""
 
@@ -381,36 +528,7 @@ def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
     if len(command) == 1:
         executable = Path(command[0])
     else:
-        environment = worker_environment(
-            extra_variables=("PATH", "HOME", "ELAN_HOME"),
-            overrides={"ELAN_TOOLCHAIN": LEAN_TOOLCHAIN},
-        )
-        try:
-            which_result = execute_process(
-                ProcessRequest(
-                    executable=command[0],
-                    arguments=(*command[1:], "which", "lean"),
-                    environment=environment,
-                    cwd=str(Path.cwd()),
-                    timeout_seconds=5.0,
-                    stdin_bytes=b"",
-                    stdout_limit_bytes=4096,
-                    stderr_limit_bytes=4096,
-                )
-            )
-        except OSError as exc:
-            raise _LeanSetupError(
-                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
-            ) from exc
-        if (
-            which_result.termination is not ProcessTermination.EXITED
-            or which_result.returncode != 0
-        ):
-            raise _LeanSetupError(
-                f"The pinned Lean {LEAN_VERSION} executable could not be resolved."
-            )
-        resolved = which_result.stdout.decode("utf-8", errors="replace").strip()
-        executable = Path(resolved)
+        executable = _resolve_elan_toolchain_executable(command)
     if not executable.is_file():
         raise _LeanSetupError(
             f"The pinned Lean {LEAN_VERSION} executable is unavailable."

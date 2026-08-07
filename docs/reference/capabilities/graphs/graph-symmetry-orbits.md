@@ -4,7 +4,7 @@
 
 - Producer: `graph.symmetry.generator_orbits.compute`
 - Verification: `graph.symmetry.generator_orbits.verify`
-- Producer backend: Jacobian standard-library finite orbit closure
+- Producer backend: NetworkX `UnionFind` orbit closure
 - Checker: isolated standard-library permutation, adjacency, color, and orbit replay
 
 The producer computes one atomic outcome: the exact vertex and edge orbit
@@ -104,28 +104,21 @@ checker for the resulting weighted orbit sum.
 
 ### Reproducibility snapshot
 
-- Installed catalog: 286 capabilities, catalog version 1,
-  `sha256:1912b23ea59c32b084004cc2849773f1fbce46c88b852c5ac47ea2e441085768`.
+- Installed catalog: 332 capabilities, catalog version 1,
+  `sha256:26298e734e8766d1590a4e2ab32a752334f8837099ff6dc5c119efcf808f292b`.
 - Policy: `DEFAULT`,
   `sha256:870a92b83d3e522e4015b6bb1cabda33086906f9de1c3c36e466251ea7ed1957`.
-- Producer runtime: `jacobian.graph-symmetry==0.5.0a0`, available on
-  `linux-x86_64`; source-tree digest
-  `sha256:85039ff8f1cb46aea540d2d67bc8f0775a8d282a1ee28d92d84dabb08d24af69`.
+- Producer runtime: `jacobian.networkx==3.6.1`, available on
+  `linux-x86_64`; Python distribution RECORD digest
+  `sha256:635dbe2fc5e3fe00b1bb114b69d49600ae9f546c88cc702d6f2c74eb42ba8fe7`.
 - Checker runtime: `jacobian.graph-exact-checkers`, available; composite digest
-  `sha256:f8ef833e153d3c371dc1c3d0491ef707eebb39e17342fadde5328f29f6fc068c`.
+  `sha256:6abaded42d9316e58d141756b4c3fabbd02b91e9dbf54843d3a24910a94cca69`.
 - Authorized checker:
-  `checker://sha256/ae6b66dec47b6ad6f586e0ff460f123b21af2f2fa7efacec2c74845424daa119`.
-- Validation: `make check` passed with 293 unit tests; focused contract,
-  producer, verification, and public reproduction tests passed; the shared
-  exact-domain checker attack matrix passed 145 tests; and documentation links
-  passed. `make test-affected BASE=origin/main` passed its unit, component,
-  domain, composition, storage, process, MCP, provider, end-to-end, Lean,
-  static, build, security, duplicate-code, and documentation lanes. Its npm
-  tests passed 14 cases, but the repository's
-  `npm pack --dry-run --prefix npm` invocation failed under npm 10.8.2 because
-  that npm version looked for `package.json` at the repository root. The same
-  failure reproduces on the unchanged base revision; the equivalent
-  `npm pack --dry-run ./npm` completed successfully.
+  `checker://sha256/36c790c6c190c475d8bb483d424987cebda3ccb861a340b5535b2b3f343457a5`.
+- Validation: focused unit (698 passed), component (698 passed), domain (153
+  passed), and composition (446 passed, 2 skipped) lanes passed; `make
+  check-static` passed (ruff, mypy, deptry, vulture, complexity, architecture,
+  build). Skips were limited to the documented unavailable Lean runtime.
 - Open obligations: the held-out model-in-the-loop comparison is not run, and
   no claim is made for full automorphism-group discovery, canonical labeling,
   quotient graphs, edge-state orbits, weighted orbit sums, reliability

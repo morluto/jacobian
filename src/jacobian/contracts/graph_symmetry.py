@@ -205,8 +205,8 @@ class GraphSymmetryOrbitResult(ContractModel):
     )
     exactness: Literal["EXACT_COMBINATORIAL"] = "EXACT_COMBINATORIAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["jacobian-stdlib"] = "jacobian-stdlib"
-    backend_version: Literal["1"] = "1"
+    backend: Literal["networkx"] = "networkx"
+    backend_version: str = Field(min_length=1, max_length=64)
     verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")

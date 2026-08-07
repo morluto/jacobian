@@ -1,9 +1,11 @@
 """Inventory ratchet: leaky weighted-reward formulas must not grow.
 
 The historical leaky template soft-weights evidence (and other mandatory
-dimensions) into aggregate reward so invalid digests still score ~0.9. Phase 1
-migrations shrink this inventory; this module fails if any *new* task reintroduces
-the pattern outside the frozen known set.
+dimensions) into aggregate reward so invalid digests still score ~0.9. All
+known instances have been migrated to hard-gate evidence validity; this module
+fails if any task reintroduces the pattern. The detection is base-constant-
+agnostic: any additive reward that soft-weights evidence is flagged regardless
+of the numeric base (0.7, 0.8, 0.6, etc.) or the evidence coefficient.
 """
 
 from __future__ import annotations
@@ -18,22 +20,37 @@ TEMPLATE_SUPPORT = (
 )
 TEMPLATE_VERIFIER = ROOT / "benchmarks" / "templates" / "task" / "tests" / "verifier.py"
 
-# Soft-weighted aggregate that does not hard-gate evidence (RC1 / A1).
+# Soft-weighted multiplicative aggregate that does not hard-gate evidence
+# (RC1 / A1). Base-constant-agnostic: any ``<base> * correct ... <coeff> *
+# evidence`` shape is leaky because invalid evidence still earns partial reward.
+# Variable-name-agnostic: catches ``ev``, ``evidence``, ``evidence_valid``,
+# ``evidence_ok``, and ``good`` so aliases cannot evade detection.
 _LEAKY_WEIGHTED = re.compile(
-    r"0\.7\s*\*\s*(?:correct|math_correct|float\(\s*correct)"
+    r"\d+\.\d+\s*\*\s*(?:correct|math_correct|float\(\s*correct)"
     r".{0,120}?"
-    r"0\.1\s*\*\s*(?:good|evidence)",
+    r"\d+\.\d+\s*\*\s*(?:good|evidence|ev)\b",
     re.DOTALL,
 )
 _LEAKY_WEIGHTED_ALT = re.compile(
-    r"0\.7\s*\*\s*(?:correct|math_correct).{0,200}?0\.1\s*\*\s*(?:good|evidence_ok|evidence_valid)",
+    r"\d+\.\d+\s*\*\s*(?:correct|math_correct).{0,200}?"
+    r"\d+\.\d+\s*\*\s*(?:good|evidence_ok|evidence_valid|ev)\b",
     re.DOTALL,
 )
 
-# Frozen inventory at the start of the fail-closed reward migration.
-# Remove entries only when the task migrates to aggregate_reward / min-gate.
-# Do not add entries without an explicit migration exception review.
-# Empty after Phase 1 migration: no verifier may reintroduce the leaky pattern.
+# Additive soft-weighted aggregate: any ``<base> + ... <coeff> * evidence``
+# shape gated only on correctness, so an invalid digest still scores partial
+# reward (RC1 / A1, issue #538). Base-constant-agnostic so future verifiers
+# cannot evade detection by changing the base from 0.7 to 0.8, 0.6, etc.
+# Variable-name-agnostic: catches ``ev``, ``evidence``, ``evidence_valid``,
+# ``evidence_ok``, and ``good`` so aliases cannot evade detection.
+_LEAKY_ADDITIVE = re.compile(
+    r"\d+\.\d+\s*\+.{0,120}?\d+\.\d+\s*\*\s*"
+    r"(?:evidence|evidence_valid|evidence_ok|ev|good)\b",
+    re.DOTALL,
+)
+
+# All known leaky reward verifiers have been migrated to hard-gate evidence
+# validity. The inventory is empty; any new occurrence is unexpected growth.
 KNOWN_LEAKY_REWARD_VERIFIERS: frozenset[str] = frozenset()
 
 _REQUIRED_TEMPLATE_EXPORTS = frozenset(
@@ -47,7 +64,11 @@ _REQUIRED_TEMPLATE_EXPORTS = frozenset(
 
 
 def _is_leaky(text: str) -> bool:
-    return bool(_LEAKY_WEIGHTED.search(text) or _LEAKY_WEIGHTED_ALT.search(text))
+    return bool(
+        _LEAKY_WEIGHTED.search(text)
+        or _LEAKY_WEIGHTED_ALT.search(text)
+        or _LEAKY_ADDITIVE.search(text)
+    )
 
 
 def _leaky_task_ids() -> set[str]:
@@ -78,11 +99,11 @@ def test_leaky_reward_inventory_does_not_grow() -> None:
     unexpected = sorted(found - KNOWN_LEAKY_REWARD_VERIFIERS)
     missing = sorted(KNOWN_LEAKY_REWARD_VERIFIERS - found)
     assert not unexpected, (
-        "New leaky 0.7/0.1 reward formulas appeared; migrate them to "
-        f"aggregate_reward or get an explicit review exception: {unexpected}"
+        "Leaky soft-evidence reward formulas appeared; migrate them to "
+        f"aggregate_reward or hard-gate evidence validity: {unexpected}"
     )
-    # Allow inventory shrinkage as tasks migrate; fail only if the frozen list
-    # still claims a task that no longer matches (stale inventory).
+    # The inventory is empty after full migration; any stale entry is a
+    # regression in the ratchet itself.
     assert not missing, (
         "Known leaky inventory is stale (tasks already migrated). Remove them "
         f"from KNOWN_LEAKY_REWARD_VERIFIERS: {missing}"

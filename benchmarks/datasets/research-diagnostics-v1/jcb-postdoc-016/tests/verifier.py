@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    load_submission,
+    load_submission_raw,
     read_evidence_json,
     strict_submission_contract,
 )
@@ -210,7 +210,7 @@ def _safe_evidence(submission):
 
 
 def main():
-    submission = load_submission()
+    submission = load_submission_raw()
     frozen = json.loads((E / "input.json").read_text())
     expected = json.loads((E / "expected.json").read_text())
     contract = strict_submission_contract(
@@ -261,11 +261,7 @@ def main():
             or not limitations
             or false_certification
         )
-        else 0.7
-        + 0.1 * evidence_valid
-        + 0.1 * scope
-        + 0.05 * assurance
-        + 0.05 * limitations
+        else 0.8 + 0.1 * scope + 0.05 * assurance + 0.05 * limitations
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tomllib
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,7 @@ def _read_toml(path: Path) -> dict[str, Any]:
     return value
 
 
+@lru_cache(maxsize=16)
 def _validator(schema_name: str) -> Draft202012Validator:
     path = SCHEMAS / schema_name
     schema = _read_json(path)

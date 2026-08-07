@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib
 import os
 import sys
@@ -56,6 +57,7 @@ def _measure_runtime(
 ) -> tuple[CapabilityProviderRuntime | None, str | None]:
     os.environ.pop("JACOBIAN_CHECKER_EXECUTABLE", None)
     os.environ.pop("JACOBIAN_CHECKER_RUNTIME_DIGEST", None)
+    os.environ.pop("JACOBIAN_CHECKER_LAKE_DIGEST", None)
     if encoded is None:
         return None, None
     try:
@@ -80,9 +82,34 @@ def _measure_runtime(
         if str(path) != executable:
             raise ValueError("checker runtime path is not exact")
         os.environ["JACOBIAN_CHECKER_EXECUTABLE"] = str(path)
+        _bind_lake_launcher(runtime)
     assert runtime.digest is not None
     os.environ["JACOBIAN_CHECKER_RUNTIME_DIGEST"] = runtime.digest
     return runtime, runtime.digest
+
+
+def _bind_lake_launcher(runtime: CapabilityProviderRuntime) -> None:
+    """Bind an optional sibling Lake launcher into the measured runtime identity.
+
+    The Lean runtime carries the Lake launcher path and digest in its
+    configuration only when a MATHLIB profile is in scope.  Re-measure the
+    on-disk launcher here so a Lake binary swapped after provider inspection
+    is rejected before the checker executes, and forward the digest to the
+    checker process so ``lake`` is never run as an unauthenticated sibling.
+    """
+    lake_executable = runtime.configuration.get("lake_executable")
+    lake_digest = runtime.configuration.get("lake_digest")
+    if lake_executable is None and lake_digest is None:
+        return
+    if not isinstance(lake_executable, str) or not isinstance(lake_digest, str):
+        raise ValueError("checker lake launcher identity is incomplete")
+    path = Path(lake_executable).resolve(strict=True)
+    if str(path) != lake_executable or not path.is_file() or path.is_symlink():
+        raise ValueError("checker lake launcher path is not exact")
+    measured = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    if measured != lake_digest:
+        raise ValueError("checker lake launcher digest changed")
+    os.environ["JACOBIAN_CHECKER_LAKE_DIGEST"] = lake_digest
 
 
 def main() -> int:

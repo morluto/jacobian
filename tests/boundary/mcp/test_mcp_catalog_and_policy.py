@@ -46,6 +46,11 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 descriptor["capability_id"]
                 for descriptor in full_catalog["capabilities"]
             }
+            discoverable_ids = {
+                descriptor["capability_id"]
+                for descriptor in full_catalog["capabilities"]
+                if descriptor.get("discovery_visible", True)
+            }
 
             listed = await client.call_tool(
                 "math.find",
@@ -81,7 +86,9 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                     descriptor["capability_id"] for descriptor in page["matches"]
                 )
                 cursor = page["next_cursor"]
-            assert indexed_ids == all_ids
+            assert "artifact.put" in all_ids
+            assert "artifact.put" not in discoverable_ids
+            assert indexed_ids == discoverable_ids
 
             searched = await client.call_tool(
                 "math.find",
@@ -167,5 +174,30 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             )
             invalid = json.loads(invalid_cursor.content[0].text)
             assert invalid["error"]["code"] == "INVALID_CURSOR"
+
+    asyncio.run(scenario())
+
+
+def test_mcp_text_projection_preserves_produced_artifact_types(
+    tmp_path: Path,
+) -> None:
+    """The agent-facing text projection must include produced_artifact_types."""
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            listed = await client.call_tool(
+                "math.find",
+                {"query": "poset", "limit": 20},
+            )
+            text = json.loads(listed.content[0].text)
+            assert text["kind"] == "discovery"
+            producing = [m for m in text["matches"] if "produced_artifact_types" in m]
+            assert producing, (
+                "text projection must preserve produced_artifact_types for at "
+                "least one poset capability so agents can connect producers to "
+                "consumers without structured_content"
+            )
 
     asyncio.run(scenario())

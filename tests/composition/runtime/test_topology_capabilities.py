@@ -429,3 +429,28 @@ def test_invalid_topology_request_fails_before_artifact_writes(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST"
     assert result.artifact_uris == ()
+
+
+def test_stale_complex_digest_surfaces_its_constraint(
+    fresh_complete_runtime,
+) -> None:
+    complex_ = _materialize(fresh_complete_runtime, _CIRCLE)
+    complex_["complex_digest"] = "sha256:" + "0" * 64
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={"complex": complex_},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.artifact_uris == ()
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST"
+    assert diagnostic.hint == "complex_digest does not bind the canonical complex"
+    assert diagnostic.details["validation_error"] == {
+        "type": "value_error",
+        "path": "complex",
+        "message": "complex_digest does not bind the canonical complex",
+    }

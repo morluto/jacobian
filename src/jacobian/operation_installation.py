@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
+    CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityMode,
     CapabilityObligation,
@@ -65,6 +66,37 @@ class _OperationResources:
     input_schema_uris: dict[type[ContractModel], str]
     result_schema_uris: dict[str, str]
     obligation_schema_uris: dict[str, str]
+
+
+def _validation_diagnostic(
+    base: CapabilityDiagnostic,
+    error: ValidationError,
+) -> CapabilityDiagnostic:
+    """Preserve the actionable Pydantic constraint in a domain diagnostic."""
+    validation_errors = error.errors(
+        include_url=False,
+        include_context=False,
+        include_input=False,
+    )
+    if not validation_errors:
+        return base
+    first_error = validation_errors[0]
+    path = ".".join(str(part) for part in first_error["loc"])[:512]
+    hint = str(first_error["msg"]).removeprefix("Value error, ")[:1024]
+    return base.model_copy(
+        update={
+            "path": path or base.path,
+            "hint": hint or base.hint,
+            "details": {
+                **base.details,
+                "validation_error": {
+                    "type": str(first_error["type"])[:128],
+                    "path": path,
+                    "message": hint,
+                },
+            },
+        }
+    )
 
 
 def _execution_failure_result(
@@ -231,8 +263,11 @@ class ComputedOperationAdapter:
             )
         except ValidationError as exc:
             raise CapabilityInvocationError(
-                self.operation.invalid_request
-                or self.bundle.diagnostics.invalid_request
+                _validation_diagnostic(
+                    self.operation.invalid_request
+                    or self.bundle.diagnostics.invalid_request,
+                    exc,
+                )
             ) from exc
 
         started = time.monotonic()
@@ -350,10 +385,17 @@ class MaterializedOperationAdapter:
                     validated_request, source_artifact_uris = (
                         self.operation.artifact_converter(validated_request, payload)
                     )
+        except ValidationError as exc:
+            raise CapabilityInvocationError(
+                _validation_diagnostic(
+                    self.operation.invalid_request
+                    or self.bundle.diagnostics.invalid_request,
+                    exc,
+                )
+            ) from exc
         except (
             ArtifactNotFoundError,
             ArtifactIntegrityError,
-            ValidationError,
             ValueError,
         ) as exc:
             raise CapabilityInvocationError(
@@ -476,8 +518,11 @@ class BoundedSearchOperationAdapter:
             )
         except ValidationError as exc:
             raise CapabilityInvocationError(
-                self.operation.invalid_request
-                or self.bundle.diagnostics.invalid_request
+                _validation_diagnostic(
+                    self.operation.invalid_request
+                    or self.bundle.diagnostics.invalid_request,
+                    exc,
+                )
             ) from exc
 
         started = time.monotonic()

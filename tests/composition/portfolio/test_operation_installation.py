@@ -2,7 +2,7 @@ from dataclasses import replace
 from typing import Any, cast
 
 import pytest
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -32,6 +32,15 @@ from jacobian.runtime.model import JacobianRuntime
 
 class _SyntheticRequest(ContractModel):
     value: int = Field(ge=0, le=100)
+
+    @field_validator("value")
+    @classmethod
+    def require_non_sentinel_value(cls, value: int) -> int:
+        if value == 99:
+            raise ValueError("synthetic value 99 is reserved")
+        if value == 98:
+            raise ValueError("x" * 2_000)
+        return value
 
 
 class _SyntheticResult(ContractModel):
@@ -138,6 +147,48 @@ def test_synthetic_bundle_returns_an_inline_typed_result(
     assert result.scope is not None
     assert result.scope.parameters == {"value": 6}
     assert result.scope.artifact_uri is None
+
+
+def test_validation_error_preserves_the_rejected_field_and_constraint(
+    fresh_complete_runtime,
+) -> None:
+    _install(fresh_complete_runtime, _synthetic_bundle())
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="synthetic.compute.double",
+            input={"value": 99},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.artifact_uris == ()
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "INVALID_SYNTHETIC_REQUEST"
+    assert diagnostic.path == "value"
+    assert diagnostic.hint == "synthetic value 99 is reserved"
+    assert diagnostic.details["validation_error"] == {
+        "type": "value_error",
+        "path": "value",
+        "message": "synthetic value 99 is reserved",
+    }
+
+
+def test_validation_error_respects_diagnostic_text_bounds(
+    fresh_complete_runtime,
+) -> None:
+    _install(fresh_complete_runtime, _synthetic_bundle())
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="synthetic.compute.double",
+            input={"value": 98},
+        )
+    )
+
+    diagnostic = result.diagnostics[0]
+    assert len(diagnostic.hint or "") == 1024
+    assert diagnostic.details["validation_error"]["message"] == diagnostic.hint
 
 
 def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
@@ -397,6 +448,44 @@ def test_bounded_adapter_preserves_timeout_without_partial_artifacts(
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.diagnostics == (diagnostic,)
     assert result.artifact_uris == ()
+
+
+def test_bounded_adapter_preserves_the_rejected_field_and_constraint(
+    fresh_complete_runtime,
+) -> None:
+    bundle = _synthetic_bundle()
+    operation = BoundedSearchOperation(
+        capability_id="synthetic.search.validate",
+        title="Validate a bounded synthetic search",
+        description="Exercise bounded-search request validation diagnostics.",
+        request_model=_SyntheticRequest,
+        result_model=_BoundedResult,
+        implementation=lambda _request: BoundedSearchWitness(_BoundedResult(complete=True)),
+        relation_id="synthetic.search.validate.relation",
+        scope_parameters=lambda _request, _result: {},
+        is_complete=lambda result: result.complete,
+        obligation_model=_BoundedResult,
+        obligation=lambda _request, result: result,
+        incomplete_basis="the synthetic search did not complete",
+    )
+    _install(fresh_complete_runtime, replace(bundle, capabilities=(operation,)))
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="synthetic.search.validate",
+            input={"value": 99},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.artifact_uris == ()
+    assert result.diagnostics[0].path == "value"
+    assert result.diagnostics[0].hint == "synthetic value 99 is reserved"
+    assert result.diagnostics[0].details["validation_error"] == {
+        "type": "value_error",
+        "path": "value",
+        "message": "synthetic value 99 is reserved",
+    }
 
 
 def test_bounded_adapter_materializes_interrupted_partial_result(

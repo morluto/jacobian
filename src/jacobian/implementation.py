@@ -82,7 +82,8 @@ def install_source_only_importer(entrypoint: str) -> None:
     # this, already-imported modules in sys.modules would shadow the
     # finder and serve potentially stale bytecode.
     stale = [
-        name for name in list(sys.modules)
+        name
+        for name in list(sys.modules)
         if name == top_level or name.startswith(top_level + ".")
     ]
     for name in stale:

@@ -212,25 +212,20 @@ def smith_reduce(
     # including 0xm and nx0 matrices, returning identity transformations for
     # the empty side.
     if rows and columns:
-        sympy_source = sympy.Matrix(
-            [[int(value) for value in row] for row in original]
-        )
+        sympy_source = sympy.Matrix([[int(value) for value in row] for row in original])
     else:
         sympy_source = sympy.Matrix(rows, columns, [])
 
     diagonal, left, right = smith_normal_decomp(sympy_source, domain=sympy.ZZ)
 
     diagonal_matrix = [
-        [int(diagonal[row, column]) for column in range(columns)]
-        for row in range(rows)
+        [int(diagonal[row, column]) for column in range(columns)] for row in range(rows)
     ]
     left_matrix = [
-        [int(left[row, column]) for column in range(rows)]
-        for row in range(rows)
+        [int(left[row, column]) for column in range(rows)] for row in range(rows)
     ]
     right_matrix = [
-        [int(right[row, column]) for column in range(columns)]
-        for row in range(columns)
+        [int(right[row, column]) for column in range(columns)] for row in range(columns)
     ]
 
     diagonal_count = min(rows, columns)
@@ -243,7 +238,10 @@ def smith_reduce(
         right_factor % left_factor for left_factor, right_factor in pairwise(factors)
     ):
         raise ArithmeticError("Smith reduction did not produce a canonical diagonal")
-    if matrix_multiply(matrix_multiply(left_matrix, original), right_matrix) != diagonal_matrix:
+    if (
+        matrix_multiply(matrix_multiply(left_matrix, original), right_matrix)
+        != diagonal_matrix
+    ):
         raise ArithmeticError("Smith transformations do not bind the source")
     left_determinant = determinant(left_matrix)
     right_determinant = determinant(right_matrix)

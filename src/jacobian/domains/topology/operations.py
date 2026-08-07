@@ -253,10 +253,7 @@ def _domain_matrix(
     from sympy.polys.matrices import DomainMatrix
 
     field = sympy.GF(prime)
-    entries = [
-        [int(value) % prime for value in row[:columns]]
-        for row in matrix[:rows]
-    ]
+    entries = [[int(value) % prime for value in row[:columns]] for row in matrix[:rows]]
     return DomainMatrix(entries, (rows, columns), field)
 
 
@@ -272,9 +269,7 @@ def _rref(
     # empty row lists.
     if row_count == 0 or columns == 0:
         return [[0] * columns for _ in range(row_count)], ()
-    domain = _domain_matrix(
-        matrix, rows=row_count, columns=columns, prime=prime
-    )
+    domain = _domain_matrix(matrix, rows=row_count, columns=columns, prime=prime)
     reduced_domain, pivot_columns = domain.rref()
     reduced_matrix = reduced_domain.to_Matrix()
     rows_out = [
@@ -293,9 +288,7 @@ def _rank(
     row_count = len(matrix)
     if row_count == 0 or columns == 0:
         return 0
-    domain = _domain_matrix(
-        matrix, rows=row_count, columns=columns, prime=prime
-    )
+    domain = _domain_matrix(matrix, rows=row_count, columns=columns, prime=prime)
     return int(domain.rank())
 
 

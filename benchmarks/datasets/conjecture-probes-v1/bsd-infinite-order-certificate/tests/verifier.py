@@ -147,7 +147,9 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"), max_bytes=MAX_SUBMISSION_BYTES)
+        and evidence_list_is_bound(
+            submission.get("evidence"), max_bytes=MAX_SUBMISSION_BYTES
+        )
     )
     payload = (
         read_evidence_json(
@@ -179,8 +181,7 @@ def main() -> None:
     )
     raw = _raw_submission()
     false_certification = bool(
-        isinstance(raw, dict)
-        and raw.get("claimed_assurance") == "VERIFIED"
+        isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
     )
     aggregate = (
         1.0
@@ -208,16 +209,16 @@ if __name__ == "__main__":
         main()
     except BaseException as exc:
         _reward(
-        {
-            "protocol": 0.0,
-            "input_binding": 0.0,
-            "mathematics": 0.0,
-            "evidence": 0.0,
-            "scope": 0.0,
-            "assurance": 0.0,
-            "false_certification": False,
-            "aggregate_reward": 0.0,
-            "reward": 0.0,
-            "error": type(exc).__name__,
-        }
-    )
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

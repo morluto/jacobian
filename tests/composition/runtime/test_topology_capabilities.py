@@ -359,6 +359,34 @@ def test_integral_homology_exposes_free_and_torsion_generators(
     assert sum(sizes) < 8 * 1024 * 1024
 
 
+def test_stale_complex_digest_reports_the_recoverable_field(
+    fresh_complete_runtime,
+) -> None:
+    circle = _materialize(fresh_complete_runtime, _CIRCLE)
+    circle["vertices"] = ["x", "y", "z"]
+    circle["maximal_simplices"] = [["x", "y"], ["x", "z"], ["y", "z"]]
+    circle["faces_by_dimension"] = [
+        {"dimension": 0, "faces": [["x"], ["y"], ["z"]]},
+        {"dimension": 1, "faces": [["x", "y"], ["x", "z"], ["y", "z"]]},
+    ]
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_homology.integral.compute",
+            input={"complex": circle, "convention": "UNREDUCED"},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.artifact_uris == ()
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST"
+    assert diagnostic.path == "/complex/complex_digest"
+    assert diagnostic.details["validation_reason"] == (
+        "Value error, complex_digest does not bind the canonical complex"
+    )
+
+
 def test_reduced_integral_homology_uses_the_augmentation_kernel(
     fresh_complete_runtime,
 ) -> None:

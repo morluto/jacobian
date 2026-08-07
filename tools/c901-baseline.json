@@ -3,6 +3,11 @@
   "max_complexity": 10,
   "violations": [
     {
+      "path": "benchmarks/datasets/conjecture-probes-v1/reconstruction-deck-certificate/tests/verifier_support.py",
+      "symbol": "_read_streaming_json_value",
+      "complexity": 11
+    },
+    {
       "path": "benchmarks/datasets/conjecture-probes-v1/vizing-bounded-cartesian-products/tests/verifier.py",
       "symbol": "_frozen",
       "complexity": 11

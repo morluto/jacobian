@@ -260,8 +260,10 @@ def _discovery_recovery_paths(
 ) -> list[dict[str, Any]]:
     """Return unranked access choices for weak, empty, or incompatible discovery."""
 
-    if portfolio_fit not in {"ONLY_WEAK_LEXICAL_MATCHES", "NO_LEXICAL_MATCHES"} and (
-        routing_status != "NO_ROUTE"
+    if (
+        domain_filter_status != "UNKNOWN"
+        and portfolio_fit not in {"ONLY_WEAK_LEXICAL_MATCHES", "NO_LEXICAL_MATCHES"}
+        and routing_status != "NO_ROUTE"
     ):
         return []
     paths: list[dict[str, Any]] = []

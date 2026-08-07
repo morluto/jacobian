@@ -384,6 +384,22 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "change": "Retry without the unrecognized domain filter.",
             }
 
+            browse_unknown_result = await client.call_tool(
+                "math.find",
+                {"domain": "arithmetic"},
+            )
+            assert isinstance(browse_unknown_result.structured_content, dict)
+            browse_unknown = browse_unknown_result.structured_content
+            assert browse_unknown["domain_filter_status"] == "UNKNOWN"
+            assert browse_unknown["portfolio_fit"] == "UNFILTERED"
+            assert browse_unknown["routing_status"] == "UNFILTERED"
+            assert browse_unknown["available_recovery_paths"][0] == {
+                "action": "remove_unknown_domain_filter",
+                "tool": "math.find",
+                "rejected_domain": "arithmetic",
+                "change": "Retry without the unrecognized domain filter.",
+            }
+
             catalog_result = await client.read_resource("capability://catalog")
             catalog = json.loads(catalog_result.contents[0].text)
             capability_ids = {

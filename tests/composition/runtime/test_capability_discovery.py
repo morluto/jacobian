@@ -132,6 +132,14 @@ def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
         discovered.portfolio_fit_basis
     )
 
+    browsed = capability_core_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(domain="arithmetic")
+    )
+    assert browsed.matches == ()
+    assert browsed.domain_filter_status == "UNKNOWN"
+    assert browsed.portfolio_fit == "UNFILTERED"
+    assert browsed.routing_status == "UNFILTERED"
+
 
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
     authorized_complete_runtime: JacobianRuntime,

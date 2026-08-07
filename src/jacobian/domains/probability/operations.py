@@ -49,7 +49,8 @@ def _wire(value: Any) -> CanonicalRational:
 def _fmpq(value: CanonicalRational) -> Any:
     from flint import fmpq
 
-    return fmpq(int(value.num), int(value.den))
+    fraction = value.as_fraction()
+    return fmpq(fraction.numerator, fraction.denominator)
 
 
 def _complex_wire(value: tuple[Any, Any]) -> ExactComplexRational:

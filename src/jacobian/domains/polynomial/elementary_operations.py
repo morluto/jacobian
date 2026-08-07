@@ -197,15 +197,17 @@ def _partial_fraction_term(
 def _partial_fraction_sort_key(
     term: RationalPartialFractionTerm,
 ) -> tuple[tuple[tuple[tuple[int, ...], int, int], ...], int]:
-    factor_terms = tuple(
-        (
-            factor_term.exponents,
-            int(factor_term.coefficient.num),
-            int(factor_term.coefficient.den),
+    factor_terms: list[tuple[tuple[int, ...], int, int]] = []
+    for factor_term in term.denominator_factor.polynomial.terms:
+        coefficient = factor_term.coefficient.as_fraction()
+        factor_terms.append(
+            (
+                factor_term.exponents,
+                coefficient.numerator,
+                coefficient.denominator,
+            )
         )
-        for factor_term in term.denominator_factor.polynomial.terms
-    )
-    return factor_terms, term.denominator_exponent
+    return tuple(factor_terms), term.denominator_exponent
 
 
 def rational_partial_fraction_decomposition(

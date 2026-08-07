@@ -8,6 +8,8 @@ from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 
+_LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
+
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
@@ -49,3 +51,19 @@ def test_arithmetic_capabilities_return_exact_results(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == expected
+
+
+def test_rational_difference_accepts_contract_sized_components(
+    domain_services: DomainTestServices,
+) -> None:
+    value = {"num": _LARGE_CANONICAL_INTEGER, "den": "1"}
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="rational.compute.difference",
+            input={"left": value, "right": value},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == {"value": {"num": "0", "den": "1"}}

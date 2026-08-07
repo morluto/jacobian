@@ -36,7 +36,7 @@ def _sympy_expression(
     symbols: dict[str, Any],
 ) -> Any:
     if isinstance(expression, PolynomialRationalExpression):
-        return sympy.Rational(int(expression.value.num), int(expression.value.den))
+        return sympy.Rational(expression.value.as_fraction())
     if isinstance(expression, PolynomialVariableExpression):
         return symbols[expression.name]
     if isinstance(expression, PolynomialAddExpression):

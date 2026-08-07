@@ -109,7 +109,7 @@ def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
 
 
 def _fraction(value: CanonicalRational) -> Fraction:
-    return Fraction(int(value.num), int(value.den))
+    return value.as_fraction()
 
 
 def _wire(value: Fraction) -> CanonicalRational:

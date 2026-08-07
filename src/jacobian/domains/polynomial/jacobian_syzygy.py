@@ -172,11 +172,7 @@ def compute_graded_jacobian_syzygy(
         for factor in request.linear_factors:
             source *= Poly(
                 sum(
-                    Rational(
-                        int(coefficient.num),
-                        int(coefficient.den),
-                    )
-                    * generator
+                    Rational(coefficient.as_fraction()) * generator
                     for coefficient, generator in zip(
                         factor.coefficients,
                         generators,

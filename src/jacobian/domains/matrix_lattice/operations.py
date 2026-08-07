@@ -42,7 +42,7 @@ def _qq_matrix(matrix: RationalMatrix) -> Any:
 
     return sympy.Matrix(
         [
-            [sympy.Rational(int(value.num), int(value.den)) for value in row]
+            [sympy.Rational(value.as_fraction()) for value in row]
             for row in matrix.entries
         ]
     )
@@ -190,9 +190,7 @@ def compute_rational_linear_solve(
     import sympy
 
     source = _qq_matrix(request.matrix)
-    rhs = sympy.Matrix(
-        [sympy.Rational(int(value.num), int(value.den)) for value in request.rhs]
-    )
+    rhs = sympy.Matrix([sympy.Rational(value.as_fraction()) for value in request.rhs])
     solution, parameters = source.gauss_jordan_solve(rhs)
     if parameters.rows:
         raise ValueError("linear system does not have a unique solution")

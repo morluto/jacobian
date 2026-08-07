@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces six PR10 invariants:
+runtime.  It enforces seven PR10 invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -21,12 +21,16 @@ runtime.  It enforces six PR10 invariants:
    environment (``dict(os.environ)``, ``os.environ.copy()``, ``**os.environ``)
    into child-process calls.  Selective ``os.environ.get`` access is fine.
 
-5. **public-contract-drift**: every canonical benchmark task in a dataset with
+5. **unsafe-canonical-conversion**: product code must use canonical conversion
+   APIs instead of applying ``int()`` or ``str()`` directly to rational
+   ``.num`` and ``.den`` wire components.
+
+6. **public-contract-drift**: every canonical benchmark task in a dataset with
    public contracts must have a ``public_contract.json`` and its projection must
    match the rendered ``submission_schema.json`` and ``instruction.md``.  A
    missing contract is a violation, not a skip.
 
-6. **unsupported-surface**: removed experimental memory/search identifiers must
+7. **unsupported-surface**: removed experimental memory/search identifiers must
    not appear in supported product source, tests, schemas, catalog, or docs.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
@@ -685,7 +689,46 @@ def _environ_spread_violations(
 
 
 # ---------------------------------------------------------------------------
-# Check 5: public-contract drift (missing contract is a violation)
+# Check 5: canonical wire values must cross the canonical conversion API
+# ---------------------------------------------------------------------------
+
+
+def _unsafe_canonical_conversion_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    if not any(
+        _is_under(relative, root)
+        for root in (
+            PurePosixPath("src/jacobian"),
+            PurePosixPath("src/jacobian_checkers"),
+        )
+    ):
+        return ()
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"int", "str"}
+            and node.args
+            and isinstance(node.args[0], ast.Attribute)
+            and node.args[0].attr in {"num", "den"}
+        ):
+            violations.append(
+                Violation(
+                    str(relative),
+                    "unsafe-canonical-conversion",
+                    f"{node.func.id}() must not consume canonical rational "
+                    f".{node.args[0].attr} wire text directly; use the canonical "
+                    "conversion API",
+                    node.lineno,
+                )
+            )
+    return tuple(violations)
+
+
+# ---------------------------------------------------------------------------
+# Check 6: public-contract drift (missing contract is a violation)
 # ---------------------------------------------------------------------------
 
 
@@ -733,7 +776,7 @@ def _public_contract_drift_violations(root: Path) -> tuple[Violation, ...]:
 
 
 # ---------------------------------------------------------------------------
-# Check 6: unsupported surfaces (Python AST + text scan)
+# Check 7: unsupported surfaces (Python AST + text scan)
 # ---------------------------------------------------------------------------
 
 
@@ -873,6 +916,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))
     violations.extend(_environ_spread_violations(relative, tree))
+    violations.extend(_unsafe_canonical_conversion_violations(relative, tree))
     violations.extend(_unsupported_surface_ast_violations(relative, tree))
     return tuple(violations)
 
@@ -882,10 +926,11 @@ def check_architecture(root: Path | str = ROOT) -> ArchitectureReport:
 
     Scans all non-excluded Python files for subprocess confinement,
     run_bounded_process gateway confinement, shutil.which resolver
-    confinement, os.environ spreading, and unsupported experimental
-    surfaces.  Scans non-Python text files (docs, schemas, catalog) for
-    unsupported surfaces.  Additionally checks every public-contract dataset's
-    task projection for drift (missing contracts are violations).
+    confinement, os.environ spreading, unsafe canonical-rational conversions,
+    and unsupported experimental surfaces.  Scans non-Python text files (docs,
+    schemas, catalog) for unsupported surfaces.  Additionally checks every
+    public-contract dataset's task projection for drift (missing contracts are
+    violations).
     """
     project_root = Path(root).resolve()
     py_files = _python_files(project_root)

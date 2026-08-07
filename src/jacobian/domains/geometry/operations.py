@@ -56,8 +56,8 @@ def _point(value: RationalPoint2D) -> Any:
     from sympy.geometry import Point2D
 
     return Point2D(
-        sympy.Rational(int(value.x.num), int(value.x.den)),
-        sympy.Rational(int(value.y.num), int(value.y.den)),
+        sympy.Rational(value.x.as_fraction()),
+        sympy.Rational(value.y.as_fraction()),
     )
 
 

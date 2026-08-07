@@ -47,10 +47,7 @@ def _poly(polynomial: RationalPolynomial) -> Any:
 
     generators = _symbols(polynomial.variables)
     coefficients = {
-        term.exponents: Rational(
-            int(term.coefficient.num),
-            int(term.coefficient.den),
-        )
+        term.exponents: Rational(term.coefficient.as_fraction())
         for term in polynomial.polynomial.terms
     }
     return Poly.from_dict(coefficients, *generators, domain=QQ)

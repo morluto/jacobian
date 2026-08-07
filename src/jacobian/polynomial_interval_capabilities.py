@@ -701,10 +701,10 @@ def _bernstein_coefficients(
     degree = polynomial.degree
     sp = _sympy.get()
     generator: Symbol = sp.symbols(polynomial.variable)
-    terms = {
-        term.exponents: sp.QQ(int(term.coefficient.num), int(term.coefficient.den))
-        for term in polynomial.polynomial.terms
-    }
+    terms = {}
+    for term in polynomial.polynomial.terms:
+        coefficient = term.coefficient.as_fraction()
+        terms[term.exponents] = sp.QQ(coefficient.numerator, coefficient.denominator)
     source = sp.Poly.from_dict(terms, generator, domain=sp.QQ)
     shifted = sp.Poly(
         sp.expand(source.as_expr().subs(generator, a + width * generator)),

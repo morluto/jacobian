@@ -316,10 +316,7 @@ def _sympy_matrix(matrix: ExactRationalMatrix) -> Matrix:
     from sympy import Matrix, Rational
 
     return Matrix(
-        [
-            [Rational(int(entry.num), int(entry.den)) for entry in row]
-            for row in matrix.entries
-        ]
+        [[Rational(entry.as_fraction()) for entry in row] for row in matrix.entries]
     )
 
 

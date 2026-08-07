@@ -93,9 +93,9 @@ def _pair_rows(value: Any, neighbors: list[set[int]]) -> bool:
     return seen == set(itertools.combinations(range(13), 2))
 
 
-def mathematics(result: Any) -> bool:
+def _result_components(result: Any):
     if not isinstance(result, dict):
-        return False
+        return None
     required = {
         "points",
         "lines",
@@ -109,15 +109,23 @@ def mathematics(result: Any) -> bool:
         "excluded_edge_count",
     }
     if set(result) != required:
-        return False
+        return None
     points = _triples(result["points"])
     lines = _triples(result["lines"])
     edges = _edges(result["edges"])
     if points is None or lines is None or edges is None:
-        return False
+        return None
+    return points, lines, edges
+
+
+def _incidence_neighbors(
+    points: list[tuple[int, int, int]],
+    lines: list[tuple[int, int, int]],
+    edges: set[tuple[int, int]],
+):
     classes = _all_projective_classes()
     if set(points) != classes or set(lines) != classes:
-        return False
+        return None
     expected = {
         (i, j)
         for i, p in enumerate(points)
@@ -125,13 +133,25 @@ def mathematics(result: Any) -> bool:
         if sum(a * b for a, b in zip(p, line, strict=True)) % 3 == 0
     }
     if edges != expected:
-        return False
+        return None
     left = [{j for i2, j in edges if i2 == i} for i in range(13)]
     right = [{i for i, j2 in edges if j2 == j} for j in range(13)]
     left_degrees = [len(x) for x in left]
     right_degrees = [len(x) for x in right]
     if left_degrees != [4] * 13 or right_degrees != [4] * 13:
+        return None
+    return left, right, left_degrees, right_degrees
+
+
+def mathematics(result: Any) -> bool:
+    components = _result_components(result)
+    if components is None:
         return False
+    points, lines, edges = components
+    incidence = _incidence_neighbors(points, lines, edges)
+    if incidence is None:
+        return False
+    left, right, left_degrees, right_degrees = incidence
     if (
         result["left_degrees"] != left_degrees
         or result["right_degrees"] != right_degrees

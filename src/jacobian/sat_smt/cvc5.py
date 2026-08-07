@@ -9,7 +9,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -522,11 +522,14 @@ def _parse_worker_output(
     status = payload["solver_status"]
     proof_written = payload["proof_written"]
     hole_count = payload["alethe_hole_count"]
-    if not isinstance(status, str) or status not in {
-        "SATISFIABLE",
-        "UNSATISFIABLE",
-        "UNKNOWN",
-    }:
+    solver_status: _SolverStatus | None = None
+    if status == "SATISFIABLE":
+        solver_status = "SATISFIABLE"
+    elif status == "UNSATISFIABLE":
+        solver_status = "UNSATISFIABLE"
+    elif status == "UNKNOWN":
+        solver_status = "UNKNOWN"
+    if solver_status is None:
         raise ValueError("invalid worker status")
     if not isinstance(proof_written, bool):
         raise ValueError("invalid proof-written flag")
@@ -537,7 +540,7 @@ def _parse_worker_output(
         or hole_count > 1_000_000
     ):
         raise ValueError("invalid Alethe hole count")
-    return cast(_SolverStatus, status), proof_written, hole_count
+    return solver_status, proof_written, hole_count
 
 
 def _read_proof_file(path: Path) -> bytes:

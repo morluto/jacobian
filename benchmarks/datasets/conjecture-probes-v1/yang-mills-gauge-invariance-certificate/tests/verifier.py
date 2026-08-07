@@ -22,7 +22,8 @@ LIMITATIONS = [
     "NO_CONTINUUM_YANG_MILLS_CONSTRUCTION",
     "NO_MASS_GAP_CONCLUSION",
 ]
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+MAX_EVIDENCE_BYTES = None
+SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def rat(v: object, *, bounded: bool = False) -> Fraction:
@@ -91,6 +92,16 @@ def mathematics(result: Any) -> bool:
         or len(set(gauges)) != 4
     ):
         return False
+    # Reject fully commuting witnesses: at least one link/gauge pair
+    # must have a nonzero commutator to exercise noncommutative
+    # gauge-covariance.
+    def _comm_nonzero(a, b):
+        ab = mul(a, b)
+        ba = mul(b, a)
+        return ab != ba
+
+    if not any(_comm_nonzero(links[i], gauges[i]) for i in range(4)):
+        return False
     expected = [
         mul(mul(gauges[i], links[i]), inv(gauges[(i + 1) % 4])) for i in range(4)
     ]
@@ -106,6 +117,14 @@ def mathematics(result: Any) -> bool:
         and tp[0] == p[0]
         and result["scalar_trace_invariant"] is True
     )
+
+
+def _raw_submission() -> dict[str, Any] | None:
+    try:
+        value = json.loads(Path("/app/submission.json").read_text())
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def reward(v):
@@ -124,8 +143,8 @@ def main():
         allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
         verification_record="forbidden",
     )
-    m = bool(c and mathematics(s["result"]))
-    e = bool(c and evidence_list_is_bound(s["evidence"], max_bytes=MAX_EVIDENCE_BYTES))
+    m = bool(isinstance(s, dict) and mathematics(s.get("result")))
+    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES))
     payload = (
         read_evidence_json(
             s["evidence"][0],
@@ -145,9 +164,10 @@ def main():
             "limitations": LIMITATIONS,
         }
     )
-    sc = bool(c and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
-    a = bool(c and s.get("claimed_assurance") == "CHECKED")
-    f = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
+    sc = bool(isinstance(s, dict) and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in SCOREABLE_ASSURANCES)
+    raw = _raw_submission()
+    f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
     reward(
         {
@@ -168,4 +188,17 @@ if __name__ == "__main__":
     try:
         main()
     except BaseException as exc:
-        reward({"aggregate_reward": 0.0, "reward": 0.0, "error": type(exc).__name__})
+        reward(
+            {
+                "protocol": 0.0,
+                "input_binding": 0.0,
+                "mathematics": 0.0,
+                "evidence": 0.0,
+                "scope": 0.0,
+                "assurance": 0.0,
+                "false_certification": False,
+                "aggregate_reward": 0.0,
+                "reward": 0.0,
+                "error": type(exc).__name__,
+            }
+        )

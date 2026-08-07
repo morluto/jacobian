@@ -93,10 +93,23 @@ class LabelledTrajectory(ContractModel):
             raise ValueError(
                 "terminal label requires exact input and artifact bindings"
             )
-        if not self.extraction.states or self.extraction.states[-1].boundary is not (
-            StateBoundary.TERMINAL
-        ):
+        if evidence.source_binding_digest != self.extraction.source_digest:
+            raise ValueError(
+                "terminal evidence must be bound to the exact extracted trajectory"
+            )
+        states = self.extraction.states
+        if not states or states[-1].boundary is not StateBoundary.TERMINAL:
             raise ValueError("labelled extraction must end at a terminal boundary")
+        if states[0].boundary is not StateBoundary.PLAN or states[0].index != 0:
+            raise ValueError("labelled extraction must begin at a PLAN observation")
+        if not any(
+            state.boundary is not StateBoundary.TERMINAL
+            and state.boundary is not StateBoundary.FINAL
+            for state in states
+        ):
+            raise ValueError(
+                "labelled extraction must contain at least one selectable observation"
+            )
         return self
 
 
@@ -400,7 +413,7 @@ def _tfidf_vectors(
     }
     document_frequency: Counter[str] = Counter()
     for counts in term_counts.values():
-        document_frequency.update(counts)
+        document_frequency.update(counts.keys())
     document_count = len(observations)
     vectors: dict[str, dict[str, float]] = {}
     for observation_id, counts in term_counts.items():
@@ -568,7 +581,9 @@ def _feature_summary(
     if kind is EstimatorKind.GROUP_ROLLOUT:
         return f"task_group={first.task_group}; no intermediate-state features"
     if kind is EstimatorKind.NUMCA_NUMERICAL:
-        return f"task_group={first.task_group}; numbers={list(first.numerical_milestones)!r}"
+        return _clip_summary(
+            f"task_group={first.task_group}; numbers={list(first.numerical_milestones)!r}"
+        )
     if kind is EstimatorKind.JACOBIAN_TYPED:
         payload = json.dumps(first.typed_payload, sort_keys=True, separators=(",", ":"))
         return _clip_summary(

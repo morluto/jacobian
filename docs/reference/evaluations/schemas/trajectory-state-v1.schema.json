@@ -65,31 +65,34 @@
     "CleanRoomTerminalEvidence": {
       "additionalProperties": false,
       "properties": {
-        "acceptance": {
-          "$ref": "#/$defs/TerminalAcceptance"
+        "evidence_schema_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Evidence Schema Version",
+          "type": "string"
         },
-        "artifact_binding_valid": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Artifact Binding Valid"
+        "verifier_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Verifier Digest",
+          "type": "string"
         },
         "clean_room": {
           "const": true,
           "title": "Clean Room",
           "type": "boolean"
         },
-        "evidence_schema_version": {
-          "const": "1",
-          "default": "1",
-          "title": "Evidence Schema Version",
+        "verifier_execution_status": {
+          "enum": [
+            "COMPLETED",
+            "TIMEOUT",
+            "CANCELLED",
+            "ERROR"
+          ],
+          "title": "Verifier Execution Status",
           "type": "string"
+        },
+        "acceptance": {
+          "$ref": "#/$defs/TerminalAcceptance"
         },
         "input_binding_valid": {
           "anyOf": [
@@ -103,19 +106,21 @@
           "default": null,
           "title": "Input Binding Valid"
         },
-        "verifier_digest": {
-          "pattern": "^sha256:[0-9a-f]{64}$",
-          "title": "Verifier Digest",
-          "type": "string"
-        },
-        "verifier_execution_status": {
-          "enum": [
-            "COMPLETED",
-            "TIMEOUT",
-            "CANCELLED",
-            "ERROR"
+        "artifact_binding_valid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "title": "Verifier Execution Status",
+          "default": null,
+          "title": "Artifact Binding Valid"
+        },
+        "source_binding_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Binding Digest",
           "type": "string"
         }
       },
@@ -123,7 +128,8 @@
         "verifier_digest",
         "clean_room",
         "verifier_execution_status",
-        "acceptance"
+        "acceptance",
+        "source_binding_digest"
       ],
       "title": "CleanRoomTerminalEvidence",
       "type": "object"
@@ -131,47 +137,21 @@
     "ExtractedTrajectoryState": {
       "additionalProperties": false,
       "properties": {
-        "boundary": {
-          "$ref": "#/$defs/StateBoundary"
-        },
-        "changed_fields": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Changed Fields",
-          "type": "array"
-        },
-        "hard_state": {
-          "$ref": "#/$defs/TrajectoryHardState"
-        },
-        "hard_state_digest": {
-          "pattern": "^sha256:[0-9a-f]{64}$",
-          "title": "Hard State Digest",
-          "type": "string"
-        },
         "index": {
           "minimum": 0,
           "title": "Index",
           "type": "integer"
         },
-        "milestone_eligible": {
-          "title": "Milestone Eligible",
-          "type": "boolean"
+        "source_event_index": {
+          "minimum": 0,
+          "title": "Source Event Index",
+          "type": "integer"
         },
-        "milestone_kinds": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/MilestoneKind"
-          },
-          "title": "Milestone Kinds",
-          "type": "array"
+        "boundary": {
+          "$ref": "#/$defs/StateBoundary"
         },
-        "milestone_reason": {
-          "maxLength": 512,
-          "minLength": 1,
-          "title": "Milestone Reason",
-          "type": "string"
+        "hard_state": {
+          "$ref": "#/$defs/TrajectoryHardState"
         },
         "soft_state": {
           "anyOf": [
@@ -184,10 +164,36 @@
           ],
           "default": null
         },
-        "source_event_index": {
-          "minimum": 0,
-          "title": "Source Event Index",
-          "type": "integer"
+        "hard_state_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Hard State Digest",
+          "type": "string"
+        },
+        "changed_fields": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed Fields",
+          "type": "array"
+        },
+        "milestone_kinds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MilestoneKind"
+          },
+          "title": "Milestone Kinds",
+          "type": "array"
+        },
+        "milestone_eligible": {
+          "title": "Milestone Eligible",
+          "type": "boolean"
+        },
+        "milestone_reason": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Milestone Reason",
+          "type": "string"
         }
       },
       "required": [
@@ -257,6 +263,26 @@
     "TrajectoryHardState": {
       "additionalProperties": false,
       "properties": {
+        "state_schema_version": {
+          "const": "1",
+          "default": "1",
+          "title": "State Schema Version",
+          "type": "string"
+        },
+        "task_family": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Task Family",
+          "type": "string"
+        },
+        "typed_objects": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TypedObjectRef"
+          },
+          "title": "Typed Objects",
+          "type": "array"
+        },
         "artifacts": {
           "default": [],
           "items": {
@@ -265,11 +291,14 @@
           "title": "Artifacts",
           "type": "array"
         },
-        "assurance_level": {
+        "candidate_state": {
+          "$ref": "#/$defs/CandidateState",
+          "default": "ABSENT"
+        },
+        "latest_candidate_digest": {
           "anyOf": [
             {
-              "maxLength": 64,
-              "minLength": 1,
+              "pattern": "^sha256:[0-9a-f]{64}$",
               "type": "string"
             },
             {
@@ -277,47 +306,19 @@
             }
           ],
           "default": null,
-          "title": "Assurance Level"
-        },
-        "binding_validity": {
-          "$ref": "#/$defs/BindingValidity",
-          "default": "UNKNOWN"
-        },
-        "candidate_state": {
-          "$ref": "#/$defs/CandidateState",
-          "default": "ABSENT"
+          "title": "Latest Candidate Digest"
         },
         "checker_state": {
           "$ref": "#/$defs/CheckerState",
           "default": "NOT_CHECKED"
         },
-        "completeness_assurance": {
-          "anyOf": [
-            {
-              "maxLength": 64,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Completeness Assurance"
-        },
-        "completeness_status": {
-          "anyOf": [
-            {
-              "maxLength": 64,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Completeness Status"
+        "open_obligation_uris": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Open Obligation Uris",
+          "type": "array"
         },
         "discharged_obligation_uris": {
           "default": [],
@@ -341,10 +342,11 @@
           "default": null,
           "title": "Execution Status"
         },
-        "latest_candidate_digest": {
+        "completeness_status": {
           "anyOf": [
             {
-              "pattern": "^sha256:[0-9a-f]{64}$",
+              "maxLength": 64,
+              "minLength": 1,
               "type": "string"
             },
             {
@@ -352,27 +354,35 @@
             }
           ],
           "default": null,
-          "title": "Latest Candidate Digest"
+          "title": "Completeness Status"
         },
-        "latest_meaningful_transitions": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/MilestoneKind"
-          },
-          "title": "Latest Meaningful Transitions",
-          "type": "array"
+        "completeness_assurance": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completeness Assurance"
         },
-        "open_obligation_uris": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Open Obligation Uris",
-          "type": "array"
-        },
-        "reasoning_protocol_state": {
-          "$ref": "#/$defs/ReasoningProtocolState",
-          "default": "NOT_STARTED"
+        "assurance_level": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assurance Level"
         },
         "scope_digest": {
           "anyOf": [
@@ -395,25 +405,21 @@
           "title": "Scope Escalation Errors",
           "type": "array"
         },
-        "state_schema_version": {
-          "const": "1",
-          "default": "1",
-          "title": "State Schema Version",
-          "type": "string"
+        "binding_validity": {
+          "$ref": "#/$defs/BindingValidity",
+          "default": "UNKNOWN"
         },
-        "task_family": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Task Family",
-          "type": "string"
-        },
-        "typed_objects": {
+        "latest_meaningful_transitions": {
           "default": [],
           "items": {
-            "$ref": "#/$defs/TypedObjectRef"
+            "$ref": "#/$defs/MilestoneKind"
           },
-          "title": "Typed Objects",
+          "title": "Latest Meaningful Transitions",
           "type": "array"
+        },
+        "reasoning_protocol_state": {
+          "$ref": "#/$defs/ReasoningProtocolState",
+          "default": "NOT_STARTED"
         }
       },
       "required": [
@@ -426,31 +432,11 @@
       "additionalProperties": false,
       "description": "Optional model-authored external summaries; never hidden chain-of-thought.",
       "properties": {
-        "final_summary": {
-          "anyOf": [
-            {
-              "maxLength": 512,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Final Summary"
-        },
-        "latest_after_tool_summary": {
-          "anyOf": [
-            {
-              "maxLength": 512,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Latest After Tool Summary"
+        "soft_state_schema_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Soft State Schema Version",
+          "type": "string"
         },
         "plan_summary": {
           "anyOf": [
@@ -465,11 +451,31 @@
           "default": null,
           "title": "Plan Summary"
         },
-        "soft_state_schema_version": {
-          "const": "1",
-          "default": "1",
-          "title": "Soft State Schema Version",
-          "type": "string"
+        "latest_after_tool_summary": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest After Tool Summary"
+        },
+        "final_summary": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Summary"
         }
       },
       "title": "TrajectorySoftState",
@@ -478,15 +484,15 @@
     "TypedObjectRef": {
       "additionalProperties": false,
       "properties": {
-        "content_digest": {
-          "pattern": "^sha256:[0-9a-f]{64}$",
-          "title": "Content Digest",
-          "type": "string"
-        },
         "object_type": {
           "maxLength": 256,
           "minLength": 1,
           "title": "Object Type",
+          "type": "string"
+        },
+        "content_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Content Digest",
           "type": "string"
         },
         "source_capability_id": {
@@ -508,12 +514,6 @@
   "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-state-v1.schema.json",
   "additionalProperties": false,
   "properties": {
-    "assurance_authority": {
-      "const": false,
-      "default": false,
-      "title": "Assurance Authority",
-      "type": "boolean"
-    },
     "extraction_schema_version": {
       "const": "1",
       "default": "1",
@@ -526,15 +526,21 @@
       "title": "Extractor Id",
       "type": "string"
     },
+    "source_format": {
+      "const": "codex-jsonl",
+      "default": "codex-jsonl",
+      "title": "Source Format",
+      "type": "string"
+    },
     "source_digest": {
       "pattern": "^sha256:[0-9a-f]{64}$",
       "title": "Source Digest",
       "type": "string"
     },
-    "source_format": {
-      "const": "codex-jsonl",
-      "default": "codex-jsonl",
-      "title": "Source Format",
+    "task_family": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Task Family",
       "type": "string"
     },
     "states": {
@@ -543,12 +549,6 @@
       },
       "title": "States",
       "type": "array"
-    },
-    "task_family": {
-      "maxLength": 128,
-      "minLength": 1,
-      "title": "Task Family",
-      "type": "string"
     },
     "terminal_evidence": {
       "anyOf": [
@@ -560,6 +560,12 @@
         }
       ],
       "default": null
+    },
+    "assurance_authority": {
+      "const": false,
+      "default": false,
+      "title": "Assurance Authority",
+      "type": "boolean"
     }
   },
   "required": [

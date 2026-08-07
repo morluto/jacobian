@@ -263,6 +263,58 @@ def test_controlled_replay_summary_is_immutable_and_reproducible() -> None:
         assert expected == {key: payload[key] for key in expected}
 
 
+def test_replay_rejects_cluster_support_outside_cluster_trajectories() -> None:
+    comparison = _comparison()
+    hybrid = comparison.evaluations[-1]
+    corrupted = hybrid.estimates[0].model_copy(
+        update={"supporting_trajectory_ids": ("support-a", "foreign")}
+    )
+    hybrid_corrupted = hybrid.model_copy(
+        update={"estimates": (corrupted, *hybrid.estimates[1:])}
+    )
+    corrupted_comparison = comparison.model_copy(
+        update={"evaluations": (*comparison.evaluations[:-1], hybrid_corrupted)}
+    )
+    with pytest.raises(TrajectoryScoreError, match="outside its cluster members"):
+        replay_offline_values(corrupted_comparison, trajectory_id="target")
+
+
+def test_replay_rejects_cumulative_credit_inconsistent_with_transition_chain() -> None:
+    replay = replay_offline_values(_comparison(), trajectory_id="target")
+    payload = replay.states[1].model_dump(mode="json")
+    payload["cumulative_milestone_credit"] = 0.31
+    bad = replay.model_copy(
+        update={
+            "states": (
+                replay.states[0],
+                replay.states[1].model_copy(
+                    update={"cumulative_milestone_credit": 0.31}
+                ),
+                *replay.states[2:],
+            )
+        }
+    )
+    with pytest.raises(ValidationError, match="running total of transition credits"):
+        TrajectoryScoreReplay.model_validate(bad.model_dump(mode="json"))
+
+
+def test_replay_rejects_broken_observation_chain() -> None:
+    replay = replay_offline_values(_comparison(), trajectory_id="target")
+    bad = replay.model_copy(
+        update={
+            "states": (
+                replay.states[0],
+                replay.states[1].model_copy(
+                    update={"previous_observation_id": "target:999"}
+                ),
+                *replay.states[2:],
+            )
+        }
+    )
+    with pytest.raises(ValidationError, match="previous observation must chain"):
+        TrajectoryScoreReplay.model_validate(bad.model_dump(mode="json"))
+
+
 def test_replay_schema_matches_closed_model_and_validates_output() -> None:
     path = (
         ROOT

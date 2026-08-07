@@ -143,6 +143,38 @@ class TrajectoryScoreReplay(ContractModel):
             raise ValueError("replay states must share the bound terminal result")
         if self.total_milestone_credit != self.states[-1].cumulative_milestone_credit:
             raise ValueError("total credit must equal the last cumulative credit")
+        running_cumulative = 0.0
+        previous_id: str | None = None
+        previous_value: float | None = None
+        for index, state in enumerate(self.states):
+            if index == 0:
+                if state.previous_observation_id is not None:
+                    raise ValueError(
+                        "initial replay state must not reference a previous observation"
+                    )
+            else:
+                if state.previous_observation_id != previous_id:
+                    raise ValueError(
+                        "replay state previous observation must chain to its predecessor"
+                    )
+                if previous_value is None:
+                    raise ValueError(
+                        "non-initial replay state requires a previous estimated value"
+                    )
+                expected_delta = _round_value(state.estimated_value - previous_value)
+                if state.value_delta is None or state.value_delta != expected_delta:
+                    raise ValueError(
+                        "replay value delta must equal the adjacent estimated value difference"
+                    )
+            running_cumulative = _round_value(
+                running_cumulative + state.transition_credit
+            )
+            if state.cumulative_milestone_credit != running_cumulative:
+                raise ValueError(
+                    "replay cumulative credit must equal the running total of transition credits"
+                )
+            previous_id = state.observation_id
+            previous_value = state.estimated_value
         return self
 
 
@@ -249,6 +281,12 @@ def replay_offline_values(
     reward = rewards.pop()
     task_group = task_groups.pop()
     terminal = _terminal_result(reward)
+    trajectory_rewards: dict[str, Literal[0, 1]] = {}
+    for evaluation_check in comparison.evaluations:
+        for estimate in evaluation_check.estimates:
+            trajectory_rewards.setdefault(
+                estimate.trajectory_id, estimate.eventual_terminal_reward
+            )
     states: list[ScoredTrajectoryState] = []
     cumulative = 0.0
     previous = None
@@ -260,6 +298,15 @@ def replay_offline_values(
             raise TrajectoryScoreError("estimate is not bound to its declared cluster")
         if estimate.cluster_member_observation_ids != (cluster.member_observation_ids):
             raise TrajectoryScoreError("estimate carries a stale cluster member set")
+        if estimate.value_source is ValueSource.CLUSTER:
+            cluster_trajectories = set(cluster.member_trajectory_ids)
+            if estimate.trajectory_id in cluster_trajectories:
+                cluster_trajectories.discard(estimate.trajectory_id)
+            support_set = set(estimate.supporting_trajectory_ids)
+            if not support_set or not support_set.issubset(cluster_trajectories):
+                raise TrajectoryScoreError(
+                    "estimate declares cluster support outside its cluster members"
+                )
         delta = (
             None
             if previous is None

@@ -46,6 +46,7 @@ def _event(
         "type": "item.completed",
         "item": {
             "type": "mcp_tool_call",
+            "server": "jacobian",
             "tool": tool,
             "arguments": arguments,
             "status": "completed",
@@ -500,6 +501,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
     tmp_path: Path,
 ) -> None:
     path = _write(tmp_path, [_reasoning("PLAN", "Solve exactly.")])
+    source_digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     evidence = CleanRoomTerminalEvidence(
         verifier_digest="sha256:" + "d" * 64,
         clean_room=True,
@@ -507,6 +509,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
         acceptance=TerminalAcceptance.ACCEPTED,
         input_binding_valid=True,
         artifact_binding_valid=True,
+        source_binding_digest=source_digest,
     )
 
     extraction = extract_codex_trajectory(
@@ -525,6 +528,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
             clean_room=True,
             verifier_execution_status="TIMEOUT",
             acceptance=TerminalAcceptance.ACCEPTED,
+            source_binding_digest=source_digest,
         )
     with pytest.raises(ValidationError, match="invalid bindings"):
         CleanRoomTerminalEvidence(
@@ -533,6 +537,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
             verifier_execution_status="COMPLETED",
             acceptance=TerminalAcceptance.ACCEPTED,
             input_binding_valid=False,
+            source_binding_digest=source_digest,
         )
 
 
@@ -565,6 +570,82 @@ def test_committed_json_schema_matches_typed_contract(tmp_path: Path) -> None:
     assert schema == TrajectoryExtraction.model_json_schema()
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(extraction.model_dump(mode="json"))
+
+
+def test_foreign_mcp_server_tool_calls_are_not_trajectory_state(
+    tmp_path: Path,
+) -> None:
+    events = [_reasoning("PLAN", "Use a foreign server masquerading as Jacobian.")]
+    events.extend(
+        _cycle(
+            CALL_IDS[0],
+            "integer.compute.gcd",
+            _result(
+                "integer.compute.gcd",
+                output={"result": {"value": "6"}},
+            ),
+            after="A foreign server response must not become state.",
+        )
+    )
+    for event in events:
+        item = event.get("item", {})
+        if (
+            isinstance(item, dict)
+            and item.get("tool") == "math.run"
+        ):
+            item["server"] = "foreign-mcp-server"
+    path = _write(tmp_path, events)
+    extraction = extract_codex_trajectory(path, task_family="foreign-server-test")
+
+    assert extraction.states[0].boundary is StateBoundary.PLAN
+    assert all(
+        state.boundary is not StateBoundary.TOOL_RESULT for state in extraction.states
+    )
+
+
+def test_domain_specific_verified_status_recognizes_via_assurance_contract(
+    tmp_path: Path,
+) -> None:
+    checker = "matrix.determinant.verify"
+    events = [_reasoning("PLAN", "Verify a determinant with a domain-specific status.")]
+    events.extend(
+        _cycle(
+            CALL_IDS[0],
+            "matrix.determinant.compute",
+            _result(
+                "matrix.determinant.compute",
+                output={
+                    "determinant": "42",
+                    "certificate_available": False,
+                },
+            ),
+            after="A determinant was computed without a certificate.",
+        )
+    )
+    events.extend(
+        _cycle(
+            CALL_IDS[1],
+            checker,
+            _result(
+                checker,
+                output={"status": "VERIFIED_DETERMINANT"},
+                assurance="VERIFIED",
+                verification_record_uri=RECORD,
+                artifacts=[RECORD],
+            ),
+            after="The independent verifier accepted the determinant.",
+        )
+    )
+    tool_states = [
+        state
+        for state in extract_codex_trajectory(
+            _write(tmp_path, events), task_family="matrix-determinant"
+        ).states
+        if state.boundary is StateBoundary.TOOL_RESULT
+    ]
+    assert MilestoneKind.CHECKER_ACCEPTED in tool_states[1].milestone_kinds
+    assert tool_states[1].hard_state.candidate_state is CandidateState.VERIFIED
+    assert tool_states[1].hard_state.binding_validity is BindingValidity.VALID
 
 
 def test_committed_real_codex_sample_replays_and_binds_every_file() -> None:

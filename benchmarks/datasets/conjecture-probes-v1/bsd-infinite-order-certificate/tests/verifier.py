@@ -17,6 +17,44 @@ from verifier_support import (
     workspace_input_is_bound,
 )
 
+
+def json_equal(a: object, b: object) -> bool:
+    """Structural equality with exact JSON type matching.
+
+    Unlike Python's ``==``, this distinguishes ``bool`` from ``int`` at every
+    depth, so that ``True`` does not match ``1`` in evidence comparisons.
+    """
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, int) and isinstance(b, int):
+        return a == b
+    if isinstance(a, float) and isinstance(b, float):
+        return a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return False
+    if isinstance(a, str) and isinstance(b, str):
+        return a == b
+    if isinstance(a, str) or isinstance(b, str):
+        return False
+    if isinstance(a, dict) and isinstance(b, dict):
+        if len(a) != len(b):
+            return False
+        if set(a.keys()) != set(b.keys()):
+            return False
+        return all(json_equal(a[k], b[k]) for k in a)
+    if isinstance(a, dict) or isinstance(b, dict):
+        return False
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(
+            json_equal(x, y) for x, y in zip(a, b)
+        )
+    if isinstance(a, list) or isinstance(b, list):
+        return False
+    if a is None or b is None:
+        return a is None and b is None
+    return False
+
+
 TASK_ID = "jacobian/bsd-infinite-order-certificate"
 SCOPE = "integral-lutz-nagell-witness-v1"
 LIMITATIONS = [
@@ -162,13 +200,15 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(payload, dict)
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": submission.get("result"),
-            "limitations": LIMITATIONS,
-        }
+        and json_equal(
+            payload,
+            {
+                "schema_version": "1",
+                "task_id": TASK_ID,
+                "result": submission.get("result"),
+                "limitations": LIMITATIONS,
+            },
+        )
     )
     scope = bool(
         isinstance(submission, dict)

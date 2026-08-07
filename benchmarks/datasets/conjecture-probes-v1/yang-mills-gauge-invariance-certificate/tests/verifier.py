@@ -9,8 +9,8 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -25,7 +25,7 @@ LIMITATIONS = [
     "NO_MASS_GAP_CONCLUSION",
 ]
 MAX_EVIDENCE_BYTES = None
-SCOREABLE_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def rat(v: object, *, bounded: bool = False) -> Fraction:
@@ -94,6 +94,7 @@ def mathematics(result: Any) -> bool:
         or len(set(gauges)) != 4
     ):
         return False
+
     # Reject fully commuting witnesses: at least one link/gauge pair
     # must have a nonzero commutator to exercise noncommutative
     # gauge-covariance.
@@ -122,7 +123,9 @@ def mathematics(result: Any) -> bool:
 
 
 def _raw_submission() -> dict[str, Any] | None:
-    if not is_regular_bounded_file(Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES):
+    if not is_regular_bounded_file(
+        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
+    ):
         return None
     try:
         value = json.loads(Path("/app/submission.json").read_text())
@@ -148,7 +151,10 @@ def main():
         verification_record="forbidden",
     )
     m = bool(isinstance(s, dict) and mathematics(s.get("result")))
-    e = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("evidence"), max_bytes=None))
+    e = bool(
+        isinstance(s, dict)
+        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
+    )
     payload = (
         read_evidence_json(
             s["evidence"][0],
@@ -168,8 +174,12 @@ def main():
             "limitations": LIMITATIONS,
         }
     )
-    sc = bool(isinstance(s, dict) and s.get("scope") == SCOPE and s.get("limitations") == LIMITATIONS)
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in SCOREABLE_ASSURANCES)
+    sc = bool(
+        isinstance(s, dict)
+        and s.get("scope") == SCOPE
+        and s.get("limitations") == LIMITATIONS
+    )
+    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
     raw = _raw_submission()
     f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
     agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0

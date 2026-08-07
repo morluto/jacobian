@@ -350,7 +350,7 @@ def test_conjecture_probe_task_selects_owned_host_regression() -> None:
     )
     assert _host_matrix(result) == [
         {
-            "name": "conjecture-probes-v1-1",
+            "name": "vizing-bounded-cartesian-products",
             "selector": (
                 "benchmarks/validation/conjecture_probes_v1/"
                 "test_vizing_bounded_cartesian_products.py"

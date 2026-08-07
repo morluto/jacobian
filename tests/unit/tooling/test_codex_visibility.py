@@ -195,9 +195,11 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     for guidance in (
         "requested outcomes separately.",
         "over a generic arithmetic substep",
-        "retry once without that filter",
-        "correct only the reported constraint and retry once",
-        "smallest decisive value, witness, status, and assurance",
+        "composing already-known supporting operations remains allowed",
+        "follow those fields",
+        "retry within the task resource bounds",
+        "continue with other installed routes",
+        "completeness, and open obligations",
     ):
         assert guidance in skill
 

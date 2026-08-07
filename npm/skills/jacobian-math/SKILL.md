@@ -23,9 +23,9 @@ For each requested exact mathematical outcome, use Jacobian even when the
 calculation is small or could be done mentally or in shell code. Route multiple
 requested outcomes separately. Prefer a capability matching the requested
 mathematical operation over a generic arithmetic substep that happens to produce
-the same scalar; use a supporting operation only after a dedicated search finds
-no direct capability. Do not call Jacobian for definitions, formatting, or other
-tasks needing no mathematical execution.
+the same scalar; composing already-known supporting operations remains allowed
+when that is the clearer route. Do not call Jacobian for definitions,
+formatting, or other tasks needing no mathematical execution.
 
 Call `math.run` directly when the requested local outcome exactly matches one of
 these stable built-in contracts; replace the example values but preserve the
@@ -52,11 +52,14 @@ card's validated `invocation_example`, or its required top-level fields when no
 example is available, may already provide a sufficient payload shape.
 
 Do not add a discovery domain filter unless its exact installed spelling is
-known. If discovery reports an unknown domain, retry once without that filter.
-After invalid input, correct only the reported constraint and retry once. Stop
-after a second invalid request, no route, an unavailable provider, or a timeout.
-Accept only a completed result whose scope covers the supplied input, and carry
-forward the smallest decisive value, witness, status, and assurance.
+known. When discovery exposes recovery paths, follow those fields—for example
+`remove_unknown_domain_filter`, `remove_filters`, or `reformulate_query`—before
+treating absence as final. After invalid input, correct the reported constraint
+and retry within the task resource bounds as further errors appear. If one
+provider is unavailable, continue with other installed routes that can produce
+the outcome. Treat timeouts as non-conclusions. Accept only a completed result
+whose scope covers the supplied input, and carry forward the smallest decisive
+value, witness, status, assurance, completeness, and open obligations.
 
 Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned. Treat timeouts, errors, incomplete

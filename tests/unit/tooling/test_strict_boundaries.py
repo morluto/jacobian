@@ -99,7 +99,11 @@ def test_harbor_job_selection_rejects_non_str_path() -> None:
 
 
 def test_harbor_job_dataset_entry_accepts_valid_selection() -> None:
-    HarborJobDatasetEntry.model_validate({"path": "p", "task_names": ["a", "b"]})
+    entry = HarborJobDatasetEntry.model_validate(
+        {"path": "p", "task_names": ["a", "b"]}
+    )
+    assert entry.path == "p"
+    assert entry.task_names == ["a", "b"]
 
 
 def test_heldout_run_plan_rejects_invalid_condition() -> None:

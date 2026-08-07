@@ -33,8 +33,8 @@ def _matrix_payload(page_size: int) -> dict:
     ],
 )
 def test_page_size_accepts_one_through_256(model, payload) -> None:
-    model.model_validate(payload(1))
-    model.model_validate(payload(256))
+    assert model.model_validate(payload(1)).page_size == 1
+    assert model.model_validate(payload(256)).page_size == 256
 
 
 @pytest.mark.parametrize(

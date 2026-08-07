@@ -30,6 +30,11 @@ def _encoded(plan: dict[str, str]) -> str:
 def test_ci_plan_output_is_internally_consistent(args: tuple[str, ...]) -> None:
     plan = run_ci_script("classify-ci-paths", *args, check=True).stdout
 
+    # The classifier must produce a non-empty plan with at least a
+    # classification line and runnable flags.
+    assert plan.strip(), "classifier produced empty plan"
+    assert "classification=" in plan, "plan missing classification line"
+
     run_ci_script("validate-ci-plan", input_text=plan, check=True)
 
 

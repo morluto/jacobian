@@ -21,7 +21,32 @@
       "application/json"
     ],
     "min_items": 1,
-    "payload_shape": null
+    "payload_shape": {
+      "required": [
+        "schema_version",
+        "task_id",
+        "result",
+        "limitations"
+      ],
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1"
+        },
+        "task_id": {
+          "const": "jacobian/hodge-blowup-divisor-certificate"
+        },
+        "result": {
+          "type": "object"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      }
+    }
   },
   "limitations": {
     "const": [

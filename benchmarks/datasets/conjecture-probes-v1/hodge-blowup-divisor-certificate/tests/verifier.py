@@ -60,6 +60,30 @@ def gradient(coeffs, p):
     return out
 
 
+def json_equal(a: Any, b: Any) -> bool:
+    """Deep equality that preserves JSON scalar types.
+
+    Python treats ``False == 0`` and ``True == 1``, so a plain ``==``
+    comparison would accept ``arithmetic_genus: true`` where ``1`` was
+    required.  This helper distinguishes bool from int at every depth so
+    the evidence payload must match the schema-validated result exactly.
+    """
+
+    if isinstance(a, bool) or isinstance(b, bool):
+        if isinstance(a, bool) and isinstance(b, bool):
+            return a == b
+        return False
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(json_equal(x, y) for x, y in zip(a, b))
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(json_equal(a[k], b[k]) for k in a)
+    if isinstance(a, int) and isinstance(b, int):
+        return a == b
+    if isinstance(a, float) and isinstance(b, float):
+        return a == b
+    return type(a) is type(b) and a == b
+
+
 def mathematics(r: Any) -> bool:
     if not isinstance(r, dict) or set(r) != {
         "coefficients",
@@ -94,13 +118,27 @@ def mathematics(r: Any) -> bool:
     }
     submitted = {}
     for check in checks:
-        if not isinstance(check, dict) or check.get("point_index") in submitted:
+        if not isinstance(check, dict):
             return False
-        submitted[check.get("point_index")] = check
+        # Validate point_index before using it as a dict key: an array
+        # value would crash with TypeError before returning a failure.
+        idx = check.get("point_index")
+        if type(idx) is not int or idx in submitted:
+            return False
+        submitted[idx] = check
     if submitted != expected or any(
         row["value"] != 0 or row["gradient"] == [0, 0, 0] for row in expected.values()
     ):
         return False
+    # Reject booleans masquerading as ints in point-check fields: Python
+    # treats False == 0 and True == 1, so a plain dict comparison would
+    # accept value: false / multiplicity: true. Require exact int types.
+    for check in checks:
+        if (
+            type(check.get("value")) is not int
+            or type(check.get("multiplicity")) is not int
+        ):
+            return False
     d = [3, -1, -1, -1, -1, -1, -1]
     self_i = d[0] ** 2 - sum(x * x for x in d[1:])
     canonical = -3 * d[0] - sum(d[1:])
@@ -157,16 +195,13 @@ def main():
         if e
         else None
     )
-    e = bool(
-        isinstance(payload, dict)
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": s.get("result"),
-            "limitations": LIMITATIONS,
-        }
-    )
+    expected_payload = {
+        "schema_version": "1",
+        "task_id": TASK_ID,
+        "result": s.get("result"),
+        "limitations": LIMITATIONS,
+    }
+    e = bool(isinstance(payload, dict) and json_equal(payload, expected_payload))
     sc = bool(
         isinstance(s, dict)
         and s.get("scope") == SCOPE

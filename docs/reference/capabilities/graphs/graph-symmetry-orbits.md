@@ -4,7 +4,7 @@
 
 - Producer: `graph.symmetry.generator_orbits.compute`
 - Verification: `graph.symmetry.generator_orbits.verify`
-- Producer backend: Jacobian standard-library finite orbit closure
+- Producer backend: NetworkX `UnionFind` orbit closure
 - Checker: isolated standard-library permutation, adjacency, color, and orbit replay
 
 The producer computes one atomic outcome: the exact vertex and edge orbit
@@ -108,7 +108,7 @@ checker for the resulting weighted orbit sum.
   `sha256:1912b23ea59c32b084004cc2849773f1fbce46c88b852c5ac47ea2e441085768`.
 - Policy: `DEFAULT`,
   `sha256:870a92b83d3e522e4015b6bb1cabda33086906f9de1c3c36e466251ea7ed1957`.
-- Producer runtime: `jacobian.graph-symmetry==0.5.0a0`, available on
+- Producer runtime: `jacobian.networkx==3.6.1`, available on
   `linux-x86_64`; source-tree digest
   `sha256:85039ff8f1cb46aea540d2d67bc8f0775a8d282a1ee28d92d84dabb08d24af69`.
 - Checker runtime: `jacobian.graph-exact-checkers`, available; composite digest

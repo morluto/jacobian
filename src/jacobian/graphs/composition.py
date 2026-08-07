@@ -562,7 +562,7 @@ def _backend_suffix(operation: str) -> str:
     if operation == "DISJOINT_UNION":
         return "disjoint_union"
     if operation == "JOIN":
-        return "join"
+        return "full_join"
     if operation == "COMPLEMENT":
         return "complement"
     if operation == "LEXICOGRAPHIC_PRODUCT":

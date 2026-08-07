@@ -12,6 +12,7 @@ from jacobian.contracts.graph_symmetry import (
     GraphVertexOrbit,
 )
 from jacobian.domains._examples import example
+from jacobian.graphs.artifacts import nx
 from jacobian.operations import ComputedSuccess, MaterializedOperation
 
 
@@ -23,9 +24,7 @@ def _orbit_components[Element: Hashable](
     elements: tuple[Element, ...],
     actions: tuple[Mapping[Element, Element], ...],
 ) -> tuple[tuple[Element, ...], ...]:
-    import networkx as nx
-
-    union_find = nx.utils.UnionFind(elements)
+    union_find = nx().utils.UnionFind(elements)
     for action in actions:
         for element in elements:
             union_find.union(element, action[element])
@@ -104,6 +103,7 @@ def _generator_orbits(
             edge_orbit_count=len(edge_orbits),
             vertex_color_mode=("DECLARED" if request.vertex_colors else "UNCOLORED"),
             edge_color_mode="DECLARED" if request.edge_colors else "UNCOLORED",
+            backend_version=nx().__version__,
         )
     )
 
@@ -158,7 +158,7 @@ GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any], ...] = 
                 },
             ),
         ),
-        version="3",
+        version="4",
     ),
 )
 

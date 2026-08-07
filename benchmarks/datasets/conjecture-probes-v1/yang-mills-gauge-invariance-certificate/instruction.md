@@ -12,7 +12,7 @@ invariance of the plaquette scalar part. Identity-only and commutative-scalar
 shortcuts are rejected.
 
 Evidence is a matching JSON object with exactly `schema_version`, `task_id`,
-`result`, and `limitations`, at most 2 MiB. This is one finite lattice-gauge
+`result`, and `limitations`, This is one finite lattice-gauge
 identity. It says nothing about continuum construction or a Yang–Mills mass
 gap.
 

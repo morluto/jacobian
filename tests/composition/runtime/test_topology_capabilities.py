@@ -147,6 +147,46 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     )
 
 
+@pytest.mark.parametrize(
+    ("capability_id", "extra_input"),
+    (
+        (
+            "topology.simplicial_complex.chain_complex.compute",
+            {"coefficient_ring": "INTEGER"},
+        ),
+        ("topology.simplicial_homology.compute", {"prime": 2}),
+        ("topology.simplicial_homology.integral.compute", {}),
+    ),
+)
+def test_materialized_complex_composes_into_topology_consumers(
+    fresh_complete_runtime,
+    capability_id: str,
+    extra_input: dict[str, Any],
+) -> None:
+    materialized = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="topology.simplicial_complex.materialize",
+            input=_CIRCLE,
+        )
+    )
+    complex_uri = materialized.output["result_uri"]
+
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=capability_id,
+            input={"complex_artifact_uri": complex_uri, **extra_input},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.artifact_uris[0] == complex_uri
+    input_artifact = fresh_complete_runtime.core.store.get(result.output["input_uri"])
+    assert input_artifact.manifest.parents == (complex_uri,)
+    assert "complex_artifact_uri" not in input_artifact.payload
+    assert input_artifact.payload["complex"]["complex_digest"].startswith("sha256:")
+
+
 def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
     fresh_complete_runtime,
 ) -> None:

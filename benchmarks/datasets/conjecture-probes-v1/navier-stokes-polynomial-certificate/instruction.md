@@ -12,8 +12,7 @@ must be nonzero, so the zero field and pure-gradient shortcuts are rejected.
 
 `evidence/answer.txt` must be a JSON object with exactly `schema_version`,
 `task_id`, `result`, and `limitations`, matching the result and limitations in
-the submission. It must be no larger than 2 MiB.
-
+the submission. 
 This finite symbolic certificate concerns one exact steady polynomial flow.
 It neither proves nor disproves global existence or smoothness for the
 three-dimensional Navier–Stokes equations. Claim only `CHECKED` for the frozen
@@ -33,4 +32,5 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
 - **Evidence media types:** `text/plain`.
 - **Required artifact filenames:** `evidence/answer.txt`.
+- **Evidence payload:** JSON object with required keys `schema_version` (string "1"), `task_id`, `result`, and `limitations`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

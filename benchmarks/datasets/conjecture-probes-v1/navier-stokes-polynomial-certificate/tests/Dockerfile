@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/navier-stokes-polynomial-certificate" \
-      jacobian.checksum="e3a4e70ec494d9b735d7e532a25b5f17cbb4b711b1541ad5c78753af710eaa89"
+      jacobian.checksum="64180bc5a4fbf8d5a76e34531fec9728074251db0e784c12978a672908de13a0"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json verifier_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

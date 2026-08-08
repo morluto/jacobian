@@ -82,7 +82,11 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
     )
 
 
-def _json_equal(left: object, right: object) -> bool:  # noqa: C901
+def _finite_floats_equal(left: float, right: float) -> bool:
+    return math.isfinite(left) and math.isfinite(right) and left == right
+
+
+def _json_equal(left: object, right: object) -> bool:
     pending = [(left, right)]
     while pending:
         current_left, current_right = pending.pop()
@@ -99,9 +103,7 @@ def _json_equal(left: object, right: object) -> bool:  # noqa: C901
                 return False
             pending.extend(zip(current_left, current_right, strict=True))
         elif isinstance(current_left, float):
-            if not math.isfinite(current_left) or not math.isfinite(current_right):
-                return False
-            if current_left != current_right:
+            if not _finite_floats_equal(current_left, current_right):
                 return False
         elif current_left != current_right:
             return False

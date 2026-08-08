@@ -110,9 +110,11 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             assert verified["assurance"]["level"] == "VERIFIED"
             record_uri = verified["output"]["verification_record_uri"]
             assert record_uri in verified["artifact_uris"]
+            assert verified["artifact_uris"] == [record_uri]
             record = await _artifact(client, record_uri)
             assert record["artifact_uri"] == record_uri
-            assert record["payload"]["evidence_uri"] in verified["artifact_uris"]
+            assert record["payload"]["bindings"]["candidate_digest"]
+            assert "evidence_uri" not in record["payload"]
 
         restarted = create_server(
             tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED

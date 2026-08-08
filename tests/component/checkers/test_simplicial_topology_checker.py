@@ -19,15 +19,15 @@ from jacobian.contracts.topology import (
     SimplicialHomologyRequest,
 )
 from jacobian.domains.topology.operations import (
+    _canonicalize,
     _chain_result,
     _homology,
     _integral_homology,
-    _materialize,
 )
 from jacobian_checkers.simplicial_topology import (
     check_integral_simplicial_homology,
     check_simplicial_chain_complex,
-    check_simplicial_complex_materialization,
+    check_simplicial_complex_canonicalization,
     check_simplicial_homology,
 )
 
@@ -104,9 +104,9 @@ _PRESENTATION = {
     "vertices": ["c", "a", "b"],
     "facets": [["b", "a"], ["c", "b"], ["a", "c"]],
 }
-_MATERIAL_REQUEST = SimplicialComplexRequest.model_validate(_PRESENTATION)
-_MATERIAL_RESULT = _materialize(_MATERIAL_REQUEST).value
-_COMPLEX = _MATERIAL_RESULT.complex
+_CANONICALIZATION_REQUEST = SimplicialComplexRequest.model_validate(_PRESENTATION)
+_CANONICALIZATION_RESULT = _canonicalize(_CANONICALIZATION_REQUEST).value
+_COMPLEX = _CANONICALIZATION_RESULT.complex
 _CHAIN_REQUEST = ChainComplexRequest(
     complex=_COMPLEX,
     coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
@@ -143,12 +143,12 @@ _CASES: tuple[
     tuple[Callable[[dict[str, Any]], dict[str, Any]], dict[str, Any]], ...
 ] = (
     (
-        check_simplicial_complex_materialization,
+        check_simplicial_complex_canonicalization,
         _request(
-            "topology.simplicial_complex.materialize",
+            "topology.simplicial_complex.canonicalize",
             "topology.simplicial-complex.closure-replay",
-            _MATERIAL_REQUEST.model_dump(mode="json"),
-            _MATERIAL_RESULT.model_dump(mode="json"),
+            _CANONICALIZATION_REQUEST.model_dump(mode="json"),
+            _CANONICALIZATION_RESULT.model_dump(mode="json"),
         ),
     ),
     (

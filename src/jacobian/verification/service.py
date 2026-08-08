@@ -25,6 +25,10 @@ from jacobian.contracts.evidence import (
     PreservationEnvelope,
     WitnessEnvelope,
 )
+from jacobian.contracts.exact_domain_verification import (
+    InlineExactVerificationRecord,
+    inline_exact_value_digest,
+)
 from jacobian.contracts.results import (
     Arithmetic,
     Assurance,
@@ -117,6 +121,23 @@ class VerificationService:
                 "description": "authorized checker result bound to exact evidence"
             },
         )
+        self.inline_exact_record_schema_uri = store.register_descriptor(
+            kind="schema",
+            name="jacobian.inline-exact-verification-record",
+            version="1",
+            definition=model_schema(InlineExactVerificationRecord),
+        )
+        self.inline_exact_record_semantics_uri = store.register_descriptor(
+            kind="semantics",
+            name="jacobian.inline-exact-verification-record",
+            version="1",
+            definition={
+                "description": (
+                    "authorized checker decision bound to canonical inline exact "
+                    "input and candidate values"
+                )
+            },
+        )
         self.preservation_schema_uri = store.register_descriptor(
             kind="schema",
             name="jacobian.preservation-envelope",
@@ -201,6 +222,155 @@ class VerificationService:
         return self._validate_checker_response(
             completed, expected_digest, provider_runtime
         )
+
+    def verify_inline_exact(
+        self,
+        *,
+        claim_schema_uri: str,
+        candidate_schema_uri: str,
+        semantics_uri: str,
+        claim_payload: dict[str, object],
+        candidate_payload: dict[str, object],
+        checker_id: str,
+        witness_format: str,
+        request: dict[str, Any],
+        timeout_seconds: float | None = None,
+    ) -> ResultEnvelope:
+        """Verify exact inline values without materializing them as artifacts.
+
+        Only an accepted immutable record is persisted.  The record binds the
+        value digests, schemas, semantics, checker, measured runtime, request,
+        and the checker decision; the ordinary input and candidate never enter
+        the artifact store.
+        """
+
+        started = time.monotonic()
+        try:
+            self.schemas.validate(claim_schema_uri, claim_payload)
+            self.schemas.validate(candidate_schema_uri, candidate_payload)
+            semantics = self.store.get(semantics_uri)
+            semantics_digest = semantics.manifest.object_digest
+            claim_digest = inline_exact_value_digest(
+                schema_uri=claim_schema_uri,
+                semantics_uri=semantics_uri,
+                payload=claim_payload,
+            )
+            candidate_digest = inline_exact_value_digest(
+                schema_uri=candidate_schema_uri,
+                semantics_uri=semantics_uri,
+                payload=candidate_payload,
+            )
+            expected_bindings = request.get("expected_bindings")
+            if not isinstance(expected_bindings, dict) or expected_bindings != {
+                "claim_digest": claim_digest,
+                "semantics_digest": semantics_digest,
+                "candidate_digest": candidate_digest,
+                "scope_digest": None,
+                "encoding_digest": None,
+            }:
+                raise ValueError("inline exact replay bindings do not match values")
+            bindings = EvidenceBindings.model_validate(expected_bindings)
+            checker = self.checker_registry.require_compatible(
+                checker_id,
+                evidence_kind=EvidenceKind.WITNESS,
+                format_id=witness_format,
+                format_version="1",
+                claim_schema_uri=claim_schema_uri,
+                semantics_uri=semantics_uri,
+                candidate_schema_uri=candidate_schema_uri,
+            )
+            request_digest = _digest_bytes(canonicalize_json(request))
+            decision = self._run_checker(
+                entrypoint=checker.entrypoint,
+                expected_digest=checker.executable_digest,
+                request=request,
+                provider_runtime=checker.provider_runtime,
+                timeout_seconds=timeout_seconds,
+            )
+            runtime_ms = int((time.monotonic() - started) * 1000)
+            if not decision.accepted:
+                return ResultEnvelope(
+                    execution=Execution(
+                        status=ExecutionStatus.COMPLETED, runtime_ms=runtime_ms
+                    ),
+                    input=InputValidation(
+                        status=InputStatus.REJECTED, errors=(decision.detail,)
+                    ),
+                    conclusion=Conclusion.UNKNOWN,
+                    assurance=Assurance(
+                        arithmetic=decision.arithmetic,
+                        method=decision.method,
+                        coverage=decision.coverage,
+                        verification=Verification.UNVERIFIED,
+                    ),
+                    claim_digest=claim_digest,
+                    semantics_digest=semantics_digest,
+                    candidate_digest=candidate_digest,
+                )
+            self._ensure_decision_endpoints_in_request(decision, set())
+            record = InlineExactVerificationRecord(
+                witness_format=witness_format,
+                checker_id=checker.checker_id,
+                checker_digest=checker.executable_digest,
+                runtime_digest=(
+                    checker.provider_runtime.digest
+                    if checker.provider_runtime is not None
+                    else None
+                ),
+                environment_digest=_environment_digest(
+                    checker.executable_digest, checker.provider_runtime
+                ),
+                input_schema_uri=claim_schema_uri,
+                candidate_schema_uri=candidate_schema_uri,
+                semantics_uri=semantics_uri,
+                bindings=bindings,
+                decision=decision,
+                request_digest=request_digest,
+            )
+            record_artifact = self._commit_verification_record(
+                checker_id=checker.checker_id,
+                checker_digest=checker.executable_digest,
+                schema_uri=self.inline_exact_record_schema_uri,
+                semantics_uri=self.inline_exact_record_semantics_uri,
+                payload=record.model_dump(mode="json"),
+                parents=(semantics_uri,),
+                summary="authorized inline exact verification",
+            )
+            return ResultEnvelope(
+                execution=Execution(
+                    status=ExecutionStatus.COMPLETED,
+                    runtime_ms=runtime_ms,
+                    detail=decision.detail,
+                ),
+                input=InputValidation(status=InputStatus.ACCEPTED),
+                conclusion=decision.conclusion,
+                assurance=Assurance(
+                    arithmetic=decision.arithmetic,
+                    method=decision.method,
+                    coverage=decision.coverage,
+                    verification=Verification.VERIFIED,
+                    checker_id=checker.checker_id,
+                    checker_digest=checker.executable_digest,
+                ),
+                claim_digest=claim_digest,
+                semantics_digest=semantics_digest,
+                candidate_digest=candidate_digest,
+                evidence_uris=(record_artifact.artifact_uri,),
+                verification_record_uri=record_artifact.artifact_uri,
+            )
+        except (
+            TimeoutError,
+            CheckerExecutionCancelledError,
+            CheckerExecutableChangedError,
+            CheckerRegistryError,
+            SchemaRegistryError,
+            ValueError,
+            ValidationError,
+            ArtifactNotFoundError,
+            StorageError,
+            CheckerExecutionError,
+        ) as exc:
+            return self._verification_failure_result(exc, started)
 
     def _validate_checker_response(
         self,

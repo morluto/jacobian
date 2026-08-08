@@ -18,8 +18,10 @@ from jacobian_checkers.exact_domain_operations import (
     check_integer_powerful_number,
     check_integer_prime_factorization,
     check_matrix_characteristic_polynomial,
+    check_matrix_determinant,
     check_matrix_nullspace,
     check_matrix_product,
+    check_matrix_rank,
     check_matrix_rref,
     check_matrix_smith_normal_form,
     check_modular_polynomial_residue_image,
@@ -80,11 +82,19 @@ def _rational_poly(
 
 
 def _qq(entries: list[list[int]]) -> dict[str, Any]:
-    return {"domain": "QQ", "entries": [[_q(item) for item in row] for row in entries]}
+    return {
+        "matrix_schema_version": "1",
+        "domain": "QQ",
+        "entries": [[_q(item) for item in row] for row in entries],
+    }
 
 
 def _zz(entries: list[list[int]]) -> dict[str, Any]:
-    return {"domain": "ZZ", "entries": [[str(item) for item in row] for row in entries]}
+    return {
+        "matrix_schema_version": "1",
+        "domain": "ZZ",
+        "entries": [[str(item) for item in row] for row in entries],
+    }
 
 
 def _artifact(
@@ -272,6 +282,31 @@ _POLY_CASES: tuple[
 _MATRIX_CASES: tuple[
     tuple[Callable[[dict[str, Any]], dict[str, Any]], dict[str, Any]], ...
 ] = (
+    (
+        check_matrix_determinant,
+        _request(
+            "matrix.determinant.compute",
+            "matrix.determinant.flint-replay",
+            {"matrix": _qq([[1, 2], [3, 4]])},
+            {
+                "determinant": _q(-2),
+                "method": "FRACTION_FREE_BAREISS",
+            },
+        ),
+    ),
+    (
+        check_matrix_rank,
+        _request(
+            "matrix.rank.compute",
+            "matrix.rank.flint-replay",
+            {"matrix": _qq([[1, 2, 3], [2, 4, 6], [0, 1, 1]])},
+            {
+                "rank": 2,
+                "pivot_columns": [0, 1],
+                "method": "EXACT_RATIONAL_ROW_REDUCTION",
+            },
+        ),
+    ),
     (
         check_matrix_product,
         _request(

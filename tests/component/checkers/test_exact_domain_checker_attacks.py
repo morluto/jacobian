@@ -15,6 +15,8 @@ from tests.support.artifacts import artifact_uri as _uri
 from tests.support.artifacts import canonical_digest as _digest
 
 import jacobian_checkers.exact_domain_operations as checker_module
+from jacobian.contracts.exact_domain_verification import inline_exact_value_digest
+from jacobian_checkers.exact_domain_operations import check_matrix_rank
 from jacobian_checkers.graph_exact_operations import check_graph_induced_tree_maximum
 
 
@@ -88,6 +90,51 @@ def test_exact_domain_checker_rejects_changed_flint_runtime(
     assert decision["accepted"] is False
     assert decision["conclusion"] == "UNKNOWN"
     assert "runtime is unavailable" in decision["detail"]
+
+
+def test_exact_domain_checker_rejects_rebound_inline_candidate() -> None:
+    """Version-two replay binds inline values without assigning artifact URIs."""
+
+    _checker, stored = next(case for case in _CASES if case[0] is check_matrix_rank)
+    claim = stored["claim"]
+    candidate = stored["candidate"]
+    semantics = stored["semantics"]
+    request: dict[str, Any] = {
+        "request_version": "2",
+        "claim": {
+            "schema_uri": claim["schema_uri"],
+            "semantics_uri": claim["semantics_uri"],
+            "payload": copy.deepcopy(claim["payload"]),
+        },
+        "candidate": {
+            "schema_uri": candidate["schema_uri"],
+            "semantics_uri": candidate["semantics_uri"],
+            "payload": copy.deepcopy(candidate["payload"]),
+        },
+        "semantics": copy.deepcopy(semantics),
+        "scope": None,
+    }
+    request["expected_bindings"] = {
+        "claim_digest": inline_exact_value_digest(
+            schema_uri=request["claim"]["schema_uri"],
+            semantics_uri=request["claim"]["semantics_uri"],
+            payload=request["claim"]["payload"],
+        ),
+        "semantics_digest": semantics["object_digest"],
+        "candidate_digest": inline_exact_value_digest(
+            schema_uri=request["candidate"]["schema_uri"],
+            semantics_uri=request["candidate"]["semantics_uri"],
+            payload=request["candidate"]["payload"],
+        ),
+        "scope_digest": None,
+        "encoding_digest": None,
+    }
+
+    assert check_matrix_rank(request)["accepted"] is True
+    request["candidate"]["payload"]["rank"] = 1
+    rejected = check_matrix_rank(request)
+    assert rejected["accepted"] is False
+    assert rejected["conclusion"] == "UNKNOWN"
 
 
 def test_graph_checker_does_not_require_the_unrelated_flint_runtime(

@@ -15,6 +15,7 @@ _VERB_SEGMENTS: tuple[str, ...] = (
     "compute",
     "decide",
     "materialize",
+    "canonicalize",
     "evaluate",
     "count",
     "classify",
@@ -25,7 +26,7 @@ def derive_verification_capability_id(producer_capability_id: str) -> str:
     """Derive a per-producer verifier ID by stripping the verb and appending ``.verify``.
 
     The producer operation verb (``compute``, ``decide``, ``materialize``,
-    ``evaluate``, or ``count``) is removed from wherever it appears in the
+    ``canonicalize``, ``evaluate``, or ``count``) is removed from wherever it appears in the
     producer capability ID, and ``.verify`` is appended. For example
     ``polynomial.compute.gcd`` becomes ``polynomial.gcd.verify`` and
     ``integer.decide.powerful`` becomes ``integer.powerful.verify``.
@@ -66,8 +67,9 @@ def derive_verification_description(producer_capability_id: str) -> str:
 
     return (
         f"Independently replay the exact {producer_capability_id} relation "
-        "against its inline input and candidate, materializing both within "
-        "verification and reusing the operator-authorized independent checker."
+        "against its inline input and candidate, binding their canonical "
+        "digests in the accepted verification record through the "
+        "operator-authorized independent checker."
     )
 
 

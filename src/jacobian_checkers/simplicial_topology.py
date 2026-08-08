@@ -608,7 +608,7 @@ def _unit_vector(length: int, index: int) -> list[int]:
     return [1 if position == index else 0 for position in range(length)]
 
 
-def _replay_materialization(source: dict[str, Any], result: dict[str, Any]) -> bool:
+def _replay_canonicalization(source: dict[str, Any], result: dict[str, Any]) -> bool:
     expected_complex = _complex_from_request(source)
     return result == {
         **_META,
@@ -1096,12 +1096,12 @@ def _run(
         return _reject("malformed, unsupported, or mismatched topology request")
 
 
-def check_simplicial_complex_materialization(request: object) -> dict[str, Any]:
+def check_simplicial_complex_canonicalization(request: object) -> dict[str, Any]:
     return _run(
         request,
-        operation_id="topology.simplicial_complex.materialize",
+        operation_id="topology.simplicial_complex.canonicalize",
         witness_format="topology.simplicial-complex.closure-replay",
-        replay=_replay_materialization,
+        replay=_replay_canonicalization,
     )
 
 
@@ -1135,6 +1135,6 @@ def check_integral_simplicial_homology(request: object) -> dict[str, Any]:
 __all__ = [
     "check_integral_simplicial_homology",
     "check_simplicial_chain_complex",
-    "check_simplicial_complex_materialization",
+    "check_simplicial_complex_canonicalization",
     "check_simplicial_homology",
 ]

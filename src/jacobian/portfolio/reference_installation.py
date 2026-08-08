@@ -89,29 +89,27 @@ class ReferenceLeanInstaller:
                 point_schema_uri=application.polytope.point_schema_uri,
             )
         )
-        result.lean_checkers = application.reference_installer.install_lean_checkers()
-        profiles = {
-            environment.value: {
-                "semantics_uri": installation.semantics_uri,
-                "import_name": installation.import_name,
-                "mathlib_commit": installation.mathlib_commit,
-                "allowed_axioms": list(installation.allowed_axioms),
-                "checker_timeout_seconds": installation.checker_timeout_seconds,
-            }
-            for environment, installation in sorted(
-                result.lean_checkers.items(),
-                key=lambda item: item[0].value,
-            )
-        }
-        runtime = self.provider_resolver.resolve_lean(
-            profiles=profiles,
-            checker_ids=tuple(
-                installation.checker_id
-                for _, installation in sorted(
-                    result.lean_checkers.items(),
-                    key=lambda item: item[0].value,
+        result.lean_checkers, checker_runtime = (
+            application.reference_installer.install_lean_checkers(
+                resolve_provider_runtime=lambda profiles: (
+                    self.provider_resolver.resolve_lean(
+                        profiles=profiles,
+                        checker_ids=(),
+                    )
                 )
-            ),
+            )
+        )
+        runtime = checker_runtime.model_copy(
+            update={
+                "checker_ids": tuple(
+                    installation.checker_id
+                    for _, installation in sorted(
+                        result.lean_checkers.items(),
+                        key=lambda item: item[0].value,
+                    )
+                    if installation.checker_id is not None
+                )
+            }
         )
         result.lean_runtime = runtime
         inspect_adapter = install_lean_proof_state_inspect_only(
@@ -127,6 +125,12 @@ class ReferenceLeanInstaller:
         ctx.register_capability(inspect_adapter)
         if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
             _LOGGER.warning("lean.check is not installed: %s", runtime.diagnostic)
+            return
+        if any(
+            installation.checker_id is None
+            for installation in result.lean_checkers.values()
+        ):
+            _LOGGER.warning("lean.check is not installed: no active Lean checker")
             return
         try:
             result.lean_declarations = installed_lean_declaration_service(runtime)

@@ -49,6 +49,10 @@ def _result_payload(runtime, computed) -> dict[str, Any]:
     return runtime.core.store.get(computed.output["result_uri"]).payload
 
 
+def _inline_result_payload(computed) -> dict[str, Any]:
+    return computed.output["result"]
+
+
 def test_public_certified_smith_cases_reach_checker_bound_results(
     authorized_complete_runtime,
 ) -> None:
@@ -81,26 +85,24 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
     authorized_complete_runtime,
 ) -> None:
     for case in _suite()["homology_cases"]:
-        materialized = authorized_complete_runtime.core.capabilities.invoke(
+        canonicalized = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
-                capability_id="topology.simplicial_complex.materialize",
+                capability_id="topology.simplicial_complex.canonicalize",
                 input=case["presentation"],
             )
         )
-        materialized_payload = _result_payload(
-            authorized_complete_runtime, materialized
-        )
-        complex_ = materialized_payload["complex"]
+        complex_ = _inline_result_payload(canonicalized)["complex"]
+        integral_input = {
+            "complex": complex_,
+            "convention": case["convention"],
+        }
         computed = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="topology.simplicial_homology.integral.compute",
-                input={
-                    "complex": complex_,
-                    "convention": case["convention"],
-                },
+                input=integral_input,
             )
         )
-        groups = _result_payload(authorized_complete_runtime, computed)["groups"]
+        groups = _inline_result_payload(computed)["groups"]
         assert [group["betti_number"] for group in groups] == (
             case["expected_free_ranks"]
         )
@@ -113,7 +115,10 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
             CapabilityRequest(
                 capability_id="topology.simplicial_homology.integral.verify",
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={
+                    "input": integral_input,
+                    "candidate": _inline_result_payload(computed),
+                },
             )
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED

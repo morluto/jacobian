@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
+from jacobian.contracts.capabilities import (
+    CapabilityProviderAvailability,
+    CapabilityProviderRuntime,
+)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.claims import ClaimSpec
 from jacobian.contracts.evidence import (
@@ -69,7 +74,7 @@ class LeanCheckerInstallation:
     claim_schema_uri: str
     candidate_schema_uri: str
     certificate_schema_uri: str
-    checker_id: str
+    checker_id: str | None
 
 
 class ReferenceInstaller:
@@ -155,8 +160,14 @@ class ReferenceInstaller:
 
     def install_lean_checkers(
         self,
-    ) -> dict[LeanEnvironment, LeanCheckerInstallation]:
-        """Authorize the pinned core and mathlib Lean certificate profiles."""
+        *,
+        resolve_provider_runtime: Callable[
+            [dict[str, dict[str, Any]]], CapabilityProviderRuntime
+        ],
+    ) -> tuple[
+        dict[LeanEnvironment, LeanCheckerInstallation], CapabilityProviderRuntime
+    ]:
+        """Authorize Lean checkers bound to their measured provider runtime."""
 
         mathlib_commit = "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
         lean_version = "4.31.0"
@@ -187,7 +198,7 @@ class ReferenceInstaller:
                 225,
             ),
         }
-        installations: dict[LeanEnvironment, LeanCheckerInstallation] = {}
+        profiles: dict[str, dict[str, Any]] = {}
         for environment, (
             import_name,
             pinned_mathlib,
@@ -212,15 +223,39 @@ class ReferenceInstaller:
                     "trust_level": 0,
                 },
             )
-            checker_id = self._authorize_checker(
-                name=f"pinned {environment.value} Lean kernel checker",
-                entrypoint="jacobian_checkers.lean4:check_kernel_certificate",
-                evidence_kind="CERTIFICATE",
-                format_id="lean4.kernel",
-                claim_schema=claim_schema_uri,
-                semantics=semantics_uri,
-                candidate_schema=candidate_schema_uri,
-            )
+            profiles[environment.value] = {
+                "semantics_uri": semantics_uri,
+                "import_name": import_name,
+                "mathlib_commit": pinned_mathlib,
+                "allowed_axioms": list(allowed_axioms),
+                "checker_timeout_seconds": checker_timeout_seconds,
+            }
+        provider_runtime = resolve_provider_runtime(profiles)
+
+        installations: dict[LeanEnvironment, LeanCheckerInstallation] = {}
+        for environment, (
+            import_name,
+            pinned_mathlib,
+            allowed_axioms,
+            checker_timeout_seconds,
+        ) in configurations.items():
+            semantics_uri = profiles[environment.value]["semantics_uri"]
+            assert isinstance(semantics_uri, str)
+            checker_id = None
+            if (
+                provider_runtime.availability
+                is CapabilityProviderAvailability.AVAILABLE
+            ):
+                checker_id = self._authorize_checker(
+                    name=f"pinned {environment.value} Lean kernel checker",
+                    entrypoint="jacobian_checkers.lean4:check_kernel_certificate",
+                    evidence_kind="CERTIFICATE",
+                    format_id="lean4.kernel",
+                    claim_schema=claim_schema_uri,
+                    semantics=semantics_uri,
+                    candidate_schema=candidate_schema_uri,
+                    provider_runtime=provider_runtime,
+                )
             installations[environment] = LeanCheckerInstallation(
                 environment=environment,
                 lean_version=lean_version,
@@ -235,7 +270,7 @@ class ReferenceInstaller:
                 certificate_schema_uri=self.certificate_schema_uri,
                 checker_id=checker_id,
             )
-        return installations
+        return installations, provider_runtime
 
     def install_graph_paths(self) -> ReferenceInstallation:
         domain = "jacobian.graph-paths"
@@ -682,6 +717,7 @@ class ReferenceInstaller:
         candidate_schema: str,
         target_schema: str | None = None,
         target_semantics: str | None = None,
+        provider_runtime: CapabilityProviderRuntime | None = None,
     ) -> str:
         return (
             CheckerInstaller(self.checkers)
@@ -701,6 +737,7 @@ class ReferenceInstaller:
                     target_semantics_uris=(
                         (target_semantics,) if target_semantics is not None else ()
                     ),
+                    provider_runtime=provider_runtime,
                     reason="bundled reference checker",
                 ),
                 authorize=not self.checkers.bind_existing_when_omitted,

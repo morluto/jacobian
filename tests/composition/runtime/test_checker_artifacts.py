@@ -9,6 +9,7 @@ from jacobian.contracts.evidence import (
     WitnessEnvelope,
     WitnessRole,
 )
+from jacobian.contracts.matrices import RationalMatrix
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.storage.models import StoredArtifact
 
@@ -21,8 +22,18 @@ def _witness_schema_uri(runtime: JacobianRuntime) -> str:
     )
 
 
+def _matrix_schema_uri(runtime: JacobianRuntime) -> str:
+    return runtime.core.schemas.register_model(
+        name="jacobian.exact-rational-matrix",
+        version="1",
+        model=RationalMatrix,
+    )
+
+
 def _semantics_artifact(runtime: JacobianRuntime) -> StoredArtifact:
-    return runtime.core.store.get(runtime.portfolio.matrix.semantics_uri)
+    return runtime.core.store.get(
+        runtime.portfolio.domain_bundles["matrix"].semantics_uri
+    )
 
 
 def _claim_and_candidate(
@@ -42,8 +53,30 @@ def _claim_and_candidate(
             input={"matrix": matrix},
         )
     )
-    claim = runtime.core.store.get(computed.output["matrix_uri"])
-    candidate = runtime.core.store.get(computed.output["determinant_uri"])
+    matrix_bundle = runtime.portfolio.domain_bundles["matrix"]
+    matrix_schema_uri = _matrix_schema_uri(runtime)
+    determinant_schema_uri = matrix_bundle.result_schema_uris[
+        "matrix.determinant.compute"
+    ]
+    semantics_uri = matrix_bundle.semantics_uri
+    claim_put = runtime.core.artifacts.put(
+        schema_uri=matrix_schema_uri,
+        semantics_uri=semantics_uri,
+        payload=matrix,
+        summary="exact rational matrix verification claim",
+    )
+    claim = runtime.core.store.get(claim_put.artifact_uri)
+    candidate_put = runtime.core.artifacts.put(
+        schema_uri=determinant_schema_uri,
+        semantics_uri=semantics_uri,
+        payload={
+            "determinant": computed.output["result"]["determinant"],
+            "method": "FRACTION_FREE_BAREISS",
+        },
+        parents=(claim.artifact_uri,),
+        summary="exact rational matrix determinant verification candidate",
+    )
+    candidate = runtime.core.store.get(candidate_put.artifact_uri)
     return claim, candidate
 
 

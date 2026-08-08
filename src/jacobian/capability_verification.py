@@ -12,6 +12,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRelationshipStatus,
     CapabilityResult,
 )
+from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import Coverage
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.storage.errors import StorageError
@@ -62,9 +63,22 @@ class CapabilityVerificationMixin:
             record_artifact = self.store.get(record_uri)
             record = VerificationRecord.model_validate(record_artifact.payload)
         except (StorageError, ValueError) as exc:
-            raise CapabilityError(
-                "verified capability result has no valid local verification record"
-            ) from exc
+            if isinstance(exc, StorageError):
+                raise CapabilityError(
+                    "verified capability result has no valid local verification record"
+                ) from exc
+            try:
+                inline_record = InlineExactVerificationRecord.model_validate(
+                    record_artifact.payload
+                )
+            except ValueError as inline_exc:
+                raise CapabilityError(
+                    "verified capability result has no valid local verification record"
+                ) from inline_exc
+            _validate_inline_exact_record(
+                result, record_uri, record_artifact, inline_record
+            )
+            return
         if record.evidence_uri not in result.artifact_uris:
             raise CapabilityError(
                 "verified capability result does not expose its checked evidence"
@@ -83,6 +97,55 @@ class CapabilityVerificationMixin:
         )
         _validate_discharged_obligations(result, record_artifact, record_parents)
         _validate_verified_completeness(result, record, record_parents)
+
+
+def _validate_inline_exact_record(
+    result: CapabilityResult,
+    record_uri: str,
+    record_artifact: Any,
+    record: InlineExactVerificationRecord,
+) -> None:
+    """Validate a digest-bound replay without inventing input/result artifacts."""
+
+    if record_uri not in result.artifact_uris:
+        raise CapabilityError(
+            "verified capability result does not expose its verification record"
+        )
+    if tuple(record_artifact.manifest.parents) != (record.semantics_uri,):
+        raise CapabilityError(
+            "inline exact verification record has unexpected artifact parents"
+        )
+    projected_record = result.output.get("verification_record_uri")
+    if projected_record is not None and projected_record != record_uri:
+        raise CapabilityError(
+            "verified capability output projects a different verification record"
+        )
+    projected_conclusion = result.output.get("conclusion")
+    if (
+        projected_conclusion is not None
+        and projected_conclusion != record.decision.conclusion.value
+    ):
+        raise CapabilityError(
+            "verified capability output differs from the checked conclusion"
+        )
+    if any(
+        relationship.status is CapabilityRelationshipStatus.VERIFIED
+        for relationship in result.relationships
+    ):
+        raise CapabilityError(
+            "inline exact verification cannot certify artifact relationships"
+        )
+    if any(
+        obligation.status is CapabilityObligationStatus.DISCHARGED
+        for obligation in result.obligations
+    ):
+        raise CapabilityError(
+            "inline exact verification cannot discharge artifact obligations"
+        )
+    if result.completeness.assurance_level is CapabilityAssuranceLevel.VERIFIED:
+        raise CapabilityError(
+            "inline exact verification cannot certify artifact completeness"
+        )
 
 
 def _validate_projected_output(

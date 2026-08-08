@@ -7,6 +7,8 @@ import json
 import re
 from typing import Any
 
+import rfc8785
+
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _ARTIFACT_KEYS = {
@@ -80,12 +82,83 @@ def _artifact(value: object) -> dict[str, Any]:
     return value
 
 
+def _inline_exact_digest(value: dict[str, Any]) -> str:
+    """Return the protocol digest for an inline, non-artifact exact value."""
+
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            rfc8785.dumps(
+                {
+                    "inline_exact_value_version": "1",
+                    "schema_uri": value["schema_uri"],
+                    "semantics_uri": value["semantics_uri"],
+                    "payload": value["payload"],
+                }
+            )
+        ).hexdigest()
+    )
+
+
+def _inline_value(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema_uri",
+        "semantics_uri",
+        "payload",
+    }:
+        raise ValueError("inline exact value is malformed")
+    if not all(
+        isinstance(value[key], str) and _ARTIFACT_URI.fullmatch(value[key])
+        for key in ("schema_uri", "semantics_uri")
+    ):
+        raise ValueError("inline exact value identifiers are malformed")
+    _inline_exact_digest(value)
+    return value
+
+
+def _bound_inline_request(
+    request: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if (
+        set(request)
+        != {
+            "request_version",
+            "claim",
+            "candidate",
+            "semantics",
+            "scope",
+            "expected_bindings",
+        }
+        or request["request_version"] != "2"
+        or request["scope"] is not None
+    ):
+        raise ValueError("inline checker request is malformed")
+    claim = _inline_value(request["claim"])
+    candidate = _inline_value(request["candidate"])
+    semantics = _artifact(request["semantics"])
+    bindings = request["expected_bindings"]
+    if (
+        claim["semantics_uri"] != semantics["artifact_uri"]
+        or candidate["semantics_uri"] != semantics["artifact_uri"]
+        or not valid_unscoped_unencoded_bindings(bindings)
+        or bindings["claim_digest"] != _inline_exact_digest(claim)
+        or bindings["candidate_digest"] != _inline_exact_digest(candidate)
+        or bindings["semantics_digest"] != semantics["object_digest"]
+    ):
+        raise ValueError("inline exact bindings are malformed or mismatched")
+    return claim["payload"], candidate["payload"]
+
+
 def bound_request(
     request: object, *, operation_id: str, witness_format: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Validate exact artifact and evidence binding before mathematical replay."""
 
-    if not isinstance(request, dict) or set(request) != {
+    if not isinstance(request, dict):
+        raise ValueError("checker request is malformed")
+    if request.get("request_version") == "2":
+        return _bound_inline_request(request)
+    if set(request) != {
         "request_version",
         "claim",
         "candidate",

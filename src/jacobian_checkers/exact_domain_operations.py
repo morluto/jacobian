@@ -29,7 +29,7 @@ _MAX_RESIDUE_ASSIGNMENTS = 4_096
 _MAX_RESIDUE_MODULUS = 1_000_000
 _MAX_MATRIX_DIMENSION = 32
 _MAX_MATRIX_INPUT_DIGITS = 256
-_MAX_MATRIX_OUTPUT_DIGITS = 4_096
+_MAX_MATRIX_OUTPUT_DIGITS = 32_768
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -171,7 +171,11 @@ def _same_polynomial_variable(*values: object) -> str:
 
 
 def _rational_matrix(value: object) -> fmpq_mat:
-    if not isinstance(value, dict) or set(value) != {"domain", "entries"}:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"matrix_schema_version", "domain", "entries"}
+        or value["matrix_schema_version"] != "1"
+    ):
         raise ValueError("rational matrix is malformed")
     if value["domain"] != "QQ":
         raise ValueError("rational matrix domain is unsupported")
@@ -190,7 +194,11 @@ def _rational_matrix(value: object) -> fmpq_mat:
 
 
 def _integer_matrix(value: object) -> fmpz_mat:
-    if not isinstance(value, dict) or set(value) != {"domain", "entries"}:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"matrix_schema_version", "domain", "entries"}
+        or value["matrix_schema_version"] != "1"
+    ):
         raise ValueError("integer matrix is malformed")
     if value["domain"] != "ZZ":
         raise ValueError("integer matrix domain is unsupported")
@@ -915,6 +923,56 @@ def check_matrix_product(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _matrix_determinant(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(result) != {"determinant", "method"} or result["method"] != (
+        "FRACTION_FREE_BAREISS"
+    ):
+        return False
+    matrix = _matrix_source(source)
+    if matrix.nrows() != matrix.ncols():
+        return False
+    return bool(_q(result["determinant"]) == matrix.det())
+
+
+def check_matrix_determinant(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="matrix.determinant.compute",
+        witness_format="matrix.determinant.flint-replay",
+        replay=_matrix_determinant,
+    )
+
+
+def _matrix_rank(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if (
+        set(result) != {"rank", "pivot_columns", "method"}
+        or result["method"] != "EXACT_RATIONAL_ROW_REDUCTION"
+    ):
+        return False
+    matrix = _matrix_source(source)
+    reduced, rank = matrix.rref()
+    return (
+        type(result["rank"]) is int
+        and result["rank"] == rank
+        and isinstance(result["pivot_columns"], list)
+        and all(type(column) is int for column in result["pivot_columns"])
+        and tuple(result["pivot_columns"])
+        == tuple(
+            next(column for column in range(reduced.ncols()) if reduced[row, column])
+            for row in range(rank)
+        )
+    )
+
+
+def check_matrix_rank(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="matrix.rank.compute",
+        witness_format="matrix.rank.flint-replay",
+        replay=_matrix_rank,
+    )
+
+
 def _characteristic_polynomial(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if set(result) != {
         "variable",
@@ -990,8 +1048,10 @@ __all__ = [
     "check_integer_powerful_number",
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",
+    "check_matrix_determinant",
     "check_matrix_nullspace",
     "check_matrix_product",
+    "check_matrix_rank",
     "check_matrix_rref",
     "check_matrix_smith_normal_form",
     "check_modular_polynomial_residue_image",

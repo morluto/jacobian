@@ -31,6 +31,10 @@ from jacobian.provider_runtime import (
     ProviderRuntimeErrorCode,
     require_provider_runtime_unchanged,
 )
+from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
+    require_lean_semantic_runtime_identity,
+)
 
 
 class _CheckerWorkerFailureError(ValueError):
@@ -58,6 +62,7 @@ def _measure_runtime(
     os.environ.pop("JACOBIAN_CHECKER_EXECUTABLE", None)
     os.environ.pop("JACOBIAN_CHECKER_RUNTIME_DIGEST", None)
     os.environ.pop("JACOBIAN_CHECKER_LAKE_DIGEST", None)
+    os.environ.pop("JACOBIAN_CHECKER_LEAN_PROJECT_ROOT", None)
     if encoded is None:
         return None, None
     try:
@@ -83,10 +88,28 @@ def _measure_runtime(
             raise ValueError("checker runtime path is not exact")
         os.environ["JACOBIAN_CHECKER_EXECUTABLE"] = str(path)
         _bind_lake_launcher(runtime)
+    _bind_lean_semantic_environment(runtime)
     if runtime.digest is None:
         raise RuntimeError("runtime digest is unexpectedly None")
     os.environ["JACOBIAN_CHECKER_RUNTIME_DIGEST"] = runtime.digest
     return runtime, runtime.digest
+
+
+def _bind_lean_semantic_environment(runtime: CapabilityProviderRuntime) -> None:
+    if runtime.provider != "jacobian.lean4":
+        return
+    semantic_runtime = runtime.configuration.get("semantic_runtime")
+    if semantic_runtime is None:
+        return
+    if not isinstance(semantic_runtime, dict):
+        raise _CheckerWorkerFailureError("MALFORMED_RUNTIME")
+    try:
+        require_lean_semantic_runtime_identity(runtime)
+    except LeanRuntimeIdentityError as exc:
+        raise _CheckerWorkerFailureError("EXECUTION_FAILED") from exc
+    project = semantic_runtime.get("mathlib_project")
+    if isinstance(project, dict) and isinstance(project.get("root"), str):
+        os.environ["JACOBIAN_CHECKER_LEAN_PROJECT_ROOT"] = project["root"]
 
 
 def _bind_lake_launcher(runtime: CapabilityProviderRuntime) -> None:

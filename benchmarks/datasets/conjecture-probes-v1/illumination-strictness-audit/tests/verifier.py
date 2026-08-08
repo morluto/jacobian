@@ -62,6 +62,19 @@ def _json_equal(left: Any, right: Any) -> bool:
     return left == right
 
 
+def _evidence_payload_matches_submission(payload: Any, raw: Any) -> bool:
+    """Bind every copied evidence field to the submitted JSON value."""
+    return bool(
+        isinstance(payload, dict)
+        and isinstance(raw, dict)
+        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and payload.get("schema_version") == "1"
+        and _json_equal(payload.get("task_id"), raw.get("task_id"))
+        and _json_equal(payload.get("result"), raw.get("result"))
+        and _json_equal(payload.get("limitations"), raw.get("limitations"))
+    )
+
+
 def mathematics(result):
     if not isinstance(result, dict) or set(result) != {
         "flawed_directions",
@@ -135,14 +148,7 @@ def main():
         if evidence_ok
         else None
     )
-    evidence_ok = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
-    )
+    evidence_ok = _evidence_payload_matches_submission(payload, raw)
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),

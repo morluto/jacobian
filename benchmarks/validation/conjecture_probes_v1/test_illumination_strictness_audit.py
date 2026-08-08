@@ -103,6 +103,30 @@ def test_evidence_result_comparison_preserves_json_types():
     assert not module._json_equal(evidence_result, result)
 
 
+def test_evidence_copied_fields_bind_to_raw_submission():
+    module = _module()
+    raw = {
+        "task_id": module.TASK_ID,
+        "result": _result(module),
+        "limitations": module.LIMITATIONS,
+    }
+    payload = {
+        "schema_version": "1",
+        "task_id": module.TASK_ID,
+        "result": _result(module),
+        "limitations": module.LIMITATIONS,
+    }
+    assert module._evidence_payload_matches_submission(payload, raw)
+
+    for field, replacement in (
+        ("task_id", "jacobian/a-different-task"),
+        ("limitations", ["A_DIFFERENT_LIMITATION"]),
+    ):
+        changed_raw = dict(raw)
+        changed_raw[field] = replacement
+        assert not module._evidence_payload_matches_submission(payload, changed_raw)
+
+
 def test_accepts_reordered_repair():
     module = _module()
     result = _result(module)

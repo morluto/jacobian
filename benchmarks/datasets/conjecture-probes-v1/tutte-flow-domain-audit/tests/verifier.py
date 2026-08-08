@@ -107,10 +107,19 @@ def _raw():
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(), object_pairs_hook=_reject_duplicate_keys)
     except (OSError, ValueError, MemoryError, RecursionError):
         return None
     return value if isinstance(value, dict) else None
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        result[key] = value
+    return result
 
 
 def _write(values):

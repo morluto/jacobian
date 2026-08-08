@@ -98,3 +98,11 @@ def test_evidence_comparison_preserves_json_types():
     module = _module()
     assert not module._json_equal({"balance": 0}, {"balance": False})
     assert not module._json_equal({"index": 4}, {"index": 4.0})
+
+
+def test_raw_parser_rejects_duplicate_keys(tmp_path, monkeypatch):
+    module = _module()
+    submission = tmp_path / "submission.json"
+    submission.write_text('{"result": {}, "result": {}}')
+    monkeypatch.setattr(module, "Path", lambda _value: submission)
+    assert module._raw() is None

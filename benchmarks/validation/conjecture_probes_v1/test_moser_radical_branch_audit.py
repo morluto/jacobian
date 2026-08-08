@@ -32,7 +32,7 @@ def write(app, submission):
         "result": submission["result"],
         "limitations": submission["limitations"],
     }
-    evidence = app / "evidence/answer.txt"
+    evidence = app / "evidence/answer.json"
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
@@ -81,7 +81,7 @@ def test_noncanonical_fraction_and_false_assurance_fail(tmp_path):
 
 def test_evidence_tamper_and_malformed_json_fail(tmp_path):
     app, logs, _ = case(tmp_path)
-    (app / "evidence/answer.txt").write_text("tampered\n")
+    (app / "evidence/answer.json").write_text("tampered\n")
     result = run(app, logs)
     assert result["mathematics"] == 1.0 and result["evidence"] == 0.0
     app, logs, _ = case(tmp_path / "json")

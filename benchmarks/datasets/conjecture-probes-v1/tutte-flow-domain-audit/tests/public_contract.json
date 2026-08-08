@@ -26,17 +26,17 @@
     ]
   },
   "required_artifact_filenames": [
-    "evidence/answer.txt"
+    "evidence/answer.json"
   ],
   "evidence": {
     "allowed_paths": [
-      "evidence/answer.txt"
+      "evidence/answer.json"
     ],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
     "min_items": 1,
     "max_items": 1,
     "media_types": [
-      "text/plain"
+      "application/json"
     ],
     "payload_shape": null
   },
@@ -171,7 +171,7 @@
           ],
           "properties": {
             "path": {
-              "const": "evidence/answer.txt"
+              "const": "evidence/answer.json"
             },
             "sha256": {
               "type": "string",
@@ -212,5 +212,5 @@
     }
   },
   "verification_record": null,
-  "public_notes": "Exact nonzero-domain audit and repair for one Petersen-graph modular flow only."
+  "public_notes": "Exact nonzero-domain audit and repair for one Petersen-graph modular flow only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list."
 }

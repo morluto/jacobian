@@ -292,7 +292,7 @@ def read_evidence_json(
 def evidence_list_is_bound(
     evidence: object,
     *,
-    expected_path: str = "evidence/answer.txt",
+    expected_path: str = "evidence/answer.json",
     expected_count: int = 1,
     max_bytes: int | None = None,
 ) -> bool:

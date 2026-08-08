@@ -1,7 +1,7 @@
 schema_version="2"
 task_id="zarankiewicz-projective-plane-certificate"
 task_name="jacobian/zarankiewicz-projective-plane-certificate"
-evaluation_kind="regression"
+evaluation_kind="conjecture-probe"
 domain="mathematical-sciences"
 primary_domain="graph-theory"
 field="extremal-combinatorics"

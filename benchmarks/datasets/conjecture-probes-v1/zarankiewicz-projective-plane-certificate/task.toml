@@ -6,7 +6,7 @@ version="1.0.0"
 description="Construct and independently certify the sharp K2,2-free 13-by-13 incidence bound."
 keywords=["zarankiewicz","projective-plane","finite-field","extremal-graph-theory"]
 [metadata]
-evaluation_kind="regression"
+evaluation_kind="conjecture-probe"
 domain="mathematical-sciences"
 primary_domain="graph-theory"
 field="extremal-combinatorics"

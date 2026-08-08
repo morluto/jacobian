@@ -10,7 +10,7 @@ The verifier reconstructs projective equivalence classes, recomputes every
 dot-product incidence, checks degrees and duplicate-free coverage, exhaustively
 checks all pairs on both sides, and replays the extremal upper bound. For a
 `K_{2,2}`-free bipartite graph with 13 vertices on each side and left degrees
-`d_i`, the 13 right-vertex pairs can be used at most once, so
+`d_i`, the 78 unordered right-vertex pairs can be used at most once, so
 `sum_i binom(d_i,2) <= binom(13,2)`. Convexity then rules out 53 edges, while
 the submitted 52-edge construction attains the bound.
 

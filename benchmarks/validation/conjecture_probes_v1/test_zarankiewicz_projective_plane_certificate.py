@@ -51,7 +51,7 @@ def run(app: Path, logs: Path):
 
 def test_oracle_and_independent_projective_order_pass(tmp_path):
     app, logs, submission = case(tmp_path)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    assert run(app, logs).details["aggregate_reward"] == 1.0
     permutation = list(reversed(range(13)))
     result = submission["result"]
     result["points"] = [result["points"][i] for i in permutation]
@@ -59,29 +59,29 @@ def test_oracle_and_independent_projective_order_pass(tmp_path):
     inverse = {old: new for new, old in enumerate(permutation)}
     result["edges"] = sorted([[inverse[i], inverse[j]] for i, j in result["edges"]])
     write(app, submission)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    assert run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_missing_and_nonincidence_edges_fail(tmp_path):
     app, logs, submission = case(tmp_path)
     submission["result"]["edges"][-1] = submission["result"]["edges"][0]
     write(app, submission)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
     app, logs, submission = case(tmp_path / "nonincidence")
     submission["result"]["edges"][0] = [0, 0]
     write(app, submission)
-    assert run(app, logs)["mathematics"] == 0.0
+    assert run(app, logs).details["mathematics"] == 0.0
 
 
 def test_bad_projective_normalization_and_pair_count_fail(tmp_path):
     app, logs, submission = case(tmp_path)
     submission["result"]["points"][0] = [2, 0, 0]
     write(app, submission)
-    assert run(app, logs)["mathematics"] == 0.0
+    assert run(app, logs).details["mathematics"] == 0.0
     app, logs, submission = case(tmp_path / "pair")
     submission["result"]["left_pair_common_counts"][0]["common_neighbors"] = 0
     write(app, submission)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_false_assurance_and_tampered_evidence_fail(tmp_path):
@@ -89,18 +89,18 @@ def test_false_assurance_and_tampered_evidence_fail(tmp_path):
     submission["claimed_assurance"] = "VERIFIED"
     write(app, submission)
     result = run(app, logs)
-    assert result["mathematics"] == 1.0 and result["assurance"] == 0.0
-    assert result["aggregate_reward"] == 0.0
+    assert result.details["mathematics"] == 1.0 and result.details["assurance"] == 0.0
+    assert result.details["aggregate_reward"] == 0.0
     app, logs, _ = case(tmp_path / "evidence")
     (app / "evidence/answer.txt").write_text("tampered\n")
     result = run(app, logs)
-    assert result["mathematics"] == 1.0 and result["evidence"] == 0.0
-    assert result["aggregate_reward"] == 0.0
+    assert result.details["mathematics"] == 1.0 and result.details["evidence"] == 0.0
+    assert result.details["aggregate_reward"] == 0.0
 
 
 def test_malformed_json_preserves_fail_closed_behavior(tmp_path):
     app, logs, _ = case(tmp_path)
     (app / "submission.json").write_text('{"claimed_assurance": NaN}\n')
     result = run(app, logs)
-    assert result["aggregate_reward"] == 0.0
-    assert result["mathematics"] == 0.0
+    assert result.details["aggregate_reward"] == 0.0
+    assert result.details["mathematics"] == 0.0

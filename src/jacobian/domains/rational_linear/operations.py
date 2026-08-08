@@ -35,6 +35,10 @@ _SOLUTION_PROTOCOL = "jacobian.rational-linear-solution-worker/v1"
 _INCONSISTENCY_PROTOCOL = "jacobian.rational-linear-inconsistency-worker/v1"
 
 
+class _RuntimeChangedError(RuntimeError):
+    """The pinned FLINT runtime changed while the worker was running."""
+
+
 def _failure(
     code: str, status: ExecutionStatus, message: str
 ) -> OperationExecutionFailure:
@@ -133,6 +137,8 @@ def _run(
         or completed.returncode != 0
     ):
         raise RuntimeError("rational-linear worker failed")
+    if python_flint_provider_runtime(refresh=True) != RUNTIME:
+        raise _RuntimeChangedError
     return _validate_worker_payload(
         loads_strict_json(completed.stdout), request, protocol
     )
@@ -161,6 +167,12 @@ def compute_rational_solution(
             "FLINT_LINEAR_TIMEOUT",
             ExecutionStatus.TIMEOUT,
             "The bounded rational-linear computation timed out.",
+        )
+    except _RuntimeChangedError:
+        return _failure(
+            "FLINT_LINEAR_RUNTIME_CHANGED",
+            ExecutionStatus.ERROR,
+            "The Python-FLINT rational-linear runtime changed during the bounded computation.",
         )
     except (RuntimeError, TypeError, ValueError, ValidationError):
         return _failure(
@@ -198,6 +210,12 @@ def compute_rational_inconsistency(
             "FLINT_LINEAR_TIMEOUT",
             ExecutionStatus.TIMEOUT,
             "The bounded rational-linear computation timed out.",
+        )
+    except _RuntimeChangedError:
+        return _failure(
+            "FLINT_LINEAR_RUNTIME_CHANGED",
+            ExecutionStatus.ERROR,
+            "The Python-FLINT rational-linear runtime changed during the bounded computation.",
         )
     except (RuntimeError, TypeError, ValueError, ValidationError):
         return _failure(

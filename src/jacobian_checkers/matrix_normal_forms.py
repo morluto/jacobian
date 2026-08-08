@@ -5,13 +5,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.contracts.matrices import MAX_MATRIX_SCALAR_DIGITS
 from jacobian_checkers.bound_artifacts import bound_request
 
 __all__ = ["check_hermite_normal_form"]
 
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 MAX_MATRIX_DIMENSION = 32
-MAX_INTEGER_DIGITS = 256
+MAX_INTEGER_DIGITS = MAX_MATRIX_SCALAR_DIGITS
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -32,8 +34,8 @@ def _integer(value: object) -> int:
         or len(value.lstrip("-")) > MAX_INTEGER_DIGITS
     ):
         raise ValueError("matrix entry is not a bounded canonical integer")
-    result = int(value)
-    if str(result) != value:
+    result = parse_canonical_integer(value)
+    if format_canonical_integer(result) != value:
         raise ValueError("matrix entry is not canonical")
     return result
 

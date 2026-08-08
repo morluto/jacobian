@@ -123,6 +123,19 @@ def test_checker_accepts_retained_hnf_certificate() -> None:
     assert decision["arithmetic"] == "EXACT_INTEGER"
 
 
+def test_checker_accepts_the_contract_scalar_bound() -> None:
+    scalar = "1" + "0" * 299
+    decision = check_hermite_normal_form(
+        _request(
+            source=[[scalar, "0"], ["0", scalar]],
+            normal_form=[[scalar, "0"], ["0", scalar]],
+            transformation=[["1", "0"], ["0", "1"]],
+        )
+    )
+
+    assert decision["accepted"] is True
+
+
 @pytest.mark.parametrize(
     "matrix",
     [

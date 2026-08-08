@@ -94,7 +94,7 @@ count to the full-carrier state.
 - `COMPLETE_MATRIX` returns every interval \(x\leq y\); and
 - `SELECTED_INTERVALS` returns exactly the requested valid intervals.
 
-The inline summary includes the canonical recurrence contributions used in
+The inline summary includes the canonical Möbius values used in
 
 \[
 \mu(x,x)=1,\qquad

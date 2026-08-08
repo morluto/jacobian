@@ -459,13 +459,16 @@ class MaterializedOperationAdapter:
             if self.operation.preview is not None
             else None
         )
-        operation_runtime = _operation_runtime(self.operation, self.bundle)
         output = self.output_model(
             input_uri=input_uri,
             result_uri=result_uri,
             preview=preview,
             preview_complete=self.operation.preview_complete,
-            backend_version=operation_runtime.version or self.bundle.backend_version,
+            backend_version=(
+                self.operation.provider_runtime.version or self.bundle.backend_version
+                if self.operation.provider_runtime is not None
+                else self.bundle.backend_version
+            ),
         )
         return CapabilityResult(
             capability_id=self.operation.capability_id,

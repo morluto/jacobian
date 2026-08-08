@@ -81,7 +81,9 @@ def _result_payload(
     runtime: DomainTestServices,
     computed: Any,
 ) -> dict[str, Any]:
-    return runtime.core.store.get(computed.output["result_uri"]).payload
+    if "result_uri" in computed.output:
+        return runtime.core.store.get(computed.output["result_uri"]).payload
+    return computed.output["result"]
 
 
 def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
@@ -274,7 +276,13 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": {
+                    "polynomial": _polynomial([(1, (1, 1, 1))]),
+                    "max_degree": 3,
+                },
+                "candidate": computed.output["result"],
+            },
         )
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
@@ -298,9 +306,11 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
             },
         )
     )
-    input_uri = computed.output["input_uri"]
-    stored = frontier_services.core.store.get(computed.output["result_uri"])
-    forged = deepcopy(stored.payload)
+    input_payload = {
+        "polynomial": _polynomial([(1, (1, 1, 1))]),
+        "max_degree": 1,
+    }
+    forged = deepcopy(computed.output["result"])
     if forgery == "map_digest":
         forged["degree_maps"][0]["matrix_digest"] = f"sha256:{'0' * 64}"
     elif forgery == "rank_minor":
@@ -312,19 +322,11 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
         forged["partial_derivatives"][0]["polynomial"]["terms"][0]["coefficient"] = _q(
             2
         )
-    forged_uri = frontier_services.core.artifacts.put(
-        schema_uri=stored.manifest.schema_uri,
-        semantics_uri=stored.manifest.semantics_uri,
-        payload=forged,
-        parents=(input_uri,),
-        summary=f"schema-valid adversarial graded-map result: {forgery}",
-    ).artifact_uri
-
     checked = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": forged_uri},
+            input={"input": input_payload, "candidate": forged},
         )
     )
     assert checked.execution.status is ExecutionStatus.COMPLETED
@@ -373,7 +375,7 @@ def test_sparse_map_detail_is_explicitly_opt_in(
 ) -> None:
     computed = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
+            capability_id=("polynomial.jacobian_syzygy.coefficients.materialize"),
             input={
                 "polynomial": _polynomial([(1, (1, 1, 1))]),
                 "max_degree": 0,
@@ -452,7 +454,20 @@ def test_nine_line_challenge_mdr_values_are_end_to_end_verified(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": {
+                    "linear_factors": [
+                        {
+                            "label": str(index),
+                            "coefficients": [_q(value) for value in coefficients],
+                        }
+                        for index, coefficients in enumerate(factors, start=1)
+                    ],
+                    "linear_factor_variables": ["x", "y", "z"],
+                    "max_degree": expected_degree,
+                },
+                "candidate": computed.output["result"],
+            },
         )
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED

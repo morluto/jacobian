@@ -93,6 +93,7 @@ __all__ = [
     "enumerate_proper_divisors",
     "enumerate_quadratic_residues",
     "factorize_primes",
+    "materialize_modular_polynomial_residue_assignments",
     "solve_chinese_remainder",
 ]
 
@@ -438,6 +439,22 @@ def compute_modular_polynomial_residue_image(
     request: ModularPolynomialResidueImageRequest,
 ) -> ModularPolynomialResidueImageResult:
     """Enumerate one sparse polynomial over its declared finite residue domains."""
+    return _compute_modular_polynomial_residue_image(request, include_table=False)
+
+
+def materialize_modular_polynomial_residue_assignments(
+    request: ModularPolynomialResidueImageRequest,
+) -> ModularPolynomialResidueImageResult:
+    """Retain the complete assignment-to-residue ledger for explicit evidence."""
+    return _compute_modular_polynomial_residue_image(request, include_table=True)
+
+
+def _compute_modular_polynomial_residue_image(
+    request: ModularPolynomialResidueImageRequest,
+    *,
+    include_table: bool,
+) -> ModularPolynomialResidueImageResult:
+    """Build the shared summary, optionally retaining its bulk ledger."""
     from itertools import product
 
     polynomial = request
@@ -491,7 +508,7 @@ def compute_modular_polynomial_residue_image(
             )
             for residue in image
         ),
-        table=tuple(table),
+        table=tuple(table) if include_table else None,
     )
 
 

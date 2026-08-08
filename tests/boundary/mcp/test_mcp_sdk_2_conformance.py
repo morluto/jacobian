@@ -57,6 +57,9 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             )
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
             assert invoke.output_schema == CapabilityResult.model_json_schema()
+            find = next(tool for tool in listed.tools if tool.name == "math.find")
+            assert "matches" in find.output_schema["properties"]
+            assert "kind" in find.output_schema["properties"]
 
             with pytest.raises(MCPError) as unknown:
                 await client.call_tool("math.find", {"unknown_key": "rejected"})

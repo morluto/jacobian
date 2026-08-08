@@ -36,13 +36,6 @@ from jacobian.lean_frontend.proof_axioms import LeanProofAxiomsInstallation
 from jacobian.lean_frontend.proof_edit import LeanProofEditInstallation
 from jacobian.lean_frontend.service import LeanService
 from jacobian.lean_frontend.statement import LeanStatementInstallation
-from jacobian.matrices.linear_capabilities import (
-    LinearRationalInconsistencyCheckerInstallation,
-    LinearRationalSolutionCheckerInstallation,
-)
-from jacobian.matrices.normal_form import (
-    MatrixNormalFormCheckerInstallation,
-)
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.polynomial_expression_capabilities import (
     PolynomialExpressionCheckerInstallation,
@@ -213,19 +206,8 @@ class PortfolioInstallation:
     carcara_runtime: CapabilityProviderRuntime | None = None
     cadical_runtime: CapabilityProviderRuntime | None = None
     cvc5_runtime: CapabilityProviderRuntime | None = None
-    python_flint_runtime: CapabilityProviderRuntime | None = None
-    python_flint_hnf_runtime: CapabilityProviderRuntime | None = None
     sympy_polynomial_normalization_runtime: CapabilityProviderRuntime | None = None
     lean_runtime: CapabilityProviderRuntime | None = None
-
-    # --- Linear checkers ---
-    linear_solution_checker: LinearRationalSolutionCheckerInstallation | None = None
-    linear_inconsistency_checker: (
-        LinearRationalInconsistencyCheckerInstallation | None
-    ) = None
-
-    # --- Matrix ---
-    matrix_normal_form_checker: MatrixNormalFormCheckerInstallation | None = None
 
     # --- Polynomial ---
     polynomial: PolynomialInstallation | None = None

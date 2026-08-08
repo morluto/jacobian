@@ -31,6 +31,7 @@ from jacobian.domains.polynomial_nullstellensatz import (
 from jacobian.domains.posets import build_finite_poset_bundle
 from jacobian.domains.probability import build_finite_probability_bundle
 from jacobian.domains.projective_geometry import build_projective_geometry_bundle
+from jacobian.domains.rational_linear import build_rational_linear_bundle
 from jacobian.domains.sequences import build_sequence_bundle
 from jacobian.domains.topology import build_topology_bundle
 from jacobian.operations import DomainBundle
@@ -52,6 +53,7 @@ BUILTIN_DOMAIN_BUNDLE_FACTORIES: tuple[DomainBundleFactory, ...] = (
     build_graph_symmetry_bundle,
     build_certified_snf_bundle,
     build_matrix_bundle,
+    build_rational_linear_bundle,
     build_lattice_bundle,
     build_polynomial_bundle,
     build_nullstellensatz_core_bundle,

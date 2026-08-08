@@ -55,6 +55,7 @@ def polynomial_operation[
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
     relation_id: str | None = None,
+    version: str = "2",
 ) -> ComputedOperation[RequestT, ResultT]:
     """Declare an exact polynomial operation with bounded-output failure semantics."""
 
@@ -71,6 +72,7 @@ def polynomial_operation[
     )
     return replace(
         declared,
+        version=version,
         implementation=_with_polynomial_output_budget(declared.implementation),
     )
 
@@ -88,6 +90,7 @@ def materialized_polynomial_operation[
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
     relation_id: str | None = None,
+    resource_reason: str = "",
     version: str = "2",
 ) -> MaterializedOperation[RequestT, ResultT, ResultT, ContractModel]:
     """Declare an exact polynomial operation with durable result lineage."""
@@ -102,6 +105,7 @@ def materialized_polynomial_operation[
         *tags,
         invocation_examples=invocation_examples,
         relation_id=relation_id,
+        resource_reason=resource_reason,
         version=version,
     )
     return replace(

@@ -124,9 +124,19 @@ def _cubic_residue_payload() -> dict[str, object]:
 def test_modular_polynomial_residue_image_is_complete_and_materialized(
     domain_services,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
+    inline = domain_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.compute",
+            input=_cubic_residue_payload(),
+        )
+    )
+    assert inline.execution.status is ExecutionStatus.COMPLETED
+    assert inline.artifact_uris == ()
+    assert inline.output["result"]["table"] is None
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input=_cubic_residue_payload(),
         )
     )
@@ -170,7 +180,7 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
     assert stored_artifact.payload == stored_result
     assert stored_artifact.manifest.parents == (input_uri,)
     assert result.relationships[0].relation_id == (
-        "modular.polynomial_residue_image.relation"
+        "modular.polynomial_residue_image.assignments.relation"
     )
     assert result.relationships[0].source_artifact_uris == (input_uri,)
     assert result.relationships[0].target_artifact_uris == (result_uri,)
@@ -181,7 +191,7 @@ def test_modular_polynomial_residue_image_handles_multivariate_domains(
 ) -> None:
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input={
                 "modulus": 5,
                 "variables": [
@@ -219,7 +229,7 @@ def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
 ) -> None:
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input=_cubic_residue_payload(),
         )
     )
@@ -262,7 +272,7 @@ def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
 ) -> None:
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input={
                 "modulus": 7**7,
                 "variables": [

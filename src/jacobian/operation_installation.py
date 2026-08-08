@@ -21,6 +21,8 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
+    CapabilityProviderAvailability,
+    CapabilityProviderRuntime,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -66,6 +68,14 @@ class _OperationResources:
     input_schema_uris: dict[type[ContractModel], str]
     result_schema_uris: dict[str, str]
     obligation_schema_uris: dict[str, str]
+
+
+def _operation_runtime(
+    operation: DomainOperation,
+    bundle: DomainBundle,
+) -> CapabilityProviderRuntime:
+    """Resolve provider identity at operation granularity."""
+    return operation.provider_runtime or bundle.provider_runtime
 
 
 def _execution_failure_result(
@@ -186,6 +196,7 @@ class OperationInstaller:
         adapters = tuple(
             self._adapter(operation, bundle, resources)
             for operation in bundle.capabilities
+            if self._operation_available(operation, bundle)
         )
         return InstalledDomainBundle(
             adapters=adapters,
@@ -194,6 +205,14 @@ class OperationInstaller:
             result_schema_uris=result_schema_uris,
             obligation_schema_uris=obligation_schema_uris,
         )
+
+    @staticmethod
+    def _operation_available(
+        operation: DomainOperation,
+        bundle: DomainBundle,
+    ) -> bool:
+        runtime = _operation_runtime(operation, bundle)
+        return runtime.availability is CapabilityProviderAvailability.AVAILABLE
 
     @staticmethod
     def _adapter(
@@ -240,8 +259,8 @@ class ComputedOperationAdapter:
             version=operation.version,
             title=operation.title,
             description=operation.description,
-            provider=bundle.provider_runtime.provider,
-            provider_runtime=bundle.provider_runtime,
+            provider=_operation_runtime(operation, bundle).provider,
+            provider_runtime=_operation_runtime(operation, bundle),
             modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
@@ -336,8 +355,8 @@ class MaterializedOperationAdapter:
             version=operation.version,
             title=operation.title,
             description=operation.description,
-            provider=bundle.provider_runtime.provider,
-            provider_runtime=bundle.provider_runtime,
+            provider=_operation_runtime(operation, bundle).provider,
+            provider_runtime=_operation_runtime(operation, bundle),
             modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
@@ -498,8 +517,8 @@ class BoundedSearchOperationAdapter:
             version=operation.version,
             title=operation.title,
             description=operation.description,
-            provider=bundle.provider_runtime.provider,
-            provider_runtime=bundle.provider_runtime,
+            provider=_operation_runtime(operation, bundle).provider,
+            provider_runtime=_operation_runtime(operation, bundle),
             modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(operation.result_model),

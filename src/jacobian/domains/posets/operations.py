@@ -236,6 +236,20 @@ def _linear_extensions(
 def _mobius(
     request: MobiusFunctionRequest,
 ) -> ComputedSuccess[MobiusFunctionResult]:
+    return _compute_mobius(request, include_recurrence=False)
+
+
+def _materialize_mobius_recurrence(
+    request: MobiusFunctionRequest,
+) -> ComputedSuccess[MobiusFunctionResult]:
+    return _compute_mobius(request, include_recurrence=True)
+
+
+def _compute_mobius(
+    request: MobiusFunctionRequest,
+    *,
+    include_recurrence: bool,
+) -> ComputedSuccess[MobiusFunctionResult]:
     poset = request.poset
     graph: nx.DiGraph[str] = nx.DiGraph()
     graph.add_nodes_from(poset.elements)
@@ -283,9 +297,13 @@ def _mobius(
             lower=lower,
             upper=upper,
             value=mu[(lower, upper)],
-            recurrence_contributions=tuple(
-                MobiusContribution(intermediate=middle, value=value)
-                for middle, value in contributions[(lower, upper)]
+            recurrence_contributions=(
+                tuple(
+                    MobiusContribution(intermediate=middle, value=value)
+                    for middle, value in contributions[(lower, upper)]
+                )
+                if include_recurrence
+                else None
             ),
         )
         for lower, upper in requested
@@ -322,8 +340,8 @@ FINITE_POSET_CAPABILITIES: tuple[
     ComputedOperation[Any, Any] | MaterializedOperation[Any, Any, Any, Any], ...
 ] = (
     ComputedOperation(
-        capability_id="poset.finite.materialize",
-        title="Materialize a canonical finite poset",
+        capability_id="poset.finite.compute",
+        title="Compute a canonical finite poset",
         description=(
             "Validate exact cover edges or a complete comparable relation and "
             "return canonical closure, Hasse reduction, incomparability, extrema, "
@@ -332,7 +350,7 @@ FINITE_POSET_CAPABILITIES: tuple[
         request_model=FinitePosetRequest,
         result_model=FinitePosetMaterializationResult,
         implementation=_materialize,
-        relation_id="poset.finite.materialization.relation",
+        relation_id="poset.finite.relation",
         tags=(
             "poset",
             "partial-order",
@@ -391,9 +409,13 @@ FINITE_POSET_CAPABILITIES: tuple[
             "order-ideal",
             "dynamic-programming",
         ),
+        resource_reason=(
+            "the full order-ideal recurrence table is retained for independent "
+            "replay and exact count provenance"
+        ),
         version="3",
     ),
-    MaterializedOperation(
+    ComputedOperation(
         capability_id="poset.mobius_function.compute",
         title="Compute finite-poset Möbius values",
         description=(
@@ -410,6 +432,30 @@ FINITE_POSET_CAPABILITIES: tuple[
             "incidence-algebra",
             "interval",
             "exact",
+        ),
+        version="3",
+    ),
+    MaterializedOperation(
+        capability_id="poset.mobius_function.recurrence.materialize",
+        title="Materialize the finite-poset Möbius recurrence table",
+        description=(
+            "Retain every interval-convolution recurrence contribution used by "
+            "the bounded Möbius summary."
+        ),
+        request_model=MobiusFunctionRequest,
+        result_model=MobiusFunctionResult,
+        implementation=_materialize_mobius_recurrence,
+        relation_id="poset.mobius_function.recurrence.relation",
+        tags=(
+            "poset",
+            "mobius-function",
+            "recurrence",
+            "ledger",
+            "evidence",
+        ),
+        resource_reason=(
+            "the full interval-convolution recurrence table is retained as "
+            "explicit bulk evidence for independent replay"
         ),
         version="3",
     ),

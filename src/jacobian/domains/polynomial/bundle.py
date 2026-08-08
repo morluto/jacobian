@@ -12,6 +12,7 @@ from jacobian.domains.polynomial.invariants import (
 )
 from jacobian.domains.polynomial.jacobian_syzygy import (
     GRADED_JACOBIAN_SYZYGY_CAPABILITY,
+    JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
 )
 from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
@@ -57,6 +58,7 @@ def build_polynomial_bundle() -> DomainBundle:
             *POLYNOMIAL_INVARIANT_CAPABILITIES,
             POLYNOMIAL_GROEBNER_CAPABILITY,
             GRADED_JACOBIAN_SYZYGY_CAPABILITY,
+            JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
             *INTEGER_POLYNOMIAL_CAPABILITIES,
             *RATIONAL_POLYNOMIAL_CAPABILITIES,
         ),

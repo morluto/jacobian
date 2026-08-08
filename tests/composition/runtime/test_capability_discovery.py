@@ -195,7 +195,7 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
             authorized_complete_runtime.core.capabilities.catalog().capabilities
         )
     }
-    assert descriptors["poset.finite.materialize"].produced_artifact_types == ()
+    assert descriptors["poset.finite.compute"].produced_artifact_types == ()
     assert descriptors["poset.width.compute"].accepted_artifact_types == ()
 
 

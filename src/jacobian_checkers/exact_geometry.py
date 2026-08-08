@@ -12,7 +12,10 @@ import re
 from fractions import Fraction
 from typing import Any
 
-from jacobian_checkers.bound_artifacts import valid_unscoped_unencoded_bindings
+from jacobian_checkers.bound_artifacts import (
+    bound_request,
+    valid_unscoped_unencoded_bindings,
+)
 
 __all__ = ["check_exact_geometry"]
 
@@ -694,37 +697,27 @@ def check_exact_geometry(request: dict[str, Any]) -> dict[str, Any]:
     """Accept a bound result exactly when direct rational replay agrees."""
 
     try:
-        detail = _request_shape_detail(request)
-        if detail is not None:
-            return _reject(detail)
-        claim = request["claim"]
-        candidate = request["candidate"]
-        semantics = request["semantics"]
-        witness = request["witness"]
-        bindings = request["expected_bindings"]
-        detail = _artifact_metadata_detail(
-            claim, candidate, semantics, witness, bindings
+        if request.get("request_version") == "2":
+            operation = request.get("operation_id")
+        else:
+            witness = request.get("witness")
+            envelope = witness.get("payload") if isinstance(witness, dict) else None
+            witness_payload = (
+                envelope.get("payload") if isinstance(envelope, dict) else None
+            )
+            operation = (
+                witness_payload.get("operation_id")
+                if isinstance(witness_payload, dict)
+                else None
+            )
+        if operation not in _OPERATIONS:
+            return _reject("unsupported exact geometry operation")
+        claim, candidate = bound_request(
+            request,
+            operation_id=operation,
+            witness_format="geometry.exact_rational_result",
         )
-        if detail is not None:
-            return _reject(detail)
-        detail = _binding_match_detail(bindings, claim, candidate, semantics, witness)
-        if detail is not None:
-            return _reject(detail)
-        detail = _artifact_digest_detail((claim, candidate, semantics, witness))
-        if detail is not None:
-            return _reject(detail)
-        envelope = witness["payload"]
-        detail = _witness_envelope_detail(envelope, bindings, witness, claim, candidate)
-        if detail is not None:
-            return _reject(detail)
-        payload = envelope["payload"]
-        detail = _witness_payload_detail(payload, claim, candidate)
-        if detail is not None:
-            return _reject(detail)
-        operation = payload["operation_id"]
-        if _candidate(candidate["payload"], operation) != _expected(
-            operation, claim["payload"]
-        ):
+        if _candidate(candidate, operation) != _expected(operation, claim):
             return _reject("exact rational replay disagrees with the candidate")
         return {
             "accepted": True,

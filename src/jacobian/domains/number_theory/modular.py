@@ -26,6 +26,7 @@ from jacobian.domains.number_theory.operations import (
     compute_modular_polynomial_residue_image,
     compute_multiplicative_order,
     enumerate_quadratic_residues,
+    materialize_modular_polynomial_residue_assignments,
     solve_chinese_remainder,
 )
 
@@ -100,13 +101,14 @@ MODULAR_CAPABILITIES = (
             ),
         ),
     ),
-    materialized_number_theory_operation(
+    number_theory_operation(
         "modular.polynomial_residue_image.compute",
         "Compute modular polynomial residue image",
         (
-            "Compute the complete image of a bounded sparse integer polynomial "
-            "over declared finite residue domains modulo m, including "
-            "multiplicities, witnesses, and the exhaustive assignment table."
+            "Compute the bounded image of a sparse integer polynomial over declared "
+            "finite residue domains modulo m, including multiplicities and first "
+            "witness assignments. The exhaustive assignment ledger is a separate "
+            "durable resource."
         ),
         ModularPolynomialResidueImageRequest,
         ModularPolynomialResidueImageResult,
@@ -133,6 +135,28 @@ MODULAR_CAPABILITIES = (
                     "terms": [{"coefficient": "4", "exponents": [3]}],
                 },
             ),
+        ),
+    ),
+    materialized_number_theory_operation(
+        "modular.polynomial_residue_image.assignments.materialize",
+        "Materialize modular polynomial assignment ledger",
+        (
+            "Retain the complete assignment-to-residue ledger for a bounded sparse "
+            "modular polynomial, including the inline image summary."
+        ),
+        ModularPolynomialResidueImageRequest,
+        ModularPolynomialResidueImageResult,
+        materialize_modular_polynomial_residue_assignments,
+        "number-theory",
+        "modular",
+        "polynomial",
+        "residue",
+        "ledger",
+        "evidence",
+        relation_id="modular.polynomial_residue_image.assignments.relation",
+        resource_reason=(
+            "the complete assignment-to-residue ledger is retained as explicit "
+            "bulk evidence for independent replay"
         ),
     ),
     number_theory_operation(

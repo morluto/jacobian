@@ -19,18 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.installation.context import InstallationContext
-from jacobian.matrices.flint_hnf import install_python_flint_hnf_capability
-from jacobian.matrices.flint_linear import (
-    install_python_flint_inconsistency_capability,
-    install_python_flint_linear_capability,
-)
-from jacobian.matrices.linear_capabilities import (
-    install_linear_rational_inconsistency_checker,
-    install_linear_rational_solution_checker,
-)
-from jacobian.matrices.normal_form import (
-    install_matrix_normal_form_checker,
-)
 from jacobian.polynomial_expression_capabilities import (
     install_polynomial_expression_checker,
 )
@@ -125,40 +113,6 @@ class FoundationInstaller:
         if smt_proof_adapter is not None:
             self.context.register_capability(smt_proof_adapter)
 
-        linear_adapter, result.linear_solution_checker = (
-            install_linear_rational_solution_checker(
-                ctx.store,
-                ctx.schemas,
-                ctx.artifacts,
-                core.linear,
-                ctx.verification,
-                ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
-            )
-        )
-        if linear_adapter is not None:
-            self.context.register_capability(linear_adapter)
-
-        inconsistency_adapter, result.linear_inconsistency_checker = (
-            install_linear_rational_inconsistency_checker(
-                ctx.store,
-                ctx.schemas,
-                ctx.artifacts,
-                core.linear,
-                ctx.verification,
-                ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
-            )
-        )
-        if inconsistency_adapter is not None:
-            self.context.register_capability(inconsistency_adapter)
-
-        self._install_python_flint_capabilities(core, result, runtimes.python_flint)
-        self._install_matrix_normal_form_capabilities(
-            core,
-            result,
-            runtimes.python_flint_hnf,
-        )
         self._install_polynomial_expression_capabilities(
             core,
             result,
@@ -202,85 +156,6 @@ class FoundationInstaller:
     # ------------------------------------------------------------------
     # Private installation helpers
     # ------------------------------------------------------------------
-
-    def _install_python_flint_capabilities(
-        self,
-        core: CoreServices,
-        result: PortfolioInstallation,
-        runtime: CapabilityProviderRuntime,
-    ) -> None:
-        """Install exact rational linear producers when the pin is available."""
-
-        result.python_flint_runtime = runtime
-        if (
-            result.python_flint_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
-        ):
-            return
-        try:
-            solution_adapter = install_python_flint_linear_capability(
-                core.linear,
-                result.python_flint_runtime,
-            )
-        except (OSError, ValueError) as exc:
-            _LOGGER.warning(
-                "Python-FLINT rational solution exploration is not installed: %s",
-                exc,
-            )
-        else:
-            self.context.register_capability(solution_adapter)
-        try:
-            inconsistency_adapter = install_python_flint_inconsistency_capability(
-                core.linear,
-                result.python_flint_runtime,
-            )
-        except (OSError, ValueError) as exc:
-            _LOGGER.warning(
-                "Python-FLINT rational inconsistency exploration is not installed: %s",
-                exc,
-            )
-        else:
-            self.context.register_capability(inconsistency_adapter)
-
-    def _install_matrix_normal_form_capabilities(
-        self,
-        core: CoreServices,
-        result: PortfolioInstallation,
-        runtime: CapabilityProviderRuntime,
-    ) -> None:
-        ctx = self.context
-        verification_adapter, result.matrix_normal_form_checker = (
-            install_matrix_normal_form_checker(
-                ctx.store,
-                ctx.schemas,
-                ctx.artifacts,
-                core.matrix_normal_forms,
-                ctx.verification,
-                ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
-            )
-        )
-        if verification_adapter is not None:
-            self.context.register_capability(verification_adapter)
-
-        result.python_flint_hnf_runtime = runtime
-        if (
-            result.python_flint_hnf_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
-        ):
-            return
-        try:
-            adapter = install_python_flint_hnf_capability(
-                core.matrix_normal_forms,
-                result.python_flint_hnf_runtime,
-            )
-        except (OSError, ValueError) as exc:
-            _LOGGER.warning(
-                "Python-FLINT Hermite normal form is not installed: %s",
-                exc,
-            )
-        else:
-            self.context.register_capability(adapter)
 
     def _install_polynomial_expression_capabilities(
         self,

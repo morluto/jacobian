@@ -168,6 +168,10 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: MaterializedOperation[
     "flats",
     "exact",
     relation_id="geometry.projective_line_arrangement.flats.relation",
+    resource_reason=(
+        "the complete labelled flat lattice is retained for durable projective "
+        "incidence provenance and downstream certificate binding"
+    ),
     version="3",
     invocation_examples=(
         example(

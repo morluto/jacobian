@@ -85,13 +85,8 @@ _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
     "jacobian_checkers.certified_snf": "certified-snf",
     "jacobian_checkers.finite_posets": "poset",
     "jacobian_checkers.exact_geometry": "geometry",
+    "jacobian_checkers.matrix_normal_forms": "matrix-hnf",
 }
-_INLINE_EXACT_ENTRYPOINTS = frozenset(
-    {
-        "jacobian_checkers.exact_domain_operations",
-        "jacobian_checkers.simplicial_topology",
-    }
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +110,11 @@ class _InstalledDeclaration:
 
 
 def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
+    if declaration.entrypoint_module == "jacobian_checkers.linear":
+        return {
+            "check_rational_solution": "linear-solution",
+            "check_rational_inconsistency": "linear-inconsistency",
+        }[declaration.function]
     try:
         return _ENTRYPOINT_PROVIDER_RUNTIME_KEYS[declaration.entrypoint_module]
     except KeyError as exc:
@@ -146,6 +146,30 @@ def install_exact_domain_checkers(
             "jacobian.exact-geometry-checker",
             version="1",
             entrypoint="jacobian_checkers.exact_geometry:check_exact_geometry",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-rational-replay", "clean-process-checker"),
+        ),
+        "matrix-hnf": source_provider_runtime(
+            "jacobian.matrix-hnf-checker",
+            version="1",
+            entrypoint="jacobian_checkers.matrix_normal_forms:check_hermite_normal_form",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-integer-replay", "clean-process-checker"),
+        ),
+        "linear-solution": source_provider_runtime(
+            "jacobian.rational-linear-checker",
+            version="1",
+            entrypoint="jacobian_checkers.linear:check_rational_solution",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-rational-replay", "clean-process-checker"),
+        ),
+        "linear-inconsistency": source_provider_runtime(
+            "jacobian.rational-linear-inconsistency-checker",
+            version="1",
+            entrypoint="jacobian_checkers.linear:check_rational_inconsistency",
             install_tier=CapabilityInstallTier.T1,
             license_id="MIT",
             features=("standard-library-rational-replay", "clean-process-checker"),
@@ -269,6 +293,36 @@ def install_exact_domain_checkers(
                 ),
                 checker_ids=authorized_ids["geometry"],
             ),
+            "matrix-hnf": source_provider_runtime(
+                "jacobian.matrix-hnf-checker",
+                version="1",
+                entrypoint="jacobian_checkers.matrix_normal_forms:check_hermite_normal_form",
+                install_tier=CapabilityInstallTier.T1,
+                license_id="MIT",
+                features=("standard-library-integer-replay", "clean-process-checker"),
+                checker_ids=authorized_ids["matrix-hnf"],
+            ),
+            "linear-solution": source_provider_runtime(
+                "jacobian.rational-linear-checker",
+                version="1",
+                entrypoint="jacobian_checkers.linear:check_rational_solution",
+                install_tier=CapabilityInstallTier.T1,
+                license_id="MIT",
+                features=("standard-library-rational-replay", "clean-process-checker"),
+                checker_ids=authorized_ids["linear-solution"],
+            ),
+            "linear-inconsistency": source_provider_runtime(
+                "jacobian.rational-linear-inconsistency-checker",
+                version="1",
+                entrypoint="jacobian_checkers.linear:check_rational_inconsistency",
+                install_tier=CapabilityInstallTier.T1,
+                license_id="MIT",
+                features=(
+                    "standard-library-rational-replay",
+                    "clean-process-checker",
+                ),
+                checker_ids=authorized_ids["linear-inconsistency"],
+            ),
         },
     )
 
@@ -348,9 +402,6 @@ def install_exact_domain_verification(
                     _provider_runtime_key(declaration)
                 ],
                 stored_result_input=declaration.capability_id in stored_producers,
-                supports_inline_exact=(
-                    declaration.entrypoint_module in _INLINE_EXACT_ENTRYPOINTS
-                ),
             )
         )
     return tuple(adapters), installation
@@ -420,10 +471,9 @@ class ExactComputedVerificationAdapter:
 
     The verifier validates the inline input and candidate against the
     producer's input and result schemas and checks the authorized checker's
-    bounded input scope before any artifact write. It then materializes the
-    exact input and candidate as artifacts within verification and reuses the
-    existing witness, checker, ``VerificationService``, and immutable
-    replay-record path.
+    bounded input scope before any artifact write. Computed operations use
+    the v2 inline replay envelope; only materialized and bounded-search
+    operations resolve their existing stored lineage.
     """
 
     def __init__(
@@ -437,7 +487,6 @@ class ExactComputedVerificationAdapter:
         witness_schema_uri: str,
         provider_runtime: CapabilityProviderRuntime,
         stored_result_input: bool,
-        supports_inline_exact: bool,
     ) -> None:
         self.store = store
         self.schemas = schemas
@@ -446,7 +495,6 @@ class ExactComputedVerificationAdapter:
         self.declaration = declaration
         self.witness_schema_uri = witness_schema_uri
         self.stored_result_input = stored_result_input
-        self.supports_inline_exact = supports_inline_exact
         generic_request_model: Any = ExactComputedVerificationRequest
         self.input_model = generic_request_model[
             declaration.declaration.request_model,
@@ -504,13 +552,7 @@ class ExactComputedVerificationAdapter:
             normalized_input, normalized_candidate = self._validated_inline_payloads(
                 request
             )
-            source_artifacts = (
-                None
-                if self.supports_inline_exact
-                else self._materialize_inline_payloads(
-                    normalized_input, normalized_candidate
-                )
-            )
+            source_artifacts = None
         # Check the authorized checker's bounded input scope before any artifact write.
         if not _checker_supports(
             declaration.declaration.capability_id,
@@ -627,6 +669,7 @@ class ExactComputedVerificationAdapter:
         )
         checker_request = {
             "request_version": "2",
+            "operation_id": declaration.declaration.capability_id,
             "claim": {
                 "schema_uri": declaration.input_schema_uri,
                 "semantics_uri": declaration.semantics_uri,
@@ -870,35 +913,6 @@ class ExactComputedVerificationAdapter:
                 )
             ) from exc
         return normalized_input, normalized_candidate
-
-    def _materialize_inline_payloads(
-        self,
-        normalized_input: dict[str, object],
-        normalized_candidate: dict[str, object],
-    ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
-        """Bridge legacy artifact-only checkers without changing caller input."""
-
-        declaration = self.declaration
-        semantics_artifact = self.store.get(declaration.semantics_uri)
-        input_put = self.artifacts.put(
-            schema_uri=declaration.input_schema_uri,
-            semantics_uri=declaration.semantics_uri,
-            payload=normalized_input,
-            summary=f"{declaration.declaration.capability_id} verification input",
-        )
-        input_artifact = self.store.get(input_put.artifact_uri)
-        result_put = self.artifacts.put(
-            schema_uri=declaration.result_schema_uri,
-            semantics_uri=declaration.semantics_uri,
-            payload=normalized_candidate,
-            parents=(input_artifact.artifact_uri,),
-            summary=f"{declaration.declaration.capability_id} verification candidate",
-        )
-        return (
-            input_artifact,
-            self.store.get(result_put.artifact_uri),
-            semantics_artifact,
-        )
 
     @staticmethod
     def _checker_artifact(artifact: StoredArtifact) -> dict[str, object]:

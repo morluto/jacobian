@@ -172,6 +172,7 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
         ),
         relation_id="synthetic.relation.materialize",
         tags=("synthetic",),
+        resource_reason="the test exercises durable lineage and preview behavior",
         preview_model=_SyntheticPreview,
         preview=lambda result: _SyntheticPreview(summary=f"doubled={result.doubled}"),
         preview_complete=True,
@@ -236,6 +237,7 @@ def test_materialized_operation_omits_preview_without_projection(
         ),
         relation_id="synthetic.relation.no_preview",
         tags=("synthetic",),
+        resource_reason="the test exercises durable lineage without a preview",
     )
     _install(fresh_complete_runtime, replace(bundle, capabilities=(materialized,)))
 
@@ -270,6 +272,7 @@ def test_materialized_factory_derives_terminal_materialize_relation_id() -> None
         _SyntheticRequest,
         _SyntheticResult,
         lambda request: _SyntheticResult(doubled=request.value * 2),
+        resource_reason="the test exercises durable lineage and relation derivation",
     )
 
     assert operation.relation_id == "synthetic.relation"
@@ -293,6 +296,7 @@ def test_materialized_operation_fails_closed_before_artifact_writes(
         implementation=lambda _request: ComputedNotApplicable(not_applicable),
         relation_id="synthetic.relation.excluded",
         tags=("synthetic",),
+        resource_reason="the test exercises fail-closed durable computation",
         preview_model=_SyntheticPreview,
         preview=lambda result: _SyntheticPreview(summary=f"doubled={result.doubled}"),
         preview_complete=True,

@@ -176,7 +176,10 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": producer_payload,
+                "candidate": computed.output["result"],
+            },
         )
     )
 
@@ -212,7 +215,10 @@ def test_modular_residue_verifier_replays_its_materialized_lineage(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": _modular_residue_payload(coefficient="3"),
+                "candidate": computed.output["result"],
+            },
         )
     )
 

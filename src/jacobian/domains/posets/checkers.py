@@ -16,7 +16,7 @@ _REASON = (
 
 FINITE_POSET_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
-        "poset.finite.materialize",
+        "poset.finite.compute",
         FinitePosetRequest,
         "check_finite_poset_materialization",
         "poset.finite.closure-reduction-replay",

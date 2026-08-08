@@ -6,8 +6,6 @@ from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
-from jacobian.matrices.linear import install_linear_artifacts
-from jacobian.matrices.normal_forms import install_matrix_normal_form_artifacts
 from jacobian.operation_installation import OperationInstaller
 from jacobian.plugins.registry import PluginRegistry
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
@@ -32,12 +30,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
         with store.transaction():
             sat = install_sat_artifacts(store, schemas, artifacts)
             smt = install_smt_artifacts(store, schemas, artifacts)
-            linear = install_linear_artifacts(store, schemas, artifacts)
-            matrix_normal_forms = install_matrix_normal_form_artifacts(
-                store,
-                schemas,
-                artifacts,
-            )
             polynomial_expressions = install_polynomial_expression_artifacts(
                 store,
                 schemas,
@@ -60,8 +52,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
             operations=operations,
             sat=sat,
             smt=smt,
-            linear=linear,
-            matrix_normal_forms=matrix_normal_forms,
             polynomial_expressions=polynomial_expressions,
             plugins=plugins,
             checkers=checkers,

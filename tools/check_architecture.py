@@ -1013,6 +1013,43 @@ def _output_only_contract_violations(
     return tuple(violations)
 
 
+def _materialization_reason_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Require every durable operation declaration to name its resource reason."""
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = (
+            node.func.id
+            if isinstance(node.func, ast.Name)
+            else node.func.attr
+            if isinstance(node.func, ast.Attribute)
+            else ""
+        )
+        if name != "MaterializedOperation" and not name.startswith("materialized_"):
+            continue
+        reason = next(
+            (keyword.value for keyword in node.keywords if keyword.arg == "resource_reason"),
+            None,
+        )
+        if reason is None or (
+            isinstance(reason, ast.Constant)
+            and isinstance(reason.value, str)
+            and not reason.value.strip()
+        ):
+            violations.append(
+                Violation(
+                    str(relative),
+                    "materialization-resource-reason",
+                    "durable operations must declare an explicit resource_reason",
+                    node.lineno,
+                )
+            )
+    return tuple(violations)
+
+
 # ---------------------------------------------------------------------------
 # Check 12: unsupported surfaces (Python AST + text scan)
 # ---------------------------------------------------------------------------
@@ -1272,6 +1309,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_checker_producer_isolation_violations(relative, tree))
     violations.extend(_erased_contract_operation_violations(relative, tree))
     violations.extend(_output_only_contract_violations(relative, tree))
+    violations.extend(_materialization_reason_violations(relative, tree))
     violations.extend(_unsupported_surface_ast_violations(relative, tree))
     return tuple(violations)
 

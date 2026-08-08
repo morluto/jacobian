@@ -493,19 +493,34 @@ def _strict_result_integer(value: object) -> int:
 
 
 def _modular_residue_result_shape(result: dict[str, Any]) -> None:
-    if set(result) != {
-        "semantics_version",
-        "modulus",
-        "variable_order",
-        "domains",
-        "normalized_terms",
-        "enumeration_scope",
-        "total_assignments",
-        "image",
-        "residue_counts",
-        "witnesses",
-        "table",
-    }:
+    allowed_keys = (
+        {
+            "semantics_version",
+            "modulus",
+            "variable_order",
+            "domains",
+            "normalized_terms",
+            "enumeration_scope",
+            "total_assignments",
+            "image",
+            "residue_counts",
+            "witnesses",
+            "table",
+        },
+        {
+            "semantics_version",
+            "modulus",
+            "variable_order",
+            "domains",
+            "normalized_terms",
+            "enumeration_scope",
+            "total_assignments",
+            "image",
+            "residue_counts",
+            "witnesses",
+        },
+    )
+    if set(result) not in allowed_keys:
         raise ValueError("modular-polynomial result is malformed")
     _strict_result_integer(result["modulus"])
     _strict_result_integer(result["total_assignments"])
@@ -549,13 +564,20 @@ def _modular_residue_result_shape(result: dict[str, Any]) -> None:
         for item in result["witnesses"]
     ):
         raise ValueError("modular-polynomial witnesses are malformed")
-    if not isinstance(result["table"], list) or any(
-        not isinstance(row, dict)
-        or set(row) != {"assignment", "residue"}
-        or type(row["residue"]) is not int
-        or not isinstance(row["assignment"], list)
-        or any(type(value) is not int for value in row["assignment"])
-        for row in result["table"]
+    if (
+        "table" in result
+        and result["table"] is not None
+        and (
+            not isinstance(result["table"], list)
+            or any(
+                not isinstance(row, dict)
+                or set(row) != {"assignment", "residue"}
+                or type(row["residue"]) is not int
+                or not isinstance(row["assignment"], list)
+                or any(type(value) is not int for value in row["assignment"])
+                for row in result["table"]
+            )
+        )
     ):
         raise ValueError("modular-polynomial assignment table is malformed")
 
@@ -590,6 +612,9 @@ def _modular_polynomial_residue_image(
         {"assignment": assignment, "residue": residue}
         for assignment, residue in zip(assignments, residues, strict=True)
     ]
+    table_matches = (
+        "table" not in result or result["table"] is None or result["table"] == table
+    )
     return bool(
         result["semantics_version"] == "modular-polynomial-residue-image.v1"
         and result["modulus"] == modulus
@@ -601,7 +626,7 @@ def _modular_polynomial_residue_image(
         and result["image"] == image
         and result["residue_counts"] == counts
         and result["witnesses"] == witnesses
-        and result["table"] == table
+        and table_matches
     )
 
 

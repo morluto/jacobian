@@ -34,7 +34,7 @@ def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
 def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
     materialized = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="poset.finite.materialize",
+            capability_id="poset.finite.compute",
             input=_PRESENTATION,
         )
     )
@@ -61,7 +61,7 @@ def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
         )
     )
     return [
-        ("poset.finite.materialize", _PRESENTATION, materialized),
+        ("poset.finite.compute", _PRESENTATION, materialized),
         ("poset.width.compute", width_input, width),
         ("poset.linear_extensions.count", linear_input, linear),
         ("poset.mobius_function.compute", mobius_input, mobius),
@@ -82,7 +82,12 @@ def test_poset_results_are_independently_verified(
             mode=CapabilityMode.VERIFY,
             input=(
                 {"input": producer_input, "candidate": computed.output["result"]}
-                if producer_id in {"poset.finite.materialize", "poset.width.compute"}
+                if producer_id
+                in {
+                    "poset.finite.compute",
+                    "poset.width.compute",
+                    "poset.mobius_function.compute",
+                }
                 else {"result_uri": computed.output["result_uri"]}
             ),
         )
@@ -92,7 +97,9 @@ def test_poset_results_are_independently_verified(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert len(verified.artifact_uris) == 4
+    assert len(verified.artifact_uris) == (
+        4 if producer_id == "poset.linear_extensions.count" else 2
+    )
 
 
 def test_poset_checker_rejects_forged_width_certificate(

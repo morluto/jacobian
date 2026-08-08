@@ -15,8 +15,6 @@ from jacobian.conjectures import ConjectureService
 from jacobian.evaluation import EvaluationService
 from jacobian.experiment_router import ExperimentRouter
 from jacobian.experiments import ExperimentService
-from jacobian.matrices.linear import LinearArtifactService
-from jacobian.matrices.normal_forms import MatrixNormalFormArtifactService
 from jacobian.operation_installation import OperationInstaller
 from jacobian.plugin_execution import PluginExecutor
 from jacobian.plugins.registry import PluginRegistry
@@ -47,8 +45,6 @@ class CoreServices:
     operations: OperationInstaller
     sat: SatArtifactService
     smt: SmtArtifactService
-    linear: LinearArtifactService
-    matrix_normal_forms: MatrixNormalFormArtifactService
     polynomial_expressions: PolynomialExpressionArtifactService
     plugins: PluginRegistry
     checkers: CheckerRegistry

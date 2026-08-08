@@ -118,19 +118,24 @@ def _inline_value(value: object) -> dict[str, Any]:
 
 def _bound_inline_request(
     request: dict[str, Any],
+    *,
+    operation_id: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    allowed_keys = {
+        "request_version",
+        "claim",
+        "candidate",
+        "semantics",
+        "scope",
+        "expected_bindings",
+    }
+    if "operation_id" in request:
+        allowed_keys.add("operation_id")
     if (
-        set(request)
-        != {
-            "request_version",
-            "claim",
-            "candidate",
-            "semantics",
-            "scope",
-            "expected_bindings",
-        }
+        set(request) != allowed_keys
         or request["request_version"] != "2"
         or request["scope"] is not None
+        or ("operation_id" in request and request["operation_id"] != operation_id)
     ):
         raise ValueError("inline checker request is malformed")
     claim = _inline_value(request["claim"])
@@ -157,7 +162,7 @@ def bound_request(
     if not isinstance(request, dict):
         raise ValueError("checker request is malformed")
     if request.get("request_version") == "2":
-        return _bound_inline_request(request)
+        return _bound_inline_request(request, operation_id=operation_id)
     if set(request) != {
         "request_version",
         "claim",

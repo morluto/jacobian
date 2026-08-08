@@ -58,6 +58,10 @@ def build_formal_dataset_bundle() -> DomainBundle:
                 implementation=_materialize_operation,
                 relation_id="dataset.formal.materialization",
                 tags=("dataset", "formal-mathematics", "lean", "provenance"),
+                resource_reason=(
+                    "durable identity is required to bind the normalized row to "
+                    "pinned dataset and formal-provider provenance"
+                ),
                 invocation_examples=(
                     example(
                         "minif2f_core_true",

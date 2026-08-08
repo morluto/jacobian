@@ -34,10 +34,6 @@ def _suite() -> list[dict[str, Any]]:
     return cases
 
 
-def _result_payload(runtime, computed) -> dict[str, Any]:
-    return runtime.core.store.get(computed.output["result_uri"]).payload
-
-
 def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
     authorized_complete_runtime,
 ) -> None:
@@ -49,7 +45,7 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
             )
         )
         assert computed.execution.status is ExecutionStatus.COMPLETED
-        result = _result_payload(authorized_complete_runtime, computed)
+        result = computed.output["result"]
         assert [orbit["members"] for orbit in result["vertex_orbits"]] == (
             case["expected_vertex_orbits"]
         )
@@ -66,7 +62,7 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
             CapabilityRequest(
                 capability_id="graph.symmetry.generator_orbits.verify",
                 mode=CapabilityMode.VERIFY,
-                input={"result_uri": computed.output["result_uri"]},
+                input={"input": case["request"], "candidate": result},
             )
         )
         assert verified.output["status"] == "VERIFIED"

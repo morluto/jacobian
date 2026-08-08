@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context
 from mcp_types import CallToolResult, TextContent
-from pydantic import Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE, ReasoningLogMode
 from jacobian.adapters.mcp.context import AppState, _runtime
@@ -41,7 +41,48 @@ from jacobian.contracts.results import ExecutionStatus
 
 _LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
-CapabilityDiscoveryToolResult = Annotated[CallToolResult, dict[str, Any]]
+
+
+class CapabilityDiscoveryResponse(BaseModel):
+    """Typed structured content for both discovery and exact lookup responses."""
+
+    model_config = ConfigDict(extra="allow")
+
+    kind: Literal["discovery", "capability"] | None = None
+    view: CapabilityDescriptionView | None = None
+    catalog_version: str | None = None
+    policy_profile: str | None = None
+    policy_digest: str | None = None
+    catalog_digest: str | None = None
+    discovery_version: str | None = None
+    query: str | None = None
+    domain: str | None = None
+    mode: CapabilityMode | None = None
+    resolved_input_kind: CapabilityInputKind | None = None
+    artifact_type: str | None = None
+    routing_status: str | None = None
+    routing_basis: str | None = None
+    matches: list[dict[str, Any]] | None = None
+    total_matches: int | None = None
+    truncated: bool | None = None
+    next_cursor: str | None = None
+    available_domains: list[str] | None = None
+    portfolio_fit: str | None = None
+    portfolio_fit_basis: str | None = None
+    available_recovery_paths: list[dict[str, Any]] | None = None
+    capability: dict[str, Any] | None = None
+    scope_rule: str | dict[str, Any] | None = None
+    invocations: list[dict[str, Any]] | None = None
+    related_capabilities: list[dict[str, Any]] | None = None
+    next_views: dict[str, str] | None = None
+    cache: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+
+
+CapabilityDiscoveryToolResult = Annotated[
+    CallToolResult,
+    CapabilityDiscoveryResponse,
+]
 CapabilityRunToolResult = Annotated[CallToolResult, CapabilityResult]
 
 
@@ -144,6 +185,14 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
     if response.get("related_capabilities"):
         projection["related_capabilities"] = response["related_capabilities"]
     return projection
+
+
+def _find_result(response: dict[str, Any]) -> CallToolResult:
+    structured = CapabilityDiscoveryResponse.model_validate(response)
+    return _text_result(
+        structured.model_dump(mode="json", exclude_unset=True),
+        _find_text_projection(response),
+    )
 
 
 def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
@@ -277,10 +326,7 @@ async def capability_describe(
                 limit=limit,
                 cursor=cursor,
             )
-            return _text_result(
-                discovery_response,
-                _find_text_projection(discovery_response),
-            )
+            return _find_result(discovery_response)
         capability_catalog = active_runtime.core.capabilities.catalog()
         descriptors = {
             item.capability_id: item for item in capability_catalog.capabilities
@@ -298,7 +344,7 @@ async def capability_describe(
                     "available_capability_ids": sorted(descriptors),
                 }
             }
-            return _text_result(error_response, _find_text_projection(error_response))
+            return _find_result(error_response)
         response: dict[str, Any] = {
             "kind": "capability",
             "view": view,
@@ -367,7 +413,7 @@ async def capability_describe(
                     else {"status": "UNAVAILABLE", "detail": None}
                 ),
             }
-        return _text_result(response, _find_text_projection(response))
+        return _find_result(response)
 
 
 async def capability_invoke(

@@ -37,18 +37,8 @@ def _cycle_request() -> dict[str, object]:
 
 
 def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
-    return runtime.core.store.get(computed.output["result_uri"]).payload
-
-
-def _forged_result_uri(runtime: Any, computed: Any, payload: dict[str, Any]) -> str:
-    source = runtime.core.store.get(computed.output["result_uri"])
-    return runtime.core.store.put(
-        schema_uri=source.manifest.schema_uri,
-        semantics_uri=source.manifest.semantics_uri,
-        payload=payload,
-        parents=source.manifest.parents,
-        summary="forged graph symmetry result",
-    ).artifact_uri
+    del runtime
+    return computed.output["result"]
 
 
 def test_graph_symmetry_orbits_are_independently_replayed(
@@ -65,7 +55,10 @@ def test_graph_symmetry_orbits_are_independently_replayed(
         CapabilityRequest(
             capability_id="graph.symmetry.generator_orbits.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={
+                "input": payload,
+                "candidate": computed.output["result"],
+            },
         )
     )
 
@@ -109,9 +102,8 @@ def test_graph_symmetry_checker_rejects_forged_orbit_partition(
             capability_id="graph.symmetry.generator_orbits.verify",
             mode=CapabilityMode.VERIFY,
             input={
-                "result_uri": _forged_result_uri(
-                    authorized_complete_runtime, computed, forged_candidate
-                )
+                "input": payload,
+                "candidate": forged_candidate,
             },
         )
     )

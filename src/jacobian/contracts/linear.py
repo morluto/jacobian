@@ -139,6 +139,29 @@ class LinearRationalSolutionFindRequest(ContractModel):
     )
 
 
+class LinearRationalSolutionResult(ContractModel):
+    """Inline total rational solution candidate for ordinary composition."""
+
+    result_schema_version: Literal["1"] = "1"
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_LINEAR_DIMENSION,
+    )
+    method: Literal["RREF_FREE_VARIABLES_ZERO"] = "RREF_FREE_VARIABLES_ZERO"
+
+
+class LinearRationalInconsistencyResult(ContractModel):
+    """Inline normalized left witness for an inconsistent rational system."""
+
+    result_schema_version: Literal["1"] = "1"
+    left_witness: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_LINEAR_DIMENSION,
+    )
+    rhs_pairing: CanonicalRational
+    method: Literal["DUAL_RREF_PAIRING_ONE"] = "DUAL_RREF_PAIRING_ONE"
+
+
 class LinearRationalSolutionFindOutput(ContractModel):
     """Unverified outcome of one bounded rational-solution attempt."""
 

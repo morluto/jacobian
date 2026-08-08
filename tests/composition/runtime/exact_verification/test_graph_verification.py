@@ -278,7 +278,7 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert verified.output["verification_record_uri"] is not None
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert len(verified.artifact_uris) == 4
+    assert len(verified.artifact_uris) == 2
 
     matrix = computed.output["result"]["distances"]
     degree = dict.fromkeys(graph["vertices"], 0)

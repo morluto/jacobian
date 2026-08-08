@@ -162,6 +162,10 @@ LATTICE_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
         implementation=reduce_lattice_basis,
         relation_id="lattice.relation.reduced-basis-of",
         tags=("lattice", "lll", "exact-integer", "bounded", "python-flint"),
+        resource_reason=(
+            "the reduced basis and exact left transformation have durable identity "
+            "for later certificate replay and lattice composition"
+        ),
         invocation_examples=(
             example(
                 "unit_basis",

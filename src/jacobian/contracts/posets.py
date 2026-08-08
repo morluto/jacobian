@@ -591,8 +591,8 @@ class MobiusValue(ContractModel):
     lower: ElementLabel
     upper: ElementLabel
     value: StrictInt
-    recurrence_contributions: tuple[MobiusContribution, ...] = Field(
-        default=(),
+    recurrence_contributions: tuple[MobiusContribution, ...] | None = Field(
+        default=None,
         max_length=MAX_POSET_ELEMENTS,
     )
 

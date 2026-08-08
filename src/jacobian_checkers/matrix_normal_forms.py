@@ -11,7 +11,10 @@ import json
 import re
 from typing import Any
 
-from jacobian_checkers.bound_artifacts import valid_unscoped_unencoded_bindings
+from jacobian_checkers.bound_artifacts import (
+    bound_request,
+    valid_unscoped_unencoded_bindings,
+)
 
 __all__ = ["check_hermite_normal_form"]
 
@@ -443,10 +446,59 @@ def _check_hnf_math(
     return None
 
 
+def _check_materialized_operation_request(request: dict[str, Any]) -> dict[str, Any]:
+    claim, candidate = bound_request(
+        request,
+        operation_id="matrix.normal_form.hermite.materialize",
+        witness_format="matrix.normal_form.hermite",
+    )
+    source = _matrix(claim["matrix"])
+    if set(candidate) != {
+        "result_schema_version",
+        "normal_form",
+        "transformation",
+        "method",
+        "backend",
+        "backend_version",
+        "flint_library_version",
+    }:
+        return _reject("HNF result is malformed")
+    if candidate["method"] != "ROW_HNF_LEFT_UNIMODULAR_TRANSFORM":
+        return _reject("HNF result uses unsupported semantics")
+    normal_form = _matrix(candidate["normal_form"])
+    transformation = _matrix(candidate["transformation"])
+    if (
+        len(normal_form) != len(source)
+        or len(normal_form[0]) != len(source[0])
+        or len(transformation) != len(source)
+        or len(transformation[0]) != len(source)
+    ):
+        return _reject("HNF result dimensions are malformed")
+    error = _check_hnf_math(transformation, source, normal_form)
+    if error is not None:
+        return _reject(error)
+    return {
+        "accepted": True,
+        "conclusion": "TRUE",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "DIRECT_WITNESS",
+        "coverage": "NOT_APPLICABLE",
+        "detail": "checked H = U A and row-HNF conditions independently",
+    }
+
+
 def check_hermite_normal_form(request: dict[str, Any]) -> dict[str, Any]:
     """Accept only exact row-HNF evidence with a unimodular left transform."""
 
     try:
+        if (
+            request.get("request_version") == "1"
+            and "operation_id" not in request
+            and isinstance(request.get("candidate"), dict)
+            and isinstance(request["candidate"].get("payload"), dict)
+            and "result_schema_version" in request["candidate"]["payload"]
+        ):
+            return _check_materialized_operation_request(request)
         error = _check_hnf_request_envelope(request)
         if error is not None:
             return _reject(error)

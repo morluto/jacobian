@@ -622,6 +622,24 @@ def _mobius_table(
     return mu, ledgers
 
 
+def _mobius_result_matches(
+    result: dict[str, Any],
+    expected: dict[str, Any],
+    expected_values: list[dict[str, Any]],
+    ledgers: dict[tuple[str, str], list[dict[str, Any]]],
+) -> bool:
+    if result == expected:
+        return True
+    expected["values"] = [
+        {
+            **value,
+            "recurrence_contributions": ledgers[(value["lower"], value["upper"])],
+        }
+        for value in expected_values
+    ]
+    return result == expected
+
+
 def _replay_mobius(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if set(source) != {"poset", "scope", "intervals"}:
         return False
@@ -661,25 +679,26 @@ def _replay_mobius(source: dict[str, Any], result: dict[str, Any]) -> bool:
         requested = sorted(selected)
         intervals = [{"lower": lower, "upper": upper} for lower, upper in requested]
     mu, ledgers = _mobius_table(poset)
+    expected_values = [
+        {
+            "lower": lower,
+            "upper": upper,
+            "value": mu[(lower, upper)],
+            "recurrence_contributions": None,
+        }
+        for lower, upper in requested
+    ]
     expected = {
         **_META,
         "poset_digest": poset["poset_digest"],
         "element_order": poset["elements"],
         "scope": scope,
         "intervals": intervals,
-        "values": [
-            {
-                "lower": lower,
-                "upper": upper,
-                "value": mu[(lower, upper)],
-                "recurrence_contributions": ledgers[(lower, upper)],
-            }
-            for lower, upper in requested
-        ],
+        "values": expected_values,
         "completeness": scope,
         "recurrence_identity": "SUM_LOWER_TO_UPPER_EQUALS_DELTA",
     }
-    return result == expected
+    return _mobius_result_matches(result, expected, expected_values, ledgers)
 
 
 def _run(
@@ -705,7 +724,7 @@ def _run(
 def check_finite_poset_materialization(request: object) -> dict[str, Any]:
     return _run(
         request,
-        operation_id="poset.finite.materialize",
+        operation_id="poset.finite.compute",
         witness_format="poset.finite.closure-reduction-replay",
         replay=_replay_materialization,
     )

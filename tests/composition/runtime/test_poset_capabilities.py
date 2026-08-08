@@ -38,7 +38,7 @@ def _materialize(
 ) -> dict[str, Any]:
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="poset.finite.materialize",
+            capability_id="poset.finite.compute",
             input=presentation,
         )
     )
@@ -57,16 +57,17 @@ def _invoke(
     )
 
 
-def test_poset_bundle_exposes_four_atomic_capabilities(fresh_complete_runtime) -> None:
+def test_poset_bundle_exposes_five_atomic_capabilities(fresh_complete_runtime) -> None:
     ids = tuple(
         operation.capability_id
         for operation in build_finite_poset_bundle().capabilities
     )
     assert ids == (
-        "poset.finite.materialize",
+        "poset.finite.compute",
         "poset.width.compute",
         "poset.linear_extensions.count",
         "poset.mobius_function.compute",
+        "poset.mobius_function.recurrence.materialize",
     )
     assert "poset" in fresh_complete_runtime.portfolio.domain_bundles
     catalog_ids = {
@@ -108,7 +109,7 @@ def test_materialization_is_canonical_complete_and_inline(
 ) -> None:
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="poset.finite.materialize",
+            capability_id="poset.finite.compute",
             input=_DIAMOND,
         )
     )
@@ -134,7 +135,7 @@ def test_canonical_poset_is_directly_consumable_by_width(
 ) -> None:
     materialized = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="poset.finite.materialize",
+            capability_id="poset.finite.compute",
             input=_DIAMOND,
         )
     )
@@ -317,7 +318,20 @@ def test_mobius_ledger_is_canonical_across_branching_topological_orders(
     result = _result_payload(fresh_complete_runtime, computed)
     value = result["values"][0]
     assert value["value"] == 1
-    assert [item["intermediate"] for item in value["recurrence_contributions"]] == [
+    assert value["recurrence_contributions"] is None
+
+    ledger = _invoke(
+        fresh_complete_runtime,
+        "poset.mobius_function.recurrence.materialize",
+        poset,
+        scope="SELECTED_INTERVALS",
+        intervals=[{"lower": "a", "upper": "e"}],
+    )
+    ledger_result = _result_payload(fresh_complete_runtime, ledger)
+    assert [
+        item["intermediate"]
+        for item in ledger_result["values"][0]["recurrence_contributions"]
+    ] == [
         "a",
         "b",
         "c",
@@ -407,7 +421,7 @@ def test_invalid_poset_request_fails_before_artifact_writes(
 ) -> None:
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="poset.finite.materialize",
+            capability_id="poset.finite.compute",
             input={
                 "elements": ["a", "b"],
                 "relation": [

@@ -1,6 +1,7 @@
 """Independent checker declarations owned by the matrix domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.matrix_lattice import HermiteNormalFormRequest
 from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
     MatrixDeterminantRequest,
@@ -11,6 +12,25 @@ from jacobian.contracts.matrix_operations import (
 )
 
 MATRIX_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "matrix.normal_form.hermite.materialize",
+        HermiteNormalFormRequest,
+        "check_hermite_normal_form",
+        "matrix.normal_form.hermite",
+        entrypoint_module="jacobian_checkers.matrix_normal_forms",
+        replay_method="independent row-HNF and unimodular-transform replay",
+        reason=(
+            "standard-library checker independently validates H=UA, unimodularity, "
+            "and the full retained row-HNF certificate"
+        ),
+        verification_capability_id="matrix.normal_form.hermite.verify",
+        verification_title="Verify a transformation-certified row Hermite normal form",
+        verification_description=(
+            "Independently verify the retained H and U certificate against its "
+            "stored integer matrix input."
+        ),
+        verification_tags=("verification", "exact", "matrix", "hermite-normal-form"),
+    ),
     ExactReplayCheckerDeclaration(
         "matrix.determinant.compute",
         MatrixDeterminantRequest,

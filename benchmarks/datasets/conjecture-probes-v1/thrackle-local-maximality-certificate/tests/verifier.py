@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from itertools import combinations
 from pathlib import Path
+from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
@@ -53,12 +54,29 @@ def _edge(value):
     return tuple(value)
 
 
+def _json_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without equating booleans, integers, and floats."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _json_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _json_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return left == right
+
+
 def mathematics(result):
     if not isinstance(result, dict) or set(result) != {
         "selected_edges",
         "pair_classifications",
         "excluded_edge_witnesses",
     }:
+        return False
+    if not isinstance(result["selected_edges"], list):
         return False
     try:
         selected = [_edge(e) for e in result["selected_edges"]]
@@ -70,9 +88,8 @@ def mathematics(result):
         {"left": list(e), "right": list(f), "relation": _relation(e, f)}
         for e, f in combinations(selected, 2)
     ]
-    if (
-        any(row["relation"] == "DISJOINT" for row in expected_pairs)
-        or result["pair_classifications"] != expected_pairs
+    if any(row["relation"] == "DISJOINT" for row in expected_pairs) or not _json_equal(
+        result["pair_classifications"], expected_pairs
     ):
         return False
     excluded = [e for e in ALL if e not in selected]
@@ -88,7 +105,7 @@ def mathematics(result):
         expected.append(
             {"excluded": list(edge), "disjoint_selected": list(disjoint[0])}
         )
-    return result["excluded_edge_witnesses"] == expected
+    return _json_equal(result["excluded_edge_witnesses"], expected)
 
 
 def _raw():
@@ -134,7 +151,7 @@ def main():
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
+        and _json_equal(payload.get("result"), raw.get("result"))
         and payload.get("limitations") == LIMITATIONS
     )
     values = {

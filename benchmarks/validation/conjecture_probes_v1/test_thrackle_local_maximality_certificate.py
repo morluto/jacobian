@@ -77,11 +77,38 @@ def test_rejects_corrupt_pair_relation():
     assert not module.mathematics(result)
 
 
+def test_rejects_non_integer_vertices_in_certificates():
+    module = _module()
+    result = _result(module)
+    result["pair_classifications"][0]["left"][0] = 0.0
+    assert not module.mathematics(result)
+
+    result = _result(module)
+    result["excluded_edge_witnesses"][0]["excluded"][0] = False
+    assert not module.mathematics(result)
+
+
+def test_evidence_result_comparison_preserves_json_types():
+    module = _module()
+    result = _result(module)
+    evidence_result = _result(module)
+    evidence_result["selected_edges"][0][0] = False
+    assert not module._json_equal(evidence_result, result)
+
+
 def test_rejects_missing_maximality_witness():
     module = _module()
     result = _result(module)
     result["excluded_edge_witnesses"].pop()
     assert not module.mathematics(result)
+
+
+def test_rejects_non_list_selected_edges_without_crashing():
+    module = _module()
+    for malformed in (None, 5, {}):
+        result = _result(module)
+        result["selected_edges"] = malformed
+        assert not module.mathematics(result)
 
 
 def test_rejects_boundary_cycle():

@@ -89,10 +89,11 @@ def _failure_details(exc: Exception) -> dict[str, str]:
     if isinstance(exc, ValidationError):
         errors = exc.errors(include_url=False, include_input=False)
         details["validation_error_count"] = str(len(errors))
-        first = errors[0] if errors else {}
-        reason = (
-            f"{first.get('type', 'value_error')}: {first.get('msg', 'invalid value')}"
-        )
+        if errors:
+            first = errors[0]
+            reason = f"{first['type']}: {first['msg']}"
+        else:
+            reason = "value_error: invalid value"
     else:
         reason = str(exc)
     details["reason"] = reason[:_MAX_DIAGNOSTIC_REASON_CHARS]

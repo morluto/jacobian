@@ -10,6 +10,7 @@ from verifier_support import (
     evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -115,7 +116,8 @@ def _table(
             not isinstance(pair, list)
             or len(pair) != 2
             or any(type(x) is not int for x in pair)
-            or not 0 <= pair[0] < pair[1] < 7
+            or pair[0] == pair[1]
+            or any(not 0 <= endpoint < 7 for endpoint in pair)
         ):
             return False
         if (
@@ -129,7 +131,7 @@ def _table(
             parsed = Fraction(distance[0]), Fraction(distance[1])
         except (ValueError, ZeroDivisionError):
             return False
-        key = tuple(pair)
+        key = tuple(sorted(pair))
         if key in seen or parsed != expected[key] or unit != (parsed == (1, 0)):
             return False
         if any(str(part) != raw for part, raw in zip(parsed, distance, strict=True)):
@@ -152,16 +154,33 @@ def mathematics(result: Any) -> bool:
         result["corrected_pair_table"], fixed
     ):
         return False
-    false_edges = [list(pair) for pair in sorted(CLAIMED) if corrupt[pair] != (1, 0)]
-    fixed_edges = [
-        list(pair) for pair, value in sorted(fixed.items()) if value == (1, 0)
-    ]
+    false_edges = {pair for pair in CLAIMED if corrupt[pair] != (1, 0)}
+    fixed_edges = {pair for pair, value in fixed.items() if value == (1, 0)}
+    submitted_false = _edge_set(result["false_claimed_edges"], len(false_edges))
+    submitted_fixed = _edge_set(result["corrected_edges"], len(fixed_edges))
     return (
-        result["false_claimed_edges"] == false_edges
+        submitted_false == false_edges
         and result["repair"] == "FLIP_VERTEX_5_B_BRANCH_TO_POSITIVE"
-        and result["corrected_edges"] == fixed_edges
+        and submitted_fixed == fixed_edges
         and len(fixed_edges) == 11
     )
+
+
+def _edge_set(value: Any, expected_count: int) -> set[tuple[int, int]] | None:
+    if not isinstance(value, list) or len(value) != expected_count:
+        return None
+    normalized: set[tuple[int, int]] = set()
+    for edge in value:
+        if (
+            not isinstance(edge, list)
+            or len(edge) != 2
+            or any(type(endpoint) is not int for endpoint in edge)
+            or edge[0] == edge[1]
+            or any(not 0 <= endpoint < 7 for endpoint in edge)
+        ):
+            return None
+        normalized.add(tuple(sorted(edge)))
+    return normalized if len(normalized) == expected_count else None
 
 
 def _equal(a, b):
@@ -192,6 +211,7 @@ def _write(values):
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
     (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+    normalize_reward_file(path / "reward.json")
 
 
 def main():
@@ -231,20 +251,32 @@ def main():
         and raw.get("completeness") == "COMPLETE"
         and raw.get("limitations") == LIMITATIONS
     )
-    assurance_ok = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
+    assurance_score = (
+        {
+            "UNVERIFIED": 0.25,
+            "COMPUTED": 0.5,
+            "CHECKED": 1.0,
+        }.get(raw.get("claimed_assurance"), 0.0)
+        if contract and isinstance(raw, dict)
+        else 0.0
     )
     values = {
         "input_binding": float(bound),
         "protocol": float(bool(contract)),
+        "correctness": float(math_ok),
         "mathematics": float(math_ok),
         "evidence": float(evidence_ok),
         "scope": float(scope_ok),
-        "assurance": float(assurance_ok),
+        "assurance": assurance_score,
     }
-    reward = float(all(values.values()))
+    hard_gates = (
+        values["input_binding"],
+        values["protocol"],
+        values["mathematics"],
+        values["evidence"],
+        values["scope"],
+    )
+    reward = assurance_score if all(hard_gates) else 0.0
     values.update(
         {
             "aggregate_reward": reward,
@@ -265,6 +297,7 @@ if __name__ == "__main__":
             {
                 "protocol": 0.0,
                 "input_binding": 0.0,
+                "correctness": 0.0,
                 "mathematics": 0.0,
                 "evidence": 0.0,
                 "scope": 0.0,

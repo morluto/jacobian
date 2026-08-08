@@ -43,13 +43,35 @@ def write(app, submission):
 
 
 def run(app, logs):
-    return run_verifier_in_child(task=TASK, app=app, logs=logs)
+    output = run_verifier_in_child(task=TASK, app=app, logs=logs)
+    if hasattr(output, "details"):
+        return {"reward": output.reward, **output.details}
+    return output
 
 
 def test_oracle_passes(tmp_path):
     app, logs, _ = case(tmp_path)
     result = run(app, logs)
+    assert result["correctness"] == result["mathematics"] == 1.0
     assert result["aggregate_reward"] == result["reward"] == 1.0
+    assert json.loads((logs / "reward.json").read_text()) == {"reward": 1.0}
+    assert "correctness" in json.loads((logs / "reward-details.json").read_text())
+
+
+def test_unordered_pair_and_edge_representations_pass(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission["result"]["corrupted_pair_table"].reverse()
+    submission["result"]["corrected_pair_table"].reverse()
+    for table_name in ("corrupted_pair_table", "corrected_pair_table"):
+        for row in submission["result"][table_name]:
+            row["pair"].reverse()
+    submission["result"]["false_claimed_edges"].reverse()
+    submission["result"]["corrected_edges"].reverse()
+    for name in ("false_claimed_edges", "corrected_edges"):
+        for edge in submission["result"][name]:
+            edge.reverse()
+    write(app, submission)
+    assert run(app, logs)["aggregate_reward"] == 1.0
 
 
 def test_sign_erasure_and_incomplete_pair_audit_fail(tmp_path):
@@ -77,6 +99,15 @@ def test_noncanonical_fraction_and_false_assurance_fail(tmp_path):
         and result["false_certification"] is True
         and result["reward"] == 0.0
     )
+
+
+def test_lower_assurance_is_valid_but_receives_partial_credit(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission["claimed_assurance"] = "COMPUTED"
+    write(app, submission)
+    result = run(app, logs)
+    assert result["protocol"] == result["mathematics"] == 1.0
+    assert result["assurance"] == result["aggregate_reward"] == 0.5
 
 
 def test_evidence_tamper_and_malformed_json_fail(tmp_path):

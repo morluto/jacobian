@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import json
 import math
@@ -262,6 +263,46 @@ def resolve_evidence(
     return target
 
 
+_JSON_WHITESPACE = frozenset(" \t\n\r")
+_JSON_WHITESPACE_CHARS = " \t\n\r"
+
+
+def _drain_stream_tail(stream, decoder) -> None:
+    """Reject non-whitespace after the parsed JSON value incrementally."""
+
+    while block := stream.read(65_536):
+        tail = decoder.decode(block)
+        if tail and not all(character in _JSON_WHITESPACE for character in tail):
+            raise ValueError("non-whitespace after evidence JSON value")
+    tail = decoder.decode(b"", final=True)
+    if tail and not all(character in _JSON_WHITESPACE for character in tail):
+        raise ValueError("non-whitespace after evidence JSON value")
+
+
+def _read_streaming_json_value(stream) -> Any:
+    """Parse one UTF-8 JSON value without materializing legal file padding."""
+
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    parser = json.JSONDecoder(object_pairs_hook=_reject_duplicate_keys)
+    buffer = ""
+    while True:
+        block = stream.read(65_536)
+        if block:
+            buffer += decoder.decode(block)
+        if buffer[:1] in _JSON_WHITESPACE:
+            buffer = buffer.lstrip(_JSON_WHITESPACE_CHARS)
+        try:
+            value, end = parser.raw_decode(buffer)
+        except json.JSONDecodeError as exc:
+            if not block or exc.pos < len(buffer):
+                raise
+            continue
+        if not all(character in _JSON_WHITESPACE for character in buffer[end:]):
+            raise ValueError("non-whitespace after evidence JSON value")
+        _drain_stream_tail(stream, decoder)
+        return value
+
+
 def read_evidence_json(
     descriptor: object,
     *,
@@ -269,7 +310,12 @@ def read_evidence_json(
     workspace: Path = WORKSPACE,
     max_bytes: int | None = None,
 ) -> dict[str, Any] | None:
-    """Resolve and parse a digest-bound evidence object."""
+    """Resolve and stream-parse a digest-bound evidence object.
+
+    ``max_bytes`` applies only to explicit caller policy. Without one, a valid
+    evidence file may contain arbitrarily large legal JSON whitespace because
+    its workspace path, regular-file status, and digest remain authoritative.
+    """
 
     target = resolve_evidence(
         descriptor,
@@ -280,11 +326,9 @@ def read_evidence_json(
     if target is None:
         return None
     try:
-        value = json.loads(
-            target.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-        )
-    except (OSError, ValueError, RecursionError, MemoryError):
+        with target.open("rb") as stream:
+            value = _read_streaming_json_value(stream)
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
 

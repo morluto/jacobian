@@ -65,6 +65,23 @@
             ]
           },
           "key_facts": {
+            "additionalProperties": false,
+            "properties": {
+              "hamiltonian_path": {
+                "const": "absent"
+              },
+              "lambda_avg": {
+                "const": "36/7"
+              },
+              "tree": {
+                "const": "7"
+              }
+            },
+            "required": [
+              "tree",
+              "lambda_avg",
+              "hamiltonian_path"
+            ],
             "type": "object"
           }
         },

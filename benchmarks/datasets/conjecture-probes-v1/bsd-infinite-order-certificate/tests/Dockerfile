@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/bsd-infinite-order-certificate" \
-      jacobian.checksum="c44d63394de11b04833f7709b7b18ad80a6a1d8ba8e27b085d5e43acda23ee35"
+      jacobian.checksum="2350dd3a4199735c216420da78c52ecb13ddccc1d6a8e77bf196d8aba42f0bae"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

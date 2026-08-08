@@ -88,3 +88,35 @@ def test_false_verified_and_tampered_input_fail_closed(tmp_path):
         and reward.details["mathematics"] == 1.0
         and reward.details["aggregate_reward"] == 0.0
     )
+
+
+def test_large_digest_bound_evidence_whitespace_streams_without_a_size_cap(tmp_path):
+    app, logs, s = case(tmp_path)
+    write(app, s)
+    evidence = app / "evidence/answer.txt"
+    evidence.write_bytes(evidence.read_bytes() + (b" \n" * (9 * 1024 * 1024)))
+    s["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+
+    verdict = run(app, logs)
+
+    assert verdict.details["evidence"] == 1.0
+    assert verdict.details["aggregate_reward"] == 1.0
+
+
+def test_digest_bound_evidence_with_trailing_garbage_fails_closed(tmp_path):
+    app, logs, s = case(tmp_path)
+    write(app, s)
+    evidence = app / "evidence/answer.txt"
+    evidence.write_bytes(evidence.read_bytes() + b"not-json")
+    s["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(s) + "\n")
+
+    verdict = run(app, logs)
+
+    assert verdict.details["evidence"] == 0.0
+    assert verdict.details["aggregate_reward"] == 0.0

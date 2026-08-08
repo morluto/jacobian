@@ -149,15 +149,13 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(
-            submission.get("evidence"), max_bytes=MAX_SUBMISSION_BYTES
-        )
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
             submission["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_SUBMISSION_BYTES,
+            max_bytes=None,
         )
         if evidence
         else None

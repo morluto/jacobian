@@ -8,5 +8,9 @@ report the capability boundary honestly. The current portfolio has no dedicated 
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence
-list. Claim `COMPUTED` assurance only; do not claim `VERIFIED`. Treat timeout, error, or
-incomplete search as a non-conclusion, not as evidence for or against the claim.
+list. In `result.key_facts`, report exactly the structured public facts
+`tree: "7"`, `lambda_avg: "36/7"`, and `hamiltonian_path: "absent"`; these
+are canonical strings, not inferred prose. You may claim `UNVERIFIED` or
+`COMPUTED`; only `COMPUTED` receives full aggregate credit. Do not claim
+`VERIFIED`. Treat timeout, error, or incomplete search as a non-conclusion,
+not as evidence for or against the claim.

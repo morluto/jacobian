@@ -47,6 +47,14 @@
           "minLength": 1
         },
         "key_facts": {
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
           "type": "object"
         }
       }

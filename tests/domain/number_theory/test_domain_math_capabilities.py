@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian.contracts import number_theory as number_theory_contracts
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
@@ -227,6 +228,33 @@ def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
 
     with pytest.raises(ValidationError, match="complete table length"):
         ModularPolynomialResidueImageResult.model_validate(corrupted)
+
+
+def test_modular_polynomial_residue_result_rejects_oversized_domains_before_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_product(*_: object) -> object:
+        raise AssertionError("oversized Cartesian domains must not be materialized")
+
+    monkeypatch.setattr(number_theory_contracts, "product", unexpected_product)
+    domains = [list(range(32))] * 6
+
+    with pytest.raises(ValidationError, match="result domains exceed"):
+        ModularPolynomialResidueImageResult.model_validate(
+            {
+                "semantics_version": "modular-polynomial-residue-image.v1",
+                "modulus": 32,
+                "variable_order": ["a", "b", "c", "d", "e", "f"],
+                "domains": domains,
+                "normalized_terms": [],
+                "enumeration_scope": "COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+                "total_assignments": 1,
+                "image": [0],
+                "residue_counts": [{"residue": 0, "count": 1}],
+                "witnesses": [{"residue": 0, "assignment": [0, 0, 0, 0, 0, 0]}],
+                "table": [{"assignment": [0, 0, 0, 0, 0, 0], "residue": 0}],
+            }
+        )
 
 
 def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(

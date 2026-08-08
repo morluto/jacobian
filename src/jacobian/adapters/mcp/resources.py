@@ -13,7 +13,7 @@ from jacobian.adapters.mcp.guidance import (
     discovery_prompt,
     evidence_check_prompt,
 )
-from jacobian.adapters.mcp.tooling import _run_blocking
+from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry, _run_blocking
 from jacobian.runtime.model import JacobianRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ def _register_resources_and_prompts(
     server: Any,
     runtime: JacobianRuntime | None,
     tenant_router: Any,
+    worker_registry: MCPBlockingWorkerRegistry,
 ) -> None:
     """Register all MCP resource and prompt handlers on the server."""
 
@@ -35,7 +36,9 @@ def _register_resources_and_prompts(
     async def artifact_resource(
         digest: str,
     ) -> str:
-        with _resource_runtime(runtime, tenant_router) as active_runtime:
+        with _resource_runtime(
+            runtime, tenant_router, worker_registry
+        ) as active_runtime:
             artifact = await _run_blocking(
                 active_runtime.core.store.get,
                 f"artifact://sha256/{digest}",
@@ -59,7 +62,9 @@ def _register_resources_and_prompts(
     async def experiment_resource(
         experiment_id: str,
     ) -> str:
-        with _resource_runtime(runtime, tenant_router) as active_runtime:
+        with _resource_runtime(
+            runtime, tenant_router, worker_registry
+        ) as active_runtime:
             snapshot = await _run_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
@@ -79,7 +84,9 @@ def _register_resources_and_prompts(
     async def experiment_accounting_resource(
         experiment_id: str,
     ) -> str:
-        with _resource_runtime(runtime, tenant_router) as active_runtime:
+        with _resource_runtime(
+            runtime, tenant_router, worker_registry
+        ) as active_runtime:
             snapshot = await _run_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
@@ -111,7 +118,9 @@ def _register_resources_and_prompts(
     async def experiment_scope_resource(
         experiment_id: str,
     ) -> str:
-        with _resource_runtime(runtime, tenant_router) as active_runtime:
+        with _resource_runtime(
+            runtime, tenant_router, worker_registry
+        ) as active_runtime:
             snapshot = await _run_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
@@ -131,7 +140,9 @@ def _register_resources_and_prompts(
     async def experiment_archive_resource(
         experiment_id: str,
     ) -> str:
-        with _resource_runtime(runtime, tenant_router) as active_runtime:
+        with _resource_runtime(
+            runtime, tenant_router, worker_registry
+        ) as active_runtime:
             snapshot = await _run_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
@@ -201,6 +212,7 @@ def _register_reasoning_resource(
     server: Any,
     runtime: JacobianRuntime | None,
     tenant_router: Any,
+    worker_registry: MCPBlockingWorkerRegistry,
 ) -> None:
     """Register the optional operational reasoning-log reader."""
 
@@ -211,7 +223,9 @@ def _register_reasoning_resource(
         mime_type="application/x-ndjson",
     )
     async def reasoning_log_resource(run_id: str) -> str:
-        with _resource_runtime(runtime, tenant_router) as active_runtime:
+        with _resource_runtime(
+            runtime, tenant_router, worker_registry
+        ) as active_runtime:
             return await _run_blocking(
                 active_runtime.core.reasoning_log.inspect_jsonl,
                 run_id,

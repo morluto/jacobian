@@ -200,6 +200,8 @@ class ExtractedTrajectoryState(ContractModel):
 
     @model_validator(mode="after")
     def bind_eligibility_to_kinds(self) -> Self:
+        if self.hard_state_digest != _digest(self.hard_state.model_dump(mode="json")):
+            raise ValueError("hard-state digest must bind the hard state")
         if self.milestone_eligible != bool(self.milestone_kinds):
             raise ValueError("milestone eligibility must equal presence of kinds")
         if self.milestone_kinds != self.hard_state.latest_meaningful_transitions:

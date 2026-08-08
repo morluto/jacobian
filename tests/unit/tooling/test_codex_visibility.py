@@ -20,7 +20,7 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
-from jacobian.contracts.matrices import MatrixDeterminantRequest
+from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
 from jacobian.contracts.number_theory import IntegerPairRequest
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
 from jacobian.eval.telemetry import parse_agent_transcript

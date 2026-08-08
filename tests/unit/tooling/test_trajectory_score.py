@@ -233,6 +233,15 @@ def test_closed_state_contract_rejects_credit_for_prose_only_transition() -> Non
         TrajectoryScoreReplay.model_validate(root_payload)
 
 
+def test_replay_contract_rejects_mismatched_terminal_result_and_reward() -> None:
+    replay = replay_offline_values(_comparison(), trajectory_id="target")
+    payload = replay.model_dump(mode="json")
+    payload["eventual_terminal_result"] = TerminalResult.REJECTED.value
+
+    with pytest.raises(ValidationError, match="terminal result must bind"):
+        TrajectoryScoreReplay.model_validate(payload)
+
+
 def test_replay_is_deterministic_and_binds_the_complete_comparison() -> None:
     comparison = _comparison()
     left = replay_offline_values(comparison, trajectory_id="target")
@@ -279,7 +288,50 @@ def test_replay_rejects_cluster_support_outside_cluster_trajectories() -> None:
     corrupted_comparison = comparison.model_copy(
         update={"evaluations": (*comparison.evaluations[:-1], hybrid_corrupted)}
     )
-    with pytest.raises(TrajectoryScoreError, match="outside its cluster members"):
+    with pytest.raises(TrajectoryScoreError, match="must equal its cluster members"):
+        replay_offline_values(corrupted_comparison, trajectory_id="target")
+
+
+def test_replay_rejects_incomplete_cluster_support() -> None:
+    comparison = _comparison()
+    hybrid = comparison.evaluations[-1]
+    corrupted = hybrid.estimates[0].model_copy(
+        update={"supporting_trajectory_ids": ("support-a",)}
+    )
+    hybrid_corrupted = hybrid.model_copy(
+        update={"estimates": (corrupted, *hybrid.estimates[1:])}
+    )
+    corrupted_comparison = comparison.model_copy(
+        update={"evaluations": (*comparison.evaluations[:-1], hybrid_corrupted)}
+    )
+
+    with pytest.raises(TrajectoryScoreError, match="must equal its cluster members"):
+        replay_offline_values(corrupted_comparison, trajectory_id="target")
+
+
+def test_replay_rejects_foreign_task_group_fallback_support() -> None:
+    comparison = _comparison()
+    hybrid = comparison.evaluations[-1]
+    singleton_cluster = hybrid.clusters[0].model_copy(
+        update={"member_trajectory_ids": ("target",)}
+    )
+    fallback_estimates = tuple(
+        estimate.model_copy(
+            update={
+                "value_source": ValueSource.TASK_GROUP_PRIOR,
+                "supporting_trajectory_ids": ("foreign",),
+            }
+        )
+        for estimate in hybrid.estimates
+    )
+    hybrid_corrupted = hybrid.model_copy(
+        update={"clusters": (singleton_cluster,), "estimates": fallback_estimates}
+    )
+    corrupted_comparison = comparison.model_copy(
+        update={"evaluations": (*comparison.evaluations[:-1], hybrid_corrupted)}
+    )
+
+    with pytest.raises(TrajectoryScoreError, match="task-group support must bind"):
         replay_offline_values(corrupted_comparison, trajectory_id="target")
 
 

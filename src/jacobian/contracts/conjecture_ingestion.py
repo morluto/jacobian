@@ -6,19 +6,11 @@ import hashlib
 from enum import StrEnum
 from typing import Literal, Self
 
-from pydantic import (
-    AnyHttpUrl,
-    Field,
-    TypeAdapter,
-    ValidationError,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, field_validator, model_validator
 
 from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.results import ContractModel
-
-_HTTP_URL = TypeAdapter(AnyHttpUrl)
+from jacobian.contracts.urls import normalize_http_url
 
 
 class ConjectureLicenseClass(StrEnum):
@@ -45,7 +37,7 @@ class ExternalConjectureMetadata(ContractModel):
     source_name: str | None = Field(default=None, max_length=512)
     source_item_url: str | None = Field(default=None, max_length=2_000)
 
-    @field_validator("source_item_url")
+    @field_validator("source_item_url", mode="before")
     @classmethod
     def normalize_source_item_url(cls, value: str | None) -> str | None:
         return (
@@ -76,12 +68,12 @@ class ExternalConjectureIngestRequest(ContractModel):
     expected_record_digest: Sha256Digest | None = None
     expected_content_digest: Sha256Digest | None = None
 
-    @field_validator("source_url")
+    @field_validator("source_url", mode="before")
     @classmethod
     def normalize_source_url(cls, value: str) -> str:
         return _normalize_http_url(value, "source_url")
 
-    @field_validator("license_evidence_url")
+    @field_validator("license_evidence_url", mode="before")
     @classmethod
     def normalize_license_evidence_url(cls, value: str | None) -> str | None:
         return (
@@ -210,9 +202,4 @@ def _text_digest(value: str) -> str:
 
 
 def _normalize_http_url(value: str, label: str) -> str:
-    if not value.strip():
-        raise ValueError(f"{label} must not be blank")
-    try:
-        return str(_HTTP_URL.validate_python(value))
-    except ValidationError as exc:
-        raise ValueError(f"{label} must be a valid HTTP(S) URL") from exc
+    return normalize_http_url(value, label=label)

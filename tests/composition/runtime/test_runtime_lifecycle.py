@@ -197,7 +197,7 @@ def test_close_quiesces_enumeration_workers_before_closing_store(
         )
 
 
-def test_enumeration_close_timeout_keeps_store_open_for_retry(
+def test_enumeration_close_timeout_keeps_service_closing_until_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -217,8 +217,10 @@ def test_enumeration_close_timeout_keeps_store_open_for_retry(
 
     with pytest.raises(ExperimentError, match="did not quiesce"):
         runtime.services.experiments.close(timeout_seconds=0)
-    with pytest.raises(ValidationError):
-        runtime.services.experiments.start_enumeration({})
+    with pytest.raises(ExperimentError, match="service is closing"):
+        runtime.services.experiments._launch_enumeration(
+            "experiment://must-not-launch-after-close-begins"
+        )
     runtime.core.store.register_descriptor(
         kind="schema",
         name="store-open-after-enumeration-timeout",
@@ -384,7 +386,7 @@ def test_close_waits_for_a_reserved_enumeration_start_through_worker_launch(
     ]
 
 
-def test_search_close_timeout_keeps_store_open_for_retry(
+def test_search_close_timeout_keeps_service_closing_until_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -402,8 +404,10 @@ def test_search_close_timeout_keeps_store_open_for_retry(
 
     with pytest.raises(SearchError, match="did not quiesce"):
         runtime.services.search.close(timeout_seconds=0)
-    with pytest.raises(ValidationError):
-        runtime.services.search.start({})
+    with pytest.raises(SearchError, match="service is closing"):
+        runtime.services.search._launch(
+            "experiment://must-not-launch-after-close-begins"
+        )
 
     runtime.core.store.register_descriptor(
         kind="schema",

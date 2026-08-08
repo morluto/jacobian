@@ -51,7 +51,11 @@ from jacobian.experiments.errors import (
     ExperimentError,
     ExperimentNotFoundError,
 )
-from jacobian.lifecycle import LifecycleTimeoutError, wait_for_worker_quiescence
+from jacobian.lifecycle import (
+    LifecycleTimeoutError,
+    ServiceLifecycleState,
+    wait_for_worker_quiescence,
+)
 from jacobian.persistence import PersistenceCorruptionError, decode_persisted_model
 from jacobian.plugin_execution import PluginExecutor
 from jacobian.plugins.registry import PluginRegistry, PluginRegistryError
@@ -136,8 +140,7 @@ class ExperimentService:
         self._threads: dict[str, threading.Thread] = {}
         self._thread_lock = threading.Lock()
         self._starts_in_flight = 0
-        self._closing = False
-        self._closed = False
+        self._lifecycle_state = ServiceLifecycleState.OPEN
         self._recover_interrupted_experiments()
         self.semantics_uri = store.register_descriptor(
             kind="semantics",
@@ -176,9 +179,9 @@ class ExperimentService:
         if timeout_seconds < 0:
             raise ValueError("timeout_seconds must be non-negative")
         with self._thread_lock:
-            if self._closed:
+            if self._lifecycle_state is ServiceLifecycleState.CLOSED:
                 return
-            self._closing = True
+            self._lifecycle_state = ServiceLifecycleState.CLOSING
         try:
             wait_for_worker_quiescence(
                 lock=self._thread_lock,
@@ -187,14 +190,11 @@ class ExperimentService:
                 timeout_seconds=timeout_seconds,
             )
         except LifecycleTimeoutError as exc:
-            with self._thread_lock:
-                self._closing = False
             raise ExperimentError(
                 "enumeration workers did not quiesce before runtime shutdown"
             ) from exc
         with self._thread_lock:
-            self._closed = True
-            self._closing = False
+            self._lifecycle_state = ServiceLifecycleState.CLOSED
 
     def _put_internal_artifact(
         self,
@@ -333,7 +333,7 @@ class ExperimentService:
         """Validate, persist, and launch one bounded enumeration job."""
 
         with self._thread_lock:
-            if self._closing or self._closed:
+            if self._lifecycle_state is not ServiceLifecycleState.OPEN:
                 raise ExperimentError("experiment service is closing")
             self._starts_in_flight += 1
         try:
@@ -403,7 +403,10 @@ class ExperimentService:
         lifecycle_reserved: bool = False,
     ) -> None:
         with self._thread_lock:
-            if self._closed or (self._closing and not lifecycle_reserved):
+            if self._lifecycle_state is ServiceLifecycleState.CLOSED or (
+                self._lifecycle_state is ServiceLifecycleState.CLOSING
+                and not lifecycle_reserved
+            ):
                 raise ExperimentError("experiment service is closing")
             current = self._threads.get(experiment_uri)
             if current is not None and current.is_alive():

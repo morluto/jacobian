@@ -135,7 +135,7 @@ def _state(
         boundary=boundary,
         hard_state=hard,
         soft_state=soft,
-        hard_state_digest=_sha(f"hard-{index}-{hard.model_dump_json()}"),
+        hard_state_digest=_digest(hard.model_dump(mode="json")),
         changed_fields=tuple(item.value for item in transitions),
         milestone_kinds=transitions,
         milestone_eligible=bool(transitions),

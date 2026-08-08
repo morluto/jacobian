@@ -95,6 +95,33 @@ def test_environment_rejects_aliased_project_paths(path: str) -> None:
         )
 
 
+@pytest.mark.parametrize("path", ("C:lakefile.toml", "C:/lakefile.toml"))
+def test_environment_rejects_drive_qualified_project_paths(path: str) -> None:
+    with pytest.raises(ValidationError, match="canonical NFC and relative"):
+        FormalDatasetEnvironment(
+            lean_version="4.31.0",
+            project_source_url="https://example.invalid/formal-project",
+            project_revision="fixture",
+            project_files=({"path": path, "digest": "sha256:" + "a" * 64},),
+        )
+
+
+def test_environment_normalizes_and_validates_project_source_url() -> None:
+    environment = FormalDatasetEnvironment(
+        lean_version="4.31.0",
+        project_source_url=" https://example.invalid/formal project ",
+        project_revision="fixture",
+    )
+    assert environment.project_source_url == "https://example.invalid/formal%20project"
+
+    with pytest.raises(ValidationError, match=r"valid HTTP\(S\) URL"):
+        FormalDatasetEnvironment(
+            lean_version="4.31.0",
+            project_source_url="not a URL",
+            project_revision="fixture",
+        )
+
+
 def test_environment_rejects_non_nfc_and_oversized_items() -> None:
     with pytest.raises(ValidationError, match="NFC-normalized"):
         FormalDatasetEnvironment(

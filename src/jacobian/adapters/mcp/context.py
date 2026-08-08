@@ -16,7 +16,11 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from jacobian.adapters.mcp.constants import ReasoningLogMode
 from jacobian.adapters.mcp.remote import TenantRuntimeRouter
-from jacobian.adapters.mcp.tooling import AgentRecoveryError
+from jacobian.adapters.mcp.tooling import (
+    AgentRecoveryError,
+    MCPBlockingWorkerRegistry,
+    blocking_worker_scope,
+)
 from jacobian.runtime.model import JacobianRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +31,7 @@ class AppState:
     runtime: JacobianRuntime | None
     tenant_router: TenantRuntimeRouter | None = None
     reasoning_log_mode: ReasoningLogMode = ReasoningLogMode.OFF
+    worker_registry: MCPBlockingWorkerRegistry | None = None
 
 
 @contextmanager
@@ -77,6 +82,7 @@ def _start_lean_warmup(runtime: JacobianRuntime) -> None:
 def _resource_runtime(
     runtime: JacobianRuntime | None,
     tenant_router: TenantRuntimeRouter | None,
+    worker_registry: MCPBlockingWorkerRegistry | None = None,
 ) -> Iterator[JacobianRuntime]:
     """Route resources through the same auth context as tools.
 
@@ -89,16 +95,29 @@ def _resource_runtime(
 
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
-        with tenant_router.lease_for(subject) as active_runtime:
-            _start_lean_warmup(active_runtime)
-            yield active_runtime
+        lease = tenant_router.lease_for(subject)
+        if worker_registry is None:
+            with lease as active_runtime:
+                _start_lean_warmup(active_runtime)
+                yield active_runtime
+        else:
+            with blocking_worker_scope(
+                worker_registry,
+                lease_release=lease.release,
+            ):
+                _start_lean_warmup(lease.runtime)
+                yield lease.runtime
         return
     if runtime is None:
         raise AgentRecoveryError(
             "Jacobian is unavailable for this resource request. Retry once; if it "
             "fails again, inspect the local Jacobian log."
         )
-    yield runtime
+    if worker_registry is None:
+        yield runtime
+    else:
+        with blocking_worker_scope(worker_registry):
+            yield runtime
 
 
 def _configured_root(state_dir: str | Path | None) -> Path:

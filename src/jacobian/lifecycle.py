@@ -5,10 +5,19 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable, Mapping
+from enum import StrEnum
 
 
 class LifecycleTimeoutError(TimeoutError):
     """Runtime-owned workers did not quiesce before a close deadline."""
+
+
+class ServiceLifecycleState(StrEnum):
+    """One-way lifecycle states for services that own background workers."""
+
+    OPEN = "OPEN"
+    CLOSING = "CLOSING"
+    CLOSED = "CLOSED"
 
 
 def wait_for_worker_quiescence(
@@ -42,4 +51,8 @@ def wait_for_worker_quiescence(
             thread.join(timeout=min(remaining, 0.05))
 
 
-__all__ = ["LifecycleTimeoutError", "wait_for_worker_quiescence"]
+__all__ = [
+    "LifecycleTimeoutError",
+    "ServiceLifecycleState",
+    "wait_for_worker_quiescence",
+]

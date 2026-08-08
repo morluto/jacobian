@@ -39,7 +39,11 @@ from jacobian.evaluation import (
     EvaluationService,
 )
 from jacobian.experiment_identity import new_experiment_uri
-from jacobian.lifecycle import LifecycleTimeoutError, wait_for_worker_quiescence
+from jacobian.lifecycle import (
+    LifecycleTimeoutError,
+    ServiceLifecycleState,
+    wait_for_worker_quiescence,
+)
 from jacobian.persistence import PersistenceCorruptionError, decode_persisted_model
 from jacobian.persistence.recovery import (
     put_internal_artifact,
@@ -123,8 +127,7 @@ class SearchService:
         self._threads: dict[str, threading.Thread] = {}
         self._thread_lock = threading.Lock()
         self._starts_in_flight = 0
-        self._closing = False
-        self._closed = False
+        self._lifecycle_state = ServiceLifecycleState.OPEN
         self.semantics_uri = store.register_descriptor(
             kind="semantics",
             name="jacobian.search-experiment",
@@ -163,9 +166,9 @@ class SearchService:
         if timeout_seconds < 0:
             raise ValueError("timeout_seconds must be non-negative")
         with self._thread_lock:
-            if self._closed:
+            if self._lifecycle_state is ServiceLifecycleState.CLOSED:
                 return
-            self._closing = True
+            self._lifecycle_state = ServiceLifecycleState.CLOSING
         try:
             wait_for_worker_quiescence(
                 lock=self._thread_lock,
@@ -174,18 +177,15 @@ class SearchService:
                 timeout_seconds=timeout_seconds,
             )
         except LifecycleTimeoutError as exc:
-            with self._thread_lock:
-                self._closing = False
             raise SearchError(
                 "search workers did not quiesce before runtime shutdown"
             ) from exc
         with self._thread_lock:
-            self._closed = True
-            self._closing = False
+            self._lifecycle_state = ServiceLifecycleState.CLOSED
 
     def _require_open(self) -> None:
         with self._thread_lock:
-            if self._closing or self._closed:
+            if self._lifecycle_state is not ServiceLifecycleState.OPEN:
                 raise SearchError("search service is closing")
 
     def _recover_interrupted_searches(self) -> None:
@@ -351,7 +351,7 @@ class SearchService:
         """Commit one idempotent search request and launch it locally."""
 
         with self._thread_lock:
-            if self._closing or self._closed:
+            if self._lifecycle_state is not ServiceLifecycleState.OPEN:
                 raise SearchError("search service is closing")
             self._starts_in_flight += 1
         try:
@@ -751,7 +751,10 @@ class SearchService:
         lifecycle_reserved: bool = False,
     ) -> None:
         with self._thread_lock:
-            if self._closed or (self._closing and not lifecycle_reserved):
+            if self._lifecycle_state is ServiceLifecycleState.CLOSED or (
+                self._lifecycle_state is ServiceLifecycleState.CLOSING
+                and not lifecycle_reserved
+            ):
                 raise SearchError("search service is closing")
             current = self._threads.get(experiment_uri)
             if current is not None and current.is_alive():

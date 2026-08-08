@@ -18,6 +18,7 @@ from typing import Literal
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.arithmetic import (
+    MAX_BASE_DIGITS,
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
     IntegerNthRootRequest,
@@ -97,6 +98,7 @@ def decimal_digit_count(request: IntegerValueRequest) -> IntegerValueResult:
 
 
 def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
+    _require_bounded_base_expansion(request.value, request.base)
     from sympy.ntheory import digits as sympy_digits
 
     value = _int(request.value)
@@ -113,6 +115,19 @@ def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
         base=abs(signed_base),
         digits=tuple(str(digit) for digit in expanded),
     )
+
+
+def _require_bounded_base_expansion(value: str, base: int) -> None:
+    """Reject inputs that necessarily exceed the bounded positional output."""
+
+    magnitude = value.lstrip("-")
+    maximum_value = format_canonical_integer(base**MAX_BASE_DIGITS)
+    if len(magnitude) > len(maximum_value) or (
+        len(magnitude) == len(maximum_value) and magnitude >= maximum_value
+    ):
+        raise ValueError(
+            f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound"
+        )
 
 
 def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:

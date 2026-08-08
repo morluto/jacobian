@@ -21,6 +21,7 @@ from jacobian.contracts.results import ContractModel
 
 _MAX_BASE = 10_000
 _MAX_NONNEGATIVE = 1_000
+MAX_BASE_DIGITS = 1_024
 
 # A positional digit is a small non-negative canonical integer string.  The
 # max length of 4 comfortably covers every base up to ``_MAX_BASE`` (10_000).
@@ -102,7 +103,7 @@ class IntegerBaseDigitsResult(ContractModel):
 
     sign: Literal[-1, 0, 1]
     base: int = Field(ge=2, le=_MAX_BASE)
-    digits: tuple[BaseDigit, ...] = Field(min_length=1, max_length=1_024)
+    digits: tuple[BaseDigit, ...] = Field(min_length=1, max_length=MAX_BASE_DIGITS)
 
     @model_validator(mode="after")
     def require_canonical_digits(self) -> Self:

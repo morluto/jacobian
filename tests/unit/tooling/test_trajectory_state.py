@@ -13,6 +13,7 @@ from jacobian.eval.trajectory_state import (
     BindingValidity,
     CandidateState,
     CleanRoomTerminalEvidence,
+    ExtractedTrajectoryState,
     MilestoneKind,
     ReasoningProtocolState,
     StateBoundary,
@@ -585,6 +586,16 @@ def test_strict_source_and_closed_models_reject_malformed_input(tmp_path: Path) 
     payload["invented"] = True
     with pytest.raises(ValidationError, match="Extra inputs"):
         TrajectoryExtraction.model_validate(payload)
+
+
+def test_extracted_state_rejects_a_stale_hard_state_digest(tmp_path: Path) -> None:
+    path = _write(tmp_path, [_reasoning("PLAN", "Inspect the state contract.")])
+    extraction = extract_codex_trajectory(path, task_family="digest-test")
+    payload = extraction.states[0].model_dump(mode="json")
+    payload["hard_state_digest"] = "sha256:" + "0" * 64
+
+    with pytest.raises(ValidationError, match="hard-state digest must bind"):
+        ExtractedTrajectoryState.model_validate(payload)
 
 
 def test_committed_json_schema_matches_typed_contract(tmp_path: Path) -> None:

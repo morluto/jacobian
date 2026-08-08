@@ -70,6 +70,9 @@ class ScoredTrajectoryState(ContractModel):
 
     @model_validator(mode="after")
     def require_local_credit_semantics(self) -> Self:
+        _require_terminal_pair(
+            self.eventual_terminal_result, self.eventual_terminal_reward
+        )
         if self.previous_observation_id is None:
             if self.value_delta is not None or self.transition_credit != 0.0:
                 raise ValueError("initial state has no delta and zero credit")
@@ -121,6 +124,9 @@ class TrajectoryScoreReplay(ContractModel):
 
     @model_validator(mode="after")
     def require_bound_ordered_replay(self) -> Self:  # noqa: C901
+        _require_terminal_pair(
+            self.eventual_terminal_result, self.eventual_terminal_reward
+        )
         if self.states[0].boundary is not StateBoundary.PLAN:
             raise ValueError("replay must begin at a PLAN observation")
         if any(state.trajectory_id != self.trajectory_id for state in self.states):
@@ -212,6 +218,11 @@ def _terminal_result(reward: Literal[0, 1]) -> TerminalResult:
     return TerminalResult.ACCEPTED if reward == 1 else TerminalResult.REJECTED
 
 
+def _require_terminal_pair(result: TerminalResult, reward: Literal[0, 1]) -> None:
+    if (result is TerminalResult.ACCEPTED) != (reward == 1):
+        raise ValueError("terminal result must bind the terminal reward")
+
+
 def _validate_estimates(
     evaluation: EstimatorEvaluation,
     trajectory_id: str,
@@ -258,7 +269,36 @@ def _validate_estimates(
     return estimates, clusters
 
 
-def replay_offline_values(  # noqa: C901
+def _require_supporting_trajectories(
+    estimate: StateValueEstimate,
+    cluster_support: tuple[str, ...],
+    evaluation: EstimatorEvaluation,
+) -> None:
+    if estimate.value_source is ValueSource.CLUSTER:
+        if estimate.supporting_trajectory_ids != cluster_support:
+            raise TrajectoryScoreError(
+                "estimate cluster support must equal its cluster members"
+            )
+        return
+    if cluster_support:
+        raise TrajectoryScoreError("task-group fallback cannot replace cluster support")
+    expected_support = tuple(
+        sorted(
+            {
+                candidate.trajectory_id
+                for candidate in evaluation.estimates
+                if candidate.task_group == estimate.task_group
+                and candidate.trajectory_id != estimate.trajectory_id
+            }
+        )
+    )
+    if estimate.supporting_trajectory_ids != expected_support:
+        raise TrajectoryScoreError(
+            "task-group support must bind the evaluation task group"
+        )
+
+
+def replay_offline_values(
     comparison: OfflineValueComparison,
     *,
     trajectory_id: str,
@@ -298,15 +338,12 @@ def replay_offline_values(  # noqa: C901
             raise TrajectoryScoreError("estimate is not bound to its declared cluster")
         if estimate.cluster_member_observation_ids != (cluster.member_observation_ids):
             raise TrajectoryScoreError("estimate carries a stale cluster member set")
-        if estimate.value_source is ValueSource.CLUSTER:
-            cluster_trajectories = set(cluster.member_trajectory_ids)
-            if estimate.trajectory_id in cluster_trajectories:
-                cluster_trajectories.discard(estimate.trajectory_id)
-            support_set = set(estimate.supporting_trajectory_ids)
-            if not support_set or not support_set.issubset(cluster_trajectories):
-                raise TrajectoryScoreError(
-                    "estimate declares cluster support outside its cluster members"
-                )
+        cluster_support = tuple(
+            trajectory
+            for trajectory in cluster.member_trajectory_ids
+            if trajectory != estimate.trajectory_id
+        )
+        _require_supporting_trajectories(estimate, cluster_support, evaluation)
         delta = (
             None
             if previous is None

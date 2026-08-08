@@ -584,11 +584,14 @@ def _validate_residue_image_shape(
     exponent_vectors = [term.exponents for term in result.normalized_terms]
     if exponent_vectors != sorted(set(exponent_vectors)):
         raise ValueError("normalized term exponents must be canonical")
-    assignments = tuple(product(*result.domains))
-    if result.total_assignments != len(assignments):
+    assignment_count = math.prod(len(domain) for domain in result.domains)
+    if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
+        raise ValueError("result domains exceed the 4,096-assignment bound")
+    if result.total_assignments != assignment_count:
         raise ValueError("total assignments do not match the declared domains")
-    if len(result.table) != len(assignments):
+    if len(result.table) != assignment_count:
         raise ValueError("complete table length does not match the declared domains")
+    assignments = tuple(product(*result.domains))
     return assignments
 
 

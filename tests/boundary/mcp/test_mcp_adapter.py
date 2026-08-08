@@ -131,8 +131,8 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
             assert "invocation_example" not in verifier
             assert verifier["input_schema_summary"] == {
                 "type": "object",
-                "required": ["determinant_uri"],
-                "property_names": ["determinant_uri"],
+                "required": ["input", "candidate"],
+                "property_names": ["candidate", "input"],
             }
             verifier_text = next(
                 match
@@ -164,7 +164,8 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
             )
             verify_text = json.loads(verify_contract.content[0].text)
             assert verify_text["capability"]["input_schema"]["required"] == [
-                "determinant_uri"
+                "input",
+                "candidate",
             ]
 
     asyncio.run(scenario())

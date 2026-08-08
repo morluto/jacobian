@@ -4,11 +4,6 @@
   "violations": [
     {
       "path": "src/jacobian/eval/trajectory_score.py",
-      "symbol": "replay_offline_values",
-      "complexity": 12
-    },
-    {
-      "path": "src/jacobian/eval/trajectory_score.py",
       "symbol": "require_bound_ordered_replay",
       "complexity": 16
     }

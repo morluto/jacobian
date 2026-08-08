@@ -7,6 +7,7 @@ from jacobian.contracts.arithmetic import (
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
 )
+from jacobian.domains.arithmetic import operations as arithmetic_operations
 from jacobian.domains.arithmetic.operations import base_digits
 
 
@@ -50,3 +51,15 @@ def test_base_digits_result_rejects_noncanonical_separated_fields(
 ) -> None:
     with pytest.raises(ValidationError):
         IntegerBaseDigitsResult.model_validate(invalid)
+
+
+def test_base_digits_rejects_an_oversized_result_before_integer_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_conversion(_: str) -> int:
+        raise AssertionError("base expansion must preflight before integer conversion")
+
+    monkeypatch.setattr(arithmetic_operations, "_int", unexpected_conversion)
+
+    with pytest.raises(ValueError, match="1024-digit result bound"):
+        base_digits(IntegerBaseDigitsRequest(value="1" + ("0" * 1_024), base=10))

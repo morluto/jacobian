@@ -11,15 +11,23 @@ import threading
 import time
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from jacobian.adapters.mcp.context import _public_tool_error
-from jacobian.adapters.mcp.server import create_server
+from jacobian.adapters.mcp.server import (
+    JacobianCoreExtension,
+    _runtime_lifespan,
+    create_server,
+)
 from jacobian.adapters.mcp.tooling import (
+    MCPBlockingWorkerRegistry,
+    MCPBlockingWorkerShutdownError,
     _request_id_digest,
     _request_trace_digest,
     _run_blocking,
+    blocking_worker_scope,
 )
 
 MCP_TOOL_NAMES = {
@@ -436,5 +444,167 @@ def test_repeated_cancellation_keeps_draining_blocking_work() -> None:
         with pytest.raises(asyncio.CancelledError):
             await task
         assert finished.is_set()
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_worker_retains_its_request_lease_until_late_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A late worker cannot outlive the tenant lease protecting its runtime."""
+
+    monkeypatch.setattr(
+        "jacobian.adapters.mcp.tooling._CANCEL_DRAIN_GRACE_SECONDS", 0.05
+    )
+    registry = MCPBlockingWorkerRegistry()
+    release = threading.Event()
+    lease_released = threading.Event()
+    worker_finished = threading.Event()
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+
+        def blocking_operation() -> None:
+            loop.call_soon_threadsafe(started.set)
+            release.wait(timeout=2)
+            worker_finished.set()
+
+        async def request() -> None:
+            with blocking_worker_scope(registry, lease_release=lease_released.set):
+                await _run_blocking(blocking_operation)
+
+        task = asyncio.create_task(request())
+        await asyncio.wait_for(started.wait(), timeout=1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert registry.active_count == 1
+        assert not lease_released.is_set()
+
+        release.set()
+        await asyncio.wait_for(asyncio.to_thread(worker_finished.wait, 1), timeout=1)
+        await asyncio.sleep(0)
+        assert lease_released.is_set()
+        assert registry.active_count == 0
+
+    asyncio.run(scenario())
+
+
+def test_worker_registry_bounds_shutdown_and_consumes_late_results() -> None:
+    registry = MCPBlockingWorkerRegistry()
+    release = threading.Event()
+    finished = threading.Event()
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+
+        def blocking_operation() -> str:
+            loop.call_soon_threadsafe(started.set)
+            release.wait(timeout=2)
+            finished.set()
+            return "late result"
+
+        async def request() -> None:
+            with blocking_worker_scope(registry):
+                await _run_blocking(blocking_operation)
+
+        task = asyncio.create_task(request())
+        await asyncio.wait_for(started.wait(), timeout=1)
+        with pytest.raises(MCPBlockingWorkerShutdownError):
+            await registry.close(timeout_seconds=0)
+        assert registry.active_count == 1
+        release.set()
+        await task
+        assert finished.is_set()
+        await asyncio.sleep(0)
+        assert registry.active_count == 0
+
+    asyncio.run(scenario())
+
+
+def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bounded shutdown retains, then deterministically releases its owners."""
+
+    closed: list[str] = []
+
+    class Runtime:
+        def close(self) -> None:
+            closed.append("runtime")
+
+    class Router:
+        def close(self) -> None:
+            closed.append("router")
+
+    class ImmediateShutdownRegistry(MCPBlockingWorkerRegistry):
+        async def close(self) -> None:
+            await super().close(timeout_seconds=0)
+
+    monkeypatch.setattr(
+        "jacobian.adapters.mcp.server._start_lean_warmup", lambda _: None
+    )
+    registry = ImmediateShutdownRegistry()
+
+    async def scenario() -> None:
+        release = asyncio.Event()
+
+        async def late_worker() -> None:
+            await release.wait()
+
+        worker = asyncio.create_task(late_worker())
+        registry.register(worker, request_scope=None)
+        with pytest.raises(MCPBlockingWorkerShutdownError):
+            async with _runtime_lifespan(
+                None,
+                runtime=Runtime(),  # type: ignore[arg-type]
+                tenant_router=Router(),  # type: ignore[arg-type]
+                worker_registry=registry,
+            ):
+                pass
+        assert closed == []
+        release.set()
+        await worker
+        await asyncio.sleep(0)
+        assert closed == ["runtime", "router"]
+
+    asyncio.run(scenario())
+
+
+def test_failed_tenant_warmup_releases_the_acquired_lease(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warmup executes inside the scope which owns every tenant lease."""
+
+    released = threading.Event()
+
+    class Lease:
+        runtime = object()
+
+        def release(self) -> None:
+            released.set()
+
+    class Router:
+        def lease_for(self, subject: str | None) -> Lease:
+            assert subject is None
+            return Lease()
+
+    async def scenario() -> None:
+        extension = JacobianCoreExtension(None, Router())  # type: ignore[arg-type]
+        monkeypatch.setattr(
+            "jacobian.adapters.mcp.server._start_lean_warmup",
+            lambda _: (_ for _ in ()).throw(RuntimeError("warmup failed")),
+        )
+        with pytest.raises(ToolError):
+            await extension.intercept_tool_call(
+                SimpleNamespace(name="math.find", arguments={}),
+                None,
+                lambda _: None,
+            )
+        assert released.is_set()
+
+    from mcp.server.mcpserver.exceptions import ToolError
 
     asyncio.run(scenario())

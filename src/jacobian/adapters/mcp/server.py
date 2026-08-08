@@ -45,11 +45,14 @@ from jacobian.adapters.mcp.resources import (
     _register_resources_and_prompts,
 )
 from jacobian.adapters.mcp.tooling import (
+    MCPBlockingWorkerRegistry,
+    MCPBlockingWorkerShutdownError,
     _argument_digest,
     _request_id_digest,
     _request_trace_digest,
     _response_size,
     _tool_annotations,
+    blocking_worker_scope,
 )
 from jacobian.adapters.mcp.tools import (
     capability_describe,
@@ -104,9 +107,11 @@ class JacobianCoreExtension(Extension):
         runtime: JacobianRuntime | None,
         tenant_router: TenantRuntimeRouter | None,
         reasoning_log_mode: ReasoningLogMode = ReasoningLogMode.REQUIRED,
+        worker_registry: MCPBlockingWorkerRegistry | None = None,
     ) -> None:
         self._runtime = runtime
         self._tenant_router = tenant_router
+        self._worker_registry = worker_registry or MCPBlockingWorkerRegistry()
         self._reasoning_log_mode = reasoning_log_mode
         self._accepted_tool_arguments: dict[str, frozenset[str]] = {
             binding.kwargs["name"]: frozenset(
@@ -246,6 +251,7 @@ class JacobianCoreExtension(Extension):
         trace_digest, trace_source = _request_trace_digest(ctx)
         try:
             with ExitStack() as request_resources:
+                lease_release = None
                 if self._tenant_router is not None:
                     from mcp.server.auth.middleware.auth_context import (
                         get_access_token,
@@ -253,9 +259,16 @@ class JacobianCoreExtension(Extension):
 
                     access_token = get_access_token()
                     subject = access_token.subject if access_token is not None else None
-                    active_runtime = request_resources.enter_context(
-                        self._tenant_router.lease_for(subject)
+                    lease = self._tenant_router.lease_for(subject)
+                    active_runtime = lease.runtime
+                    lease_release = lease.release
+                request_resources.enter_context(
+                    blocking_worker_scope(
+                        self._worker_registry,
+                        lease_release=lease_release,
                     )
+                )
+                if self._tenant_router is not None:
                     _start_lean_warmup(active_runtime)
                 # MCP 2.0.0 validates declared parameter values through the generated
                 # Pydantic model, but that model intentionally ignores unknown keys.
@@ -368,6 +381,7 @@ async def _runtime_lifespan(
     *,
     runtime: JacobianRuntime | None,
     tenant_router: TenantRuntimeRouter | None,
+    worker_registry: MCPBlockingWorkerRegistry,
     reasoning_log_mode: ReasoningLogMode = ReasoningLogMode.OFF,
 ) -> AsyncIterator[AppState]:
     if runtime is not None:
@@ -377,25 +391,46 @@ async def _runtime_lifespan(
             runtime=runtime,
             tenant_router=tenant_router,
             reasoning_log_mode=reasoning_log_mode,
+            worker_registry=worker_registry,
         )
     finally:
-        cleanup_failures: list[BaseException] = []
-        if runtime is not None:
-            try:
-                runtime.close()
-            except BaseException as exc:
-                cleanup_failures.append(exc)
-        if tenant_router is not None:
-            try:
-                tenant_router.close()
-            except BaseException as exc:
-                cleanup_failures.append(exc)
-        if cleanup_failures:
-            if len(cleanup_failures) == 1:
-                raise cleanup_failures[0]
-            raise BaseExceptionGroup(
-                "runtime and tenant router cleanup failed", cleanup_failures
+        try:
+            await worker_registry.close()
+        except MCPBlockingWorkerShutdownError as exc:
+            # A late thread still has a registry-owned tenant lease.  Closing its
+            # runtime now would let it use a torn-down store.  Keep ownership in
+            # the registry and close it once the final late worker has released
+            # its request scope.
+            worker_registry.defer_until_quiescent(
+                lambda: _close_runtime_owners(runtime, tenant_router)
             )
+            raise exc from None
+        _close_runtime_owners(runtime, tenant_router)
+
+
+def _close_runtime_owners(
+    runtime: JacobianRuntime | None,
+    tenant_router: TenantRuntimeRouter | None,
+) -> None:
+    """Close runtime owners once no request worker can still use them."""
+
+    cleanup_failures: list[BaseException] = []
+    if runtime is not None:
+        try:
+            runtime.close()
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+    if tenant_router is not None:
+        try:
+            tenant_router.close()
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+    if cleanup_failures:
+        if len(cleanup_failures) == 1:
+            raise cleanup_failures[0]
+        raise BaseExceptionGroup(
+            "runtime and tenant router cleanup failed", cleanup_failures
+        )
 
 
 def create_server(
@@ -455,6 +490,7 @@ def create_server(
         if tenant_isolation
         else None
     )
+    worker_registry = MCPBlockingWorkerRegistry()
 
     @asynccontextmanager
     async def lifespan(server: MCPServer[AppState]) -> AsyncIterator[AppState]:
@@ -462,6 +498,7 @@ def create_server(
             server,
             runtime=runtime,
             tenant_router=tenant_router,
+            worker_registry=worker_registry,
             reasoning_log_mode=selected_reasoning_mode,
         ) as state:
             yield state
@@ -482,6 +519,7 @@ def create_server(
                 runtime,
                 tenant_router,
                 selected_reasoning_mode,
+                worker_registry=worker_registry,
             )
         ],
     )
@@ -490,9 +528,10 @@ def create_server(
         server,
         runtime,
         tenant_router,
+        worker_registry,
     )
     if selected_reasoning_mode is not ReasoningLogMode.OFF:
-        _register_reasoning_resource(server, runtime, tenant_router)
+        _register_reasoning_resource(server, runtime, tenant_router, worker_registry)
     return server
 
 

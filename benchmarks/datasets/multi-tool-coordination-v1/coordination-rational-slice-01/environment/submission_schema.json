@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "den": {
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^(?:0|-?[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "LOCAL_SLICE_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "maxItems": 1,
+      "minItems": 1,
+      "prefixItems": [
+        {
+          "const": "NO_GLOBAL_CERTIFICATE_OR_THEOREM_CONCLUSION"
+        }
+      ],
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "positive_definite_certificate": {
+          "additionalProperties": false,
+          "properties": {
+            "leading_principal_determinants": {
+              "items": {
+                "$ref": "#/$defs/rational"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "leading_principal_determinants"
+          ],
+          "type": "object"
+        },
+        "proof_mode": {
+          "const": "SYLVESTER"
+        },
+        "scalar_replay": {
+          "additionalProperties": false,
+          "properties": {
+            "c00_y": {
+              "$ref": "#/$defs/rational"
+            },
+            "m00": {
+              "$ref": "#/$defs/rational"
+            },
+            "objective": {
+              "$ref": "#/$defs/rational"
+            },
+            "y0": {
+              "$ref": "#/$defs/rational"
+            }
+          },
+          "required": [
+            "y0",
+            "c00_y",
+            "m00",
+            "objective"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "scalar_replay",
+        "proof_mode",
+        "positive_definite_certificate"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "SCALARS_AND_DECLARED_3X3_RATIONAL_SLICE_ONLY:coordination-rational-slice-01",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/coordination-rational-slice-01"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

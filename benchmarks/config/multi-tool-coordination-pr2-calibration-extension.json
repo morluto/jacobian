@@ -1,0 +1,121 @@
+{
+  "agent_instructions": "Work only in the current directory. Read instruction.md, input.json, and submission_schema.json. Treat the current directory as /app and write submission.json plus every required evidence file there. Use the available Jacobian mathematical tools when they provide useful exact intermediate results, but choose your own mathematical route and tool order. Comply with the external reasoning-log protocol exposed by the Jacobian server. Do not use web search or inspect files outside the current directory. The task-owned verifier runs only after you exit, so independently check the terminal mathematical object, scope, completeness, evidence bindings, and assurance before finishing.",
+  "causal_claim_authorized": false,
+  "evidence_class": "public-host-local-difficulty-calibration-extension",
+  "extension_number": 1,
+  "harbor_execution_claimed": false,
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "parent_manifest_sha256": "sha256:b65f5a32438e44dbc58af7f1323f3d38d86a703df41a1ab8daa37044010944bb",
+  "parent_selected_task_ids": [
+    "symbolic-coordination-semantic-equivalence-01"
+  ],
+  "parent_study_id": "multi-tool-coordination-pr2-calibration",
+  "parent_summary_sha256": "sha256:ce69b7bc01c25a5e187c735c8b8c7234197e6273e086e7462869b283e21ba362",
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_task": 2,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "selection": {
+    "eligible_accepted_count": 1,
+    "eligible_rejected_count": 1,
+    "extension_policy": "no-further-extension",
+    "maximum_selected_tasks": 6,
+    "ordering": "declared-task-order",
+    "required_labelled_rollouts": 2,
+    "target_minimum_tasks": 4,
+    "uncertainty": "wilson-score-95"
+  },
+  "selection_rationale": [
+    "Retain the same inverse, near-miss, and one-direction families at their most structurally complex unused public fixtures.",
+    "Include all three unused semantic-equivalence fixtures because they independently vary affine duplicates, term order, cancellation, rational coefficients, and variable renaming.",
+    "Choose candidates only from public structure and never from unobserved rollout labels or hidden Oracle material.",
+    "Keep the model, prompt, timeout, verifier threshold, and two-rollout mixed-outcome rule unchanged."
+  ],
+  "source_base_revision": "a33d6cd66f431cf1d904fcc719f24383869d4bd4",
+  "stop_rules": [
+    "Run each declared extension rollout at most once and never retry a rejected mathematical answer.",
+    "Exclude timeout, model error, verifier error, missing output, and incomplete reasoning evidence from difficulty labels.",
+    "Select only tasks with exactly one accepted and one rejected labelled rollout, in declared extension order, after the one parent-selected task, up to six total tasks.",
+    "Do not run a second extension even if fewer than four total tasks qualify.",
+    "Do not tune the selection rule, model, prompt, timeout, task contract, or product capability after observing extension labels.",
+    "Do not change product capabilities before the combined selected evaluation set is frozen in a later commit."
+  ],
+  "study_id": "multi-tool-coordination-pr2-calibration-extension",
+  "tasks": [
+    {
+      "coordination_probe": [
+        "rational sparse inverse encoding",
+        "both ordered compositions",
+        "exact denominator preservation"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "a28eb8a704929056a8461f1682b4712c428b2999a05fcf354d27eb0ece03c210",
+      "task_id": "symbolic-coordination-valid-inverse-04"
+    },
+    {
+      "coordination_probe": [
+        "rational near-miss candidate audit",
+        "denominator perturbation",
+        "negative two-sided conclusion"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "538c34380a13a7a559f9816986ac651bb547c93c2c86a60ff508736f72f30761",
+      "task_id": "symbolic-coordination-near-miss-04"
+    },
+    {
+      "coordination_probe": [
+        "three-dimensional composition",
+        "one-direction supplied evidence",
+        "missing reverse composition"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "d0c1137aa4a21e989c6695017108e4b62c8fed64e4d1b390923981e629bfd511",
+      "task_id": "symbolic-coordination-one-direction-03"
+    },
+    {
+      "coordination_probe": [
+        "affine duplicate sparse terms",
+        "source and target variable renaming",
+        "semantic rather than lexical equality"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "3e12d6a7959fdfc475251ac7e2a8ba5e8ca3ccd8868d12157711d981b536e1d2",
+      "task_id": "symbolic-coordination-semantic-equivalence-02"
+    },
+    {
+      "coordination_probe": [
+        "reordered sparse inverse encoding",
+        "variable renaming",
+        "two composition directions"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "a43b3ff05f551628f6609df3910e63da846309391cb508f48ef0ed478ea27e35",
+      "task_id": "symbolic-coordination-semantic-equivalence-03"
+    },
+    {
+      "coordination_probe": [
+        "rational coefficients",
+        "cancelling sparse terms and renaming",
+        "semantic rather than lexical equality"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "9a99f6990bf3ac9b0fc5f81ad208ebb0b7f88917ab7f6d2018ae7d2cd324905c",
+      "task_id": "symbolic-coordination-semantic-equivalence-04"
+    }
+  ],
+  "terminal_reward": "task-owned-clean-room-verifier-only",
+  "timeout_seconds_per_rollout": 600,
+  "tool_call_reward": 0,
+  "web_search": "disabled",
+  "wrong_answer_retries": 0
+}

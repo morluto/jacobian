@@ -1,0 +1,93 @@
+{
+  "agent_instructions": "Work only in the current directory. Read instruction.md, input.json, and submission_schema.json. Treat the current directory as /app and write submission.json plus every required evidence file there. Use the available Jacobian mathematical tools when they provide useful exact intermediate results, but choose your own mathematical route and tool order. Comply with the external reasoning-log protocol exposed by the Jacobian server. Do not use web search or inspect files outside the current directory. The task-owned verifier runs only after you exit, so independently check the terminal mathematical object, scope, completeness, evidence bindings, and assurance before finishing.",
+  "calibrations": [
+    {
+      "manifest_sha256": "sha256:b65f5a32438e44dbc58af7f1323f3d38d86a703df41a1ab8daa37044010944bb",
+      "study_id": "multi-tool-coordination-pr2-calibration",
+      "summary_sha256": "sha256:ce69b7bc01c25a5e187c735c8b8c7234197e6273e086e7462869b283e21ba362"
+    },
+    {
+      "manifest_sha256": "sha256:ac1ac4b541c7771fa5ee2a8aeb302bad1b159f3fffe23e9bc90206cb833bd49a",
+      "study_id": "multi-tool-coordination-pr2-calibration-extension",
+      "summary_sha256": "sha256:6d1f233d05a88b8cb9e46fefc53e437b2c1c85c0977a8d4e349700af3314a518"
+    }
+  ],
+  "causal_claim_authorized": false,
+  "comparison": {
+    "conditions": [
+      "baseline",
+      "treatment"
+    ],
+    "order": "complete-baseline-before-product-change",
+    "reasoning_log_mode": "REQUIRED",
+    "repetitions_per_task_per_condition": 5,
+    "terminal_reward": "task-owned-clean-room-verifier-only",
+    "timeout_seconds_per_rollout": 600,
+    "tool_call_reward": 0,
+    "web_search": "disabled",
+    "wrong_answer_retries": 0
+  },
+  "evidence_class": "public-host-local-exploratory-controlled-comparison",
+  "extension_exhausted": true,
+  "harbor_execution_claimed": false,
+  "intended_use": "small-exploratory-paired-before-after-comparison",
+  "limitations": [
+    "Only two tasks met the frozen mixed-outcome rule, below the target of four.",
+    "Both selected tasks are from the semantic-equivalence family, so results do not estimate broad cross-domain performance.",
+    "The study is host-local and exploratory; uncertainty and every individual terminal result must be reported."
+  ],
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "schema_version": "1",
+  "selected_task_ids": [
+    "symbolic-coordination-semantic-equivalence-01",
+    "symbolic-coordination-semantic-equivalence-04"
+  ],
+  "selection_rule": "exactly-one-accepted-and-one-rejected-across-two-calibration-rollouts",
+  "stop_rules": [
+    "Complete and preserve all ten baseline rollouts before any product code changes.",
+    "Run each declared rollout at most once and never retry a rejected mathematical answer.",
+    "Treat timeout, model error, verifier error, missing output, and incomplete reasoning evidence as INCONCLUSIVE rather than failure.",
+    "Change at most one small reusable capability or interface boundary justified by the calibration traces.",
+    "Keep the tasks, model, prompt, timeout, verifier, repetition count, and label rule unchanged between conditions.",
+    "Stop without a treatment if implementation evidence does not support an independently testable reusable change."
+  ],
+  "strategic_metrics": [
+    "task-owned exact terminal acceptance",
+    "noncanonical sparse-map request rejections",
+    "successful recovery after fail-closed capability rejection",
+    "correct transfer of verified mathematics into the terminal object",
+    "reasoning protocol completion",
+    "capability invocation count reported separately from success"
+  ],
+  "study_id": "multi-tool-coordination-pr3-frozen-comparison",
+  "target_minimum_met": false,
+  "target_minimum_tasks": 4,
+  "tasks": [
+    {
+      "coordination_probe": [
+        "equivalent sparse encoding",
+        "term cancellation and reordering",
+        "semantic rather than lexical equality"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "799301c8118daf0c9328aafaace67e904eba0679bffd06ea44ff3c120137df4e",
+      "task_id": "symbolic-coordination-semantic-equivalence-01"
+    },
+    {
+      "coordination_probe": [
+        "rational coefficients",
+        "cancelling sparse terms and renaming",
+        "semantic rather than lexical equality"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "9a99f6990bf3ac9b0fc5f81ad208ebb0b7f88917ab7f6d2018ae7d2cd324905c",
+      "task_id": "symbolic-coordination-semantic-equivalence-04"
+    }
+  ]
+}

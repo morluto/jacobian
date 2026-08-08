@@ -1,0 +1,148 @@
+{
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "den": {
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^(?:0|-?[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "DIRECTED_POLYNOMIAL_IDENTITY_CERTIFIED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "maxItems": 1,
+      "minItems": 1,
+      "prefixItems": [
+        {
+          "const": "NO_CLAIM_BEYOND_THE_DECLARED_COORDINATE_IDENTITY"
+        }
+      ],
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "c": {
+          "$ref": "#/$defs/rational"
+        },
+        "center": {
+          "$ref": "#/$defs/rational"
+        },
+        "circle_coefficients": {
+          "items": {
+            "$ref": "#/$defs/rational"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "distance_coefficients": {
+          "items": {
+            "$ref": "#/$defs/rational"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "k": {
+          "$ref": "#/$defs/rational"
+        },
+        "multiplier": {
+          "$ref": "#/$defs/rational"
+        },
+        "p": {
+          "$ref": "#/$defs/rational"
+        },
+        "q": {
+          "$ref": "#/$defs/rational"
+        },
+        "radius": {
+          "$ref": "#/$defs/rational"
+        },
+        "relation": {
+          "const": "DISTANCE_EQUALS_MULTIPLIER_TIMES_CIRCLE"
+        }
+      },
+      "required": [
+        "k",
+        "c",
+        "p",
+        "q",
+        "center",
+        "radius",
+        "multiplier",
+        "circle_coefficients",
+        "distance_coefficients",
+        "relation"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "EXACT_DECLARED_QQ_COEFFICIENT_IDENTITY:coordination-directed-proportionality-01",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/coordination-directed-proportionality-01"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

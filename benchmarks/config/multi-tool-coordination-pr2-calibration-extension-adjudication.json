@@ -1,0 +1,72 @@
+{
+  "schema_version": "1",
+  "study_id": "multi-tool-coordination-pr2-calibration-extension",
+  "evidence_class": "public-host-local-difficulty-calibration-extension",
+  "causal_claim_authorized": false,
+  "source_revision": "9bf71ae053e0cdaa9cd981c9ee875536f24728d0",
+  "parent": {
+    "study_id": "multi-tool-coordination-pr2-calibration",
+    "manifest_sha256": "sha256:b65f5a32438e44dbc58af7f1323f3d38d86a703df41a1ab8daa37044010944bb",
+    "summary_sha256": "sha256:ce69b7bc01c25a5e187c735c8b8c7234197e6273e086e7462869b283e21ba362"
+  },
+  "model": {
+    "id": "gpt-5.4-mini",
+    "reasoning_effort": "medium",
+    "codex_cli_version": "codex-cli 0.147.0"
+  },
+  "batch": {
+    "tmux_session": "coord-pr2-calibration-extension",
+    "started_at": "2026-08-08T13:03:51.123177+00:00",
+    "ended_at": "2026-08-08T13:42:28.156511+00:00",
+    "task_count": 6,
+    "run_count": 12,
+    "outcomes": {"ACCEPTED": 11, "REJECTED": 1},
+    "reasoning_protocol": {"COMPLETE": 12},
+    "extraction_error_count": 8,
+    "artifact_count": 185,
+    "manifest_sha256": "sha256:ac1ac4b541c7771fa5ee2a8aeb302bad1b159f3fffe23e9bc90206cb833bd49a",
+    "summary_sha256": "sha256:6d1f233d05a88b8cb9e46fefc53e437b2c1c85c0977a8d4e349700af3314a518",
+    "raw_artifact_location": "benchmarks/results/multi-tool-coordination-pr2-calibration-extension"
+  },
+  "selection": {
+    "rule": "exactly one ACCEPTED and one REJECTED labelled rollout per task",
+    "initial_selected_task_ids": ["symbolic-coordination-semantic-equivalence-01"],
+    "eligible_extension_task_ids": ["symbolic-coordination-semantic-equivalence-04"],
+    "selected_task_ids": [
+      "symbolic-coordination-semantic-equivalence-01",
+      "symbolic-coordination-semantic-equivalence-04"
+    ],
+    "target_minimum_tasks": 4,
+    "target_minimum_met": false,
+    "extension_exhausted": true,
+    "further_extension_authorized": false
+  },
+  "runs": [
+    {"trajectory_id":"symbolic-coordination-valid-inverse-04-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["exact_two_sided_verification","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The authorized checker verified both rational linear compositions exactly."},
+    {"trajectory_id":"symbolic-coordination-valid-inverse-04-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["exact_two_sided_verification","trajectory_extractor_false_candidate"],"note":"The independent repetition produced the same complete VERIFIED result."},
+    {"trajectory_id":"symbolic-coordination-near-miss-04-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["exact_two_sided_verification","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The checker replayed both directions and correctly rejected the denominator-perturbed inverse."},
+    {"trajectory_id":"symbolic-coordination-near-miss-04-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.compute_jacobian"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The determinant-two Jacobian was only a computed intermediate; the task-owned verifier accepted the independently prepared nonzero residual certificate."},
+    {"trajectory_id":"symbolic-coordination-one-direction-03-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.compute_jacobian"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The Jacobian intermediate did not prove invertibility, while the terminal object supplied and passed both complete composition directions."},
+    {"trajectory_id":"symbolic-coordination-one-direction-03-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["exact_two_sided_verification","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The authorized checker supplied the missing reverse direction and verified the three-variable inverse."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-02-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify","polynomial.map.inverse.verify"],"categories":["noncanonical_representation_rejected","successful_recovery_after_tool_rejection","trajectory_extractor_false_candidate"],"note":"The raw duplicate-term map failed closed; the agent combined terms, reordered the sparse map, and the repaired request verified both compositions."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-02-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":[],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The agent normalized the affine duplicates locally and the clean-room terminal verifier accepted the complete replay."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-03-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["tool_transport_failure","valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The inverse tool call failed before a result; the independently checked terminal object nevertheless encoded both exact identities."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-03-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify","polynomial.map.inverse.verify"],"categories":["noncanonical_representation_rejected","valid_terminal_object"],"note":"Two requests were rejected because sparse terms were not in canonical monomial order; the terminal verifier accepted the equivalent reordered inverse."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-04-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":[],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The rational cancellation and variable renaming were handled locally and the full terminal replay passed."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-04-r02","terminal_acceptance":"REJECTED","mathematical_adjudication":"VALID_MATH_INVALID_TERMINAL_SHAPE","capability_ids":["polynomial.map.inverse.verify","polynomial.map.inverse.verify"],"categories":["noncanonical_representation_rejected","successful_recovery_after_tool_rejection","representation_or_artifact_handoff","recoverable_reasoning_protocol_error","trajectory_extractor_false_candidate"],"note":"The raw map failed closed and the repaired request was VERIFIED, but the agent duplicated scope, completeness, and limitations inside result; the terminal schema/semantic object was therefore invalid."}
+  ],
+  "findings": [
+    "The extension added only one mixed task; the combined frozen set has two tasks and misses the preregistered target of four.",
+    "Five semantic-equivalence trajectories encountered or narrowly avoided noncanonical sparse-map input failures, while no map-level canonicalization operation was available.",
+    "The sole extension rejection occurred after a correct VERIFIED mathematical result and was caused by terminal representation handoff.",
+    "The exact two-sided inverse checker itself was sound on every completed canonical request.",
+    "No verifier false negative, false VERIFIED claim, scope escalation, timeout inference, or infrastructure-labelled rejection was observed."
+  ],
+  "limitations": [
+    "The extension is a 12-run public host-local calibration, not a held-out or causal comparison.",
+    "Eleven of twelve extension rollouts were accepted, so most selected structural variants remained ceiling tasks.",
+    "The final two-task mixed set is suitable only for a small exploratory paired comparison, not a broad performance estimate.",
+    "Eight post-run extraction failures repeat the known evaluator candidate-heuristic defect; raw traces and terminal labels remain intact.",
+    "No second extension is authorized."
+  ]
+}

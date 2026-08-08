@@ -1,0 +1,174 @@
+{
+  "agent_instructions": "Work only in the current directory. Read instruction.md, input.json, and submission_schema.json. Treat the current directory as /app and write submission.json plus every required evidence file there. Use the available Jacobian mathematical tools when they provide useful exact intermediate results, but choose your own mathematical route and tool order. Comply with the external reasoning-log protocol exposed by the Jacobian server. Do not use web search or inspect files outside the current directory. The task-owned verifier runs only after you exit, so independently check the terminal mathematical object, scope, completeness, evidence bindings, and assurance before finishing.",
+  "causal_claim_authorized": false,
+  "evidence_class": "public-host-local-difficulty-calibration",
+  "harbor_execution_claimed": false,
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_task": 2,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "selection": {
+    "eligible_accepted_count": 1,
+    "eligible_rejected_count": 1,
+    "extension_policy": "one-separately-preregistered-extension-of-at-most-six-new-candidates",
+    "maximum_selected_tasks": 6,
+    "ordering": "declared-task-order",
+    "required_labelled_rollouts": 2,
+    "target_minimum_tasks": 4,
+    "uncertainty": "wilson-score-95"
+  },
+  "source_base_revision": "098abff900e67f8e80c83df84fcc121358862750",
+  "stop_rules": [
+    "Run each declared rollout at most once and never retry a rejected mathematical answer.",
+    "Exclude timeout, model error, verifier error, missing output, and incomplete reasoning evidence from difficulty labels.",
+    "Select only tasks with exactly one accepted and one rejected labelled rollout, in declared order, up to six tasks.",
+    "If fewer than four tasks are selected, permit at most one separately preregistered extension of no more than six new candidates; never extend automatically.",
+    "Do not tune the selection rule, model, prompt, timeout, or task contract after observing calibration labels.",
+    "Do not change product capabilities before the selected evaluation set is frozen in a later commit."
+  ],
+  "study_id": "multi-tool-coordination-pr2-calibration",
+  "tasks": [
+    {
+      "coordination_probe": [
+        "graph representation to maximum-degree set",
+        "set-valued intermediate to exact distance profile",
+        "complete extremizer binding"
+      ],
+      "dataset": "multi-tool-coordination-v1",
+      "domain": "graph-theory",
+      "harbor_task_digest": "7efbbbbb658d21bec6117ae4d175d7b4518a154ddca1503aebb5b7144fa7e061",
+      "task_id": "coordination-graph-set-distance-01"
+    },
+    {
+      "coordination_probe": [
+        "simplicial complex to cycle coordinates",
+        "spanning-tree-dependent representation",
+        "alternate exact witness"
+      ],
+      "dataset": "multi-tool-coordination-v1",
+      "domain": "algebraic-topology",
+      "harbor_task_digest": "33337c539c7d1699c46179707d737f62e26a67a0af8a477c40e1929abda09179",
+      "task_id": "coordination-cycle-lattice-01"
+    },
+    {
+      "coordination_probe": [
+        "exact rational replay",
+        "named derived scalar binding",
+        "positive-definiteness certificate without scope escalation"
+      ],
+      "dataset": "multi-tool-coordination-v1",
+      "domain": "optimization-linear-algebra",
+      "harbor_task_digest": "0c500e4af53e85fa5351ed614cbf60680a697e85f2be59de5e8875fdd206ca4b",
+      "task_id": "coordination-rational-slice-01"
+    },
+    {
+      "coordination_probe": [
+        "coordinate normalization",
+        "polynomial coefficient transformation",
+        "explicit multiplier direction"
+      ],
+      "dataset": "multi-tool-coordination-v1",
+      "domain": "geometry-polynomial-algebra",
+      "harbor_task_digest": "f5e3142e7a56bb8b794c7cc5ddfd68be00b4fdb9dac7c098eaf8f5f3edbd8e62",
+      "task_id": "coordination-directed-proportionality-01"
+    },
+    {
+      "coordination_probe": [
+        "sparse polynomial normalization",
+        "both ordered compositions",
+        "exact checker-style certificate"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "b4d43bfa15d69938cf8e94fcdf29048a3a96122afbf5e7e005bb1552399c0b64",
+      "task_id": "symbolic-coordination-valid-inverse-05"
+    },
+    {
+      "coordination_probe": [
+        "near-miss candidate audit",
+        "nonzero composition residual",
+        "negative terminal conclusion"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "1ee3cfe9c426a6ff4ebefc146f6764fbe957b09f54c271628467a48bd3564194",
+      "task_id": "symbolic-coordination-near-miss-01"
+    },
+    {
+      "coordination_probe": [
+        "one-direction evidence audit",
+        "missing reverse composition",
+        "two-sided inverse conclusion"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "40ad43dda2cf01e0b7f625e3d1be3695c1728ced9ae82f2b4f86a44711cc0dee",
+      "task_id": "symbolic-coordination-one-direction-01"
+    },
+    {
+      "coordination_probe": [
+        "constant nonzero Jacobian replay",
+        "local versus global conclusion boundary",
+        "assurance calibration"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "2aeac9903dc30b2ce7af041ef241968f37f2a84171f9ee3e780a3e428208432f",
+      "task_id": "symbolic-coordination-keller-only-01"
+    },
+    {
+      "coordination_probe": [
+        "bounded collision search",
+        "alternate exact witness",
+        "bounded evidence to terminal scope"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "2aefb6b973f1096dee784ff4ccffe1188d487c71e5af2773a9b6cc0bb9040154",
+      "task_id": "symbolic-coordination-collision-found-01"
+    },
+    {
+      "coordination_probe": [
+        "complete finite-grid replay",
+        "absence of bounded collision",
+        "no global injectivity inference"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "ad906c9616b067efbd716ad3dfddfb6ba6bb59f90bfd57514237063c5d27fe31",
+      "task_id": "symbolic-coordination-grid-exhausted-01"
+    },
+    {
+      "coordination_probe": [
+        "timeout record interpretation",
+        "incomplete search non-conclusion",
+        "honest completeness state"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "9be02d59a0ca478b88232ef5497f7a173ebe684e11704472f5eae16c2e4259ed",
+      "task_id": "symbolic-coordination-search-timeout-01"
+    },
+    {
+      "coordination_probe": [
+        "equivalent sparse encoding",
+        "term cancellation and reordering",
+        "semantic rather than lexical equality"
+      ],
+      "dataset": "symbolic-coordination-v1",
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "799301c8118daf0c9328aafaace67e904eba0679bffd06ea44ff3c120137df4e",
+      "task_id": "symbolic-coordination-semantic-equivalence-01"
+    }
+  ],
+  "terminal_reward": "task-owned-clean-room-verifier-only",
+  "timeout_seconds_per_rollout": 600,
+  "tool_call_reward": 0,
+  "web_search": "disabled",
+  "wrong_answer_retries": 0
+}

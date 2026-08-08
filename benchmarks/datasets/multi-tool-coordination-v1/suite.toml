@@ -1,0 +1,18 @@
+schema_version = "2"
+
+[dataset]
+id = "jacobian/multi-tool-coordination-v1"
+title = "Multi-tool mathematical coordination pilot"
+purpose = "Cross-domain exact terminal certificates derived from observed operation-composition failures."
+claim_class = "workflow-observation-pilot"
+answer_visibility = "hidden-at-runtime"
+default_execution_profile = "oracle-only"
+keywords = [
+    "mathematics",
+    "multi-tool-coordination",
+    "exact-certificates",
+    "clean-room-verification",
+]
+authors = [
+    { name = "Jacobian contributors", email = "maintainers@jacobian.invalid" },
+]

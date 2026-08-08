@@ -376,6 +376,30 @@ def test_dataset_owned_task_selects_shared_host_regression() -> None:
     _assert_plan_valid(result)
 
 
+def test_multi_tool_dataset_task_selects_owned_host_regression() -> None:
+    result = planner.plan(
+        [
+            "benchmarks/datasets/multi-tool-coordination-v1/"
+            "coordination-cycle-lattice-01/tests/verifier.py"
+        ],
+        event="pull_request",
+    )
+
+    assert _host_matrix(result) == [
+        {
+            "name": "multi-tool-coordination-v1-1",
+            "selector": (
+                "benchmarks/validation/multi_tool_coordination_v1/"
+                "test_pilot_contract.py"
+            ),
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
 def test_conjecture_probe_task_selects_owned_host_regression() -> None:
     result = planner.plan(
         [

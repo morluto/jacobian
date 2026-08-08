@@ -1,0 +1,153 @@
+{
+  "schema_version": "1",
+  "study_id": "multi-tool-coordination-pr1",
+  "evidence_class": "public-host-local-workflow-observation",
+  "causal_claim_authorized": false,
+  "source_revision": "4eaf525a136e4473ddbc015a1d6a94aa0f3dd885",
+  "model": {
+    "id": "gpt-5.4-mini",
+    "reasoning_effort": "medium",
+    "codex_cli_version": "codex-cli 0.147.0"
+  },
+  "batch": {
+    "tmux_session": "coord-pr1-batch",
+    "started_at": "2026-08-08T10:23:49.194266+00:00",
+    "ended_at": "2026-08-08T10:53:53.723813+00:00",
+    "task_count": 6,
+    "run_count": 12,
+    "outcomes": {"ACCEPTED": 3, "REJECTED": 9},
+    "reasoning_protocol": {"COMPLETE": 12},
+    "extraction_error_count": 1,
+    "manifest_sha256": "sha256:cec334f434782a7e58c7a5a7fb6307bf37a6962489305967edaab00d80c95bd3",
+    "summary_sha256": "sha256:38527aa598ada65161898b85c20a56620a88a073d16ca1d0c47aff1666c270ce",
+    "raw_artifact_location": "benchmarks/results/multi-tool-coordination-pr1"
+  },
+  "taxonomy": {
+    "capability_discovery_miss": "A useful installed operation was not surfaced or selected, even when the terminal object was recovered locally.",
+    "representation_or_artifact_handoff": "A useful intermediate was not transferred into the representation or durable evidence required by the next step.",
+    "intermediate_semantic_binding": "Exact subcomputations were correct but a named derived quantity or relation direction was bound incorrectly in the terminal object.",
+    "checker_rejection_recovery": "An independent checker rejected a candidate and the agent repaired the candidate before continuing.",
+    "checker_not_invoked": "A producer candidate was available but the installed independent checker was not discovered or invoked.",
+    "false_certification": "The terminal submission claimed VERIFIED without binding an operator-authorized verification record.",
+    "safe_assurance_downgrade": "The terminal mathematics was correct and the agent conservatively claimed COMPUTED rather than fabricating verification.",
+    "verifier_contract_overconstraint": "The frozen verifier rejected a mathematically valid terminal object because of an agent-visible lexical or directional ambiguity.",
+    "successful_multi_operation_composition": "Several exact operations were composed into a fully accepted terminal certificate.",
+    "recoverable_reasoning_protocol_error": "One or more reasoning.write calls had invalid phase fields, but the durable protocol still completed."
+  },
+  "runs": [
+    {
+      "trajectory_id": "graph-artifact-composition-r01",
+      "terminal_acceptance": "ACCEPTED",
+      "terminal_reward": 1.0,
+      "mathematical_adjudication": "VALID",
+      "capability_ids": [],
+      "categories": ["capability_discovery_miss", "recoverable_reasoning_protocol_error"],
+      "note": "The exact graph answer passed, but the agent used a local breadth-first search after graph.distance_matrix.compute was not surfaced."
+    },
+    {
+      "trajectory_id": "graph-artifact-composition-r02",
+      "terminal_acceptance": "ACCEPTED",
+      "terminal_reward": 1.0,
+      "mathematical_adjudication": "VALID",
+      "capability_ids": [],
+      "categories": ["capability_discovery_miss", "representation_or_artifact_handoff", "recoverable_reasoning_protocol_error"],
+      "note": "The answer passed locally; discovery exposed an artifact-only graph operation but not the raw structured distance-matrix route."
+    },
+    {
+      "trajectory_id": "rp2-homology-lattice-r01",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "VALID_CONTRACT_FALSE_NEGATIVE",
+      "capability_ids": ["matrix.determinant.compute"],
+      "categories": ["capability_discovery_miss", "verifier_contract_overconstraint"],
+      "note": "The alternate spanning-tree certificate and determinant -2 were exact; evidence failed only because the verifier required the literal substring 'determinant -2'."
+    },
+    {
+      "trajectory_id": "rp2-homology-lattice-r02",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "VALID_CONTRACT_FALSE_NEGATIVE",
+      "capability_ids": ["matrix.determinant.compute"],
+      "categories": ["capability_discovery_miss", "verifier_contract_overconstraint"],
+      "note": "The second alternate spanning-tree certificate was also exact and failed the same lexical evidence condition."
+    },
+    {
+      "trajectory_id": "polynomial-map-collision-r01",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "VALID_MATH_INVALID_ASSURANCE",
+      "capability_ids": ["polynomial.map.collision.verify", "polynomial.map.collision.verify"],
+      "categories": ["checker_rejection_recovery", "representation_or_artifact_handoff", "false_certification"],
+      "note": "The checker rejected a malformed map, accepted the repair, and returned a verification_record_uri; no resource link was exposed, so the agent substituted a model-authored record and falsely claimed VERIFIED."
+    },
+    {
+      "trajectory_id": "polynomial-map-collision-r02",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.9,
+      "mathematical_adjudication": "VALID_SAFE_DOWNGRADE",
+      "capability_ids": ["polynomial.map.evaluate", "polynomial.map.evaluate"],
+      "categories": ["safe_assurance_downgrade", "recoverable_reasoning_protocol_error"],
+      "note": "Both exact images were correct and the agent honestly claimed COMPUTED; the legacy verifier reserved full reward for the maximum VERIFIED assurance."
+    },
+    {
+      "trajectory_id": "exact-farkas-ldl-slice-r01",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "INVALID_TERMINAL_OBJECT",
+      "capability_ids": ["matrix.determinant.compute", "matrix.determinant.compute", "matrix.determinant.compute", "matrix.determinant.compute"],
+      "categories": ["intermediate_semantic_binding", "recoverable_reasoning_protocol_error"],
+      "note": "All four Sylvester determinants were correct, but m00 was bound to the matrix entry rather than the required scalar sum y0+c00_y."
+    },
+    {
+      "trajectory_id": "exact-farkas-ldl-slice-r02",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "INVALID_TERMINAL_OBJECT",
+      "capability_ids": ["matrix.determinant.compute"],
+      "categories": ["intermediate_semantic_binding"],
+      "note": "The independent repetition made the same m00 semantic-binding error despite exact positive-definiteness arithmetic."
+    },
+    {
+      "trajectory_id": "apollonius-gap-repair-r01",
+      "terminal_acceptance": "ACCEPTED",
+      "terminal_reward": 1.0,
+      "mathematical_adjudication": "VALID",
+      "capability_ids": ["polynomial.expression.normalize", "polynomial.expression.normalize"],
+      "categories": ["successful_multi_operation_composition", "recoverable_reasoning_protocol_error"],
+      "note": "Two typed exact normalizations were correctly compared and transferred into the directed coefficient certificate."
+    },
+    {
+      "trajectory_id": "apollonius-gap-repair-r02",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "VALID_CONTRACT_AMBIGUITY",
+      "capability_ids": ["polynomial.expression.normalize", "polynomial.expression.normalize", "polynomial.expression.normalize"],
+      "categories": ["verifier_contract_overconstraint"],
+      "note": "The agent exactly proved circle=(-1/3)*distance; the verifier expected distance=multiplier*circle, but the visible contract did not define the multiplier direction."
+    },
+    {
+      "trajectory_id": "hermite-normal-form-r01",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.0,
+      "mathematical_adjudication": "VALID_MATH_INVALID_ASSURANCE",
+      "capability_ids": ["matrix.normal_form.hermite"],
+      "categories": ["checker_not_invoked", "representation_or_artifact_handoff", "false_certification", "recoverable_reasoning_protocol_error"],
+      "note": "The producer explicitly returned UNVERIFIED, no related verifier was advertised, and the agent replaced an authorized record with its own summary while claiming VERIFIED."
+    },
+    {
+      "trajectory_id": "hermite-normal-form-r02",
+      "terminal_acceptance": "REJECTED",
+      "terminal_reward": 0.9,
+      "mathematical_adjudication": "VALID_SAFE_DOWNGRADE",
+      "capability_ids": ["matrix.normal_form.hermite"],
+      "categories": ["checker_not_invoked", "safe_assurance_downgrade", "recoverable_reasoning_protocol_error"],
+      "note": "The exact H and U were correct and the agent conservatively claimed COMPUTED after no verifier was discovered."
+    }
+  ],
+  "limitations": [
+    "This is a 12-run public host-local observation, not a held-out or causal comparison.",
+    "Three legacy task contracts produced diagnostically useful but methodologically overconstrained rejection labels.",
+    "Raw transcripts are host-local ignored artifacts; this record binds their complete manifest and summary digests.",
+    "The outer tmux wrapper exited after collection because zsh reserves the variable name status; the study manifest and all 196 artifact digests were complete and independently rechecked."
+  ]
+}

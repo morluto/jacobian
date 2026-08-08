@@ -1,0 +1,250 @@
+{
+  "allowed_assurance": [
+    "COMPUTED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "COMPUTED",
+  "conclusion": {
+    "const": "GRAPH_SET_DISTANCE_CERTIFIED"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/certificate.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1
+  },
+  "limitations": {
+    "maxItems": 1,
+    "minItems": 1,
+    "prefixItems": [
+      {
+        "const": "NO_CLAIM_BEYOND_THE_DECLARED_FINITE_GRAPH"
+      }
+    ],
+    "type": "array"
+  },
+  "public_notes": "Write evidence/certificate.json as a JSON wrapper with exactly schema_version, task_id, result, scope, completeness, and limitations. The last four values must exactly match submission.json. Bind the regular file by SHA-256. The clean-room verifier independently checks the terminal mathematics, frozen input, scope, completeness, evidence, and assurance; prose phrases are not proof evidence.",
+  "required_artifact_filenames": [
+    "evidence/certificate.json"
+  ],
+  "schema_definitions": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "den": {
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^(?:0|-?[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "EXACT_DECLARED_FINITE_GRAPH:coordination-graph-set-distance-01",
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "distance_to_set": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "distance": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "vertex": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "vertex",
+            "distance"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "maximizing_vertices": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "maximum_degree_vertices": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "maximum_distance_to_set": {
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "maximum_degree_vertices",
+      "distance_to_set",
+      "maximum_distance_to_set",
+      "maximizing_vertices"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "den": {
+            "pattern": "^[1-9][0-9]*$",
+            "type": "string"
+          },
+          "num": {
+            "pattern": "^(?:0|-?[1-9][0-9]*)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "num",
+          "den"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "GRAPH_SET_DISTANCE_CERTIFIED"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "maxItems": 1,
+        "minItems": 1,
+        "prefixItems": [
+          {
+            "const": "NO_CLAIM_BEYOND_THE_DECLARED_FINITE_GRAPH"
+          }
+        ],
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "distance_to_set": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "distance": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "vertex": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vertex",
+                "distance"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "maximizing_vertices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maximum_degree_vertices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maximum_distance_to_set": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "maximum_degree_vertices",
+          "distance_to_set",
+          "maximum_distance_to_set",
+          "maximizing_vertices"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "EXACT_DECLARED_FINITE_GRAPH:coordination-graph-set-distance-01",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/coordination-graph-set-distance-01"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/coordination-graph-set-distance-01"
+}

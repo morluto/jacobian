@@ -1,0 +1,77 @@
+{
+  "schema_version": "1",
+  "study_id": "multi-tool-coordination-pr2-calibration",
+  "evidence_class": "public-host-local-difficulty-calibration",
+  "causal_claim_authorized": false,
+  "source_revision": "a33d6cd66f431cf1d904fcc719f24383869d4bd4",
+  "model": {
+    "id": "gpt-5.4-mini",
+    "reasoning_effort": "medium",
+    "codex_cli_version": "codex-cli 0.147.0"
+  },
+  "batch": {
+    "tmux_session": "coord-pr2-calibration",
+    "started_at": "2026-08-08T11:38:52.301418+00:00",
+    "ended_at": "2026-08-08T12:54:32.600310+00:00",
+    "task_count": 12,
+    "run_count": 24,
+    "outcomes": {"ACCEPTED": 21, "REJECTED": 3},
+    "reasoning_protocol": {"COMPLETE": 24},
+    "extraction_error_count": 10,
+    "artifact_count": 375,
+    "manifest_sha256": "sha256:b65f5a32438e44dbc58af7f1323f3d38d86a703df41a1ab8daa37044010944bb",
+    "summary_sha256": "sha256:ce69b7bc01c25a5e187c735c8b8c7234197e6273e086e7462869b283e21ba362",
+    "raw_artifact_location": "benchmarks/results/multi-tool-coordination-pr2-calibration"
+  },
+  "selection": {
+    "rule": "exactly one ACCEPTED and one REJECTED labelled rollout per task",
+    "eligible_task_ids": ["symbolic-coordination-semantic-equivalence-01"],
+    "selected_task_ids": ["symbolic-coordination-semantic-equivalence-01"],
+    "target_minimum_tasks": 4,
+    "target_minimum_met": false,
+    "extension_required": true,
+    "extension_is_automatic": false
+  },
+  "taxonomy": {
+    "valid_terminal_object": "The task-owned clean-room verifier accepted the exact terminal mathematics, bindings, scope, evidence, and assurance.",
+    "intermediate_semantic_binding": "Exact subcomputations were correct but a fixed input parameter or named relation was rebound incorrectly in the terminal object.",
+    "noncanonical_representation_rejected": "A capability correctly rejected duplicate, zero, or out-of-order sparse terms before making a mathematical claim.",
+    "failed_recovery_after_tool_rejection": "The agent did not recover a valid mathematical route after a fail-closed capability response.",
+    "recoverable_reasoning_protocol_error": "One or more reasoning.write attempts were invalid, while the durable PLAN-to-FINAL protocol still completed.",
+    "trajectory_extractor_false_candidate": "The post-run extractor misclassified certificate metadata as a mathematical candidate and could not digest the scalar URI.",
+    "safe_nonconclusion": "The terminal object preserved bounded or incomplete evidence as UNKNOWN without a global inference."
+  },
+  "runs": [
+    {"trajectory_id":"coordination-graph-set-distance-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["graph.distance_matrix.compute"],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The full exact distance matrix was transferred into the maximum-degree set distance profile."},
+    {"trajectory_id":"coordination-graph-set-distance-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["graph.distance_matrix.compute"],"categories":["valid_terminal_object"],"note":"The independent repetition used the same exact graph operation and bound all extremizers."},
+    {"trajectory_id":"coordination-cycle-lattice-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["matrix.determinant.compute","matrix.normal_form.smith.certified.compute"],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The determinant -2 and Smith computation supported an accepted alternate cycle-lattice witness."},
+    {"trajectory_id":"coordination-cycle-lattice-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":[],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The matrix tool attempt failed at transport/protocol level, but the independently checked terminal witness was exact."},
+    {"trajectory_id":"coordination-rational-slice-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["matrix.determinant.compute"],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"After one failed invocation, the full 3 by 3 determinant was exactly 4 and every named scalar remained correctly bound."},
+    {"trajectory_id":"coordination-rational-slice-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["matrix.determinant.compute"],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"The independent repetition returned the same exact determinant and accepted certificate."},
+    {"trajectory_id":"coordination-directed-proportionality-01-r01","terminal_acceptance":"REJECTED","mathematical_adjudication":"INVALID_TERMINAL_OBJECT","capability_ids":["polynomial.expression.normalize","rational.compute.product","rational.compute.quotient"],"categories":["intermediate_semantic_binding","recoverable_reasoning_protocol_error"],"note":"The agent substituted k=1/3 for the frozen k=3 and concluded the wrong directed multiplier 8/9 after otherwise exact rational arithmetic."},
+    {"trajectory_id":"coordination-directed-proportionality-01-r02","terminal_acceptance":"REJECTED","mathematical_adjudication":"INVALID_TERMINAL_OBJECT","capability_ids":["geometry.points.compute.squared_distance"],"categories":["intermediate_semantic_binding","recoverable_reasoning_protocol_error"],"note":"A different operation route repeated the same frozen-parameter inversion and wrong 8/9 multiplier."},
+    {"trajectory_id":"symbolic-coordination-valid-inverse-05-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The authorized checker replayed both three-variable compositions and verified the inverse."},
+    {"trajectory_id":"symbolic-coordination-valid-inverse-05-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The second exact two-sided verification matched the first."},
+    {"trajectory_id":"symbolic-coordination-near-miss-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.compute_jacobian"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The Jacobian intermediate was insufficient by itself, but the terminal residual certificate correctly rejected the perturbed inverse."},
+    {"trajectory_id":"symbolic-coordination-near-miss-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.inverse.verify"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The authorized checker returned FALSE after replaying both complete residual families."},
+    {"trajectory_id":"symbolic-coordination-one-direction-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.identity.verify","polynomial.identity.verify","polynomial.identity.verify"],"categories":["valid_terminal_object","noncanonical_representation_rejected","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The first duplicate-term request failed closed; two canonical identities then supported a correct complete two-direction terminal replay."},
+    {"trajectory_id":"symbolic-coordination-one-direction-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.expression.normalize","polynomial.expression.normalize"],"categories":["valid_terminal_object"],"note":"Two exact normalizations exposed the cancellations needed to avoid relying on one-direction supplied evidence."},
+    {"trajectory_id":"symbolic-coordination-keller-only-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.compute_jacobian"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate"],"note":"The exact determinant was one, while the terminal object correctly withheld any unlicensed global invertibility conclusion."},
+    {"trajectory_id":"symbolic-coordination-keller-only-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.keller_condition.verify"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The independent checker verified only the Keller condition and the terminal scope remained local to that claim."},
+    {"trajectory_id":"symbolic-coordination-collision-found-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.evaluate","polynomial.map.evaluate"],"categories":["valid_terminal_object","recoverable_reasoning_protocol_error"],"note":"Two distinct rational points were exactly evaluated to the same image and bound as a collision witness."},
+    {"trajectory_id":"symbolic-coordination-collision-found-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.collision.verify"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The authorized collision checker verified the alternate witness directly."},
+    {"trajectory_id":"symbolic-coordination-grid-exhausted-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":[],"categories":["valid_terminal_object","safe_nonconclusion"],"note":"The terminal certificate stayed within the completely enumerated finite grid and made no global injectivity claim."},
+    {"trajectory_id":"symbolic-coordination-grid-exhausted-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":[],"categories":["valid_terminal_object","safe_nonconclusion"],"note":"The independent repetition preserved the same bounded-search conclusion without a tool invocation."},
+    {"trajectory_id":"symbolic-coordination-search-timeout-01-r01","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":[],"categories":["valid_terminal_object","safe_nonconclusion","recoverable_reasoning_protocol_error"],"note":"The terminal conclusion was UNKNOWN and did not infer failure or injectivity from the timeout record."},
+    {"trajectory_id":"symbolic-coordination-search-timeout-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.map.keller_condition.verify"],"categories":["valid_terminal_object","safe_nonconclusion","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"An exact negative Keller-condition result was retained as separate evidence and did not alter the timeout non-conclusion."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-01-r01","terminal_acceptance":"REJECTED","mathematical_adjudication":"INVALID_TERMINAL_OBJECT","capability_ids":["polynomial.map.compute_jacobian"],"categories":["noncanonical_representation_rejected","failed_recovery_after_tool_rejection","recoverable_reasoning_protocol_error"],"note":"The map capability correctly rejected duplicate and zero sparse terms; the subsequent manual composition was wrong and produced a false negative inverse conclusion."},
+    {"trajectory_id":"symbolic-coordination-semantic-equivalence-01-r02","terminal_acceptance":"ACCEPTED","mathematical_adjudication":"VALID","capability_ids":["polynomial.identity.verify","polynomial.identity.verify"],"categories":["valid_terminal_object","trajectory_extractor_false_candidate","recoverable_reasoning_protocol_error"],"note":"The second rollout canonicalized both residual families to zero and the terminal verifier independently replayed the complete compositions."}
+  ],
+  "limitations": [
+    "This is a 24-run public host-local calibration, not a held-out or causal comparison.",
+    "Only one of twelve tasks met the preregistered mixed-outcome criterion, so the separately preregistered extension is required.",
+    "The extension is enriched for unused representation-heavy fixtures and cannot support a population-level difficulty estimate.",
+    "Ten post-run extraction failures are evaluator heuristic defects; their raw traces and task-owned terminal labels remain intact.",
+    "Raw transcripts are host-local ignored artifacts; this record binds their complete manifest and summary digests."
+  ]
+}

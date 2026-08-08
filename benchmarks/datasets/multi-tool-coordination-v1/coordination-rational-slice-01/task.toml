@@ -1,0 +1,45 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json", "/app/evidence"]
+
+[task]
+name = "jacobian/coordination-rational-slice-01"
+version = "1.0.0"
+description = "Assess one exact rational-slice-binding coordination certificate."
+keywords = ["mathematics", "multi-tool", "coordination", "exact-certificate"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+field = "mathematics"
+primary_domain = "optimization"
+assurance_ceiling = "COMPUTED"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "deterministic-hand-auditable-pilot"
+fixture_digest = "sha256:448f0c3cb502bb460ff14c246a1fe957c046d6e753ad15ba5a6387293000d138"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["multi-tool-coordination", "offline", "clean-room-verifier"]
+case_version = "multi-tool-coordination-v1/pr1-pilot-1"
+generator_version = "multi-tool-coordination-pilot-generator@1"
+derivation = "Evidence-driven PR1 pilot from the frozen multi-tool-coordination-pr1 study."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -13,6 +13,9 @@ HOST_VALIDATION_FULL_SHARDS = 4
 HOST_VALIDATION_MAX_JOBS = 256
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 HOST_VALIDATION_DATASET_FILES = {
+    "multi-tool-coordination-v1": (
+        "benchmarks/validation/multi_tool_coordination_v1/test_pilot_contract.py",
+    ),
     "symbolic-coordination-v1": (
         "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py",
     ),

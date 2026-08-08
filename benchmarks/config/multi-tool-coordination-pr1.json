@@ -1,0 +1,92 @@
+{
+  "agent_instructions": "Work only in the current directory. Read instruction.md, input.json, and submission_schema.json. Treat the current directory as /app and write submission.json plus every required evidence file there. Use the available Jacobian mathematical tools when they provide useful exact intermediate results, but choose your own mathematical route and tool order. Comply with the external reasoning-log protocol exposed by the Jacobian server. Do not use web search or inspect files outside the current directory. The task-owned verifier runs only after you exit, so independently check the terminal mathematical object, scope, completeness, evidence bindings, and assurance before finishing.",
+  "causal_claim_authorized": false,
+  "dataset": "mathematical-benchmarks-v1",
+  "evidence_class": "public-host-local-workflow-observation",
+  "harbor_execution_claimed": false,
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_task": 2,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "snapshot_id": "sha256:26e558abcfda80f944ff1659f73b3c89b22ed4ddd2700d8340c067dc4ed7b323",
+  "source_base_revision": "7edc7ba9035e5f9de5a04f406cfe50e7da28d8e1",
+  "stop_rules": [
+    "Run each declared rollout at most once; never retry a rejected mathematical answer.",
+    "Treat timeout, model error, verifier error, missing output, and incomplete reasoning evidence as inconclusive rather than failure.",
+    "Do not extend this PR1 batch because outcomes are disappointing; preserve ceiling, floor, and negative results.",
+    "Do not change product capabilities before the PR2 benchmark is expanded, calibrated, and frozen."
+  ],
+  "study_id": "multi-tool-coordination-pr1",
+  "tasks": [
+    {
+      "coordination_probe": [
+        "graph construction to structural property",
+        "set-valued intermediate to distance computation",
+        "artifact handoff"
+      ],
+      "domain": "graph-theory",
+      "harbor_task_digest": "b9443acbabd824ddc007974712433cf2b7d942720d40f0865e9f9843bd6ddb4a",
+      "task_id": "graph-artifact-composition"
+    },
+    {
+      "coordination_probe": [
+        "simplicial complex to chain complex",
+        "integer lattice or determinant computation",
+        "alternate certificate witness"
+      ],
+      "domain": "algebraic-topology",
+      "harbor_task_digest": "35c60550453aa1979b4694a399813023844ab3a6524643e106a9e983836b6539",
+      "task_id": "rp2-homology-lattice"
+    },
+    {
+      "coordination_probe": [
+        "polynomial map evaluation",
+        "candidate distinction and equality",
+        "checker and assurance choice"
+      ],
+      "domain": "polynomial-algebra",
+      "harbor_task_digest": "9243ca8ee4800cb8eae039a08e0414c7fcfd8e111c3d1a3c8d6fbbfc44884abd",
+      "task_id": "polynomial-map-collision"
+    },
+    {
+      "coordination_probe": [
+        "exact rational scalar replay",
+        "positive-definiteness certificate",
+        "bounded versus global scope"
+      ],
+      "domain": "optimization-linear-algebra",
+      "harbor_task_digest": "5ff1eed2a5ff443222d181f3c676ac5012b4cd01189f1d983ef2e5256e447848",
+      "task_id": "exact-farkas-ldl-slice"
+    },
+    {
+      "coordination_probe": [
+        "coordinate normalization",
+        "polynomial expansion and proportionality",
+        "evidence contract repair"
+      ],
+      "domain": "geometry-polynomial-algebra",
+      "harbor_task_digest": "701b5fc809ec6973a55d8a30568d89829c9c7f683b80c04241a4df2d6bc61636",
+      "task_id": "apollonius-gap-repair"
+    },
+    {
+      "coordination_probe": [
+        "normal-form computation",
+        "transformation handoff",
+        "candidate verification"
+      ],
+      "domain": "integer-linear-algebra",
+      "harbor_task_digest": "19223f7d5ef1a502b0a857a8ed8c5f7c9d8dddf17d5fc4b3ebf720c294ed3d9a",
+      "task_id": "hermite-normal-form"
+    }
+  ],
+  "terminal_reward": "task-owned-clean-room-verifier-only",
+  "timeout_seconds_per_rollout": 600,
+  "tool_call_reward": 0,
+  "web_search": "disabled",
+  "wrong_answer_retries": 0
+}

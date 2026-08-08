@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from verifier_support import (
@@ -82,17 +83,29 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
 
 
 def _json_equal(left: object, right: object) -> bool:
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return set(left) == set(right) and all(
-            _json_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            _json_equal(a, b) for a, b in zip(left, right, strict=True)
-        )
-    return left == right
+    pending = [(left, right)]
+    while pending:
+        current_left, current_right = pending.pop()
+        if type(current_left) is not type(current_right):
+            return False
+        if isinstance(current_left, dict):
+            if set(current_left) != set(current_right):
+                return False
+            pending.extend(
+                (current_left[key], current_right[key]) for key in current_left
+            )
+        elif isinstance(current_left, list):
+            if len(current_left) != len(current_right):
+                return False
+            pending.extend(zip(current_left, current_right, strict=True))
+        elif isinstance(current_left, float):
+            if not math.isfinite(current_left) or not math.isfinite(current_right):
+                return False
+            if current_left != current_right:
+                return False
+        elif current_left != current_right:
+            return False
+    return True
 
 
 def mathematics(result: object) -> bool:
@@ -124,7 +137,12 @@ def _raw() -> dict | None:
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text(), object_pairs_hook=_reject_duplicate_keys)
+        value = json.loads(
+            path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite,
+            parse_float=_parse_finite_float,
+        )
     except (OSError, ValueError, MemoryError, RecursionError):
         return None
     return value if isinstance(value, dict) else None
@@ -137,6 +155,17 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
             raise ValueError(f"duplicate JSON object key: {key}")
         result[key] = value
     return result
+
+
+def _reject_nonfinite(value: str) -> object:
+    raise ValueError(f"non-finite JSON number: {value}")
+
+
+def _parse_finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"out-of-range JSON number: {value}")
+    return parsed
 
 
 def _write(values: dict) -> None:

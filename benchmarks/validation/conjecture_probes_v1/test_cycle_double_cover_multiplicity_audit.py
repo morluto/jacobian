@@ -113,10 +113,30 @@ def test_raw_parser_rejects_duplicate_keys(tmp_path, monkeypatch):
     assert module._raw() is None
 
 
+def test_raw_parser_rejects_nonstandard_numbers(tmp_path, monkeypatch):
+    module = _module()
+    submission = tmp_path / "submission.json"
+    monkeypatch.setattr(module, "Path", lambda _value: submission)
+    for value in ("Infinity", "NaN", "1e10000"):
+        submission.write_text('{"task_id": ' + value + "}")
+        assert module._raw() is None
+
+
 def test_evidence_comparison_preserves_json_types():
     module = _module()
     assert not module._json_equal({"count": 1}, {"count": True})
     assert not module._json_equal({"count": 2}, {"count": 2.0})
+
+
+def test_evidence_comparison_rejects_nonfinite_and_handles_deep_values():
+    module = _module()
+    assert not module._json_equal({"value": float("inf")}, {"value": float("inf")})
+    left: object = 0
+    right: object = 0
+    for _ in range(600):
+        left = [left]
+        right = [right]
+    assert module._json_equal(left, right)
 
 
 def test_evidence_copy_uses_raw_envelope_fields():

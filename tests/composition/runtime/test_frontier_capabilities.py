@@ -231,13 +231,14 @@ def test_hamiltonian_path_decision_has_independent_replay(
         )
     )
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert _result_payload(frontier_services, computed)["decision"] == decision
+    assert computed.output["result"]["decision"] == decision
+    assert computed.artifact_uris == ()
 
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.hamiltonian_path.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": {"graph": graph}, "candidate": computed.output["result"]},
         )
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
@@ -345,23 +346,21 @@ def test_hamiltonian_checker_rejects_a_forged_negative_decision(
             },
         )
     )
-    stored = frontier_services.core.store.get(computed.output["result_uri"])
-    forged = deepcopy(stored.payload)
+    input_payload = {
+        "graph": {
+            "vertices": ["a", "b", "c"],
+            "edges": [["a", "b"], ["b", "c"]],
+        }
+    }
+    forged = deepcopy(computed.output["result"])
     forged["decision"] = "DOES_NOT_EXIST"
     forged["path"] = []
-    forged_uri = frontier_services.core.artifacts.put(
-        schema_uri=stored.manifest.schema_uri,
-        semantics_uri=stored.manifest.semantics_uri,
-        payload=forged,
-        parents=(computed.output["input_uri"],),
-        summary="schema-valid forged negative Hamiltonian-path decision",
-    ).artifact_uri
 
     checked = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.hamiltonian_path.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": forged_uri},
+            input={"input": input_payload, "candidate": forged},
         )
     )
     assert checked.execution.status is ExecutionStatus.COMPLETED

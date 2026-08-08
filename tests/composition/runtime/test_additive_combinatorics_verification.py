@@ -4,8 +4,6 @@ import pytest
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityDiscoveryRequest,
-    CapabilityInputKind,
     CapabilityMode,
     CapabilityRequest,
 )
@@ -52,22 +50,23 @@ def test_additive_decisions_are_independently_verified(
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
-def test_fixed_order_negative_result_is_verified_from_its_typed_artifact(
+def test_fixed_order_negative_result_is_verified_inline(
     authorized_complete_runtime,
 ) -> None:
     producer_id = "combinatorics.cyclic_difference_set.extension.decide"
     verifier_id = "combinatorics.cyclic_difference_set.extension.verify"
+    payload = {"base_elements": _BASE, "target_order": 7}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=producer_id,
-            input={"base_elements": _BASE, "target_order": 7},
+            input=payload,
         )
     )
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": payload, "candidate": computed.output["result"]},
         )
     )
 
@@ -76,45 +75,28 @@ def test_fixed_order_negative_result_is_verified_from_its_typed_artifact(
     assert verified.output["operation_id"] == producer_id
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-
-    descriptor = next(
-        item
-        for item in authorized_complete_runtime.core.capabilities.catalog().capabilities
-        if item.capability_id == verifier_id
-    )
-    source = authorized_complete_runtime.core.store.get(computed.output["result_uri"])
-    assert descriptor.accepted_input_kinds == (CapabilityInputKind.TYPED_ARTIFACT,)
-    assert descriptor.accepted_artifact_types == (source.manifest.schema_uri,)
-
-    discovered = authorized_complete_runtime.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
-            query="verify a fixed-order cyclic difference-set extension result",
-            mode=CapabilityMode.VERIFY,
-            input_kind=CapabilityInputKind.TYPED_ARTIFACT,
-            artifact_type=source.manifest.schema_uri,
-        )
-    )
-    assert [match.capability_id for match in discovered.matches] == [verifier_id]
+    assert computed.artifact_uris == ()
 
 
 def test_fixed_order_positive_witness_is_independently_verified(
     authorized_complete_runtime,
 ) -> None:
+    payload = {"base_elements": ["0", "1"], "target_order": 3}
     computed = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.cyclic_difference_set.extension.decide",
-            input={"base_elements": ["0", "1"], "target_order": 3},
+            input=payload,
         )
     )
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.cyclic_difference_set.extension.verify",
             mode=CapabilityMode.VERIFY,
-            input={"result_uri": computed.output["result_uri"]},
+            input={"input": payload, "candidate": computed.output["result"]},
         )
     )
 
-    assert computed.output["preview"]["extension"] == [0, 1, 3]
+    assert computed.output["result"]["extension"] == [0, 1, 3]
     assert verified.output["status"] == "VERIFIED"
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 

@@ -1,8 +1,8 @@
 from dataclasses import replace
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import pytest
-from pydantic import Field
+from pydantic import Field, ValidationError, field_validator, model_validator
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -10,7 +10,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_installation import OperationInstaller, _validation_diagnostic
 from jacobian.operations import (
     BoundedSearchInterrupted,
     BoundedSearchOperation,
@@ -44,6 +44,26 @@ class _BoundedResult(ContractModel):
 
 class _SyntheticPreview(ContractModel):
     summary: str
+
+
+class _RootValidatedRequest(ContractModel):
+    left: int
+    right: int
+
+    @model_validator(mode="after")
+    def require_equal_values(self) -> Self:
+        if self.left != self.right:
+            raise ValueError("values must match")
+        return self
+
+
+class _SecretValidatedRequest(ContractModel):
+    token: str
+
+    @field_validator("token")
+    @classmethod
+    def reject_token(cls, value: str) -> str:
+        raise ValueError(f"invalid token {value}")
 
 
 def _synthetic_bundle() -> DomainBundle:
@@ -106,6 +126,43 @@ def _install(runtime: JacobianRuntime, bundle: DomainBundle) -> None:
     ).install(bundle)
     for adapter in installation.adapters:
         runtime.core.capabilities.register(adapter)
+
+
+def _validation_error(
+    model: type[ContractModel], payload: dict[str, object]
+) -> ValidationError:
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(payload)
+    return error.value
+
+
+def test_validation_diagnostic_uses_document_root_pointer() -> None:
+    diagnostic = _validation_diagnostic(
+        CapabilityDiagnostic(
+            code="INVALID_SYNTHETIC_REQUEST",
+            stage="synthetic_input_validation",
+            message="Invalid synthetic input.",
+        ),
+        _validation_error(_RootValidatedRequest, {"left": 1, "right": 2}),
+    )
+
+    assert diagnostic.path is None
+
+
+def test_validation_diagnostic_redacts_custom_validator_values() -> None:
+    secret = "do-not-return-" + "x" * 1024
+    diagnostic = _validation_diagnostic(
+        CapabilityDiagnostic(
+            code="INVALID_SYNTHETIC_REQUEST",
+            stage="synthetic_input_validation",
+            message="Invalid synthetic input.",
+        ),
+        _validation_error(_SecretValidatedRequest, {"token": secret}),
+    )
+
+    assert diagnostic.path == "/token"
+    assert diagnostic.details["validation_reason"] == "value error"
+    assert secret not in diagnostic.model_dump_json()
 
 
 def test_synthetic_bundle_returns_an_inline_typed_result(

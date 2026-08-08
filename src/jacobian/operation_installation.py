@@ -60,24 +60,31 @@ def _validation_diagnostic(
         return diagnostic
     first = errors[0]
     path_parts = [str(part) for part in first.get("loc", ())]
-    reason = str(first.get("msg", "invalid value"))
+    raw_reason = str(first.get("msg", "invalid value"))
+    validation_type = str(first.get("type", "value_error"))
+    context = first.get("ctx")
+    context_error = context.get("error") if isinstance(context, dict) else None
+    if isinstance(context_error, (ValueError, AssertionError)):
+        reason = validation_type.replace("_", " ")[:128]
+    else:
+        reason = raw_reason[:128]
     rejected_container = raw_errors[0].get("input")
-    field_match = re.match(r"(?:Value error, )?([a-z][a-z0-9_]*)\b", reason)
+    field_match = re.match(r"(?:Value error, )?([a-z][a-z0-9_]*)\b", raw_reason)
     if (
         field_match is not None
         and isinstance(rejected_container, dict)
         and field_match.group(1) in rejected_container
     ):
         path_parts.append(field_match.group(1))
-    path = "/" + "/".join(path_parts)
+    path = "/" + "/".join(path_parts) if path_parts else None
     return diagnostic.model_copy(
         update={
-            "path": diagnostic.path or path or None,
+            "path": diagnostic.path or path,
             "details": {
                 **diagnostic.details,
                 "validation_error_count": len(errors),
                 "validation_reason": reason,
-                "validation_type": str(first.get("type", "value_error")),
+                "validation_type": validation_type,
             },
         }
     )

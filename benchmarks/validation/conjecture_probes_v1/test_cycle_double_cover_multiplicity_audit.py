@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -163,3 +164,14 @@ def test_assurance_value_is_independent_of_protocol():
         {"claimed_assurance": "CHECKED", "conclusion": "wrong"}
     )
     assert not module._assurance_is_calibrated({"claimed_assurance": True})
+
+
+def test_reward_output_uses_host_contract(tmp_path, monkeypatch):
+    module = _module()
+    logs = tmp_path / "verifier"
+    monkeypatch.setattr(module, "Path", lambda _value: logs)
+    module._write({"reward": 1.0, "correctness": 1.0})
+    assert json.loads((logs / "reward.json").read_text()) == {"reward": 1.0}
+    assert json.loads((logs / "reward-details.json").read_text()) == {
+        "correctness": 1.0
+    }

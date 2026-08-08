@@ -82,7 +82,7 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
     )
 
 
-def _json_equal(left: object, right: object) -> bool:
+def _json_equal(left: object, right: object) -> bool:  # noqa: C901
     pending = [(left, right)]
     while pending:
         current_left, current_right = pending.pop()
@@ -171,7 +171,10 @@ def _parse_finite_float(value: str) -> float:
 def _write(values: dict) -> None:
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
-    (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+    reward = values.get("reward", 0.0)
+    details = {key: value for key, value in values.items() if key != "reward"}
+    (path / "reward.json").write_text(json.dumps({"reward": reward}, sort_keys=True))
+    (path / "reward-details.json").write_text(json.dumps(details, sort_keys=True))
 
 
 def _evidence_payload_is_bound(payload: object, raw: object) -> bool:

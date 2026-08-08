@@ -66,7 +66,9 @@ def _identity_tree(root: Path, relative_path: Path) -> dict[str, object]:
             or not resolved.is_relative_to(root)
         ):
             raise OSError("not an exact directory")
-        files = tuple(sorted(path for path in resolved.rglob("*.olean") if path.is_file()))
+        files = tuple(
+            sorted(path for path in resolved.rglob("*.olean") if path.is_file())
+        )
         if not files or any(path.is_symlink() for path in files):
             raise OSError("incomplete or symlinked module tree")
     except OSError as exc:

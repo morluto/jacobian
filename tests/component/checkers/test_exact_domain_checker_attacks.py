@@ -41,11 +41,7 @@ def test_matrix_determinant_checker_accepts_supported_large_canonical_result() -
             "domain": "QQ",
             "entries": [
                 [
-                    (
-                        {"num": diagonal_entry, "den": "1"}
-                        if row == column
-                        else zero
-                    )
+                    ({"num": diagonal_entry, "den": "1"} if row == column else zero)
                     for column in range(32)
                 ]
                 for row in range(32)

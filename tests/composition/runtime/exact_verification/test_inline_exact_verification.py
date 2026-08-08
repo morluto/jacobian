@@ -64,9 +64,10 @@ def test_inline_exact_replay_persists_only_its_bound_record(
         parsed.bindings.candidate_digest
         == verified.scope.parameters["candidate_digest"]
     )
-    assert parsed.bindings.semantics_digest == verified.scope.parameters[
-        "semantics_digest"
-    ]
+    assert (
+        parsed.bindings.semantics_digest
+        == verified.scope.parameters["semantics_digest"]
+    )
     assert parsed.operation_id == verified.scope.parameters["operation_id"]
     assert parsed.checker_id == verified.scope.parameters["checker_id"]
     assert parsed.witness_format == verified.scope.parameters["witness_format"]

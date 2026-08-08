@@ -732,6 +732,7 @@ class PolynomialMapEvaluation(ContractModel):
     backend: Literal["sympy"] = "sympy"
     backend_version: str = Field(min_length=1, max_length=64)
 
+
 class PolynomialJacobian(ContractModel):
     jacobian_schema_version: Literal["1"] = "1"
     map_uri: ArtifactUri
@@ -930,6 +931,7 @@ class PolynomialEvaluationOutput(ContractModel):
     checker_id: None = None
     backend: Literal["sympy"] = "sympy"
     backend_version: str
+
 
 class PolynomialJacobianOutput(ContractModel):
     map_uri: ArtifactUri

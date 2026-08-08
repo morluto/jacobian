@@ -163,3 +163,35 @@ def test_assurance_diagnostic_is_independent_of_protocol(monkeypatch, tmp_path):
     assert values["protocol"] == 0.0
     assert values["assurance"] == 1.0
     assert values["reward"] == 0.0
+
+
+def test_unhashable_assurance_only_fails_assurance(monkeypatch, tmp_path):
+    module = _module()
+    raw = {"claimed_assurance": [], "result": _result(module)}
+    monkeypatch.setattr(module, "_raw", lambda: raw)
+    monkeypatch.setattr(module, "load_submission", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        module, "strict_submission_contract", lambda *_args, **_kwargs: False
+    )
+    monkeypatch.setattr(module, "workspace_input_is_bound", lambda: True)
+    monkeypatch.setattr(
+        module, "evidence_list_is_bound", lambda *_args, **_kwargs: False
+    )
+    output = tmp_path / "reward.json"
+    monkeypatch.setattr(
+        module, "_write", lambda values: output.write_text(json.dumps(values))
+    )
+
+    module.main()
+
+    values = json.loads(output.read_text())
+    assert values["mathematics"] == 1.0
+    assert values["assurance"] == values["protocol"] == values["reward"] == 0.0
+
+
+def test_task_exports_visible_input_to_separate_verifier():
+    task_toml = (TASK / "task.toml").read_text()
+    assert (
+        'artifacts=["/app/submission.json","/app/evidence","/app/input.json"]'
+        in task_toml
+    )

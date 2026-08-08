@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from tests.support.nullstellensatz import load_chart_certificates
 from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityMode,
@@ -51,6 +52,36 @@ def test_failure_details_are_bounded_and_summarize_validation_errors() -> None:
     assert validation_details["exception_type"] == "ValidationError"
     assert int(validation_details["validation_error_count"]) > 0
     assert len(validation_details["reason"]) <= 512
+
+
+def test_invalid_request_uri_values_are_summarized_without_echoing(
+    tmp_path: Path,
+) -> None:
+    oversized_uri = "secret" * 200_000
+    with open_domain_services(
+        tmp_path,
+        build_nullstellensatz_core_bundle(),
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as services:
+        adapter = services.core.capabilities._adapters[VERIFY_CAPABILITY_ID]
+        with pytest.raises(CapabilityInvocationError) as caught:
+            adapter.invoke(
+                CapabilityRequest(
+                    capability_id=VERIFY_CAPABILITY_ID,
+                    mode=CapabilityMode.VERIFY,
+                    input={
+                        "system_uri": oversized_uri,
+                        "certificate_bundle_uri": oversized_uri,
+                    },
+                )
+            )
+
+    diagnostic = caught.value.diagnostic
+    assert diagnostic.details["system_uri"] == (f"string(length={len(oversized_uri)})")
+    assert diagnostic.details["certificate_bundle_uri"] == (
+        f"string(length={len(oversized_uri)})"
+    )
+    assert "secret" not in str(diagnostic.details)
 
 
 def _invoke(

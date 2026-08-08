@@ -100,6 +100,17 @@ def _failure_details(exc: Exception) -> dict[str, str]:
     return details
 
 
+def _request_value_summary(value: object) -> str:
+    """Return a URI when short, otherwise describe it without echoing contents."""
+    if isinstance(value, str):
+        if len(value) <= _MAX_DIAGNOSTIC_REASON_CHARS:
+            return value
+        return f"string(length={len(value)})"
+    if isinstance(value, (list, tuple, dict, set)):
+        return f"{type(value).__name__}(length={len(value)})"
+    return type(value).__name__
+
+
 class JacobianDegreeSliceMaterializeAdapter:
     def __init__(
         self,
@@ -270,14 +281,14 @@ class NullstellensatzVerificationAdapter:
             StorageError,
         ) as exc:
             requested_system_uri = (
-                str(validated.system_uri)
+                _request_value_summary(validated.system_uri)
                 if "validated" in locals()
-                else str(request.input.get("system_uri", ""))
+                else _request_value_summary(request.input.get("system_uri"))
             )
             requested_bundle_uri = (
-                str(validated.certificate_bundle_uri)
+                _request_value_summary(validated.certificate_bundle_uri)
                 if "validated" in locals()
-                else str(request.input.get("certificate_bundle_uri", ""))
+                else _request_value_summary(request.input.get("certificate_bundle_uri"))
             )
             raise CapabilityInvocationError(
                 _diagnostic(

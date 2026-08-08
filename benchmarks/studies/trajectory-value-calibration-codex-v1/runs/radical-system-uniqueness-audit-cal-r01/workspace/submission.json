@@ -1,0 +1,69 @@
+{
+  "task_id": "jacobian/radical-system-uniqueness-audit",
+  "conclusion": "UNIQUE_REAL_SOLUTION",
+  "result": {
+    "substitution": "u=b^(1/6)",
+    "elimination_coefficients": [1, -1, -2, 0, 0],
+    "linear_factors": [
+      {
+        "x_coefficient": 1,
+        "constant": 0
+      },
+      {
+        "x_coefficient": 1,
+        "constant": 0
+      },
+      {
+        "x_coefficient": 1,
+        "constant": 1
+      },
+      {
+        "x_coefficient": 1,
+        "constant": -2
+      }
+    ],
+    "root_classification": [
+      {
+        "u": -1,
+        "status": "REJECTED",
+        "reason": "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE"
+      },
+      {
+        "u": 0,
+        "status": "REJECTED",
+        "reason": "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE"
+      },
+      {
+        "u": 2,
+        "status": "ACCEPTED",
+        "reason": "SATISFIES_ALL_ROOT_DOMAINS"
+      }
+    ],
+    "solutions": [
+      {
+        "u": 2,
+        "a": 2025,
+        "b": 64,
+        "c": 25,
+        "equation_values": [
+          "2025/25 = 64 - 8 + 25 = 81",
+          "sqrt(2025/25) = 8 + 1 = 9",
+          "fourth_root(2025/25) = 4 - 1 = 3"
+        ]
+      }
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "Exact audit of the frozen radical system under principal-root semantics with substitution u = b^(1/6).",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:205f9e770f48a51515f1e60745b48cb68b7d4bcd6bdabf65ec2d77d70d08d57b"
+    }
+  ],
+  "limitations": [
+    "Assurance is COMPUTED rather than proof-assistant verified.",
+    "The result depends on the stated principal-root semantics."
+  ]
+}

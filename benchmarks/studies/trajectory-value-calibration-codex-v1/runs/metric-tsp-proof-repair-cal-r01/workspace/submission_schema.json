@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "corrected_claim": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "euler_walk": {
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
+          "maxItems": 11,
+          "minItems": 11,
+          "type": "array"
+        },
+        "flaw_location": {
+          "const": "STEP_4"
+        },
+        "invalid_inference": {
+          "const": "SHORTCUTTING_PRESERVES_EXACT_COST"
+        },
+        "mst_edges": {
+          "items": {
+            "items": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F"
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "optimal_tour": {
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "type": "array"
+        },
+        "shortcut_tour": {
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "type": "array"
+        },
+        "weights": {
+          "additionalProperties": false,
+          "properties": {
+            "euler": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mst": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "optimal": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "shortcut": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mst",
+            "euler",
+            "shortcut",
+            "optimal"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "flaw_location",
+        "invalid_inference",
+        "corrected_claim",
+        "mst_edges",
+        "euler_walk",
+        "shortcut_tour",
+        "optimal_tour",
+        "weights"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "metric-tsp-proof-repair exact finite optimization certificate",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/metric-tsp-proof-repair"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

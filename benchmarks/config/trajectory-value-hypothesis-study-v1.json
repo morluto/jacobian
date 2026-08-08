@@ -1,0 +1,61 @@
+{
+  "analysis_id": "trajectory-value-hypothesis-codex-v1",
+  "causal_claim_authorized": false,
+  "evaluator_config": {
+    "config_schema_version": "1",
+    "linkage": "average",
+    "state_selection": "plan-milestone-and-post-milestone-after-tool",
+    "text_ngram_range": "word-1-2",
+    "text_similarity_threshold_millionths": 350000,
+    "trajectory_metric_weighting": "equal",
+    "validation": "leave-one-trajectory-out"
+  },
+  "h1": {
+    "baselines": [
+      "GROUP_ROLLOUT",
+      "NUMCA_NUMERICAL"
+    ],
+    "directional_support_rule": "strictly-lower-brier-and-mae-than-each-baseline",
+    "metric_weighting": "equal-per-trajectory",
+    "metrics": [
+      "brier_score",
+      "mean_absolute_error"
+    ],
+    "question": "typed/value-state estimation outperforms group and Numca baselines on mixed terminal outcomes",
+    "typed_estimators": [
+      "JACOBIAN_TYPED_EXACT",
+      "ABSTRACT_VALUE_STATE",
+      "ABSTRACT_VALUE_STATE_TEXT"
+    ],
+    "uncertainty": "per-estimate-wilson-score-95-and-reported-mean-width"
+  },
+  "h2": {
+    "branch_separation": "different-reasoning-text-and-abstract-plus-text-cluster-ids",
+    "directional_support_rule": "at-least-one-mixed-outcome-pair-separated-and-hybrid-strictly-lower-brier-and-mae-than-abstract",
+    "pair_scope": "different-trajectories-same-task-group-same-abstract-state",
+    "question": "reasoning text adds predictive information beyond abstract typed mathematical state",
+    "require_different_reasoning_digest": true,
+    "require_mixed_terminal_outcome": true
+  },
+  "h3": {
+    "directional_support_rule": "positive-recall-precision-above-failure-prevalence-and-positive-mean-true-positive-lead",
+    "false_alarm_denominator": "accepted-labelled-trajectories",
+    "lead_time_unit": "later-selected-preterminal-observations",
+    "question": "a negative estimated-value change predicts eventual failure before terminal verification",
+    "threshold_tuned_on_main_labels": false,
+    "warning_rule": "any-strictly-negative-preterminal-selected-state-value-delta"
+  },
+  "learned_components": false,
+  "mixed_study": {
+    "file_digest": "sha256:84cd146eb66b679130d57d33c7ce71f1f78d956c7bd2100475297733e287594b",
+    "path": "benchmarks/config/trajectory-value-mixed-study-v1.json",
+    "study_id": "trajectory-value-mixed-codex-v1"
+  },
+  "representative_selection": "lexicographically-first-accepted-and-rejected-labelled-trajectory-per-task-group",
+  "retries_for_wrong_answers": 0,
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "scorer_mode": "retrospective-observation-only",
+  "terminal_reward": "clean-room-verifier-acceptance-only",
+  "training_performed": false
+}

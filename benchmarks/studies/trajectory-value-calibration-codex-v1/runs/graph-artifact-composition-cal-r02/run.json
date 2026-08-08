@@ -1,0 +1,90 @@
+{
+  "calibration_tags": [
+    "artifact-binding",
+    "capability-routing"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 0,
+    "before_tool_count": 0,
+    "bound_invoke_count": 0,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 534,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "057f267c-9a76-4478-b6ff-7cae9dfa772b"
+  ],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:0c9242e66d054d81df8581a5fa971c798fad57ab7c064835573c50d7b211f24e",
+    "public_file_digests": {
+      "input.json": "sha256:1354318a3f9be62136c4478bee54abda0d581c08b129556f464ebff1f4d6ad02",
+      "instruction.md": "sha256:bb79c43b1470ce93a879b39795707584814895dbff24c021e5f62dc995bf4718",
+      "submission_schema.json": "sha256:aed82749a7a415a176598de331d133a0bcc6a732977fbf2420cd95f3a7f73cd7"
+    },
+    "task_id": "graph-artifact-composition",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:c71f2bca523dac09abf0823ad999a4a8a00d3363a88fd8c5a56cb4994b6be0e9",
+      "agent-workflow-v1-graph-artifact-composition-input.json": "sha256:1354318a3f9be62136c4478bee54abda0d581c08b129556f464ebff1f4d6ad02",
+      "expected.json": "sha256:1d7d2e027b0db72a0512115d066cb21774223dd7da89af33f26aed1e5bd2dfd0",
+      "public_contract.json": "sha256:1aa65a0bf5ca899d635adc372d678c571c0541c566093918c437b72ffe988543",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:13ee25a1501f06a40356e88bf7d918ff92f65d6b2ea3b79d360b5682610d4294",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "graph-artifact-composition",
+  "task_id": "graph-artifact-composition",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 1.0,
+      "correctness": 1.0,
+      "evidence_validity": 1.0,
+      "false_certification": false,
+      "reward": 1.0,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:0c9242e66d054d81df8581a5fa971c798fad57ab7c064835573c50d7b211f24e",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:c71f2bca523dac09abf0823ad999a4a8a00d3363a88fd8c5a56cb4994b6be0e9",
+      "agent-workflow-v1-graph-artifact-composition-input.json": "sha256:1354318a3f9be62136c4478bee54abda0d581c08b129556f464ebff1f4d6ad02",
+      "expected.json": "sha256:1d7d2e027b0db72a0512115d066cb21774223dd7da89af33f26aed1e5bd2dfd0",
+      "public_contract.json": "sha256:1aa65a0bf5ca899d635adc372d678c571c0541c566093918c437b72ffe988543",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:13ee25a1501f06a40356e88bf7d918ff92f65d6b2ea3b79d360b5682610d4294",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "graph-artifact-composition-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 136448,
+    "input_tokens": 167396,
+    "output_tokens": 3214,
+    "reasoning_output_tokens": 1136
+  }
+}

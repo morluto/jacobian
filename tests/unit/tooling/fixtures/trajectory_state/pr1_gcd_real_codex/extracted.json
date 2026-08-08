@@ -58,6 +58,7 @@
         "plan_summary": "Compute gcd(84, 30) with the integer gcd capability.",
         "soft_state_schema_version": "1"
       },
+      "soft_state_digest": "sha256:fe01723230f019b0b3f3bd5270125498a5a22bf3f7cce6ce614024fea76cd15a",
       "source_event_index": 10
     },
     {
@@ -117,6 +118,7 @@
         "plan_summary": "Compute gcd(84, 30) with the integer gcd capability.",
         "soft_state_schema_version": "1"
       },
+      "soft_state_digest": "sha256:fe01723230f019b0b3f3bd5270125498a5a22bf3f7cce6ce614024fea76cd15a",
       "source_event_index": 14
     },
     {
@@ -162,6 +164,7 @@
         "plan_summary": "Compute gcd(84, 30) with the integer gcd capability.",
         "soft_state_schema_version": "1"
       },
+      "soft_state_digest": "sha256:855ac7875c05fee4b1dc6671ddd2b488ab06f6fbc219608d0d281fe8e32eabf4",
       "source_event_index": 17
     },
     {
@@ -206,6 +209,7 @@
         "plan_summary": "Compute gcd(84, 30) with the integer gcd capability.",
         "soft_state_schema_version": "1"
       },
+      "soft_state_digest": "sha256:ee3427f014eb592cff3e37be9227c20701f91dc44d021157177616ab90f8a0f3",
       "source_event_index": 19
     }
   ],

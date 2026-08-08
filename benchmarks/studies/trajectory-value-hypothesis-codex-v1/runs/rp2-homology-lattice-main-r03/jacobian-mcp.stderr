@@ -1,0 +1,850 @@
+Uninstalled 1 package in 2ms
+Installed 1 package in 2ms
+INFO:     Started server process [48407]
+INFO:     Waiting for application startup.
+[08/07/26 05:47:21] INFO     StreamableHTTP       streamable_http_manager.py:151
+                             session manager                                    
+                             started                                            
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:55717 (Press CTRL+C to quit)
+[08/07/26 05:47:24] WARNING  lean.check is not     reference_installation.py:114
+                             installed: The pinned                              
+                             Lean 4.31.0 runtime                                
+                             is unavailable.                                    
+                    INFO     Created new          streamable_http_manager.py:303
+                             transport with                                     
+                             session ID:                                        
+                             1ce7ba81fad84d759b16                               
+                             96f88c2af5d1                                       
+[08/07/26 05:47:55] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=d4735e3a265e16ee                    
+                             trace_digest=d4735e3a                              
+                             trace_source=request_id                            
+                             duration_ms=7.190 response_bytes=860               
+                             argument_digest=sha256:a18aa1b8172150              
+                             ba1415aeaebb77a6696505994e18c48a2ac67              
+                             9c98769d8d238                                      
+[08/07/26 05:47:58] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4e07408562bedb8b                    
+                             trace_digest=4e074085                              
+                             trace_source=request_id                            
+                             duration_ms=138.690                                
+                             response_bytes=11572                               
+                             argument_digest=sha256:e8a36c8a909532              
+                             461e8e6c61ad8a4feb8f355f72cd22330df94              
+                             d160c8f299ba1                                      
+[08/07/26 05:48:35] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4b227777d4dd1fc6                    
+                             trace_digest=4b227777                              
+                             trace_source=request_id                            
+                             duration_ms=0.634 response_bytes=508               
+                             argument_digest=sha256:638aadca8c782e              
+                             3a07289230c5f64ee2933a5eba8c36d269ea3              
+                             82fa0c41bf0e4                                      
+[08/07/26 05:48:45] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             BEFORE_TOOL phase contract                         
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...pleteness_status':               
+                             None}, input_type=dict]                            
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=ef2d127de37b942b                    
+                             trace_digest=ef2d127d                              
+                             trace_source=request_id                            
+                             duration_ms=69.207 response_bytes=401              
+                             argument_digest=sha256:1990b1f5ec8dbb              
+                             77a25e136afe13b5e353cba10e75d8db7f143              
+                             f0066bab93694                                      
+[08/07/26 05:48:49] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=e7f6c011776e8db7                    
+                             trace_digest=e7f6c011                              
+                             trace_source=request_id                            
+                             duration_ms=56.654                                 
+                             response_bytes=5032                                
+                             argument_digest=sha256:4e11496da876a2              
+                             c27e5e1cb5406ead9fec345eb26a2852c6306              
+                             49693e4836608                                      
+[08/07/26 05:48:54] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=7902699be42c8a8e                    
+                             trace_digest=7902699b                              
+                             trace_source=request_id                            
+                             duration_ms=60.059 response_bytes=944              
+                             argument_digest=sha256:02633c340bde33              
+                             f0b0265aadfc17da278d4f9fb22d67daab7c8              
+                             cba21ee50ec39                                      
+[08/07/26 05:49:13] INFO     capability invocation    capability_telemetry.py:18
+                             capability_id=matrix.det                           
+                             erminant.compute                                   
+                             version=1 mode=EXPLORE                             
+                             status=COMPLETED                                   
+                             assurance=COMPUTED                                 
+                             elapsed_ms=22                                      
+                             diagnostics=-                                      
+                    INFO     MCP capability attempt               tooling.py:183
+                             request_digest=2c624232cdd22177                    
+                             trace_digest=2c624232                              
+                             trace_source=request_id                            
+                             capability_id=matrix.determinant.com               
+                             pute capability_version=1                          
+                             mode=EXPLORE                                       
+                             execution_status=COMPLETED                         
+                             assurance=COMPUTED                                 
+                             diagnostic_codes=none                              
+                             attempt_duration_ms=30.431                         
+                             operation_runtime_ms=17                            
+                             response_bytes=1951                                
+                             argument_digest=sha256:e557a3d50806f               
+                             b0a5dad28faa0548ab8dfb23bd9ca6adcef1               
+                             1cd06bca1239569                                    
+                    INFO     MCP tool call tool=math.run           server.py:335
+                             status=success                                     
+                             request_digest=2c624232cdd22177                    
+                             trace_digest=2c624232                              
+                             trace_source=request_id                            
+                             duration_ms=33.156                                 
+                             response_bytes=4020                                
+                             argument_digest=sha256:b9220256e69487              
+                             5bb34aabf3e8dc4e3c1a2aa8d3ef7b61779f0              
+                             9fc8627ce3217                                      
+[08/07/26 05:50:10] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:471 in reasoning_write      │              
+                             │                                   │              
+                             │   468 │   │   │   │   "BEFORE_TOO │              
+                             │   469 │   │   │   │   "Inspect it │              
+                             │   470 │   │   │   )               │              
+                             │ ❱ 471 │   return await _run_block │              
+                             │   472                             │              
+                             │   473                             │              
+                             │   474 def _reasoning_mode_from_co │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ling.py:45 in _run_blocking       │              
+                             │                                   │              
+                             │    42 │                           │              
+                             │    43 │   worker = asyncio.create │              
+                             │    44 │   try:                    │              
+                             │ ❱  45 │   │   return await asynci │              
+                             │    46 │   except asyncio.Cancelle │              
+                             │    47 │   │   if on_cancel is not │              
+                             │    48 │   │   │   on_cancel()     │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/.local/sha │              
+                             │ re/uv/python/cpython-3.12.13-maco │              
+                             │ s-aarch64-none/lib/python3.12/asy │              
+                             │ ncio/threads.py:25 in to_thread   │              
+                             │                                   │              
+                             │   22 │   loop = events.get_runnin │              
+                             │   23 │   ctx = contextvars.copy_c │              
+                             │   24 │   func_call = functools.pa │              
+                             │ ❱ 25 │   return await loop.run_in │              
+                             │   26                              │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/.local/sha │              
+                             │ re/uv/python/cpython-3.12.13-maco │              
+                             │ s-aarch64-none/lib/python3.12/con │              
+                             │ current/futures/thread.py:59 in   │              
+                             │ run                               │              
+                             │                                   │              
+                             │    56 │   │   │   return          │              
+                             │    57 │   │                       │              
+                             │    58 │   │   try:                │              
+                             │ ❱  59 │   │   │   result = self.f │              
+                             │    60 │   │   except BaseExceptio │              
+                             │    61 │   │   │   self.future.set │              
+                             │    62 │   │   │   # Break a refer │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/reasoning_log.py │              
+                             │ :71 in write                      │              
+                             │                                   │              
+                             │    68 │   │   │   │   │   │   "St │              
+                             │    69 │   │   │   │   │   )       │              
+                             │    70 │   │   │   │   if state is │              
+                             │ ❱  71 │   │   │   │   │   self._r │              
+                             │    72 │   │   │   │   │   │   "RE │              
+                             │    73 │   │   │   │   │   │   "Th │              
+                             │    74 │   │   │   │   │   │   "Co │              
+                             │       another call.",             │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/reasoning_log.py │              
+                             │ :502 in _raise                    │              
+                             │                                   │              
+                             │   499 │                           │              
+                             │   500 │   @staticmethod           │              
+                             │   501 │   def _raise(code: str, m │              
+                             │ ❱ 502 │   │   raise ReasoningProt │              
+                             │   503                             │              
+                             │   504                             │              
+                             │   505 __all__ = [                 │              
+                             ╰───────────────────────────────────╯              
+                             ReasoningProtocolError: This run is                
+                             waiting for its current capability                 
+                             cycle.                                             
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=19581e27de7ced00                    
+                             trace_digest=19581e27                              
+                             trace_source=request_id                            
+                             duration_ms=95.429 response_bytes=428              
+                             argument_digest=sha256:b213b475165ec6              
+                             504d0ac6349720444f6140ee572b4f870bf4c              
+                             7be6de4a41815                                      
+[08/07/26 05:50:17] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             AFTER_TOOL phase contract                          
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...s.COMPLETE:                      
+                             'COMPLETE'>}, input_type=dict]                     
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4a44dc15364204a8                    
+                             trace_digest=4a44dc15                              
+                             trace_source=request_id                            
+                             duration_ms=78.635 response_bytes=401              
+                             argument_digest=sha256:51cb5694b0b864              
+                             ee6c7a62e3b63a4b8f73753a045d58ae562ff              
+                             9a825d0c58cb1                                      
+[08/07/26 05:50:26] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             AFTER_TOOL phase contract                          
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...s.COMPLETE:                      
+                             'COMPLETE'>}, input_type=dict]                     
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4fc82b26aecb47d2                    
+                             trace_digest=4fc82b26                              
+                             trace_source=request_id                            
+                             duration_ms=44.122 response_bytes=401              
+                             argument_digest=sha256:b45ad8cb0f2d22              
+                             d28db3e146d01308295750e33e813a23ed03c              
+                             68432515a3b9d                                      
+[08/07/26 05:50:33] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             AFTER_TOOL phase contract                          
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...s.COMPLETE:                      
+                             'COMPLETE'>}, input_type=dict]                     
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=6b51d431df5d7f14                    
+                             trace_digest=6b51d431                              
+                             trace_source=request_id                            
+                             duration_ms=43.981 response_bytes=401              
+                             argument_digest=sha256:cbf9dd99afee59              
+                             4e4967271705064cebfbfdd88e3659476e1fe              
+                             3129f971a51b0                                      
+[08/07/26 05:50:45] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=3fdba35f04dc8c46                    
+                             trace_digest=3fdba35f                              
+                             trace_source=request_id                            
+                             duration_ms=0.503 response_bytes=437               
+                             argument_digest=sha256:59ff4f1860d39a              
+                             5716e19b4821a61cba1a98294e5d7590b45a2              
+                             2c3b021dbb6df                                      
+[08/07/26 05:50:48] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             AFTER_TOOL phase contract                          
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...pleteness_status':               
+                             None}, input_type=dict]                            
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+[08/07/26 05:50:49] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=8527a891e2241369                    
+                             trace_digest=8527a891                              
+                             trace_source=request_id                            
+                             duration_ms=43.022 response_bytes=401              
+                             argument_digest=sha256:4b026d558dc6e8              
+                             335ae1e6aba8115bba8fa1d68b700b7fd68a4              
+                             276be4c5972e0                                      
+[08/07/26 05:50:54] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, INTERPRETED requires                
+                             all reported result fields                         
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...pleteness_status':               
+                             None}, input_type=dict]                            
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=e629fa6598d73276                    
+                             trace_digest=e629fa65                              
+                             trace_source=request_id                            
+                             duration_ms=43.967 response_bytes=401              
+                             argument_digest=sha256:f8a2bbf04d3e00              
+                             88159be5f30421d1e5cca39d63d6af9c994b8              
+                             a62c6b29c3cb9                                      
+[08/07/26 05:51:59] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:471 in reasoning_write      │              
+                             │                                   │              
+                             │   468 │   │   │   │   "BEFORE_TOO │              
+                             │   469 │   │   │   │   "Inspect it │              
+                             │   470 │   │   │   )               │              
+                             │ ❱ 471 │   return await _run_block │              
+                             │   472                             │              
+                             │   473                             │              
+                             │   474 def _reasoning_mode_from_co │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ling.py:45 in _run_blocking       │              
+                             │                                   │              
+                             │    42 │                           │              
+                             │    43 │   worker = asyncio.create │              
+                             │    44 │   try:                    │              
+                             │ ❱  45 │   │   return await asynci │              
+                             │    46 │   except asyncio.Cancelle │              
+                             │    47 │   │   if on_cancel is not │              
+                             │    48 │   │   │   on_cancel()     │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/.local/sha │              
+                             │ re/uv/python/cpython-3.12.13-maco │              
+                             │ s-aarch64-none/lib/python3.12/asy │              
+                             │ ncio/threads.py:25 in to_thread   │              
+                             │                                   │              
+                             │   22 │   loop = events.get_runnin │              
+                             │   23 │   ctx = contextvars.copy_c │              
+                             │   24 │   func_call = functools.pa │              
+                             │ ❱ 25 │   return await loop.run_in │              
+                             │   26                              │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/.local/sha │              
+                             │ re/uv/python/cpython-3.12.13-maco │              
+                             │ s-aarch64-none/lib/python3.12/con │              
+                             │ current/futures/thread.py:59 in   │              
+                             │ run                               │              
+                             │                                   │              
+                             │    56 │   │   │   return          │              
+                             │    57 │   │                       │              
+                             │    58 │   │   try:                │              
+                             │ ❱  59 │   │   │   result = self.f │              
+                             │    60 │   │   except BaseExceptio │              
+                             │    61 │   │   │   self.future.set │              
+                             │    62 │   │   │   # Break a refer │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/reasoning_log.py │              
+                             │ :175 in write                     │              
+                             │                                   │              
+                             │   172 │   │   │   │   )           │              
+                             │   173 │   │   │   else:           │              
+                             │   174 │   │   │   │   if state is │              
+                             │ ❱ 175 │   │   │   │   │   self._r │              
+                             │   176 │   │   │   │   │   │   "RE │              
+                             │   177 │   │   │   │   │   │   "FI │              
+                             │   178 │   │   │   │   │   │   "Co │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/reasoning_log.py │              
+                             │ :502 in _raise                    │              
+                             │                                   │              
+                             │   499 │                           │              
+                             │   500 │   @staticmethod           │              
+                             │   501 │   def _raise(code: str, m │              
+                             │ ❱ 502 │   │   raise ReasoningProt │              
+                             │   503                             │              
+                             │   504                             │              
+                             │   505 __all__ = [                 │              
+                             ╰───────────────────────────────────╯              
+                             ReasoningProtocolError: FINAL                      
+                             requires every capability call to                  
+                             have AFTER_TOOL.                                   
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=b17ef6d19c7a5b1e                    
+                             trace_digest=b17ef6d1                              
+                             trace_source=request_id                            
+                             duration_ms=61.813 response_bytes=423              
+                             argument_digest=sha256:fa395ca75bf7cd              
+                             576d5d29bb629bf76052c30f2489877afd1b0              
+                             dc6cac4d44839                                      
+[08/07/26 05:52:15] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, INTERPRETED requires                
+                             all reported result fields                         
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...pleteness_status':               
+                             None}, input_type=dict]                            
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4523540f1504cd17                    
+                             trace_digest=4523540f                              
+                             trace_source=request_id                            
+                             duration_ms=44.921 response_bytes=401              
+                             argument_digest=sha256:cfb76bd0dfea1f              
+                             05f8d8fc5ed6c9cf0a41866b1247b951c4825              
+                             1b464fb29f802                                      
+[08/07/26 05:52:28] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             AFTER_TOOL phase contract                          
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...pleteness_status':               
+                             None}, input_type=dict]                            
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4ec9599fc203d176                    
+                             trace_digest=4ec9599f                              
+                             trace_source=request_id                            
+                             duration_ms=43.678 response_bytes=401              
+                             argument_digest=sha256:eb273d614b243c              
+                             7d4ec64fb9310e58f18c8e598fa1e53257d79              
+                             cc3156665a9ff                                      
+[08/07/26 05:52:36] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=9400f1b21cb527d7                    
+                             trace_digest=9400f1b2                              
+                             trace_source=request_id                            
+                             duration_ms=6.182 response_bytes=930               
+                             argument_digest=sha256:af72c80e05246e              
+                             3a5bd1685ebe0fec9ea33c84682b56e92c6fe              
+                             b05779343b063                                      
+[08/07/26 05:52:40] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=f5ca38f748a1d6ea                    
+                             trace_digest=f5ca38f7                              
+                             trace_source=request_id                            
+                             duration_ms=4.282 response_bytes=836               
+                             argument_digest=sha256:c0f0ec46801391              
+                             89eca72011f3d1c601bd53e075ca7e5b3f108              
+                             aa94ea5f50876                                      
+[08/07/26 05:52:48] INFO     Terminating session:         streamable_http.py:814
+                             1ce7ba81fad84d759b1696f88c2a                       
+                             f5d1                                               

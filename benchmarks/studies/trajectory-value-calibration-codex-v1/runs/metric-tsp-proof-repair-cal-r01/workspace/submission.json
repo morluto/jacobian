@@ -1,0 +1,65 @@
+{
+  "task_id": "jacobian/metric-tsp-proof-repair",
+  "conclusion": "REPAIRED",
+  "claimed_assurance": "COMPUTED",
+  "scope": "metric-tsp-proof-repair exact finite optimization certificate",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:1f2d6d4a605383ec269b077a08d0423691525807e388f20937641dc732eaeee9"
+    }
+  ],
+  "limitations": [
+    "The repaired guarantee is a 2-approximation bound; the shortcut tour need not equal the MST or the optimum."
+  ],
+  "result": {
+    "flaw_location": "STEP_4",
+    "invalid_inference": "SHORTCUTTING_PRESERVES_EXACT_COST",
+    "corrected_claim": "Shortcutting the doubled MST Euler tour never increases total weight, so the double-tree method is a polynomial-time 2-approximation for Metric TSP: the produced Hamiltonian cycle has weight at most 2 * MST and therefore at most 2 * OPT, but not necessarily equal to either one.",
+    "mst_edges": [
+      ["A", "B"],
+      ["B", "E"],
+      ["C", "D"],
+      ["A", "F"],
+      ["A", "D"]
+    ],
+    "euler_walk": [
+      "A",
+      "B",
+      "E",
+      "B",
+      "A",
+      "D",
+      "C",
+      "D",
+      "A",
+      "F",
+      "A"
+    ],
+    "shortcut_tour": [
+      "A",
+      "B",
+      "E",
+      "D",
+      "C",
+      "F",
+      "A"
+    ],
+    "optimal_tour": [
+      "A",
+      "B",
+      "E",
+      "F",
+      "C",
+      "D",
+      "A"
+    ],
+    "weights": {
+      "mst": 20,
+      "euler": 40,
+      "shortcut": 38,
+      "optimal": 32
+    }
+  }
+}

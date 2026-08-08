@@ -1,0 +1,383 @@
+{
+  "$defs": {
+    "ClusterSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "cluster_id": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "estimator": {
+          "$ref": "#/$defs/EstimatorKind"
+        },
+        "feature_summary": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Feature Summary",
+          "type": "string"
+        },
+        "member_observation_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Member Observation Ids",
+          "type": "array"
+        },
+        "member_trajectory_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Member Trajectory Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cluster_id",
+        "estimator",
+        "member_observation_ids",
+        "member_trajectory_ids",
+        "feature_summary"
+      ],
+      "title": "ClusterSummary",
+      "type": "object"
+    },
+    "EstimatorEvaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "clusters": {
+          "items": {
+            "$ref": "#/$defs/ClusterSummary"
+          },
+          "minItems": 1,
+          "title": "Clusters",
+          "type": "array"
+        },
+        "estimates": {
+          "items": {
+            "$ref": "#/$defs/StateValueEstimate"
+          },
+          "minItems": 1,
+          "title": "Estimates",
+          "type": "array"
+        },
+        "estimator": {
+          "$ref": "#/$defs/EstimatorKind"
+        },
+        "metrics": {
+          "$ref": "#/$defs/EstimatorMetrics"
+        }
+      },
+      "required": [
+        "estimator",
+        "clusters",
+        "estimates",
+        "metrics"
+      ],
+      "title": "EstimatorEvaluation",
+      "type": "object"
+    },
+    "EstimatorKind": {
+      "enum": [
+        "GROUP_ROLLOUT",
+        "NUMCA_NUMERICAL",
+        "REASONING_TEXT",
+        "JACOBIAN_TYPED",
+        "HYBRID_TYPED_TEXT"
+      ],
+      "title": "EstimatorKind",
+      "type": "string"
+    },
+    "EstimatorMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "brier_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Brier Score",
+          "type": "number"
+        },
+        "cluster_count": {
+          "minimum": 1,
+          "title": "Cluster Count",
+          "type": "integer"
+        },
+        "mean_absolute_error": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Mean Absolute Error",
+          "type": "number"
+        },
+        "observation_count": {
+          "minimum": 1,
+          "title": "Observation Count",
+          "type": "integer"
+        },
+        "task_group_fallback_count": {
+          "minimum": 0,
+          "title": "Task Group Fallback Count",
+          "type": "integer"
+        },
+        "trajectory_count": {
+          "minimum": 2,
+          "title": "Trajectory Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "observation_count",
+        "trajectory_count",
+        "cluster_count",
+        "task_group_fallback_count",
+        "brier_score",
+        "mean_absolute_error"
+      ],
+      "title": "EstimatorMetrics",
+      "type": "object"
+    },
+    "StateBoundary": {
+      "enum": [
+        "PLAN",
+        "TOOL_RESULT",
+        "AFTER_TOOL",
+        "FINAL",
+        "TERMINAL"
+      ],
+      "title": "StateBoundary",
+      "type": "string"
+    },
+    "StateValueEstimate": {
+      "additionalProperties": false,
+      "properties": {
+        "assurance_authority": {
+          "const": false,
+          "default": false,
+          "title": "Assurance Authority",
+          "type": "boolean"
+        },
+        "boundary": {
+          "$ref": "#/$defs/StateBoundary"
+        },
+        "cluster_id": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "cluster_member_observation_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Cluster Member Observation Ids",
+          "type": "array"
+        },
+        "estimated_value": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Estimated Value",
+          "type": "number"
+        },
+        "estimator": {
+          "$ref": "#/$defs/EstimatorKind"
+        },
+        "eventual_terminal_reward": {
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Eventual Terminal Reward",
+          "type": "integer"
+        },
+        "milestone_eligible": {
+          "title": "Milestone Eligible",
+          "type": "boolean"
+        },
+        "numerical_milestones": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Numerical Milestones",
+          "type": "array"
+        },
+        "observation_id": {
+          "maxLength": 256,
+          "minLength": 3,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "reasoning_text_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Reasoning Text Digest",
+          "type": "string"
+        },
+        "state_index": {
+          "minimum": 0,
+          "title": "State Index",
+          "type": "integer"
+        },
+        "supporting_trajectory_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Supporting Trajectory Ids",
+          "type": "array"
+        },
+        "task_group": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Task Group",
+          "type": "string"
+        },
+        "trajectory_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Trajectory Id",
+          "type": "string"
+        },
+        "typed_compatibility_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Typed Compatibility Digest",
+          "type": "string"
+        },
+        "value_source": {
+          "$ref": "#/$defs/ValueSource"
+        }
+      },
+      "required": [
+        "observation_id",
+        "trajectory_id",
+        "task_group",
+        "state_index",
+        "boundary",
+        "milestone_eligible",
+        "estimator",
+        "cluster_id",
+        "estimated_value",
+        "eventual_terminal_reward",
+        "value_source",
+        "supporting_trajectory_ids",
+        "cluster_member_observation_ids",
+        "typed_compatibility_digest",
+        "reasoning_text_digest"
+      ],
+      "title": "StateValueEstimate",
+      "type": "object"
+    },
+    "ValueEstimatorConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "config_schema_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Config Schema Version",
+          "type": "string"
+        },
+        "linkage": {
+          "const": "average",
+          "default": "average",
+          "title": "Linkage",
+          "type": "string"
+        },
+        "state_selection": {
+          "const": "plan-milestone-and-post-milestone-after-tool",
+          "default": "plan-milestone-and-post-milestone-after-tool",
+          "title": "State Selection",
+          "type": "string"
+        },
+        "text_ngram_range": {
+          "const": "word-1-2",
+          "default": "word-1-2",
+          "title": "Text Ngram Range",
+          "type": "string"
+        },
+        "text_similarity_threshold_millionths": {
+          "default": 350000,
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Text Similarity Threshold Millionths",
+          "type": "integer"
+        },
+        "trajectory_metric_weighting": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Trajectory Metric Weighting",
+          "type": "string"
+        },
+        "validation": {
+          "const": "leave-one-trajectory-out",
+          "default": "leave-one-trajectory-out",
+          "title": "Validation",
+          "type": "string"
+        }
+      },
+      "title": "ValueEstimatorConfig",
+      "type": "object"
+    },
+    "ValueSource": {
+      "enum": [
+        "CLUSTER",
+        "TASK_GROUP_PRIOR"
+      ],
+      "title": "ValueSource",
+      "type": "string"
+    }
+  },
+  "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-value-evaluation-v1.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "assurance_authority": {
+      "const": false,
+      "default": false,
+      "title": "Assurance Authority",
+      "type": "boolean"
+    },
+    "comparison_schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Comparison Schema Version",
+      "type": "string"
+    },
+    "corpus_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Corpus Digest",
+      "type": "string"
+    },
+    "corpus_id": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "title": "Corpus Id",
+      "type": "string"
+    },
+    "evaluations": {
+      "items": {
+        "$ref": "#/$defs/EstimatorEvaluation"
+      },
+      "title": "Evaluations",
+      "type": "array"
+    },
+    "evaluator_config": {
+      "$ref": "#/$defs/ValueEstimatorConfig"
+    },
+    "evaluator_id": {
+      "const": "jacobian.offline-trajectory-value.v1",
+      "default": "jacobian.offline-trajectory-value.v1",
+      "title": "Evaluator Id",
+      "type": "string"
+    },
+    "terminal_reward_semantics": {
+      "const": "1=clean-room accepted;0=clean-room rejected;inconclusive=excluded",
+      "default": "1=clean-room accepted;0=clean-room rejected;inconclusive=excluded",
+      "title": "Terminal Reward Semantics",
+      "type": "string"
+    }
+  },
+  "required": [
+    "corpus_id",
+    "corpus_digest",
+    "evaluator_config",
+    "evaluations"
+  ],
+  "title": "OfflineValueComparison",
+  "type": "object"
+}

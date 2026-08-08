@@ -1,0 +1,267 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:0c716637908a139555c1043c0e482ef482eb211cea0bc83fdca6902418fa7f2f",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:290d53f4a5efd3c2388aa7b95b80b57e480dad7f22e9e26269fe76217bc9cceb",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the graph's maximum-degree vertices, shortest-path distances to that set in lexicographic vertex order, the maximum distance, and the vertices attaining it.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 11
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "assurance_level",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:d77a362510f0ad6d177e80f8c32eef95616a083d594e0d2d12d42f7aa7ec7f0c",
+      "index": 1,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the graph's maximum-degree vertices, shortest-path distances to that set in lexicographic vertex order, the maximum distance, and the vertices attaining it.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 23
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:29f68f41b0748a29a809bd6826f8563722258f31701c7ba616659be5d51490bd",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "Received the complete unweighted all-pairs distance matrix over vertices 0..5 in lexicographic order. This is sufficient to derive the distance-to-set values once the maximum-degree vertex set is identified from the input graph.",
+        "plan_summary": "Compute the graph's maximum-degree vertices, shortest-path distances to that set in lexicographic vertex order, the maximum distance, and the vertices attaining it.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 26
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:befdcd498c8797cd11fe482f928e876ae22bd2b8f02ad2e8fc79c043f0336bac",
+      "index": 3,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the graph artifact composition task: maximum-degree vertices {4}; distances to that set by lexicographic vertex order 1,1,1,1,0,2; maximum distance 2; maximizing vertex {5}. Evidence and submission files were written and validated.",
+        "latest_after_tool_summary": "Received the complete unweighted all-pairs distance matrix over vertices 0..5 in lexicographic order. This is sufficient to derive the distance-to-set values once the maximum-degree vertex set is identified from the input graph.",
+        "plan_summary": "Compute the graph's maximum-degree vertices, shortest-path distances to that set in lexicographic vertex order, the maximum distance, and the vertices attaining it.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 46
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:7571ef427a7130db01a1db9d753b390fb4539c3d6cf47f68ddee3f5d613b10fc",
+      "index": 4,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the graph artifact composition task: maximum-degree vertices {4}; distances to that set by lexicographic vertex order 1,1,1,1,0,2; maximum distance 2; maximizing vertex {5}. Evidence and submission files were written and validated.",
+        "latest_after_tool_summary": "Received the complete unweighted all-pairs distance matrix over vertices 0..5 in lexicographic order. This is sufficient to derive the distance-to-set values once the maximum-degree vertex set is identified from the input graph.",
+        "plan_summary": "Compute the graph's maximum-degree vertices, shortest-path distances to that set in lexicographic vertex order, the maximum distance, and the vertices attaining it.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 49
+    }
+  ],
+  "task_family": "graph-artifact-composition",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:0c716637908a139555c1043c0e482ef482eb211cea0bc83fdca6902418fa7f2f",
+    "verifier_digest": "sha256:c2d0d59a349eb74098087dbd694204f94a84371429cf14c0bfbfd4e786d7cb92",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

@@ -1,0 +1,280 @@
+{
+  "$defs": {
+    "BindingValidity": {
+      "enum": [
+        "UNKNOWN",
+        "VALID",
+        "INVALID"
+      ],
+      "title": "BindingValidity",
+      "type": "string"
+    },
+    "CandidateState": {
+      "enum": [
+        "ABSENT",
+        "PRESENT",
+        "REJECTED",
+        "CHECKED",
+        "VERIFIED"
+      ],
+      "title": "CandidateState",
+      "type": "string"
+    },
+    "CheckerState": {
+      "enum": [
+        "NOT_CHECKED",
+        "ACCEPTED",
+        "REJECTED"
+      ],
+      "title": "CheckerState",
+      "type": "string"
+    },
+    "MilestoneKind": {
+      "enum": [
+        "OBJECT_ADDED",
+        "ARTIFACT_ADDED",
+        "CANDIDATE_PRODUCED",
+        "CANDIDATE_REPAIRED",
+        "CHECKER_ACCEPTED",
+        "CHECKER_REJECTED",
+        "OBLIGATION_OPENED",
+        "OBLIGATION_DISCHARGED",
+        "BINDING_BECAME_VALID",
+        "BINDING_BECAME_INVALID",
+        "SCOPE_CHANGED",
+        "SCOPE_ESCALATION_REJECTED",
+        "COMPLETENESS_CHANGED",
+        "ASSURANCE_CHANGED"
+      ],
+      "title": "MilestoneKind",
+      "type": "string"
+    },
+    "ReasoningProtocolState": {
+      "enum": [
+        "NOT_STARTED",
+        "READY",
+        "READY_TO_INVOKE",
+        "AWAITING_AFTER_TOOL",
+        "FINALIZED",
+        "INVALID"
+      ],
+      "title": "ReasoningProtocolState",
+      "type": "string"
+    },
+    "ScopeClass": {
+      "enum": [
+        "ABSENT",
+        "DECLARED",
+        "ESCALATION_REJECTED"
+      ],
+      "title": "ScopeClass",
+      "type": "string"
+    },
+    "ScopeRelation": {
+      "enum": [
+        "INITIAL",
+        "ABSENT",
+        "INTRODUCED",
+        "STABLE",
+        "CHANGED",
+        "REMOVED",
+        "ESCALATION_REJECTED"
+      ],
+      "title": "ScopeRelation",
+      "type": "string"
+    },
+    "SemanticClassCount": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "semantic_class": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Semantic Class",
+          "type": "string"
+        }
+      },
+      "required": [
+        "semantic_class",
+        "count"
+      ],
+      "title": "SemanticClassCount",
+      "type": "object"
+    },
+    "StateBoundary": {
+      "enum": [
+        "PLAN",
+        "TOOL_RESULT",
+        "AFTER_TOOL",
+        "FINAL",
+        "TERMINAL"
+      ],
+      "title": "StateBoundary",
+      "type": "string"
+    }
+  },
+  "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-value-state-abstraction-v1.schema.json",
+  "additionalProperties": false,
+  "description": "Clustering signature that deliberately excludes exact identities.",
+  "properties": {
+    "abstraction_id": {
+      "const": "jacobian.semantic-value-state.v1",
+      "default": "jacobian.semantic-value-state.v1",
+      "title": "Abstraction Id",
+      "type": "string"
+    },
+    "abstraction_schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Abstraction Schema Version",
+      "type": "string"
+    },
+    "artifact_role_counts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SemanticClassCount"
+      },
+      "title": "Artifact Role Counts",
+      "type": "array"
+    },
+    "assurance_authority": {
+      "const": false,
+      "default": false,
+      "title": "Assurance Authority",
+      "type": "boolean"
+    },
+    "assurance_level": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assurance Level"
+    },
+    "binding_validity": {
+      "$ref": "#/$defs/BindingValidity"
+    },
+    "boundary": {
+      "$ref": "#/$defs/StateBoundary"
+    },
+    "candidate_state": {
+      "$ref": "#/$defs/CandidateState"
+    },
+    "checker_state": {
+      "$ref": "#/$defs/CheckerState"
+    },
+    "completeness_assurance": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completeness Assurance"
+    },
+    "completeness_status": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completeness Status"
+    },
+    "discharged_obligation_class_counts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SemanticClassCount"
+      },
+      "title": "Discharged Obligation Class Counts",
+      "type": "array"
+    },
+    "exact_identity_fields_included": {
+      "const": false,
+      "default": false,
+      "title": "Exact Identity Fields Included",
+      "type": "boolean"
+    },
+    "execution_status": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Execution Status"
+    },
+    "meaningful_transitions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/MilestoneKind"
+      },
+      "title": "Meaningful Transitions",
+      "type": "array"
+    },
+    "object_type_counts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SemanticClassCount"
+      },
+      "title": "Object Type Counts",
+      "type": "array"
+    },
+    "open_obligation_class_counts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SemanticClassCount"
+      },
+      "title": "Open Obligation Class Counts",
+      "type": "array"
+    },
+    "reasoning_protocol_state": {
+      "$ref": "#/$defs/ReasoningProtocolState"
+    },
+    "scope_class": {
+      "$ref": "#/$defs/ScopeClass"
+    },
+    "scope_relation": {
+      "$ref": "#/$defs/ScopeRelation"
+    },
+    "task_family": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Task Family",
+      "type": "string"
+    }
+  },
+  "required": [
+    "task_family",
+    "boundary",
+    "candidate_state",
+    "checker_state",
+    "scope_class",
+    "scope_relation",
+    "binding_validity",
+    "reasoning_protocol_state"
+  ],
+  "title": "AbstractValueStateSignature",
+  "type": "object"
+}

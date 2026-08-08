@@ -1,0 +1,60 @@
+{
+  "comparison_digest": "sha256:825e074f83990efa74cefd4159085668261dd9d3ee836c4662d0e093eb6789af",
+  "estimator": "HYBRID_TYPED_TEXT",
+  "eventual_terminal_result": "ACCEPTED",
+  "eventual_terminal_reward": 1,
+  "fixture_kind": "CONTROLLED_OBSERVATION_ONLY_REPLAY",
+  "fixture_schema_version": "1",
+  "interpretation": "The negative AFTER_TOOL value change remains visible but earns zero credit because no typed milestone occurred.",
+  "limitations": [
+    "The values are controlled fixture estimates, not real Codex predictions.",
+    "The scorer replays a frozen PR2 comparison and does not fit or update clusters.",
+    "Predictive and early-warning conclusions remain deferred to PR4."
+  ],
+  "scorer_id": "jacobian.observation-only-trajectory-scorer.v1",
+  "source_corpus_digest": "sha256:6b17b8fcc411a533c822a5117e33cf73fa6766739d7d36ac86dc4bea883af4fe",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "credit_reason": "INITIAL_STATE",
+      "cumulative_milestone_credit": 0.0,
+      "estimated_value": 0.4,
+      "milestone_eligible": false,
+      "observation_id": "target:0",
+      "transition_credit": 0.0,
+      "value_delta": null
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "credit_reason": "MILESTONE_VALUE_DELTA",
+      "cumulative_milestone_credit": 0.3,
+      "estimated_value": 0.7,
+      "milestone_eligible": true,
+      "observation_id": "target:1",
+      "transition_credit": 0.3,
+      "value_delta": 0.3
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "credit_reason": "NON_MILESTONE_ZERO",
+      "cumulative_milestone_credit": 0.3,
+      "estimated_value": 0.2,
+      "milestone_eligible": false,
+      "observation_id": "target:2",
+      "transition_credit": 0.0,
+      "value_delta": -0.5
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "credit_reason": "MILESTONE_VALUE_DELTA",
+      "cumulative_milestone_credit": 0.7,
+      "estimated_value": 0.6,
+      "milestone_eligible": true,
+      "observation_id": "target:3",
+      "transition_credit": 0.4,
+      "value_delta": 0.4
+    }
+  ],
+  "total_milestone_credit": 0.7,
+  "trajectory_id": "target"
+}

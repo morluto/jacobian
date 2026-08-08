@@ -1,0 +1,47 @@
+{
+  "corpus_digest": "sha256:0bbc0e5ca9e3544b154e0ae3d170f09dfd650376ecb895e6a05c526afe169225",
+  "corpus_id": "controlled-polynomial-state-aliasing-v1",
+  "evaluator_config": {
+    "config_schema_version": "1",
+    "linkage": "average",
+    "state_selection": "plan-milestone-and-post-milestone-after-tool",
+    "text_ngram_range": "word-1-2",
+    "text_similarity_threshold_millionths": 350000,
+    "trajectory_metric_weighting": "equal",
+    "validation": "leave-one-trajectory-out"
+  },
+  "evaluator_id": "jacobian.offline-trajectory-value.v1",
+  "metrics": {
+    "GROUP_ROLLOUT": {
+      "brier_score": 0.444444444445,
+      "cluster_count": 18,
+      "mean_absolute_error": 0.666666666667,
+      "task_group_fallback_count": 0
+    },
+    "HYBRID_TYPED_TEXT": {
+      "brier_score": 0.074074074074,
+      "cluster_count": 11,
+      "mean_absolute_error": 0.111111111111,
+      "task_group_fallback_count": 0
+    },
+    "JACOBIAN_TYPED": {
+      "brier_score": 0.296296296297,
+      "cluster_count": 8,
+      "mean_absolute_error": 0.444444444445,
+      "task_group_fallback_count": 0
+    },
+    "NUMCA_NUMERICAL": {
+      "brier_score": 0.444444444445,
+      "cluster_count": 18,
+      "mean_absolute_error": 0.666666666667,
+      "task_group_fallback_count": 0
+    },
+    "REASONING_TEXT": {
+      "brier_score": 0.222222222222,
+      "cluster_count": 19,
+      "mean_absolute_error": 0.333333333334,
+      "task_group_fallback_count": 0
+    }
+  },
+  "observation_count": 24
+}

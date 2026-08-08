@@ -1,0 +1,10 @@
+Take the spanning tree with edges (0,1), (0,2), (0,3), (0,4), (0,5). The remaining ten edges are
+(1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5).
+
+Using the increasing-orientation boundary convention, each triangle boundary gives a 1-cycle whose
+coordinates in the fundamental-cycle basis are the coefficients on those ten non-tree edges. In the
+facet order from input.json, this yields a 10x10 integer matrix with determinant -2.
+
+Therefore the cycle lattice has index 2 in the ambient lattice, so the first homology is Z/2Z.
+This is the requested finite chain-complex computation only; it does not prove in a proof assistant
+that the geometric realization is the real projective plane.

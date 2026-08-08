@@ -1,0 +1,80 @@
+{
+  "agent_instructions": "Complete the mathematical task in this isolated directory. Read instruction.md, input.json, and submission_schema.json. Harbor's /app/submission.json is mapped to ./submission.json and environment/submission_schema.json is mapped to ./submission_schema.json; remain inside this workspace. Write submission.json and every required evidence file, using any mathematical method and any available Jacobian capability when useful. Do not use the web, inspect paths outside this directory, or look for verifier or solution material. Tool calls, tokens, log length, retries, and repeated actions receive no reward. The Jacobian server requires concise external reasoning records: one PLAN before work, BEFORE_TOOL and AFTER_TOOL around each math.run, and one FINAL audit before answering. Do not infer a mathematical conclusion from timeout, incomplete search, provider status, or one-sided evidence.",
+  "calibration_sources": [
+    {
+      "calibration_id": "trajectory-value-calibration-codex-v1",
+      "manifest_digest": "sha256:d087a1fff3632ba6f1a34fdfb983cbaae0812faa85dea4d040fdcf3ec311188f",
+      "manifest_path": "benchmarks/studies/trajectory-value-calibration-codex-v1/manifest.json",
+      "summary_digest": "sha256:1de7997f93a1eeeb09508600f8b40ddf12b36a5036e7030cc15f7248589b8df2",
+      "summary_path": "benchmarks/studies/trajectory-value-calibration-codex-v1/summary.json"
+    },
+    {
+      "calibration_id": "trajectory-value-calibration-extension-codex-v1",
+      "manifest_digest": "sha256:3df9d76e6d79682ef381b60da4d47ab89577d358b3f14eb98c15ede5b07927a0",
+      "manifest_path": "benchmarks/studies/trajectory-value-calibration-extension-codex-v1/manifest.json",
+      "summary_digest": "sha256:8f2224b72ca9f468284e6f01fc07486785cc0bd4b30b17de4ecb4240c49d48dd",
+      "summary_path": "benchmarks/studies/trajectory-value-calibration-extension-codex-v1/summary.json"
+    }
+  ],
+  "estimator_comparison": [
+    "GROUP_ROLLOUT",
+    "NUMCA_NUMERICAL",
+    "REASONING_TEXT",
+    "JACOBIAN_TYPED_EXACT",
+    "ABSTRACT_VALUE_STATE",
+    "ABSTRACT_VALUE_STATE_TEXT"
+  ],
+  "exact_resume_supported": false,
+  "h3_warning_rule": "any-strictly-negative-preterminal-selected-state-value-delta",
+  "intermediate_value_surrogate": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+  "label_status_at_freeze": "main-labels-not-collected",
+  "model": {
+    "codex_cli_version": "codex-cli 0.147.0",
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium"
+  },
+  "reasoning_log_mode": "REQUIRED",
+  "repetitions_per_task": 8,
+  "retries_for_wrong_answers": 0,
+  "sandbox": "workspace-write",
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "selection_policy": {
+    "calibration_rule": {
+      "maximum_selected_tasks": 4,
+      "maximum_success_rate_millionths": 800000,
+      "minimum_labelled_rollouts": 2,
+      "minimum_success_rate_millionths": 200000,
+      "ordering": "candidate-order",
+      "uncertainty": "wilson-95"
+    },
+    "maximum_main_tasks": 4,
+    "minimum_main_tasks": 1,
+    "source_combination": "source-order-then-candidate-order"
+  },
+  "study_id": "trajectory-value-mixed-codex-v1",
+  "tasks": [
+    {
+      "accepted": 1,
+      "calibration_id": "trajectory-value-calibration-extension-codex-v1",
+      "calibration_result_digest": "sha256:9712f23507ad8b12f990a72876c1755bdeeb9db9ff4a14edcb43802ec1058d74",
+      "calibration_tags": [
+        "scope-assurance",
+        "candidate-checker-repair"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "labelled": 2,
+      "rejected": 1,
+      "success_rate_millionths": 500000,
+      "task_contract_digest": "sha256:38936ad97260ff38385fc57ac457aabe772a99606e66b50b64b951f31139577a",
+      "task_family": "apollonius-proof-gap-repair",
+      "task_group": "apollonius-gap-repair",
+      "task_id": "apollonius-gap-repair"
+    }
+  ],
+  "terminal_reward": "clean-room-verifier-acceptance-only",
+  "timeout_seconds": 420,
+  "tool_mode": "direct",
+  "training_performed": false,
+  "web_search": "disabled"
+}

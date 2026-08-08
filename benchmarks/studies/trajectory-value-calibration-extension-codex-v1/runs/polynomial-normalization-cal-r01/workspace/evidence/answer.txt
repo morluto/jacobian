@@ -1,0 +1,12 @@
+Input terms:
+- 2 * x^2 * y^0
+- 3 * x^1 * y^2
+- -2 * x^2 * y^0
+- 5 * x^0 * y^0
+
+Cancellation:
+- 2 * x^2 * y^0 + -2 * x^2 * y^0 = 0
+
+Resulting terms:
+- 3 * x^1 * y^2
+- 5 * x^0 * y^0

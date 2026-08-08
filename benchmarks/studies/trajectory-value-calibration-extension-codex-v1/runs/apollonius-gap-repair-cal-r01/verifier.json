@@ -1,0 +1,32 @@
+{
+  "acceptance": "ACCEPTED",
+  "artifact_binding_valid": true,
+  "clean_room": true,
+  "false_certification": false,
+  "input_binding_valid": true,
+  "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+  "reward": {
+    "assurance_calibration": 1.0,
+    "completeness_accuracy": 1.0,
+    "correctness": 1.0,
+    "evidence_validity": 1.0,
+    "false_certification": false,
+    "input_binding": 1.0,
+    "limitations_accuracy": 1.0,
+    "protocol_compliance": 1.0,
+    "reward": 1.0,
+    "scope_accuracy": 1.0
+  },
+  "task_harbor_digest": "sha256:62f32a5a3110e83cfb16e81d89555181a8ec978354150ae83d657cd2f3bcade6",
+  "verifier_execution_status": "COMPLETED",
+  "verifier_file_digests": {
+    "Dockerfile": "sha256:01989b92b9690208d338c98a520137defeba29f276dbc0a2a1bf5c2d1bd3a42b",
+    "expected.json": "sha256:3c96deaba634fb55ae70bd8762e449d2ab923055edcf1cc7da134ffd217aebfc",
+    "input.json": "sha256:8cd2e39811a30ee92dcefc5fe4c330a98ee392b0447f332d187719b36189907e",
+    "public_contract.json": "sha256:ced672214b7b6b747a87393d0823c7a5d0776977e7068ef00e9f4a1bf86d920b",
+    "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+    "verifier.py": "sha256:7165b4d18f126335c06ae90dc04ddfcb8f0ed3bcfbc22385cbe9f1b2abd314a4",
+    "verifier_contract.json": "sha256:7a472d5fc135876ff4ee4065aa61d95e34f280bb2756906ff30e206dca3c28a3",
+    "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+  }
+}

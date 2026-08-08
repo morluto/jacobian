@@ -1,0 +1,49 @@
+Uninstalled 1 package in 1ms
+Installed 1 package in 1ms
+INFO:     Started server process [27516]
+INFO:     Waiting for application startup.
+[08/07/26 01:40:59] INFO     StreamableHTTP       streamable_http_manager.py:151
+                             session manager                                    
+                             started                                            
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:60790 (Press CTRL+C to quit)
+[08/07/26 01:41:01] WARNING  lean.check is not     reference_installation.py:114
+                             installed: The pinned                              
+                             Lean 4.31.0 runtime                                
+                             is unavailable.                                    
+                    INFO     Created new          streamable_http_manager.py:303
+                             transport with                                     
+                             session ID:                                        
+                             a456533d8f15433499b8                               
+                             bf33472eaed2                                       
+[08/07/26 01:41:24] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=d4735e3a265e16ee                    
+                             trace_digest=d4735e3a                              
+                             trace_source=request_id                            
+                             duration_ms=3.291 response_bytes=860               
+                             argument_digest=sha256:ef3ff44b402049              
+                             67eb2ceb995b04ead11f29bdd9027e3dfce9b              
+                             9e454f6c9c19e                                      
+[08/07/26 01:41:29] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4e07408562bedb8b                    
+                             trace_digest=4e074085                              
+                             trace_source=request_id                            
+                             duration_ms=138.988                                
+                             response_bytes=12033                               
+                             argument_digest=sha256:278dad6c905c75              
+                             ff14c13fb6d4e8787f6a98a0f6ae8a81c60ad              
+                             36f1d34a7d672                                      
+[08/07/26 01:43:02] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4b227777d4dd1fc6                    
+                             trace_digest=4b227777                              
+                             trace_source=request_id                            
+                             duration_ms=1.847 response_bytes=836               
+                             argument_digest=sha256:011bdd03ac7984              
+                             617573bc1841cda739f75399d7dfdc5280deb              
+                             0b40784f397f9                                      
+[08/07/26 01:43:12] INFO     Terminating session:         streamable_http.py:814
+                             a456533d8f15433499b8bf33472e                       
+                             aed2                                               

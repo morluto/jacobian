@@ -1,0 +1,33 @@
+{
+  "task_id": "jacobian/polynomial-normalization",
+  "method": "manual_combination_of_like_terms",
+  "checked_terms": [
+    {
+      "coefficient": "2",
+      "exponents": [2, 0]
+    },
+    {
+      "coefficient": "3",
+      "exponents": [1, 2]
+    },
+    {
+      "coefficient": "-2",
+      "exponents": [2, 0]
+    },
+    {
+      "coefficient": "5",
+      "exponents": [0, 0]
+    }
+  ],
+  "normalized_terms": [
+    {
+      "coefficient": "3",
+      "exponents": [1, 2]
+    },
+    {
+      "coefficient": "5",
+      "exponents": [0, 0]
+    }
+  ],
+  "cancellation": "2*x^2*y^0 and -2*x^2*y^0 cancel exactly"
+}

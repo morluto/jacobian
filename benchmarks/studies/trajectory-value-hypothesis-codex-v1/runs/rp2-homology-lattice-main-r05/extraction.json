@@ -1,0 +1,416 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:232995b4d531352c42bbd794b892678efde96e88aa9fdbab17e00200a4690dc8",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:d2d5927ab28f983dcbf580c6a08f42019b535a996a8ba4dead4780a2f64997f0",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute an exact integral homology certificate for the frozen 6-vertex, 10-facet simplicial complex: choose a spanning tree, derive the non-tree-edge cycle-coordinate matrix from oriented facet boundaries, verify determinant -2 and H1 = Z/2Z, then write submission.json and evidence/answer.txt.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 17
+    },
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:0d115438930ffec713703ec33666f6a6e84696ea2ab0322c4365cda5898fc745",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact determinant of the chosen 10x10 cycle-coordinate matrix for the frozen six-vertex ten-facet complex and confirm the homology certificate data before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 27
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "assurance_level",
+        "candidate_state",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_candidate_digest",
+        "latest_meaningful_transitions",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/7b07538c9de6df04fb93649b7d0479cfe77643dbc1552292069347a9e740cd98",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9afc078e9483878da892cc2fb3a01acca3161e6bffb6914720cbf7781cbfef47",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "CANDIDATE_PRODUCED",
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:6f521426e5f8848c91d8a87f75b8b73918d1b89f1d0fc58578786f21baabbf8b",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:64dc94a4308fd1b98fd05122cd0301bb69742161c0802ac2a23e576dda32ba27",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:fd79b6c96da9bfbfc50181fc47f7fc87d89808ebd39cf4e67e92193cca88f7c7",
+      "index": 2,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "CANDIDATE_PRODUCED",
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact determinant of the chosen 10x10 cycle-coordinate matrix for the frozen six-vertex ten-facet complex and confirm the homology certificate data before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 31
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/7b07538c9de6df04fb93649b7d0479cfe77643dbc1552292069347a9e740cd98",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9afc078e9483878da892cc2fb3a01acca3161e6bffb6914720cbf7781cbfef47",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:6f521426e5f8848c91d8a87f75b8b73918d1b89f1d0fc58578786f21baabbf8b",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:64dc94a4308fd1b98fd05122cd0301bb69742161c0802ac2a23e576dda32ba27",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:6119605c01ecbb78b6bc773dedfc4670cc64b0df7bf8a4520e0e200f5891da76",
+      "index": 3,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The determinant computation completed exactly for the matrix that was supplied, yielding -1. That input matrix was later found to have a row-order mistake relative to the intended canonical non-tree-edge order, so the certified matrix will be rebuilt and rechecked.",
+        "plan_summary": "Compute the exact determinant of the chosen 10x10 cycle-coordinate matrix for the frozen six-vertex ten-facet complex and confirm the homology certificate data before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 41
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "latest_meaningful_transitions",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/043b9794aab2fd4b683a42299a60087652e9f6f55612b63bfc2171bd2eed1280",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/7b07538c9de6df04fb93649b7d0479cfe77643dbc1552292069347a9e740cd98",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9afc078e9483878da892cc2fb3a01acca3161e6bffb6914720cbf7781cbfef47",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/c4d64017c72115db57bff57e5fde7e304b766712ab2ad3d45483e7f83500d41f",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:33742b7dac03e37468d306cc02586015f85811911950d50d649c8196eb348be2",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:64dc94a4308fd1b98fd05122cd0301bb69742161c0802ac2a23e576dda32ba27",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:653d5925d2d32ef66f290cb02602ebd8cfeed8ea350e328219c150ee6e210de0",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:92190fd0b3739aff99fecadd10db0f4c6dd628c0dc856e86262d680bb9ad0d55",
+      "index": 4,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The determinant computation completed exactly for the matrix that was supplied, yielding -1. That input matrix was later found to have a row-order mistake relative to the intended canonical non-tree-edge order, so the certified matrix will be rebuilt and rechecked.",
+        "plan_summary": "Compute the exact determinant of the chosen 10x10 cycle-coordinate matrix for the frozen six-vertex ten-facet complex and confirm the homology certificate data before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 45
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity",
+        "latest_meaningful_transitions"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/043b9794aab2fd4b683a42299a60087652e9f6f55612b63bfc2171bd2eed1280",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/7b07538c9de6df04fb93649b7d0479cfe77643dbc1552292069347a9e740cd98",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9afc078e9483878da892cc2fb3a01acca3161e6bffb6914720cbf7781cbfef47",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/c4d64017c72115db57bff57e5fde7e304b766712ab2ad3d45483e7f83500d41f",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:33742b7dac03e37468d306cc02586015f85811911950d50d649c8196eb348be2",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:64dc94a4308fd1b98fd05122cd0301bb69742161c0802ac2a23e576dda32ba27",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:653d5925d2d32ef66f290cb02602ebd8cfeed8ea350e328219c150ee6e210de0",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:acd213a40afd3f19fbc7ebf77ba0152ae11b2ffcea4aff49eaf273de0bcaf8f5",
+      "index": 5,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The determinant computation completed exactly for the matrix that was supplied, yielding -1. That input matrix was later found to have a row-order mistake relative to the intended canonical non-tree-edge order, so the certified matrix will be rebuilt and rechecked.",
+        "plan_summary": "Compute the exact determinant of the chosen 10x10 cycle-coordinate matrix for the frozen six-vertex ten-facet complex and confirm the homology certificate data before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 72
+    }
+  ],
+  "task_family": "projective-plane-homology-lattice",
+  "terminal_evidence": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:232995b4d531352c42bbd794b892678efde96e88aa9fdbab17e00200a4690dc8",
+    "verifier_digest": "sha256:fdb2016dbebeed9007180fd6f4edad811d9c16cb8940b21540abc549b11a3572",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

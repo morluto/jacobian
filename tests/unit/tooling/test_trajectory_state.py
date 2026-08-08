@@ -161,6 +161,10 @@ def _write(tmp_path: Path, events: list[dict[str, object]]) -> Path:
     return path
 
 
+def _file_sha(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _cycle(
     call_id: str,
     capability_id: str,
@@ -453,6 +457,49 @@ def test_rejection_repair_obligations_and_verified_binding_are_milestones(
     assert tool_states[3].hard_state.binding_validity is BindingValidity.VALID
 
 
+def test_verified_assurance_with_false_conclusion_does_not_accept_checker(
+    tmp_path: Path,
+) -> None:
+    producer = "polynomial.map.inverse.candidate_synthesize"
+    checker = "polynomial.map.inverse.verify"
+    events = [_reasoning("PLAN", "Produce and check a candidate.")]
+    events.extend(
+        _cycle(
+            CALL_IDS[0],
+            producer,
+            _result(producer, output={"candidate_inverse_map": {"components": ["x"]}}),
+            after="The candidate is ready for checking.",
+        )
+    )
+    events.extend(
+        _cycle(
+            CALL_IDS[1],
+            checker,
+            _result(
+                checker,
+                output={"status": "VERIFIED", "conclusion": "FALSE"},
+                assurance="VERIFIED",
+                verification_record_uri=RECORD,
+                artifacts=[RECORD],
+            ),
+            after="The checker reported a false conclusion.",
+        )
+    )
+
+    tool_states = [
+        state
+        for state in extract_codex_trajectory(
+            _write(tmp_path, events), task_family="polynomial-map-inverse"
+        ).states
+        if state.boundary is StateBoundary.TOOL_RESULT
+    ]
+
+    assert MilestoneKind.CHECKER_ACCEPTED not in tool_states[1].milestone_kinds
+    assert MilestoneKind.BINDING_BECAME_VALID not in tool_states[1].milestone_kinds
+    assert tool_states[1].hard_state.candidate_state is CandidateState.REJECTED
+    assert tool_states[1].hard_state.binding_validity is BindingValidity.UNKNOWN
+
+
 def test_scope_and_binding_diagnostics_are_structural_not_prose(tmp_path: Path) -> None:
     events = [_reasoning("PLAN", "Respect the exact bounded scope.")]
     events.extend(
@@ -502,6 +549,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
     path = _write(tmp_path, [_reasoning("PLAN", "Solve exactly.")])
     evidence = CleanRoomTerminalEvidence(
         verifier_digest="sha256:" + "d" * 64,
+        source_binding_digest=_file_sha(path),
         clean_room=True,
         verifier_execution_status="COMPLETED",
         acceptance=TerminalAcceptance.ACCEPTED,
@@ -522,6 +570,7 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
     with pytest.raises(ValidationError, match="inconclusive"):
         CleanRoomTerminalEvidence(
             verifier_digest="sha256:" + "e" * 64,
+            source_binding_digest=_file_sha(path),
             clean_room=True,
             verifier_execution_status="TIMEOUT",
             acceptance=TerminalAcceptance.ACCEPTED,
@@ -529,10 +578,30 @@ def test_terminal_evidence_is_clean_room_fail_closed_and_not_assurance(
     with pytest.raises(ValidationError, match="invalid bindings"):
         CleanRoomTerminalEvidence(
             verifier_digest="sha256:" + "e" * 64,
+            source_binding_digest=_file_sha(path),
             clean_room=True,
             verifier_execution_status="COMPLETED",
             acceptance=TerminalAcceptance.ACCEPTED,
             input_binding_valid=False,
+        )
+    with pytest.raises(ValidationError):
+        CleanRoomTerminalEvidence(
+            verifier_digest="sha256:" + "e" * 64,
+            source_binding_digest=_file_sha(path),
+            clean_room=True,
+            verifier_execution_status="COMPLETED",
+            acceptance=TerminalAcceptance.REJECTED,
+            input_binding_valid=1,
+            artifact_binding_valid=True,
+        )
+    with pytest.raises(ValidationError, match="exact source transcript"):
+        TrajectoryExtraction(
+            source_digest=_file_sha(path),
+            task_family="exact-arithmetic",
+            states=(),
+            terminal_evidence=evidence.model_copy(
+                update={"source_binding_digest": "sha256:" + "0" * 64}
+            ),
         )
 
 
@@ -550,6 +619,16 @@ def test_strict_source_and_closed_models_reject_malformed_input(tmp_path: Path) 
     payload = extraction.model_dump(mode="json")
     payload["invented"] = True
     with pytest.raises(ValidationError, match="Extra inputs"):
+        TrajectoryExtraction.model_validate(payload)
+
+
+def test_soft_state_digest_rejects_edited_reasoning_summaries(tmp_path: Path) -> None:
+    path = _write(tmp_path, [_reasoning("PLAN", "Bind this exact plan summary.")])
+    extraction = extract_codex_trajectory(path, task_family="soft-state-binding")
+    payload = extraction.model_dump(mode="json")
+    payload["states"][0]["soft_state"]["plan_summary"] = "A substituted plan."
+
+    with pytest.raises(ValidationError, match="soft-state digest mismatch"):
         TrajectoryExtraction.model_validate(payload)
 
 

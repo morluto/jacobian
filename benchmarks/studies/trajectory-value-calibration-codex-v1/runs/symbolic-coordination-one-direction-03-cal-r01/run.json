@@ -1,0 +1,91 @@
+{
+  "calibration_tags": [
+    "one-sided-evidence",
+    "candidate-checker-repair"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "symbolic-coordination-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 559,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "cf7aa574-5c62-4bef-9e60-544ef2cb86dc"
+  ],
+  "repetition": 1,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "symbolic-coordination-v1",
+    "harbor_digest": "sha256:9b33f92a390a9d28eb1783207405ba1a17f8bbb3b4d591250898b4ec6c369d59",
+    "public_file_digests": {
+      "input.json": "sha256:e255ab52d8a033aab1d507ee84e4944e33785f2e93efce9a67ba4a5a65433e0c",
+      "instruction.md": "sha256:2a91101a8b91bd781bee99a21b50c90f54c8e7e4318e90932cb847827e10898f",
+      "submission_schema.json": "sha256:493cdf00a77de9335abb164a7ac67abb3a8f10c8e95a620def2e8784c450cad5"
+    },
+    "task_id": "symbolic-coordination-one-direction-03",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:48213b6f0f7a7b8777c1e30eca5c6332a192597772bc8b934788a82a438b7d15",
+      "input.json": "sha256:e255ab52d8a033aab1d507ee84e4944e33785f2e93efce9a67ba4a5a65433e0c",
+      "public_contract.json": "sha256:296d9770d6bde64727e5f157f4a301c11c6603b0b9bf95f61ac5819160d7f025",
+      "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+      "verifier.py": "sha256:f5ed45198db5032b69622220fcdc4ae48b2f9e27ffec4a5978100ff92c96f3a9",
+      "verifier_support.py": "sha256:d98fdf950b207f6fe6e2795ed77b17959d8ea62e877a95dd30417e844263fb30"
+    }
+  },
+  "task_family": "polynomial-one-direction-evidence",
+  "task_id": "symbolic-coordination-one-direction-03",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": true,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "artifact_binding": 1.0,
+      "assurance_calibration": 1.0,
+      "correctness": 1.0,
+      "evidence_validity": 1.0,
+      "false_certification": false,
+      "input_binding": 1.0,
+      "protocol_compliance": 1.0,
+      "reward": 1.0,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:9b33f92a390a9d28eb1783207405ba1a17f8bbb3b4d591250898b4ec6c369d59",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:48213b6f0f7a7b8777c1e30eca5c6332a192597772bc8b934788a82a438b7d15",
+      "input.json": "sha256:e255ab52d8a033aab1d507ee84e4944e33785f2e93efce9a67ba4a5a65433e0c",
+      "public_contract.json": "sha256:296d9770d6bde64727e5f157f4a301c11c6603b0b9bf95f61ac5819160d7f025",
+      "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+      "verifier.py": "sha256:f5ed45198db5032b69622220fcdc4ae48b2f9e27ffec4a5978100ff92c96f3a9",
+      "verifier_support.py": "sha256:d98fdf950b207f6fe6e2795ed77b17959d8ea62e877a95dd30417e844263fb30"
+    }
+  },
+  "trajectory_id": "symbolic-coordination-one-direction-03-cal-r01",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 345600,
+    "input_tokens": 377124,
+    "output_tokens": 7586,
+    "reasoning_output_tokens": 2238
+  }
+}

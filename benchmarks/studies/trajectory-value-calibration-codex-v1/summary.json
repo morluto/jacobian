@@ -1,0 +1,178 @@
+{
+  "accepted": 4,
+  "calibration_id": "trajectory-value-calibration-codex-v1",
+  "candidate_results": [
+    {
+      "accepted": 2,
+      "calibration_tags": [
+        "one-sided-evidence",
+        "candidate-checker-repair"
+      ],
+      "dataset_id": "symbolic-coordination-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": 1.0,
+      "task_family": "polynomial-one-direction-evidence",
+      "task_id": "symbolic-coordination-one-direction-03",
+      "wilson_95_high": 1.0,
+      "wilson_95_low": 0.34238022750665303
+    },
+    {
+      "accepted": 2,
+      "calibration_tags": [
+        "bounded-search-unknown",
+        "scope-assurance"
+      ],
+      "dataset_id": "symbolic-coordination-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": 1.0,
+      "task_family": "polynomial-bounded-search-nonconclusion",
+      "task_id": "symbolic-coordination-search-incomplete-01",
+      "wilson_95_high": 1.0,
+      "wilson_95_low": 0.34238022750665303
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "candidate-checker-repair",
+        "capability-routing"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "radical-elimination-root-rejection",
+      "task_id": "radical-system-uniqueness-audit",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "scope-assurance",
+        "capability-routing"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "metric-tsp-proof-repair",
+      "task_id": "metric-tsp-proof-repair",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "artifact-binding",
+        "scope-assurance"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "exact-farkas-certificate",
+      "task_id": "exact-farkas-ldl-slice",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "artifact-binding",
+        "capability-routing"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "graph-artifact-composition",
+      "task_id": "graph-artifact-composition",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "candidate-checker-repair",
+        "artifact-binding"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "polynomial-map-collision-witness",
+      "task_id": "polynomial-map-collision",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "scope-assurance",
+        "capability-routing",
+        "artifact-binding"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 2,
+      "selection_eligible": false,
+      "success_rate": 0.0,
+      "task_family": "finite-scheme-rational-point-audit",
+      "task_id": "finite-scheme-rational-points-audit",
+      "wilson_95_high": 0.6576197724933469,
+      "wilson_95_low": 0.0
+    }
+  ],
+  "causal_claim_authorized": false,
+  "evidence_class": "public-host-local-codex-difficulty-calibration",
+  "inconclusive": 10,
+  "rejected": 2,
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "selected_task_count": 0,
+  "selected_tasks": [],
+  "selection_rule": {
+    "maximum_selected_tasks": 4,
+    "maximum_success_rate_millionths": 800000,
+    "minimum_labelled_rollouts": 2,
+    "minimum_success_rate_millionths": 200000,
+    "ordering": "candidate-order",
+    "uncertainty": "wilson-95"
+  },
+  "terminal_reward": "clean-room-verifier-acceptance-only",
+  "total_rollouts": 16,
+  "training_performed": false
+}

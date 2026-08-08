@@ -1,0 +1,64 @@
+{
+  "artifacts": {
+    "codex.jsonl": "sha256:1cc462b0ae71b5d4347b64eabd4878aa2abc729721d9dc1a8f0b1609fb8c8385",
+    "codex.stderr": "sha256:1aa26269eb1cc57f86b235a03cda53c004edb5b1e9fc99d4da4f00843293d721",
+    "extraction.json": "sha256:051de64ec9d6b93017a3c37c2be8df6a8aea9b6180d5397c6be45ff218b4ba8c",
+    "jacobian-mcp.stderr": "sha256:a7e1b9667e5cd4bfaa71b639b63407da69e9ec36a7b244903e93304c96fbcdef",
+    "jacobian-mcp.stdout": "sha256:928010b64093187db31324c40cf99b47b36ad28228a2cc681990709a94912663",
+    "prompt.txt": "sha256:6e6230f122f101d81a2de5889fc316d83e131c1142131748ab70d46eb9fab43e",
+    "reasoning-log.jsonl": "sha256:37be773f85e73d15722ff8b91515e716651a191ff44138f02609b3696d60d794",
+    "submission-schema.json": "sha256:fec17026ac9418e163c912dbbfe713509fb3ab9b31d1727b82da4cbbfe13f9cf",
+    "submission.json": "sha256:3d68707fad9b07ba70a8f05418e675d83986ee1eb9e6425310d453b95f07658c",
+    "surface.json": "sha256:a633d866c339cf33ca4d6a1c0e9c8fbf14fb84a078e59759be48dceb35aa9e7a",
+    "task.json": "sha256:73772d061b99f96fc103b2ef030ccaadc492ac5cd31d6f0a5aea94cfb972692c",
+    "verifier.json": "sha256:7bd03f0cd74f9961b785812137a8bdd6d438e9cf6f1dad0d287abd55723d20e7"
+  },
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 419,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "8c8c0447-5621-49d7-a1f9-4cc8e6abe5e6"
+  ],
+  "repetition": 4,
+  "schema_version": "1",
+  "surface_digest": "sha256:4b0dd8ec6dd62e38f74ff2f9486ecc8fdd16dcd164e03838597d19786c7c0b4c",
+  "task_family": "exact-integer-bezout",
+  "task_group": "integer-bezout-01",
+  "task_id": "integer-bezout-01",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:1cc462b0ae71b5d4347b64eabd4878aa2abc729721d9dc1a8f0b1609fb8c8385",
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  },
+  "trajectory_id": "integer-bezout-01-r04",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 246400,
+    "input_tokens": 267970,
+    "output_tokens": 2761,
+    "reasoning_output_tokens": 1021
+  }
+}

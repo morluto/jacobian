@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "additionalProperties": false,
+      "properties": {
+        "optimum": {
+          "maximum": 12,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vertices": {
+          "items": {
+            "enum": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e",
+              "f",
+              "g",
+              "h",
+              "i",
+              "j",
+              "k",
+              "l"
+            ]
+          },
+          "maxItems": 12,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "vertices",
+        "optimum"
+      ],
+      "type": "object"
+    },
+    "task_id": {
+      "const": "graph-independent-set-01"
+    }
+  },
+  "required": [
+    "task_id",
+    "answer"
+  ],
+  "type": "object"
+}

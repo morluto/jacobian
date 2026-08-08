@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "TRUE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "distance_to_set": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "distance": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "vertex": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "vertex",
+              "distance"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "maximizing_vertices": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "maximum_degree_vertices": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "maximum_distance_to_set": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_degree_vertices",
+        "distance_to_set",
+        "maximum_distance_to_set",
+        "maximizing_vertices"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "jacobian/graph-artifact-composition complete finite input",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/graph-artifact-composition"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

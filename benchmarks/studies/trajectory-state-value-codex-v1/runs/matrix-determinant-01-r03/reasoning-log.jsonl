@@ -1,0 +1,1 @@
+{"schema_version":"1","run_id":"d441e1e4-322c-4d02-a7ef-e269c266d0d0","sequence":0,"kind":"PLAN","occurred_at":"2026-08-07T05:50:44.607067+00:00","payload":{"summary":"Read the task and submission schema, compute the exact determinant of the matrix, then write submission.json with the schema-required shape."}}

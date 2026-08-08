@@ -1,0 +1,18 @@
+{
+  "task_id": "jacobian/hermite-normal-form",
+  "method": "local-arithmetic-check",
+  "matrix": [[2, 4], [6, 8]],
+  "normal_form": [[2, 0], [0, 4]],
+  "transformation": [[-2, 1], [3, -1]],
+  "checks": {
+    "product_equals_normal_form": true,
+    "determinant_is_unimodular": true,
+    "row_hnf_convention_satisfied": true
+  },
+  "derivation": [
+    "(-2,1) * A = (2,0)",
+    "(3,-1) * A = (0,4)",
+    "det(U) = -1"
+  ],
+  "result": "verified locally by exact integer arithmetic"
+}

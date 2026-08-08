@@ -1,0 +1,70 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:61f490478231634ec0ffe3bf06e2e988a0ac10baa5c42114ada60a08feb6bb0f",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "NOT_STARTED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:61858a0d738fac077cab124a47f23207110d182954179bf95d6efd7be2f6db2e",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": null,
+      "source_event_index": 21
+    }
+  ],
+  "task_family": "graph-artifact-composition",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:61f490478231634ec0ffe3bf06e2e988a0ac10baa5c42114ada60a08feb6bb0f",
+    "verifier_digest": "sha256:c2d0d59a349eb74098087dbd694204f94a84371429cf14c0bfbfd4e786d7cb92",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

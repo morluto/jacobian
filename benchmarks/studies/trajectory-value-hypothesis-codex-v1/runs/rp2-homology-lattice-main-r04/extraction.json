@@ -1,0 +1,218 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:ed8ffccc1646f352a01afb318d099c8c4deedd39934ef29c43611328f4fca39d",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:d2d5927ab28f983dcbf580c6a08f42019b535a996a8ba4dead4780a2f64997f0",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute a fundamental-cycle basis for the frozen six-vertex ten-facet complex, derive the 10x10 facet boundary coordinate matrix relative to a spanning tree of the one-skeleton, and verify determinant and homology conclusion before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 15
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "assurance_level",
+        "candidate_state",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_candidate_digest",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/1b9c441500f19769aa166d78dc44c9d014aaf837412e9355bf48a8609364a399",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/57369b3e3d43de758abead80e3eb77ce060804ed7810acc029ddc15c9143a6ee",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "CANDIDATE_PRODUCED",
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:79af60be0d6f4ed83e438e94afafdc708c6b94a84ed764493719571822409082",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:c7506c9e2bf74da5b22f01e5e6eb125a657a520a8e409c04dcb777a43b786562",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:1b1c683262df31a2e8fc4c2f688b863c1fcb052b233b85c6e20862a95f80b59b",
+      "index": 1,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "CANDIDATE_PRODUCED",
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute a fundamental-cycle basis for the frozen six-vertex ten-facet complex, derive the 10x10 facet boundary coordinate matrix relative to a spanning tree of the one-skeleton, and verify determinant and homology conclusion before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 27
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity",
+        "latest_meaningful_transitions"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/1b9c441500f19769aa166d78dc44c9d014aaf837412e9355bf48a8609364a399",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/57369b3e3d43de758abead80e3eb77ce060804ed7810acc029ddc15c9143a6ee",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:79af60be0d6f4ed83e438e94afafdc708c6b94a84ed764493719571822409082",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:c7506c9e2bf74da5b22f01e5e6eb125a657a520a8e409c04dcb777a43b786562",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:04adfc2115ca9764e361f3df565c5aa21db97af29000e55c019845351307b259",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute a fundamental-cycle basis for the frozen six-vertex ten-facet complex, derive the 10x10 facet boundary coordinate matrix relative to a spanning tree of the one-skeleton, and verify determinant and homology conclusion before writing submission artifacts.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 63
+    }
+  ],
+  "task_family": "projective-plane-homology-lattice",
+  "terminal_evidence": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:ed8ffccc1646f352a01afb318d099c8c4deedd39934ef29c43611328f4fca39d",
+    "verifier_digest": "sha256:fdb2016dbebeed9007180fd6f4edad811d9c16cb8940b21540abc549b11a3572",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

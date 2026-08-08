@@ -1,0 +1,48 @@
+{
+  "assurance_authority": false,
+  "changes_prompts": false,
+  "chooses_tools": false,
+  "comparison_digest": "sha256:2febc99338d06cbcfdda43b4a865e81afb9d398cc9cf86505b82917423e0e6fe",
+  "credit_semantics": "non-milestone=0;milestone=current-value-minus-previous-selected-value",
+  "estimator": "JACOBIAN_TYPED",
+  "eventual_terminal_result": "ACCEPTED",
+  "eventual_terminal_reward": 1,
+  "mutates_runtime": false,
+  "observation_only": true,
+  "replay_schema_version": "1",
+  "scorer_id": "jacobian.observation-only-trajectory-scorer.v1",
+  "source_corpus_digest": "sha256:c60a0fc1a5a2e4bfb531cf5b31faf3507900f57ac62fb2618661e4d97dedb11b",
+  "states": [
+    {
+      "assurance_authority": false,
+      "boundary": "PLAN",
+      "cluster_feature_summary": "task_group=graph-independent-set-01; typed_signature=sha256:0c83b4430cc3f36215194bc161cdeeb3031315c3fb643f1e1608d6af9db99176; fields={\"artifacts\":[],\"assurance_level\":null,\"binding_validity\":\"UNKNOWN\",\"boundary\":\"PLAN\",\"candidate_state\":\"ABSENT\",\"checker_state\":\"NOT_CHECKED\",\"completeness_assurance\":null,\"completeness_status\":null,\"discharged_obligation_uris\":[],\"execution_status\":null,\"latest_candidate_digest\":null,\"latest_transitions\":[],\"open_obligation_uris\":[],\"reasoning_protocol_state\":\"READY\",\"scope_digest\":null,\"scope_escalation_errors\":[],\"task_family\":\"exact-graph-maximum-independent-set\",\"typed_objects\":[]}",
+      "cluster_id": "sha256:991c0b023e85b5924e333acfc4e2a20cf2642ba9aa8ba4968f4d179703d59c77",
+      "credit_reason": "INITIAL_STATE",
+      "cumulative_milestone_credit": 0.0,
+      "estimated_value": 1.0,
+      "estimator": "JACOBIAN_TYPED",
+      "eventual_terminal_result": "ACCEPTED",
+      "eventual_terminal_reward": 1,
+      "milestone_eligible": false,
+      "observation_id": "graph-independent-set-01-r04:0",
+      "observation_only": true,
+      "previous_observation_id": null,
+      "state_index": 0,
+      "supporting_trajectory_ids": [
+        "graph-independent-set-01-r01",
+        "graph-independent-set-01-r02",
+        "graph-independent-set-01-r03"
+      ],
+      "task_group": "graph-independent-set-01",
+      "trajectory_id": "graph-independent-set-01-r04",
+      "transition_credit": 0.0,
+      "typed_state_digest": "sha256:0c83b4430cc3f36215194bc161cdeeb3031315c3fb643f1e1608d6af9db99176",
+      "value_delta": null,
+      "value_source": "CLUSTER"
+    }
+  ],
+  "task_group": "graph-independent-set-01",
+  "total_milestone_credit": 0.0,
+  "trajectory_id": "graph-independent-set-01-r04"
+}

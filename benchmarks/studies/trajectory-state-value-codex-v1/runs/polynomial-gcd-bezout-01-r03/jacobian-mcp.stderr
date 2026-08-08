@@ -1,0 +1,56 @@
+Uninstalled 1 package in 1ms
+Installed 1 package in 1ms
+INFO:     Started server process [17881]
+INFO:     Waiting for application startup.
+[08/06/26 22:57:21] INFO     StreamableHTTP       streamable_http_manager.py:151
+                             session manager                                    
+                             started                                            
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:55510 (Press CTRL+C to quit)
+[08/06/26 22:57:23] WARNING  lean.check is not     reference_installation.py:114
+                             installed: The pinned                              
+                             Lean 4.31.0 runtime                                
+                             is unavailable.                                    
+                    INFO     Created new          streamable_http_manager.py:303
+                             transport with                                     
+                             session ID:                                        
+                             eb7743c5fcf549a2af80                               
+                             f47092f164f9                                       
+[08/06/26 22:57:53] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=d4735e3a265e16ee                    
+                             trace_digest=d4735e3a                              
+                             trace_source=request_id                            
+                             duration_ms=3.418 response_bytes=860               
+                             argument_digest=sha256:2de6be4c6d136b              
+                             17cff5335f650bb489aaead920784a6344205              
+                             40df713d72db2                                      
+[08/06/26 22:57:56] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4e07408562bedb8b                    
+                             trace_digest=4e074085                              
+                             trace_source=request_id                            
+                             duration_ms=138.738                                
+                             response_bytes=13805                               
+                             argument_digest=sha256:66ac0a1d05c7a6              
+                             0607b87a7fffae771ddbbcde8084f78c836f8              
+                             b8e6f17b41759                                      
+[08/06/26 22:57:59] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4b227777d4dd1fc6                    
+                             trace_digest=4b227777                              
+                             trace_source=request_id                            
+                             duration_ms=58.614                                 
+                             response_bytes=6468                                
+                             argument_digest=sha256:1227df576e6313              
+                             79c03c2df8d4fcd2423cc2b397e53d5fcf65b              
+                             1160b5544c06f                                      
+[08/06/26 22:58:07] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=ef2d127de37b942b                    
+                             trace_digest=ef2d127d                              
+                             trace_source=request_id                            
+                             duration_ms=56.970 response_bytes=944              
+                             argument_digest=sha256:d72acc0ce20b30              
+                             ca0c93cf17ace138f8036b73a2a2519b35a80              
+                             7f5a28672cbba                                      

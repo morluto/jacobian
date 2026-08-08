@@ -1,0 +1,174 @@
+Uninstalled 1 package in 1ms
+Installed 1 package in 1ms
+INFO:     Started server process [44202]
+INFO:     Waiting for application startup.
+[08/07/26 04:59:09] INFO     StreamableHTTP       streamable_http_manager.py:151
+                             session manager                                    
+                             started                                            
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:53455 (Press CTRL+C to quit)
+[08/07/26 04:59:11] WARNING  lean.check is not     reference_installation.py:114
+                             installed: The pinned                              
+                             Lean 4.31.0 runtime                                
+                             is unavailable.                                    
+[08/07/26 04:59:12] INFO     Created new          streamable_http_manager.py:303
+                             transport with                                     
+                             session ID:                                        
+                             885c923a27654d0da0b7                               
+                             2a5e7a8f8b20                                       
+[08/07/26 04:59:37] WARNING  MCP tool reasoning.write failed       server.py:318
+                             ╭─ Traceback (most recent call last─╮              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/ser │              
+                             │ ver.py:314 in wrapped             │              
+                             │                                   │              
+                             │   311 │   @wraps(handler)         │              
+                             │   312 │   async def wrapped(*args │              
+                             │   313 │   │   try:                │              
+                             │ ❱ 314 │   │   │   return await ha │              
+                             │   315 │   │   except MCPError:    │              
+                             │   316 │   │   │   raise           │              
+                             │   317 │   │   except Exception as │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/src/jacobian/adapters/mcp/too │              
+                             │ ls.py:443 in reasoning_write      │              
+                             │                                   │              
+                             │   440 │   ctx: Context[AppState,  │              
+                             │   441 ) -> ReasoningWriteResult:  │              
+                             │   442 │   active_runtime = _runti │              
+                             │ ❱ 443 │   request = ReasoningWrit │              
+                             │   444 │   │   phase=phase,        │              
+                             │   445 │   │   summary=summary,    │              
+                             │   446 │   │   run_id=run_id,      │              
+                             │                                   │              
+                             │ /Users/saionjitoko0822/Documents/ │              
+                             │ GitHub/jacobian-trajectory-value- │              
+                             │ pr7/.venv/lib/python3.12/site-pac │              
+                             │ kages/pydantic/main.py:263 in     │              
+                             │ __init__                          │              
+                             │                                   │              
+                             │    260 │   │   """                │              
+                             │    261 │   │   # `__tracebackhide │              
+                             │        from tracebacks            │              
+                             │    262 │   │   __tracebackhide__  │              
+                             │ ❱  263 │   │   validated_self = s │              
+                             │        self_instance=self)        │              
+                             │    264 │   │   if self is not val │              
+                             │    265 │   │   │   warnings.warn( │              
+                             │    266 │   │   │   │   'A custom  │              
+                             ╰───────────────────────────────────╯              
+                             ValidationError: 1 validation error                
+                             for ReasoningWriteRequest                          
+                               Value error, fields do not match                 
+                             PLAN phase contract                                
+                             [type=value_error,                                 
+                             input_value={'phase':                              
+                             <ReasoningPhase...pleteness_status':               
+                             None}, input_type=dict]                            
+                                 For further information visit                  
+                             https://errors.pydantic.dev/2.13/v/va              
+                             lue_error                                          
+                    INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=d4735e3a265e16ee                    
+                             trace_digest=d4735e3a                              
+                             trace_source=request_id                            
+                             duration_ms=64.323 response_bytes=401              
+                             argument_digest=sha256:2732d22f1bd3f7              
+                             882b50b53ccf516bcc40f2cc691b33418fbe9              
+                             5dd8fdd926ab2                                      
+[08/07/26 04:59:41] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=4e07408562bedb8b                    
+                             trace_digest=4e074085                              
+                             trace_source=request_id                            
+                             duration_ms=136.698                                
+                             response_bytes=14414                               
+                             argument_digest=sha256:af71d6e6b53cf3              
+                             b39040ae6339c16cb53718526bdc83a651567              
+                             255570ebd63b4                                      
+[08/07/26 04:59:47] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=4b227777d4dd1fc6                    
+                             trace_digest=4b227777                              
+                             trace_source=request_id                            
+                             duration_ms=2.635 response_bytes=860               
+                             argument_digest=sha256:0b786e86b32d86              
+                             130b7a2583e4ae4b98d0a844f0d7a8295a228              
+                             6efcf6818f07c                                      
+[08/07/26 04:59:51] INFO     MCP tool call tool=math.find          server.py:335
+                             status=success                                     
+                             request_digest=ef2d127de37b942b                    
+                             trace_digest=ef2d127d                              
+                             trace_source=request_id                            
+                             duration_ms=57.904                                 
+                             response_bytes=4444                                
+                             argument_digest=sha256:d4e6b524ce5e45              
+                             5fa5f782214875e3dd4804f425e3b097d38f0              
+                             bd7acb32ca800                                      
+[08/07/26 04:59:54] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=e7f6c011776e8db7                    
+                             trace_digest=e7f6c011                              
+                             trace_source=request_id                            
+                             duration_ms=57.692 response_bytes=944              
+                             argument_digest=sha256:fa091439ff0de4              
+                             db47baf1658810d27fe580d88b614257aeaa7              
+                             74de8bc7079c8                                      
+[08/07/26 04:59:58] INFO     capability invocation    capability_telemetry.py:18
+                             capability_id=graph.dist                           
+                             ance_matrix.compute                                
+                             version=1 mode=EXPLORE                             
+                             status=COMPLETED                                   
+                             assurance=COMPUTED                                 
+                             elapsed_ms=3                                       
+                             diagnostics=-                                      
+                    INFO     MCP capability attempt               tooling.py:183
+                             request_digest=7902699be42c8a8e                    
+                             trace_digest=7902699b                              
+                             trace_source=request_id                            
+                             capability_id=graph.distance_matrix.               
+                             compute capability_version=1                       
+                             mode=EXPLORE                                       
+                             execution_status=COMPLETED                         
+                             assurance=COMPUTED                                 
+                             diagnostic_codes=none                              
+                             attempt_duration_ms=6.585                          
+                             operation_runtime_ms=1                             
+                             response_bytes=1354                                
+                             argument_digest=sha256:f6fc4a2c5bb31               
+                             8aaa20b45afbcc13d641917914b47ec7d886               
+                             9285db8640f8610                                    
+                    INFO     MCP tool call tool=math.run           server.py:335
+                             status=success                                     
+                             request_digest=7902699be42c8a8e                    
+                             trace_digest=7902699b                              
+                             trace_source=request_id                            
+                             duration_ms=9.014 response_bytes=2827              
+                             argument_digest=sha256:3f0c6c20a77194              
+                             81a681951545839b436f870601d4f5b69960f              
+                             234517dc6b35a                                      
+[08/07/26 05:00:03] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=2c624232cdd22177                    
+                             trace_digest=2c624232                              
+                             trace_source=request_id                            
+                             duration_ms=2.233 response_bytes=930               
+                             argument_digest=sha256:ae0e4fac49cf3b              
+                             328d20088505241ddd2531af5c75c85e03509              
+                             c84863958aad2                                      
+[08/07/26 05:00:39] INFO     MCP tool call tool=reasoning.write    server.py:335
+                             status=success                                     
+                             request_digest=19581e27de7ced00                    
+                             trace_digest=19581e27                              
+                             trace_source=request_id                            
+                             duration_ms=4.457 response_bytes=836               
+                             argument_digest=sha256:81ddf720046e9a              
+                             bf7e73817908b6a35ec19fb20fe9baeafe1b8              
+                             1c4c020278d0f                                      
+[08/07/26 05:00:46] INFO     Terminating session:         streamable_http.py:814
+                             885c923a27654d0da0b72a5e7a8f                       
+                             8b20                                               

@@ -1,0 +1,347 @@
+{
+  "$defs": {
+    "FrozenMixedStudyReference": {
+      "additionalProperties": false,
+      "properties": {
+        "file_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "File Digest",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+\\.json$",
+          "title": "Path",
+          "type": "string"
+        },
+        "study_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Study Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "file_digest",
+        "study_id"
+      ],
+      "title": "FrozenMixedStudyReference",
+      "type": "object"
+    },
+    "H1Plan": {
+      "additionalProperties": false,
+      "properties": {
+        "baselines": {
+          "default": [
+            "GROUP_ROLLOUT",
+            "NUMCA_NUMERICAL"
+          ],
+          "items": {
+            "enum": [
+              "GROUP_ROLLOUT",
+              "NUMCA_NUMERICAL"
+            ],
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "directional_support_rule": {
+          "const": "strictly-lower-brier-and-mae-than-each-baseline",
+          "default": "strictly-lower-brier-and-mae-than-each-baseline",
+          "title": "Directional Support Rule",
+          "type": "string"
+        },
+        "metric_weighting": {
+          "const": "equal-per-trajectory",
+          "default": "equal-per-trajectory",
+          "title": "Metric Weighting",
+          "type": "string"
+        },
+        "metrics": {
+          "default": [
+            "brier_score",
+            "mean_absolute_error"
+          ],
+          "items": {
+            "enum": [
+              "brier_score",
+              "mean_absolute_error"
+            ],
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "question": {
+          "const": "typed/value-state estimation outperforms group and Numca baselines on mixed terminal outcomes",
+          "title": "Question",
+          "type": "string"
+        },
+        "typed_estimators": {
+          "default": [
+            "JACOBIAN_TYPED_EXACT",
+            "ABSTRACT_VALUE_STATE",
+            "ABSTRACT_VALUE_STATE_TEXT"
+          ],
+          "items": {
+            "enum": [
+              "JACOBIAN_TYPED_EXACT",
+              "ABSTRACT_VALUE_STATE",
+              "ABSTRACT_VALUE_STATE_TEXT"
+            ],
+            "type": "string"
+          },
+          "title": "Typed Estimators",
+          "type": "array"
+        },
+        "uncertainty": {
+          "const": "per-estimate-wilson-score-95-and-reported-mean-width",
+          "default": "per-estimate-wilson-score-95-and-reported-mean-width",
+          "title": "Uncertainty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "title": "H1Plan",
+      "type": "object"
+    },
+    "H2Plan": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_separation": {
+          "const": "different-reasoning-text-and-abstract-plus-text-cluster-ids",
+          "default": "different-reasoning-text-and-abstract-plus-text-cluster-ids",
+          "title": "Branch Separation",
+          "type": "string"
+        },
+        "directional_support_rule": {
+          "const": "at-least-one-mixed-outcome-pair-separated-and-hybrid-strictly-lower-brier-and-mae-than-abstract",
+          "default": "at-least-one-mixed-outcome-pair-separated-and-hybrid-strictly-lower-brier-and-mae-than-abstract",
+          "title": "Directional Support Rule",
+          "type": "string"
+        },
+        "pair_scope": {
+          "const": "different-trajectories-same-task-group-same-abstract-state",
+          "default": "different-trajectories-same-task-group-same-abstract-state",
+          "title": "Pair Scope",
+          "type": "string"
+        },
+        "question": {
+          "const": "reasoning text adds predictive information beyond abstract typed mathematical state",
+          "title": "Question",
+          "type": "string"
+        },
+        "require_different_reasoning_digest": {
+          "const": true,
+          "default": true,
+          "title": "Require Different Reasoning Digest",
+          "type": "boolean"
+        },
+        "require_mixed_terminal_outcome": {
+          "const": true,
+          "default": true,
+          "title": "Require Mixed Terminal Outcome",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "title": "H2Plan",
+      "type": "object"
+    },
+    "H3Plan": {
+      "additionalProperties": false,
+      "properties": {
+        "directional_support_rule": {
+          "const": "positive-recall-precision-above-failure-prevalence-and-positive-mean-true-positive-lead",
+          "default": "positive-recall-precision-above-failure-prevalence-and-positive-mean-true-positive-lead",
+          "title": "Directional Support Rule",
+          "type": "string"
+        },
+        "false_alarm_denominator": {
+          "const": "accepted-labelled-trajectories",
+          "default": "accepted-labelled-trajectories",
+          "title": "False Alarm Denominator",
+          "type": "string"
+        },
+        "lead_time_unit": {
+          "const": "later-selected-preterminal-observations",
+          "default": "later-selected-preterminal-observations",
+          "title": "Lead Time Unit",
+          "type": "string"
+        },
+        "question": {
+          "const": "a negative estimated-value change predicts eventual failure before terminal verification",
+          "title": "Question",
+          "type": "string"
+        },
+        "threshold_tuned_on_main_labels": {
+          "const": false,
+          "default": false,
+          "title": "Threshold Tuned On Main Labels",
+          "type": "boolean"
+        },
+        "warning_rule": {
+          "const": "any-strictly-negative-preterminal-selected-state-value-delta",
+          "default": "any-strictly-negative-preterminal-selected-state-value-delta",
+          "title": "Warning Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "title": "H3Plan",
+      "type": "object"
+    },
+    "ValueEstimatorConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "config_schema_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Config Schema Version",
+          "type": "string"
+        },
+        "linkage": {
+          "const": "average",
+          "default": "average",
+          "title": "Linkage",
+          "type": "string"
+        },
+        "state_selection": {
+          "const": "plan-milestone-and-post-milestone-after-tool",
+          "default": "plan-milestone-and-post-milestone-after-tool",
+          "title": "State Selection",
+          "type": "string"
+        },
+        "text_ngram_range": {
+          "const": "word-1-2",
+          "default": "word-1-2",
+          "title": "Text Ngram Range",
+          "type": "string"
+        },
+        "text_similarity_threshold_millionths": {
+          "default": 350000,
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Text Similarity Threshold Millionths",
+          "type": "integer"
+        },
+        "trajectory_metric_weighting": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Trajectory Metric Weighting",
+          "type": "string"
+        },
+        "validation": {
+          "const": "leave-one-trajectory-out",
+          "default": "leave-one-trajectory-out",
+          "title": "Validation",
+          "type": "string"
+        }
+      },
+      "title": "ValueEstimatorConfig",
+      "type": "object"
+    }
+  },
+  "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-value-hypothesis-study-v1.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_id": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "causal_claim_authorized": {
+      "const": false,
+      "default": false,
+      "title": "Causal Claim Authorized",
+      "type": "boolean"
+    },
+    "evaluator_config": {
+      "$ref": "#/$defs/ValueEstimatorConfig",
+      "default": {
+        "config_schema_version": "1",
+        "linkage": "average",
+        "state_selection": "plan-milestone-and-post-milestone-after-tool",
+        "text_ngram_range": "word-1-2",
+        "text_similarity_threshold_millionths": 350000,
+        "trajectory_metric_weighting": "equal",
+        "validation": "leave-one-trajectory-out"
+      }
+    },
+    "h1": {
+      "$ref": "#/$defs/H1Plan"
+    },
+    "h2": {
+      "$ref": "#/$defs/H2Plan"
+    },
+    "h3": {
+      "$ref": "#/$defs/H3Plan"
+    },
+    "learned_components": {
+      "const": false,
+      "default": false,
+      "title": "Learned Components",
+      "type": "boolean"
+    },
+    "mixed_study": {
+      "$ref": "#/$defs/FrozenMixedStudyReference"
+    },
+    "representative_selection": {
+      "const": "lexicographically-first-accepted-and-rejected-labelled-trajectory-per-task-group",
+      "default": "lexicographically-first-accepted-and-rejected-labelled-trajectory-per-task-group",
+      "title": "Representative Selection",
+      "type": "string"
+    },
+    "retries_for_wrong_answers": {
+      "const": 0,
+      "default": 0,
+      "title": "Retries For Wrong Answers",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scorer_intervention": {
+      "const": false,
+      "default": false,
+      "title": "Scorer Intervention",
+      "type": "boolean"
+    },
+    "scorer_mode": {
+      "const": "retrospective-observation-only",
+      "default": "retrospective-observation-only",
+      "title": "Scorer Mode",
+      "type": "string"
+    },
+    "terminal_reward": {
+      "const": "clean-room-verifier-acceptance-only",
+      "default": "clean-room-verifier-acceptance-only",
+      "title": "Terminal Reward",
+      "type": "string"
+    },
+    "training_performed": {
+      "const": false,
+      "default": false,
+      "title": "Training Performed",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "analysis_id",
+    "mixed_study",
+    "h1",
+    "h2",
+    "h3"
+  ],
+  "title": "TrajectoryValueHypothesisStudySpec",
+  "type": "object"
+}

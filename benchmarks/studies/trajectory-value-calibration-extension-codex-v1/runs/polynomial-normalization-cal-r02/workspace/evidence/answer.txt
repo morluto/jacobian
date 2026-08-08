@@ -1,0 +1,12 @@
+Input terms:
+2*x^2
+3*x*y^2
+-2*x^2
+5
+
+Cancellation:
+2*x^2 + (-2*x^2) = 0
+
+Canonical nonzero terms:
+3*x*y^2
+5

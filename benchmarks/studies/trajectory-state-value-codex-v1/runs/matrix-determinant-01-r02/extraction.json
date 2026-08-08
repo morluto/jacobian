@@ -1,0 +1,338 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:8cb96444d597176721447fd41f68e01076c17190d59c4078e0da7a1d609c4212",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:b1b2170ac548bf6d0b3e013fb0a921e0386e8bd196e3060629cd4c2f912cfecb",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 12
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "assurance_level",
+        "candidate_state",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_candidate_digest",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "CANDIDATE_PRODUCED",
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:eaa69e76766b972a6952cebae3eccab8c8aa55f1adddcc8336aaede3baee5b16",
+      "index": 1,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "CANDIDATE_PRODUCED",
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, CANDIDATE_PRODUCED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 21
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:7d83526a57f17b79db98fed00b673d68dbbd2142f4b93788b505c84738089791",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "Exact determinant computed successfully; result is 4312753.",
+        "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 23
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:459bae46db77385ed9d35033a4cc87af5da83bb104647f61441b8804c54b7b53",
+      "index": 3,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the exact determinant computation and wrote submission.json with the required schema.",
+        "latest_after_tool_summary": "Exact determinant computed successfully; result is 4312753.",
+        "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 28
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/11e934716b78f4b0c9369d383f7b9873b273f03dc31e0dcebf8150806f48689c",
+            "role": "SCOPE",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "artifact_uri": "artifact://sha256/d329895f6047817cba34c4ecd730e605f04a0a03efe259d4a40b7dbed704a7c8",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "PRESENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": "sha256:7352617def23d43295b5350bf00233b7d6da60fdac2c7fd90a523940fd2125c3",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "exact-matrix-determinant",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:855f2a007c935b168cc7b80e1666e0425a613956f93620553e04c5155ba3f3a8",
+            "object_type": "matrix.determinant.compute.output",
+            "source_capability_id": "matrix.determinant.compute"
+          },
+          {
+            "content_digest": "sha256:fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+            "object_type": "matrix.determinant.compute.output.certificate_available",
+            "source_capability_id": "matrix.determinant.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:139ff6e3bebf9c367631adabacb6ed869d96421ea5014e86811f27d9c37123b2",
+      "index": 4,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the exact determinant computation and wrote submission.json with the required schema.",
+        "latest_after_tool_summary": "Exact determinant computed successfully; result is 4312753.",
+        "plan_summary": "Compute the exact determinant of the provided 5x5 integer matrix, using a Jacobian matrix-determinant capability if available, then write submission.json matching the schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 31
+    }
+  ],
+  "task_family": "exact-matrix-determinant",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:8cb96444d597176721447fd41f68e01076c17190d59c4078e0da7a1d609c4212",
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

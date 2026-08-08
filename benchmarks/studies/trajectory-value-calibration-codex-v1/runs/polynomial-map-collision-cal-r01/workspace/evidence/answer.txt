@@ -1,0 +1,4 @@
+f(1,2) = (1+2, 1*2) = (3, 2)
+f(2,1) = (2+1, 2*1) = (3, 2)
+
+The points are distinct and their images are equal, so the collision claim is TRUE.

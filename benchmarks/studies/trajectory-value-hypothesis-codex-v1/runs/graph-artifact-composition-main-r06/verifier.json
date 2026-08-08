@@ -1,0 +1,42 @@
+{
+  "acceptance": "ACCEPTED",
+  "artifact_binding_valid": true,
+  "clean_room": true,
+  "false_certification": false,
+  "input_binding_valid": true,
+  "public_file_digests_expected": {
+    "input.json": "sha256:1354318a3f9be62136c4478bee54abda0d581c08b129556f464ebff1f4d6ad02",
+    "instruction.md": "sha256:bb79c43b1470ce93a879b39795707584814895dbff24c021e5f62dc995bf4718",
+    "submission_schema.json": "sha256:aed82749a7a415a176598de331d133a0bcc6a732977fbf2420cd95f3a7f73cd7"
+  },
+  "public_file_digests_observed": {
+    "input.json": "sha256:1354318a3f9be62136c4478bee54abda0d581c08b129556f464ebff1f4d6ad02",
+    "instruction.md": "sha256:bb79c43b1470ce93a879b39795707584814895dbff24c021e5f62dc995bf4718",
+    "submission_schema.json": "sha256:aed82749a7a415a176598de331d133a0bcc6a732977fbf2420cd95f3a7f73cd7"
+  },
+  "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+  "reward": {
+    "assurance_calibration": 1.0,
+    "correctness": 1.0,
+    "evidence_validity": 1.0,
+    "false_certification": false,
+    "reward": 1.0,
+    "scope_accuracy": 1.0
+  },
+  "submission_digest_after_verifier": "sha256:cb44c01988c010ddd875e3c09b7a23243716e6985a96a49e694ced4729d5af71",
+  "submission_digest_before_verifier": "sha256:cb44c01988c010ddd875e3c09b7a23243716e6985a96a49e694ced4729d5af71",
+  "submission_evidence_valid": true,
+  "task_harbor_digest": "sha256:0c9242e66d054d81df8581a5fa971c798fad57ab7c064835573c50d7b211f24e",
+  "task_id": "graph-artifact-composition",
+  "verifier_digest": "sha256:c2d0d59a349eb74098087dbd694204f94a84371429cf14c0bfbfd4e786d7cb92",
+  "verifier_execution_status": "COMPLETED",
+  "verifier_file_digests": {
+    "Dockerfile": "sha256:c71f2bca523dac09abf0823ad999a4a8a00d3363a88fd8c5a56cb4994b6be0e9",
+    "agent-workflow-v1-graph-artifact-composition-input.json": "sha256:1354318a3f9be62136c4478bee54abda0d581c08b129556f464ebff1f4d6ad02",
+    "expected.json": "sha256:1d7d2e027b0db72a0512115d066cb21774223dd7da89af33f26aed1e5bd2dfd0",
+    "public_contract.json": "sha256:1aa65a0bf5ca899d635adc372d678c571c0541c566093918c437b72ffe988543",
+    "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+    "verifier.py": "sha256:13ee25a1501f06a40356e88bf7d918ff92f65d6b2ea3b79d360b5682610d4294",
+    "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+  }
+}

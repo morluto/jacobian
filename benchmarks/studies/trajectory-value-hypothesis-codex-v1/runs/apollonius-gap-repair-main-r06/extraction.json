@@ -1,0 +1,152 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:8384b7eaba849d445aff1811d69389e8707ebb4d7dbb23dcbf182fc1d20eba53",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "apollonius-proof-gap-repair",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:b61020375df0588d3b2f7d2d36d9ed4283dfa317f1bd990647dea00a26c2f46e",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the Apollonius circle parameters and expand the two required quadratics exactly, then package the verified coefficients into the required submission and evidence files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 7
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "execution_status",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "apollonius-proof-gap-repair",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:980509695600476faf40e6e4b44353790a03763881827c54ff1bd5632be12d87",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the Apollonius circle parameters and expand the two required quadratics exactly, then package the verified coefficients into the required submission and evidence files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 22
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "apollonius-proof-gap-repair",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:db8ebf178d9b3c97b6b2605b0695774f57be61b938f8d8967b1aae4240962aab",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the Apollonius circle parameters and expand the two required quadratics exactly, then package the verified coefficients into the required submission and evidence files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 43
+    }
+  ],
+  "task_family": "apollonius-proof-gap-repair",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:8384b7eaba849d445aff1811d69389e8707ebb4d7dbb23dcbf182fc1d20eba53",
+    "verifier_digest": "sha256:f7484b193a203efeb93e2d7da6f763f1bba8c809d854ca3a0dbf20d971f0f450",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

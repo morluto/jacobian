@@ -14,7 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, Self
 
-from pydantic import ConfigDict, Field, ValidationError, model_validator
+from pydantic import ConfigDict, Field, StrictBool, ValidationError, model_validator
 
 from jacobian.canonical import CanonicalizationError, canonicalize_json
 from jacobian.contracts.capabilities import CapabilityResult
@@ -47,6 +47,12 @@ _ACCEPTED_CHECKER_STATUSES = frozenset(
 )
 _REJECTED_CHECKER_STATUSES = frozenset(
     {"FAIL", "FAILED", "INVALID", "NOT_VERIFIED", "REJECTED"}
+)
+_POSITIVE_CHECKER_CONCLUSIONS = frozenset(
+    {"ACCEPTED", "HOLDS", "PASS", "PASSED", "SATISFIED", "TRUE", "VALID", "VERIFIED"}
+)
+_NEGATIVE_CHECKER_CONCLUSIONS = frozenset(
+    {"FALSE", "FAIL", "FAILED", "INVALID", "NOT_VERIFIED", "REJECTED", "UNSATISFIED"}
 )
 _NONCONCLUSIVE_EXECUTION = frozenset({"CANCELLED", "ERROR", "TIMEOUT"})
 ArtifactRole = Literal[
@@ -190,6 +196,7 @@ class ExtractedTrajectoryState(ContractModel):
     boundary: StateBoundary
     hard_state: TrajectoryHardState
     soft_state: TrajectorySoftState | None = None
+    soft_state_digest: str = Field(pattern=_DIGEST_PATTERN)
     hard_state_digest: str = Field(pattern=_DIGEST_PATTERN)
     changed_fields: tuple[str, ...] = ()
     milestone_kinds: tuple[MilestoneKind, ...] = ()
@@ -208,11 +215,12 @@ class ExtractedTrajectoryState(ContractModel):
 class CleanRoomTerminalEvidence(ContractModel):
     evidence_schema_version: Literal["1"] = "1"
     verifier_digest: str = Field(pattern=_DIGEST_PATTERN)
+    source_binding_digest: str = Field(pattern=_DIGEST_PATTERN)
     clean_room: Literal[True]
     verifier_execution_status: Literal["COMPLETED", "TIMEOUT", "CANCELLED", "ERROR"]
     acceptance: TerminalAcceptance
-    input_binding_valid: bool | None = None
-    artifact_binding_valid: bool | None = None
+    input_binding_valid: StrictBool | None = None
+    artifact_binding_valid: StrictBool | None = None
 
     @model_validator(mode="after")
     def fail_closed_on_noncompletion(self) -> Self:
@@ -255,6 +263,19 @@ class TrajectoryExtraction(ContractModel):
             range(len(self.states))
         ):
             raise ValueError("state indices must be contiguous")
+        for state in self.states:
+            soft_payload = (
+                None
+                if state.soft_state is None
+                else state.soft_state.model_dump(mode="json")
+            )
+            if state.soft_state_digest != _digest(soft_payload):
+                raise ValueError("soft-state digest mismatch")
+        if (
+            self.terminal_evidence is not None
+            and self.terminal_evidence.source_binding_digest != self.source_digest
+        ):
+            raise ValueError("terminal evidence must bind the exact source transcript")
         return self
 
 
@@ -352,9 +373,20 @@ def _status(value: object) -> str | None:
     return None
 
 
+def _checker_conclusion(value: object) -> str | None:
+    status = _status(value)
+    if status is not None:
+        return status
+    if isinstance(value, dict):
+        nested = value.get("value") or value.get("status")
+        return _status(nested)
+    return None
+
+
 def _checker_outcome(capability_id: str, output: object) -> CheckerState | None:
     if not _is_checker(capability_id) or not isinstance(output, dict):
         return None
+    conclusion = _checker_conclusion(output.get("conclusion"))
     candidates = (
         output.get("status"),
         output.get("verdict"),
@@ -363,9 +395,15 @@ def _checker_outcome(capability_id: str, output: object) -> CheckerState | None:
         output.get("verified"),
     )
     statuses = {_status(value) for value in candidates}
+    if conclusion in _NEGATIVE_CHECKER_CONCLUSIONS:
+        return CheckerState.REJECTED
     if statuses & _REJECTED_CHECKER_STATUSES:
         return CheckerState.REJECTED
     if statuses & _ACCEPTED_CHECKER_STATUSES:
+        if conclusion is not None and conclusion not in _POSITIVE_CHECKER_CONCLUSIONS:
+            return None
+        return CheckerState.ACCEPTED
+    if conclusion in _POSITIVE_CHECKER_CONCLUSIONS:
         return CheckerState.ACCEPTED
     return None
 
@@ -897,13 +935,17 @@ def extract_codex_trajectory(
             if eligible
             else "observation boundary only; no eligible typed mathematical state transition"
         )
+        soft = mutable.soft()
         snapshots.append(
             ExtractedTrajectoryState(
                 index=len(snapshots),
                 source_event_index=source_event_index,
                 boundary=boundary,
                 hard_state=hard,
-                soft_state=mutable.soft(),
+                soft_state=soft,
+                soft_state_digest=_digest(
+                    None if soft is None else soft.model_dump(mode="json")
+                ),
                 hard_state_digest=_digest(hard.model_dump(mode="json")),
                 changed_fields=changed,
                 milestone_kinds=kinds,

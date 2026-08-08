@@ -1,0 +1,49 @@
+{
+  "task_id": "jacobian/graph-artifact-composition",
+  "conclusion": "TRUE",
+  "result": {
+    "maximum_degree_vertices": [
+      "4"
+    ],
+    "distance_to_set": [
+      {
+        "vertex": "0",
+        "distance": 1
+      },
+      {
+        "vertex": "1",
+        "distance": 1
+      },
+      {
+        "vertex": "2",
+        "distance": 1
+      },
+      {
+        "vertex": "3",
+        "distance": 1
+      },
+      {
+        "vertex": "4",
+        "distance": 0
+      },
+      {
+        "vertex": "5",
+        "distance": 2
+      }
+    ],
+    "maximum_distance_to_set": 2,
+    "maximizing_vertices": [
+      "5"
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "jacobian/graph-artifact-composition complete finite input",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:aa839d33e9f3093a296d222f27e86cc313dc0f41f460416d107d4eef2767dd2a"
+    }
+  ],
+  "limitations": []
+}

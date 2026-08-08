@@ -1,0 +1,20 @@
+Metric TSP proof repair.
+
+The invalid inference is in STEP_4: shortcutting repeated vertices does not preserve the exact cost of the doubled Euler tour, and it certainly does not force the Hamiltonian cycle to have weight equal to the MST.
+
+Strongest generic claim supported by the double-tree argument:
+the shortcut tour has weight at most the Euler tour weight, so the algorithm is a polynomial-time 2-approximation for Metric TSP. In particular, the returned Hamiltonian cycle has weight <= 2 * MST <= 2 * OPT, but not necessarily equal to MST or OPT.
+
+For the supplied metric:
+- Minimum spanning tree edges: AB, BE, CD, AF, AD
+- MST weight: 3 + 3 + 3 + 4 + 7 = 20
+- Doubled-tree Euler circuit: A-B-E-B-A-D-C-D-A-F-A
+- Euler circuit weight: 40
+- First-visit shortcut tour from that circuit: A-B-E-D-C-F-A
+- Shortcut tour weight: 3 + 3 + 13 + 3 + 12 + 4 = 38
+- Optimal Hamiltonian cycle: A-B-E-F-C-D-A
+- Optimal tour weight: 3 + 3 + 4 + 12 + 3 + 7 = 32
+
+This concrete instance shows the shortcut tour can be suboptimal: 38 > 32.
+
+RESULT_JSON: {"task_id":"jacobian/metric-tsp-proof-repair","conclusion":"REPAIRED","claimed_assurance":"COMPUTED","scope":"metric-tsp-proof-repair exact finite optimization certificate","completeness":"COMPLETE","limitations":["The double-tree argument guarantees only a 2-approximation bound, not exact equality with the MST or the optimum."]}

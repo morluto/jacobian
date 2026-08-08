@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "additionalProperties": false,
+      "properties": {
+        "gcd": {
+          "items": {
+            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        "left_bezout": {
+          "items": {
+            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        "right_bezout": {
+          "items": {
+            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "gcd",
+        "left_bezout",
+        "right_bezout"
+      ],
+      "type": "object"
+    },
+    "task_id": {
+      "const": "polynomial-gcd-bezout-01"
+    }
+  },
+  "required": [
+    "task_id",
+    "answer"
+  ],
+  "type": "object"
+}

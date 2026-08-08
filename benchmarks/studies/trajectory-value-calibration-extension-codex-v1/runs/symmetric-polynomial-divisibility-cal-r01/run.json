@@ -1,0 +1,90 @@
+{
+  "calibration_tags": [
+    "artifact-binding",
+    "capability-routing"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 2,
+    "before_tool_count": 2,
+    "bound_invoke_count": 2,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 863,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "8a9f107d-994c-4a63-889f-d9e64e27e2fa"
+  ],
+  "repetition": 1,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:8b53018fa7392e3833d5c410d2d8551696fc5d647ea84f424339955ae0c45157",
+    "public_file_digests": {
+      "input.json": "sha256:a81623e3f0b7c2defddf66f005b45fb1d1fdb591aaf36043b624471a12a85266",
+      "instruction.md": "sha256:7be4a81076a287ccd718e55f71ceb2655cedc66053ae04342e4166a36ee85fae",
+      "submission_schema.json": "sha256:b2154470b4130f86a641bd1b6f2729ae412aeabe901339bc3cf699ebd42d237d"
+    },
+    "task_id": "symmetric-polynomial-divisibility",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:13bac89880b9798f36b02daa8e5221d60903b70bd51c01bdc03e53cbc5a69a6e",
+      "expected.json": "sha256:3ef048cb189814769eda60dbca501cfdb1cb70c5e529dce6983fdeb70e3c67db",
+      "input.json": "sha256:a81623e3f0b7c2defddf66f005b45fb1d1fdb591aaf36043b624471a12a85266",
+      "public_contract.json": "sha256:e133d3b1d0c404d2f3922225a223052d430af2cd613d78e624b9a157d0820c2c",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:08f75827306935891d826db9ef1a4590dbf7fa21e6b1a596b15f8d6d4f9fc3dd",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "symmetric-polynomial-ideal-membership",
+  "task_id": "symmetric-polynomial-divisibility",
+  "terminal": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": false,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 1.0,
+      "correctness": 0.0,
+      "evidence_validity": 0.0,
+      "false_certification": false,
+      "reward": 0,
+      "scope_accuracy": 0.0
+    },
+    "task_harbor_digest": "sha256:8b53018fa7392e3833d5c410d2d8551696fc5d647ea84f424339955ae0c45157",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:13bac89880b9798f36b02daa8e5221d60903b70bd51c01bdc03e53cbc5a69a6e",
+      "expected.json": "sha256:3ef048cb189814769eda60dbca501cfdb1cb70c5e529dce6983fdeb70e3c67db",
+      "input.json": "sha256:a81623e3f0b7c2defddf66f005b45fb1d1fdb591aaf36043b624471a12a85266",
+      "public_contract.json": "sha256:e133d3b1d0c404d2f3922225a223052d430af2cd613d78e624b9a157d0820c2c",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:08f75827306935891d826db9ef1a4590dbf7fa21e6b1a596b15f8d6d4f9fc3dd",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "symmetric-polynomial-divisibility-cal-r01",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 588032,
+    "input_tokens": 622206,
+    "output_tokens": 15922,
+    "reasoning_output_tokens": 9525
+  }
+}

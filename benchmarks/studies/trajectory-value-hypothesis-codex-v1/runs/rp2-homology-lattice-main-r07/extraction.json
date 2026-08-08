@@ -1,0 +1,151 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:b092e011687caedb902a51c82a1bbc9ca35e7aa422c4bdce54c0467b2ebd1a60",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:d2d5927ab28f983dcbf580c6a08f42019b535a996a8ba4dead4780a2f64997f0",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact cycle-coordinate matrix from a spanning tree of the 1-skeleton, verify its determinant, and write the required evidence and submission files inside the workspace.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 16
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:18b49b9b2c53faaccae5cba64fe45bf250a0a180c13bb391cd74a3095420e3b3",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the integer homology certificate task with a star spanning tree, exact 10x10 cycle-coordinate matrix, determinant -2, and the required submission and evidence files written in the workspace.",
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact cycle-coordinate matrix from a spanning tree of the 1-skeleton, verify its determinant, and write the required evidence and submission files inside the workspace.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 60
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "projective-plane-homology-lattice",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:5858646ee8a74b14982933de526878e4ae5f66a1023b3d73b69ebdd7969c0ed9",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the integer homology certificate task with a star spanning tree, exact 10x10 cycle-coordinate matrix, determinant -2, and the required submission and evidence files written in the workspace.",
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the exact cycle-coordinate matrix from a spanning tree of the 1-skeleton, verify its determinant, and write the required evidence and submission files inside the workspace.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 63
+    }
+  ],
+  "task_family": "projective-plane-homology-lattice",
+  "terminal_evidence": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:b092e011687caedb902a51c82a1bbc9ca35e7aa422c4bdce54c0467b2ebd1a60",
+    "verifier_digest": "sha256:fdb2016dbebeed9007180fd6f4edad811d9c16cb8940b21540abc549b11a3572",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

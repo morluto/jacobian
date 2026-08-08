@@ -1,0 +1,20 @@
+Let
+S1 = a+b+c+d
+S2 = a^2+b^2+c^2+d^2.
+
+The exact identity is
+
+a^4+b^4+c^4+d^4+4abcd = S1*P + S2*Q,
+
+where
+
+P = a^3 - a^2b - a^2c - a^2d + abc + abd + acd
+    - b^2c - b^2d - bc^2 + bcd - bd^2 - c^2d - cd^2
+
+and
+
+Q = b^2 + bc + bd + c^2 + cd + d^2.
+
+If n divides S1 and n divides S2, then n divides S1*P and S2*Q, hence n divides their sum. Therefore
+
+n | (a^4+b^4+c^4+d^4+4abcd).

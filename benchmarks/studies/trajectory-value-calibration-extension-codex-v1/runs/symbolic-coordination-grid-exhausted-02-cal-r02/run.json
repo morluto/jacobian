@@ -1,0 +1,89 @@
+{
+  "calibration_tags": [
+    "bounded-search-unknown",
+    "scope-assurance"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "symbolic-coordination-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 0,
+    "before_tool_count": 0,
+    "bound_invoke_count": 0,
+    "final_count": 0,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 0,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 0,
+    "status": "INCOMPLETE",
+    "summary_characters": 0,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "symbolic-coordination-v1",
+    "harbor_digest": "sha256:eeaabf292519d01f2ac591420f17c8a9f848b5a9dc0b934ef27958577128eb56",
+    "public_file_digests": {
+      "input.json": "sha256:2f232a9efc9c8a1c7864726dfb99b473b579dc12bdb54bc603ebb853f857d628",
+      "instruction.md": "sha256:98d49e58c8e637e7e1e2b1811decc88ebaedce7f0af5e49c3eaf2216a339664b",
+      "submission_schema.json": "sha256:e75bdeef661a9a135fe457c768668eba8fbc6d1fa5b72a2605648954f02358d5"
+    },
+    "task_id": "symbolic-coordination-grid-exhausted-02",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:48213b6f0f7a7b8777c1e30eca5c6332a192597772bc8b934788a82a438b7d15",
+      "input.json": "sha256:2f232a9efc9c8a1c7864726dfb99b473b579dc12bdb54bc603ebb853f857d628",
+      "public_contract.json": "sha256:fcd5070ba7436c697e8aaf5d48a4437e2416d053c728587ce74f190c29da70a8",
+      "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+      "verifier.py": "sha256:f5ed45198db5032b69622220fcdc4ae48b2f9e27ffec4a5978100ff92c96f3a9",
+      "verifier_support.py": "sha256:d98fdf950b207f6fe6e2795ed77b17959d8ea62e877a95dd30417e844263fb30"
+    }
+  },
+  "task_family": "polynomial-grid-exhaustion",
+  "task_id": "symbolic-coordination-grid-exhausted-02",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": true,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "artifact_binding": 1.0,
+      "assurance_calibration": 1.0,
+      "correctness": 1.0,
+      "evidence_validity": 1.0,
+      "false_certification": false,
+      "input_binding": 1.0,
+      "protocol_compliance": 1.0,
+      "reward": 1.0,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:eeaabf292519d01f2ac591420f17c8a9f848b5a9dc0b934ef27958577128eb56",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:48213b6f0f7a7b8777c1e30eca5c6332a192597772bc8b934788a82a438b7d15",
+      "input.json": "sha256:2f232a9efc9c8a1c7864726dfb99b473b579dc12bdb54bc603ebb853f857d628",
+      "public_contract.json": "sha256:fcd5070ba7436c697e8aaf5d48a4437e2416d053c728587ce74f190c29da70a8",
+      "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+      "verifier.py": "sha256:f5ed45198db5032b69622220fcdc4ae48b2f9e27ffec4a5978100ff92c96f3a9",
+      "verifier_support.py": "sha256:d98fdf950b207f6fe6e2795ed77b17959d8ea62e877a95dd30417e844263fb30"
+    }
+  },
+  "trajectory_id": "symbolic-coordination-grid-exhausted-02-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 267520,
+    "input_tokens": 296276,
+    "output_tokens": 5187,
+    "reasoning_output_tokens": 2458
+  }
+}

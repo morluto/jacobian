@@ -1,0 +1,23 @@
+{
+  "task_id":"jacobian/metric-tsp-proof-repair",
+  "flawed_claim": "Doubling a minimum spanning tree, taking an Euler circuit, and shortcutting repeated vertices is an exact polynomial-time algorithm for Metric TSP.",
+  "flawed_step": "Step 4 asserts that shortcutting removes weight exactly equal to the MST weight, so the Hamiltonian cycle has weight equal to the MST.",
+  "vertices": ["A", "B", "C", "D", "E", "F"],
+  "distance_matrix": [
+    [0, 3, 10, 7, 6, 4],
+    [3, 0, 13, 10, 3, 5],
+    [10, 13, 0, 3, 16, 12],
+    [7, 10, 3, 0, 13, 9],
+    [6, 3, 16, 13, 0, 4],
+    [4, 5, 12, 9, 4, 0]
+  ],
+  "required_repair": {
+    "identify_invalid_inference": true,
+    "state_the_strongest_supported_generic_claim": true,
+    "submit_a_minimum_spanning_tree": true,
+    "submit_an_euler_circuit_of_the_doubled_tree": true,
+    "submit_the_first-visit_shortcut_tour": true,
+    "submit_an_optimal_tour": true,
+    "demonstrate_that_the_shortcut_tour_can_be_suboptimal": true
+  }
+}

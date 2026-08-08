@@ -1,0 +1,7 @@
+{
+  "task_id": "jacobian/polynomial-map-collision",
+  "assurance": "COMPUTED",
+  "method": "Exact point evaluation with Jacobian capability polynomial.map.evaluate",
+  "verified": false,
+  "notes": "No independent checker was invoked; the result is based on deterministic exact arithmetic."
+}

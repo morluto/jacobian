@@ -1,0 +1,64 @@
+{
+  "artifacts": {
+    "codex.jsonl": "sha256:eb7b48379c6f17d8c9aea05b4dee068554c5efec8efbde525a56ab815c335f4d",
+    "codex.stderr": "sha256:1aa26269eb1cc57f86b235a03cda53c004edb5b1e9fc99d4da4f00843293d721",
+    "extraction.json": "sha256:af32f9667a2e67d40e0f122a61a01cc6122aba1f88578d1576194a02aefab419",
+    "jacobian-mcp.stderr": "sha256:2a197ce73f62f63c87e6865d3c7544f8ca6680858395304115814c59a129424a",
+    "jacobian-mcp.stdout": "sha256:f9c301987bb957cb5037e638aa91e10b2be34d7c3f48f6298d348135c73e7b93",
+    "prompt.txt": "sha256:f611bd1d1356bdebbec80714321ba70c2875252723242156f537130a0014a924",
+    "reasoning-log.jsonl": "sha256:7575caa73a1412db6e04014aa462a3b5c655efd12626c98ab4e32d9ff7df5e95",
+    "submission-schema.json": "sha256:fe752d564fcd4967cf0004d191420d907a50799eef223eb007f58c8e8ce4a3c1",
+    "submission.json": "sha256:80f307755c930bf3a56e7f3063f74fb14e8d386b2fea09696fa60dd552753aff",
+    "surface.json": "sha256:a633d866c339cf33ca4d6a1c0e9c8fbf14fb84a078e59759be48dceb35aa9e7a",
+    "task.json": "sha256:d59a32b6d7865deb2784a7be5bfe2672541ce2f5de6efcaa4a5f6e561100b603",
+    "verifier.json": "sha256:03139d063884d3b343b3e01a8cc53db46dca5207e510a12df0abfd354a742f7e"
+  },
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 2,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 1,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "INCOMPLETE",
+    "summary_characters": 401,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "a406b36f-dac0-42c1-be93-0c8ce968ab17"
+  ],
+  "repetition": 1,
+  "schema_version": "1",
+  "surface_digest": "sha256:4b0dd8ec6dd62e38f74ff2f9486ecc8fdd16dcd164e03838597d19786c7c0b4c",
+  "task_family": "exact-graph-maximum-independent-set",
+  "task_group": "graph-independent-set-01",
+  "task_id": "graph-independent-set-01",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:eb7b48379c6f17d8c9aea05b4dee068554c5efec8efbde525a56ab815c335f4d",
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  },
+  "trajectory_id": "graph-independent-set-01-r01",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 282112,
+    "input_tokens": 305873,
+    "output_tokens": 4751,
+    "reasoning_output_tokens": 2443
+  }
+}

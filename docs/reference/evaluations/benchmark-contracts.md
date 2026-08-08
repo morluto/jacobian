@@ -134,7 +134,8 @@ gate passes.
 ```python
 # FORBIDDEN: evidence failure still yields reward ≈ 0.9
 reward = (
-    0 if not correct or false
+    0
+    if not correct or false
     else 0.7 * correct + 0.1 * good + 0.1 * scope + 0.1 * assurance
 )
 ```

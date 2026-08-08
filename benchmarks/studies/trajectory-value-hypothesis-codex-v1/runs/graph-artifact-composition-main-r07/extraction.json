@@ -1,0 +1,627 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:84a772e0c09babad1605d95be0b6802b328edf5806ff35cfdcc69d966e8d7938",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:290d53f4a5efd3c2388aa7b95b80b57e480dad7f22e9e26269fe76217bc9cceb",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 14
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "assurance_level",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:3913d36929b04e7c34e1174a570e56d5747f75b2fb2c66cd54fd148eddf2d365",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:cc8773b824eee608bda26242ea2ca3ee6515a4657c15d9c56f68a9af366a2417",
+      "index": 1,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 32
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": "sha256:3913d36929b04e7c34e1174a570e56d5747f75b2fb2c66cd54fd148eddf2d365",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:440627ce1d7679bbd7073f3c8a0cf04a80874c8dfe9d880922cb9e444a39e4b0",
+      "index": 2,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The explicit graph was successfully materialized as a canonical six-vertex simple graph artifact; no property beyond canonical graph validation was asserted.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 42
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:066cef730337e581f834ead8388896d8dd7bd71aedae131fbaf6f9e6686d8299",
+      "index": 3,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The explicit graph was successfully materialized as a canonical six-vertex simple graph artifact; no property beyond canonical graph validation was asserted.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 46
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:2091316873ff9b29942ec08f3922ac0b4b51ed5d03a64131520b781802fb98be",
+      "index": 4,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The distance matrix was computed exactly for the complete six-vertex graph; the ordered vertex list and full pairwise distances are available for deriving distances to the maximum-degree set.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 49
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "artifacts",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/938b2b800de3a5b0ad4b857d01e376bb982a8a2b5516d0756130df78482a592a",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/95227b60137c0012fd83561eaab496cf7dca60f8711e357207348a3ada13d134",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a10fa8de3def59c1d88ca40f15cb4eeb76d8a566041bc1ac8e61768f9525109d",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [
+          "ARTIFACT_ADDED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "AWAITING_AFTER_TOOL",
+        "scope_digest": "sha256:18c71f40ae2b5259f2c711100c0840726fd11e4a1172e0588881cf94a3ed279e",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:5205116fc9be64f743f43c9d69bc4c5088929b18090a8a8c51483e71f5ce0cd1",
+            "object_type": "graph.compute.properties.output",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:988a7cb5e681fe948b26a4d0d018ead064361def04c12cdda85f9c1918f6c920",
+      "index": 5,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "ARTIFACT_ADDED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: ARTIFACT_ADDED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The distance matrix was computed exactly for the complete six-vertex graph; the ordered vertex list and full pairwise distances are available for deriving distances to the maximum-degree set.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 53
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/938b2b800de3a5b0ad4b857d01e376bb982a8a2b5516d0756130df78482a592a",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/95227b60137c0012fd83561eaab496cf7dca60f8711e357207348a3ada13d134",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a10fa8de3def59c1d88ca40f15cb4eeb76d8a566041bc1ac8e61768f9525109d",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": "sha256:18c71f40ae2b5259f2c711100c0840726fd11e4a1172e0588881cf94a3ed279e",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:5205116fc9be64f743f43c9d69bc4c5088929b18090a8a8c51483e71f5ce0cd1",
+            "object_type": "graph.compute.properties.output",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:ecde4c410b0cfe29709dcfb3632ddffd05a1d8c34c67b4d57a1a21531d886037",
+      "index": 6,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The exact degree sequence and maximum degree were computed from the canonical graph artifact; the unique maximum-degree vertex is the one with degree 4.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 56
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/938b2b800de3a5b0ad4b857d01e376bb982a8a2b5516d0756130df78482a592a",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/95227b60137c0012fd83561eaab496cf7dca60f8711e357207348a3ada13d134",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a10fa8de3def59c1d88ca40f15cb4eeb76d8a566041bc1ac8e61768f9525109d",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": "sha256:18c71f40ae2b5259f2c711100c0840726fd11e4a1172e0588881cf94a3ed279e",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:5205116fc9be64f743f43c9d69bc4c5088929b18090a8a8c51483e71f5ce0cd1",
+            "object_type": "graph.compute.properties.output",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:263bfd34c3d97e096e27daea04981ea511f48f09e552138856cca66141773cb0",
+      "index": 7,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the finite graph task: canonicalized the input graph, computed the exact distance matrix, identified the unique maximum-degree vertex set [4], derived distances to that set for every vertex in lexicographic order, and wrote evidence/answer.txt plus submission.json with the matching SHA-256 digest.",
+        "latest_after_tool_summary": "The exact degree sequence and maximum degree were computed from the canonical graph artifact; the unique maximum-degree vertex is the one with degree 4.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 71
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [
+          {
+            "artifact_uri": "artifact://sha256/938b2b800de3a5b0ad4b857d01e376bb982a8a2b5516d0756130df78482a592a",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/95227b60137c0012fd83561eaab496cf7dca60f8711e357207348a3ada13d134",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "artifact_uri": "artifact://sha256/9ba68ff7523115796da3bf6bcc149244a853eb0b537f2f8e8e253d037be81190",
+            "role": "SCOPE",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "artifact_uri": "artifact://sha256/a10fa8de3def59c1d88ca40f15cb4eeb76d8a566041bc1ac8e61768f9525109d",
+            "role": "MATHEMATICAL_RESULT",
+            "source_capability_id": "graph.compute.properties"
+          }
+        ],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "FINALIZED",
+        "scope_digest": "sha256:18c71f40ae2b5259f2c711100c0840726fd11e4a1172e0588881cf94a3ed279e",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:5205116fc9be64f743f43c9d69bc4c5088929b18090a8a8c51483e71f5ce0cd1",
+            "object_type": "graph.compute.properties.output",
+            "source_capability_id": "graph.compute.properties"
+          },
+          {
+            "content_digest": "sha256:10ebffb9ba0da5f540bf9ce371f672502a912620450ede352253dda5ddef361e",
+            "object_type": "graph.construct.explicit.output",
+            "source_capability_id": "graph.construct.explicit"
+          },
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:a23e23367ccb8c91e11d145a99d0603078ddcb3e2012b15376bc7b097d1e5cf0",
+      "index": 8,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the finite graph task: canonicalized the input graph, computed the exact distance matrix, identified the unique maximum-degree vertex set [4], derived distances to that set for every vertex in lexicographic order, and wrote evidence/answer.txt plus submission.json with the matching SHA-256 digest.",
+        "latest_after_tool_summary": "The exact degree sequence and maximum degree were computed from the canonical graph artifact; the unique maximum-degree vertex is the one with degree 4.",
+        "plan_summary": "Compute the maximum-degree vertex set, distances to that set for each vertex in lexicographic order, the maximum distance, and the maximizing vertices; then write evidence/answer.txt and submission.json matching the provided schema.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 74
+    }
+  ],
+  "task_family": "graph-artifact-composition",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:84a772e0c09babad1605d95be0b6802b328edf5806ff35cfdcc69d966e8d7938",
+    "verifier_digest": "sha256:c2d0d59a349eb74098087dbd694204f94a84371429cf14c0bfbfd4e786d7cb92",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

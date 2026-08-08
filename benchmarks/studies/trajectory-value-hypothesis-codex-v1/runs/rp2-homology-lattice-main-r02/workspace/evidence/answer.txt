@@ -1,0 +1,5 @@
+Choose the spanning tree with edges (0,1), (0,2), (0,3), (0,4), (0,5).
+Order the non-tree edges as (1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5).
+Using the increasing-orientation boundary convention, the 10 facet boundaries give the 10x10 cycle-coordinate matrix over the fundamental-cycle basis.
+Its exact determinant is -2, so the lattice index is 2.
+Therefore the first integral homology is Z/2Z.

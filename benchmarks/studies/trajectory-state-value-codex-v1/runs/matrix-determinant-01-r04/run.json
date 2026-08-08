@@ -1,0 +1,64 @@
+{
+  "artifacts": {
+    "codex.jsonl": "sha256:1628bdd73e62761fe6e27d4829d71a486489030b76bb9e7106cc6aa95758084b",
+    "codex.stderr": "sha256:1aa26269eb1cc57f86b235a03cda53c004edb5b1e9fc99d4da4f00843293d721",
+    "extraction.json": "sha256:44562ba7ae3c751062cf356dcde30a795cbe6f4d0dfc8e296dff1de0a894f8a5",
+    "jacobian-mcp.stderr": "sha256:ed12fab380724419029a34f4192749c5e28da65e5d7fb56cd6e2333d990180fe",
+    "jacobian-mcp.stdout": "sha256:55cafef296d95eb4240480d995a905348164cb4d19ee84658e9cd12d5f130766",
+    "prompt.txt": "sha256:43fb5b57190eb384f74cf19e44ca801d821404197863cf38a91b24731c5471af",
+    "reasoning-log.jsonl": "sha256:919ecb28f985f8f9ddc9e8f9b4f96f447e6920d5d56644d1b0f6b7cc0966c4bb",
+    "submission-schema.json": "sha256:44c8e3dca9a329fe08d13149609354718486983ab098e1dc285b1669fb36253c",
+    "submission.json": "sha256:2f324aa82df0da4f4127277eade4365cae29ab4dd826afb4c7a0c1169d8901ef",
+    "surface.json": "sha256:a633d866c339cf33ca4d6a1c0e9c8fbf14fb84a078e59759be48dceb35aa9e7a",
+    "task.json": "sha256:11314cf9f83bd93cf43f3672a99a16de43fe612893ae2f7642dc34d1f4a99ca7",
+    "verifier.json": "sha256:352377cf775ef0bbe125c34aafba1c6b4a2dde5980a8eb1bf135eb14229c926e"
+  },
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 0,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "INCOMPLETE",
+    "summary_characters": 289,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "bda318e7-da22-4040-9ce6-7870567f49a9"
+  ],
+  "repetition": 4,
+  "schema_version": "1",
+  "surface_digest": "sha256:4b0dd8ec6dd62e38f74ff2f9486ecc8fdd16dcd164e03838597d19786c7c0b4c",
+  "task_family": "exact-matrix-determinant",
+  "task_group": "matrix-determinant-01",
+  "task_id": "matrix-determinant-01",
+  "terminal": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:1628bdd73e62761fe6e27d4829d71a486489030b76bb9e7106cc6aa95758084b",
+    "verifier_digest": "sha256:e684baf691da801ff2315d398f8be75de84d820d676d750ebd76942b3e0dba0e",
+    "verifier_execution_status": "COMPLETED"
+  },
+  "trajectory_id": "matrix-determinant-01-r04",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 276480,
+    "input_tokens": 300060,
+    "output_tokens": 3618,
+    "reasoning_output_tokens": 1479
+  }
+}

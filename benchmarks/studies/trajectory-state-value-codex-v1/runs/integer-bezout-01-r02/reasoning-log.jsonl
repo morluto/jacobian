@@ -1,0 +1,1 @@
+{"schema_version":"1","run_id":"d9d8b8d7-6dec-4637-959d-561aa8d9014c","sequence":0,"kind":"PLAN","occurred_at":"2026-08-07T05:43:55.238892+00:00","payload":{"summary":"Compute the gcd and Bezout coefficients for the two task integers, verify the linear combination exactly, then write submission.json matching the schema."}}

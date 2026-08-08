@@ -1,0 +1,94 @@
+{
+  "calibration_tags": [
+    "candidate-checker-repair",
+    "artifact-binding"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 1,
+    "before_tool_count": 1,
+    "bound_invoke_count": 1,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 450,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "336c9daa-2151-48d3-9dea-047aa2ff1569"
+  ],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:b9caaaabb039a20a36f3a6996769ea15a61741b4cb098db605d74fdc9848d115",
+    "public_file_digests": {
+      "input.json": "sha256:72715f337b737297021a124965c42e7f27906a5781533168666461a3865e09cc",
+      "instruction.md": "sha256:fe79e1185b5410a25d1290ae0ed4c029936781f3dee8720e38ae4c5447a0d7d2",
+      "submission_schema.json": "sha256:7789cecaac50541480db061e5a57272dc790f74d9c6bd50b9e2b2abd33f0f9bb"
+    },
+    "task_id": "polynomial-normalization",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:a383773a798cde7fd4bff265178ca87b9174ed5ae15e1c836cc1020a108bbc75",
+      "authorized_record.json": "sha256:5d71c8539dabbe3f3e83bbc4faf282213b415ccb5dbd8844b5bf6a1e36fc40fa",
+      "expected.json": "sha256:1019170f60037f2b2bcf8fe621ba1cb87cc995ace4727595505e948885085b12",
+      "mathematical-benchmarks-v1-polynomial-normalization-expected.json": "sha256:1019170f60037f2b2bcf8fe621ba1cb87cc995ace4727595505e948885085b12",
+      "mathematical-benchmarks-v1-polynomial-normalization-input.json": "sha256:72715f337b737297021a124965c42e7f27906a5781533168666461a3865e09cc",
+      "public_contract.json": "sha256:d024e17d1babb39a520b6c88eb9a799c057ba65378afaf6b7fa75a6a622cad0c",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:c2764c538fa1a2db5a0223a9b8d22100d16d4420ae33c41a43b72ed9f2c03ad3",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "polynomial-normalization-certificate",
+  "task_id": "polynomial-normalization",
+  "terminal": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 0.0,
+      "correctness": 1.0,
+      "evidence_validity": 1.0,
+      "false_certification": false,
+      "reward": 0.9,
+      "scope_accuracy": 1.0
+    },
+    "task_harbor_digest": "sha256:b9caaaabb039a20a36f3a6996769ea15a61741b4cb098db605d74fdc9848d115",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:a383773a798cde7fd4bff265178ca87b9174ed5ae15e1c836cc1020a108bbc75",
+      "authorized_record.json": "sha256:5d71c8539dabbe3f3e83bbc4faf282213b415ccb5dbd8844b5bf6a1e36fc40fa",
+      "expected.json": "sha256:1019170f60037f2b2bcf8fe621ba1cb87cc995ace4727595505e948885085b12",
+      "mathematical-benchmarks-v1-polynomial-normalization-expected.json": "sha256:1019170f60037f2b2bcf8fe621ba1cb87cc995ace4727595505e948885085b12",
+      "mathematical-benchmarks-v1-polynomial-normalization-input.json": "sha256:72715f337b737297021a124965c42e7f27906a5781533168666461a3865e09cc",
+      "public_contract.json": "sha256:d024e17d1babb39a520b6c88eb9a799c057ba65378afaf6b7fa75a6a622cad0c",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:c2764c538fa1a2db5a0223a9b8d22100d16d4420ae33c41a43b72ed9f2c03ad3",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "polynomial-normalization-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 304640,
+    "input_tokens": 331955,
+    "output_tokens": 4705,
+    "reasoning_output_tokens": 2075
+  }
+}

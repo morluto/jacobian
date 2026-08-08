@@ -1,0 +1,238 @@
+{
+  "$defs": {
+    "CalibrationCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "calibration_tags": {
+          "items": {
+            "enum": [
+              "candidate-checker-repair",
+              "bounded-search-unknown",
+              "scope-assurance",
+              "one-sided-evidence",
+              "artifact-binding",
+              "capability-routing"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Calibration Tags",
+          "type": "array"
+        },
+        "dataset_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "task_family": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Task Family",
+          "type": "string"
+        },
+        "task_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "task_id",
+        "task_family",
+        "calibration_tags"
+      ],
+      "title": "CalibrationCandidate",
+      "type": "object"
+    },
+    "CalibrationSelectionRule": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_selected_tasks": {
+          "const": 4,
+          "default": 4,
+          "title": "Maximum Selected Tasks",
+          "type": "integer"
+        },
+        "maximum_success_rate_millionths": {
+          "const": 800000,
+          "default": 800000,
+          "title": "Maximum Success Rate Millionths",
+          "type": "integer"
+        },
+        "minimum_labelled_rollouts": {
+          "const": 2,
+          "default": 2,
+          "title": "Minimum Labelled Rollouts",
+          "type": "integer"
+        },
+        "minimum_success_rate_millionths": {
+          "const": 200000,
+          "default": 200000,
+          "title": "Minimum Success Rate Millionths",
+          "type": "integer"
+        },
+        "ordering": {
+          "const": "candidate-order",
+          "default": "candidate-order",
+          "title": "Ordering",
+          "type": "string"
+        },
+        "uncertainty": {
+          "const": "wilson-95",
+          "default": "wilson-95",
+          "title": "Uncertainty",
+          "type": "string"
+        }
+      },
+      "title": "CalibrationSelectionRule",
+      "type": "object"
+    },
+    "StudyModel": {
+      "additionalProperties": false,
+      "properties": {
+        "codex_cli_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Codex Cli Version",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "title": "Reasoning Effort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "reasoning_effort",
+        "codex_cli_version"
+      ],
+      "title": "StudyModel",
+      "type": "object"
+    }
+  },
+  "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-value-calibration-v1.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "agent_instructions": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "title": "Agent Instructions",
+      "type": "string"
+    },
+    "calibration_id": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "title": "Calibration Id",
+      "type": "string"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/CalibrationCandidate"
+      },
+      "maxItems": 16,
+      "minItems": 4,
+      "title": "Candidates",
+      "type": "array"
+    },
+    "model": {
+      "$ref": "#/$defs/StudyModel"
+    },
+    "reasoning_log_mode": {
+      "const": "REQUIRED",
+      "default": "REQUIRED",
+      "title": "Reasoning Log Mode",
+      "type": "string"
+    },
+    "repetitions_per_candidate": {
+      "const": 2,
+      "default": 2,
+      "title": "Repetitions Per Candidate",
+      "type": "integer"
+    },
+    "retries_for_wrong_answers": {
+      "const": 0,
+      "default": 0,
+      "title": "Retries For Wrong Answers",
+      "type": "integer"
+    },
+    "sandbox": {
+      "const": "workspace-write",
+      "default": "workspace-write",
+      "title": "Sandbox",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scorer_intervention": {
+      "const": false,
+      "default": false,
+      "title": "Scorer Intervention",
+      "type": "boolean"
+    },
+    "selection_rule": {
+      "$ref": "#/$defs/CalibrationSelectionRule",
+      "default": {
+        "maximum_selected_tasks": 4,
+        "maximum_success_rate_millionths": 800000,
+        "minimum_labelled_rollouts": 2,
+        "minimum_success_rate_millionths": 200000,
+        "ordering": "candidate-order",
+        "uncertainty": "wilson-95"
+      }
+    },
+    "terminal_reward": {
+      "const": "clean-room-verifier-acceptance-only",
+      "default": "clean-room-verifier-acceptance-only",
+      "title": "Terminal Reward",
+      "type": "string"
+    },
+    "timeout_seconds": {
+      "maximum": 900,
+      "minimum": 60,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "tool_mode": {
+      "const": "direct",
+      "default": "direct",
+      "title": "Tool Mode",
+      "type": "string"
+    },
+    "training_performed": {
+      "const": false,
+      "default": false,
+      "title": "Training Performed",
+      "type": "boolean"
+    },
+    "web_search": {
+      "const": "disabled",
+      "default": "disabled",
+      "title": "Web Search",
+      "type": "string"
+    }
+  },
+  "required": [
+    "calibration_id",
+    "model",
+    "timeout_seconds",
+    "agent_instructions",
+    "candidates"
+  ],
+  "title": "TrajectoryValueCalibrationSpec",
+  "type": "object"
+}

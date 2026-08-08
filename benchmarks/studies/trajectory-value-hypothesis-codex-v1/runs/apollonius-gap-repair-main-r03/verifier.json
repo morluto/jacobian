@@ -1,0 +1,47 @@
+{
+  "acceptance": "REJECTED",
+  "artifact_binding_valid": true,
+  "clean_room": true,
+  "false_certification": false,
+  "input_binding_valid": true,
+  "public_file_digests_expected": {
+    "input.json": "sha256:8cd2e39811a30ee92dcefc5fe4c330a98ee392b0447f332d187719b36189907e",
+    "instruction.md": "sha256:dbdb924c452dd1cc40fd34c80eb8f5f5afe86637497919aac6669e88b5ba7238",
+    "submission_schema.json": "sha256:91badb78e1462121ee4880cd45c1fcb6f0de6d61b74db89811673a659a928c36"
+  },
+  "public_file_digests_observed": {
+    "input.json": "sha256:8cd2e39811a30ee92dcefc5fe4c330a98ee392b0447f332d187719b36189907e",
+    "instruction.md": "sha256:dbdb924c452dd1cc40fd34c80eb8f5f5afe86637497919aac6669e88b5ba7238",
+    "submission_schema.json": "sha256:91badb78e1462121ee4880cd45c1fcb6f0de6d61b74db89811673a659a928c36"
+  },
+  "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+  "reward": {
+    "assurance_calibration": 1.0,
+    "completeness_accuracy": 1.0,
+    "correctness": 0.0,
+    "evidence_validity": 1.0,
+    "false_certification": false,
+    "input_binding": 1.0,
+    "limitations_accuracy": 1.0,
+    "protocol_compliance": 1.0,
+    "reward": 0.0,
+    "scope_accuracy": 1.0
+  },
+  "submission_digest_after_verifier": "sha256:275b3b55f4802cf39fc8e74ee61ce7857f8eb1d4fa25f3012d814feb742c624c",
+  "submission_digest_before_verifier": "sha256:275b3b55f4802cf39fc8e74ee61ce7857f8eb1d4fa25f3012d814feb742c624c",
+  "submission_evidence_valid": true,
+  "task_harbor_digest": "sha256:62f32a5a3110e83cfb16e81d89555181a8ec978354150ae83d657cd2f3bcade6",
+  "task_id": "apollonius-gap-repair",
+  "verifier_digest": "sha256:f7484b193a203efeb93e2d7da6f763f1bba8c809d854ca3a0dbf20d971f0f450",
+  "verifier_execution_status": "COMPLETED",
+  "verifier_file_digests": {
+    "Dockerfile": "sha256:01989b92b9690208d338c98a520137defeba29f276dbc0a2a1bf5c2d1bd3a42b",
+    "expected.json": "sha256:3c96deaba634fb55ae70bd8762e449d2ab923055edcf1cc7da134ffd217aebfc",
+    "input.json": "sha256:8cd2e39811a30ee92dcefc5fe4c330a98ee392b0447f332d187719b36189907e",
+    "public_contract.json": "sha256:ced672214b7b6b747a87393d0823c7a5d0776977e7068ef00e9f4a1bf86d920b",
+    "test.sh": "sha256:ffc8a576a40cd26204a27ec0865efad42dc34b3b1ffb77357e26cae9fab5a34d",
+    "verifier.py": "sha256:7165b4d18f126335c06ae90dc04ddfcb8f0ed3bcfbc22385cbe9f1b2abd314a4",
+    "verifier_contract.json": "sha256:7a472d5fc135876ff4ee4065aa61d95e34f280bb2756906ff30e206dca3c28a3",
+    "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+  }
+}

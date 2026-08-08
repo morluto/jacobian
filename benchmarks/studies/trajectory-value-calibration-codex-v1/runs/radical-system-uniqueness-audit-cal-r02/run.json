@@ -1,0 +1,90 @@
+{
+  "calibration_tags": [
+    "candidate-checker-repair",
+    "capability-routing"
+  ],
+  "command": {
+    "diagnostic": null,
+    "exit_code": 0,
+    "status": "EXITED",
+    "stderr_exceeded": false,
+    "stdout_exceeded": false
+  },
+  "dataset_id": "mathematical-benchmarks-v1",
+  "reasoning_protocol": {
+    "after_tool_count": 2,
+    "before_tool_count": 2,
+    "bound_invoke_count": 2,
+    "final_count": 1,
+    "missing_after_tool_count": 0,
+    "pending_call_count": 0,
+    "plan_count": 1,
+    "reported_actual_mismatch_count": 0,
+    "run_count": 1,
+    "status": "COMPLETE",
+    "summary_characters": 881,
+    "unavailable_after_tool_count": 0
+  },
+  "reasoning_run_ids": [
+    "480ed946-e116-4b21-a59d-9490bdef1396"
+  ],
+  "repetition": 2,
+  "schema_version": "1",
+  "surface_digest": "sha256:15a92b3f3113716063e7f9ef43f194a0bc3807f539c4742697012e2bd5ab83a0",
+  "task_contract": {
+    "dataset_id": "mathematical-benchmarks-v1",
+    "harbor_digest": "sha256:f8d30c13929a2bdee3d94e9f64a1e67c1e092da9d4b7f925d236bb4ce560f4f8",
+    "public_file_digests": {
+      "input.json": "sha256:75a3ed620b774d26b0a7b7e59c3a89c9988aeb1885044e93f8dea591edb20deb",
+      "instruction.md": "sha256:201979fbcc55f8bb6475eb35d50e39ef9b5608b12cb9ace28b2ab0d958d0b56f",
+      "submission_schema.json": "sha256:281c685ad9ea1aaa168748065a2955d903e0d2fb8e93a3170bec5f6f805f5573"
+    },
+    "task_id": "radical-system-uniqueness-audit",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:38858f2175ce574c7784718123c3fc614a6bdcb8d731bc959584887123441d87",
+      "expected.json": "sha256:a192deffc507f7ac354ad85b09d005da1df3dda3c192a2e7dd207d78f046404d",
+      "input.json": "sha256:75a3ed620b774d26b0a7b7e59c3a89c9988aeb1885044e93f8dea591edb20deb",
+      "public_contract.json": "sha256:e2186854c116e871fbf614725acf9d39b7710b30992157af3cdb7c4a46fa30e7",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:c91958559099aa6aec573d3070c9b220cdbb4692d7cb6935c84971fe3d926de9",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "task_family": "radical-elimination-root-rejection",
+  "task_id": "radical-system-uniqueness-audit",
+  "terminal": {
+    "acceptance": "REJECTED",
+    "artifact_binding_valid": false,
+    "clean_room": true,
+    "false_certification": false,
+    "input_binding_valid": false,
+    "reason": "TERMINAL_CLEAN_ROOM_REWARD",
+    "reward": {
+      "assurance_calibration": 1.0,
+      "correctness": 0.0,
+      "evidence_validity": 0.0,
+      "false_certification": false,
+      "reward": 0.0,
+      "scope_accuracy": 0.0
+    },
+    "task_harbor_digest": "sha256:f8d30c13929a2bdee3d94e9f64a1e67c1e092da9d4b7f925d236bb4ce560f4f8",
+    "verifier_execution_status": "COMPLETED",
+    "verifier_file_digests": {
+      "Dockerfile": "sha256:38858f2175ce574c7784718123c3fc614a6bdcb8d731bc959584887123441d87",
+      "expected.json": "sha256:a192deffc507f7ac354ad85b09d005da1df3dda3c192a2e7dd207d78f046404d",
+      "input.json": "sha256:75a3ed620b774d26b0a7b7e59c3a89c9988aeb1885044e93f8dea591edb20deb",
+      "public_contract.json": "sha256:e2186854c116e871fbf614725acf9d39b7710b30992157af3cdb7c4a46fa30e7",
+      "test.sh": "sha256:ed87f87a56d3eebcc1728e8a8e365a0af5a71d0b03b8cf045a797cca1f4c6b9a",
+      "verifier.py": "sha256:c91958559099aa6aec573d3070c9b220cdbb4692d7cb6935c84971fe3d926de9",
+      "verifier_support.py": "sha256:6fec0481374c4f728f5086f32e5c154552ddabdaf0402e329ee59ddcdd4cb663"
+    }
+  },
+  "trajectory_id": "radical-system-uniqueness-audit-cal-r02",
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 570368,
+    "input_tokens": 614343,
+    "output_tokens": 9476,
+    "reasoning_output_tokens": 4831
+  }
+}

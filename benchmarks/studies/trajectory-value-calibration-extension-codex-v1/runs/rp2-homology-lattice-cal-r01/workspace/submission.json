@@ -1,0 +1,63 @@
+{
+  "task_id": "jacobian/rp2-homology-lattice",
+  "conclusion": "INTEGRAL_H1_CERTIFIED",
+  "result": {
+    "spanning_tree": [
+      [0, 1],
+      [0, 2],
+      [0, 3],
+      [0, 4],
+      [0, 5]
+    ],
+    "non_tree_edges": [
+      [1, 2],
+      [1, 3],
+      [1, 4],
+      [1, 5],
+      [2, 3],
+      [2, 4],
+      [2, 5],
+      [3, 4],
+      [3, 5],
+      [4, 5]
+    ],
+    "facet_order": [
+      [0, 1, 2],
+      [0, 2, 3],
+      [0, 1, 5],
+      [0, 4, 5],
+      [0, 3, 4],
+      [1, 2, 4],
+      [1, 3, 4],
+      [1, 3, 5],
+      [2, 3, 5],
+      [2, 4, 5]
+    ],
+    "cycle_coordinate_matrix": [
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+      [0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+      [1, 0, -1, 0, 0, 1, 0, 0, 0, 0],
+      [0, 1, -1, 0, 0, 0, 0, 1, 0, 0],
+      [0, 1, 0, -1, 0, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 1, 0, -1, 0, 1, 0],
+      [0, 0, 0, 0, 0, 1, -1, 0, 0, 1]
+    ],
+    "determinant": -2,
+    "homology": "Z/2Z"
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "the frozen six-vertex ten-facet simplicial complex",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:2568b826eb8bd9cee5a9b1e7384be691020cf2131f2f44ae8b722548772dda8b"
+    }
+  ],
+  "limitations": [
+    "This does not prove in a proof assistant that the geometric realization is the real projective plane."
+  ]
+}

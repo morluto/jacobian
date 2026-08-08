@@ -1,0 +1,12 @@
+{
+  "kind": "INTEGER_BEZOUT",
+  "payload": {
+    "left": "918273645546372819",
+    "right": "192837465564738291"
+  },
+  "schema_version": "1",
+  "statement": "Compute the nonnegative gcd of the two supplied integers and give any exact Bezout coefficients u and v satisfying left*u + right*v = gcd.",
+  "task_family": "exact-integer-bezout",
+  "task_group": "integer-bezout-01",
+  "task_id": "integer-bezout-01"
+}

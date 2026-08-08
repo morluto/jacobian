@@ -1,0 +1,22 @@
+Vertices: 0, 1, 2, 3, 4, 5
+Edges: (0,3), (0,4), (1,4), (2,4), (3,4), (3,5)
+
+Degrees:
+0 -> 2
+1 -> 1
+2 -> 1
+3 -> 3
+4 -> 4
+5 -> 1
+
+Maximum degree is 4, so the maximum-degree vertex set is {4}.
+
+Shortest-path distances to {4}:
+0 -> 1
+1 -> 1
+2 -> 1
+3 -> 1
+4 -> 0
+5 -> 2
+
+Maximum distance to {4} is 2, attained by vertex {5}.

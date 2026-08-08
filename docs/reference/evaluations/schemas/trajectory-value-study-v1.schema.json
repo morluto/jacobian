@@ -1,0 +1,259 @@
+{
+  "$defs": {
+    "StudyModel": {
+      "additionalProperties": false,
+      "properties": {
+        "codex_cli_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Codex Cli Version",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "title": "Reasoning Effort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "reasoning_effort",
+        "codex_cli_version"
+      ],
+      "title": "StudyModel",
+      "type": "object"
+    },
+    "StudyTask": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_contract": {
+          "additionalProperties": true,
+          "title": "Answer Contract",
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "INTEGER_BEZOUT",
+            "MATRIX_DETERMINANT",
+            "POLYNOMIAL_GCD_BEZOUT",
+            "GRAPH_MAXIMUM_INDEPENDENT_SET"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "statement": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        },
+        "task_family": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Task Family",
+          "type": "string"
+        },
+        "task_group": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Task Group",
+          "type": "string"
+        },
+        "task_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "task_group",
+        "task_family",
+        "kind",
+        "statement",
+        "payload",
+        "answer_contract"
+      ],
+      "title": "StudyTask",
+      "type": "object"
+    },
+    "ValueEstimatorConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "config_schema_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Config Schema Version",
+          "type": "string"
+        },
+        "linkage": {
+          "const": "average",
+          "default": "average",
+          "title": "Linkage",
+          "type": "string"
+        },
+        "state_selection": {
+          "const": "plan-milestone-and-post-milestone-after-tool",
+          "default": "plan-milestone-and-post-milestone-after-tool",
+          "title": "State Selection",
+          "type": "string"
+        },
+        "text_ngram_range": {
+          "const": "word-1-2",
+          "default": "word-1-2",
+          "title": "Text Ngram Range",
+          "type": "string"
+        },
+        "text_similarity_threshold_millionths": {
+          "default": 350000,
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Text Similarity Threshold Millionths",
+          "type": "integer"
+        },
+        "trajectory_metric_weighting": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Trajectory Metric Weighting",
+          "type": "string"
+        },
+        "validation": {
+          "const": "leave-one-trajectory-out",
+          "default": "leave-one-trajectory-out",
+          "title": "Validation",
+          "type": "string"
+        }
+      },
+      "title": "ValueEstimatorConfig",
+      "type": "object"
+    }
+  },
+  "$id": "https://jacobian.invalid/docs/reference/evaluations/schemas/trajectory-value-study-v1.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "agent_instructions": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "title": "Agent Instructions",
+      "type": "string"
+    },
+    "evaluator_config": {
+      "$ref": "#/$defs/ValueEstimatorConfig",
+      "default": {
+        "config_schema_version": "1",
+        "linkage": "average",
+        "state_selection": "plan-milestone-and-post-milestone-after-tool",
+        "text_ngram_range": "word-1-2",
+        "text_similarity_threshold_millionths": 350000,
+        "trajectory_metric_weighting": "equal",
+        "validation": "leave-one-trajectory-out"
+      }
+    },
+    "exact_resume_supported": {
+      "const": false,
+      "default": false,
+      "title": "Exact Resume Supported",
+      "type": "boolean"
+    },
+    "intermediate_value_surrogate": {
+      "const": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+      "default": "leave-one-trajectory-out-success-frequency-among-compatible-cross-rollout-states",
+      "title": "Intermediate Value Surrogate",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/StudyModel"
+    },
+    "reasoning_log_mode": {
+      "const": "REQUIRED",
+      "default": "REQUIRED",
+      "title": "Reasoning Log Mode",
+      "type": "string"
+    },
+    "repetitions_per_task": {
+      "const": 4,
+      "default": 4,
+      "title": "Repetitions Per Task",
+      "type": "integer"
+    },
+    "sandbox": {
+      "const": "workspace-write",
+      "default": "workspace-write",
+      "title": "Sandbox",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scorer_intervention": {
+      "const": false,
+      "default": false,
+      "title": "Scorer Intervention",
+      "type": "boolean"
+    },
+    "study_id": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "title": "Study Id",
+      "type": "string"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/StudyTask"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Tasks",
+      "type": "array"
+    },
+    "timeout_seconds": {
+      "maximum": 600,
+      "minimum": 60,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "tool_mode": {
+      "const": "direct",
+      "default": "direct",
+      "title": "Tool Mode",
+      "type": "string"
+    },
+    "training_performed": {
+      "const": false,
+      "default": false,
+      "title": "Training Performed",
+      "type": "boolean"
+    },
+    "web_search": {
+      "const": "disabled",
+      "default": "disabled",
+      "title": "Web Search",
+      "type": "string"
+    }
+  },
+  "required": [
+    "study_id",
+    "model",
+    "timeout_seconds",
+    "agent_instructions",
+    "tasks"
+  ],
+  "title": "TrajectoryValueStudySpec",
+  "type": "object"
+}

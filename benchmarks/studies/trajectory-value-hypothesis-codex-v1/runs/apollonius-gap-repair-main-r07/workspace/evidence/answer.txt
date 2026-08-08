@@ -1,0 +1,4 @@
+apollonius-coefficient-certificate-v1
+multiplier: -3
+circle_coefficients: 1,1,-8/3,4/3
+distance_coefficients: -3,-3,8,-4

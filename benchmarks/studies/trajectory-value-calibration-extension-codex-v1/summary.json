@@ -1,0 +1,197 @@
+{
+  "accepted": 7,
+  "calibration_id": "trajectory-value-calibration-extension-codex-v1",
+  "candidate_results": [
+    {
+      "accepted": 2,
+      "calibration_tags": [
+        "candidate-checker-repair",
+        "scope-assurance"
+      ],
+      "dataset_id": "symbolic-coordination-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": 1.0,
+      "task_family": "polynomial-near-miss-composition",
+      "task_id": "symbolic-coordination-near-miss-04",
+      "wilson_95_high": 1.0,
+      "wilson_95_low": 0.34238022750665303
+    },
+    {
+      "accepted": 2,
+      "calibration_tags": [
+        "bounded-search-unknown",
+        "scope-assurance"
+      ],
+      "dataset_id": "symbolic-coordination-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": 1.0,
+      "task_family": "polynomial-grid-exhaustion",
+      "task_id": "symbolic-coordination-grid-exhausted-02",
+      "wilson_95_high": 1.0,
+      "wilson_95_low": 0.34238022750665303
+    },
+    {
+      "accepted": 2,
+      "calibration_tags": [
+        "one-sided-evidence",
+        "capability-routing"
+      ],
+      "dataset_id": "symbolic-coordination-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": 1.0,
+      "task_family": "polynomial-three-variable-inverse",
+      "task_id": "symbolic-coordination-valid-inverse-05",
+      "wilson_95_high": 1.0,
+      "wilson_95_low": 0.34238022750665303
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "artifact-binding",
+        "capability-routing"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "hermite-normal-form-certificate",
+      "task_id": "hermite-normal-form",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "candidate-checker-repair",
+        "artifact-binding"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "polynomial-normalization-certificate",
+      "task_id": "polynomial-normalization",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "artifact-binding",
+        "capability-routing"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "symmetric-polynomial-ideal-membership",
+      "task_id": "symmetric-polynomial-divisibility",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    },
+    {
+      "accepted": 1,
+      "calibration_tags": [
+        "scope-assurance",
+        "candidate-checker-repair"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 1,
+      "selection_eligible": true,
+      "success_rate": 0.5,
+      "task_family": "apollonius-proof-gap-repair",
+      "task_id": "apollonius-gap-repair",
+      "wilson_95_high": 0.9054687942657693,
+      "wilson_95_low": 0.09453120573423074
+    },
+    {
+      "accepted": 0,
+      "calibration_tags": [
+        "artifact-binding",
+        "scope-assurance"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 2,
+      "labelled": 0,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 0,
+      "selection_eligible": false,
+      "success_rate": null,
+      "task_family": "projective-plane-homology-lattice",
+      "task_id": "rp2-homology-lattice",
+      "wilson_95_high": null,
+      "wilson_95_low": null
+    }
+  ],
+  "causal_claim_authorized": false,
+  "evidence_class": "public-host-local-codex-difficulty-calibration",
+  "inconclusive": 8,
+  "rejected": 1,
+  "schema_version": "1",
+  "scorer_intervention": false,
+  "selected_task_count": 1,
+  "selected_tasks": [
+    {
+      "accepted": 1,
+      "calibration_tags": [
+        "scope-assurance",
+        "candidate-checker-repair"
+      ],
+      "dataset_id": "mathematical-benchmarks-v1",
+      "inconclusive": 0,
+      "labelled": 2,
+      "observed_rollouts": 2,
+      "planned_rollouts": 2,
+      "rejected": 1,
+      "selection_eligible": true,
+      "success_rate": 0.5,
+      "task_family": "apollonius-proof-gap-repair",
+      "task_id": "apollonius-gap-repair",
+      "wilson_95_high": 0.9054687942657693,
+      "wilson_95_low": 0.09453120573423074
+    }
+  ],
+  "selection_rule": {
+    "maximum_selected_tasks": 4,
+    "maximum_success_rate_millionths": 800000,
+    "minimum_labelled_rollouts": 2,
+    "minimum_success_rate_millionths": 200000,
+    "ordering": "candidate-order",
+    "uncertainty": "wilson-95"
+  },
+  "terminal_reward": "clean-room-verifier-acceptance-only",
+  "total_rollouts": 16,
+  "training_performed": false
+}

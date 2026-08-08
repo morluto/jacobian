@@ -1,0 +1,69 @@
+{
+  "task_id": "jacobian/radical-system-uniqueness-audit",
+  "conclusion": "UNIQUE_REAL_SOLUTION",
+  "result": {
+    "substitution": "u=b^(1/6)",
+    "elimination_coefficients": [1, -1, -2, 0, 0],
+    "linear_factors": [
+      {
+        "x_coefficient": 1,
+        "constant": -2
+      },
+      {
+        "x_coefficient": 1,
+        "constant": 1
+      },
+      {
+        "x_coefficient": 1,
+        "constant": 0
+      },
+      {
+        "x_coefficient": 1,
+        "constant": 0
+      }
+    ],
+    "root_classification": [
+      {
+        "u": 0,
+        "status": "REJECTED",
+        "reason": "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE"
+      },
+      {
+        "u": 2,
+        "status": "ACCEPTED",
+        "reason": "SATISFIES_ALL_ROOT_DOMAINS"
+      },
+      {
+        "u": -1,
+        "status": "REJECTED",
+        "reason": "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE"
+      }
+    ],
+    "solutions": [
+      {
+        "u": 2,
+        "a": 2025,
+        "b": 64,
+        "c": 25,
+        "equation_values": [
+          "2025/25 = 64 - 8 + 25",
+          "sqrt(2025/25) = 8 + 1",
+          "fourth_root(2025/25) = 4 - 1"
+        ]
+      }
+    ]
+  },
+  "claimed_assurance": "COMPUTED",
+  "scope": "Exact audit of the supplied radical system under principal-root semantics using u=b^(1/6).",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:0143b09fa975eee86361f0eff74346f81d86a58828ad54a6b254a426b6f72d1f"
+    }
+  ],
+  "limitations": [
+    "No external proof assistant replay was available.",
+    "Jacobian was used as an exact cross-check of the elimination polynomial factorization."
+  ]
+}

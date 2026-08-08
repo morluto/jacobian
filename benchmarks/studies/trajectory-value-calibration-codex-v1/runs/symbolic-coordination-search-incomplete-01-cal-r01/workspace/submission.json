@@ -1,0 +1,42 @@
+{
+  "task_id": "jacobian/symbolic-coordination-search-incomplete-01",
+  "conclusion": "UNKNOWN",
+  "result": {
+    "bindings": {
+      "binding_schema_version": "1",
+      "checker_id": "symbolic-coordination-v1.clean-room-polynomial-map-checker@1",
+      "claim_id": "claim://symbolic-coordination-v1/symbolic-coordination-search-incomplete-01",
+      "forward_map_sha256": "sha256:9766b9646532d049dd66a947ec8b880fc072dfd612c701292de3132cfe5d5a4f",
+      "scope_id": "scope://symbolic-coordination-v1/symbolic-coordination-search-incomplete-01",
+      "semantics_id": "exact-sparse-polynomial-maps-over-QQ@1",
+      "subject_sha256": "sha256:d3b6ff63190d590f66e91f7542dd3078393c14d19989782411ab13a6b0e5b93f"
+    },
+    "case_id": "symbolic-coordination-search-incomplete-01",
+    "family": "bounded-collision-scope",
+    "verdict": "UNKNOWN",
+    "certificate": {
+      "kind": "SEARCH_NONCONCLUSION",
+      "grid": {
+        "min_numerator": -2,
+        "max_numerator": 2,
+        "max_denominator": 1
+      },
+      "stop_reason": "INCOMPLETE",
+      "examined_point_count": 5,
+      "global_consequence": "NOT_ESTABLISHED"
+    }
+  },
+  "claimed_assurance": "CHECKED",
+  "scope": "DECLARED_RATIONAL_GRID_AND_SUPPLIED_SEARCH_RECORD:symbolic-coordination-search-incomplete-01",
+  "completeness": "PARTIAL",
+  "evidence": [
+    {
+      "path": "evidence/certificate.json",
+      "sha256": "sha256:8db61fe2f7af5d4169e63a6aa00f60f90747e7164c284318e94330a4642cefca"
+    }
+  ],
+  "limitations": [
+    "SEARCH_NONCONCLUSION",
+    "NO_GLOBAL_INJECTIVITY_OR_INVERTIBILITY_CONCLUSION"
+  ]
+}

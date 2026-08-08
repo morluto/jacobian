@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "tensor3": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/vec3"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "tensor5": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/vec5"
+        },
+        "maxItems": 5,
+        "minItems": 5,
+        "type": "array"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    },
+    "vec3": {
+      "items": {
+        "maximum": 4,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "vec5": {
+      "items": {
+        "maximum": 4,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "RATIONAL_POINT_BIJECTION_DOES_NOT_FORCE_SCHEME_ISOMORPHISM"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "a_multiplication": {
+          "$ref": "#/$defs/tensor5"
+        },
+        "a_points": {
+          "items": {
+            "$ref": "#/$defs/vec5"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "a_unit": {
+          "$ref": "#/$defs/vec5"
+        },
+        "b_multiplication": {
+          "$ref": "#/$defs/tensor3"
+        },
+        "b_points": {
+          "items": {
+            "$ref": "#/$defs/vec3"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "b_reduced": {
+          "const": true
+        },
+        "b_unit": {
+          "$ref": "#/$defs/vec3"
+        },
+        "field_prime": {
+          "const": 5
+        },
+        "induced_point_map": {
+          "items": {
+            "maximum": 2,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "morphism_columns": {
+          "items": {
+            "$ref": "#/$defs/vec5"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "nilpotent": {
+          "additionalProperties": false,
+          "properties": {
+            "exact_order": {
+              "const": 3
+            },
+            "power2": {
+              "$ref": "#/$defs/vec5"
+            },
+            "power3": {
+              "$ref": "#/$defs/vec5"
+            },
+            "vector": {
+              "$ref": "#/$defs/vec5"
+            }
+          },
+          "required": [
+            "vector",
+            "power2",
+            "power3",
+            "exact_order"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "field_prime",
+        "a_unit",
+        "b_unit",
+        "a_multiplication",
+        "b_multiplication",
+        "morphism_columns",
+        "a_points",
+        "b_points",
+        "induced_point_map",
+        "nilpotent",
+        "b_reduced"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "finite-affine-schemes-over-F5-certificate",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/finite-scheme-rational-points-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

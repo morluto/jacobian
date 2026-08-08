@@ -1,0 +1,30 @@
+{
+  "kind": "POLYNOMIAL_GCD_BEZOUT",
+  "payload": {
+    "coefficient_order": "low-to-high",
+    "domain": "QQ",
+    "left_coefficients_low_to_high": [
+      "3",
+      "1",
+      "1",
+      "-2",
+      "1",
+      "1",
+      "1"
+    ],
+    "right_coefficients_low_to_high": [
+      "-4",
+      "-4",
+      "-3",
+      "2",
+      "2",
+      "1"
+    ],
+    "variable": "x"
+  },
+  "schema_version": "1",
+  "statement": "Over QQ, compute the monic gcd of the two supplied univariate polynomials and any exact Bezout coefficient polynomials s and t satisfying s*left + t*right = gcd. Encode every coefficient array from lowest to highest degree.",
+  "task_family": "exact-polynomial-gcd-bezout",
+  "task_group": "polynomial-gcd-bezout-01",
+  "task_id": "polynomial-gcd-bezout-01"
+}

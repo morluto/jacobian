@@ -1,0 +1,28 @@
+{
+  "task_id": "jacobian/hermite-normal-form",
+  "conclusion": "TRUE",
+  "result": {
+    "normal_form": [
+      [2, 0],
+      [0, 4]
+    ],
+    "transformation": [
+      [-2, 1],
+      [3, -1]
+    ]
+  },
+  "claimed_assurance": "VERIFIED",
+  "scope": "jacobian/hermite-normal-form complete finite input",
+  "completeness": "COMPLETE",
+  "evidence": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:2fb8c683f40e38c0c155db408108ee4f1598c1eeecb81df354256713425d2997"
+    }
+  ],
+  "limitations": [],
+  "verification_record_uri": {
+    "path": "evidence/verification-record.json",
+    "sha256": "sha256:6fdf864d8bcc2ded7e24f8e952b6dc7c31bced5e94488ccb645321c50b66dfe3"
+  }
+}

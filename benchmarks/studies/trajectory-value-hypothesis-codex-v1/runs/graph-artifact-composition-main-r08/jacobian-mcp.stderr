@@ -1,0 +1,21 @@
+Uninstalled 1 package in 1ms
+Installed 1 package in 1ms
+INFO:     Started server process [44587]
+INFO:     Waiting for application startup.
+[08/07/26 05:03:27] INFO     StreamableHTTP       streamable_http_manager.py:151
+                             session manager                                    
+                             started                                            
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:53731 (Press CTRL+C to quit)
+[08/07/26 05:03:29] WARNING  lean.check is not     reference_installation.py:114
+                             installed: The pinned                              
+                             Lean 4.31.0 runtime                                
+                             is unavailable.                                    
+[08/07/26 05:03:30] INFO     Created new          streamable_http_manager.py:303
+                             transport with                                     
+                             session ID:                                        
+                             5737398b3e784317b9c7                               
+                             0e75b2187a35                                       
+[08/07/26 05:04:20] INFO     Terminating session:         streamable_http.py:814
+                             5737398b3e784317b9c70e75b218                       
+                             7a35                                               

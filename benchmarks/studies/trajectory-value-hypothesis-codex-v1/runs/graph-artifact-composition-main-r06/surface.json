@@ -1,0 +1,1069 @@
+{
+  "catalog": {
+    "capability_count": 328,
+    "catalog_digest": "sha256:edb6420fe4b93cd01f5f6bda4b7e86df97c49d786992520aba4b7c3081540d70",
+    "catalog_version": "1",
+    "content_sha256": "sha256:0d9923fc0994c9d18b1a25c106cc2d7fc2b75cc2ec2ad2a8601b5040a2156a63",
+    "policy_digest": "sha256:870a92b83d3e522e4015b6bb1cabda33086906f9de1c3c36e466251ea7ed1957",
+    "policy_profile": "DEFAULT"
+  },
+  "instructions": "Before using Jacobian, call reasoning.write with phase PLAN and a concise external work summary. Before each math.run call, write BEFORE_TOOL with the selected capability ID and mode, then pass the returned run_id and call_id to math.run. Write AFTER_TOOL after every result with the reported status, assurance, and completeness; use RESULT_UNAVAILABLE only when result content was lost. Write FINAL before completing the task. These are summaries, not hidden chain-of-thought. Do not copy raw tool output. Use Jacobian whenever a task may benefit from a specialized exact mathematical operation, including matrix or polynomial computation, symbolic transformation, structural analysis, examples or counterexamples, bounded search, formal-environment inspection, or requested independent verification. This applies even when the user does not name Jacobian and shell code could also calculate the result. Unless an exact installed capability ID and its typed contract are already available, call math.find with a plain-language desired local mathematical outcome; no capability ID is required. math.run may execute a known contract directly. Do not report that no specialized mathematical operation is available without checking math.find. When independent checking is requested, multiple calculations or programs authored by the same model are not independent checker evidence. Search or browse again whenever the objective or available evidence changes. The model owns representation, decomposition, composition, iteration, verification timing, and stopping. Results keep execution status, scope, completeness, mathematical conclusion, and assurance separate. No descriptor match, timeout, bounded or exhausted search, or failure to find a witness is a mathematical conclusion. Only assurance level VERIFIED with a local verification record is verified. Read jacobian://instructions for the complete operating guide.",
+  "server": {
+    "description": "Use specialized exact and symbolic mathematics with explicit scope, completeness, assurance, and optional independent verification.",
+    "name": "jacobian",
+    "title": "Jacobian Mathematical Workbench",
+    "version": "0.9.0"
+  },
+  "surface_digest": "sha256:eaa51084b77142ea1bd09d83add27af4d4a4a0eb03cd0140298b47c4edc05727",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Use this when a task may benefit from a specialized exact mathematical operation, even\nif shell code could also calculate the answer. Relevant outcomes include matrix\ndeterminants, polynomial or symbolic computation, structural analysis, examples or\ncounterexamples, bounded search, formal-environment inspection, and requested\nindependent verification. Search Jacobian by desired local mathematical outcome, or\ninspect one exact operation contract. A capability ID is not required for search or\nbrowse.\n\nAvailable forms:\n- Pass `query` as a plain-language description of the desired local mathematical\n  outcome. The response contains compact operation cards with accepted inputs, output\n  summary, availability, scope, assurance ceiling, factual relationships, and one\n  size-bounded validated invocation example when available.\n- Optionally filter with `domain` and `mode`. `limit` is between 1 and 20 and defaults\n  to 5; a smaller requested limit returns less model context.\n- Omit all arguments to browse a compact installed catalog.\n- When `next_cursor` is present, pass it back with the same filters and limit to\n  continue without loading the complete catalog.\n- Ranking is deterministic retrieval over published IDs, titles, descriptions, and\n  tags. Match fields and terms are returned; candidates are not recommendations.\n- Pass `capability_id` to inspect the exact operation. SUMMARY is compact, CONTRACT\n  adds the validation-equivalent input schema and validated invocation examples, and\n  FULL adds complete provider and audit metadata.\n\nWeak or empty results do not imply impossibility. They include unranked recovery paths\nfor query reformulation, filter removal, browsing, and catalog inspection. Every exact\nresponse states the operation's scope rule.\n\nExamples:\n- `{\"query\":\"compute an exact matrix determinant\",\"domain\":\"matrix\",\"mode\":\"EXPLORE\",\"limit\":3}`\n- `{\"query\":\"find a counterexample to associativity\",\"domain\":\"universal_algebra\",\"mode\":\"EXPLORE\",\"limit\":3}`\n- `{\"query\":\"eliminate this denominator using the defining relations\"}`\n- `{}`\n- `{\"capability_id\":\"polynomial.compute.gcd\"}`\n- `{\"capability_id\":\"polynomial.compute.gcd\",\"view\":\"CONTRACT\"}`\n",
+      "inputSchema": {
+        "$defs": {
+          "CapabilityInputKind": {
+            "description": "Coarse input boundary used to prevent incompatible discovery routes.",
+            "enum": [
+              "STRUCTURED_REQUEST",
+              "FORMAL_PROPOSITION",
+              "TYPED_ARTIFACT",
+              "NATURAL_LANGUAGE_PROOF"
+            ],
+            "title": "CapabilityInputKind",
+            "type": "string"
+          },
+          "CapabilityMode": {
+            "description": "The low-friction exploration and explicit verification lanes.",
+            "enum": [
+              "EXPLORE",
+              "VERIFY"
+            ],
+            "title": "CapabilityMode",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "artifact_type": {
+            "anyOf": [
+              {
+                "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Exact schema_uri from the stored artifact manifest; requires TYPED_ARTIFACT.",
+            "title": "Artifact Type"
+          },
+          "capability_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Exact installed ID; cannot be combined with discovery filters.",
+            "title": "Capability Id"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Opaque continuation ID from next_cursor. Reuse the same query, domain, mode, input kind, artifact type, and limit.",
+            "title": "Cursor"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional domain tag filter, such as universal_algebra, graph, polynomial, or lean.",
+            "title": "Domain"
+          },
+          "input_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapabilityInputKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Input boundary used to reject incompatible routes."
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Maximum compact discovery matches; defaults to 5. Lower values reduce returned model context without changing match order.",
+            "title": "Limit"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapabilityMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional EXPLORE or VERIFY capability filter."
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Plain-language mathematical outcome to find, such as computing an exact matrix determinant; no capability ID is required.",
+            "title": "Query"
+          },
+          "view": {
+            "default": "SUMMARY",
+            "description": "Exact lookup only: SUMMARY judges fit; CONTRACT adds the validated input schema and invocation examples; FULL adds audit metadata. Omit for discovery.",
+            "enum": [
+              "SUMMARY",
+              "CONTRACT",
+              "FULL"
+            ],
+            "title": "View",
+            "type": "string"
+          }
+        },
+        "title": "capability_describeArguments",
+        "type": "object"
+      },
+      "name": "math.find",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "capability_describeDictOutput",
+        "type": "object"
+      },
+      "title": "Find an exact mathematical operation"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Use this to run one selected Jacobian operation with its typed payload. If the payload\nshape is unfamiliar, math.find can return the exact CONTRACT. EXPLORE returns proposed,\nheuristic, or computed evidence; VERIFY is valid only for an installed checker-backed\ncontract.\n\nThe typed `CapabilityResult` keeps execution, scope, completeness, mathematical\nconclusion, assurance, obligations, diagnostics, relationships, and artifacts distinct.\n\nCOMPLETED does not by itself establish a mathematical conclusion. One invocation\ncovers only its exact supplied input or claim, and repeated finite or bounded calls do\nnot widen that scope. Follow returned `artifact://` references when durable evidence\nor a size-separated result is provided.\n\nExamples:\n- `{\"capability_id\":\"integer.compute.gcd\",\"mode\":\"EXPLORE\",\"payload\":{\"left\":\"84\",\"right\":\"30\"}}`\n- `{\"capability_id\":\"polynomial.identity.verify\",\"mode\":\"VERIFY\",\"payload\":{\"variables\":[\"x\"],\"left\":{\"terms\":[]},\"right\":{\"terms\":[]}}}`\n\nThese are valid envelopes, not a required research strategy.\n",
+      "inputSchema": {
+        "$defs": {
+          "CapabilityMode": {
+            "description": "The low-friction exploration and explicit verification lanes.",
+            "enum": [
+              "EXPLORE",
+              "VERIFY"
+            ],
+            "title": "CapabilityMode",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "capability_id": {
+            "title": "Capability Id",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/$defs/CapabilityMode",
+            "default": "EXPLORE"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "reasoning_call_id": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "title": "Reasoning Call Id",
+            "type": "string"
+          },
+          "reasoning_run_id": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "title": "Reasoning Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability_id",
+          "payload",
+          "reasoning_run_id",
+          "reasoning_call_id"
+        ],
+        "title": "capability_invoke_reasonedArguments",
+        "type": "object"
+      },
+      "name": "math.run",
+      "outputSchema": {
+        "$defs": {
+          "CapabilityAssurance": {
+            "additionalProperties": false,
+            "properties": {
+              "basis": {
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Basis",
+                "type": "string"
+              },
+              "level": {
+                "$ref": "#/$defs/CapabilityAssuranceLevel"
+              },
+              "verification_record_uri": {
+                "anyOf": [
+                  {
+                    "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Verification Record Uri"
+              }
+            },
+            "required": [
+              "level",
+              "basis"
+            ],
+            "title": "CapabilityAssurance",
+            "type": "object"
+          },
+          "CapabilityAssuranceLevel": {
+            "description": "Coarse model-facing assurance without hiding the detailed result record.",
+            "enum": [
+              "HEURISTIC",
+              "COMPUTED",
+              "VERIFIED"
+            ],
+            "title": "CapabilityAssuranceLevel",
+            "type": "string"
+          },
+          "CapabilityCompleteness": {
+            "additionalProperties": false,
+            "description": "Coverage claim over the result's exact declared scope.",
+            "properties": {
+              "assurance_level": {
+                "$ref": "#/$defs/CapabilityAssuranceLevel",
+                "default": "HEURISTIC"
+              },
+              "basis": {
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Basis",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/CapabilityCompletenessStatus",
+                "default": "NOT_APPLICABLE"
+              },
+              "verification_record_uri": {
+                "anyOf": [
+                  {
+                    "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Verification Record Uri"
+              }
+            },
+            "required": [
+              "basis"
+            ],
+            "title": "CapabilityCompleteness",
+            "type": "object"
+          },
+          "CapabilityCompletenessStatus": {
+            "description": "How much of the explicitly declared scope an operation covered.",
+            "enum": [
+              "NOT_APPLICABLE",
+              "UNKNOWN",
+              "PARTIAL",
+              "COMPLETE"
+            ],
+            "title": "CapabilityCompletenessStatus",
+            "type": "string"
+          },
+          "CapabilityDiagnostic": {
+            "additionalProperties": false,
+            "description": "Actionable, stage-aware failure information without a truth claim.",
+            "properties": {
+              "actual_type": {
+                "anyOf": [
+                  {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Actual Type"
+              },
+              "code": {
+                "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+                "title": "Code",
+                "type": "string"
+              },
+              "details": {
+                "additionalProperties": true,
+                "title": "Details",
+                "type": "object"
+              },
+              "expected": {
+                "anyOf": [
+                  {
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Expected"
+              },
+              "hint": {
+                "anyOf": [
+                  {
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hint"
+              },
+              "message": {
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Message",
+                "type": "string"
+              },
+              "path": {
+                "anyOf": [
+                  {
+                    "maxLength": 512,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Path"
+              },
+              "schema_uri": {
+                "anyOf": [
+                  {
+                    "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Schema Uri"
+              },
+              "stage": {
+                "pattern": "^[a-z][a-z0-9_]{1,63}$",
+                "title": "Stage",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "stage",
+              "message"
+            ],
+            "title": "CapabilityDiagnostic",
+            "type": "object"
+          },
+          "CapabilityMode": {
+            "description": "The low-friction exploration and explicit verification lanes.",
+            "enum": [
+              "EXPLORE",
+              "VERIFY"
+            ],
+            "title": "CapabilityMode",
+            "type": "string"
+          },
+          "CapabilityObligation": {
+            "additionalProperties": false,
+            "description": "One materialized proof obligation and its checker-backed lifecycle.",
+            "properties": {
+              "obligation_uri": {
+                "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                "title": "Obligation Uri",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/CapabilityObligationStatus",
+                "default": "OPEN"
+              },
+              "verification_record_uri": {
+                "anyOf": [
+                  {
+                    "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Verification Record Uri"
+              }
+            },
+            "required": [
+              "obligation_uri"
+            ],
+            "title": "CapabilityObligation",
+            "type": "object"
+          },
+          "CapabilityObligationStatus": {
+            "description": "Lifecycle of a proof obligation created by a capability.",
+            "enum": [
+              "OPEN",
+              "DISCHARGED"
+            ],
+            "title": "CapabilityObligationStatus",
+            "type": "string"
+          },
+          "CapabilityRelationship": {
+            "additionalProperties": false,
+            "description": "A domain-owned relationship between exact immutable artifacts.",
+            "properties": {
+              "obligation_uris": {
+                "default": [],
+                "items": {
+                  "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "title": "Obligation Uris",
+                "type": "array"
+              },
+              "relation_id": {
+                "maxLength": 128,
+                "minLength": 3,
+                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+                "title": "Relation Id",
+                "type": "string"
+              },
+              "source_artifact_uris": {
+                "items": {
+                  "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "title": "Source Artifact Uris",
+                "type": "array"
+              },
+              "status": {
+                "$ref": "#/$defs/CapabilityRelationshipStatus",
+                "default": "PROPOSED"
+              },
+              "target_artifact_uris": {
+                "items": {
+                  "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "title": "Target Artifact Uris",
+                "type": "array"
+              },
+              "verification_record_uri": {
+                "anyOf": [
+                  {
+                    "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Verification Record Uri"
+              }
+            },
+            "required": [
+              "relation_id",
+              "source_artifact_uris",
+              "target_artifact_uris"
+            ],
+            "title": "CapabilityRelationship",
+            "type": "object"
+          },
+          "CapabilityRelationshipStatus": {
+            "description": "Whether a returned mathematical relationship has checker backing.",
+            "enum": [
+              "PROPOSED",
+              "VERIFIED"
+            ],
+            "title": "CapabilityRelationshipStatus",
+            "type": "string"
+          },
+          "CapabilityScope": {
+            "additionalProperties": false,
+            "description": "Domain-owned scope parameters, optionally materialized as an artifact.",
+            "properties": {
+              "artifact_uri": {
+                "anyOf": [
+                  {
+                    "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Artifact Uri"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "parameters": {
+                "additionalProperties": true,
+                "title": "Parameters",
+                "type": "object"
+              }
+            },
+            "title": "CapabilityScope",
+            "type": "object"
+          },
+          "Execution": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Detail"
+              },
+              "runtime_ms": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Runtime Ms"
+              },
+              "status": {
+                "$ref": "#/$defs/ExecutionStatus"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "title": "Execution",
+            "type": "object"
+          },
+          "ExecutionStatus": {
+            "description": "Operational completion state, independent of mathematical truth.",
+            "enum": [
+              "COMPLETED",
+              "TIMEOUT",
+              "CANCELLED",
+              "ERROR"
+            ],
+            "title": "ExecutionStatus",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Capability invocation result.",
+        "properties": {
+          "artifact_uris": {
+            "default": [],
+            "items": {
+              "pattern": "^artifact://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "title": "Artifact Uris",
+            "type": "array"
+          },
+          "assurance": {
+            "$ref": "#/$defs/CapabilityAssurance"
+          },
+          "capability_id": {
+            "maxLength": 128,
+            "minLength": 3,
+            "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+            "title": "Capability Id",
+            "type": "string"
+          },
+          "capability_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Capability Version",
+            "type": "string"
+          },
+          "completeness": {
+            "$ref": "#/$defs/CapabilityCompleteness"
+          },
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/CapabilityDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "execution": {
+            "$ref": "#/$defs/Execution"
+          },
+          "mode": {
+            "$ref": "#/$defs/CapabilityMode"
+          },
+          "obligations": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/CapabilityObligation"
+            },
+            "title": "Obligations",
+            "type": "array"
+          },
+          "output": {
+            "additionalProperties": true,
+            "title": "Output",
+            "type": "object"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "provider_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider Digest"
+          },
+          "relationships": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/CapabilityRelationship"
+            },
+            "title": "Relationships",
+            "type": "array"
+          },
+          "response_version": {
+            "const": "2",
+            "default": "2",
+            "title": "Response Version",
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapabilityScope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "capability_id",
+          "capability_version",
+          "mode",
+          "execution",
+          "assurance"
+        ],
+        "title": "CapabilityResult",
+        "type": "object"
+      },
+      "title": "Run a mathematical operation"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Append one concise external reasoning summary. This records model-authored PLAN,\nBEFORE_TOOL, AFTER_TOOL, or FINAL entries; it does not request or expose hidden\nchain-of-thought and never establishes mathematical assurance. PLAN creates a run.\nBEFORE_TOOL reserves one capability call. AFTER_TOOL interprets the bound actual\nresult or explicitly records RESULT_UNAVAILABLE after a lost response or runtime\nrestart. FINAL audits the completed run. Do not copy prompts, secrets, payloads, or\nraw tool output into summary.\n",
+      "inputSchema": {
+        "$defs": {
+          "CapabilityAssuranceLevel": {
+            "description": "Coarse model-facing assurance without hiding the detailed result record.",
+            "enum": [
+              "HEURISTIC",
+              "COMPUTED",
+              "VERIFIED"
+            ],
+            "title": "CapabilityAssuranceLevel",
+            "type": "string"
+          },
+          "CapabilityCompletenessStatus": {
+            "description": "How much of the explicitly declared scope an operation covered.",
+            "enum": [
+              "NOT_APPLICABLE",
+              "UNKNOWN",
+              "PARTIAL",
+              "COMPLETE"
+            ],
+            "title": "CapabilityCompletenessStatus",
+            "type": "string"
+          },
+          "CapabilityMode": {
+            "description": "The low-friction exploration and explicit verification lanes.",
+            "enum": [
+              "EXPLORE",
+              "VERIFY"
+            ],
+            "title": "CapabilityMode",
+            "type": "string"
+          },
+          "ExecutionStatus": {
+            "description": "Operational completion state, independent of mathematical truth.",
+            "enum": [
+              "COMPLETED",
+              "TIMEOUT",
+              "CANCELLED",
+              "ERROR"
+            ],
+            "title": "ExecutionStatus",
+            "type": "string"
+          },
+          "ReasoningInterpretationStatus": {
+            "description": "Whether the model received enough result content to interpret the call.",
+            "enum": [
+              "INTERPRETED",
+              "RESULT_UNAVAILABLE"
+            ],
+            "title": "ReasoningInterpretationStatus",
+            "type": "string"
+          },
+          "ReasoningPhase": {
+            "enum": [
+              "PLAN",
+              "BEFORE_TOOL",
+              "AFTER_TOOL",
+              "FINAL"
+            ],
+            "title": "ReasoningPhase",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Call Id"
+          },
+          "capability_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Capability Id"
+          },
+          "interpretation_status": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ReasoningInterpretationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapabilityMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "phase": {
+            "$ref": "#/$defs/ReasoningPhase"
+          },
+          "reported_assurance_level": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapabilityAssuranceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reported_completeness_status": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapabilityCompletenessStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reported_execution_status": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExecutionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "summary": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "summary"
+        ],
+        "title": "reasoning_writeArguments",
+        "type": "object"
+      },
+      "name": "reasoning.write",
+      "outputSchema": {
+        "$defs": {
+          "ReasoningNextRequired": {
+            "enum": [
+              "BEFORE_TOOL_OR_FINAL",
+              "CAPABILITY_INVOKE",
+              "AFTER_TOOL",
+              "NONE"
+            ],
+            "title": "ReasoningNextRequired",
+            "type": "string"
+          },
+          "ReasoningRunState": {
+            "enum": [
+              "READY",
+              "READY_TO_INVOKE",
+              "TOOL_RUNNING",
+              "AWAITING_AFTER_TOOL",
+              "FINALIZED"
+            ],
+            "title": "ReasoningRunState",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "assurance_level_matches": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Assurance Level Matches"
+          },
+          "call_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Call Id"
+          },
+          "completeness_status_matches": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Completeness Status Matches"
+          },
+          "execution_status_matches": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Execution Status Matches"
+          },
+          "log_uri": {
+            "pattern": "^reasoning://run/[0-9a-f-]{36}$",
+            "title": "Log Uri",
+            "type": "string"
+          },
+          "next_required": {
+            "$ref": "#/$defs/ReasoningNextRequired"
+          },
+          "run_id": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "1",
+            "default": "1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/ReasoningRunState"
+          }
+        },
+        "required": [
+          "run_id",
+          "sequence",
+          "state",
+          "next_required",
+          "log_uri"
+        ],
+        "title": "ReasoningWriteResult",
+        "type": "object"
+      },
+      "title": "Write a concise external reasoning summary"
+    }
+  ]
+}

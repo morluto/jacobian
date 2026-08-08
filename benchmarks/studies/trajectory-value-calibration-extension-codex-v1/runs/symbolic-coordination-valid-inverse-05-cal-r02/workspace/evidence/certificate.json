@@ -1,0 +1,162 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/symbolic-coordination-valid-inverse-05",
+  "result": {
+    "bindings": {
+      "binding_schema_version": "1",
+      "checker_id": "symbolic-coordination-v1.clean-room-polynomial-map-checker@1",
+      "claim_id": "claim://symbolic-coordination-v1/symbolic-coordination-valid-inverse-05",
+      "forward_map_sha256": "sha256:bbe686ae2c0d6aac0d7b4b9ed92cd88d1d2768a4473aaef9db5988d5d44efe66",
+      "scope_id": "scope://symbolic-coordination-v1/symbolic-coordination-valid-inverse-05",
+      "semantics_id": "exact-sparse-polynomial-maps-over-QQ@1",
+      "subject_sha256": "sha256:db8ae848b2816816912c702bce5714cf5b9d14e66a8411e6112fb1d709e266f3"
+    },
+    "case_id": "symbolic-coordination-valid-inverse-05",
+    "family": "valid-two-sided-inverse",
+    "verdict": "VALID_TWO_SIDED_INVERSE",
+    "certificate": {
+      "kind": "TWO_SIDED_COMPOSITION_REPLAY",
+      "source_variables": [
+        "x",
+        "y",
+        "z"
+      ],
+      "target_variables": [
+        "u",
+        "v",
+        "w"
+      ],
+      "inverse_map": {
+        "map_schema_version": "1",
+        "domain": "QQ",
+        "variables": [
+          "u",
+          "v",
+          "w"
+        ],
+        "coordinates": [
+          {
+            "terms": [
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "1"
+                },
+                "exponents": [
+                  1,
+                  0,
+                  0
+                ]
+              },
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "-1"
+                },
+                "exponents": [
+                  0,
+                  2,
+                  0
+                ]
+              },
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "2"
+                },
+                "exponents": [
+                  0,
+                  1,
+                  1
+                ]
+              },
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "-1"
+                },
+                "exponents": [
+                  0,
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          {
+            "terms": [
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "1"
+                },
+                "exponents": [
+                  0,
+                  1,
+                  0
+                ]
+              },
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "-1"
+                },
+                "exponents": [
+                  0,
+                  0,
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "terms": [
+              {
+                "coefficient": {
+                  "den": "1",
+                  "num": "1"
+                },
+                "exponents": [
+                  0,
+                  0,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "inverse_after_forward_residuals": [
+        {
+          "terms": []
+        },
+        {
+          "terms": []
+        },
+        {
+          "terms": []
+        }
+      ],
+      "forward_after_inverse_residuals": [
+        {
+          "terms": []
+        },
+        {
+          "terms": []
+        },
+        {
+          "terms": []
+        }
+      ],
+      "checked_directions": [
+        "INVERSE_AFTER_FORWARD",
+        "FORWARD_AFTER_INVERSE"
+      ]
+    }
+  },
+  "scope": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-valid-inverse-05",
+  "completeness": "COMPLETE",
+  "limitations": [
+    "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
+  ]
+}

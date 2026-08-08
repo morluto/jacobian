@@ -1,0 +1,302 @@
+{
+  "assurance_authority": false,
+  "extraction_schema_version": "1",
+  "extractor_id": "jacobian.observable-trajectory-state.v1",
+  "source_digest": "sha256:d601cb2b588c1eb0e5dab17e66ef32a952ee29d252ae32479fcbb87b4db72965",
+  "source_format": "codex-jsonl",
+  "states": [
+    {
+      "boundary": "PLAN",
+      "changed_fields": [
+        "state_schema_version",
+        "task_family",
+        "typed_objects",
+        "artifacts",
+        "candidate_state",
+        "latest_candidate_digest",
+        "checker_state",
+        "open_obligation_uris",
+        "discharged_obligation_uris",
+        "execution_status",
+        "completeness_status",
+        "completeness_assurance",
+        "assurance_level",
+        "scope_digest",
+        "scope_escalation_errors",
+        "binding_validity",
+        "latest_meaningful_transitions",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": null,
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "READY",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:290d53f4a5efd3c2388aa7b95b80b57e480dad7f22e9e26269fe76217bc9cceb",
+      "index": 0,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute maximum-degree vertices and distances to that set for the finite graph in input.json, then write evidence and submission files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 20
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "execution_status",
+        "reasoning_protocol_state"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": null,
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": null,
+        "completeness_status": null,
+        "discharged_obligation_uris": [],
+        "execution_status": "ERROR",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": null,
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": []
+      },
+      "hard_state_digest": "sha256:ea180851f89d40de16f950555a44f58dca1badcb9e8f47e5180cef9f34bb131f",
+      "index": 1,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute maximum-degree vertices and distances to that set for the finite graph in input.json, then write evidence and submission files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 32
+    },
+    {
+      "boundary": "TOOL_RESULT",
+      "changed_fields": [
+        "assurance_level",
+        "completeness_assurance",
+        "completeness_status",
+        "execution_status",
+        "latest_meaningful_transitions",
+        "scope_digest",
+        "typed_objects"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [
+          "COMPLETENESS_CHANGED",
+          "OBJECT_ADDED",
+          "SCOPE_CHANGED"
+        ],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:cea9384432c58dbb43020b27b64584ae2ca933b865c6319596cf9ac2f65ffc9f",
+      "index": 2,
+      "milestone_eligible": true,
+      "milestone_kinds": [
+        "COMPLETENESS_CHANGED",
+        "OBJECT_ADDED",
+        "SCOPE_CHANGED"
+      ],
+      "milestone_reason": "eligible typed mathematical state transition: COMPLETENESS_CHANGED, OBJECT_ADDED, SCOPE_CHANGED",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": null,
+        "plan_summary": "Compute maximum-degree vertices and distances to that set for the finite graph in input.json, then write evidence and submission files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 35
+    },
+    {
+      "boundary": "AFTER_TOOL",
+      "changed_fields": [
+        "latest_meaningful_transitions"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:591ebaee40054b3966e0e2bf0a0d8be178744d5529f0ad7c1292e872478f0a48",
+      "index": 3,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": null,
+        "latest_after_tool_summary": "The exact graph distance-matrix computation completed successfully on the supplied finite graph; the derived evidence and submission agree with the local structural check.",
+        "plan_summary": "Compute maximum-degree vertices and distances to that set for the finite graph in input.json, then write evidence and submission files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 47
+    },
+    {
+      "boundary": "FINAL",
+      "changed_fields": [],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "UNKNOWN",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:591ebaee40054b3966e0e2bf0a0d8be178744d5529f0ad7c1292e872478f0a48",
+      "index": 4,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the graph-artifact composition task: evidence/answer.txt and submission.json are written in the workspace, the evidence hash is bound in submission.json, and the submission passed a local structural check.",
+        "latest_after_tool_summary": "The exact graph distance-matrix computation completed successfully on the supplied finite graph; the derived evidence and submission agree with the local structural check.",
+        "plan_summary": "Compute maximum-degree vertices and distances to that set for the finite graph in input.json, then write evidence and submission files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 52
+    },
+    {
+      "boundary": "TERMINAL",
+      "changed_fields": [
+        "binding_validity"
+      ],
+      "hard_state": {
+        "artifacts": [],
+        "assurance_level": "COMPUTED",
+        "binding_validity": "VALID",
+        "candidate_state": "ABSENT",
+        "checker_state": "NOT_CHECKED",
+        "completeness_assurance": "COMPUTED",
+        "completeness_status": "COMPLETE",
+        "discharged_obligation_uris": [],
+        "execution_status": "COMPLETED",
+        "latest_candidate_digest": null,
+        "latest_meaningful_transitions": [],
+        "open_obligation_uris": [],
+        "reasoning_protocol_state": "INVALID",
+        "scope_digest": "sha256:6bf03331516ebe58f41d135e77f61b333295a377de94da93880ac1c264b09d5f",
+        "scope_escalation_errors": [],
+        "state_schema_version": "1",
+        "task_family": "graph-artifact-composition",
+        "typed_objects": [
+          {
+            "content_digest": "sha256:4b32975fbef3199ac9cd08caed088b5803c7c7c200ce9fb850485960a218cab3",
+            "object_type": "graph.distance_matrix.compute.output",
+            "source_capability_id": "graph.distance_matrix.compute"
+          }
+        ]
+      },
+      "hard_state_digest": "sha256:0ec179597fb65be276090541aa011cfa6aa94e98e7ea00133752d05d616c1165",
+      "index": 5,
+      "milestone_eligible": false,
+      "milestone_kinds": [],
+      "milestone_reason": "observation boundary only; no eligible typed mathematical state transition",
+      "soft_state": {
+        "final_summary": "Completed the graph-artifact composition task: evidence/answer.txt and submission.json are written in the workspace, the evidence hash is bound in submission.json, and the submission passed a local structural check.",
+        "latest_after_tool_summary": "The exact graph distance-matrix computation completed successfully on the supplied finite graph; the derived evidence and submission agree with the local structural check.",
+        "plan_summary": "Compute maximum-degree vertices and distances to that set for the finite graph in input.json, then write evidence and submission files.",
+        "soft_state_schema_version": "1"
+      },
+      "source_event_index": 55
+    }
+  ],
+  "task_family": "graph-artifact-composition",
+  "terminal_evidence": {
+    "acceptance": "ACCEPTED",
+    "artifact_binding_valid": true,
+    "clean_room": true,
+    "evidence_schema_version": "1",
+    "input_binding_valid": true,
+    "source_binding_digest": "sha256:d601cb2b588c1eb0e5dab17e66ef32a952ee29d252ae32479fcbb87b4db72965",
+    "verifier_digest": "sha256:c2d0d59a349eb74098087dbd694204f94a84371429cf14c0bfbfd4e786d7cb92",
+    "verifier_execution_status": "COMPLETED"
+  }
+}

@@ -1,5 +1,104 @@
 # Changelog
 
+## [0.10.0](https://github.com/morluto/jacobian/compare/jacobian-v0.9.0...jacobian-v0.10.0) (2026-08-08)
+
+
+### Features
+
+* **benchmarks:** add fail-closed aggregate reward policy and ratchets ([70963ed](https://github.com/morluto/jacobian/commit/70963ed2ceb104475a39208abad6da0b3bdec2b5))
+* **benchmarks:** add selected-task workflow ([#572](https://github.com/morluto/jacobian/issues/572)) ([9d94310](https://github.com/morluto/jacobian/commit/9d943108c6650200c67eb5aa70fb27b78b048d52))
+* **benchmarks:** move verifier exceptions into task-local contracts ([ccf4b7c](https://github.com/morluto/jacobian/commit/ccf4b7c898387583ebbbf1e26d86f6b0ce862a0c))
+
+
+### Bug Fixes
+
+* address post-merge MCP and observation review findings ([7f5a035](https://github.com/morluto/jacobian/commit/7f5a035c369f5b6445c5236a384b3adaa8852206))
+* address post-merge review findings ([9913af4](https://github.com/morluto/jacobian/commit/9913af4ea0fec4c686edd940bb673f3a4688f89a))
+* **benchmarks:** accept compact network_mode TOML assignments ([#668](https://github.com/morluto/jacobian/issues/668)) ([5957cd2](https://github.com/morluto/jacobian/commit/5957cd24b5acb207d99e0ee0cd98c5714fd6a468))
+* **benchmarks:** address reconstruction deck certificate review comments ([#657](https://github.com/morluto/jacobian/issues/657)) ([7154612](https://github.com/morluto/jacobian/commit/71546120bc94035a20822a5ef26a3a9d1b6a12d5))
+* **benchmarks:** bind cddlib/regina and tighten provider Oracle evidence ([#709](https://github.com/morluto/jacobian/issues/709)) ([bf44e7a](https://github.com/morluto/jacobian/commit/bf44e7ab470d739274f57bcb78c8017d03288247))
+* **benchmarks:** discard consumed streaming whitespace prefix in reconstruction deck verifier ([#682](https://github.com/morluto/jacobian/issues/682)) ([256ff13](https://github.com/morluto/jacobian/commit/256ff1318e024e9bcf28f0544ed4b77b0b35b263))
+* **benchmarks:** discover conjecture host validations ([#829](https://github.com/morluto/jacobian/issues/829)) ([08f7d95](https://github.com/morluto/jacobian/commit/08f7d951cbc2c2ee63824bf9d029cbbd33be3616))
+* **benchmarks:** fail-closed reward, support, and provider evidence ([f03baaf](https://github.com/morluto/jacobian/commit/f03baafb40e22cb9a37392053e4a5d52a1d97b69))
+* **benchmarks:** identify provider feasibility tasks accurately ([#771](https://github.com/morluto/jacobian/issues/771)) ([4de8452](https://github.com/morluto/jacobian/commit/4de8452081397cb056be0a98bf320ca032204d6a))
+* **benchmarks:** install jsonschema in upgraded verifier images ([64132a9](https://github.com/morluto/jacobian/commit/64132a94d689ade8e9fbd447101df3cafe5d35cf))
+* **benchmarks:** land Hadwiger verifier review follow-ups (evidence schema, JSON type fidelity, assurance guard, non-finite JSON) ([#675](https://github.com/morluto/jacobian/issues/675)) ([c174872](https://github.com/morluto/jacobian/commit/c1748722017a66295a317188885acace6d753faa))
+* **benchmarks:** make mathematical rewards fail closed ([b3dbc1c](https://github.com/morluto/jacobian/commit/b3dbc1c6d00338a5af980253c04abc0880829b7e))
+* **benchmarks:** migrate legacy verifier diagnostics ([ee14bf7](https://github.com/morluto/jacobian/commit/ee14bf7470d28f2c59e319e8159d3c75c3c942a2))
+* **benchmarks:** pin deterministic pytest-randomly seed for host shards ([#625](https://github.com/morluto/jacobian/issues/625)) ([6c893d3](https://github.com/morluto/jacobian/commit/6c893d3d9e003585c1eeac1eb394566d35924dfb))
+* **benchmarks:** preserve decoupled input diagnostics ([9b05caf](https://github.com/morluto/jacobian/commit/9b05caf5e94cbacb8f9100c3859af783d8284138))
+* **benchmarks:** preserve fail-closed diagnostics and validation gates ([e2c264b](https://github.com/morluto/jacobian/commit/e2c264bd0145ab3314a69fce9df961bdda946b89))
+* **benchmarks:** publish bound input for provider Oracle verifiers ([#683](https://github.com/morluto/jacobian/issues/683)) ([41504be](https://github.com/morluto/jacobian/commit/41504be7ac07cb6d9983a5ba81750c1c851b316c))
+* **benchmarks:** repair shared CI root causes for oracle and contracts ([#640](https://github.com/morluto/jacobian/issues/640)) ([95b2024](https://github.com/morluto/jacobian/commit/95b202450872a59f7aa944dc17f03e6e699bf0b5))
+* **benchmarks:** require authoritative completion counts ([556dfae](https://github.com/morluto/jacobian/commit/556dfae0e38c9e7b6d1b07c4c7cd5aea7fe628ca))
+* **benchmarks:** skip vanished Oracle evidence candidates ([#743](https://github.com/morluto/jacobian/issues/743)) ([a3b35ac](https://github.com/morluto/jacobian/commit/a3b35ac6f1b230e3a20da1044086353e44f860b0))
+* **benchmarks:** sort functools import for schema validator cache CI ([#621](https://github.com/morluto/jacobian/issues/621)) ([db4cc38](https://github.com/morluto/jacobian/commit/db4cc3834dadb6b956048c6edfb8e9daddfda418))
+* **capabilities:** return typed failures for invalid adapter output ([#739](https://github.com/morluto/jacobian/issues/739)) ([166a380](https://github.com/morluto/jacobian/commit/166a380f956c56842ade0a78a988a4030bfe073c))
+* **checkers:** bind the Lake launcher digest to the authorized Lean runtime ([b84a9ca](https://github.com/morluto/jacobian/commit/b84a9ca819ff298eabaaa3ee482a3e2a66a5adb9))
+* **ci:** account for shared Lean process memory ([6114242](https://github.com/morluto/jacobian/commit/6114242ad9f36c9561b9bcbbfcc95be93b55e1ff))
+* **ci:** avoid repeated trajectory cluster validation ([a7c312b](https://github.com/morluto/jacobian/commit/a7c312bc252ca822d0e17cdcf5a884b058910150))
+* **ci:** format eval telemetry test signature ([#777](https://github.com/morluto/jacobian/issues/777)) ([bad5a78](https://github.com/morluto/jacobian/commit/bad5a78d7aac6cdec801f57537898bdc4c0e5626))
+* **ci:** restore lint-full and test-architecture on main ([0891065](https://github.com/morluto/jacobian/commit/089106563c8947ec8794da2065f385f64b24e425))
+* **ci:** restore lint-full and test-architecture on main ([f39f3eb](https://github.com/morluto/jacobian/commit/f39f3eb1ecec7cf525a1f0b7068e46784c748472))
+* **ci:** restore static gates after benchmark additions ([#723](https://github.com/morluto/jacobian/issues/723)) ([b5fc67a](https://github.com/morluto/jacobian/commit/b5fc67a7c934c6f9eb286d31656ab879bc70aedd))
+* **ci:** tolerate duplicate timing entries across benchmark shards ([#624](https://github.com/morluto/jacobian/issues/624)) ([6b3b58a](https://github.com/morluto/jacobian/commit/6b3b58afd2c2140dd036b63e768dd1e15afa232f))
+* **cli:** preserve command failures during cleanup ([#713](https://github.com/morluto/jacobian/issues/713)) ([fb118bb](https://github.com/morluto/jacobian/commit/fb118bb118ff2370430845cd6ac250d979174093))
+* **eval:** guard resource-read tool field against non-hashable values ([2e08f67](https://github.com/morluto/jacobian/commit/2e08f67de52cb80089f005becd5c634dbee87bd2))
+* **eval:** ignore malformed telemetry status and tool fields ([#708](https://github.com/morluto/jacobian/issues/708)) ([f64d891](https://github.com/morluto/jacobian/commit/f64d891b0a855c4af77c91376e5925889ada9a60))
+* **experiments:** use first-page parent capacity ([#716](https://github.com/morluto/jacobian/issues/716)) ([10421cb](https://github.com/morluto/jacobian/commit/10421cb6839e24867f025d88d9ab799b850121d2))
+* fail closed on malformed JSON and purge stale plugin imports ([4cdb2b4](https://github.com/morluto/jacobian/commit/4cdb2b436c6314c35bd6e90d2ef5766981e5b2e7))
+* fail closed on malformed observation/control JSON and purge stale plugin imports ([3bfaf5f](https://github.com/morluto/jacobian/commit/3bfaf5f364b67907a415c5346da87a327b28279b))
+* fail-closed evaluation integrity across verifiers and kernel ([#585](https://github.com/morluto/jacobian/issues/585)) ([5aec651](https://github.com/morluto/jacobian/commit/5aec6514f06f47a0745c2c3ff4db0deb7a11c4e0))
+* **lean:** resolve toolchain lean instead of elan proxy ([#627](https://github.com/morluto/jacobian/issues/627)) ([c91140e](https://github.com/morluto/jacobian/commit/c91140ee365252e7b86844c71001a3e0023cdb02))
+* **matrix:** reject invalid flint worker protocols ([#725](https://github.com/morluto/jacobian/issues/725)) ([f2d3525](https://github.com/morluto/jacobian/commit/f2d3525ca7452506511ce66066015475ebf7b654))
+* MCP concurrency, fail-closed benchmark, and resource safety fixes ([ed07ff7](https://github.com/morluto/jacobian/commit/ed07ff780e453c953e35ed5c6d3b5c991be55200))
+* MCP concurrency, fail-closed benchmark, and resource safety fixes ([6dab752](https://github.com/morluto/jacobian/commit/6dab75299303ad374826192cc3a860049082901b))
+* **mcp:** bound cancellation drain with monotonic deadline ([fec2f27](https://github.com/morluto/jacobian/commit/fec2f27e93f925d7d9302401cbb90d5b9a7dbd74))
+* **mcp:** clarify validation and assurance diagnostics ([#602](https://github.com/morluto/jacobian/issues/602)) ([0733334](https://github.com/morluto/jacobian/commit/07333343e70d6e09534db92c4dfeff1c96b6def3))
+* **mcp:** distinguish unknown discovery domains ([#604](https://github.com/morluto/jacobian/issues/604)) ([fcfe72f](https://github.com/morluto/jacobian/commit/fcfe72f0169697ddd2e37d3af96358df21536246))
+* **mcp:** quarantine failed tenant runtimes and serialize shutdown ([#745](https://github.com/morluto/jacobian/issues/745)) ([ce452d9](https://github.com/morluto/jacobian/commit/ce452d96d1aae6c918ea62fe32243cd2b51a1ec0))
+* **mcp:** report nested required constraints, keep capability selection agent-owned ([#678](https://github.com/morluto/jacobian/issues/678)) ([25141d0](https://github.com/morluto/jacobian/commit/25141d0e293ea0d8023273cea3ad20049ef47340))
+* **npm:** resolve latest bootstrap for upgrades ([fb884b3](https://github.com/morluto/jacobian/commit/fb884b3a97a1f317e60b09034af9ce598ca94e37))
+* **polynomials:** bound inverse solver termination ([#744](https://github.com/morluto/jacobian/issues/744)) ([024d9c7](https://github.com/morluto/jacobian/commit/024d9c715b328680b184de973e958807cd3212c6))
+* **pre-commit:** remove stale verifier-support hook ([#730](https://github.com/morluto/jacobian/issues/730)) ([383d17e](https://github.com/morluto/jacobian/commit/383d17ee08cfc8cc5ab3734eb5296ff830f22987))
+* **providers:** correct Z3 mismatch diagnostic ([#748](https://github.com/morluto/jacobian/issues/748)) ([0f7a445](https://github.com/morluto/jacobian/commit/0f7a445910852accd0f92cc9f4368bc9dd6c92d8))
+* **runtime:** attempt all owners during shutdown ([#714](https://github.com/morluto/jacobian/issues/714)) ([b423a41](https://github.com/morluto/jacobian/commit/b423a41d29669ecc0adc0308359d47ff1e67a04b))
+* **runtime:** preserve bootstrap failures during cleanup ([#724](https://github.com/morluto/jacobian/issues/724)) ([42fc483](https://github.com/morluto/jacobian/commit/42fc483b82d045864f605693ce0a4a74e10aa08d))
+* **search:** bound nomination lineage before persistence ([#750](https://github.com/morluto/jacobian/issues/750)) ([f6043fe](https://github.com/morluto/jacobian/commit/f6043fe3fff61d8a0c4a3d068caefbbb0ca4610e))
+* **smt:** allow declare-const in cvc5 worker ([#715](https://github.com/morluto/jacobian/issues/715)) ([92ca13f](https://github.com/morluto/jacobian/commit/92ca13f40bbe303e71503c0eacb21d38cceca10e))
+* **smt:** reject non-string cvc5 worker statuses ([#726](https://github.com/morluto/jacobian/issues/726)) ([43ceea8](https://github.com/morluto/jacobian/commit/43ceea8587f46983944b90695ff53cb47005803b))
+* **tests:** audit and clean up false greens, assertion debt, and antipatterns ([#628](https://github.com/morluto/jacobian/issues/628)) ([8f79a00](https://github.com/morluto/jacobian/commit/8f79a007287922cc17a7bdc69d12c4062be32c65))
+* **tests:** audit and clean up test anti-patterns ([#641](https://github.com/morluto/jacobian/issues/641)) ([7eafbea](https://github.com/morluto/jacobian/commit/7eafbea0c7234b57b4acc0ff6a2300919a1a7dc0))
+* **tests:** avoid sharing template blob inodes ([2d3d260](https://github.com/morluto/jacobian/commit/2d3d2601da23ed79452f17dadb2c72483b3afe91))
+* **tests:** avoid sharing template blob inodes ([a729e16](https://github.com/morluto/jacobian/commit/a729e16e109719e96b43995d40879ae7ff392ec2))
+* **verification:** gate VERIFIED on TRUE and fail closed on unknown ops ([721635e](https://github.com/morluto/jacobian/commit/721635e0118fdb556854e41185fd4aef5efe3428))
+* **verification:** include supporting artifact metadata ([#711](https://github.com/morluto/jacobian/issues/711)) ([6714453](https://github.com/morluto/jacobian/commit/67144534397c4876f79ba7a1a3290c98bb18445f))
+* **verification:** verify accepted false conclusions ([d478e2e](https://github.com/morluto/jacobian/commit/d478e2e4bf14844022975309c782ad465f3a1577))
+* **verifier:** retain false-certification diagnostics ([#773](https://github.com/morluto/jacobian/issues/773)) ([a3cbb91](https://github.com/morluto/jacobian/commit/a3cbb912c0c3ae782564243da512b0b1d0a87cb8))
+* verify accepted false conclusions ([dfcc29c](https://github.com/morluto/jacobian/commit/dfcc29c010fb004bb3fd5bf7faaeb6a090b7698a))
+
+
+### Performance Improvements
+
+* **benchmarks:** cache schema validators with lru_cache ([#626](https://github.com/morluto/jacobian/issues/626)) ([f55147f](https://github.com/morluto/jacobian/commit/f55147f9f1735a556085f059690c8e442c446bec))
+* **schema:** skip meta-schema validation for Pydantic-generated schemas ([c928039](https://github.com/morluto/jacobian/commit/c9280392842f78eeb6aa81abd8e2e838cdbe59ee))
+* **schema:** skip meta-schema validation for Pydantic-generated schemas ([18d6042](https://github.com/morluto/jacobian/commit/18d60427806e889edff61b917abd7fc369e29c35))
+* **storage:** reuse prepared artifact identities ([#747](https://github.com/morluto/jacobian/issues/747)) ([d43167a](https://github.com/morluto/jacobian/commit/d43167ab27d3f917b41961d0b3ac844a163eb970))
+* **tests:** hardlink immutable blobs in template copy ([65b0092](https://github.com/morluto/jacobian/commit/65b0092d5cc72edebf0e23b11c6cf5b60a377932))
+* **tests:** hardlink immutable blobs in template copy instead of copying ([26fc5af](https://github.com/morluto/jacobian/commit/26fc5afd50c9674e5ea85b828e9dc2d023e42473))
+
+
+### Documentation
+
+* add comprehensive audit report ([e42392b](https://github.com/morluto/jacobian/commit/e42392b57e4ed61f131213f1c2ff3b841c03cfdf))
+* **agents:** define mathematical interoperability rules ([#769](https://github.com/morluto/jacobian/issues/769)) ([3097458](https://github.com/morluto/jacobian/commit/309745890cd29da85d1abc41f2522755ce926af4))
+* **benchmarks:** document prebuilt agent environment direction ([e24dbf6](https://github.com/morluto/jacobian/commit/e24dbf6b8aa5c94531958e5b3efcef17b2b51dcc))
+* clarify inline verification evidence ([53bd6aa](https://github.com/morluto/jacobian/commit/53bd6aafe24b6f927ad01726baa6bd6e0f310020))
+* clarify mathematical agent workflow ([033bb2b](https://github.com/morluto/jacobian/commit/033bb2bee006092d9b8be472e646be0fca830c4d))
+* explain why atomic capabilities scale ([a9df893](https://github.com/morluto/jacobian/commit/a9df893083fd7b16bafd70cc287f521e15c76234))
+* **skill:** capture benchmark validation lessons ([294e38f](https://github.com/morluto/jacobian/commit/294e38f4490a0db842f53eb0d56be79d252bddc2))
+* **skills:** capture verifier validation lessons ([ec56113](https://github.com/morluto/jacobian/commit/ec561139e0a11c26c4df65dd8b206757cd660880))
+
 ## [0.9.0](https://github.com/morluto/jacobian/compare/jacobian-v0.8.0...jacobian-v0.9.0) (2026-08-06)
 
 

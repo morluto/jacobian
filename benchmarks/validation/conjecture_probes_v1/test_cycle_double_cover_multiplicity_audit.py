@@ -50,15 +50,16 @@ def test_raw_submission_is_bounded_before_read(monkeypatch):
 
 
 def _result(module):
-    flawed = CYCLES[:-1]
+    repair = [cycle.copy() for cycle in CYCLES]
+    flawed = [cycle.copy() for cycle in repair[:-1]]
     flawed_counts = module._multiplicities(flawed)
-    repair_counts = module._multiplicities(CYCLES)
+    repair_counts = module._multiplicities(repair)
     assert flawed_counts and repair_counts
     return {
         "flawed_cycles": flawed,
         "flawed_multiplicities": flawed_counts,
         "non_double_edge_indices": [i for i, c in enumerate(flawed_counts) if c != 2],
-        "repair_cycles": CYCLES,
+        "repair_cycles": repair,
         "repair_multiplicities": repair_counts,
     }
 
@@ -88,3 +89,31 @@ def test_accepts_rotations_and_reversal():
     result = _result(module)
     result["repair_cycles"] = [cycle[2:] + cycle[:2] for cycle in reversed(CYCLES)]
     assert module.mathematics(result)
+
+
+def test_rejects_unhashable_cycle_vertex_without_crashing():
+    module = _module()
+    result = _result(module)
+    result["flawed_cycles"][0][0] = []
+    assert not module.mathematics(result)
+
+
+def test_rejects_non_integer_reported_multiplicity():
+    module = _module()
+    result = _result(module)
+    result["flawed_multiplicities"][0] = float(result["flawed_multiplicities"][0])
+    assert not module.mathematics(result)
+
+
+def test_raw_parser_rejects_duplicate_keys(tmp_path, monkeypatch):
+    module = _module()
+    submission = tmp_path / "submission.json"
+    submission.write_text('{"result": {}, "result": {}}')
+    monkeypatch.setattr(module, "Path", lambda _value: submission)
+    assert module._raw() is None
+
+
+def test_evidence_comparison_preserves_json_types():
+    module = _module()
+    assert not module._json_equal({"count": 1}, {"count": True})
+    assert not module._json_equal({"count": 2}, {"count": 2.0})

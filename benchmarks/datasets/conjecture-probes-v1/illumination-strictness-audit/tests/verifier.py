@@ -166,8 +166,7 @@ def main():
         ),
         "assurance": float(
             bool(
-                contract
-                and isinstance(raw, dict)
+                isinstance(raw, dict)
                 and raw.get("claimed_assurance")
                 in {"UNVERIFIED", "COMPUTED", "CHECKED"}
             )

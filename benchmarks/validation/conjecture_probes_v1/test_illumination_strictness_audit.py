@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from itertools import product
 from pathlib import Path
@@ -133,3 +134,32 @@ def test_accepts_reordered_repair():
     result["repair_directions"].reverse()
     result["vertex_to_direction"].reverse()
     assert module.mathematics(result)
+
+
+def test_assurance_diagnostic_is_independent_of_protocol(monkeypatch, tmp_path):
+    module = _module()
+    raw = {
+        "claimed_assurance": "CHECKED",
+        "scope": "wrong-scope",
+        "result": _result(module),
+    }
+    monkeypatch.setattr(module, "_raw", lambda: raw)
+    monkeypatch.setattr(module, "load_submission", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        module, "strict_submission_contract", lambda *_args, **_kwargs: False
+    )
+    monkeypatch.setattr(module, "workspace_input_is_bound", lambda: True)
+    monkeypatch.setattr(
+        module, "evidence_list_is_bound", lambda *_args, **_kwargs: False
+    )
+    output = tmp_path / "reward.json"
+    monkeypatch.setattr(
+        module, "_write", lambda values: output.write_text(json.dumps(values))
+    )
+
+    module.main()
+
+    values = json.loads(output.read_text())
+    assert values["protocol"] == 0.0
+    assert values["assurance"] == 1.0
+    assert values["reward"] == 0.0

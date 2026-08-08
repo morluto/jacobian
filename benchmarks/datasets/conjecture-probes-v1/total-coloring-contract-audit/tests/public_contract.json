@@ -26,17 +26,17 @@
     ]
   },
   "required_artifact_filenames": [
-    "evidence/answer.txt"
+    "evidence/answer.json"
   ],
   "evidence": {
     "allowed_paths": [
-      "evidence/answer.txt"
+      "evidence/answer.json"
     ],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
     "min_items": 1,
     "max_items": 1,
     "media_types": [
-      "text/plain"
+      "application/json"
     ],
     "payload_shape": null
   },
@@ -114,7 +114,7 @@
       }
     }
   },
-  "public_notes": "Exact audit and repair of one projected total-coloring validator on the Petersen graph only.",
+  "public_notes": "Exact audit and repair of one projected total-coloring validator on the Petersen graph only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.",
   "submission_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -206,7 +206,7 @@
           ],
           "properties": {
             "path": {
-              "const": "evidence/answer.txt"
+              "const": "evidence/answer.json"
             },
             "sha256": {
               "type": "string",

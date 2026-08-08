@@ -12,7 +12,9 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.operation_installation import OperationInstaller
 from jacobian.runtime import CheckerAuthorityMode
@@ -74,10 +76,40 @@ def test_python_flint_hnf_produces_a_durable_certificate(hnf_services) -> None:
     )
     assert result.execution.status.value == "COMPLETED"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.output["backend_version"] == "0.9.0"
     assert result.output["result_uri"].startswith("artifact://sha256/")
     payload = hnf_services.core.store.get(result.output["result_uri"]).payload
     assert payload["normal_form"]["entries"] == [["0", "2", "0"], ["0", "0", "4"]]
     assert payload["transformation"]["entries"] == [["-2", "1"], ["3", "-1"]]
+
+
+def test_hnf_worker_envelope_requires_identity_and_source_shapes() -> None:
+    source = IntegerMatrix.model_validate(
+        {
+            "entries": [["1", "2", "3"], ["4", "5", "6"]],
+        }
+    )
+    valid = {
+        "protocol": "jacobian.matrix-lattice-hnf-worker/v1",
+        "status": "NORMAL_FORM_PRODUCED",
+        "backend_version": "0.9.0",
+        "flint_library_version": "3.6.0",
+        "normal_form": [["1", "0", "0"], ["0", "1", "0"]],
+        "transformation": [["1", "0"], ["0", "1"]],
+    }
+    result = _parse_hnf_worker_result(valid, source)
+    assert result.normal_form.entries == (("1", "0", "0"), ("0", "1", "0"))
+
+    for invalid in (
+        {key: value for key, value in valid.items() if key != "protocol"},
+        {**valid, "backend_version": "0.8.0"},
+        {
+            **valid,
+            "normal_form": [["1", "0"], ["0", "1"]],
+        },
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            _parse_hnf_worker_result(invalid, source)
 
 
 def test_hnf_checker_replays_the_retained_certificate(hnf_services) -> None:

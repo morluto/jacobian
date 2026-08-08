@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context
 from mcp_types import CallToolResult, TextContent
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, RootModel, StrictInt
 
 from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE, ReasoningLogMode
 from jacobian.adapters.mcp.context import AppState, _runtime
@@ -43,40 +43,80 @@ _LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
 
 
-class CapabilityDiscoveryResponse(BaseModel):
-    """Typed structured content for both discovery and exact lookup responses."""
+class _CapabilityDiscoveryFields(BaseModel):
+    """Shared catalog metadata with a closed MCP output shape."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["discovery", "capability"] | None = None
-    view: CapabilityDescriptionView | None = None
-    catalog_version: str | None = None
-    policy_profile: str | None = None
-    policy_digest: str | None = None
-    catalog_digest: str | None = None
-    discovery_version: str | None = None
+    policy_profile: str
+    policy_digest: str
+
+
+class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
+    kind: Literal["discovery"]
+    catalog_version: str
+    catalog_digest: str
+    discovery_version: Literal["1"]
     query: str | None = None
     domain: str | None = None
+    domain_filter_status: Literal["UNFILTERED", "MATCHED", "UNKNOWN"]
+    domain_filter_basis: str
     mode: CapabilityMode | None = None
     resolved_input_kind: CapabilityInputKind | None = None
     artifact_type: str | None = None
-    routing_status: str | None = None
-    routing_basis: str | None = None
-    matches: list[dict[str, Any]] | None = None
-    total_matches: int | None = None
-    truncated: bool | None = None
+    routing_status: Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"]
+    routing_basis: str
+    matches: list[dict[str, Any]]
+    total_matches: StrictInt
+    truncated: bool
     next_cursor: str | None = None
-    available_domains: list[str] | None = None
-    portfolio_fit: str | None = None
-    portfolio_fit_basis: str | None = None
-    available_recovery_paths: list[dict[str, Any]] | None = None
-    capability: dict[str, Any] | None = None
-    scope_rule: str | dict[str, Any] | None = None
+    available_domains: list[str]
+    portfolio_fit: Literal[
+        "UNFILTERED",
+        "STRONG_CANDIDATES_FOUND",
+        "ONLY_WEAK_LEXICAL_MATCHES",
+        "NO_LEXICAL_MATCHES",
+    ]
+    portfolio_fit_basis: str
+    available_recovery_paths: list[dict[str, Any]]
+    recovery_paths_are_unranked: bool
+    response_byte_limit: StrictInt
+    truncation_reason: str | None = None
+    available_domains_total: StrictInt
+    available_domains_truncated: bool
+    match_metadata_truncated: bool
+
+
+class _CapabilityInspectionResult(_CapabilityDiscoveryFields):
+    kind: Literal["capability"]
+    view: CapabilityDescriptionView
+    capability: dict[str, Any]
+    scope_rule: str | dict[str, Any]
     invocations: list[dict[str, Any]] | None = None
     related_capabilities: list[dict[str, Any]] | None = None
+    synchronous_execution: dict[str, Any] | None = None
     next_views: dict[str, str] | None = None
     cache: dict[str, Any] | None = None
-    error: dict[str, Any] | None = None
+
+
+class _CapabilityDiscoveryError(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["error"]
+    error: dict[str, Any]
+
+
+class CapabilityDiscoveryResponse(
+    RootModel[
+        Annotated[
+            _CapabilityDiscoveryResult
+            | _CapabilityInspectionResult
+            | _CapabilityDiscoveryError,
+            Field(discriminator="kind"),
+        ]
+    ]
+):
+    """Closed, discriminated structured output for math.find."""
 
 
 CapabilityDiscoveryToolResult = Annotated[
@@ -188,6 +228,8 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def _find_result(response: dict[str, Any]) -> CallToolResult:
+    if "error" in response and response.get("kind") != "error":
+        response = {"kind": "error", **response}
     structured = CapabilityDiscoveryResponse.model_validate(response)
     return _text_result(
         structured.model_dump(mode="json", exclude_unset=True),

@@ -120,7 +120,7 @@ _CASES: tuple[
     (
         check_finite_poset_materialization,
         _request(
-            "poset.finite.materialize",
+            "poset.finite.compute",
             "poset.finite.closure-reduction-replay",
             _PRESENTATION.model_dump(mode="json"),
             _MATERIALIZED.model_dump(mode="json"),

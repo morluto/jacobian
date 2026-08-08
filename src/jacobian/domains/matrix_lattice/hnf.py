@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import (
@@ -30,6 +32,7 @@ from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
 from jacobian.worker_environment import worker_environment
 
 HNF_RUNTIME = python_flint_hnf_provider_runtime()
+HNF_WORKER_PROTOCOL = "jacobian.matrix-lattice-hnf-worker/v1"
 HNF_STDOUT_LIMIT = 80_000_000
 HNF_STDERR_LIMIT = 64_000
 
@@ -45,6 +48,48 @@ def _failure(
             message=message,
             hint="Install the pinned Python-FLINT HNF provider and retry.",
         ),
+    )
+
+
+def _parse_hnf_worker_result(
+    output: object,
+    source: IntegerMatrix,
+) -> HermiteNormalFormResult:
+    """Validate the complete worker envelope before exposing its certificate."""
+
+    expected_keys = {
+        "protocol",
+        "status",
+        "backend_version",
+        "flint_library_version",
+        "normal_form",
+        "transformation",
+    }
+    if not isinstance(output, dict) or set(output) != expected_keys:
+        raise ValueError("invalid HNF worker response shape")
+    if (
+        output["protocol"] != HNF_WORKER_PROTOCOL
+        or output["status"] != "NORMAL_FORM_PRODUCED"
+        or output["backend_version"] != "0.9.0"
+        or output["flint_library_version"] != "3.6.0"
+    ):
+        raise ValueError("invalid HNF worker response identity")
+
+    normal_form = IntegerMatrix.model_validate({"entries": output["normal_form"]})
+    transformation = IntegerMatrix.model_validate({"entries": output["transformation"]})
+    source_rows = len(source.entries)
+    source_columns = len(source.entries[0])
+    if len(normal_form.entries) != source_rows or any(
+        len(row) != source_columns for row in normal_form.entries
+    ):
+        raise ValueError("HNF normal form dimensions do not match the source")
+    if len(transformation.entries) != source_rows or any(
+        len(row) != source_rows for row in transformation.entries
+    ):
+        raise ValueError("HNF transformation dimensions do not match the source")
+    return HermiteNormalFormResult(
+        normal_form=normal_form,
+        transformation=transformation,
     )
 
 
@@ -67,7 +112,7 @@ def compute_hermite_normal_form(
             arguments=("-I", "-m", "jacobian.domains.matrix_lattice.hnf_worker"),
             stdin_bytes=canonicalize_json(
                 {
-                    "protocol": "jacobian.matrix-lattice-hnf-worker/v1",
+                    "protocol": HNF_WORKER_PROTOCOL,
                     "matrix": request.matrix.model_dump(mode="json"),
                 }
             ),
@@ -105,21 +150,10 @@ def compute_hermite_normal_form(
             "The isolated Python-FLINT HNF worker did not complete successfully.",
         )
     try:
-        output = loads_strict_json(completed.stdout)
-        if (
-            not isinstance(output, dict)
-            or output.get("status") != "NORMAL_FORM_PRODUCED"
-        ):
-            raise ValueError("invalid HNF worker response")
-        result = HermiteNormalFormResult(
-            normal_form=IntegerMatrix.model_validate(
-                {"entries": output["normal_form"]}
-            ),
-            transformation=IntegerMatrix.model_validate(
-                {"entries": output["transformation"]}
-            ),
+        result = _parse_hnf_worker_result(
+            loads_strict_json(completed.stdout), request.matrix
         )
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, ValidationError):
         return _failure(
             ExecutionStatus.ERROR,
             "FLINT_HNF_PROTOCOL_INVALID",

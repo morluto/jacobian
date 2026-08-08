@@ -106,3 +106,11 @@ def test_raw_parser_rejects_duplicate_keys(tmp_path, monkeypatch):
     submission.write_text('{"result": {}, "result": {}}')
     monkeypatch.setattr(module, "Path", lambda _value: submission)
     assert module._raw() is None
+
+
+def test_assurance_value_is_independent_of_protocol():
+    module = _module()
+    assert module._assurance_is_calibrated(
+        {"claimed_assurance": "CHECKED", "conclusion": "wrong"}
+    )
+    assert not module._assurance_is_calibrated({"claimed_assurance": True})

@@ -128,6 +128,14 @@ def _write(values):
     (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
 
 
+def _assurance_is_calibrated(raw: object) -> bool:
+    return bool(
+        isinstance(raw, dict)
+        and type(raw.get("claimed_assurance")) is str
+        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
+    )
+
+
 def main():
     raw = _raw()
     submission = load_submission(require_input_binding=False)
@@ -164,11 +172,7 @@ def main():
         and raw.get("completeness") == "COMPLETE"
         and raw.get("limitations") == LIMITATIONS
     )
-    assurance_ok = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-    )
+    assurance_ok = _assurance_is_calibrated(raw)
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),

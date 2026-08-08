@@ -239,3 +239,34 @@ def test_duration_collection_writes_separate_output(tmp_path: Path) -> None:
     assert timing_path.read_text(encoding="utf-8") == "{}\n"
     assert "test_example.py::test_it" in output.read_text(encoding="utf-8")
     assert not (tmp_path / ".pytest_cache/benchmark-host-timing").exists()
+
+
+def test_conjecture_dataset_host_validation_discovers_all_dedicated_tests() -> None:
+    """Dataset-wide conjecture-probes-v1 changes select every dedicated test file."""
+
+    from benchmarks.tooling.validation_plan import dataset_host_validation
+
+    entries = dataset_host_validation("conjecture-probes-v1")
+    selectors = [entry.selector for entry in entries]
+
+    project_root = Path(__file__).resolve().parents[2]
+    expected_dir = project_root / "benchmarks" / "validation" / "conjecture_probes_v1"
+    expected = sorted(
+        str(p.relative_to(project_root).as_posix())
+        for p in expected_dir.glob("test_*.py")
+    )
+
+    assert selectors == expected
+    assert len(selectors) > 3
+
+
+def test_non_conjecture_dataset_host_validation_uses_static_entries() -> None:
+    """Other datasets still use the hand-maintained static file list."""
+
+    from benchmarks.tooling.validation_plan import dataset_host_validation
+
+    entries = dataset_host_validation("symbolic-coordination-v1")
+    assert len(entries) == 1
+    assert entries[0].selector == (
+        "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py"
+    )

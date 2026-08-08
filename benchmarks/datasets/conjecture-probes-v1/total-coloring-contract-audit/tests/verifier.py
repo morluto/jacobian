@@ -73,6 +73,40 @@ def _collisions(vertices: list[int], edges: list[int]) -> list[dict[str, int]]:
     ]
 
 
+def _collision_set(value: object) -> set[tuple[int, int]] | None:
+    if not isinstance(value, list):
+        return None
+    rows: set[tuple[int, int]] = set()
+    for row in value:
+        if not isinstance(row, dict) or set(row) != {"vertex", "edge_index"}:
+            return None
+        vertex = row["vertex"]
+        edge_index = row["edge_index"]
+        if (
+            type(vertex) is not int
+            or not 0 <= vertex < len(VERTICES)
+            or type(edge_index) is not int
+            or not 0 <= edge_index < len(EDGES)
+        ):
+            return None
+        rows.add((vertex, edge_index))
+    return rows if len(rows) == len(value) else None
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _json_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _json_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return left == right
+
+
 def _assignment(value: object, *, require_total: bool) -> bool:
     if not isinstance(value, dict) or set(value) != {"vertex_colors", "edge_colors"}:
         return False
@@ -95,8 +129,11 @@ def mathematics(result: object) -> bool:
         repair, require_total=True
     ):
         return False
-    expected = _collisions(flawed["vertex_colors"], flawed["edge_colors"])
-    supplied = result["incidence_collisions"]
+    expected = {
+        (row["vertex"], row["edge_index"])
+        for row in _collisions(flawed["vertex_colors"], flawed["edge_colors"])
+    }
+    supplied = _collision_set(result["incidence_collisions"])
     return bool(expected and supplied == expected)
 
 
@@ -145,7 +182,7 @@ def main() -> None:
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
+        and _json_equal(payload.get("result"), raw.get("result"))
         and payload.get("limitations") == LIMITATIONS
     )
     scope_ok = bool(
@@ -163,9 +200,13 @@ def main() -> None:
         "input_binding": float(bound),
         "protocol": float(bool(contract)),
         "mathematics": float(math_ok),
+        "correctness": float(math_ok),
         "evidence": float(evidence_ok),
+        "evidence_validity": float(evidence_ok),
         "scope": float(scope_ok),
+        "scope_accuracy": float(scope_ok),
         "assurance": float(assurance_ok),
+        "assurance_calibration": float(assurance_ok),
     }
     reward = float(all(values.values()))
     values.update(
@@ -189,9 +230,13 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
+                "correctness": 0.0,
                 "evidence": 0.0,
+                "evidence_validity": 0.0,
                 "scope": 0.0,
+                "scope_accuracy": 0.0,
                 "assurance": 0.0,
+                "assurance_calibration": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "false_certification": False,

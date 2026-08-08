@@ -91,3 +91,41 @@ def test_accepts_color_permutation():
         "repair": {"vertex_colors": rv, "edge_colors": re},
     }
     assert module.mathematics(result)
+
+
+def test_accepts_complete_collision_list_in_alternate_order():
+    module = _module()
+    vertices = [0, 1, 0, 1, 2, 1, 2, 3, 3, 1]
+    repaired = [2, 3, 2, 3, 1, 0, 2, 3, 1, 2, 3, 0, 1, 0, 0]
+    flawed = [(c + 1) % 4 for c in repaired]
+    collisions = sorted(
+        module._collisions(vertices, flawed),
+        key=lambda row: (row["vertex"], row["edge_index"]),
+    )
+    result = {
+        "flawed_pass": {"vertex_colors": vertices, "edge_colors": flawed},
+        "incidence_collisions": collisions,
+        "repair": {"vertex_colors": vertices, "edge_colors": repaired},
+    }
+    assert module.mathematics(result)
+
+
+def test_rejects_non_integer_collision_diagnostic():
+    module = _module()
+    vertices = [0, 1, 0, 1, 2, 1, 2, 3, 3, 1]
+    repaired = [2, 3, 2, 3, 1, 0, 2, 3, 1, 2, 3, 0, 1, 0, 0]
+    flawed = [(c + 1) % 4 for c in repaired]
+    collisions = module._collisions(vertices, flawed)
+    collisions[0]["edge_index"] = float(collisions[0]["edge_index"])
+    result = {
+        "flawed_pass": {"vertex_colors": vertices, "edge_colors": flawed},
+        "incidence_collisions": collisions,
+        "repair": {"vertex_colors": vertices, "edge_colors": repaired},
+    }
+    assert not module.mathematics(result)
+
+
+def test_evidence_comparison_preserves_json_types():
+    module = _module()
+    assert not module._json_equal({"color": 0}, {"color": False})
+    assert not module._json_equal({"color": 1}, {"color": 1.0})

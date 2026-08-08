@@ -26,35 +26,6 @@ an MCP server and is also available as a CLI and Python library. Agents can use
 it to compute invariants, search for examples or counterexamples, work with
 solver artifacts, and check formal proofs.
 
-The important part is that Jacobian does not treat every successful computation
-as a proof.
-
-It exposes focused mathematical operations through a common interface. An
-agent decides which operations to use and in what order. Results stay visible
-as typed values or durable artifacts.
-
-## A small example
-
-Suppose an agent is testing the claim **“`F` is injective.”**
-
-A search returns two points, `p` and `q`, with the same image. That is a
-candidate counterexample, not yet a trusted conclusion.
-
-```text
-p ≠ q
-F(p) - F(q) = 0
-```
-
-An independent checker confirms those relations exactly. The checked collision
-can then be bound to the original claim and checker identity, producing
-`FALSE · VERIFIED`.
-
-If the search finds nothing, times out, is cancelled, or fails, the claim
-remains `UNKNOWN`. Absence of a witness is not proof.
-
-The [introductory tutorial](docs/tutorials/first-verified-result.md) shows the
-same boundary in a runnable graph example.
-
 ## Quickstart
 
 For a guided user-local install:
@@ -109,6 +80,43 @@ mathematical runtime, not a JavaScript dependency tree.
 
 To run the exact code in a clone, follow
 [Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
+
+## A simple counterexample
+
+Here is a small counterexample an agent can reason about directly:
+
+```text
+Claim: every prime is odd
+Agent checks: 2 is prime and even
+Counterexample: 2
+Conclusion: the claim is false
+```
+
+Here `2` is a witness: the actual example that disproves the claim. For a much
+larger search, Jacobian can preserve the candidate and the exact checks used to
+establish it.
+
+## A checked counterexample
+
+Suppose an agent is testing the claim **“`F` is injective.”**
+
+A search returns two points, `p` and `q`, with the same image. That is a
+candidate counterexample, not yet a trusted conclusion.
+
+```text
+p ≠ q
+F(p) - F(q) = 0
+```
+
+An independent checker confirms those relations exactly. The checked collision
+can then be bound to the original claim and checker identity, producing
+`FALSE · VERIFIED`.
+
+If the search finds nothing, times out, is cancelled, or fails, the claim
+remains `UNKNOWN`. Absence of a witness is not proof.
+
+The [introductory tutorial](docs/tutorials/first-verified-result.md) shows the
+same boundary in a runnable graph example.
 
 ## Available mathematics
 

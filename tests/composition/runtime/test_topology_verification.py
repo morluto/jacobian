@@ -11,6 +11,7 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import ExecutionStatus
 
 _PRESENTATION = {
@@ -83,7 +84,14 @@ def test_topology_results_are_independently_verified(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.artifact_uris == (verified.output["verification_record_uri"],)
+    record = authorized_complete_runtime.core.store.get(
+        verified.output["verification_record_uri"]
+    )
+    parsed = InlineExactVerificationRecord.model_validate(record.payload)
+    assert verified.artifact_uris == (
+        verified.output["verification_record_uri"],
+        parsed.semantics_uri,
+    )
 
 
 def test_topology_checker_rejects_forged_cycle_evidence(

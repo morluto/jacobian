@@ -544,6 +544,10 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert unknown.is_error is False
             assert unknown_result["execution"]["status"] == "ERROR"
             assert unknown_result["output"]["error"]["code"] == "UNKNOWN_CAPABILITY"
+            assert "available_capability_ids" not in unknown_result["output"]
+            assert len(unknown.content[0].text.encode("utf-8")) < 2_048
+            assert isinstance(unknown.structured_content, dict)
+            assert unknown.structured_content["output"]["available_capability_ids"]
             assert unknown_result["assurance"]["level"] != "VERIFIED"
 
     asyncio.run(scenario())

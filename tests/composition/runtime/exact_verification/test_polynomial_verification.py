@@ -7,6 +7,7 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.portfolio.builtin import build_builtin_portfolio
@@ -115,7 +116,14 @@ def test_public_seam_verifies_exact_producer_result(fresh_complete_runtime) -> N
     assert verified.output["operation_id"] == "polynomial.compute.gcd"
     assert verified.output["verification_record_uri"] is not None
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert len(verified.artifact_uris) == 4
+    record = fresh_complete_runtime.core.store.get(
+        verified.output["verification_record_uri"]
+    )
+    parsed = InlineExactVerificationRecord.model_validate(record.payload)
+    assert verified.artifact_uris == (
+        verified.output["verification_record_uri"],
+        parsed.semantics_uri,
+    )
 
 
 def test_public_seam_rejects_validly_shaped_false_result(

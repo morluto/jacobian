@@ -1,74 +1,17 @@
-"""Independent exact replay for integer row Hermite normal forms.
-
-This checker intentionally uses only the Python standard library. It does not
-import Jacobian contracts, Python-FLINT, SymPy, or producer code.
-"""
+"""Independent exact replay for retained integer row-HNF certificates."""
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from typing import Any
 
-from jacobian_checkers.bound_artifacts import (
-    bound_request,
-    valid_unscoped_unencoded_bindings,
-)
+from jacobian_checkers.bound_artifacts import bound_request
 
 __all__ = ["check_hermite_normal_form"]
 
-
-_ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
-_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
-_ARTIFACT_KEYS = {
-    "artifact_uri",
-    "object_digest",
-    "payload_digest",
-    "schema_uri",
-    "semantics_uri",
-    "parents",
-    "payload",
-}
-_MATRIX_BINDING_KEYS = {
-    "binding_version",
-    "matrix_artifact_uri",
-    "matrix_object_digest",
-    "matrix_payload_digest",
-    "row_count",
-    "column_count",
-}
-_PROVIDER_KEYS = {
-    "runtime_version",
-    "provider",
-    "availability",
-    "version",
-    "digest",
-    "digest_kind",
-    "platform",
-    "install_tier",
-    "license_id",
-    "license_files",
-    "features",
-    "checker_ids",
-    "configuration",
-    "distribution_import_name",
-    "distribution_required_attributes",
-    "diagnostic",
-}
 MAX_MATRIX_DIMENSION = 32
 MAX_INTEGER_DIGITS = 256
-_HNF_CONFIGURATION = {
-    "distribution": "python-flint",
-    "domain": "ZZ",
-    "operation": "fmpz_mat.hnf(transform=True)",
-    "flint_library_version": "3.6.0",
-    "maximum_rows": 32,
-    "maximum_columns": 32,
-    "normal_form_convention": "FLINT_ROW_HNF",
-    "relation": "H=U*A",
-}
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -80,47 +23,6 @@ def _reject(detail: str) -> dict[str, Any]:
         "coverage": "NOT_APPLICABLE",
         "detail": detail,
     }
-
-
-def _sha256(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
-
-
-def _canonical_json(value: object) -> bytes:
-    return json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-
-
-def _valid_artifact(value: object) -> bool:
-    if not isinstance(value, dict) or set(value) != _ARTIFACT_KEYS:
-        return False
-    if (
-        not isinstance(value["artifact_uri"], str)
-        or _ARTIFACT_URI.fullmatch(value["artifact_uri"]) is None
-        or not isinstance(value["object_digest"], str)
-        or _DIGEST.fullmatch(value["object_digest"]) is None
-        or not isinstance(value["payload_digest"], str)
-        or _DIGEST.fullmatch(value["payload_digest"]) is None
-        or not isinstance(value["schema_uri"], str)
-        or _ARTIFACT_URI.fullmatch(value["schema_uri"]) is None
-        or not isinstance(value["semantics_uri"], str)
-        or _ARTIFACT_URI.fullmatch(value["semantics_uri"]) is None
-    ):
-        return False
-    parents = value["parents"]
-    return (
-        isinstance(parents, list)
-        and len(parents) == len(set(parents))
-        and all(
-            isinstance(parent, str) and _ARTIFACT_URI.fullmatch(parent) is not None
-            for parent in parents
-        )
-    )
 
 
 def _integer(value: object) -> int:
@@ -157,81 +59,6 @@ def _matrix(payload: object) -> list[list[int]]:
     ):
         raise ValueError("integer matrix dimensions are malformed")
     return [[_integer(value) for value in row] for row in entries]
-
-
-def _validate_candidate(
-    payload: object,
-    *,
-    claim: dict[str, Any],
-    candidate: dict[str, Any],
-    rows: int,
-    columns: int,
-) -> tuple[list[list[int]], list[list[int]]]:
-    if not isinstance(payload, dict) or set(payload) != {
-        "normal_form_schema_version",
-        "source",
-        "declared_scope",
-        "normal_form",
-        "transformation",
-        "producer",
-        "resource_budget",
-        "method",
-    }:
-        raise ValueError("HNF candidate has an invalid shape")
-    if (
-        payload["normal_form_schema_version"] != "1"
-        or payload["declared_scope"] != "FULL_MATRIX"
-        or payload["method"] != "ROW_HNF_LEFT_UNIMODULAR_TRANSFORM"
-    ):
-        raise ValueError("HNF candidate uses unsupported semantics")
-    binding = payload["source"]
-    if not isinstance(binding, dict) or set(binding) != _MATRIX_BINDING_KEYS:
-        raise ValueError("HNF source binding is malformed")
-    if binding != {
-        "binding_version": "1",
-        "matrix_artifact_uri": claim["artifact_uri"],
-        "matrix_object_digest": claim["object_digest"],
-        "matrix_payload_digest": claim["payload_digest"],
-        "row_count": rows,
-        "column_count": columns,
-    }:
-        raise ValueError("HNF candidate is not exactly bound to the source matrix")
-    if claim["artifact_uri"] not in candidate["parents"]:
-        raise ValueError("HNF candidate is missing source-matrix lineage")
-    normal_form = _matrix(payload["normal_form"])
-    transformation = _matrix(payload["transformation"])
-    if (
-        len(normal_form) != rows
-        or len(normal_form[0]) != columns
-        or len(transformation) != rows
-        or len(transformation[0]) != rows
-    ):
-        raise ValueError("HNF candidate dimensions do not match the source")
-    provider = payload["producer"]
-    if (
-        not isinstance(provider, dict)
-        or set(provider) != _PROVIDER_KEYS
-        or provider["runtime_version"] != "1"
-        or provider["provider"] != "python-flint"
-        or provider["availability"] != "AVAILABLE"
-        or provider["version"] != "0.9.0"
-        or not isinstance(provider["digest"], str)
-        or _DIGEST.fullmatch(provider["digest"]) is None
-        or provider["digest_kind"] != "PYTHON_DISTRIBUTION_RECORD"
-        or provider["install_tier"] != "T1"
-        or provider["configuration"] != _HNF_CONFIGURATION
-    ):
-        raise ValueError("HNF producer identity is malformed")
-    budget = payload["resource_budget"]
-    if (
-        not isinstance(budget, dict)
-        or set(budget) != {"budget_version", "wall_seconds"}
-        or budget["budget_version"] != "1"
-        or type(budget["wall_seconds"]) is not int
-        or not 1 <= budget["wall_seconds"] <= 60
-    ):
-        raise ValueError("HNF resource budget is malformed")
-    return normal_form, transformation
 
 
 def _multiply(
@@ -313,125 +140,6 @@ def _is_row_hnf(matrix: list[list[int]]) -> bool:
     )
 
 
-_HNF_REQUEST_KEYS = {
-    "request_version",
-    "claim",
-    "candidate",
-    "scope",
-    "witness",
-    "expected_bindings",
-}
-_HNF_WITNESS_ENVELOPE_KEYS = {
-    "evidence_schema_version",
-    "witness_format",
-    "format_version",
-    "role",
-    "bindings",
-    "payload",
-}
-
-
-def _check_hnf_request_envelope(request: object) -> str | None:
-    if not isinstance(request, dict) or set(request) != _HNF_REQUEST_KEYS:
-        return "malformed checker request"
-    if request["request_version"] != "1" or request["scope"] is not None:
-        return "unsupported checker request"
-    return None
-
-
-def _check_hnf_artifacts(
-    claim: dict[str, Any],
-    candidate: dict[str, Any],
-    witness: dict[str, Any],
-    expected_bindings: object,
-) -> str | None:
-    if not all(_valid_artifact(item) for item in (claim, candidate, witness)):
-        return "checker artifact metadata is malformed"
-    if not valid_unscoped_unencoded_bindings(expected_bindings):
-        return "expected evidence bindings are malformed"
-    if (
-        claim["semantics_uri"] != candidate["semantics_uri"]
-        or claim["semantics_uri"] != witness["semantics_uri"]
-    ):
-        return "checker artifacts use different semantics"
-    return None
-
-
-def _check_hnf_digests(
-    claim: dict[str, Any],
-    candidate: dict[str, Any],
-    witness: dict[str, Any],
-) -> str | None:
-    for artifact, label in (
-        (claim, "source matrix"),
-        (candidate, "HNF candidate"),
-        (witness, "HNF witness"),
-    ):
-        if artifact["payload_digest"] != _sha256(_canonical_json(artifact["payload"])):
-            return f"{label} payload digest does not match"
-    return None
-
-
-def _check_hnf_binding_match(
-    expected_bindings: dict[str, Any],
-    claim: dict[str, Any],
-    candidate: dict[str, Any],
-) -> str | None:
-    if (
-        expected_bindings["claim_digest"] != claim["object_digest"]
-        or expected_bindings["candidate_digest"] != candidate["object_digest"]
-    ):
-        return "expected evidence bindings do not match artifacts"
-    return None
-
-
-def _check_hnf_witness_envelope(
-    envelope: object,
-    expected_bindings: object,
-) -> str | None:
-    if not isinstance(envelope, dict) or set(envelope) != _HNF_WITNESS_ENVELOPE_KEYS:
-        return "HNF witness envelope is malformed"
-    if (
-        envelope["evidence_schema_version"] != "1"
-        or envelope["witness_format"] != "matrix.normal_form.hermite"
-        or envelope["format_version"] != "1"
-        or envelope["role"] != "SUPPORTS_CLAIM"
-        or envelope["bindings"] != expected_bindings
-    ):
-        return "HNF witness envelope is not exactly bound"
-    return None
-
-
-def _check_hnf_witness_payload(
-    witness: dict[str, Any],
-    claim: dict[str, Any],
-    candidate: dict[str, Any],
-) -> str | None:
-    if witness["payload"]["payload"] != {
-        "matrix_uri": claim["artifact_uri"],
-        "normal_form_uri": candidate["artifact_uri"],
-    }:
-        return "HNF witness points at different artifacts"
-    if not {
-        claim["artifact_uri"],
-        candidate["artifact_uri"],
-    }.issubset(set(witness["parents"])):
-        return "HNF witness is missing required lineage"
-    return None
-
-
-def _check_hnf_witness(
-    witness: dict[str, Any],
-    expected_bindings: object,
-    claim: dict[str, Any],
-    candidate: dict[str, Any],
-) -> str | None:
-    error = _check_hnf_witness_envelope(witness["payload"], expected_bindings)
-    if error is not None:
-        return error
-    return _check_hnf_witness_payload(witness, claim, candidate)
-
-
 def _check_hnf_math(
     transformation: list[list[int]],
     source: list[list[int]],
@@ -488,58 +196,9 @@ def _check_materialized_operation_request(request: dict[str, Any]) -> dict[str, 
 
 
 def check_hermite_normal_form(request: dict[str, Any]) -> dict[str, Any]:
-    """Accept only exact row-HNF evidence with a unimodular left transform."""
+    """Accept only the v1 retained HNF result certificate."""
 
     try:
-        if (
-            request.get("request_version") == "1"
-            and "operation_id" not in request
-            and isinstance(request.get("candidate"), dict)
-            and isinstance(request["candidate"].get("payload"), dict)
-            and "result_schema_version" in request["candidate"]["payload"]
-        ):
-            return _check_materialized_operation_request(request)
-        error = _check_hnf_request_envelope(request)
-        if error is not None:
-            return _reject(error)
-        claim = request["claim"]
-        candidate = request["candidate"]
-        witness = request["witness"]
-        expected_bindings = request["expected_bindings"]
-        error = _check_hnf_artifacts(claim, candidate, witness, expected_bindings)
-        if error is not None:
-            return _reject(error)
-        error = _check_hnf_digests(claim, candidate, witness)
-        if error is not None:
-            return _reject(error)
-
-        source = _matrix(claim["payload"])
-        normal_form, transformation = _validate_candidate(
-            candidate["payload"],
-            claim=claim,
-            candidate=candidate,
-            rows=len(source),
-            columns=len(source[0]),
-        )
-        error = _check_hnf_binding_match(expected_bindings, claim, candidate)
-        if error is not None:
-            return _reject(error)
-        error = _check_hnf_witness(witness, expected_bindings, claim, candidate)
-        if error is not None:
-            return _reject(error)
-        error = _check_hnf_math(transformation, source, normal_form)
-        if error is not None:
-            return _reject(error)
-        return {
-            "accepted": True,
-            "conclusion": "TRUE",
-            "arithmetic": "EXACT_INTEGER",
-            "method": "DIRECT_WITNESS",
-            "coverage": "NOT_APPLICABLE",
-            "detail": (
-                f"checked H = U A, det(U) = +/-1, and row-HNF conditions for "
-                f"the full {len(source)} by {len(source[0])} integer matrix"
-            ),
-        }
+        return _check_materialized_operation_request(request)
     except (KeyError, TypeError, ValueError, OverflowError):
-        return _reject("malformed checker request")
+        return _reject("malformed HNF request")

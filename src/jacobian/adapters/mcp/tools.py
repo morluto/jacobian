@@ -118,6 +118,11 @@ class CapabilityDiscoveryResponse(
 ):
     """Closed, discriminated structured output for math.find."""
 
+    # MCP tool output schemas describe structured content objects. Pydantic's
+    # RootModel preserves the discriminated union but omits the common object
+    # root from JSON Schema, which stricter MCP clients reject during tools/list.
+    model_config = ConfigDict(json_schema_extra={"type": "object"})
+
 
 CapabilityDiscoveryToolResult = Annotated[
     CallToolResult,

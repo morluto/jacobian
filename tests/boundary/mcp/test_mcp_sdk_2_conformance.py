@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from mcp.server.extension import Extension, ResourceBinding, ToolBinding
+from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.constants import ReasoningLogMode
@@ -58,6 +59,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
             assert invoke.output_schema == CapabilityResult.model_json_schema()
             find = next(tool for tool in listed.tools if tool.name == "math.find")
+            assert find.output_schema["type"] == "object"
             assert find.output_schema["discriminator"] == {
                 "mapping": {
                     "capability": "#/$defs/_CapabilityInspectionResult",
@@ -73,6 +75,12 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert set(
                 find.output_schema["$defs"]["_CapabilityInspectionResult"]["required"]
             ) >= {"kind", "view", "capability"}
+            serialized_tools = serialize_server_result(
+                "tools/list",
+                "2026-07-28",
+                listed.model_dump(mode="json", by_alias=True, exclude_none=True),
+            )
+            assert serialized_tools["tools"][0]["outputSchema"]["type"] == "object"
 
             with pytest.raises(MCPError) as unknown:
                 await client.call_tool("math.find", {"unknown_key": "rejected"})

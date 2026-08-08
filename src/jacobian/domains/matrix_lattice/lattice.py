@@ -14,8 +14,8 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityProviderAvailability,
 )
+from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.contracts.matrix_operations import (
-    IntegerOutputMatrix,
     LatticeReductionRequest,
     LatticeReductionResult,
 )
@@ -130,8 +130,8 @@ def reduce_lattice_basis(
         if output["protocol"] != PROTOCOL:
             raise ValueError("LLL worker protocol does not match")
         result = LatticeReductionResult(
-            reduced_basis=IntegerOutputMatrix(entries=output["reduced_basis"]),
-            transformation=IntegerOutputMatrix(entries=output["transformation"]),
+            reduced_basis=IntegerMatrix(entries=output["reduced_basis"]),
+            transformation=IntegerMatrix(entries=output["transformation"]),
             rank=output["rank"],
         )
     except (TypeError, ValueError, ValidationError):

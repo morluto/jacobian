@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sympy.polys.matrices import DomainMatrix
 
 from jacobian.contracts.certified_snf import CertifiedIntegerMatrix
 from jacobian.contracts.topology import (
@@ -23,7 +26,7 @@ from jacobian.contracts.topology import (
     IntegralVector,
     ModularVector,
     SimplexBasis,
-    SimplicialComplexMaterializationResult,
+    SimplicialComplexCanonicalizationResult,
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
     SimplicialHomologyResult,
@@ -41,10 +44,10 @@ from jacobian.domains._certified_snf import (
     smith_reduce,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedSuccess, MaterializedOperation
+from jacobian.operations import ComputedOperation, ComputedSuccess
 
 
-def _materialized_complex(
+def _canonical_complex(
     vertices: tuple[str, ...],
     facets: tuple[tuple[str, ...], ...],
 ) -> FiniteSimplicialComplex:
@@ -77,12 +80,12 @@ def _materialized_complex(
     )
 
 
-def _materialize(
+def _canonicalize(
     request: SimplicialComplexRequest,
-) -> ComputedSuccess[SimplicialComplexMaterializationResult]:
+) -> ComputedSuccess[SimplicialComplexCanonicalizationResult]:
     return ComputedSuccess(
-        SimplicialComplexMaterializationResult(
-            complex=_materialized_complex(request.vertices, request.facets)
+        SimplicialComplexCanonicalizationResult(
+            complex=_canonical_complex(request.vertices, request.facets)
         )
     )
 
@@ -250,7 +253,7 @@ def _domain_matrix(
     rows: int,
     columns: int,
     prime: int,
-) -> Any:
+) -> DomainMatrix:
     """Build a SymPy ``DomainMatrix`` over ``GF(prime)`` with residues in ``[0, p)``."""
 
     import sympy
@@ -643,19 +646,29 @@ _CIRCLE = {
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
 }
 
-TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
-    MaterializedOperation(
-        capability_id="topology.simplicial_complex.materialize",
-        title="Materialize a finite simplicial complex",
+type TopologyOperation = (
+    ComputedOperation[SimplicialComplexRequest, SimplicialComplexCanonicalizationResult]
+    | ComputedOperation[ChainComplexRequest, ChainComplexResult]
+    | ComputedOperation[SimplicialHomologyRequest, SimplicialHomologyResult]
+    | ComputedOperation[
+        IntegralSimplicialHomologyRequest, IntegralSimplicialHomologyResult
+    ]
+)
+
+
+TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
+    ComputedOperation(
+        capability_id="topology.simplicial_complex.canonicalize",
+        title="Canonicalize a finite simplicial complex",
         description=(
             "Validate bounded maximal facets, close them under every non-empty "
             "face, and return canonical oriented simplex bases and the exact "
             "f-vector."
         ),
         request_model=SimplicialComplexRequest,
-        result_model=SimplicialComplexMaterializationResult,
-        implementation=_materialize,
-        relation_id="topology.simplicial_complex.materialization.relation",
+        result_model=SimplicialComplexCanonicalizationResult,
+        implementation=_canonicalize,
+        relation_id="topology.simplicial_complex.canonicalization.relation",
         tags=(
             "topology",
             "simplicial-complex",
@@ -667,13 +680,13 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
         invocation_examples=(
             example(
                 "triangle_boundary",
-                "Materialize the three-edge simplicial model of a circle.",
+                "Canonicalize the three-edge simplicial model of a circle.",
                 _CIRCLE,
             ),
         ),
-        version="3",
+        version="4",
     ),
-    MaterializedOperation(
+    ComputedOperation(
         capability_id="topology.simplicial_complex.chain_complex.compute",
         title="Compute an oriented simplicial chain complex",
         description=(
@@ -691,9 +704,9 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
             "boundary-matrix",
             "exact",
         ),
-        version="3",
+        version="4",
     ),
-    MaterializedOperation(
+    ComputedOperation(
         capability_id="topology.simplicial_homology.compute",
         title="Compute finite-field simplicial homology",
         description=(
@@ -712,9 +725,9 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
             "prime-field",
             "exact",
         ),
-        version="3",
+        version="4",
     ),
-    MaterializedOperation(
+    ComputedOperation(
         capability_id="topology.simplicial_homology.integral.compute",
         title="Compute transformation-certified integral simplicial homology",
         description=(
@@ -775,7 +788,7 @@ TOPOLOGY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
                 },
             ),
         ),
-        version="3",
+        version="4",
     ),
 )
 

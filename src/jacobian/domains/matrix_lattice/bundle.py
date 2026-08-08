@@ -37,6 +37,8 @@ def build_matrix_bundle() -> DomainBundle:
             features=(
                 "exact-rational-matrix",
                 "matrix-multiplication",
+                "determinant",
+                "rank",
                 "rref",
                 "nullspace",
                 "characteristic-polynomial",

@@ -16,9 +16,9 @@ _REASON = (
 
 TOPOLOGY_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
-        "topology.simplicial_complex.materialize",
+        "topology.simplicial_complex.canonicalize",
         SimplicialComplexRequest,
-        "check_simplicial_complex_materialization",
+        "check_simplicial_complex_canonicalization",
         "topology.simplicial-complex.closure-replay",
         entrypoint_module=_ENTRYPOINT,
         replay_method="independent finite face-closure replay",

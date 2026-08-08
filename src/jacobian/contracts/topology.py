@@ -118,7 +118,7 @@ def _require_request_complex(
 
 
 class SimplicialComplexRequest(ContractModel):
-    """A bounded facet presentation validated before artifact materialization."""
+    """A bounded facet presentation for canonicalization."""
 
     vertices: tuple[VertexLabel, ...] = Field(
         min_length=1,
@@ -297,7 +297,7 @@ class TopologyExactResult(ContractModel):
     verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
-class SimplicialComplexMaterializationResult(TopologyExactResult):
+class SimplicialComplexCanonicalizationResult(TopologyExactResult):
     complex: FiniteSimplicialComplex
     completeness: Literal["COMPLETE_FACE_CLOSURE"] = "COMPLETE_FACE_CLOSURE"
 
@@ -770,7 +770,7 @@ __all__ = [
     "ModularVector",
     "Simplex",
     "SimplexBasis",
-    "SimplicialComplexMaterializationResult",
+    "SimplicialComplexCanonicalizationResult",
     "SimplicialComplexRequest",
     "SimplicialHomologyRequest",
     "SimplicialHomologyResult",

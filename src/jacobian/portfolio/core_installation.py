@@ -14,9 +14,6 @@ from jacobian.graphs.installation import install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.graphs.shrinking import install_graph_shrinking
 from jacobian.installation.context import InstallationContext
-from jacobian.matrices.capabilities import install_matrix_capabilities
-from jacobian.matrices.determinant import install_matrix_determinant_checker
-from jacobian.matrices.rank import install_matrix_rank_checker
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
@@ -80,45 +77,6 @@ class CoreApplicationInstaller:
         )
         for coloring_adapter in coloring_adapters:
             self.context.register_capability(coloring_adapter)
-
-    def _install_matrix_capabilities(
-        self,
-        ctx: InstallationContext,
-        result: PortfolioInstallation,
-    ) -> None:
-        """Install matrix search, determinant, and rank capabilities."""
-
-        matrix_adapters, result.matrix = install_matrix_capabilities(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-        )
-        for matrix_adapter in matrix_adapters:
-            self.context.register_capability(matrix_adapter)
-        determinant_adapter, result.matrix_determinant_checker = (
-            install_matrix_determinant_checker(
-                ctx.store,
-                ctx.schemas,
-                ctx.artifacts,
-                result.matrix,
-                ctx.verification,
-                ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
-            )
-        )
-        if determinant_adapter is not None:
-            self.context.register_capability(determinant_adapter)
-        rank_adapter, result.matrix_rank_checker = install_matrix_rank_checker(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            result.matrix,
-            ctx.verification,
-            ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        if rank_adapter is not None:
-            self.context.register_capability(rank_adapter)
 
     def install(
         self,
@@ -192,8 +150,6 @@ class CoreApplicationInstaller:
         )
         for polynomial_adapter in polynomial_adapters:
             self.context.register_capability(polynomial_adapter)
-
-        self._install_matrix_capabilities(ctx, result)
 
         polynomial_system_adapter, result.polynomial_system = (
             install_polynomial_system_capabilities(

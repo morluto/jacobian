@@ -13,7 +13,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
-from jacobian.contracts.matrices import ExactRationalMatrix
+from jacobian.contracts.matrices import RationalMatrix
 from jacobian.contracts.results import ContractModel
 
 MAX_LINEAR_DIMENSION = 32
@@ -53,7 +53,7 @@ class LinearRationalSystem(ContractModel):
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
-    coefficients: ExactRationalMatrix
+    coefficients: RationalMatrix
     rhs: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,

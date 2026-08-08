@@ -1,4 +1,10 @@
-"""Durable exact-rational linear systems and candidate solutions."""
+"""Durable exact-rational linear systems and candidate solutions.
+
+Ownership: ``jacobian.matrices`` (linear artifact service).
+Provides the artifact-backed storage and retrieval layer for rational
+linear systems and solution/inconsistency candidates.  Installed during
+runtime bootstrap.
+"""
 
 from __future__ import annotations
 

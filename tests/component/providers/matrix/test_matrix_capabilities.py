@@ -20,13 +20,9 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.matrices.capabilities import (
-    MatrixInstallation,
-    install_matrix_capabilities,
-)
-from jacobian.matrices.determinant import (
-    install_matrix_determinant_checker,
-)
+from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.exact_domain_checkers import install_exact_domain_verification
+from jacobian.operation_installation import OperationInstaller
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
 from jacobian.verification import VerificationService
@@ -65,7 +61,6 @@ def _reference_determinant(rows: list[list[Fraction]]) -> Fraction:
 @dataclass(frozen=True, slots=True)
 class _MatrixRuntime:
     core: CoreServices
-    matrix: MatrixInstallation
     verification: VerificationService
 
 
@@ -80,29 +75,29 @@ def _open_matrix_runtime(
         if install_checker
         else CheckerAuthorityMode.NONE
     )
-    with open_domain_services(root, checker_authority=authority) as services:
-        adapters, matrix = install_matrix_capabilities(
+    with open_domain_services(
+        root, build_matrix_bundle(), checker_authority=authority
+    ) as services:
+        bundle = build_matrix_bundle()
+        installed = OperationInstaller(
             services.core.store,
             services.core.schemas,
             services.core.artifacts,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
+        ).install(bundle)
         if install_checker:
-            adapter, _installation = install_matrix_determinant_checker(
+            adapters, _installation = install_exact_domain_verification(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
-                matrix,
                 services.installation.verification,
                 services.core.checkers,
-                authorize_checker=True,
+                bundles={"matrix": (bundle, installed)},
+                authorize=True,
             )
-            assert adapter is not None
-            services.installation.register_capability(adapter)
+            for adapter in adapters:
+                services.installation.register_capability(adapter)
         yield _MatrixRuntime(
             core=services.core,
-            matrix=matrix,
             verification=services.installation.verification,
         )
 
@@ -146,46 +141,43 @@ def test_matrix_determinant_compute_is_exact_and_unverified(
         )
     )
 
-    assert result.output["determinant"] == _rational(expected)
-    assert result.output["method"] == "FRACTION_FREE_BAREISS"
-    assert result.output["backend"] == "sympy"
+    assert result.output["result"]["determinant"] == _rational(expected)
+    assert result.output["result"]["method"] == "FRACTION_FREE_BAREISS"
     assert result.output["backend_version"] == sympy.__version__
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
-    determinant_artifact = runtime.core.store.get(result.output["determinant_uri"])
-    assert determinant_artifact.payload["backend"] == "sympy"
-    assert determinant_artifact.payload["backend_version"] == sympy.__version__
+    assert result.artifact_uris == ()
 
 
 def test_matrix_determinant_verify_independently_recomputes_exact_value(
     matrix_checker_services: _MatrixRuntime,
 ) -> None:
     runtime = matrix_checker_services
+    matrix = _matrix(
+        [
+            [1, 0, 1],
+            [2, -1, 3],
+            [4, 3, 2],
+        ]
+    )
     computed = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.compute",
-            input={
-                "matrix": _matrix(
-                    [
-                        [1, 0, 1],
-                        [2, -1, 3],
-                        [4, 3, 2],
-                    ]
-                )
-            },
+            input={"matrix": matrix},
         )
     )
-
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
             mode=CapabilityMode.VERIFY,
-            input={"determinant_uri": computed.output["determinant_uri"]},
+            input={
+                "input": {"matrix": matrix},
+                "candidate": computed.output["result"],
+            },
         )
     )
 
     assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED_DETERMINANT"
+    assert verified.output["status"] == "VERIFIED"
     assert verified.output["conclusion"] == "TRUE"
     assert verified.output["verification_record_uri"].startswith("artifact://sha256/")
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
@@ -195,29 +187,24 @@ def test_matrix_determinant_verify_rejects_wrong_bound_value(
     matrix_checker_services: _MatrixRuntime,
 ) -> None:
     runtime = matrix_checker_services
+    matrix = _matrix([[1, 2], [3, 4]])
     computed = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.compute",
-            input={"matrix": _matrix([[1, 2], [3, 4]])},
+            input={"matrix": matrix},
         )
     )
-    source_uri = computed.output["matrix_uri"]
-    wrong = runtime.core.artifacts.put(
-        schema_uri=runtime.matrix.determinant_schema_uri,
-        semantics_uri=runtime.matrix.semantics_uri,
-        payload={
-            **runtime.core.store.get(computed.output["determinant_uri"]).payload,
-            "determinant": _rational(2),
-        },
-        parents=(source_uri,),
-        summary="deliberately incorrect determinant candidate",
-    )
-
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
             mode=CapabilityMode.VERIFY,
-            input={"determinant_uri": wrong.artifact_uri},
+            input={
+                "input": {"matrix": matrix},
+                "candidate": {
+                    **computed.output["result"],
+                    "determinant": _rational(2),
+                },
+            },
         )
     )
 
@@ -233,10 +220,11 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runtime = matrix_checker_services
+    matrix = _matrix([[1]])
     computed = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.compute",
-            input={"matrix": _matrix([[1]])},
+            input={"matrix": matrix},
         )
     )
     monkeypatch.setattr(
@@ -251,7 +239,10 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
             mode=CapabilityMode.VERIFY,
-            input={"determinant_uri": computed.output["determinant_uri"]},
+            input={
+                "input": {"matrix": matrix},
+                "candidate": computed.output["result"],
+            },
         )
     )
 
@@ -282,18 +273,38 @@ def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
         )
     )
 
-    assert result.output["rank"] == 2
-    assert result.output["pivot_columns"] == [0, 1]
-    assert result.output["backend"] == "sympy"
+    assert result.output["result"]["rank"] == 2
+    assert result.output["result"]["pivot_columns"] == [0, 1]
     assert result.output["backend_version"] == sympy.__version__
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
-    rank_artifact = runtime.core.store.get(result.output["rank_uri"])
-    assert rank_artifact.payload["backend"] == "sympy"
-    assert rank_artifact.payload["backend_version"] == sympy.__version__
+    assert result.artifact_uris == ()
 
 
-def test_matrix_rank_accepts_contract_sized_rational_entries(
+def test_matrix_rank_verify_independently_recomputes_inline_candidate(
+    matrix_checker_services: _MatrixRuntime,
+) -> None:
+    matrix = _matrix([[1, 2, 3], [2, 4, 6], [0, 1, 1]])
+    computed = matrix_checker_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id="matrix.rank.compute", input={"matrix": matrix})
+    )
+
+    verified = matrix_checker_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.rank.verify",
+            mode=CapabilityMode.VERIFY,
+            input={
+                "input": {"matrix": matrix},
+                "candidate": computed.output["result"],
+            },
+        )
+    )
+
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.output["conclusion"] == "TRUE"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+
+
+def test_matrix_rank_rejects_authoritative_values_above_its_operation_budget(
     matrix_services: _MatrixRuntime,
 ) -> None:
     result = matrix_services.core.capabilities.invoke(
@@ -309,9 +320,8 @@ def test_matrix_rank_accepts_contract_sized_rational_entries(
         )
     )
 
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["rank"] == 1
-    assert result.output["pivot_columns"] == [0]
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_EXACT_MATRIX_REQUEST"
 
 
 def test_matrix_determinant_rejects_rectangular_input(
@@ -352,7 +362,7 @@ def test_matrix_determinant_matches_independent_bounded_oracle(
                 )
             )
 
-            assert result.output["determinant"] == _rational(
+            assert result.output["result"]["determinant"] == _rational(
                 _reference_determinant(rows)
             )
 

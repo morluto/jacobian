@@ -11,11 +11,15 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
-from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalInteger,
+    CanonicalRational,
+)
 from jacobian.contracts.results import ContractModel
 
 MAX_MATRIX_DIMENSION = 32
-MAX_INTEGER_DIGITS = 256
+MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 PYTHON_FLINT_HNF_CONFIGURATION = {
     "distribution": "python-flint",
     "domain": "ZZ",
@@ -28,25 +32,49 @@ PYTHON_FLINT_HNF_CONFIGURATION = {
 }
 
 
-class ExactRationalMatrix(ContractModel):
+def require_matrix_scalar_digits(
+    entries: tuple[tuple[str | CanonicalRational, ...], ...],
+    *,
+    maximum: int,
+    label: str,
+) -> None:
+    """Apply an operation-owned scalar budget to an authoritative matrix value."""
+
+    for row in entries:
+        for value in row:
+            components = (value,) if isinstance(value, str) else (value.num, value.den)
+            if any(len(component.lstrip("-")) > maximum for component in components):
+                raise ValueError(
+                    f"{label} scalars are limited to {maximum} decimal digits"
+                )
+
+
+class RationalMatrix(ContractModel):
+    """One nonempty rectangular matrix over canonical rationals."""
+
     matrix_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
-        max_length=32,
+        max_length=MAX_MATRIX_DIMENSION,
     )
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > 32:
+        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
             raise ValueError("matrix rows must contain between 1 and 32 entries")
         if any(len(row) != column_count for row in self.entries):
             raise ValueError("matrix rows must all have the same length")
+        require_matrix_scalar_digits(
+            self.entries,
+            maximum=MAX_MATRIX_SCALAR_DIGITS,
+            label="matrix",
+        )
         return self
 
 
-class ExactIntegerMatrix(ContractModel):
+class IntegerMatrix(ContractModel):
     """One nonempty rectangular matrix over exact canonical integers."""
 
     matrix_schema_version: Literal["1"] = "1"
@@ -57,33 +85,18 @@ class ExactIntegerMatrix(ContractModel):
     )
 
     @model_validator(mode="after")
-    def require_bounded_rectangular_nonempty_rows(self) -> Self:
+    def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
         if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
             raise ValueError("matrix rows must contain between 1 and 32 entries")
         if any(len(row) != column_count for row in self.entries):
             raise ValueError("matrix rows must all have the same length")
-        if any(
-            len(value.lstrip("-")) > MAX_INTEGER_DIGITS
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("integer matrix entries are limited to 256 decimal digits")
+        require_matrix_scalar_digits(
+            self.entries,
+            maximum=MAX_MATRIX_SCALAR_DIGITS,
+            label="matrix",
+        )
         return self
-
-
-class MatrixDeterminantRequest(ContractModel):
-    matrix: ExactRationalMatrix
-
-    @model_validator(mode="after")
-    def require_square_matrix(self) -> Self:
-        if len(self.matrix.entries) != len(self.matrix.entries[0]):
-            raise ValueError("determinant computation requires a square matrix")
-        return self
-
-
-class MatrixRankRequest(ContractModel):
-    matrix: ExactRationalMatrix
 
 
 class MatrixDeterminantArtifact(ContractModel):
@@ -101,19 +114,6 @@ class MatrixRankArtifact(ContractModel):
     rank: int = Field(ge=0, le=32)
     pivot_columns: tuple[int, ...] = Field(max_length=32)
     method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str
-
-
-class MatrixDeterminantOutput(ContractModel):
-    matrix_uri: ArtifactUri
-    determinant_uri: ArtifactUri
-    determinant: CanonicalRational
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    certificate_available: Literal[False] = False
-    method: Literal["FRACTION_FREE_BAREISS"] = "FRACTION_FREE_BAREISS"
     backend: Literal["sympy"] = "sympy"
     backend_version: str
 
@@ -152,20 +152,6 @@ class MatrixDeterminantVerificationOutput(ContractModel):
                 "non-verified determinant output cannot carry a conclusion or record"
             )
         return self
-
-
-class MatrixRankOutput(ContractModel):
-    matrix_uri: ArtifactUri
-    rank_uri: ArtifactUri
-    rank: int = Field(ge=0, le=32)
-    pivot_columns: tuple[int, ...] = Field(max_length=32)
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    certificate_available: Literal[False] = False
-    method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str
 
 
 class MatrixRankVerificationRequest(ContractModel):
@@ -218,8 +204,8 @@ class MatrixHermiteNormalFormArtifact(ContractModel):
     normal_form_schema_version: Literal["1"] = "1"
     source: MatrixBinding
     declared_scope: Literal["FULL_MATRIX"] = "FULL_MATRIX"
-    normal_form: ExactIntegerMatrix
-    transformation: ExactIntegerMatrix
+    normal_form: IntegerMatrix
+    transformation: IntegerMatrix
     producer: CapabilityProviderRuntime
     resource_budget: MatrixHermiteResourceBudget
     method: Literal["ROW_HNF_LEFT_UNIMODULAR_TRANSFORM"] = (
@@ -256,10 +242,19 @@ class MatrixHermiteNormalFormArtifact(ContractModel):
 
 
 class MatrixHermiteNormalFormRequest(ContractModel):
-    matrix: ExactIntegerMatrix
+    matrix: IntegerMatrix
     resource_budget: MatrixHermiteResourceBudget = Field(
         default_factory=MatrixHermiteResourceBudget
     )
+
+    @model_validator(mode="after")
+    def require_hnf_input_budget(self) -> Self:
+        require_matrix_scalar_digits(
+            self.matrix.entries,
+            maximum=256,
+            label="Hermite normal form input",
+        )
+        return self
 
 
 class MatrixHermiteNormalFormOutput(ContractModel):
@@ -269,8 +264,8 @@ class MatrixHermiteNormalFormOutput(ContractModel):
     conclusion: Literal["UNKNOWN"] = "UNKNOWN"
     matrix_uri: ArtifactUri
     normal_form_uri: ArtifactUri | None = None
-    normal_form: ExactIntegerMatrix | None = None
-    transformation: ExactIntegerMatrix | None = None
+    normal_form: IntegerMatrix | None = None
+    transformation: IntegerMatrix | None = None
     exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     verification: Literal["UNVERIFIED"] = "UNVERIFIED"

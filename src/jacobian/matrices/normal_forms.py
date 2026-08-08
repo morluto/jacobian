@@ -1,4 +1,10 @@
-"""Durable integer matrices and Hermite-normal-form candidates."""
+"""Durable integer matrices and Hermite-normal-form candidates.
+
+Ownership: ``jacobian.matrices`` (HNF artifact service).
+Provides the artifact-backed storage and retrieval layer for integer
+matrices and HNF candidates used by the Python-FLINT HNF producer and
+its independent checker.  Installed during runtime bootstrap.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +18,7 @@ from jacobian.artifacts import ArtifactService
 from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.matrices import (
-    ExactIntegerMatrix,
+    IntegerMatrix,
     MatrixBinding,
     MatrixHermiteNormalFormArtifact,
     MatrixHermiteResourceBudget,
@@ -37,7 +43,7 @@ class MatrixNormalFormInstallation:
 @dataclass(frozen=True, slots=True)
 class ResolvedIntegerMatrix:
     artifact: StoredArtifact
-    matrix: ExactIntegerMatrix
+    matrix: IntegerMatrix
     binding: MatrixBinding
 
 
@@ -46,7 +52,7 @@ class ResolvedHermiteNormalForm:
     artifact: StoredArtifact
     candidate: MatrixHermiteNormalFormArtifact
     matrix_artifact: StoredArtifact
-    matrix: ExactIntegerMatrix
+    matrix: IntegerMatrix
 
 
 class MatrixNormalFormArtifactService:
@@ -66,9 +72,9 @@ class MatrixNormalFormArtifactService:
 
     def put_matrix(
         self,
-        matrix: ExactIntegerMatrix | dict[str, Any],
+        matrix: IntegerMatrix | dict[str, Any],
     ) -> ArtifactPutResult:
-        validated = ExactIntegerMatrix.model_validate(matrix)
+        validated = IntegerMatrix.model_validate(matrix)
         return self.artifacts.put(
             schema_uri=self.installation.matrix_schema_uri,
             semantics_uri=self.installation.semantics_uri,
@@ -98,7 +104,7 @@ class MatrixNormalFormArtifactService:
                 self.installation.matrix_schema_uri,
                 artifact.payload,
             )
-            matrix = ExactIntegerMatrix.model_validate(normalized)
+            matrix = IntegerMatrix.model_validate(normalized)
         except (SchemaRegistryError, ValueError, ValidationError) as exc:
             raise MatrixNormalFormArtifactError(
                 "source is not a valid exact integer-matrix artifact"
@@ -128,10 +134,10 @@ class MatrixNormalFormArtifactService:
         resolved = self.resolve_matrix(matrix_uri)
         candidate = MatrixHermiteNormalFormArtifact(
             source=resolved.binding,
-            normal_form=ExactIntegerMatrix(
+            normal_form=IntegerMatrix(
                 entries=tuple(tuple(value for value in row) for row in normal_form)
             ),
-            transformation=ExactIntegerMatrix(
+            transformation=IntegerMatrix(
                 entries=tuple(tuple(value for value in row) for row in transformation)
             ),
             producer=producer,
@@ -226,7 +232,7 @@ def install_matrix_normal_form_artifacts(
         matrix_schema_uri=schemas.register_model(
             name="jacobian.exact-integer-matrix",
             version="1",
-            model=ExactIntegerMatrix,
+            model=IntegerMatrix,
         ),
         normal_form_schema_uri=schemas.register_model(
             name="jacobian.matrix-row-hermite-normal-form",

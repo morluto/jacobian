@@ -36,10 +36,6 @@ from jacobian.lean_frontend.proof_axioms import LeanProofAxiomsInstallation
 from jacobian.lean_frontend.proof_edit import LeanProofEditInstallation
 from jacobian.lean_frontend.service import LeanService
 from jacobian.lean_frontend.statement import LeanStatementInstallation
-from jacobian.matrices.capabilities import MatrixInstallation
-from jacobian.matrices.determinant import (
-    MatrixDeterminantCheckerInstallation,
-)
 from jacobian.matrices.linear_capabilities import (
     LinearRationalInconsistencyCheckerInstallation,
     LinearRationalSolutionCheckerInstallation,
@@ -47,7 +43,6 @@ from jacobian.matrices.linear_capabilities import (
 from jacobian.matrices.normal_form import (
     MatrixNormalFormCheckerInstallation,
 )
-from jacobian.matrices.rank import MatrixRankCheckerInstallation
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.polynomial_expression_capabilities import (
     PolynomialExpressionCheckerInstallation,
@@ -230,10 +225,7 @@ class PortfolioInstallation:
     ) = None
 
     # --- Matrix ---
-    matrix: MatrixInstallation | None = None
     matrix_normal_form_checker: MatrixNormalFormCheckerInstallation | None = None
-    matrix_determinant_checker: MatrixDeterminantCheckerInstallation | None = None
-    matrix_rank_checker: MatrixRankCheckerInstallation | None = None
 
     # --- Polynomial ---
     polynomial: PolynomialInstallation | None = None

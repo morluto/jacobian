@@ -14,6 +14,7 @@ from jacobian.contracts.exact import (
     RATIONAL_SEARCH_GRID_LIMIT,
     CanonicalRational,
     bounded_rational_grid_size,
+    require_bounded_rational,
 )
 from jacobian.contracts.results import Conclusion, ContractModel, InputValidation
 
@@ -24,25 +25,92 @@ PolynomialVariable = Annotated[
         strict=True,
     ),
 ]
-_MAX_SOURCE_EXPONENT = 32
-_MAX_DERIVED_EXPONENT = 4 * _MAX_SOURCE_EXPONENT - 1
+MAX_POLYNOMIAL_VARIABLES = 8
+MAX_POLYNOMIAL_TERMS = 4_096
+MAX_POLYNOMIAL_EXPONENT = 32_768
+_MAX_JACOBIAN_SOURCE_EXPONENT = 32
 _MAX_JACOBIAN_PRODUCT_TERM_ESTIMATE = 1024
+_MAX_COMPOSITION_DERIVED_EXPONENT = 127
+
+
+def require_polynomial_budget(
+    polynomial: RationalPolynomial,
+    *,
+    maximum_terms: int,
+    maximum_exponent: int,
+    maximum_coefficient_digits: int = 256,
+    label: str = "polynomial",
+) -> None:
+    """Apply an operation-owned cost budget to an authoritative polynomial."""
+
+    require_sparse_polynomial_budget(
+        polynomial.polynomial,
+        maximum_terms=maximum_terms,
+        maximum_exponent=maximum_exponent,
+        maximum_coefficient_digits=maximum_coefficient_digits,
+        label=label,
+    )
+
+
+def require_sparse_polynomial_budget(
+    polynomial: SparseRationalPolynomial,
+    *,
+    maximum_terms: int,
+    maximum_exponent: int,
+    maximum_coefficient_digits: int = 256,
+    label: str = "polynomial",
+) -> None:
+    """Apply an operation-owned cost budget to one sparse polynomial value."""
+
+    if len(polynomial.terms) > maximum_terms:
+        raise ValueError(f"{label} exceeds the {maximum_terms}-term operation budget")
+    for term in polynomial.terms:
+        require_bounded_rational(
+            term.coefficient,
+            max_digits=maximum_coefficient_digits,
+            label=f"{label} coefficient",
+        )
+        if any(exponent > maximum_exponent for exponent in term.exponents):
+            raise ValueError(
+                f"{label} exponent exceeds the {maximum_exponent}-degree operation budget"
+            )
+
+
+def require_polynomial_map_budget(
+    polynomial_map: RationalPolynomialMap,
+    *,
+    maximum_terms: int = 1_024,
+    maximum_exponent: int = _MAX_JACOBIAN_SOURCE_EXPONENT,
+    label: str = "polynomial map",
+) -> None:
+    """Preflight each map coordinate before backend conversion or expansion."""
+
+    for coordinate in polynomial_map.coordinates:
+        require_sparse_polynomial_budget(
+            coordinate,
+            maximum_terms=maximum_terms,
+            maximum_exponent=maximum_exponent,
+            label=label,
+        )
 
 
 class RationalPolynomialTerm(ContractModel):
     coefficient: CanonicalRational
-    exponents: tuple[int, ...] = Field(min_length=1, max_length=4)
+    exponents: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
 
     @model_validator(mode="after")
     def require_nonzero_coefficient_and_bounded_exponents(self) -> Self:
         if self.coefficient.as_fraction() == 0:
             raise ValueError("zero polynomial terms must be omitted")
         if any(
-            exponent < 0 or exponent > _MAX_DERIVED_EXPONENT
+            exponent < 0 or exponent > MAX_POLYNOMIAL_EXPONENT
             for exponent in self.exponents
         ):
             raise ValueError(
-                "polynomial exponents exceed the bounded derived-polynomial limit"
+                "polynomial exponents exceed the shared representation limit"
             )
         return self
 
@@ -50,7 +118,7 @@ class RationalPolynomialTerm(ContractModel):
 class SparseRationalPolynomial(ContractModel):
     terms: tuple[RationalPolynomialTerm, ...] = Field(
         default=(),
-        max_length=1024,
+        max_length=MAX_POLYNOMIAL_TERMS,
     )
 
     @model_validator(mode="after")
@@ -68,7 +136,10 @@ class RationalPolynomial(ContractModel):
 
     polynomial_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
-    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
     polynomial: SparseRationalPolynomial
 
     @model_validator(mode="after")
@@ -85,46 +156,47 @@ class RationalPolynomial(ContractModel):
 class RationalPolynomialMap(ContractModel):
     map_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
-    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
     coordinates: tuple[SparseRationalPolynomial, ...] = Field(
         min_length=1,
-        max_length=4,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
     )
 
     @model_validator(mode="after")
-    def require_square_map_and_matching_monomials(self) -> Self:
+    def require_matching_monomials(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
             raise ValueError("polynomial variables must be unique")
-        if len(self.coordinates) != len(self.variables):
-            raise ValueError("the first polynomial-map contract supports square maps")
         if any(
             len(term.exponents) != len(self.variables)
             for polynomial in self.coordinates
             for term in polynomial.terms
         ):
             raise ValueError("every monomial must match the declared variable order")
-        if any(
-            exponent > _MAX_SOURCE_EXPONENT
-            for polynomial in self.coordinates
-            for term in polynomial.terms
-            for exponent in term.exponents
-        ):
-            raise ValueError("source polynomial exponents must be between zero and 32")
         return self
 
 
 class RationalPolynomialPoint(ContractModel):
-    values: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
 
 
 class PolynomialEvaluationRequest(ContractModel):
     map: RationalPolynomialMap
-    point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    point: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
 
     @model_validator(mode="after")
     def require_point_dimension(self) -> Self:
         if len(self.point) != len(self.map.variables):
             raise ValueError("evaluation point dimension must match the polynomial map")
+        require_polynomial_map_budget(self.map, label="polynomial evaluation map")
         return self
 
 
@@ -134,6 +206,9 @@ class PolynomialJacobianRequest(ContractModel):
     @model_validator(mode="after")
     def require_bounded_determinant_expansion(self) -> Self:
         dimension = len(self.map.variables)
+        if len(self.map.coordinates) != dimension:
+            raise ValueError("Jacobian determinant requires a square polynomial map")
+        require_polynomial_map_budget(self.map, label="Jacobian source map")
         derivative_term_counts = tuple(
             tuple(
                 sum(term.exponents[column] > 0 for term in polynomial.terms)
@@ -160,6 +235,13 @@ class PolynomialKellerConditionVerifyRequest(ContractModel):
 
     map: RationalPolynomialMap
 
+    @model_validator(mode="after")
+    def require_square_map(self) -> Self:
+        if len(self.map.coordinates) != len(self.map.variables):
+            raise ValueError("Keller-condition verification requires a square map")
+        require_polynomial_map_budget(self.map, label="Keller-condition map")
+        return self
+
 
 class PolynomialFactorRequest(ContractModel):
     variable: PolynomialVariable
@@ -169,6 +251,18 @@ class PolynomialFactorRequest(ContractModel):
     def require_univariate_terms(self) -> Self:
         if any(len(term.exponents) != 1 for term in self.polynomial.terms):
             raise ValueError("factorization currently supports univariate polynomials")
+        if len(self.polynomial.terms) > 512:
+            raise ValueError("factorization exceeds the 512-term operation budget")
+        for term in self.polynomial.terms:
+            require_bounded_rational(
+                term.coefficient,
+                max_digits=256,
+                label="factorization coefficient",
+            )
+            if term.exponents[0] > 127:
+                raise ValueError(
+                    "factorization exceeds the degree-127 operation budget"
+                )
         return self
 
 
@@ -269,6 +363,13 @@ class RationalFunctionIdentityRequest(ContractModel):
             for term in polynomial.terms
         ):
             raise ValueError("every monomial must match the declared variable order")
+        for polynomial in polynomials:
+            require_sparse_polynomial_budget(
+                polynomial,
+                maximum_terms=1_024,
+                maximum_exponent=127,
+                label="rational-function identity polynomial",
+            )
         if (
             max(
                 len(self.left.numerator.terms) * len(self.right.denominator.terms),
@@ -320,6 +421,10 @@ def _validate_ring_variable_alignment(
         raise ValueError("inverse map variables must equal target_variables")
     if len(source_variables) != len(target_variables):
         raise ValueError("source and target dimensions must agree")
+    if len(forward_map.coordinates) != len(target_variables):
+        raise ValueError("forward map coordinate count must match target_variables")
+    if len(inverse_map.coordinates) != len(source_variables):
+        raise ValueError("inverse map coordinate count must match source_variables")
     if len(set(source_variables)) != len(source_variables):
         raise ValueError("source variables must be unique")
     if len(set(target_variables)) != len(target_variables):
@@ -330,6 +435,8 @@ def _validate_composition_residual_bounds(
     outer: RationalPolynomialMap,
     inner: RationalPolynomialMap,
 ) -> None:
+    require_polynomial_map_budget(outer, label="composition outer map")
+    require_polynomial_map_budget(inner, label="composition inner map")
     inner_term_counts = tuple(len(coordinate.terms) for coordinate in inner.coordinates)
     for coordinate in outer.coordinates:
         term_bound = 0
@@ -356,7 +463,7 @@ def _validate_composition_residual_bounds(
             ),
             default=0,
         )
-        if outer_degree * inner_degree > _MAX_DERIVED_EXPONENT:
+        if outer_degree * inner_degree > _MAX_COMPOSITION_DERIVED_EXPONENT:
             raise ValueError("composition residual degree bound exceeds 127")
 
 
@@ -399,7 +506,7 @@ class PolynomialInverseSupportMode(StrEnum):
 class PolynomialInverseSynthesisLimits(ContractModel):
     timeout_ms: int = Field(ge=0, le=120_000)
     max_inverse_degree: int = Field(ge=0, le=8)
-    max_composition_degree: int = Field(ge=1, le=_MAX_DERIVED_EXPONENT)
+    max_composition_degree: int = Field(ge=1, le=_MAX_COMPOSITION_DERIVED_EXPONENT)
     max_unknown_coefficients: int = Field(ge=1, le=512)
     max_coefficient_equations: int = Field(ge=1, le=4096)
     max_residual_terms: int = Field(ge=1, le=8192)
@@ -414,6 +521,9 @@ def _validate_ansatz_ring_alignment(
         raise ValueError("forward map variables must equal source_variables")
     if len(source_variables) != len(target_variables):
         raise ValueError("source and target dimensions must agree")
+    if len(forward_map.coordinates) != len(target_variables):
+        raise ValueError("forward map coordinate count must match target_variables")
+    require_polynomial_map_budget(forward_map, label="inverse synthesis forward map")
     if len(set(source_variables)) != len(source_variables):
         raise ValueError("source variables must be unique")
     if len(set(target_variables)) != len(target_variables):
@@ -546,6 +656,7 @@ class PolynomialCollisionSearchRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_bounded_grid(self) -> Self:
+        require_polynomial_map_budget(self.map, label="collision search map")
         if (
             bounded_rational_grid_size(
                 self.max_abs_numerator,
@@ -572,6 +683,7 @@ class PolynomialCollisionVerifyRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_collision_dimensions_and_distinct_points(self) -> Self:
+        require_polynomial_map_budget(self.map, label="collision verification map")
         dimension = len(self.map.variables)
         if not (
             len(self.first_point)
@@ -598,6 +710,7 @@ class PolynomialMapInverseCollisionVerifyRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_collision_dimensions_and_distinct_points(self) -> Self:
+        require_polynomial_map_budget(self.map, label="inverse collision map")
         dimension = len(self.map.variables)
         if not (
             len(self.first_point)

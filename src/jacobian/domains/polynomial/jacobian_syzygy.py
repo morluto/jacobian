@@ -26,7 +26,12 @@ from jacobian.contracts.polynomials import (
     SparseRationalPolynomial,
 )
 from jacobian.domains.polynomial._support import materialized_polynomial_operation
-from jacobian.domains.polynomial.operations import _poly, _rational, _symbols, _wire
+from jacobian.domains.polynomial.conversions import (
+    rational_from_sympy,
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
 from jacobian.math.arithmetic import primitive_integer_vector
 
 
@@ -146,7 +151,7 @@ def compute_graded_jacobian_syzygy(
 ) -> GradedJacobianSyzygyResult:
     if request.polynomial is not None:
         variables = cast(tuple[str, str, str], request.polynomial.variables)
-        source = _poly(request.polynomial)
+        source = rational_polynomial_to_sympy(request.polynomial)
         source_kind: Literal[
             "EXPANDED_POLYNOMIAL", "LABELLED_LINEAR_FACTOR_PRODUCT"
         ] = "EXPANDED_POLYNOMIAL"
@@ -158,7 +163,7 @@ def compute_graded_jacobian_syzygy(
         if linear_factors is None or factor_variables is None:
             raise ValueError("linear-factor input is incomplete")
         variables = factor_variables
-        generators = _symbols(variables)
+        generators = symbols_for_variables(variables)
         source = Poly(1, *generators, domain="QQ")
         for factor in linear_factors:
             source *= Poly(
@@ -202,7 +207,7 @@ def compute_graded_jacobian_syzygy(
             rank_minor = GradedJacobianRankMinor(
                 row_indices=row_indices,
                 column_indices=column_indices,
-                determinant=_rational(determinant),
+                determinant=rational_from_sympy(determinant),
             )
         nullity = matrix.cols - rank
         maps.append(
@@ -223,7 +228,7 @@ def compute_graded_jacobian_syzygy(
                         GradedJacobianMapEntry(
                             row=row,
                             column=column,
-                            coefficient=_rational(value),
+                            coefficient=rational_from_sympy(value),
                         )
                         for row, column, value in entries
                     )
@@ -271,13 +276,16 @@ def compute_graded_jacobian_syzygy(
     return GradedJacobianSyzygyResult(
         variables=variables,
         source_kind=source_kind,
-        expanded_polynomial=_wire(source, variables),
+        expanded_polynomial=rational_polynomial_from_sympy(source, variables),
         homogeneous_degree=source_degree,
         searched_through_degree=searched_through,
         coefficient_map_detail=request.coefficient_map_detail,
         partial_derivatives=cast(
             tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
-            tuple(_wire(partial, variables) for partial in partials),
+            tuple(
+                rational_polynomial_from_sympy(partial, variables)
+                for partial in partials
+            ),
         ),
         degree_maps=tuple(maps),
         status="FOUND" if first_degree is not None else "NONE_THROUGH_BOUND",

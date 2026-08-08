@@ -7,7 +7,7 @@ import pytest
 import jacobian
 
 PUBLIC_API = {
-    "jacobian.math": ("arithmetic", "graphs", "matrices"),
+    "jacobian.math": ("arithmetic", "graphs", "matrices", "polynomials"),
     "jacobian.math.arithmetic": (
         "absolute_value",
         "integerize_rational_vector",
@@ -19,6 +19,7 @@ PUBLIC_API = {
     ),
     "jacobian.math.graphs": ("diameter", "is_eulerian", "triangle_count"),
     "jacobian.math.matrices": ("inverse", "rref", "trace"),
+    "jacobian.math.polynomials": ("derivative", "gcdex", "resultant"),
 }
 
 
@@ -47,6 +48,7 @@ def test_root_namespace_stays_minimal() -> None:
     assert "arithmetic" not in jacobian.__all__
     assert "matrices" not in jacobian.__all__
     assert "graphs" not in jacobian.__all__
+    assert "polynomials" not in jacobian.__all__
 
 
 def test_deleted_experimental_contract_modules_are_not_importable() -> None:

@@ -3,106 +3,40 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import ClassVar, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictInt, field_validator, model_validator
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.matrices import (
+    MAX_MATRIX_DIMENSION,
+    MAX_MATRIX_SCALAR_DIGITS,
+    IntegerMatrix,
+    RationalMatrix,
+    require_matrix_scalar_digits,
+)
 from jacobian.contracts.results import ContractModel
 
-MAX_MATRIX_DIMENSION = 32
-MAX_SCALAR_DIGITS = 256
-# Stay below CPython's default integer-string conversion guard because canonical
-# rational validation reduces values with ``fractions.Fraction``.
-MAX_OUTPUT_SCALAR_DIGITS = 4_096
+MAX_INPUT_SCALAR_DIGITS = 256
 
 
-def _check_integer_digits(value: str, *, maximum: int = MAX_SCALAR_DIGITS) -> None:
+def _check_integer_digits(
+    value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
+) -> None:
     if len(value.lstrip("-")) > maximum:
         raise ValueError(f"matrix scalars are limited to {maximum} decimal digits")
 
 
-class RationalMatrix(ContractModel):
-    """One nonempty rectangular matrix over canonical rationals."""
-
-    _maximum_scalar_digits: ClassVar[int] = MAX_SCALAR_DIGITS
-    domain: Literal["QQ"] = "QQ"
-    entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
-    )
-
-    @model_validator(mode="after")
-    def require_bounded_rectangle(self) -> Self:
-        columns = len(self.entries[0])
-        if not 1 <= columns <= MAX_MATRIX_DIMENSION:
-            raise ValueError("matrix rows must contain between 1 and 32 entries")
-        if any(len(row) != columns for row in self.entries):
-            raise ValueError("matrix rows must all have the same length")
-        for row in self.entries:
-            for value in row:
-                _check_integer_digits(
-                    value.num,
-                    maximum=self._maximum_scalar_digits,
-                )
-                _check_integer_digits(
-                    value.den,
-                    maximum=self._maximum_scalar_digits,
-                )
-        return self
-
-
-class IntegerMatrix(ContractModel):
-    """One nonempty rectangular matrix over canonical integers."""
-
-    _maximum_scalar_digits: ClassVar[int] = MAX_SCALAR_DIGITS
-    domain: Literal["ZZ"] = "ZZ"
-    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
-    )
-
-    @model_validator(mode="after")
-    def require_bounded_rectangle(self) -> Self:
-        columns = len(self.entries[0])
-        if not 1 <= columns <= MAX_MATRIX_DIMENSION:
-            raise ValueError("matrix rows must contain between 1 and 32 entries")
-        if any(len(row) != columns for row in self.entries):
-            raise ValueError("matrix rows must all have the same length")
-        for row in self.entries:
-            for value in row:
-                _check_integer_digits(
-                    value,
-                    maximum=self._maximum_scalar_digits,
-                )
-        return self
-
-
-class RationalOutputMatrix(RationalMatrix):
-    """A bounded exact rational matrix produced by an accepted input."""
-
-    _maximum_scalar_digits: ClassVar[int] = MAX_OUTPUT_SCALAR_DIGITS
-
-
-class IntegerOutputMatrix(IntegerMatrix):
-    """A bounded exact integer matrix produced by an accepted input."""
-
-    _maximum_scalar_digits: ClassVar[int] = MAX_OUTPUT_SCALAR_DIGITS
-
-
-class OutputRational(CanonicalRational):
-    """A canonical rational bounded for an exact matrix result."""
-
-    @model_validator(mode="after")
-    def require_bounded_output(self) -> Self:
-        _check_integer_digits(self.num, maximum=MAX_OUTPUT_SCALAR_DIGITS)
-        _check_integer_digits(self.den, maximum=MAX_OUTPUT_SCALAR_DIGITS)
-        return self
-
-
 class RationalMatrixRequest(ContractModel):
     matrix: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_rref_input_budget(self) -> Self:
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        return self
 
 
 class RationalMatrixProductRequest(ContractModel):
@@ -118,6 +52,12 @@ class RationalMatrixProductRequest(ContractModel):
                 "matrix multiplication requires the left column count to equal "
                 "the right row count"
             )
+        require_matrix_scalar_digits(
+            self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        require_matrix_scalar_digits(
+            self.right.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
         return self
 
 
@@ -128,11 +68,53 @@ class SquareRationalMatrixRequest(ContractModel):
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
             raise ValueError("characteristic polynomial requires a square matrix")
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        return self
+
+
+class MatrixDeterminantRequest(ContractModel):
+    """One bounded square matrix whose exact determinant is requested."""
+
+    matrix: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_square(self) -> Self:
+        if len(self.matrix.entries) != len(self.matrix.entries[0]):
+            raise ValueError("determinant computation requires a square matrix")
+        require_matrix_scalar_digits(
+            self.matrix.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label="determinant input",
+        )
+        return self
+
+
+class MatrixRankRequest(ContractModel):
+    """One bounded rectangular matrix whose exact rank is requested."""
+
+    matrix: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_input_budget(self) -> Self:
+        require_matrix_scalar_digits(
+            self.matrix.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label="rank input",
+        )
         return self
 
 
 class IntegerMatrixRequest(ContractModel):
     matrix: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_integer_input_budget(self) -> Self:
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        return self
 
 
 class SquareIntegerMatrixRequest(ContractModel):
@@ -142,6 +124,9 @@ class SquareIntegerMatrixRequest(ContractModel):
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
             raise ValueError("operation requires a square integer matrix")
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
         return self
 
 
@@ -157,6 +142,9 @@ class RationalLinearSolveRequest(ContractModel):
         rows = len(self.matrix.entries)
         if len(self.matrix.entries[0]) != rows or len(self.rhs) != rows:
             raise ValueError("linear solve requires a square matrix and matching rhs")
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
         for value in self.rhs:
             _check_integer_digits(value.num)
             _check_integer_digits(value.den)
@@ -175,20 +163,42 @@ class LatticeReductionRequest(ContractModel):
         default_factory=LatticeReductionBudget
     )
 
+    @model_validator(mode="after")
+    def require_lattice_input_budget(self) -> Self:
+        require_matrix_scalar_digits(
+            self.basis.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="basis input"
+        )
+        return self
+
 
 class RrefResult(ContractModel):
-    reduced_matrix: RationalOutputMatrix
+    reduced_matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     free_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     convention: Literal["UNIQUE_RREF_OVER_QQ"] = "UNIQUE_RREF_OVER_QQ"
 
 
+class MatrixDeterminantResult(ContractModel):
+    """One exact determinant, returned inline for ordinary composition."""
+
+    determinant: CanonicalRational
+    method: Literal["FRACTION_FREE_BAREISS"] = "FRACTION_FREE_BAREISS"
+
+
+class MatrixRankResult(ContractModel):
+    """One exact rank with the canonical RREF pivot columns."""
+
+    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
+    method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
+
+
 class NullspaceResult(ContractModel):
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     nullity: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    basis_vectors: tuple[tuple[OutputRational, ...], ...] = Field(
+    basis_vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )
     free_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
@@ -210,7 +220,7 @@ class NullspaceResult(ContractModel):
 class CharacteristicPolynomialResult(ContractModel):
     variable: Literal["lambda"] = "lambda"
     degree: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    coefficients_descending: tuple[OutputRational, ...] = Field(
+    coefficients_descending: tuple[CanonicalRational, ...] = Field(
         min_length=2,
         max_length=MAX_MATRIX_DIMENSION + 1,
     )
@@ -221,13 +231,13 @@ class CharacteristicPolynomialResult(ContractModel):
     def require_dense_monic_coefficients(self) -> Self:
         if len(self.coefficients_descending) != self.degree + 1:
             raise ValueError("dense coefficient count must be degree plus one")
-        if self.coefficients_descending[0] != OutputRational(num="1", den="1"):
+        if self.coefficients_descending[0] != CanonicalRational(num="1", den="1"):
             raise ValueError("characteristic polynomial must be monic")
         return self
 
 
 class SmithNormalFormResult(ContractModel):
-    normal_form: IntegerOutputMatrix
+    normal_form: IntegerMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     invariant_factors: tuple[CanonicalInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
@@ -269,12 +279,12 @@ class SmithNormalFormResult(ContractModel):
         values: tuple[CanonicalInteger, ...],
     ) -> tuple[CanonicalInteger, ...]:
         for value in values:
-            _check_integer_digits(value, maximum=MAX_OUTPUT_SCALAR_DIGITS)
+            _check_integer_digits(value, maximum=MAX_MATRIX_SCALAR_DIGITS)
         return values
 
 
 class MatrixInverseResult(ContractModel):
-    inverse: RationalOutputMatrix
+    inverse: RationalMatrix
     convention: Literal["TWO_SIDED_INVERSE_OVER_QQ"] = "TWO_SIDED_INVERSE_OVER_QQ"
 
 
@@ -285,12 +295,12 @@ class MatrixTraceResult(ContractModel):
     @field_validator("trace")
     @classmethod
     def require_bounded_trace(cls, value: CanonicalInteger) -> CanonicalInteger:
-        _check_integer_digits(value, maximum=MAX_OUTPUT_SCALAR_DIGITS)
+        _check_integer_digits(value, maximum=MAX_MATRIX_SCALAR_DIGITS)
         return value
 
 
 class MatrixProductResult(ContractModel):
-    product: RationalOutputMatrix
+    product: RationalMatrix
     left_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     inner_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
@@ -308,7 +318,7 @@ class MatrixProductResult(ContractModel):
 
 
 class RationalLinearSolveResult(ContractModel):
-    solution: tuple[OutputRational, ...] = Field(
+    solution: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_MATRIX_DIMENSION,
     )
@@ -316,13 +326,13 @@ class RationalLinearSolveResult(ContractModel):
 
 
 class MatrixAdjugateResult(ContractModel):
-    adjugate: IntegerOutputMatrix
+    adjugate: IntegerMatrix
     convention: Literal["CLASSICAL_ADJUGATE"] = "CLASSICAL_ADJUGATE"
 
 
 class LatticeReductionResult(ContractModel):
-    reduced_basis: IntegerOutputMatrix
-    transformation: IntegerOutputMatrix
+    reduced_basis: IntegerMatrix
+    transformation: IntegerMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["REDUCED_BASIS_EQUALS_TRANSFORMATION_TIMES_BASIS"] = (
         "REDUCED_BASIS_EQUALS_TRANSFORMATION_TIMES_BASIS"

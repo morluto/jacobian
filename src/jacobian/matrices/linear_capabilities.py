@@ -1,4 +1,10 @@
-"""Independent verification of exact rational linear-system evidence."""
+"""Independent verification of exact rational linear-system evidence.
+
+Ownership: ``jacobian.matrices`` (linear checkers).
+Installed by ``FoundationInstaller`` to provide
+``linear.rational_solution.verify`` and ``linear.rational_inconsistency.verify``
+for evidence bound to the linear artifact service.
+"""
 
 from __future__ import annotations
 

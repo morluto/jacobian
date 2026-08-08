@@ -3,12 +3,26 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
+    MatrixDeterminantRequest,
+    MatrixRankRequest,
     RationalMatrixProductRequest,
     RationalMatrixRequest,
     SquareRationalMatrixRequest,
 )
 
 MATRIX_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "matrix.determinant.compute",
+        MatrixDeterminantRequest,
+        "check_matrix_determinant",
+        "matrix.determinant.flint-replay",
+    ),
+    ExactReplayCheckerDeclaration(
+        "matrix.rank.compute",
+        MatrixRankRequest,
+        "check_matrix_rank",
+        "matrix.rank.flint-replay",
+    ),
     ExactReplayCheckerDeclaration(
         "matrix.multiply.compute",
         RationalMatrixProductRequest,

@@ -102,6 +102,7 @@ def test_consolidated_domain_results_are_exact_computed_evidence(
             },
             {
                 "adjugate": {
+                    "matrix_schema_version": "1",
                     "domain": "ZZ",
                     "entries": [["4", "-2"], ["-3", "1"]],
                 },

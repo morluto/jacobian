@@ -10,7 +10,7 @@
 The topology bundle exposes four atomic outcomes over bounded finite abstract
 simplicial complexes:
 
-- `topology.simplicial_complex.materialize`
+- `topology.simplicial_complex.canonicalize`
 - `topology.simplicial_complex.chain_complex.compute`
 - `topology.simplicial_homology.compute`
 - `topology.simplicial_homology.integral.compute`
@@ -23,7 +23,7 @@ Operator-authorized independent replay is the only path in this family to
 
 ## Canonical finite complexes
 
-Materialization accepts an explicit vertex list and maximal facets. Vertex
+Canonicalization accepts an explicit vertex list and maximal facets. Vertex
 labels use a bounded ASCII identifier syntax. Caller order does not orient a
 simplex: lexicographic vertex order is the sole orientation convention.
 
@@ -41,10 +41,9 @@ non-empty faces.
 
 The result contains canonical maximal simplices, every non-empty face grouped
 by dimension, the dimension, f-vector, closure size, and a content digest over
-the complete canonical complex. The generic operation envelope stores the
-validated request and result as content-addressed artifacts and exposes their
-relationship. A downstream topology request consumes the canonical
-`result.complex` object, so it cannot silently reinterpret a raw facet list.
+the complete canonical complex. It is returned inline as a bounded shared
+mathematical value, so a downstream topology request consumes
+`result.complex` directly and cannot silently reinterpret a raw facet list.
 
 ## Chain complexes
 
@@ -70,6 +69,10 @@ zero.
 The `REDUCED` convention exposes the augmentation \(C_0\to\mathbf F_p\) as a
 separate matrix. It does not disguise the augmentation as a stored
 negative-dimensional simplex. `UNREDUCED` omits it.
+
+The complete chain complex is one bounded inline result. It remains an
+operation result rather than a second shared foundational object: homology
+accepts the canonical complex directly, not a chain-complex serialization.
 
 ## Homology over a prime field
 
@@ -115,10 +118,10 @@ Integral homology further limits one chain group to 16 simplices, the sum of
 all chain ranks to 32, one dense boundary to 256 cells, and result integers to
 256 decimal digits.
 
-A complex can be materialized when it fits the closure bound but still be
+A complex can be canonicalized when it fits the closure bound but still be
 rejected by chain or homology computation when a linear-algebra bound is
 exceeded. That rejection occurs during complete request validation, before
-operation artifacts are written.
+backend construction.
 
 ## Public reference cases
 
@@ -155,8 +158,8 @@ oriented boundary from passive JSON. For homology it separately:
 5. checks that every quotient representative is a cycle; and
 6. checks independence and spanning modulo boundaries.
 
-Replay binds the exact input artifact, result artifact, topology semantics,
-candidate digest, witness format, and checker identity. A malformed,
+Replay binds the exact inline input and candidate after validation, topology
+semantics, candidate digest, witness format, and checker identity. A malformed,
 interrupted, unsupported, or false replay returns no opposite mathematical
 conclusion and creates no verification record.
 

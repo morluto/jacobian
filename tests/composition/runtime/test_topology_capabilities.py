@@ -4,7 +4,6 @@ from typing import Any
 
 import pytest
 
-from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
@@ -34,16 +33,16 @@ _PROJECTIVE_PLANE_FACETS = [
 ]
 
 
-def _result_payload(fresh_complete_runtime, result) -> dict[str, Any]:
-    return fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
+def _result_payload(_runtime, result) -> dict[str, Any]:
+    return result.output["result"]
 
 
-def _materialize(
+def _canonicalize(
     fresh_complete_runtime, presentation: dict[str, Any]
 ) -> dict[str, Any]:
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="topology.simplicial_complex.materialize",
+            capability_id="topology.simplicial_complex.canonicalize",
             input=presentation,
         )
     )
@@ -58,7 +57,7 @@ def _betti(
     prime: int = 2,
     convention: str = "UNREDUCED",
 ) -> tuple[int, ...]:
-    complex_ = _materialize(fresh_complete_runtime, presentation)
+    complex_ = _canonicalize(fresh_complete_runtime, presentation)
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="topology.simplicial_homology.compute",
@@ -71,6 +70,7 @@ def _betti(
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.artifact_uris == ()
     return tuple(
         group["betti_number"]
         for group in _result_payload(fresh_complete_runtime, result)["groups"]
@@ -85,7 +85,7 @@ def test_topology_bundle_exposes_four_atomic_capabilities(
     )
 
     assert ids == (
-        "topology.simplicial_complex.materialize",
+        "topology.simplicial_complex.canonicalize",
         "topology.simplicial_complex.chain_complex.compute",
         "topology.simplicial_homology.compute",
         "topology.simplicial_homology.integral.compute",
@@ -114,12 +114,12 @@ def test_homology_intent_discovers_the_domain_owned_operation(
     assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
 
 
-def test_materialization_is_canonical_complete_and_artifact_backed(
+def test_canonicalization_is_canonical_complete_inline_and_composable(
     fresh_complete_runtime,
 ) -> None:
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="topology.simplicial_complex.materialize",
+            capability_id="topology.simplicial_complex.canonicalize",
             input={
                 "vertices": ["c", "a", "b"],
                 "facets": [["b", "a"], ["c", "b"], ["c", "a"]],
@@ -140,17 +140,14 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     assert complex_["empty_simplex_stored"] is False
     assert payload["completeness"] == "COMPLETE_FACE_CLOSURE"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
-    assert (
-        fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
-        == payload
-    )
+    assert result.artifact_uris == ()
+    assert result.output["result"] == payload
 
 
 def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
     fresh_complete_runtime,
 ) -> None:
-    triangle = _materialize(
+    triangle = _canonicalize(
         fresh_complete_runtime,
         {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]},
     )
@@ -177,6 +174,9 @@ def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
         )
     )
     mod_two_reduced = _result_payload(fresh_complete_runtime, mod_two_reduced_result)
+
+    assert integer_result.artifact_uris == ()
+    assert mod_two_reduced_result.artifact_uris == ()
 
     assert integer["boundary_matrices"][2]["entries"] == [
         {"row": 0, "column": 0, "value": 1},
@@ -272,7 +272,7 @@ def test_public_reference_cases(
     f_vector: tuple[int, ...],
     betti: tuple[int, ...],
 ) -> None:
-    complex_ = _materialize(fresh_complete_runtime, presentation)
+    complex_ = _canonicalize(fresh_complete_runtime, presentation)
     computed_betti = _betti(fresh_complete_runtime, presentation)
 
     assert tuple(complex_["f_vector"]) == f_vector
@@ -300,8 +300,8 @@ def test_torus_and_projective_plane_distinguish_coefficient_fields(
 def test_integral_homology_exposes_free_and_torsion_generators(
     fresh_complete_runtime,
 ) -> None:
-    circle = _materialize(fresh_complete_runtime, _CIRCLE)
-    projective_plane = _materialize(
+    circle = _canonicalize(fresh_complete_runtime, _CIRCLE)
+    projective_plane = _canonicalize(
         fresh_complete_runtime,
         {
             "vertices": [str(index) for index in range(6)],
@@ -350,19 +350,13 @@ def test_integral_homology_exposes_free_and_torsion_generators(
         len(torsion["bounding_chain"]["coefficients"])
         == (projective_plane["f_vector"][2])
     )
-    artifacts = [
-        fresh_complete_runtime.core.store.get(uri)
-        for uri in projective_result.artifact_uris
-    ]
-    sizes = [len(canonicalize_json(artifact.payload)) for artifact in artifacts]
-    assert all(size < 10 * 1024 * 1024 for size in sizes)
-    assert sum(sizes) < 8 * 1024 * 1024
+    assert projective_result.artifact_uris == ()
 
 
 def test_reduced_integral_homology_uses_the_augmentation_kernel(
     fresh_complete_runtime,
 ) -> None:
-    points = _materialize(
+    points = _canonicalize(
         fresh_complete_runtime,
         {
             "vertices": ["a", "b", "c"],
@@ -418,7 +412,7 @@ def test_invalid_topology_request_fails_before_artifact_writes(
 ) -> None:
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="topology.simplicial_complex.materialize",
+            capability_id="topology.simplicial_complex.canonicalize",
             input={
                 "vertices": ["a", "b"],
                 "facets": [["a"], ["a", "b"]],
@@ -489,7 +483,7 @@ def test_enriched_diagnostic_still_fails_closed_for_non_digest_error(
 
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="topology.simplicial_complex.materialize",
+            capability_id="topology.simplicial_complex.canonicalize",
             input={
                 "vertices": ["a", "b"],
                 "facets": [["a"], ["a", "b"]],

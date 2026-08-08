@@ -2,39 +2,39 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
-from typing import Any
-
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.matrix_operations import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
-    IntegerOutputMatrix,
     MatrixAdjugateResult,
+    MatrixDeterminantRequest,
+    MatrixDeterminantResult,
     MatrixInverseResult,
     MatrixProductResult,
+    MatrixRankRequest,
+    MatrixRankResult,
     MatrixTraceResult,
     NullspaceResult,
-    OutputRational,
     RationalLinearSolveRequest,
     RationalLinearSolveResult,
-    RationalMatrix,
     RationalMatrixProductRequest,
     RationalMatrixRequest,
-    RationalOutputMatrix,
     RrefResult,
     SmithNormalFormResult,
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
-from jacobian.math import matrices as native_matrices
+from jacobian.domains.matrix_lattice import conversions, kernels
 
 __all__ = [
     "compute_adjugate",
     "compute_characteristic_polynomial",
+    "compute_determinant",
     "compute_inverse",
     "compute_nullspace",
     "compute_product",
+    "compute_rank",
     "compute_rational_linear_solve",
     "compute_rref",
     "compute_smith_normal_form",
@@ -42,36 +42,30 @@ __all__ = [
 ]
 
 
-def _rational(value: Any) -> OutputRational:
-    fraction = Fraction(value)
-    return OutputRational(
-        num=format_canonical_integer(fraction.numerator),
-        den=format_canonical_integer(fraction.denominator),
+def compute_determinant(
+    request: MatrixDeterminantRequest,
+) -> MatrixDeterminantResult:
+    determinant = kernels.determinant(
+        conversions.rational_matrix_to_sympy(request.matrix)
+    )
+    return MatrixDeterminantResult(
+        determinant=conversions.rational_from_sympy(determinant)
     )
 
 
-def _qq_matrix(matrix: RationalMatrix) -> Any:
-    import sympy
-
-    return sympy.Matrix(
-        [
-            [sympy.Rational(value.as_fraction()) for value in row]
-            for row in matrix.entries
-        ]
+def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    rank, pivot_columns = kernels.rank(
+        conversions.rational_matrix_to_sympy(request.matrix)
     )
+    return MatrixRankResult(rank=rank, pivot_columns=pivot_columns)
 
 
 def compute_rref(request: RationalMatrixRequest) -> RrefResult:
-    reduced, pivots = native_matrices.rref(_qq_matrix(request.matrix))
+    reduced, pivots = kernels.rref(conversions.rational_matrix_to_sympy(request.matrix))
     columns = reduced.cols
     pivot_columns = tuple(int(column) for column in pivots)
     return RrefResult(
-        reduced_matrix=RationalOutputMatrix(
-            entries=tuple(
-                tuple(_rational(reduced[row, column]) for column in range(columns))
-                for row in range(reduced.rows)
-            )
-        ),
+        reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
         rank=len(pivot_columns),
         pivot_columns=pivot_columns,
         free_columns=tuple(
@@ -83,8 +77,8 @@ def compute_rref(request: RationalMatrixRequest) -> RrefResult:
 def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
     import sympy
 
-    matrix = _qq_matrix(request.matrix)
-    reduced, pivots = matrix.rref()
+    matrix = conversions.rational_matrix_to_sympy(request.matrix)
+    reduced, pivots = kernels.nullspace_rref(matrix)
     pivot_columns = tuple(int(column) for column in pivots)
     free_columns = tuple(
         column for column in range(matrix.cols) if column not in pivot_columns
@@ -92,13 +86,13 @@ def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
     pivot_row_by_column = {
         pivot_column: row for row, pivot_column in enumerate(pivot_columns)
     }
-    basis: list[tuple[OutputRational, ...]] = []
+    basis: list[tuple[CanonicalRational, ...]] = []
     for free_column in free_columns:
         vector = [sympy.S.Zero] * matrix.cols
         vector[free_column] = sympy.S.One
         for pivot_column, row in pivot_row_by_column.items():
             vector[pivot_column] = -reduced[row, free_column]
-        basis.append(tuple(_rational(value) for value in vector))
+        basis.append(tuple(conversions.rational_from_sympy(value) for value in vector))
     return NullspaceResult(
         ambient_dimension=matrix.cols,
         rank=len(pivot_columns),
@@ -111,11 +105,14 @@ def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
 def compute_characteristic_polynomial(
     request: SquareRationalMatrixRequest,
 ) -> CharacteristicPolynomialResult:
-    polynomial = _qq_matrix(request.matrix).charpoly("lambda")
+    polynomial = kernels.characteristic_polynomial(
+        conversions.rational_matrix_to_sympy(request.matrix), "lambda"
+    )
     return CharacteristicPolynomialResult(
         degree=polynomial.degree(),
         coefficients_descending=tuple(
-            _rational(coefficient) for coefficient in polynomial.all_coeffs()
+            conversions.rational_from_sympy(coefficient)
+            for coefficient in polynomial.all_coeffs()
         ),
     )
 
@@ -124,15 +121,8 @@ def compute_smith_normal_form(
     request: IntegerMatrixRequest,
 ) -> SmithNormalFormResult:
     import sympy
-    from sympy.matrices.normalforms import smith_normal_form
 
-    source = sympy.Matrix(
-        [
-            [parse_canonical_integer(value) for value in row]
-            for row in request.matrix.entries
-        ]
-    )
-    raw = smith_normal_form(source, domain=sympy.ZZ)
+    raw = kernels.smith_normal_form(conversions.integer_matrix_to_sympy(request.matrix))
     diagonal_count = min(raw.rows, raw.cols)
     diagonal = tuple(int(raw[index, index]) for index in range(diagonal_count))
     rank = next(
@@ -146,15 +136,7 @@ def compute_smith_normal_form(
     for index, value in enumerate(invariant_factors):
         canonical[index, index] = value
     return SmithNormalFormResult(
-        normal_form=IntegerOutputMatrix(
-            entries=tuple(
-                tuple(
-                    format_canonical_integer(canonical[row, column])
-                    for column in range(raw.cols)
-                )
-                for row in range(raw.rows)
-            )
-        ),
+        normal_form=conversions.integer_matrix_from_sympy(canonical),
         rank=rank,
         invariant_factors=tuple(
             format_canonical_integer(value) for value in invariant_factors
@@ -163,47 +145,24 @@ def compute_smith_normal_form(
 
 
 def compute_inverse(request: SquareIntegerMatrixRequest) -> MatrixInverseResult:
-    import sympy
+    inverse = kernels.inverse(conversions.integer_matrix_to_sympy(request.matrix))
+    return MatrixInverseResult(inverse=conversions.rational_matrix_from_sympy(inverse))
 
-    source = sympy.Matrix(
-        [
-            [parse_canonical_integer(value) for value in row]
-            for row in request.matrix.entries
-        ]
-    )
-    inverse = native_matrices.inverse(source)
-    return MatrixInverseResult(
-        inverse=RationalOutputMatrix(
-            entries=tuple(
-                tuple(_rational(inverse[row, column]) for column in range(inverse.cols))
-                for row in range(inverse.rows)
-            )
+
+def compute_trace(request: SquareIntegerMatrixRequest) -> MatrixTraceResult:
+    return MatrixTraceResult(
+        trace=format_canonical_integer(
+            kernels.trace(conversions.integer_matrix_to_sympy(request.matrix))
         )
     )
 
 
-def compute_trace(request: SquareIntegerMatrixRequest) -> MatrixTraceResult:
-    import sympy
-
-    source = sympy.Matrix(
-        [[int(value) for value in row] for row in request.matrix.entries]
-    )
-    return MatrixTraceResult(
-        trace=format_canonical_integer(native_matrices.trace(source))
-    )
-
-
 def compute_product(request: RationalMatrixProductRequest) -> MatrixProductResult:
-    left = _qq_matrix(request.left)
-    right = _qq_matrix(request.right)
-    product = left * right
+    left = conversions.rational_matrix_to_sympy(request.left)
+    right = conversions.rational_matrix_to_sympy(request.right)
+    product = kernels.matrix_product(left, right)
     return MatrixProductResult(
-        product=RationalOutputMatrix(
-            entries=tuple(
-                tuple(_rational(product[row, column]) for column in range(product.cols))
-                for row in range(product.rows)
-            )
-        ),
+        product=conversions.rational_matrix_from_sympy(product),
         left_rows=left.rows,
         inner_dimension=left.cols,
         right_columns=right.cols,
@@ -215,36 +174,18 @@ def compute_rational_linear_solve(
 ) -> RationalLinearSolveResult:
     import sympy
 
-    source = _qq_matrix(request.matrix)
+    source = conversions.rational_matrix_to_sympy(request.matrix)
     rhs = sympy.Matrix([sympy.Rational(value.as_fraction()) for value in request.rhs])
-    solution, parameters = source.gauss_jordan_solve(rhs)
+    solution, parameters = kernels.rational_linear_solve(source, rhs)
     if parameters.rows:
         raise ValueError("linear system does not have a unique solution")
     return RationalLinearSolveResult(
-        solution=tuple(_rational(value) for value in solution)
+        solution=tuple(conversions.rational_from_sympy(value) for value in solution)
     )
 
 
 def compute_adjugate(request: SquareIntegerMatrixRequest) -> MatrixAdjugateResult:
-    import sympy
-
-    source = sympy.Matrix(
-        [
-            [parse_canonical_integer(value) for value in row]
-            for row in request.matrix.entries
-        ]
-    )
-    if source.rows != source.cols:
-        raise ValueError("adjugate requires a square matrix")
-    adjugate = source.adjugate()
+    adjugate = kernels.adjugate(conversions.integer_matrix_to_sympy(request.matrix))
     return MatrixAdjugateResult(
-        adjugate=IntegerOutputMatrix(
-            entries=tuple(
-                tuple(
-                    format_canonical_integer(adjugate[row, column])
-                    for column in range(adjugate.cols)
-                )
-                for row in range(adjugate.rows)
-            )
-        )
+        adjugate=conversions.integer_matrix_from_sympy(adjugate)
     )

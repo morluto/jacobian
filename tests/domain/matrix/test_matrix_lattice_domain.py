@@ -16,15 +16,20 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
-from jacobian.contracts.matrix_operations import (
-    MAX_OUTPUT_SCALAR_DIGITS,
+from jacobian.contracts.matrices import (
+    MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
+    RationalMatrix,
+)
+from jacobian.contracts.matrix_operations import (
+    MAX_INPUT_SCALAR_DIGITS,
     IntegerMatrixRequest,
     LatticeReductionRequest,
     MatrixProductResult,
     MatrixTraceResult,
     NullspaceResult,
     RationalMatrixProductRequest,
+    RrefResult,
     SquareIntegerMatrixRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -47,8 +52,17 @@ def matrix_domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
 def _qq(rows: list[list[int]]) -> dict[str, object]:
     return {
+        "matrix_schema_version": "1",
         "domain": "QQ",
         "entries": [[_q(value) for value in row] for row in rows],
+    }
+
+
+def _zz(rows: list[list[int]]) -> dict[str, object]:
+    return {
+        "matrix_schema_version": "1",
+        "domain": "ZZ",
+        "entries": [[str(value) for value in row] for row in rows],
     }
 
 
@@ -66,12 +80,12 @@ def test_exact_matrix_domain_results_and_lineage(
             "matrix.inverse.compute",
             {
                 "matrix": {
-                    "domain": "ZZ",
-                    "entries": [["1", "2"], ["3", "4"]],
+                    **_zz([[1, 2], [3, 4]]),
                 }
             },
             {
                 "inverse": {
+                    "matrix_schema_version": "1",
                     "domain": "QQ",
                     "entries": [
                         [_q(-2), _q(1)],
@@ -113,6 +127,7 @@ def test_exact_matrix_domain_results_and_lineage(
             {"matrix": _qq([[1, 2, 3], [2, 4, 7]])},
             {
                 "reduced_matrix": {
+                    "matrix_schema_version": "1",
                     "domain": "QQ",
                     "entries": [
                         [_q(1), _q(2), _q(0)],
@@ -155,15 +170,11 @@ def test_exact_matrix_domain_results_and_lineage(
             "matrix.normal_form.smith.compute",
             {
                 "matrix": {
-                    "domain": "ZZ",
-                    "entries": [["2", "4", "4"], ["6", "6", "12"]],
+                    **_zz([[2, 4, 4], [6, 6, 12]]),
                 }
             },
             {
-                "normal_form": {
-                    "domain": "ZZ",
-                    "entries": [["2", "0", "0"], ["0", "6", "0"]],
-                },
+                "normal_form": _zz([[2, 0, 0], [0, 6, 0]]),
                 "rank": 2,
                 "invariant_factors": ["2", "6"],
                 "transformation_available": False,
@@ -388,7 +399,7 @@ def test_matrix_output_contract_failure_is_operational_error() -> None:
         "Exercise result validation in the matrix operation declaration.",
         SquareIntegerMatrixRequest,
         MatrixTraceResult,
-        lambda _request: MatrixTraceResult(trace="9" * (MAX_OUTPUT_SCALAR_DIGITS + 1)),
+        lambda _request: MatrixTraceResult(trace="9" * (MAX_MATRIX_SCALAR_DIGITS + 1)),
         "matrix.relation.test-of",
     )
 
@@ -446,7 +457,7 @@ def test_lll_worker_allows_result_growth_beyond_input_digit_limit() -> None:
     )
 
     assert largest_output == 512
-    assert largest_output <= MAX_OUTPUT_SCALAR_DIGITS
+    assert largest_output <= MAX_MATRIX_SCALAR_DIGITS
 
 
 def test_lattice_lll_returns_exact_left_transformation(
@@ -522,3 +533,81 @@ def test_lattice_lll_timeout_retains_no_operation_artifacts(
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.diagnostics[0].code == "FLINT_LLL_TIMEOUT"
     assert result.artifact_uris == ()
+
+
+def test_rref_result_feeds_product_request_without_artifact_uri(
+    matrix_domain_services: DomainTestServices,
+) -> None:
+    """RREF reduced_matrix is a RationalMatrix that composes directly into product."""
+    runtime = matrix_domain_services
+    rref_result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.normal_form.rref.compute",
+            input={"matrix": _qq([[1, 2], [2, 4]])},
+        )
+    )
+    assert rref_result.execution.status is ExecutionStatus.COMPLETED
+    assert rref_result.artifact_uris == ()
+
+    rref = RrefResult.model_validate(rref_result.output["result"])
+    assert isinstance(rref.reduced_matrix, RationalMatrix)
+
+    # 1. Insert the in-process Pydantic object directly as both operands.
+    direct_request = RationalMatrixProductRequest(
+        left=rref.reduced_matrix,
+        right=rref.reduced_matrix,
+    )
+    assert direct_request.left is rref.reduced_matrix
+    assert direct_request.right is rref.reduced_matrix
+
+    # 2. Round-trip through serialized payload and reconstruct.
+    serialized = rref.model_dump(mode="json")
+    reconstructed = RationalMatrix.model_validate(serialized["reduced_matrix"])
+    round_trip_request = RationalMatrixProductRequest(
+        left=reconstructed,
+        right=reconstructed,
+    )
+    assert round_trip_request.left.entries == rref.reduced_matrix.entries
+    assert round_trip_request.right.entries == rref.reduced_matrix.entries
+
+    # 3. The composition produces a correct product via the capability.
+    product_result = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.multiply.compute",
+            input={
+                "left": serialized["reduced_matrix"],
+                "right": serialized["reduced_matrix"],
+            },
+        )
+    )
+    assert product_result.execution.status is ExecutionStatus.COMPLETED
+    assert product_result.artifact_uris == ()
+    assert product_result.output["result"]["product"] == _qq([[1, 2], [0, 0]])
+
+
+def test_oversized_authoritative_matrix_rejected_by_downstream_operation_budget() -> (
+    None
+):
+    """A structurally valid RationalMatrix beyond 256 digits is rejected by request budget."""
+    oversized = "9" * (MAX_INPUT_SCALAR_DIGITS + 1)
+    assert len(oversized.lstrip("-")) <= MAX_MATRIX_SCALAR_DIGITS
+
+    matrix = RationalMatrix.model_validate(
+        {
+            "domain": "QQ",
+            "entries": [
+                [_q_from_int(oversized), _q(0)],
+                [_q(0), _q(1)],
+            ],
+        }
+    )
+    # The authoritative type accepts it — it is structurally valid.
+    assert len(matrix.entries[0][0].num.lstrip("-")) == MAX_INPUT_SCALAR_DIGITS + 1
+
+    # The downstream operation rejects it via its input budget validator.
+    with raises(ValidationError, match="256 decimal digit"):
+        RationalMatrixProductRequest(left=matrix, right=matrix)
+
+
+def _q_from_int(value: str) -> dict[str, str]:
+    return {"num": value, "den": "1"}

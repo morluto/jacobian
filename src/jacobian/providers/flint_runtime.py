@@ -410,7 +410,7 @@ def topology_exact_checker_provider_runtime(
             version=version,
             entrypoint=(
                 "jacobian_checkers.simplicial_topology:"
-                "check_simplicial_complex_materialization"
+                "check_simplicial_complex_canonicalization"
             ),
             install_tier=CapabilityInstallTier.T1,
             license_id="MIT",

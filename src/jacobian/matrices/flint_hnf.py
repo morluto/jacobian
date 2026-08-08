@@ -1,4 +1,11 @@
-"""Bounded Python-FLINT row Hermite-normal-form producer."""
+"""Bounded Python-FLINT row Hermite-normal-form producer.
+
+Ownership: ``jacobian.matrices`` (artifact-backed HNF producer).
+This is a non-pilot operation that requires durable artifact identity
+for its normal-form and transformation evidence.  It is installed by
+``FoundationInstaller`` when the Python-FLINT HNF provider is available.
+Inline matrix operations live in ``jacobian.domains.matrix_lattice``.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +36,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.matrices import (
     PYTHON_FLINT_HNF_CONFIGURATION,
-    ExactIntegerMatrix,
+    IntegerMatrix,
     MatrixHermiteNormalFormOutput,
     MatrixHermiteNormalFormRequest,
 )
@@ -56,8 +63,8 @@ FLINT_HNF_STDERR_LIMIT = 64_000
 class _FlintHnfRun:
     execution_status: ExecutionStatus
     runtime_ms: int
-    normal_form: ExactIntegerMatrix | None = None
-    transformation: ExactIntegerMatrix | None = None
+    normal_form: IntegerMatrix | None = None
+    transformation: IntegerMatrix | None = None
     detail: str | None = None
 
 
@@ -344,7 +351,7 @@ def _parse_worker_output(
     *,
     rows: int,
     columns: int,
-) -> tuple[ExactIntegerMatrix, ExactIntegerMatrix]:
+) -> tuple[IntegerMatrix, IntegerMatrix]:
     if not stdout.endswith(b"\n") or stdout.count(b"\n") != 1:
         raise ValueError("worker output is not exactly one line")
     payload: Any = loads_strict_json(stdout[:-1])
@@ -365,8 +372,8 @@ def _parse_worker_output(
         or payload.get("flint_library_version") != "3.6.0"
     ):
         raise ValueError("worker protocol is invalid")
-    normal_form = ExactIntegerMatrix(entries=payload["normal_form"])
-    transformation = ExactIntegerMatrix(entries=payload["transformation"])
+    normal_form = IntegerMatrix(entries=payload["normal_form"])
+    transformation = IntegerMatrix(entries=payload["transformation"])
     if (
         len(normal_form.entries),
         len(normal_form.entries[0]),

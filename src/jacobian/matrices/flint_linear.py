@@ -1,4 +1,10 @@
-"""Bounded Python-FLINT rational linear-system evidence producers."""
+"""Bounded Python-FLINT rational linear-system evidence producers.
+
+Ownership: ``jacobian.matrices`` (artifact-backed linear producers).
+Provides ``linear.rational_solution.find`` and ``linear.rational_inconsistency.find``
+using isolated Python-FLINT workers.  Installed by ``FoundationInstaller``
+when the Python-FLINT linear provider is available.
+"""
 
 from __future__ import annotations
 

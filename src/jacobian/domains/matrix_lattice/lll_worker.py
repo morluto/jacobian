@@ -12,9 +12,9 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
+from jacobian.contracts.matrices import MAX_MATRIX_SCALAR_DIGITS
 from jacobian.contracts.matrix_operations import (
-    MAX_OUTPUT_SCALAR_DIGITS,
-    MAX_SCALAR_DIGITS,
+    MAX_INPUT_SCALAR_DIGITS,
 )
 
 PROTOCOL = "jacobian.flint-lll-worker/v1"
@@ -31,7 +31,7 @@ def _integer(value: object) -> int:
     if (
         not isinstance(value, str)
         or _INTEGER.fullmatch(value) is None
-        or len(value.lstrip("-")) > MAX_SCALAR_DIGITS
+        or len(value.lstrip("-")) > MAX_INPUT_SCALAR_DIGITS
     ):
         raise WorkerError("FLINT_LLL_MATRIX_INVALID")
     return int(value)
@@ -52,11 +52,16 @@ def _read() -> list[list[int]]:
     ):
         raise WorkerError("FLINT_LLL_INPUT_INVALID")
     basis = payload["basis"]
-    if not isinstance(basis, dict) or set(basis) != {"domain", "entries"}:
+    if not isinstance(basis, dict) or set(basis) != {
+        "matrix_schema_version",
+        "domain",
+        "entries",
+    }:
         raise WorkerError("FLINT_LLL_MATRIX_INVALID")
     entries = basis["entries"]
     if (
-        basis["domain"] != "ZZ"
+        basis["matrix_schema_version"] != "1"
+        or basis["domain"] != "ZZ"
         or not isinstance(entries, list)
         or not 1 <= len(entries) <= MAX_DIMENSION
         or not isinstance(entries[0], list)
@@ -76,7 +81,7 @@ def _wire(matrix: Any) -> list[list[str]]:
     ]
     if any(
         _INTEGER.fullmatch(value) is None
-        or len(value.lstrip("-")) > MAX_OUTPUT_SCALAR_DIGITS
+        or len(value.lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
         for row in entries
         for value in row
     ):

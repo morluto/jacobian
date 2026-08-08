@@ -11,7 +11,12 @@ from jacobian.contracts.topology import (
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
 )
-from jacobian.domains.topology.operations import _materialized_complex
+from jacobian.domains.topology.operations import (
+    _canonical_complex,
+    _canonicalize,
+    _chain_result,
+    _homology,
+)
 
 
 def test_facet_request_rejects_duplicates_nonmaximal_faces_and_hidden_isolates() -> (
@@ -35,7 +40,7 @@ def test_facet_request_rejects_duplicates_nonmaximal_faces_and_hidden_isolates()
 
 
 def test_chain_and_homology_requests_validate_prime_semantics() -> None:
-    complex_ = _materialized_complex(("a", "b"), (("a", "b"),))
+    complex_ = _canonical_complex(("a", "b"), (("a", "b"),))
 
     with pytest.raises(ValidationError, match="must not declare a prime"):
         ChainComplexRequest(
@@ -53,6 +58,29 @@ def test_chain_and_homology_requests_validate_prime_semantics() -> None:
         SimplicialHomologyRequest(complex=complex_, prime=15)
 
 
+def test_canonical_complex_composes_as_the_authoritative_object() -> None:
+    canonical = _canonicalize(
+        SimplicialComplexRequest(
+            vertices=("c", "a", "b"),
+            facets=(("b", "a"), ("c", "b"), ("c", "a")),
+        )
+    ).value
+
+    complex_ = canonical.complex
+    chain = _chain_result(
+        ChainComplexRequest(
+            complex=complex_,
+            coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
+            prime=2,
+        )
+    )
+    homology = _homology(SimplicialHomologyRequest(complex=complex_, prime=2)).value
+
+    assert chain.complex_digest == complex_.complex_digest
+    assert homology.complex_digest == complex_.complex_digest
+    assert tuple(group.betti_number for group in homology.groups) == (1, 1)
+
+
 def test_chain_bounds_are_checked_after_materialization_but_before_computation() -> (
     None
 ):
@@ -60,7 +88,7 @@ def test_chain_bounds_are_checked_after_materialization_but_before_computation()
     facets = tuple(
         tuple(f"v{start + offset}" for offset in range(8)) for start in range(0, 64, 8)
     )
-    complex_ = _materialized_complex(vertices, facets)
+    complex_ = _canonical_complex(vertices, facets)
 
     assert complex_.closure_size == 8 * 255
     with pytest.raises(ValidationError, match="chain group"):
@@ -69,7 +97,7 @@ def test_chain_bounds_are_checked_after_materialization_but_before_computation()
 
 def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
     too_many_vertices = tuple(f"v{index}" for index in range(17))
-    vertex_complex = _materialized_complex(
+    vertex_complex = _canonical_complex(
         too_many_vertices,
         tuple((vertex,) for vertex in too_many_vertices),
     )
@@ -90,7 +118,7 @@ def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
         ("6",),
         ("7",),
     )
-    total_rank_too_large = _materialized_complex(
+    total_rank_too_large = _canonical_complex(
         tuple(str(index) for index in range(8)),
         projective_plane_facets,
     )
@@ -106,7 +134,7 @@ def test_stale_complex_digest_reports_field_level_loc() -> None:
     enrichment helper can surface ``complex/complex_digest`` to the agent.
     """
 
-    good = _materialized_complex(("a", "b", "c"), (("a", "b"), ("b", "c")))
+    good = _canonical_complex(("a", "b", "c"), (("a", "b"), ("b", "c")))
     bad_payload = good.model_dump(mode="python")
     bad_payload["complex_digest"] = "sha256:" + "0" * 64
     with pytest.raises(ValidationError) as exc_info:

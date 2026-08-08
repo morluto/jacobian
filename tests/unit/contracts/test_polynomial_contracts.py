@@ -157,12 +157,47 @@ def test_jacobian_request_rejects_excessive_symbolic_expansion() -> None:
         PolynomialJacobianRequest.model_validate({"map": polynomial_map})
 
 
-def test_source_map_rejects_exponents_reserved_for_derived_artifacts() -> None:
+def test_shared_map_accepts_operation_expensive_exponents() -> None:
     polynomial_map = _identity_map()
     polynomial_map["coordinates"][0]["terms"][0]["exponents"] = [33]
 
-    with pytest.raises(ValidationError, match="source polynomial exponents"):
-        RationalPolynomialMap.model_validate(polynomial_map)
+    polynomial_map_value = RationalPolynomialMap.model_validate(polynomial_map)
+    assert polynomial_map_value.coordinates[0].terms[0].exponents == (33,)
+
+    with pytest.raises(ValidationError, match="32-degree operation budget"):
+        PolynomialJacobianRequest.model_validate({"map": polynomial_map})
+
+
+def test_shared_polynomial_map_is_not_limited_to_square_maps() -> None:
+    polynomial_map = _identity_map()
+    polynomial_map["coordinates"].append({"terms": []})
+
+    value = RationalPolynomialMap.model_validate(polynomial_map)
+    assert len(value.coordinates) == 2
+
+
+def test_shared_polynomial_representation_exceeds_gcd_input_budget() -> None:
+    from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
+    from jacobian.contracts.polynomials import RationalPolynomial
+
+    coefficient = "9" * 257
+    polynomial = RationalPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": coefficient, "den": "1"},
+                        "exponents": [1],
+                    }
+                ]
+            },
+        }
+    )
+    assert polynomial.polynomial.terms[0].coefficient.num == coefficient
+
+    with pytest.raises(ValidationError, match="256-digit"):
+        PolynomialGcdRequest(left=polynomial, right=polynomial)
 
 
 def test_bounded_rational_scalars_deduplicate_equivalents() -> None:

@@ -1,4 +1,9 @@
-"""Independent verification capability for integer row Hermite normal forms."""
+"""Independent verification capability for integer row Hermite normal forms.
+
+Ownership: ``jacobian.matrices`` (HNF checker).
+Installed by ``FoundationInstaller`` to provide ``matrix.normal_form.hermite.verify``
+for evidence bound to the HNF artifact service.
+"""
 
 from __future__ import annotations
 

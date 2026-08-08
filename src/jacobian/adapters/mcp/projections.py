@@ -74,6 +74,18 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
             "produce a matching witness and Tutte-Berge certificate",
         ),
     ),
+    "probability.graph_reliability.connection_probability.compute": (
+        (
+            "probability.graph_reliability.connection_probability.verify",
+            "independently replay every edge state and terminal connection",
+        ),
+    ),
+    "probability.graph_reliability.connection_probability.verify": (
+        (
+            "probability.graph_reliability.connection_probability.compute",
+            "compute the complete exact edge-state ledger",
+        ),
+    ),
     "graph.hamiltonian_path.decide": (
         (
             "graph.hamiltonian_path.verify",

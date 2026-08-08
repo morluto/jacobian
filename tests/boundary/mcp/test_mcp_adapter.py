@@ -144,6 +144,65 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
                 == verifier["input_schema_summary"]
             )
 
+            reliability_verifier_discovery = await client.call_tool(
+                "math.find",
+                {
+                    "query": (
+                        "independently verify exact graph reliability terminal "
+                        "connection probability edge subset enumeration"
+                    ),
+                    "domain": "graph",
+                    "mode": "VERIFY",
+                    "limit": 10,
+                },
+            )
+            assert isinstance(reliability_verifier_discovery.structured_content, dict)
+            assert "probability.graph_reliability.connection_probability.verify" in {
+                match["capability_id"]
+                for match in reliability_verifier_discovery.structured_content[
+                    "matches"
+                ]
+            }
+
+            reliability_compute = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": (
+                        "probability.graph_reliability.connection_probability.compute"
+                    ),
+                    "view": "CONTRACT",
+                },
+            )
+            reliability_verify = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": (
+                        "probability.graph_reliability.connection_probability.verify"
+                    ),
+                    "view": "CONTRACT",
+                },
+            )
+            assert isinstance(reliability_compute.structured_content, dict)
+            assert isinstance(reliability_verify.structured_content, dict)
+            assert reliability_compute.structured_content["related_capabilities"] == [
+                {
+                    "capability_id": (
+                        "probability.graph_reliability.connection_probability.verify"
+                    ),
+                    "relationship": (
+                        "independently replay every edge state and terminal connection"
+                    ),
+                }
+            ]
+            assert reliability_verify.structured_content["related_capabilities"] == [
+                {
+                    "capability_id": (
+                        "probability.graph_reliability.connection_probability.compute"
+                    ),
+                    "relationship": "compute the complete exact edge-state ledger",
+                }
+            ]
+
             compute_contract = await client.call_tool(
                 "math.find",
                 {

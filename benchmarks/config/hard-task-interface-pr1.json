@@ -1,0 +1,84 @@
+{
+  "schema_version": "1",
+  "study_id": "hard-task-interface-pr1",
+  "evidence_class": "public-host-local-interface-observation",
+  "causal_claim_authorized": false,
+  "harbor_execution_claimed": false,
+  "source_base_revision": "7edc7ba9035e5f9de5a04f406cfe50e7da28d8e1",
+  "model": {
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium",
+    "codex_cli_version": "codex-cli 0.147.0"
+  },
+  "agent_instructions": "Work only in the current directory. Read instruction.md, input.json, and submission_schema.json. Treat the current directory as /app and write submission.json plus every required evidence file there. Use the available Jacobian mathematical tools when they provide useful exact intermediate results, but choose your own mathematical route and tool order. Comply with the external reasoning-log protocol exposed by the Jacobian server. Do not use web search or inspect files outside the current directory. The task-owned verifier runs only after you exit, so independently check the terminal mathematical object, scope, completeness, evidence bindings, and assurance before finishing.",
+  "conditions": [
+    {
+      "id": "baseline",
+      "product_revision": "7edc7ba9035e5f9de5a04f406cfe50e7da28d8e1",
+      "repetitions_per_task": 2
+    },
+    {
+      "id": "treatment",
+      "product_revision": "4725e1140e5fa32324b20c1a63a4c7864259afa5",
+      "repetitions_per_task": 2
+    }
+  ],
+  "tasks": [
+    {
+      "dataset": "mathematical-benchmarks-v1",
+      "task_id": "graph-artifact-composition",
+      "harbor_task_digest": "b9443acbabd824ddc007974712433cf2b7d942720d40f0865e9f9843bd6ddb4a",
+      "selection_basis": "Existing multi-step producer-to-consumer artifact task with seven accepted and one rejected prior host-local rollout."
+    },
+    {
+      "dataset": "mathematical-benchmarks-v1",
+      "task_id": "polynomial-normalization",
+      "harbor_task_digest": "6d2a1bdd88939f92cb5c0c4dcef76468130e77e3301b6f8055448d01e2d68fa0",
+      "selection_basis": "Existing difficult normalization and checker-binding task with two prior inconclusive host-local rollouts."
+    },
+    {
+      "dataset": "symbolic-coordination-v1",
+      "task_id": "symbolic-coordination-semantic-equivalence-01",
+      "harbor_task_digest": "799301c8118daf0c9328aafaace67e904eba0679bffd06ea44ff3c120137df4e",
+      "selection_basis": "Existing semantic-equivalence task with one accepted and one rejected prior host-local rollout and an observed noncanonical-input recovery failure."
+    }
+  ],
+  "execution": {
+    "ordering": "declared-task-order-then-repetition",
+    "timeout_seconds_per_rollout": 600,
+    "sandbox": "workspace-write",
+    "reasoning_log_mode": "REQUIRED",
+    "web_search": "disabled",
+    "wrong_answer_retries": 0,
+    "terminal_reward": "unchanged-task-owned-clean-room-verifier-only",
+    "tool_call_reward": 0
+  },
+  "frozen_metrics": [
+    "terminal_verifier_acceptance",
+    "correct_capability_discovery",
+    "successful_producer_consumer_or_checker_handoff",
+    "checker_use_after_candidate_creation",
+    "recovery_after_rejection",
+    "scope_and_completeness_correctness",
+    "false_certification",
+    "unnecessary_or_repeated_calls"
+  ],
+  "candidate_interventions": [
+    "Expose factual compatible consumers and checkers in discovery cards where existing contracts establish the relationship.",
+    "Make request-validation and reasoning-protocol failures expose the exact rejected field or next required action when current structured state supports it."
+  ],
+  "invariants": [
+    "Do not change selected task files, prompts, verifier code, terminal labels, model, reasoning effort, timeout, or repetition count between conditions.",
+    "Implement at most three reusable interface tweaks and no mathematical shortcut or new benchmark task.",
+    "Do not interpret model, verifier, timeout, or infrastructure errors as mathematical failures.",
+    "Do not rerun a completed rollout to obtain a preferred result."
+  ],
+  "stop_rules": [
+    "Abandon one intervention after two failed implementations.",
+    "Stop testing an intervention when the frozen evidence shows no coordination improvement.",
+    "Do not add a second PR unless the first treatment provides specific evidence for a separate typed-handoff or recovery change."
+  ],
+  "environment_limitations": [
+    "No Docker-compatible runtime is installed on the study host, so these runs are explicitly host-local and are not Harbor executions."
+  ]
+}

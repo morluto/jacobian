@@ -202,6 +202,9 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 "exact-rational",
                 "sympy",
             ),
+            produced_artifact_types=(
+                self.expressions.installation.normalization_schema_uri,
+            ),
             invocation_examples=(
                 CapabilityInvocationExample(
                     name="combine_like_terms",

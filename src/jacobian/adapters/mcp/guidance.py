@@ -180,11 +180,20 @@ Do not claim VERIFIED when no agent-visible record content contract is available
 REASONING_WRITE_DESCRIPTION = """\
 Append one concise external reasoning summary. This records model-authored PLAN,
 BEFORE_TOOL, AFTER_TOOL, or FINAL entries; it does not request or expose hidden
-chain-of-thought and never establishes mathematical assurance. PLAN creates a run.
-BEFORE_TOOL reserves one capability call. AFTER_TOOL interprets the bound actual
-result or explicitly records RESULT_UNAVAILABLE after a lost response or runtime
-restart. FINAL audits the completed run. Do not copy prompts, secrets, payloads, or
-raw tool output into summary.
+chain-of-thought and never establishes mathematical assurance.
+
+Use only the fields for the selected phase:
+- PLAN: `phase`, `summary` (creates a run).
+- BEFORE_TOOL: `phase`, `summary`, `run_id`, `capability_id`, `mode` (reserves one
+  capability call).
+- AFTER_TOOL: `phase`, `summary`, `run_id`, `call_id`,
+  `interpretation_status`; when INTERPRETED also include the three `reported_*`
+  fields. Omit `capability_id` and `mode`.
+- FINAL: `phase`, `summary`, `run_id` (audits the completed run).
+
+AFTER_TOOL interprets the bound actual result or explicitly records
+RESULT_UNAVAILABLE after a lost response or runtime restart. Do not copy prompts,
+secrets, payloads, or raw tool output into summary.
 """
 
 _REASONING_PREFIX = (

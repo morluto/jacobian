@@ -60,6 +60,7 @@ class GraphExplicitConstructionAdapter:
             input_schema=model_schema(GraphExplicitConstructionRequest),
             output_schema=model_schema(GraphExplicitConstructionOutput),
             tags=("graph", "construction", "explicit", "artifact-materialization"),
+            produced_artifact_types=(self.resources.graph.graph_schema_uri,),
             invocation_examples=(
                 CapabilityInvocationExample(
                     name="three-vertex-path",

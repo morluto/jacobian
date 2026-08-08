@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
@@ -164,6 +165,10 @@ class PolynomialExpressionNormalizationVerificationAdapter:
                 "typed-expression",
                 "exact-rational",
                 "verification",
+            ),
+            accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
+            accepted_artifact_types=(
+                self.expressions.installation.normalization_schema_uri,
             ),
         )
 

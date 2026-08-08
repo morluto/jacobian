@@ -531,6 +531,35 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                 }
             ]
 
+            graph_contract_result = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "graph.construct.explicit",
+                    "view": "CONTRACT",
+                },
+            )
+            assert isinstance(graph_contract_result.structured_content, dict)
+            graph_contract = graph_contract_result.structured_content
+            graph_schema = graph_contract["capability"]["produced_artifact_types"]
+            assert len(graph_schema) == 1
+            assert graph_contract["related_capabilities"] == [
+                {
+                    "capability_id": "graph.compute.properties",
+                    "relationship": (
+                        "compute a requested exact property batch from the graph artifact"
+                    ),
+                }
+            ]
+
+            graph_consumer_result = await client.call_tool(
+                "math.find",
+                {"capability_id": "graph.compute.properties", "view": "CONTRACT"},
+            )
+            assert isinstance(graph_consumer_result.structured_content, dict)
+            graph_consumer = graph_consumer_result.structured_content["capability"]
+            assert graph_consumer["accepted_input_kinds"] == ["TYPED_ARTIFACT"]
+            assert graph_consumer["accepted_artifact_types"] == graph_schema
+
             unknown = await client.call_tool(
                 "math.run",
                 {
@@ -612,6 +641,8 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
                 "STRUCTURED_REQUEST"
             ]
             assert summary["capability"]["accepted_artifact_types"] == []
+            normalization_types = summary["capability"]["produced_artifact_types"]
+            assert len(normalization_types) == 1
             assert "invocations" not in summary
             assert "CONTRACT" in summary["next_views"]
             assert "all-orders" in summary["scope_rule"]["bounded_repetition"]
@@ -621,6 +652,17 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
                 "STRUCTURED_REQUEST"
             ]
             assert contract["capability"]["accepted_artifact_types"] == []
+            assert contract["capability"]["produced_artifact_types"] == (
+                normalization_types
+            )
+            assert contract["related_capabilities"] == [
+                {
+                    "capability_id": ("polynomial.expression_normalization.verify"),
+                    "relationship": (
+                        "independently verify the stored typed-expression normalization"
+                    ),
+                }
+            ]
             assert contract["invocations"]
             assert full["view"] == "FULL"
             assert "output_schema" in full["capability"]

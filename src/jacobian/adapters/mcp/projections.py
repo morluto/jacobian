@@ -41,6 +41,30 @@ def _mcp_text_json_bytes(value: object) -> bytes:
 
 
 _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
+    "graph.construct.explicit": (
+        (
+            "graph.compute.properties",
+            "compute a requested exact property batch from the graph artifact",
+        ),
+    ),
+    "graph.compute.properties": (
+        (
+            "graph.construct.explicit",
+            "materialize the graph artifact accepted by this property operation",
+        ),
+    ),
+    "polynomial.expression.normalize": (
+        (
+            "polynomial.expression_normalization.verify",
+            "independently verify the stored typed-expression normalization",
+        ),
+    ),
+    "polynomial.expression_normalization.verify": (
+        (
+            "polynomial.expression.normalize",
+            "produce the typed-expression normalization accepted by this checker",
+        ),
+    ),
     "sat.cnf.materialize": (
         ("sat.model.find", "find a candidate named assignment"),
         ("sat.model.verify", "independently verify a candidate assignment"),

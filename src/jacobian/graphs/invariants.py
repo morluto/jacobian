@@ -20,6 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInputKind,
     CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
@@ -104,6 +105,12 @@ class GraphPropertyAdapter:
             input_schema=input_schema,
             output_schema=model_schema(GraphInvariantBatchOutput),
             tags=("graph", "properties", "exact-computation"),
+            accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
+            accepted_artifact_types=(self.resources.graph.graph_schema_uri,),
+            produced_artifact_types=(
+                self.resources.property_schema_uri,
+                self.resources.invariant_result_schema_uri,
+            ),
         )
 
     @property

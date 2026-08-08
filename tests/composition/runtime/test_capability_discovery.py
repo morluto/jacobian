@@ -201,6 +201,33 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
     assert produced == accepted
 
 
+def test_graph_and_polynomial_producers_advertise_typed_consumer_handoffs(
+    authorized_complete_runtime: JacobianRuntime,
+) -> None:
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in (
+            authorized_complete_runtime.core.capabilities.catalog().capabilities
+        )
+    }
+
+    graph_produced = descriptors["graph.construct.explicit"].produced_artifact_types
+    graph_consumer = descriptors["graph.compute.properties"]
+    assert graph_produced
+    assert graph_produced == graph_consumer.accepted_artifact_types
+    assert graph_consumer.accepted_input_kinds == (CapabilityInputKind.TYPED_ARTIFACT,)
+
+    polynomial_produced = descriptors[
+        "polynomial.expression.normalize"
+    ].produced_artifact_types
+    polynomial_consumer = descriptors["polynomial.expression_normalization.verify"]
+    assert polynomial_produced
+    assert polynomial_produced == polynomial_consumer.accepted_artifact_types
+    assert polynomial_consumer.accepted_input_kinds == (
+        CapabilityInputKind.TYPED_ARTIFACT,
+    )
+
+
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:

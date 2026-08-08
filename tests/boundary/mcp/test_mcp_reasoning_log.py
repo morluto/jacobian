@@ -25,6 +25,15 @@ def test_required_reasoning_log_binds_actual_capability_result(tmp_path: Path) -
                 "reasoning_run_id",
                 "reasoning_call_id",
             }
+            reasoning_description = tools["reasoning.write"].description
+            assert reasoning_description is not None
+            assert "PLAN: `phase`, `summary`" in reasoning_description
+            assert "BEFORE_TOOL: `phase`, `summary`, `run_id`" in reasoning_description
+            assert "AFTER_TOOL: `phase`, `summary`, `run_id`, `call_id`" in (
+                reasoning_description
+            )
+            assert "Omit `capability_id` and `mode`" in reasoning_description
+            assert "FINAL: `phase`, `summary`, `run_id`" in reasoning_description
 
             plan = await client.call_tool(
                 "reasoning.write",

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from tests.support.nullstellensatz import load_chart_certificates
 from tests.support.services import DomainTestServices, open_domain_services
 
@@ -34,8 +35,22 @@ from jacobian.domains.polynomial_nullstellensatz import (
 from jacobian.domains.polynomial_nullstellensatz.core import (
     MATERIALIZE_CAPABILITY_ID,
     VERIFY_CAPABILITY_ID,
+    _failure_details,
 )
 from jacobian.runtime import CheckerAuthorityMode
+
+
+def test_failure_details_are_bounded_and_summarize_validation_errors() -> None:
+    long_details = _failure_details(ValueError("x" * 2048))
+    assert long_details["exception_type"] == "ValueError"
+    assert len(long_details["reason"]) == 512
+
+    with pytest.raises(ValidationError) as caught:
+        NullstellensatzCertificateBundle.model_validate({})
+    validation_details = _failure_details(caught.value)
+    assert validation_details["exception_type"] == "ValidationError"
+    assert int(validation_details["validation_error_count"]) > 0
+    assert len(validation_details["reason"]) <= 512
 
 
 def _invoke(
@@ -232,15 +247,15 @@ def test_stale_artifact_binding_is_rejected_before_checker(tmp_path: Path) -> No
         assert result.diagnostics[0].code == (
             "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST"
         )
-        assert result.diagnostics[0].actual_type == "ValueError"
+        assert result.diagnostics[0].actual_type is None
         assert result.diagnostics[0].details == {
+            "exception_type": "ValueError",
             "reason": "system artifact differs from the frozen degree slice",
             "system_uri": wrong_system.artifact_uri,
             "certificate_bundle_uri": certificate_uri,
         }
-        assert "if no compatible producer is installed, stop" in (
-            result.diagnostics[0].hint or ""
-        )
+        assert "cannot establish infeasibility" in (result.diagnostics[0].hint or "")
+        assert "stop" not in (result.diagnostics[0].hint or "")
 
 
 def test_wrong_bundle_schema_reports_actionable_artifact_diagnostics(
@@ -272,8 +287,11 @@ def test_wrong_bundle_schema_reports_actionable_artifact_diagnostics(
         diagnostic = result.diagnostics[0]
         assert result.execution.status is ExecutionStatus.ERROR
         assert diagnostic.code == "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST"
-        assert diagnostic.actual_type == "ValueError"
+        assert diagnostic.actual_type == (
+            services.core.store.get(system_uri).manifest.schema_uri
+        )
         assert diagnostic.details == {
+            "exception_type": "ValueError",
             "reason": "certificate_bundle_uri has the wrong schema",
             "system_uri": system_uri,
             "certificate_bundle_uri": system_uri,

@@ -67,7 +67,7 @@ class LeanService:
         environment: LeanEnvironment = LeanEnvironment.CORE,
     ) -> LeanVerifyResult:
         installation = self.installations.get(environment)
-        if installation is None:
+        if installation is None or installation.checker_id is None:
             raise ValueError(
                 f"Lean environment {environment.value} is not installed. Call "
                 "math.find with capability_id='lean.check' to list "
@@ -258,6 +258,8 @@ class LeanService:
         certificate_uri: str,
         installation: LeanCheckerInstallation,
     ) -> ResultEnvelope | None:
+        if installation.checker_id is None:
+            return None
         with self._cache_lock:
             cached = self._cache.get(certificate_uri)
             if cached is not None:

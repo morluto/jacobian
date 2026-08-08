@@ -66,7 +66,12 @@ from jacobian.process_policy import (
     ProcessTermination,
     execute_process,
 )
-from jacobian.providers.lean_runtime import lean_frontend_provider_runtime
+from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
+    lean_frontend_provider_runtime,
+    lean_semantic_runtime_digest,
+    require_lean_semantic_runtime_identity,
+)
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.worker_environment import worker_environment
@@ -384,7 +389,14 @@ def _require_current_runtime(
 
     try:
         require_provider_runtime_unchanged(provider_runtime)
-    except (OSError, ProviderRuntimeError, ValidationError) as exc:
+        if "semantic_runtime" in provider_runtime.configuration:
+            require_lean_semantic_runtime_identity(provider_runtime)
+    except (
+        LeanRuntimeIdentityError,
+        OSError,
+        ProviderRuntimeError,
+        ValidationError,
+    ) as exc:
         raise _LeanUnavailableError(
             "The pinned Lean executable identity changed or became unavailable."
         ) from exc
@@ -457,6 +469,7 @@ def _environment_digest(
     mathlib_commit: str | None,
     imports: tuple[str, ...],
     options: tuple[LeanElaborationOption, ...],
+    semantic_runtime_digest: str | None = None,
 ) -> str:
     payload = {
         "environment": environment.value,
@@ -465,8 +478,20 @@ def _environment_digest(
         "mathlib_commit": mathlib_commit,
         "imports": list(imports),
         "options": [option.model_dump(mode="json") for option in options],
+        "semantic_runtime_digest": semantic_runtime_digest,
     }
     return "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
+
+
+def _semantic_runtime_digest(runtime: CapabilityProviderRuntime | None) -> str | None:
+    if runtime is None:
+        return None
+    semantic_runtime = runtime.configuration.get("semantic_runtime")
+    return (
+        lean_semantic_runtime_digest(semantic_runtime)
+        if isinstance(semantic_runtime, dict)
+        else None
+    )
 
 
 def _indent_proof(proof: str) -> str:
@@ -696,6 +721,9 @@ class LeanStatementProposalAdapter:
                 mathlib_commit=None,
                 imports=imports,
                 options=options,
+                semantic_runtime_digest=_semantic_runtime_digest(
+                    self.resources.provider_runtime
+                ),
             ),
             informal_claim=validated.informal_claim,
             proposed_statement=validated.proposed_statement,

@@ -270,6 +270,21 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     }
 
 
+def test_core_lean_checker_binds_the_measured_runtime(tmp_path: Path) -> None:
+    runtime = create_runtime(
+        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+    )
+    installation = runtime.portfolio.lean_checkers[LeanEnvironment.CORE]
+    assert installation.checker_id is not None
+
+    registration = runtime.core.checkers.require_active(installation.checker_id)
+
+    assert registration.provider_runtime is not None
+    assert registration.provider_runtime.provider == "jacobian.lean4"
+    assert registration.provider_runtime.digest == runtime.portfolio.lean_runtime.digest
+    assert registration.provider_runtime.checker_ids == ()
+
+
 @pytest.mark.parametrize(
     ("statement", "proof"),
     (

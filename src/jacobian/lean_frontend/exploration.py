@@ -44,6 +44,7 @@ from jacobian.process_policy import (
     ProcessTermination,
     execute_process,
 )
+from jacobian.providers.lean_runtime import require_lean_semantic_runtime_identity
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -291,6 +292,7 @@ def _resolve_typed_goal_helper(
 ) -> tuple[str, tuple[str, ...], dict[str, str]]:
     """Resolve the typed-goal helper command and environment."""
 
+    require_lean_semantic_runtime_identity(resources.provider_runtime)
     helper = resources.runtime / ".lake" / "build" / "bin" / "jacobian_lean_proof_state"
     if not helper.is_file():
         raise RuntimeError(

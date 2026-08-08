@@ -37,6 +37,11 @@ from jacobian.process_policy import (
     ProcessTermination,
     execute_process,
 )
+from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
+    lean_semantic_runtime_digest,
+    require_lean_semantic_runtime_identity,
+)
 from jacobian.worker_environment import worker_environment
 
 _LOGGER = logging.getLogger(__name__)
@@ -338,7 +343,14 @@ class LeanSubprocessDeclarationBackend:
                     "LEAN_ENVIRONMENT_CHANGED",
                     "The pinned Lean executable changed after capability registration.",
                 )
+            if "semantic_runtime" in self.provider_runtime.configuration:
+                require_lean_semantic_runtime_identity(self.provider_runtime)
             return self._compute_environment_digest(environment)
+        except LeanRuntimeIdentityError as exc:
+            raise LeanDeclarationBackendError(
+                "LEAN_ENVIRONMENT_CHANGED",
+                "The pinned Lean semantic environment changed after registration.",
+            ) from exc
         except OSError as exc:
             raise LeanDeclarationBackendError(
                 "LEAN_ENVIRONMENT_UNAVAILABLE",
@@ -557,7 +569,7 @@ class LeanSubprocessDeclarationBackend:
 
     def _compute_environment_digest(self, environment: LeanEnvironment) -> str:
         identity: dict[str, Any] = {
-            "contract": "jacobian.lean.environment-manifest/v1",
+            "contract": "jacobian.lean.environment-manifest/v2",
             "environment": environment.value,
             "import_name": (
                 "Init.Prelude" if environment is LeanEnvironment.CORE else "Mathlib"
@@ -566,6 +578,11 @@ class LeanSubprocessDeclarationBackend:
             "platform": self.provider_runtime.platform,
             "provider_digest": self.provider_runtime.digest,
         }
+        semantic_runtime = self.provider_runtime.configuration.get("semantic_runtime")
+        if isinstance(semantic_runtime, dict):
+            identity["semantic_runtime_digest"] = lean_semantic_runtime_digest(
+                semantic_runtime
+            )
         if environment is LeanEnvironment.MATHLIB:
             if self.mathlib_runtime is None:
                 raise RuntimeError("cannot identify an unavailable Mathlib environment")

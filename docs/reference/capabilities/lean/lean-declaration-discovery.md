@@ -58,11 +58,13 @@ uses Lean's environment lookup directly; it does not linearly scan the catalog.
 ## Environment identity and execution bounds
 
 Both outputs carry `environment_digest`. The
-`jacobian.lean.environment-manifest/v1` digest binds the selected import,
-platform, pinned Lean version, and executable provider digest. `MATHLIB` also
-binds the byte digests of `lake-manifest.json` and `lean-toolchain` plus the
-authorized Mathlib commit. This is an exact runtime-manifest identity, not an
-independent proof certificate.
+`jacobian.lean.environment-manifest/v2` digest binds the selected import,
+platform, pinned Lean version, executable provider digest, and a digest of the
+measured semantic runtime. For `MATHLIB`, that runtime includes the Lake
+launcher, project manifest and configuration, toolchain declaration, local
+source modules, loaded `.olean` modules, and proof-state helper, in addition
+to the authorized Mathlib commit. This is an exact runtime-manifest identity,
+not an independent proof certificate.
 
 The `CORE` profile exposes only imported `Init.*` declarations compatible with
 the checker profile, even though the provider process also loads Lean

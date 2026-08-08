@@ -106,3 +106,19 @@ def test_tokens_after_char_escapes_are_scanned(literal: str) -> None:
 
 def test_string_literal_escaped_quote_is_not_scanned_as_tokens() -> None:
     assert proof_axioms._lean_source_tokens(r'"\"" sorry') == ("sorry",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    ("'x\nsorry", '"x\nsorry', "'\\\nsorry", '"\\\nsorry'),
+)
+def test_quoted_literals_with_newlines_are_rejected_before_token_scanning(
+    source: str,
+) -> None:
+    with pytest.raises(ValueError, match="cannot contain a newline"):
+        proof_axioms._lean_source_tokens(source)
+
+
+def test_unterminated_character_literal_cannot_hide_forbidden_tokens() -> None:
+    with pytest.raises(ValueError, match="unterminated Lean quoted literal"):
+        proof_axioms._validate_source("True", "by ' sorry")

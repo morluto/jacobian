@@ -401,7 +401,11 @@ def _validate_package_checkout(
 
 
 def _mathlib_runtime() -> Path:
-    configured = os.environ.get("JACOBIAN_LEAN_RUNTIME")
+    configured = (
+        os.environ.get("JACOBIAN_CHECKER_LEAN_PROJECT_ROOT")
+        if os.environ.get("JACOBIAN_CHECKER_EXECUTABLE") is not None
+        else os.environ.get("JACOBIAN_LEAN_RUNTIME")
+    )
     runtime = (
         Path(configured)
         if configured is not None

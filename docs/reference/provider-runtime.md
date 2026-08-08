@@ -59,8 +59,12 @@ is `READINESS_FAILED`; it does not change the import-free availability probe.
 descriptors whose runtime is `UNAVAILABLE`. Built-in locked Python providers
 must import, expose the required feature symbols, and have a hashed
 distribution RECORD. The Lean probe validates the pinned Lean version and
-commit, resolves and hashes the actual executable, and validates the pinned
-Mathlib checkout before `lean.check` is registered.
+commit, resolves and hashes the actual executable, and binds its semantic
+environment: the Lean core library module plus, for Mathlib, the Lake launcher,
+project manifest, Lake configuration, toolchain declaration, local source
+modules, loaded `.olean` modules, and the proof-state helper. A missing or
+changed component leaves the affected Lean runtime unavailable or fails its
+later use closed.
 
 CORE-only statement elaboration uses a separate frontend profile over the same
 pinned executable. `lean.statement.propose` and `lean.statement.compare` are

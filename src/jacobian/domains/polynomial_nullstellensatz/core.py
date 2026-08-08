@@ -87,13 +87,9 @@ def _failure_details(exc: Exception) -> dict[str, str]:
     """Return bounded failure metadata without rendering an entire error tree."""
     details = {"exception_type": type(exc).__name__}
     if isinstance(exc, ValidationError):
-        errors = exc.errors(include_url=False, include_input=False)
-        details["validation_error_count"] = str(len(errors))
-        if errors:
-            first = errors[0]
-            reason = f"{first['type']}: {first['msg']}"
-        else:
-            reason = "value_error: invalid value"
+        error_count = exc.error_count()
+        details["validation_error_count"] = str(error_count)
+        reason = f"validation_error: {error_count} invalid field(s)"
     else:
         reason = str(exc)
     details["reason"] = reason[:_MAX_DIAGNOSTIC_REASON_CHARS]

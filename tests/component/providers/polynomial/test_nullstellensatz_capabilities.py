@@ -51,7 +51,10 @@ def test_failure_details_are_bounded_and_summarize_validation_errors() -> None:
     validation_details = _failure_details(caught.value)
     assert validation_details["exception_type"] == "ValidationError"
     assert int(validation_details["validation_error_count"]) > 0
-    assert len(validation_details["reason"]) <= 512
+    assert validation_details["reason"] == (
+        "validation_error: "
+        f"{validation_details['validation_error_count']} invalid field(s)"
+    )
 
 
 def test_invalid_request_uri_values_are_summarized_without_echoing(

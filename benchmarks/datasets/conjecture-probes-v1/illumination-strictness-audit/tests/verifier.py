@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from itertools import product
 from pathlib import Path
+from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
@@ -33,18 +34,32 @@ def _strict(v, d):
 
 
 def _directions(value, n, zeros):
-    return (
-        isinstance(value, list)
-        and len(value) == n
-        and len({tuple(d) for d in value}) == n
-        and all(
-            isinstance(d, list)
-            and len(d) == 3
-            and all(type(x) is int and x in {-1, 0, 1} for x in d)
-            and d.count(0) == zeros
-            for d in value
+    if not isinstance(value, list) or len(value) != n:
+        return False
+    if not all(
+        isinstance(d, list)
+        and len(d) == 3
+        and all(type(x) is int and x in {-1, 0, 1} for x in d)
+        and d.count(0) == zeros
+        for d in value
+    ):
+        return False
+    return len({tuple(d) for d in value}) == n
+
+
+def _json_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without equating booleans, integers, and floats."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _json_equal(left[key], right[key]) for key in left
         )
-    )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _json_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return left == right
 
 
 def mathematics(result):
@@ -70,7 +85,7 @@ def mathematics(result):
     return (
         weak_cover
         and bool(expected)
-        and result["weak_false_positive_pairs"] == expected
+        and _json_equal(result["weak_false_positive_pairs"], expected)
         and isinstance(mapping, list)
         and len(mapping) == 8
         and all(
@@ -125,7 +140,7 @@ def main():
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
+        and _json_equal(payload.get("result"), raw.get("result"))
         and payload.get("limitations") == LIMITATIONS
     )
     values = {

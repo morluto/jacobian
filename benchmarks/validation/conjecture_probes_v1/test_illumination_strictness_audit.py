@@ -76,6 +76,33 @@ def test_rejects_missing_false_positive():
     assert not module.mathematics(result)
 
 
+def test_rejects_unhashable_direction_without_crashing():
+    module = _module()
+    result = _result(module)
+    result["flawed_directions"][0] = [[-1], -1, 0]
+    assert not module.mathematics(result)
+
+
+def test_rejects_non_integer_false_positive_indices():
+    module = _module()
+    for replacement in (False, 0.0):
+        result = _result(module)
+        result["weak_false_positive_pairs"][0]["vertex_index"] = replacement
+        assert not module.mathematics(result)
+
+
+def test_evidence_result_comparison_preserves_json_types():
+    module = _module()
+    result = _result(module)
+    evidence_result = _result(module)
+    evidence_result["vertex_to_direction"][0] = False
+    assert not module._json_equal(evidence_result, result)
+
+    evidence_result = _result(module)
+    evidence_result["weak_false_positive_pairs"][0]["direction_index"] = 0.0
+    assert not module._json_equal(evidence_result, result)
+
+
 def test_accepts_reordered_repair():
     module = _module()
     result = _result(module)

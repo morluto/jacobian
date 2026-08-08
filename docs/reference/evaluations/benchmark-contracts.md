@@ -8,6 +8,7 @@ retain separate claims:
 
 - `mathematical-benchmarks-v1` checks fixed workflows and evidence handling;
 - `symbolic-coordination-v1` owns the exact polynomial-map coordination pilot;
+- `multi-tool-coordination-v1` owns the first cross-domain coordination slice;
 - `public-reproductions-v1` replays known public mathematical outcomes;
 - `conjecture-probes-v1` checks independently replayable bounded conjecture progress;
 - `research-diagnostics-v1` supports answer-visible case diagnostics;

@@ -93,6 +93,20 @@ def test_resolve_selection_deduplicates_shared_dataset_validation() -> None:
     ]
 
 
+def test_resolve_coordination_pilot_uses_owned_host_validation() -> None:
+    selection = workflow.resolve_selection(
+        "multi-tool-coordination-v1",
+        (
+            "coordination-graph-set-distance-01",
+            "coordination-cycle-lattice-01",
+        ),
+    )
+
+    assert [item.selector for item in selection.host_validations] == [
+        "benchmarks/validation/multi_tool_coordination_v1/test_pilot_contract.py"
+    ]
+
+
 def test_prepare_formats_owned_python_and_reports_generated_changes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

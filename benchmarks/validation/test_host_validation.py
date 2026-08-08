@@ -270,3 +270,9 @@ def test_non_conjecture_dataset_host_validation_uses_static_entries() -> None:
     assert entries[0].selector == (
         "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py"
     )
+
+    coordination_entries = dataset_host_validation("multi-tool-coordination-v1")
+    assert len(coordination_entries) == 1
+    assert coordination_entries[0].selector == (
+        "benchmarks/validation/multi_tool_coordination_v1/test_pilot_contract.py"
+    )

@@ -38,6 +38,23 @@ oracle_jobs_dir = "benchmarks/results/symbolic-coordination-v1-oracle"
 oracle = "jobs/oracle.json"
 
 [[datasets]]
+id = "jacobian/multi-tool-coordination-v1"
+directory = "benchmarks/datasets/multi-tool-coordination-v1"
+evaluation_kind = "workflow"
+scored = true
+publication_status = "local"
+required_provider = "core"
+runtime_profile = "core"
+title = "Multi-tool mathematical coordination pilot"
+purpose = "Cross-domain exact terminal certificates derived from observed operation-composition failures."
+claim_class = "workflow-observation-pilot"
+answer_visibility = "hidden-at-runtime"
+default_execution_profile = "oracle-only"
+oracle_jobs_dir = "benchmarks/results/multi-tool-coordination-v1-oracle"
+[datasets.jobs]
+oracle = "jobs/oracle.json"
+
+[[datasets]]
 id = "jacobian/public-reproductions-v1"
 directory = "benchmarks/datasets/public-reproductions-v1"
 evaluation_kind = "public-reproduction"

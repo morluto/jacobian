@@ -21,6 +21,7 @@ evaluation bundle.
 | --- | --- | --- |
 | `jacobian/mathematical-benchmarks-v1` | Fixed hidden-runtime mathematical tasks | Oracle and optional observation |
 | `jacobian/symbolic-coordination-v1` | Exact polynomial-map coordination pilot | Oracle |
+| `jacobian/multi-tool-coordination-v1` | Cross-domain coordination certificate pilot | Oracle |
 | `jacobian/public-reproductions-v1` | Replay known public mathematical cases | Oracle |
 | `jacobian/conjecture-probes-v1` | Independently checked bounded conjecture progress | Oracle |
 | `jacobian/research-diagnostics-v1` | Answer-visible research challenges | Oracle diagnostics |
@@ -88,6 +89,11 @@ verifies relevant operations under explicit, affordance, and latent cues. See
 `symbolic-coordination-v1` keeps its deterministic 26-case pilot separate
 from the fixed `mathematical-benchmarks-v1` snapshots. Its task bundles are solvable
 without Jacobian and do not yet include the later comparison harness.
+
+`multi-tool-coordination-v1` is the four-case PR1 slice derived from a frozen
+12-run cross-domain observation. It records exact graph, topology, rational
+slice, and polynomial-identity handoffs without prescribing a tool sequence.
+PR2 owns any later expansion, calibration, or evaluation freeze.
 
 `harbor-execution-check` is the focused local gate for job JSON, MCP
 configuration, job-level Compose overlays, and their execution helpers. It

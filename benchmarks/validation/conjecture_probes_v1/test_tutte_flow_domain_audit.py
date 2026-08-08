@@ -117,6 +117,32 @@ def test_assurance_value_is_independent_of_protocol():
     assert not module._assurance_is_calibrated({"claimed_assurance": True})
 
 
+def test_evidence_metadata_is_bound_to_raw_envelope():
+    module = _module()
+    raw = {
+        "task_id": module.TASK_ID,
+        "result": {"value": 1},
+        "limitations": module.LIMITATIONS,
+    }
+    payload = {"schema_version": "1", **raw}
+    assert module._evidence_payload_is_bound(payload, raw)
+    assert not module._evidence_payload_is_bound(
+        payload, {**raw, "task_id": "different-task"}
+    )
+    assert not module._evidence_payload_is_bound(
+        payload, {**raw, "limitations": ["different-limit"]}
+    )
+
+
+def test_verifier_contract_declares_diagnostic_splits():
+    contract = json.loads((TASK / "tests/verifier_contract.json").read_text())
+    assert contract == {
+        "schema_version": "1",
+        "input_binding_decoupled": True,
+        "scope_independent_assurance": True,
+    }
+
+
 def test_reward_output_uses_host_contract(tmp_path, monkeypatch):
     module = _module()
     logs = tmp_path / "verifier"

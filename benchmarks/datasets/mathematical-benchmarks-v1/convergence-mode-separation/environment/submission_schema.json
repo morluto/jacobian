@@ -47,8 +47,9 @@
     },
     "limitations": {
       "items": {
-        "type": "string"
+        "const": "NO_OPEN_PROBLEM_OR_LEAN_CLAIM"
       },
+      "maxItems": 1,
       "minItems": 1,
       "type": "array"
     },
@@ -122,6 +123,22 @@
         },
         "relationship": {
           "const": "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
+        },
+        "research_scope": {
+          "additionalProperties": false,
+          "properties": {
+            "lean_theorem": {
+              "const": "NOT_ELABORATED"
+            },
+            "underlying_problem": {
+              "const": "NOT_ADJUDICATED"
+            }
+          },
+          "required": [
+            "underlying_problem",
+            "lean_theorem"
+          ],
+          "type": "object"
         }
       },
       "required": [
@@ -129,11 +146,13 @@
         "levels",
         "probes",
         "probability_argument",
-        "pointwise_argument"
+        "pointwise_argument",
+        "research_scope"
       ],
       "type": "object"
     },
     "scope": {
+      "const": "the frozen dyadic typewriter construction on [0,1)",
       "type": "string"
     },
     "task_id": {

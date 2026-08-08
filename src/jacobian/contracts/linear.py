@@ -86,23 +86,43 @@ class LinearRationalSolutionResult(ContractModel):
     """Inline total rational solution candidate for ordinary composition."""
 
     result_schema_version: Literal["1"] = "1"
-    values: tuple[CanonicalRational, ...] = Field(
+    status: Literal["SOLUTION_PRODUCED", "NO_SOLUTION_PRODUCED"] = "SOLUTION_PRODUCED"
+    values: tuple[CanonicalRational, ...] | None = Field(
+        default=None,
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
     method: Literal["RREF_FREE_VARIABLES_ZERO"] = "RREF_FREE_VARIABLES_ZERO"
+
+    @model_validator(mode="after")
+    def bind_values_to_status(self) -> Self:
+        produced = self.status == "SOLUTION_PRODUCED"
+        if produced != (self.values is not None):
+            raise ValueError("solution values must agree with the result status")
+        return self
 
 
 class LinearRationalInconsistencyResult(ContractModel):
     """Inline normalized left witness for an inconsistent rational system."""
 
     result_schema_version: Literal["1"] = "1"
-    left_witness: tuple[CanonicalRational, ...] = Field(
+    status: Literal["CERTIFICATE_PRODUCED", "NO_CERTIFICATE_PRODUCED"] = (
+        "CERTIFICATE_PRODUCED"
+    )
+    left_witness: tuple[CanonicalRational, ...] | None = Field(
+        default=None,
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
-    rhs_pairing: CanonicalRational
+    rhs_pairing: CanonicalRational | None = None
     method: Literal["DUAL_RREF_PAIRING_ONE"] = "DUAL_RREF_PAIRING_ONE"
+
+    @model_validator(mode="after")
+    def bind_witness_to_status(self) -> Self:
+        produced = self.status == "CERTIFICATE_PRODUCED"
+        if produced != (self.left_witness is not None and self.rhs_pairing is not None):
+            raise ValueError("inconsistency witness must agree with the result status")
+        return self
 
 
 class LinearRationalInconsistencyFindRequest(ContractModel):

@@ -67,7 +67,9 @@ def _validate_worker_payload(
             solution_result = LinearRationalSolutionResult.model_validate(
                 {"values": payload.get("values")}
             )
-            if len(solution_result.values) != len(request.system.variables):
+            if solution_result.values is None or len(solution_result.values) != len(
+                request.system.variables
+            ):
                 raise ValueError("solution dimensions do not match the source system")
         else:
             raise ValueError("rational-linear solution status is invalid")
@@ -82,7 +84,9 @@ def _validate_worker_payload(
                     "rhs_pairing": payload.get("rhs_pairing"),
                 }
             )
-            if len(inconsistency_result.left_witness) != len(request.system.rhs):
+            if inconsistency_result.left_witness is None or len(
+                inconsistency_result.left_witness
+            ) != len(request.system.rhs):
                 raise ValueError(
                     "inconsistency witness dimensions do not match the source system"
                 )
@@ -146,10 +150,8 @@ def compute_rational_solution(
                 "The pinned Python-FLINT rational-linear provider is unavailable.",
             )
         if payload.get("status") == "NO_SOLUTION_PRODUCED":
-            return _failure(
-                "LINEAR_SYSTEM_NOT_UNIQUELY_SOLVABLE",
-                ExecutionStatus.ERROR,
-                "The system has no unique solution candidate.",
+            return ComputedSuccess(
+                LinearRationalSolutionResult(status="NO_SOLUTION_PRODUCED")
             )
         if payload.get("status") != "SOLUTION_PRODUCED":
             raise ValueError("worker did not produce a solution")
@@ -180,10 +182,8 @@ def compute_rational_inconsistency(
                 "The pinned Python-FLINT rational-linear provider is unavailable.",
             )
         if payload.get("status") == "NO_CERTIFICATE_PRODUCED":
-            return _failure(
-                "LINEAR_SYSTEM_NOT_INCONSISTENT",
-                ExecutionStatus.ERROR,
-                "The system has no inconsistency certificate candidate.",
+            return ComputedSuccess(
+                LinearRationalInconsistencyResult(status="NO_CERTIFICATE_PRODUCED")
             )
         if payload.get("status") != "CERTIFICATE_PRODUCED":
             raise ValueError("worker did not produce an inconsistency witness")

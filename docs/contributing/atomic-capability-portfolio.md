@@ -482,14 +482,14 @@ The remaining sequence stays demand-gated.
 
 Implement one vertical slice at a time:
 
-1. `linear.rational_solution.find` returns one exact vector for a declared
+1. `linear.rational_solution.compute` returns one exact vector for a declared
    rational system. `linear.rational_solution.verify` independently checks
    `A x = b`. Failure to find a vector says nothing about consistency.
-2. `linear.rational_inconsistency.find` is implemented with a normalized
+2. `linear.rational_inconsistency.compute` is implemented with a normalized
    left-nullspace witness `y^T A = 0`, `y^T b = 1`;
    `linear.rational_inconsistency.verify` independently replays the exact
    certificate. Failure to produce or accept a witness remains `UNKNOWN`.
-3. `matrix.normal_form.hermite` is implemented with the binding's complete
+3. `matrix.normal_form.hermite.materialize` is implemented with the binding's complete
    left transformation. Independent replay checks `H = U A`, unimodularity,
    and every FLINT row-HNF condition.
 4. `matrix.determinant.verify` is implemented as a small shared exact

@@ -59,10 +59,29 @@ def test_inline_results_keep_only_mathematical_values() -> None:
         rhs_pairing=_q(1),
     )
 
-    assert set(solution.model_dump()) == {"result_schema_version", "values", "method"}
+    assert set(solution.model_dump()) == {
+        "result_schema_version",
+        "status",
+        "values",
+        "method",
+    }
     assert set(inconsistency.model_dump()) == {
         "result_schema_version",
+        "status",
         "left_witness",
         "rhs_pairing",
         "method",
     }
+
+
+def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
+    solution = LinearRationalSolutionResult(status="NO_SOLUTION_PRODUCED")
+    inconsistency = LinearRationalInconsistencyResult(status="NO_CERTIFICATE_PRODUCED")
+
+    assert solution.values is None
+    assert inconsistency.left_witness is None
+    with pytest.raises(ValidationError, match="agree with the result status"):
+        LinearRationalSolutionResult(
+            status="NO_SOLUTION_PRODUCED",
+            values=(_q(2), _q(1)),
+        )

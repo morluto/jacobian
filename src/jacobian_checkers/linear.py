@@ -118,8 +118,13 @@ def _check_inline_solution_request(request: dict[str, Any]) -> dict[str, Any]:
         witness_format="linear.rational_solution",
     )
     coefficients, rhs, variables = _validate_system(claim["system"])
-    if set(candidate) != {"result_schema_version", "values", "method"}:
+    if set(candidate) not in (
+        {"result_schema_version", "values", "method"},
+        {"result_schema_version", "status", "values", "method"},
+    ):
         return _reject("inline rational solution is malformed")
+    if candidate.get("status", "SOLUTION_PRODUCED") != "SOLUTION_PRODUCED":
+        return _reject("inline rational solution has no candidate")
     if candidate["method"] != "RREF_FREE_VARIABLES_ZERO":
         return _reject("inline rational solution uses unsupported semantics")
     values = [_rational(value) for value in candidate["values"]]
@@ -154,13 +159,19 @@ def _check_inline_inconsistency_request(request: dict[str, Any]) -> dict[str, An
         witness_format="linear.rational_inconsistency",
     )
     coefficients, rhs, variables = _validate_system(claim["system"])
-    if set(candidate) != {
-        "result_schema_version",
-        "left_witness",
-        "rhs_pairing",
-        "method",
-    }:
+    if set(candidate) not in (
+        {"result_schema_version", "left_witness", "rhs_pairing", "method"},
+        {
+            "result_schema_version",
+            "status",
+            "left_witness",
+            "rhs_pairing",
+            "method",
+        },
+    ):
         return _reject("inline inconsistency witness is malformed")
+    if candidate.get("status", "CERTIFICATE_PRODUCED") != "CERTIFICATE_PRODUCED":
+        return _reject("inline inconsistency result has no candidate")
     if candidate["method"] != "DUAL_RREF_PAIRING_ONE":
         return _reject("inline inconsistency witness uses unsupported semantics")
     values = [_rational(value) for value in candidate["left_witness"]]

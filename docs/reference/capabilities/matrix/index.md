@@ -41,7 +41,7 @@ construct a capability runtime.
 
 ## Artifact-backed capabilities
 
-`matrix.normal_form.hermite` is deliberately artifact-backed: it stores the
+`matrix.normal_form.hermite.materialize` is deliberately artifact-backed: it stores the
 source matrix, HNF candidate, and left transformation under versioned
 `jacobian.matrix-normal-form` semantics because the full transformation needs
 durable identity and independent retrieval.

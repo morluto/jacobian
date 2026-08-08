@@ -1,9 +1,9 @@
 # Integer matrix Hermite normal form
 
-`matrix.normal_form.hermite` computes one exact row Hermite normal form for a
-finite integer matrix. `matrix.normal_form.hermite.verify` independently
-checks the stored result. Computation and verification are separate trust
-boundaries.
+`matrix.normal_form.hermite.materialize` computes and retains one exact row
+Hermite normal form for a finite integer matrix. Its independent checker is
+`matrix.normal_form.hermite.verify`; computation and verification are separate
+trust boundaries.
 
 This row-Hermite outcome is distinct from the full two-sided relation
 documented in
@@ -34,10 +34,11 @@ integer matrices:
 - `U`, the proposed left transformation satisfying `H = U A`.
 
 The [Python-FLINT matrix documentation][python-flint-hnf] exposes this exact
-transformation relation. Jacobian records the Python distribution digest,
-operation profile, resource budget, source identity, `H`, and `U`. A successful
-provider call has `COMPUTED` assurance and `conclusion: UNKNOWN`; it does not
-verify its own output.
+transformation relation. The materialized operation stores the bounded input
+and complete `H`/`U` certificate as explicit artifacts, along with the
+provider runtime and resource budget. A successful provider call has
+`COMPUTED` assurance and `conclusion: UNKNOWN`; it does not verify its own
+output.
 
 Timeout, process failure, an invalid worker response, excessive output, or a
 runtime identity change produces no normal-form artifact and no mathematical

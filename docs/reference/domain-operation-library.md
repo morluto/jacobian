@@ -209,7 +209,10 @@ Bounded portfolio examples show the intended boundary:
   rational linear forms; the latter keeps factor-to-expansion provenance inside
   the producer and checker boundary.
   Its compact default exposes bases, map digests, ranks, nonzero minors, and a
-  kernel witness; full sparse entries are opt-in.
+  kernel witness. This compact producer accepts the `CERTIFICATES` request
+  detail; requests with `coefficient_map_detail: "SPARSE_ENTRIES"` belong to
+  the explicit `polynomial.jacobian_syzygy.coefficients.materialize` capability,
+  which retains the complete sparse coefficient ledger.
   `polynomial.jacobian_syzygy.minimum_degree.verify` reconstructs the maps with
   a standard-library rational checker independent of the SymPy producer.
 - `polynomial.jacobian_degree_slice.system.materialize` writes the frozen

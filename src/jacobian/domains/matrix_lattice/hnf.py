@@ -149,6 +149,12 @@ def compute_hermite_normal_form(
             "FLINT_HNF_WORKER_FAILED",
             "The isolated Python-FLINT HNF worker did not complete successfully.",
         )
+    if python_flint_hnf_provider_runtime(refresh=True) != HNF_RUNTIME:
+        return _failure(
+            ExecutionStatus.ERROR,
+            "FLINT_HNF_RUNTIME_CHANGED",
+            "The Python-FLINT HNF runtime changed during the bounded computation.",
+        )
     try:
         result = _parse_hnf_worker_result(
             loads_strict_json(completed.stdout), request.matrix

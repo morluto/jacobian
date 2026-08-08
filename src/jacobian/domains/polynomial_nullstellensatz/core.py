@@ -61,8 +61,25 @@ class NullstellensatzCoreInstallation:
     checker_id: str | None
 
 
-def _diagnostic(code: str, stage: str, message: str, hint: str) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(code=code, stage=stage, message=message, hint=hint)
+def _diagnostic(
+    code: str,
+    stage: str,
+    message: str,
+    hint: str,
+    *,
+    expected: str | None = None,
+    actual_type: str | None = None,
+    details: dict[str, str] | None = None,
+) -> CapabilityDiagnostic:
+    return CapabilityDiagnostic(
+        code=code,
+        stage=stage,
+        message=message,
+        hint=hint,
+        expected=expected,
+        actual_type=actual_type,
+        details=details or {},
+    )
 
 
 class JacobianDegreeSliceMaterializeAdapter:
@@ -231,12 +248,38 @@ class NullstellensatzVerificationAdapter:
             ArtifactNotFoundError,
             StorageError,
         ) as exc:
+            requested_system_uri = (
+                str(validated.system_uri)
+                if "validated" in locals()
+                else str(request.input.get("system_uri", ""))
+            )
+            requested_bundle_uri = (
+                str(validated.certificate_bundle_uri)
+                if "validated" in locals()
+                else str(request.input.get("certificate_bundle_uri", ""))
+            )
             raise CapabilityInvocationError(
                 _diagnostic(
                     "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST",
                     "artifact_resolution",
                     "The system and certificate bundle are not a compatible bound pair.",
-                    "Use producer-owned artifacts from this installed contract and exact system URI.",
+                    (
+                        "Use the exact materialized system URI and a certificate bundle "
+                        "created for that system by a compatible installed producer. Do not "
+                        "substitute unrelated artifacts; if no compatible producer is "
+                        "installed, stop without an infeasibility conclusion."
+                    ),
+                    expected=(
+                        f"system schema {self.installation.system_schema_uri}; "
+                        "certificate bundle schema "
+                        f"{self.installation.certificate_bundle_schema_uri}"
+                    ),
+                    actual_type=type(exc).__name__,
+                    details={
+                        "reason": str(exc),
+                        "system_uri": requested_system_uri,
+                        "certificate_bundle_uri": requested_bundle_uri,
+                    },
                 )
             ) from exc
 

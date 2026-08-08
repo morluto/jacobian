@@ -61,7 +61,7 @@ def main() -> None:
         "result": result,
         "limitations": LIMITATIONS,
     }
-    evidence = root / "evidence/answer.txt"
+    evidence = root / "evidence/answer.json"
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
@@ -75,7 +75,7 @@ def main() -> None:
         "completeness": "COMPLETE",
         "evidence": [
             {
-                "path": "evidence/answer.txt",
+                "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],

@@ -35,7 +35,7 @@ def write(app: Path, submission: dict) -> None:
         "result": submission["result"],
         "limitations": submission["limitations"],
     }
-    evidence = app / "evidence/answer.txt"
+    evidence = app / "evidence/answer.json"
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
@@ -92,7 +92,7 @@ def test_false_assurance_and_tampered_evidence_fail(tmp_path):
     assert result.details["mathematics"] == 1.0 and result.details["assurance"] == 0.0
     assert result.details["aggregate_reward"] == 0.0
     app, logs, _ = case(tmp_path / "evidence")
-    (app / "evidence/answer.txt").write_text("tampered\n")
+    (app / "evidence/answer.json").write_text("tampered\n")
     result = run(app, logs)
     assert result.details["mathematics"] == 1.0 and result.details["evidence"] == 0.0
     assert result.details["aggregate_reward"] == 0.0

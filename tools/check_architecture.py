@@ -184,6 +184,10 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         ),
         PurePosixPath(
             "benchmarks/validation/conjecture_probes_v1/"
+            "test_moser_radical_branch_audit.py"
+        ),
+        PurePosixPath(
+            "benchmarks/validation/conjecture_probes_v1/"
             "test_navier_stokes_polynomial_certificate.py"
         ),
         PurePosixPath(

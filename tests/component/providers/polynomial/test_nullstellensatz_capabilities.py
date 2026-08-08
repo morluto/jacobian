@@ -232,6 +232,59 @@ def test_stale_artifact_binding_is_rejected_before_checker(tmp_path: Path) -> No
         assert result.diagnostics[0].code == (
             "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST"
         )
+        assert result.diagnostics[0].actual_type == "ValueError"
+        assert result.diagnostics[0].details == {
+            "reason": "system artifact differs from the frozen degree slice",
+            "system_uri": wrong_system.artifact_uri,
+            "certificate_bundle_uri": certificate_uri,
+        }
+        assert "if no compatible producer is installed, stop" in (
+            result.diagnostics[0].hint or ""
+        )
+
+
+def test_wrong_bundle_schema_reports_actionable_artifact_diagnostics(
+    tmp_path: Path,
+) -> None:
+    with open_domain_services(
+        tmp_path,
+        build_nullstellensatz_core_bundle(),
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as services:
+        materialized = _invoke(
+            services,
+            MATERIALIZE_CAPABILITY_ID,
+            {},
+            CapabilityMode.EXPLORE,
+        )
+        system_uri = materialized.output["system_uri"]
+
+        result = _invoke(
+            services,
+            VERIFY_CAPABILITY_ID,
+            {
+                "system_uri": system_uri,
+                "certificate_bundle_uri": system_uri,
+            },
+            CapabilityMode.VERIFY,
+        )
+
+        diagnostic = result.diagnostics[0]
+        assert result.execution.status is ExecutionStatus.ERROR
+        assert diagnostic.code == "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST"
+        assert diagnostic.actual_type == "ValueError"
+        assert diagnostic.details == {
+            "reason": "certificate_bundle_uri has the wrong schema",
+            "system_uri": system_uri,
+            "certificate_bundle_uri": system_uri,
+        }
+        assert diagnostic.expected is not None
+        assert (
+            services.core.capabilities._adapters[
+                VERIFY_CAPABILITY_ID
+            ].descriptor.accepted_artifact_types[1]
+            in diagnostic.expected
+        )
 
 
 def test_checker_timeout_never_verifies(

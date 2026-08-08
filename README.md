@@ -26,12 +26,81 @@ an MCP server and is also available as a CLI and Python library. Agents can use
 it to compute invariants, search for examples or counterexamples, work with
 solver artifacts, and check formal proofs.
 
-The important part is that Jacobian does not treat every successful computation
-as a proof.
+An agent can do plenty of mathematics directly: choose a representation, spot a
+useful theorem, simplify a small expression, or propose a proof. Jacobian is
+for the part that benefits from an executable mathematical system and a clear
+record of what happened: exact computation, finite search, solver certificates,
+or formal proof checking.
 
-It exposes focused mathematical operations through a common interface. An
-agent decides which operations to use and in what order. Results stay visible
-as typed values or durable artifacts.
+It does not replace an agent's mathematical strategy or prescribe a workflow.
+The agent decides what to investigate and which operation to use. Jacobian
+exposes focused operations through a common interface, and keeps results
+visible as typed values or durable artifacts.
+
+## Why use a mathematical tool?
+
+The model's weights provide mathematical intuition and strategy, but an answer
+produced in conversation is not automatically a reproducible calculation or a
+proof. Jacobian gives the agent a way to hand the brittle or exact part of a
+problem to a maintained mathematical backend, then retain the result's scope
+and evidence.
+
+| An agent can do directly | Jacobian adds when it matters |
+| --- | --- |
+| Propose an approach, a candidate, or a proof idea | Execute exact algebra, bounded search, SAT/SMT solving, graph computation, or Lean checking |
+| Explain why a result seems plausible | Record the inputs, result, scope, status, and provenance |
+| Report that a solver or search succeeded | Independently check a witness, certificate, or formal proof for the exact claim |
+
+The important boundary is that a successful computation is not automatically a
+proof. Jacobian labels a result according to what has actually happened:
+
+- **heuristic**: a plausible result from a model, search, or unchecked witness;
+- **computed**: a deterministic calculation with a tested software contract;
+- **verified**: evidence independently checked for the exact claim and scope.
+
+A **witness** is a concrete object that establishes a claim. For example, `2`
+is a witness for “there exists an even prime”; `2` is also a counterexample to
+“every prime is odd.” Search may find such an object, but a separate checker
+must establish that it really satisfies the stated property. Finding no witness
+does not prove that none exists unless the search scope is complete and that
+completeness is established.
+
+## A simple counterexample
+
+Here is a small counterexample an agent can reason about directly:
+
+```text
+Claim: every prime is odd
+Agent checks: 2 is prime and even
+Counterexample: 2
+Conclusion: the claim is false
+```
+
+Here `2` is the **witness**: the actual example that disproves the claim. The
+same idea applies when the concrete example is difficult to find or check, such
+as a counterexample among millions of possible graphs. The agent still chooses
+the claim and search strategy; Jacobian can run the exact search and save the
+resulting graph and checks for later inspection.
+
+In this documentation:
+
+- **candidate** means an example not yet checked;
+- **witness** means an example that establishes or disproves a claim;
+- **verification** means checking that exact example really has the claimed
+  property; and
+- **artifact** means a saved mathematical object or piece of evidence.
+
+## Jacobian, Lean, SAT, and the model
+
+Jacobian supports Lean, SAT/SMT, computer algebra, and other mathematical
+systems as backends. It does not replace them or compete with them.
+
+| System | Main job |
+| --- | --- |
+| Model | Proposes ideas and chooses a mathematical strategy |
+| CAS / SAT / SMT | Calculates or searches in a specialized domain |
+| Lean | Checks a formal, general mathematical proof |
+| Jacobian | Lets an agent discover and use those systems through one interface, while retaining typed results, scope, saved evidence, provenance, and verification status |
 
 ## A small example
 

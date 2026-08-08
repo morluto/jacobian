@@ -41,6 +41,46 @@ general-purpose shell alone. Starting an MCP server, calling a tool, or
 producing a verification record is necessary infrastructure evidence, not
 proof of that product outcome.
 
+## Why use Jacobian instead of asking the agent to do the math?
+
+Agents retain useful mathematical knowledge and should own the research work:
+choosing a representation, proposing a theorem or candidate, deciding which
+tool to try, and interpreting the result. Jacobian does not replace that work.
+It makes the externally executed part of an investigation explicit when exact
+calculation, finite search, solver output, or formal proof checking matters.
+
+For example, a search can return a **witness**: a concrete object that
+establishes an existential claim, or a counterexample that disproves a
+universal one. The search result is useful evidence, but it is not itself a
+verified conclusion. An independent checker must validate that exact object
+against the exact claim and declared scope. A completed search with no witness
+is likewise not a conclusion unless the scope is complete and that
+completeness is established.
+
+The distinction is deliberately visible in the result contract:
+
+- `HEURISTIC` covers results that depend on an unchecked witness, model,
+  sampling, or untrusted search;
+- `COMPUTED` covers deterministic results whose software contract is tested;
+- `VERIFIED` requires independently checked evidence bound to the claim,
+  candidate, semantics, scope, certificate format, and checker identity.
+
+Lean, SAT proof checkers, CAS systems, and solvers are complementary backends,
+not alternatives to Jacobian's product boundary. A Lean kernel checks a formal
+proof term; a SAT certificate checker replays a finite Boolean proof; a CAS or
+solver may calculate or search. Jacobian gives an agent one way to discover,
+invoke, compose, and retain the results of those systems without mistaking a
+backend's successful run for independent verification.
+
+The division of responsibility is compact:
+
+| System | Main job |
+| --- | --- |
+| Model | Proposes ideas and chooses a mathematical strategy |
+| CAS / SAT / SMT | Calculates or searches in a specialized domain |
+| Lean | Checks a formal, general mathematical proof |
+| Jacobian | Exposes supported backends and domain operations to agents with typed results, scope, evidence, provenance, and verification status |
+
 ## Tool and primitive contract
 
 At the product level these capabilities are tools. Internally, the target

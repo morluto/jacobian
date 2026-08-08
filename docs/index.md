@@ -7,10 +7,16 @@ guide for a specific task, consult reference material for exact contracts, and
 read the explanations for design rationale.
 
 Jacobian exposes composable mathematical capabilities through an MCP server,
-CLI, and Python library. Capabilities have mathematically atomic,
-agent-visible outcomes; agents compose them into research strategies. Optional
-workflows preserve intermediate artifacts, and only operator-authorized
-independent checkers may promote exact evidence to a verified result. The
+CLI, and Python library. An agent still owns the mathematical strategy:
+choosing a representation, candidate, and next operation. Jacobian supplies
+the executable part when exact computation, bounded search, solver evidence,
+or formal proof checking is useful.
+
+Each capability has one mathematically atomic, agent-visible outcome. A search
+may return a concrete witness or counterexample; a separate authorized checker
+can establish whether that exact object proves the stated claim in its declared
+scope. Optional workflows preserve intermediate artifacts. This keeps
+heuristic, computed, and independently verified results distinct. The
 [product model](explanation/product-blueprint.md) defines the capability
 contract and ownership boundaries.
 

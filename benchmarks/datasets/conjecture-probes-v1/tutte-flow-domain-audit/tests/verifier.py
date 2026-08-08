@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
+    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
     strict_submission_contract,
@@ -77,8 +79,11 @@ def mathematics(result: object) -> bool:
 
 
 def _raw():
+    path = Path("/app/submission.json")
+    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
+        return None
     try:
-        value = json.loads(Path("/app/submission.json").read_text())
+        value = json.loads(path.read_text())
     except (OSError, ValueError, MemoryError, RecursionError):
         return None
     return value if isinstance(value, dict) else None

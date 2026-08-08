@@ -66,7 +66,34 @@ def test_rejects_corrupted_factor():
     assert not _module().mathematics(result)
 
 
-def test_rejects_noncanonical_fraction():
+def test_accepts_equivalent_public_rational_encoding():
     result = _result()
     result["outside_contributions"][0] = ["6/4", "1/2"]
+    assert _module().mathematics(result)
+
+
+def test_rejects_malformed_contribution_collection_without_crashing():
+    result = _result()
+    result["outside_contributions"] = None
     assert not _module().mathematics(result)
+
+
+def test_rejects_exponent_syntax_before_fraction_construction(monkeypatch):
+    module = _module()
+
+    def unexpected_fraction(_value):
+        raise AssertionError("invalid rational syntax must not reach Fraction")
+
+    monkeypatch.setattr(module, "Fraction", unexpected_fraction)
+    try:
+        module._q("1e10000000000")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("exponent syntax must be rejected")
+
+
+def test_evidence_comparison_preserves_json_types():
+    module = _module()
+    assert not module._json_equal({"coefficient": 0}, {"coefficient": False})
+    assert not module._json_equal({"coefficient": 1}, {"coefficient": 1.0})

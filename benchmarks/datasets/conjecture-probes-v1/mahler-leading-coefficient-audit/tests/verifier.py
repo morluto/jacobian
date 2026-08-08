@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -23,15 +24,13 @@ LIMITATIONS = [
     "LEHMER_PROBLEM_NOT_ASSESSED",
 ]
 TARGET = [2, -11, 21, -22, 23, -22, 21, -11, 2]
+RATIONAL = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
 
 
 def _q(value):
-    if not isinstance(value, str):
+    if not isinstance(value, str) or RATIONAL.fullmatch(value) is None:
         raise ValueError
-    q = Fraction(value)
-    if str(q) != value:
-        raise ValueError
-    return q
+    return Fraction(value)
 
 
 def _pair(value):
@@ -50,6 +49,20 @@ def _poly_mul(left, right):
         for j, b in enumerate(right):
             out[i + j] += a * b
     return out
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _json_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _json_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return left == right
 
 
 def mathematics(result):
@@ -83,12 +96,15 @@ def mathematics(result):
         (1, 1, 1): (Fraction(1), Fraction(0)),
         (2, -5, 2): (Fraction(2), Fraction(0)),
     }
+    contributions_raw = result["outside_contributions"]
+    if not isinstance(contributions_raw, list) or len(contributions_raw) != 4:
+        return False
     try:
-        contributions = [_pair(v) for v in result["outside_contributions"]]
+        contributions = [_pair(v) for v in contributions_raw]
         flawed = _pair(result["flawed_monic_result"])
         corrected = _pair(result["corrected_mahler_measure"])
         leading = _q(result["leading_coefficient"])
-    except (ValueError, ZeroDivisionError):
+    except (TypeError, ValueError, ZeroDivisionError):
         return False
     if contributions != [expected[tuple(f)] for f in factors] or leading != 2:
         return False
@@ -145,32 +161,32 @@ def main():
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
+        and _json_equal(payload.get("result"), raw.get("result"))
         and payload.get("limitations") == LIMITATIONS
+    )
+    math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
+    scope_ok = bool(
+        isinstance(raw, dict)
+        and raw.get("scope") == SCOPE
+        and raw.get("completeness") == "COMPLETE"
+        and raw.get("limitations") == LIMITATIONS
+    )
+    assurance_ok = bool(
+        contract
+        and isinstance(raw, dict)
+        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
     )
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),
-        "mathematics": float(
-            bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-        ),
+        "mathematics": float(math_ok),
+        "correctness": float(math_ok),
         "evidence": float(evidence_ok),
-        "scope": float(
-            bool(
-                isinstance(raw, dict)
-                and raw.get("scope") == SCOPE
-                and raw.get("completeness") == "COMPLETE"
-                and raw.get("limitations") == LIMITATIONS
-            )
-        ),
-        "assurance": float(
-            bool(
-                contract
-                and isinstance(raw, dict)
-                and raw.get("claimed_assurance")
-                in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-            )
-        ),
+        "evidence_validity": float(evidence_ok),
+        "scope": float(scope_ok),
+        "scope_accuracy": float(scope_ok),
+        "assurance": float(assurance_ok),
+        "assurance_calibration": float(assurance_ok),
     }
     reward = float(all(values.values()))
     values.update(
@@ -194,9 +210,13 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
+                "correctness": 0.0,
                 "evidence": 0.0,
+                "evidence_validity": 0.0,
                 "scope": 0.0,
+                "scope_accuracy": 0.0,
                 "assurance": 0.0,
+                "assurance_calibration": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "false_certification": False,

@@ -40,8 +40,10 @@ stable built-in contracts; replace examples but preserve JSON types:
 
 For other outcomes or unfamiliar payloads, use `math.find` with a specific
 plain-language outcome and implied domain or mode; no capability ID is required.
-Use low `limit` values. Inspect `CONTRACT` only when the typed schema is needed.
-A card's `invocation_example`, or required top-level fields, may be enough.
+Use low `limit` values. For a selected operation's schema, call
+`math.find({"capability_id":"<exact-id>","view":"CONTRACT"})`; never send
+`mode: "CONTRACT"` to `math.run` or put `CONTRACT` in a query. A card's
+`invocation_example`, or required top-level fields, may be enough.
 
 Do not add a discovery domain filter unless its exact installed spelling is
 known. When discovery exposes recovery paths, follow those fields (for example,

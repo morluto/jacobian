@@ -9,6 +9,7 @@
       "type": "array"
     },
     "q": {
+      "maxLength": 128,
       "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
       "type": "string"
     }

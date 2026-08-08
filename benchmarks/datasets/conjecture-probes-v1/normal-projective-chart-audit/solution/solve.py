@@ -16,7 +16,7 @@ def main():
     root = Path("/app")
     result = {
         "finite_parameters": ["-1", "0", "1"],
-        "finite_points": [["0", "-1"], ["2", "0"], ["0", "1"]],
+        "finite_points": [["0", "-1"], ["0", "1"], ["2", "0"]],
         "missing_projective_parameter": ["1", "0"],
         "missing_point": ["-2", "0"],
         "footpoint_records": [

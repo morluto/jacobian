@@ -43,6 +43,7 @@
   "schema_definitions": {
     "q": {
       "type": "string",
+      "maxLength": 128,
       "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
     },
     "point": {
@@ -243,6 +244,7 @@
     "$defs": {
       "q": {
         "type": "string",
+        "maxLength": 128,
         "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
       },
       "point": {

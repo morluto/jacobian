@@ -54,9 +54,8 @@ def _weighted_graph(
     return {"vertices": vertices, "edges": edges}
 
 
-def _result_payload(services: DomainTestServices, result: object) -> dict[str, object]:
-    result_uri = result.output["result_uri"]  # type: ignore[attr-defined]
-    return services.core.store.get(result_uri).payload
+def _result_payload(_services: DomainTestServices, result: object) -> dict[str, object]:
+    return result.output["result"]  # type: ignore[attr-defined, no-any-return]
 
 
 def test_exact_weighted_minimum_spanning_tree_and_lineage(
@@ -128,12 +127,7 @@ def test_exact_weighted_minimum_spanning_tree_and_lineage(
         ),
         "completion": "COMPLETE",
     }
-    assert len(result.artifact_uris) == 2
-    source = graph_optimization_services.core.store.get(result.artifact_uris[0])
-    produced = graph_optimization_services.core.store.get(result.artifact_uris[1])
-    assert produced.manifest.parents == (source.artifact_uri,)
-    assert result.relationships[0].source_artifact_uris == (source.artifact_uri,)
-    assert result.relationships[0].target_artifact_uris == (produced.artifact_uri,)
+    assert result.artifact_uris == ()
 
 
 def test_disconnected_and_empty_graphs_have_complete_no_tree_outcomes(

@@ -886,7 +886,11 @@ class ExactComputedVerificationAdapter:
             parents=(input_artifact.artifact_uri,),
             summary=f"{declaration.declaration.capability_id} verification candidate",
         )
-        return input_artifact, self.store.get(result_put.artifact_uri), semantics_artifact
+        return (
+            input_artifact,
+            self.store.get(result_put.artifact_uri),
+            semantics_artifact,
+        )
 
     @staticmethod
     def _checker_artifact(artifact: StoredArtifact) -> dict[str, object]:

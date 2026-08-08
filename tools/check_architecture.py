@@ -198,6 +198,10 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
             "benchmarks/validation/conjecture_probes_v1/"
             "test_yang_mills_gauge_invariance_certificate.py"
         ),
+        PurePosixPath(
+            "benchmarks/validation/conjecture_probes_v1/"
+            "test_zarankiewicz_projective_plane_certificate.py"
+        ),
         # Repository-command integration tests deliberately invoke CLI entrypoints.
         PurePosixPath("benchmarks/validation/test_benchmark_plan_validation.py"),
         PurePosixPath("benchmarks/validation/test_benchmark_planner.py"),

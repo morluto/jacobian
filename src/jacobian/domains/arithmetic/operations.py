@@ -58,7 +58,6 @@ __all__ = [
     "reciprocal",
     "sign",
     "sum_rationals",
-    "to_fraction",
 ]
 
 

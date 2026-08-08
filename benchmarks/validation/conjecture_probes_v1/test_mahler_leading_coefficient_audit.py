@@ -97,3 +97,9 @@ def test_evidence_comparison_preserves_json_types():
     module = _module()
     assert not module._json_equal({"coefficient": 0}, {"coefficient": False})
     assert not module._json_equal({"coefficient": 1}, {"coefficient": 1.0})
+
+
+def test_rejects_malformed_factor_shapes_without_crashing():
+    result = _result()
+    result["factors"] = [[1, -3, 1], {"bad": "factor"}, [1, 1, 1], "factor"]
+    assert not _module().mathematics(result)

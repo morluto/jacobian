@@ -75,17 +75,21 @@ def mathematics(result):
     }:
         return False
     factors = result["factors"]
-    if not isinstance(factors, list) or len(factors) != 4 or factors != sorted(factors):
+    if (
+        not isinstance(factors, list)
+        or len(factors) != 4
+        or not all(
+            isinstance(factor, list)
+            and len(factor) == 3
+            and all(type(value) is int for value in factor)
+            for factor in factors
+        )
+        or factors != sorted(factors)
+    ):
         return False
     product = [1]
     for factor in factors:
-        if (
-            not isinstance(factor, list)
-            or len(factor) != 3
-            or not all(type(v) is int for v in factor)
-            or factor[0] <= 0
-            or math.gcd(*map(abs, factor)) != 1
-        ):
+        if factor[0] <= 0 or math.gcd(*map(abs, factor)) != 1:
             return False
         product = _poly_mul(product, factor)
     if product != TARGET:

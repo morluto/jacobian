@@ -103,3 +103,46 @@ def test_rejects_malformed_factor_shapes_without_crashing():
     result = _result()
     result["factors"] = [[1, -3, 1], {"bad": "factor"}, [1, 1, 1], "factor"]
     assert not _module().mathematics(result)
+
+
+def test_accepts_schema_valid_integral_json_numbers():
+    result = _result()
+    result["factors"] = [
+        [float(value) for value in factor] for factor in result["factors"]
+    ]
+    assert _module().mathematics(result)
+
+
+def test_rejects_boolean_factor_coefficients():
+    result = _result()
+    result["factors"][0][0] = True
+    assert not _module().mathematics(result)
+
+
+def test_evidence_comparison_rejects_excessive_nesting():
+    module = _module()
+    left = right = 0
+    for _ in range(129):
+        left = [left]
+        right = [right]
+    assert not module._json_equal(left, right)
+
+
+def test_evidence_identity_fields_bind_to_raw_submission():
+    module = _module()
+    raw = {
+        "task_id": module.TASK_ID,
+        "result": _result(),
+        "limitations": module.LIMITATIONS,
+    }
+    payload = {
+        "schema_version": "1",
+        "task_id": module.TASK_ID,
+        "result": _result(),
+        "limitations": module.LIMITATIONS,
+    }
+    assert module._evidence_payload_matches_submission(payload, raw)
+
+    raw["task_id"] = "jacobian/a-different-task"
+    raw["limitations"] = ["A_DIFFERENT_LIMITATION"]
+    assert not module._evidence_payload_matches_submission(payload, raw)

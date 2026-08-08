@@ -52,17 +52,78 @@ def _poly_mul(left, right):
 
 
 def _json_equal(left: object, right: object) -> bool:
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return set(left) == set(right) and all(
-            _json_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            _json_equal(a, b) for a, b in zip(left, right, strict=True)
-        )
-    return left == right
+    pending = [(left, right, 0)]
+    visited = 0
+    while pending:
+        current_left, current_right, depth = pending.pop()
+        visited += 1
+        if visited > 100_000 or depth > 128:
+            return False
+        if type(current_left) is not type(current_right):
+            return False
+        if isinstance(current_left, dict):
+            if set(current_left) != set(current_right):
+                return False
+            pending.extend(
+                (current_left[key], current_right[key], depth + 1)
+                for key in current_left
+            )
+        elif isinstance(current_left, list):
+            if len(current_left) != len(current_right):
+                return False
+            pending.extend(
+                (a, b, depth + 1)
+                for a, b in zip(current_left, current_right, strict=True)
+            )
+        elif current_left != current_right:
+            return False
+    return True
+
+
+def _integral_json_number(value: object) -> int | None:
+    if type(value) is int:
+        return value
+    if type(value) is float and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _evidence_payload_matches_submission(payload: object, raw: object) -> bool:
+    return bool(
+        isinstance(payload, dict)
+        and isinstance(raw, dict)
+        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and payload.get("schema_version") == "1"
+        and _json_equal(payload.get("task_id"), raw.get("task_id"))
+        and _json_equal(payload.get("result"), raw.get("result"))
+        and _json_equal(payload.get("limitations"), raw.get("limitations"))
+    )
+
+
+def _normalized_factors(value: object) -> list[list[int]] | None:
+    if not isinstance(value, list) or len(value) != 4:
+        return None
+    normalized: list[list[int]] = []
+    for factor in value:
+        if not isinstance(factor, list) or len(factor) != 3:
+            return None
+        normalized_factor: list[int] = []
+        for coefficient in factor:
+            integral = _integral_json_number(coefficient)
+            if integral is None:
+                return None
+            normalized_factor.append(integral)
+        normalized.append(normalized_factor)
+    return normalized
+
+
+def _factorization_is_valid(factors: list[list[int]]) -> bool:
+    product = [1]
+    for factor in factors:
+        if factor[0] <= 0 or math.gcd(*map(abs, factor)) != 1:
+            return False
+        product = _poly_mul(product, factor)
+    return product == TARGET
 
 
 def mathematics(result):
@@ -75,24 +136,12 @@ def mathematics(result):
     }:
         return False
     factors = result["factors"]
-    if (
-        not isinstance(factors, list)
-        or len(factors) != 4
-        or not all(
-            isinstance(factor, list)
-            and len(factor) == 3
-            and all(type(value) is int for value in factor)
-            for factor in factors
-        )
-        or factors != sorted(factors)
-    ):
+    normalized_factors = _normalized_factors(factors)
+    if normalized_factors is None:
         return False
-    product = [1]
-    for factor in factors:
-        if factor[0] <= 0 or math.gcd(*map(abs, factor)) != 1:
-            return False
-        product = _poly_mul(product, factor)
-    if product != TARGET:
+    if normalized_factors != sorted(normalized_factors):
+        return False
+    if not _factorization_is_valid(normalized_factors):
         return False
     expected = {
         (1, -3, 1): (Fraction(3, 2), Fraction(1, 2)),
@@ -110,7 +159,10 @@ def mathematics(result):
         leading = _q(result["leading_coefficient"])
     except (TypeError, ValueError, ZeroDivisionError):
         return False
-    if contributions != [expected[tuple(f)] for f in factors] or leading != 2:
+    if (
+        contributions != [expected[tuple(f)] for f in normalized_factors]
+        or leading != 2
+    ):
         return False
     aggregate = (Fraction(1), Fraction(0))
     for contribution in contributions:
@@ -160,14 +212,7 @@ def main():
         if evidence_ok
         else None
     )
-    evidence_ok = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
-    )
+    evidence_ok = _evidence_payload_matches_submission(payload, raw)
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     scope_ok = bool(
         isinstance(raw, dict)

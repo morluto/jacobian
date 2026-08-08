@@ -145,6 +145,26 @@ def _write(values: dict) -> None:
     (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
 
 
+def _evidence_payload_is_bound(payload: object, raw: object) -> bool:
+    return bool(
+        isinstance(payload, dict)
+        and isinstance(raw, dict)
+        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and payload.get("schema_version") == "1"
+        and _json_equal(payload.get("task_id"), raw.get("task_id"))
+        and _json_equal(payload.get("result"), raw.get("result"))
+        and _json_equal(payload.get("limitations"), raw.get("limitations"))
+    )
+
+
+def _assurance_is_calibrated(raw: object) -> bool:
+    return bool(
+        isinstance(raw, dict)
+        and type(raw.get("claimed_assurance")) is str
+        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
+    )
+
+
 def main() -> None:
     raw = _raw()
     submission = load_submission(require_input_binding=False)
@@ -166,14 +186,7 @@ def main() -> None:
         if evidence_ok
         else None
     )
-    evidence_ok = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
-    )
+    evidence_ok = _evidence_payload_is_bound(payload, raw)
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     scope_ok = bool(
         isinstance(raw, dict)
@@ -181,11 +194,7 @@ def main() -> None:
         and raw.get("completeness") == "COMPLETE"
         and raw.get("limitations") == LIMITATIONS
     )
-    assurance_ok = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-    )
+    assurance_ok = _assurance_is_calibrated(raw)
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),

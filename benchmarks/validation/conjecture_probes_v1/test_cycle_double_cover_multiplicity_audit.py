@@ -117,3 +117,29 @@ def test_evidence_comparison_preserves_json_types():
     module = _module()
     assert not module._json_equal({"count": 1}, {"count": True})
     assert not module._json_equal({"count": 2}, {"count": 2.0})
+
+
+def test_evidence_copy_uses_raw_envelope_fields():
+    module = _module()
+    raw = {
+        "task_id": "wrong-task",
+        "result": _result(module),
+        "limitations": ["different"],
+    }
+    matching = {
+        "task_id": "wrong-task",
+        "result": _result(module),
+        "limitations": ["different"],
+    }
+    matching["schema_version"] = "1"
+    assert module._evidence_payload_is_bound(matching, raw)
+    canonical = dict(matching, task_id=module.TASK_ID, limitations=module.LIMITATIONS)
+    assert not module._evidence_payload_is_bound(canonical, raw)
+
+
+def test_assurance_value_is_independent_of_protocol():
+    module = _module()
+    assert module._assurance_is_calibrated(
+        {"claimed_assurance": "CHECKED", "conclusion": "wrong"}
+    )
+    assert not module._assurance_is_calibrated({"claimed_assurance": True})

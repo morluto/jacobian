@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from tests.support.capabilities import invoke_capability
 from tests.support.services import open_domain_services
 
@@ -10,7 +11,12 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.linear import (
+    LinearRationalInconsistencyFindRequest,
+    LinearRationalSolutionFindRequest,
+)
 from jacobian.domains.rational_linear import build_rational_linear_bundle
+from jacobian.domains.rational_linear.operations import _validate_worker_payload
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.operation_installation import OperationInstaller
 from jacobian.runtime import CheckerAuthorityMode
@@ -29,6 +35,66 @@ def _system() -> dict[str, object]:
             "rhs": [{"num": "1", "den": "1"}, {"num": "3", "den": "1"}],
         }
     }
+
+
+def test_rational_linear_worker_payloads_bind_status_and_source_dimensions() -> None:
+    solution_request = LinearRationalSolutionFindRequest.model_validate(
+        {
+            **_system(),
+            "system": {
+                **_system()["system"],
+                "rhs": [{"num": "3", "den": "1"}, {"num": "7", "den": "1"}],
+            },
+        }
+    )
+    solution = {
+        "protocol": "jacobian.rational-linear-solution-worker/v1",
+        "status": "SOLUTION_PRODUCED",
+        "values": [
+            {"num": "2", "den": "1"},
+            {"num": "1", "den": "1"},
+        ],
+    }
+    assert (
+        _validate_worker_payload(
+            solution,
+            solution_request,
+            "jacobian.rational-linear-solution-worker/v1",
+        )
+        == solution
+    )
+
+    inconsistency_request = LinearRationalInconsistencyFindRequest.model_validate(
+        _system()
+    )
+    inconsistency = {
+        "protocol": "jacobian.rational-linear-inconsistency-worker/v1",
+        "status": "CERTIFICATE_PRODUCED",
+        "left_witness": [
+            {"num": "-2", "den": "1"},
+            {"num": "1", "den": "1"},
+        ],
+        "rhs_pairing": {"num": "1", "den": "1"},
+    }
+    assert (
+        _validate_worker_payload(
+            inconsistency,
+            inconsistency_request,
+            "jacobian.rational-linear-inconsistency-worker/v1",
+        )
+        == inconsistency
+    )
+
+    for invalid in (
+        {**solution, "values": solution["values"][:1]},
+        {key: value for key, value in solution.items() if key != "values"},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            _validate_worker_payload(
+                invalid,
+                solution_request,
+                "jacobian.rational-linear-solution-worker/v1",
+            )
 
 
 def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> None:

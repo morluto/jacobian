@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import (
@@ -47,6 +49,50 @@ def _failure(
     )
 
 
+def _validate_worker_payload(
+    payload: object,
+    request: LinearRationalSolutionFindRequest | LinearRationalInconsistencyFindRequest,
+    protocol: str,
+) -> dict[str, Any]:
+    """Validate worker identity, status, fields, and source-bound dimensions."""
+
+    if not isinstance(payload, dict) or payload.get("protocol") != protocol:
+        raise ValueError("rational-linear worker protocol is invalid")
+    status = payload.get("status")
+    if protocol == _SOLUTION_PROTOCOL:
+        if status == "NO_SOLUTION_PRODUCED":
+            expected_keys = {"protocol", "status"}
+        elif status == "SOLUTION_PRODUCED":
+            expected_keys = {"protocol", "status", "values"}
+            solution_result = LinearRationalSolutionResult.model_validate(
+                {"values": payload.get("values")}
+            )
+            if len(solution_result.values) != len(request.system.variables):
+                raise ValueError("solution dimensions do not match the source system")
+        else:
+            raise ValueError("rational-linear solution status is invalid")
+    else:
+        if status == "NO_CERTIFICATE_PRODUCED":
+            expected_keys = {"protocol", "status"}
+        elif status == "CERTIFICATE_PRODUCED":
+            expected_keys = {"protocol", "status", "left_witness", "rhs_pairing"}
+            inconsistency_result = LinearRationalInconsistencyResult.model_validate(
+                {
+                    "left_witness": payload.get("left_witness"),
+                    "rhs_pairing": payload.get("rhs_pairing"),
+                }
+            )
+            if len(inconsistency_result.left_witness) != len(request.system.rhs):
+                raise ValueError(
+                    "inconsistency witness dimensions do not match the source system"
+                )
+        else:
+            raise ValueError("rational-linear inconsistency status is invalid")
+    if set(payload) != expected_keys:
+        raise ValueError("rational-linear worker response shape is invalid")
+    return payload
+
+
 def _run(
     request: LinearRationalSolutionFindRequest | LinearRationalInconsistencyFindRequest,
     protocol: str,
@@ -83,10 +129,9 @@ def _run(
         or completed.returncode != 0
     ):
         raise RuntimeError("rational-linear worker failed")
-    payload = loads_strict_json(completed.stdout)
-    if not isinstance(payload, dict) or payload.get("protocol") != protocol:
-        raise ValueError("rational-linear worker protocol is invalid")
-    return payload
+    return _validate_worker_payload(
+        loads_strict_json(completed.stdout), request, protocol
+    )
 
 
 def compute_rational_solution(
@@ -115,7 +160,7 @@ def compute_rational_solution(
             ExecutionStatus.TIMEOUT,
             "The bounded rational-linear computation timed out.",
         )
-    except (RuntimeError, TypeError, ValueError):
+    except (RuntimeError, TypeError, ValueError, ValidationError):
         return _failure(
             "FLINT_LINEAR_WORKER_FAILED",
             ExecutionStatus.ERROR,
@@ -154,7 +199,7 @@ def compute_rational_inconsistency(
             ExecutionStatus.TIMEOUT,
             "The bounded rational-linear computation timed out.",
         )
-    except (RuntimeError, TypeError, ValueError):
+    except (RuntimeError, TypeError, ValueError, ValidationError):
         return _failure(
             "FLINT_LINEAR_WORKER_FAILED",
             ExecutionStatus.ERROR,

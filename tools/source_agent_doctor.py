@@ -35,6 +35,10 @@ from jacobian.persistence.state_health import (  # noqa: E402
     inspect_state_health,
 )
 from jacobian.provider_runtime import known_provider_runtime  # noqa: E402
+from jacobian.providers.flint_runtime import (  # noqa: E402
+    python_flint_hnf_provider_runtime,
+    python_flint_provider_runtime,
+)
 from jacobian.runtime import CheckerAuthorityMode, create_runtime  # noqa: E402
 
 PROFILES = ("core", "full-python", "lean", "external-proof")
@@ -110,10 +114,12 @@ def _provider_report(runtime: Any) -> dict[str, dict[str, Any]]:
         "carcara": "carcara_runtime",
         "cvc5": "cvc5_runtime",
         "drat-trim": "drat_trim_runtime",
-        "python-flint": "python_flint_runtime",
-        "python-flint-hnf": "python_flint_hnf_runtime",
         "sympy": "sympy_polynomial_normalization_runtime",
         "lean": "lean_runtime",
+    }
+    resolvers = {
+        "python-flint": python_flint_provider_runtime,
+        "python-flint-hnf": python_flint_hnf_provider_runtime,
     }
     report: dict[str, dict[str, Any]] = {}
     for name, field in fields.items():
@@ -127,6 +133,20 @@ def _provider_report(runtime: Any) -> dict[str, dict[str, Any]]:
                 "diagnostic": "provider runtime was not resolved",
             }
             continue
+        report[name] = {
+            "availability": provider_runtime.availability.value,
+            "provider": provider_runtime.provider,
+            "version": provider_runtime.version,
+            "digest": provider_runtime.digest,
+            "digest_kind": (
+                provider_runtime.digest_kind.value
+                if provider_runtime.digest_kind is not None
+                else None
+            ),
+            "diagnostic": provider_runtime.diagnostic,
+        }
+    for name, resolve in resolvers.items():
+        provider_runtime = resolve(refresh=True)
         report[name] = {
             "availability": provider_runtime.availability.value,
             "provider": provider_runtime.provider,

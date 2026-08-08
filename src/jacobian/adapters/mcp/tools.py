@@ -148,8 +148,19 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
 
 def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
     payload = result.model_dump(mode="json")
+    output = payload["output"]
+    if (
+        result.diagnostics
+        and result.diagnostics[0].code == "UNKNOWN_CAPABILITY"
+        and "available_capability_ids" in output
+    ):
+        output = {
+            key: value
+            for key, value in output.items()
+            if key != "available_capability_ids"
+        }
     return {
-        key: payload[key]
+        key: output if key == "output" else payload[key]
         for key in (
             "capability_id",
             "mode",

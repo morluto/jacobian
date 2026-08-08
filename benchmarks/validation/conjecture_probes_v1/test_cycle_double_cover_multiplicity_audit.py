@@ -179,4 +179,4 @@ def test_reward_output_uses_host_contract(tmp_path, monkeypatch):
 
 def test_declares_decoupled_input_binding():
     contract = json.loads((TASK / "tests/verifier_contract.json").read_text())
-    assert contract == {"input_binding_decoupled": True}
+    assert contract == {"schema_version": "1", "input_binding_decoupled": True}

@@ -106,6 +106,25 @@ def test_large_digest_bound_evidence_whitespace_streams_without_a_size_cap(tmp_p
     assert verdict.details["aggregate_reward"] == 1.0
 
 
+def test_evidence_json_prefix_split_across_stream_chunk_is_not_rejected(tmp_path):
+    app, logs, submission = case(tmp_path)
+    write(app, submission)
+    evidence = app / "evidence/answer.txt"
+    original = evidence.read_bytes()
+    # Leave an incomplete JSON prefix at the 65,536-byte boundary.  The next
+    # read completes it, so this is valid evidence rather than malformed JSON.
+    evidence.write_bytes(b" " * 65_534 + original)
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+
+    verdict = run(app, logs)
+
+    assert verdict.details["evidence"] == 1.0
+    assert verdict.details["aggregate_reward"] == 1.0
+
+
 def test_digest_bound_evidence_with_trailing_garbage_fails_closed(tmp_path):
     app, logs, s = case(tmp_path)
     write(app, s)

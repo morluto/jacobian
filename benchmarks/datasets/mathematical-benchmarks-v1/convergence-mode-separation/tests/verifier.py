@@ -130,8 +130,10 @@ def _valid_result(result, source):
         _valid_levels(result["levels"], start, end)
         and _valid_probes(result["probes"], start, end)
         and result["relationship"] == "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
-        and result["probability_argument"] == "event_mass_tends_to_zero"
-        and result["pointwise_argument"] == "one_hit_and_at_least_one_miss_per_level"
+        and result["probability_argument"]
+        == {"event_mass_formula": "1/2^k", "limit": "ZERO"}
+        and result["pointwise_argument"]
+        == {"hit_count_per_level": 1, "miss_count_per_level": "AT_LEAST_ONE"}
         and result["research_scope"]
         == {
             "lean_theorem": "NOT_ELABORATED",

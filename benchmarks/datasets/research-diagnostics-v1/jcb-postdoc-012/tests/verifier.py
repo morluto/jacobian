@@ -30,7 +30,7 @@ def _math(s, e):
     facts = r.get("key_facts", {})
     if not isinstance(want, dict) or not isinstance(facts, dict):
         return False
-    if set(facts) != set(want):
+    if not set(want).issubset(facts):
         return False
     return all(
         type(facts[key]) is str and type(value) is str and facts[key] == value

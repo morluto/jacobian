@@ -293,8 +293,11 @@ def _read_streaming_json_value(stream) -> Any:
             buffer = buffer.lstrip(_JSON_WHITESPACE_CHARS)
         try:
             value, end = parser.raw_decode(buffer)
-        except json.JSONDecodeError as exc:
-            if not block or exc.pos < len(buffer):
+        except json.JSONDecodeError:
+            # A token can be split in the middle of the buffer, for example
+            # after leading whitespace.  Only EOF turns a decoder error into a
+            # malformed value; the next chunk may complete any prefix.
+            if not block:
                 raise
             continue
         if not all(character in _JSON_WHITESPACE for character in buffer[end:]):

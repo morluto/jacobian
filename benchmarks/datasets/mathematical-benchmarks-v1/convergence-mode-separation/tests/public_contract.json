@@ -84,11 +84,23 @@
         "minItems": 8,
         "type": "array"
       },
-      "pointwise_argument": {
-        "const": "one_hit_and_at_least_one_miss_per_level"
+          "pointwise_argument": {
+        "additionalProperties": false,
+        "properties": {
+          "hit_count_per_level": {"const": 1},
+          "miss_count_per_level": {"const": "AT_LEAST_ONE"}
+        },
+        "required": ["hit_count_per_level", "miss_count_per_level"],
+        "type": "object"
       },
       "probability_argument": {
-        "const": "event_mass_tends_to_zero"
+        "additionalProperties": false,
+        "properties": {
+          "event_mass_formula": {"const": "1/2^k"},
+          "limit": {"const": "ZERO"}
+        },
+        "required": ["event_mass_formula", "limit"],
+        "type": "object"
       },
       "probes": {
         "items": {
@@ -238,10 +250,22 @@
             "type": "array"
           },
           "pointwise_argument": {
-            "const": "one_hit_and_at_least_one_miss_per_level"
+            "additionalProperties": false,
+            "properties": {
+              "hit_count_per_level": {"const": 1},
+              "miss_count_per_level": {"const": "AT_LEAST_ONE"}
+            },
+            "required": ["hit_count_per_level", "miss_count_per_level"],
+            "type": "object"
           },
           "probability_argument": {
-            "const": "event_mass_tends_to_zero"
+            "additionalProperties": false,
+            "properties": {
+              "event_mass_formula": {"const": "1/2^k"},
+              "limit": {"const": "ZERO"}
+            },
+            "required": ["event_mass_formula", "limit"],
+            "type": "object"
           },
           "probes": {
             "items": {

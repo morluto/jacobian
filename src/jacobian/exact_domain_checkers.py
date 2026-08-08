@@ -86,6 +86,12 @@ _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
     "jacobian_checkers.finite_posets": "poset",
     "jacobian_checkers.exact_geometry": "geometry",
 }
+_INLINE_EXACT_ENTRYPOINTS = frozenset(
+    {
+        "jacobian_checkers.exact_domain_operations",
+        "jacobian_checkers.simplicial_topology",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -342,6 +348,9 @@ def install_exact_domain_verification(
                     _provider_runtime_key(declaration)
                 ],
                 stored_result_input=declaration.capability_id in stored_producers,
+                supports_inline_exact=(
+                    declaration.entrypoint_module in _INLINE_EXACT_ENTRYPOINTS
+                ),
             )
         )
     return tuple(adapters), installation
@@ -428,6 +437,7 @@ class ExactComputedVerificationAdapter:
         witness_schema_uri: str,
         provider_runtime: CapabilityProviderRuntime,
         stored_result_input: bool,
+        supports_inline_exact: bool,
     ) -> None:
         self.store = store
         self.schemas = schemas
@@ -436,6 +446,7 @@ class ExactComputedVerificationAdapter:
         self.declaration = declaration
         self.witness_schema_uri = witness_schema_uri
         self.stored_result_input = stored_result_input
+        self.supports_inline_exact = supports_inline_exact
         generic_request_model: Any = ExactComputedVerificationRequest
         self.input_model = generic_request_model[
             declaration.declaration.request_model,
@@ -490,9 +501,15 @@ class ExactComputedVerificationAdapter:
             normalized_input = source_artifacts[0].payload
             normalized_candidate = None
         else:
-            source_artifacts = None
             normalized_input, normalized_candidate = self._validated_inline_payloads(
                 request
+            )
+            source_artifacts = (
+                None
+                if self.supports_inline_exact
+                else self._materialize_inline_payloads(
+                    normalized_input, normalized_candidate
+                )
             )
         # Check the authorized checker's bounded input scope before any artifact write.
         if not _checker_supports(
@@ -845,6 +862,31 @@ class ExactComputedVerificationAdapter:
                 )
             ) from exc
         return normalized_input, normalized_candidate
+
+    def _materialize_inline_payloads(
+        self,
+        normalized_input: dict[str, object],
+        normalized_candidate: dict[str, object],
+    ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
+        """Bridge legacy artifact-only checkers without changing caller input."""
+
+        declaration = self.declaration
+        semantics_artifact = self.store.get(declaration.semantics_uri)
+        input_put = self.artifacts.put(
+            schema_uri=declaration.input_schema_uri,
+            semantics_uri=declaration.semantics_uri,
+            payload=normalized_input,
+            summary=f"{declaration.declaration.capability_id} verification input",
+        )
+        input_artifact = self.store.get(input_put.artifact_uri)
+        result_put = self.artifacts.put(
+            schema_uri=declaration.result_schema_uri,
+            semantics_uri=declaration.semantics_uri,
+            payload=normalized_candidate,
+            parents=(input_artifact.artifact_uri,),
+            summary=f"{declaration.declaration.capability_id} verification candidate",
+        )
+        return input_artifact, self.store.get(result_put.artifact_uri), semantics_artifact
 
     @staticmethod
     def _checker_artifact(artifact: StoredArtifact) -> dict[str, object]:

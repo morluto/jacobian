@@ -31,7 +31,11 @@ from jacobian.contracts.posets import (
     linear_extension_memo_digest,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedSuccess, MaterializedOperation
+from jacobian.operations import (
+    ComputedOperation,
+    ComputedSuccess,
+    MaterializedOperation,
+)
 
 
 def _presentation_graph(request: FinitePosetRequest) -> nx.DiGraph[str]:
@@ -108,8 +112,6 @@ def _materialize(
 
 
 def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
-    if request.poset is None:
-        raise ValueError("poset input was not resolved")
     poset = request.poset
     elements = poset.elements
     left_nodes = tuple(("L", element) for element in elements)
@@ -169,22 +171,6 @@ def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
             matching_size=len(matching),
         )
     )
-
-
-def _convert_materialized_poset(
-    request: PosetRequest,
-    payload: FinitePosetMaterializationResult,
-) -> tuple[PosetRequest, tuple[str, ...]]:
-    """Convert a materialized poset artifact into a domain request.
-
-    This is a pure typed conversion with no storage dependency; the installer
-    handles artifact retrieval, schema/semantics validation, and payload
-    deserialization before calling this converter.
-    """
-
-    return PosetRequest(poset=payload.poset), (
-        request.poset_artifact_uri,
-    ) if request.poset_artifact_uri else ()
 
 
 def _linear_extensions(
@@ -332,7 +318,9 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
+FINITE_POSET_CAPABILITIES: tuple[
+    ComputedOperation[Any, Any] | MaterializedOperation[Any, Any, Any, Any], ...
+] = (
     MaterializedOperation(
         capability_id="poset.finite.materialize",
         title="Materialize a canonical finite poset",
@@ -362,7 +350,7 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...]
         ),
         version="3",
     ),
-    MaterializedOperation(
+    ComputedOperation(
         capability_id="poset.width.compute",
         title="Compute finite-poset width with dual witnesses",
         description=(
@@ -373,10 +361,6 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...]
         result_model=PosetWidthResult,
         implementation=_width,
         relation_id="poset.width.dilworth.relation",
-        accepted_result_capability_ids=("poset.finite.materialize",),
-        artifact_converter=_convert_materialized_poset,
-        artifact_payload_model=FinitePosetMaterializationResult,
-        artifact_uri_field="poset_artifact_uri",
         tags=(
             "poset",
             "partial-order",
@@ -387,7 +371,7 @@ FINITE_POSET_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...]
             "dilworth",
             "exact",
         ),
-        version="3",
+        version="4",
     ),
     MaterializedOperation(
         capability_id="poset.linear_extensions.count",

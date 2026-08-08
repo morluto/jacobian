@@ -9,7 +9,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.common import ArtifactUri, Sha256Digest
+from jacobian.contracts.common import Sha256Digest
 from jacobian.contracts.results import ContractModel
 
 MAX_POSET_ELEMENTS = 64
@@ -432,14 +432,9 @@ class FinitePosetMaterializationResult(PosetExactResult):
 
 
 class PosetRequest(ContractModel):
-    poset: FinitePoset | None = None
-    poset_artifact_uri: ArtifactUri | None = None
+    """A canonical finite poset consumed directly by bounded operations."""
 
-    @model_validator(mode="after")
-    def require_exactly_one_poset_source(self) -> Self:
-        if (self.poset is None) == (self.poset_artifact_uri is None):
-            raise ValueError("provide exactly one of poset or poset_artifact_uri")
-        return self
+    poset: FinitePoset
 
 
 class PosetChain(ContractModel):

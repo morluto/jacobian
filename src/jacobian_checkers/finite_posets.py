@@ -339,9 +339,9 @@ def _relation_set(poset: dict[str, Any]) -> set[tuple[str, str]]:
 
 
 def _inline_poset_claim(source: dict[str, Any]) -> Any | None:
-    if set(source) - {"poset", "poset_artifact_uri"}:
+    if set(source) != {"poset"}:
         return None
-    if source.get("poset") is None or source.get("poset_artifact_uri") is not None:
+    if source.get("poset") is None:
         return None
     return source["poset"]
 

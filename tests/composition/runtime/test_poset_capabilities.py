@@ -129,7 +129,7 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     )
 
 
-def test_materialized_poset_is_directly_consumable_by_width(
+def test_canonical_poset_is_directly_consumable_by_width(
     fresh_complete_runtime,
 ) -> None:
     materialized = fresh_complete_runtime.core.capabilities.invoke(
@@ -137,71 +137,36 @@ def test_materialized_poset_is_directly_consumable_by_width(
             capability_id="poset.finite.materialize",
             input=_DIAMOND,
         )
+    )
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="poset.width.compute",
+            input={
+                "poset": _result_payload(fresh_complete_runtime, materialized)["poset"]
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["width"] == 2
+    assert result.artifact_uris == ()
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+    }
+    assert descriptors["poset.width.compute"].accepted_artifact_types == ()
+
+
+def test_width_rejects_artifact_uri_input_at_the_contract_boundary(
+    fresh_complete_runtime,
+) -> None:
+    materialized = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(capability_id="poset.finite.materialize", input=_DIAMOND)
     )
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="poset.width.compute",
             input={"poset_artifact_uri": materialized.output["result_uri"]},
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert _result_payload(fresh_complete_runtime, result)["width"] == 2
-    assert materialized.output["result_uri"] in result.artifact_uris
-    descriptors = {
-        descriptor.capability_id: descriptor
-        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
-    }
-    assert descriptors["poset.finite.materialize"].produced_artifact_types == (
-        descriptors["poset.width.compute"].accepted_artifact_types
-    )
-
-
-def test_width_rejects_an_incompatible_artifact_before_writes(
-    fresh_complete_runtime,
-) -> None:
-    poset = _materialize(fresh_complete_runtime, _DIAMOND)
-    width = _invoke(fresh_complete_runtime, "poset.width.compute", poset)
-    result = fresh_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.width.compute",
-            input={"poset_artifact_uri": width.output["result_uri"]},
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
-    assert result.artifact_uris == ()
-
-
-def test_width_rejects_a_schema_compatible_artifact_with_foreign_semantics(
-    fresh_complete_runtime,
-) -> None:
-    materialized = fresh_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.finite.materialize",
-            input=_DIAMOND,
-        )
-    )
-    result_uri = materialized.output["result_uri"]
-    result_artifact = fresh_complete_runtime.core.store.get(result_uri)
-    foreign_semantics = fresh_complete_runtime.core.store.register_descriptor(
-        kind="semantics",
-        name="foreign-poset-semantics",
-        version="1",
-        definition={"type": "object"},
-    )
-    foreign_uri = fresh_complete_runtime.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=foreign_semantics,
-        payload=result_artifact.payload,
-        summary="schema-compatible artifact under a foreign semantics",
-    ).artifact_uri
-
-    result = fresh_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.width.compute",
-            input={"poset_artifact_uri": foreign_uri},
         )
     )
 

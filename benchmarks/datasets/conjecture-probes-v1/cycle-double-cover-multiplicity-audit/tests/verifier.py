@@ -129,7 +129,7 @@ def main() -> None:
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.txt", max_bytes=None
+            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
         )
         if evidence_ok
         else None

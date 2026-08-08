@@ -53,6 +53,29 @@ def _balances(flow: object) -> list[int] | None:
     return result
 
 
+def _exact_integer_list(value: object, expected: list[int]) -> bool:
+    return bool(
+        isinstance(value, list)
+        and len(value) == len(expected)
+        and all(type(item) is int for item in value)
+        and value == expected
+    )
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _json_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _json_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return left == right
+
+
 def mathematics(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "flawed_flow",
@@ -71,9 +94,10 @@ def mathematics(result: object) -> bool:
         flawed == [0] * 10
         and repair == [0] * 10
         and len(zeros) == 1
+        and type(result["zero_edge_index"]) is int
         and result["zero_edge_index"] == zeros[0]
-        and result["flawed_balances"] == flawed
-        and result["repair_balances"] == repair
+        and _exact_integer_list(result["flawed_balances"], flawed)
+        and _exact_integer_list(result["repair_balances"], repair)
         and all(result["repair_flow"])
     )
 
@@ -121,32 +145,32 @@ def main():
         and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
+        and _json_equal(payload.get("result"), raw.get("result"))
         and payload.get("limitations") == LIMITATIONS
+    )
+    math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
+    scope_ok = bool(
+        isinstance(raw, dict)
+        and raw.get("scope") == SCOPE
+        and raw.get("completeness") == "COMPLETE"
+        and raw.get("limitations") == LIMITATIONS
+    )
+    assurance_ok = bool(
+        contract
+        and isinstance(raw, dict)
+        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
     )
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),
-        "mathematics": float(
-            bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-        ),
+        "mathematics": float(math_ok),
+        "correctness": float(math_ok),
         "evidence": float(evidence_ok),
-        "scope": float(
-            bool(
-                isinstance(raw, dict)
-                and raw.get("scope") == SCOPE
-                and raw.get("completeness") == "COMPLETE"
-                and raw.get("limitations") == LIMITATIONS
-            )
-        ),
-        "assurance": float(
-            bool(
-                contract
-                and isinstance(raw, dict)
-                and raw.get("claimed_assurance")
-                in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-            )
-        ),
+        "evidence_validity": float(evidence_ok),
+        "scope": float(scope_ok),
+        "scope_accuracy": float(scope_ok),
+        "assurance": float(assurance_ok),
+        "assurance_calibration": float(assurance_ok),
     }
     reward = float(all(values.values()))
     values.update(
@@ -170,9 +194,13 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
+                "correctness": 0.0,
                 "evidence": 0.0,
+                "evidence_validity": 0.0,
                 "scope": 0.0,
+                "scope_accuracy": 0.0,
                 "assurance": 0.0,
+                "assurance_calibration": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "false_certification": False,

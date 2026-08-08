@@ -78,3 +78,23 @@ def test_accepts_scalar_multiple():
     result["repair_flow"] = scaled
     result["repair_balances"] = module._balances(scaled)
     assert module.mathematics(result)
+
+
+def test_rejects_non_integer_reported_balances():
+    module = _module()
+    result = _result(module)
+    result["flawed_balances"][0] = False
+    assert not module.mathematics(result)
+
+
+def test_rejects_non_integer_zero_edge_index():
+    module = _module()
+    result = _result(module)
+    result["zero_edge_index"] = 4.0
+    assert not module.mathematics(result)
+
+
+def test_evidence_comparison_preserves_json_types():
+    module = _module()
+    assert not module._json_equal({"balance": 0}, {"balance": False})
+    assert not module._json_equal({"index": 4}, {"index": 4.0})

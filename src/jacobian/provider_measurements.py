@@ -33,24 +33,31 @@ import sys
 provider = sys.argv[1]
 operation = sys.argv[2]
 
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
 if provider == "jacobian.networkx":
     import networkx as backend
     if operation == "reproduction":
         graph = backend.path_graph(32)
-        assert backend.is_connected(graph)
+        require(backend.is_connected(graph), "networkx connectivity reproduction failed")
 elif provider == "jacobian.sympy":
     import sympy as backend
     if operation == "reproduction":
         x, y = backend.symbols("x y")
         matrix = backend.Matrix([x**2 + y, x * y])
-        assert matrix.jacobian((x, y)).shape == (2, 2)
+        require(
+            matrix.jacobian((x, y)).shape == (2, 2),
+            "sympy Jacobian reproduction failed",
+        )
 elif provider == "jacobian.z3":
     import z3 as backend
     if operation == "reproduction":
         x = backend.Real("x")
         solver = backend.Solver()
         solver.add(x == 1)
-        assert solver.check() == backend.sat
+        require(solver.check() == backend.sat, "z3 satisfiability reproduction failed")
 elif provider == "cvc5":
     import cvc5 as backend
     if operation == "reproduction":
@@ -75,21 +82,30 @@ elif provider == "cvc5":
             output = command.invoke(solver, parser.getSymbolManager())
             if command.getCommandName() == "check-sat":
                 result = output.strip()
-        assert result == "unsat"
+        require(result == "unsat", "cvc5 satisfiability reproduction failed")
         proofs = solver.getProof(backend.ProofComponent.FULL)
-        assert len(proofs) == 1
-        assert solver.proofToString(proofs[0], backend.ProofFormat.ALETHE)
+        require(len(proofs) == 1, "cvc5 proof count reproduction failed")
+        require(
+            solver.proofToString(proofs[0], backend.ProofFormat.ALETHE),
+            "cvc5 Alethe proof reproduction failed",
+        )
 elif provider == "python-flint":
     import flint as backend
     if operation == "reproduction":
         augmented = backend.fmpq_mat([[2, 1, 5], [1, -1, 1]])
         reduced, rank = augmented.rref()
-        assert rank == 2
-        assert reduced == backend.fmpq_mat([[1, 0, 2], [0, 1, 1]])
+        require(rank == 2, "python-flint rank reproduction failed")
+        require(
+            reduced == backend.fmpq_mat([[1, 0, 2], [0, 1, 1]]),
+            "python-flint reduction reproduction failed",
+        )
 else:
     import jacobian.canonical as backend
     if operation == "reproduction":
-        assert backend.canonicalize_json({"value": 1})
+        require(
+            backend.canonicalize_json({"value": 1}),
+            "Jacobian canonicalization reproduction failed",
+        )
 
 # Report this child's own peak resident set so a short probe that exits
 # before the engine's procfs sampler can poll it still yields a trustworthy

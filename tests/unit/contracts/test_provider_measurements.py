@@ -9,6 +9,7 @@ from jacobian.provider_measurements import (
     _PYTHON_PROBE,
     _child_peak_rss_bytes,
     _measure_command,
+    _process_environment,
 )
 
 
@@ -46,6 +47,31 @@ def test_python_probe_emits_rss_marker_for_short_completed_child() -> None:
     assert sample.status is ProviderMeasurementStatus.COMPLETED
     assert sample.peak_rss_bytes is not None
     assert sample.peak_rss_bytes > 0
+
+
+def test_python_probe_fails_closed_under_optimization(tmp_path) -> None:
+    (tmp_path / "networkx.py").write_text(
+        "def path_graph(_count):\n"
+        "    return object()\n\n"
+        "def is_connected(_graph):\n"
+        "    return False\n"
+    )
+    environment = _process_environment()
+    environment["PYTHONPATH"] = str(tmp_path)
+
+    sample = _measure_command(
+        [
+            sys.executable,
+            "-O",
+            "-c",
+            _PYTHON_PROBE,
+            "jacobian.networkx",
+            "reproduction",
+        ],
+        environment=environment,
+    )
+
+    assert sample.status is ProviderMeasurementStatus.ERROR
 
 
 def test_measure_command_without_marker_falls_back_to_engine_sample() -> None:

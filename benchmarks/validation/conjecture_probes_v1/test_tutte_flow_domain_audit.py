@@ -101,6 +101,15 @@ def test_evidence_comparison_preserves_json_types():
     assert not module._json_equal({"index": 4}, {"index": 4.0})
 
 
+def test_evidence_comparison_rejects_excessive_nesting():
+    module = _module()
+    left = right = 0
+    for _ in range(129):
+        left = [left]
+        right = [right]
+    assert not module._json_equal(left, right)
+
+
 def test_raw_parser_rejects_duplicate_keys(tmp_path, monkeypatch):
     module = _module()
     submission = tmp_path / "submission.json"

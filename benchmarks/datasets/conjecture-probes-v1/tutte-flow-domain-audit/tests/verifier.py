@@ -63,17 +63,32 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
 
 
 def _json_equal(left: object, right: object) -> bool:
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return set(left) == set(right) and all(
-            _json_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            _json_equal(a, b) for a, b in zip(left, right, strict=True)
-        )
-    return left == right
+    pending = [(left, right, 0)]
+    visited = 0
+    while pending:
+        current_left, current_right, depth = pending.pop()
+        visited += 1
+        if visited > 100_000 or depth > 128:
+            return False
+        if type(current_left) is not type(current_right):
+            return False
+        if isinstance(current_left, dict):
+            if set(current_left) != set(current_right):
+                return False
+            pending.extend(
+                (current_left[key], current_right[key], depth + 1)
+                for key in current_left
+            )
+        elif isinstance(current_left, list):
+            if len(current_left) != len(current_right):
+                return False
+            pending.extend(
+                (a, b, depth + 1)
+                for a, b in zip(current_left, current_right, strict=True)
+            )
+        elif current_left != current_right:
+            return False
+    return True
 
 
 def mathematics(result: object) -> bool:

@@ -6,12 +6,15 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
     build_graph_invariant_bundle,
     build_graph_optimization_bundle,
 )
+from jacobian.graphs import atlas_search, invariants
+from jacobian.graphs.artifacts import nx
 
 
 @pytest.fixture
@@ -202,6 +205,42 @@ _CYCLE_5 = {
     "vertices": ["a", "b", "c", "d", "e"],
     "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"], ["a", "e"]],
 }
+
+
+class _InconsistentCliqueBackend:
+    def __init__(self, backend: object) -> None:
+        self._backend = backend
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._backend, name)
+
+    def max_weight_clique(
+        self, *_args: object, **_kwargs: object
+    ) -> tuple[set[object], int]:
+        return set(), 1
+
+
+@pytest.mark.parametrize(
+    "compute",
+    (
+        lambda graph: invariants._independence_number_property(
+            graph, "independence_number"
+        ),
+        atlas_search._compute_all_properties,
+    ),
+)
+def test_graph_backends_with_inconsistent_independence_results_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    compute,
+) -> None:
+    backend = _InconsistentCliqueBackend(nx())
+    monkeypatch.setattr(invariants, "nx", lambda: backend)
+    monkeypatch.setattr(atlas_search, "nx", lambda: backend)
+
+    with pytest.raises(CapabilityInvocationError) as caught:
+        compute(nx().path_graph(2))
+
+    assert caught.value.diagnostic.code == "INCONSISTENT_INDEPENDENCE_RESULT"
 
 
 @pytest.mark.parametrize(

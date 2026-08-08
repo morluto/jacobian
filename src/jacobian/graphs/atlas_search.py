@@ -274,7 +274,18 @@ def _compute_all_properties(graph: nx_type.Graph[Any]) -> dict[str, Any]:
             nx().complement(graph),
             weight=None,
         )
-        assert len(independent_set) == independence_number
+        if len(independent_set) != independence_number:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INCONSISTENT_INDEPENDENCE_RESULT",
+                    stage="backend_execution",
+                    message=(
+                        "The graph backend returned an independent-set witness whose "
+                        "size does not match its reported independence number."
+                    ),
+                    hint="Retry with a supported graph backend.",
+                )
+            )
     else:
         independence_number = 0
     return {

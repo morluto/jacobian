@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
@@ -11,6 +14,8 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.graphs.artifacts import nx
+from jacobian.graphs.composition import _apply_composition
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
@@ -198,6 +203,19 @@ def test_compose_rejects_missing_right_graph_for_binary_operation(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics
     assert result.diagnostics[0].code == "INVALID_COMPOSITION_REQUEST"
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ("DISJOINT_UNION", "JOIN", "LEXICOGRAPHIC_PRODUCT"),
+)
+def test_internal_binary_composition_rejects_missing_right_graph(
+    operation: str,
+) -> None:
+    with pytest.raises(CapabilityInvocationError) as caught:
+        _apply_composition(operation, nx().Graph(), None)
+
+    assert caught.value.diagnostic.code == "MISSING_RIGHT_GRAPH"
 
 
 def test_compose_rejects_right_graph_for_unary_complement(

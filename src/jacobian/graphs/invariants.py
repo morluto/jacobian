@@ -283,7 +283,18 @@ def _independence_number_property(graph: nx_type.Graph[Any], name: str) -> Any:
         nx().complement(graph),
         weight=None,
     )
-    assert len(independent_set) == independence_number
+    if len(independent_set) != independence_number:
+        raise CapabilityInvocationError(
+            CapabilityDiagnostic(
+                code="INCONSISTENT_INDEPENDENCE_RESULT",
+                stage="backend_execution",
+                message=(
+                    "The graph backend returned an independent-set witness whose "
+                    "size does not match its reported independence number."
+                ),
+                hint="Retry with a supported graph backend.",
+            )
+        )
     return independence_number
 
 

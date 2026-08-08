@@ -125,7 +125,10 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
 def _write(values):
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
-    (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+    reward = values.get("reward", 0.0)
+    details = {key: value for key, value in values.items() if key != "reward"}
+    (path / "reward.json").write_text(json.dumps({"reward": reward}, sort_keys=True))
+    (path / "reward-details.json").write_text(json.dumps(details, sort_keys=True))
 
 
 def _assurance_is_calibrated(raw: object) -> bool:

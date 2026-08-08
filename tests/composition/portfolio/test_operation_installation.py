@@ -3,6 +3,7 @@ from typing import Any, Self, cast
 
 import pytest
 from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -64,6 +65,18 @@ class _SecretValidatedRequest(ContractModel):
     @classmethod
     def reject_token(cls, value: str) -> str:
         raise ValueError(f"invalid token {value}")
+
+
+class _ControlledSecretValidatedRequest(ContractModel):
+    token: str
+
+    @field_validator("token")
+    @classmethod
+    def reject_token(cls, value: str) -> str:
+        raise PydanticCustomError(
+            "jacobian.stale_complex_digest",
+            f"unsafe dynamic message {value}",
+        )
 
 
 def _synthetic_bundle() -> DomainBundle:
@@ -162,6 +175,24 @@ def test_validation_diagnostic_redacts_custom_validator_values() -> None:
 
     assert diagnostic.path == "/token"
     assert diagnostic.details["validation_reason"] == "value error"
+    assert secret not in diagnostic.model_dump_json()
+
+
+def test_validation_diagnostic_uses_static_controlled_reason() -> None:
+    secret = "do-not-return-" + "x" * 1024
+    diagnostic = _validation_diagnostic(
+        CapabilityDiagnostic(
+            code="INVALID_SYNTHETIC_REQUEST",
+            stage="synthetic_input_validation",
+            message="Invalid synthetic input.",
+        ),
+        _validation_error(_ControlledSecretValidatedRequest, {"token": secret}),
+    )
+
+    assert diagnostic.path == "/token"
+    assert diagnostic.details["validation_reason"] == (
+        "complex_digest does not bind the canonical complex"
+    )
     assert secret not in diagnostic.model_dump_json()
 
 

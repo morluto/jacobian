@@ -383,7 +383,7 @@ def test_stale_complex_digest_reports_the_recoverable_field(
     assert diagnostic.code == "INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST"
     assert diagnostic.path == "/complex/complex_digest"
     assert diagnostic.details["validation_reason"] == (
-        "Value error, complex_digest does not bind the canonical complex"
+        "complex_digest does not bind the canonical complex"
     )
 
 

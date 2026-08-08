@@ -8,6 +8,7 @@ from itertools import combinations, pairwise
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.certified_snf import (
@@ -247,7 +248,10 @@ class FiniteSimplicialComplex(ContractModel):
             closure_size=self.closure_size,
         )
         if self.complex_digest != expected_digest:
-            raise ValueError("complex_digest does not bind the canonical complex")
+            raise PydanticCustomError(
+                "jacobian.stale_complex_digest",
+                "complex_digest does not bind the canonical complex",
+            )
         return self
 
 

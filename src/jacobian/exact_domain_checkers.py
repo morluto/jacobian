@@ -642,6 +642,7 @@ class ExactComputedVerificationAdapter:
             "expected_bindings": bindings.model_dump(mode="json"),
         }
         checked = self.verification.verify_inline_exact(
+            operation_id=declaration.declaration.capability_id,
             claim_schema_uri=declaration.input_schema_uri,
             candidate_schema_uri=declaration.result_schema_uri,
             semantics_uri=declaration.semantics_uri,
@@ -689,6 +690,9 @@ class ExactComputedVerificationAdapter:
                     "operation_id": declaration.declaration.capability_id,
                     "claim_digest": bindings.claim_digest,
                     "candidate_digest": bindings.candidate_digest,
+                    "semantics_digest": bindings.semantics_digest,
+                    "checker_id": declaration.checker_id,
+                    "witness_format": declaration.declaration.format_id,
                 },
             ),
             completeness=CapabilityCompleteness(
@@ -721,7 +725,11 @@ class ExactComputedVerificationAdapter:
                 ),
                 verification_record_uri=record_uri,
             ),
-            artifact_uris=((record_uri,) if record_uri is not None else ()),
+            artifact_uris=(
+                (record_uri, declaration.semantics_uri)
+                if record_uri is not None
+                else ()
+            ),
         )
 
     def _verify_materialized_relation(

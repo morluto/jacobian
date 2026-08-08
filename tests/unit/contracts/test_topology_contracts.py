@@ -95,6 +95,18 @@ def test_chain_bounds_are_checked_after_materialization_but_before_computation()
         SimplicialHomologyRequest(complex=complex_, prime=2)
 
 
+def test_inline_homology_rejects_basis_that_exceeds_its_inline_budget() -> None:
+    vertices = tuple(f"v{index}" for index in range(64))
+    edges = (
+        *((f"v{index}", f"v{(index + 1) % 64}") for index in range(64)),
+        ("v0", "v2"),
+    )
+    complex_ = _canonical_complex(vertices, edges)
+
+    with pytest.raises(ValidationError, match="inline homology bases"):
+        SimplicialHomologyRequest(complex=complex_, prime=2)
+
+
 def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
     too_many_vertices = tuple(f"v{index}" for index in range(17))
     vertex_complex = _canonical_complex(

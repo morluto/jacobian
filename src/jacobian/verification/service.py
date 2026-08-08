@@ -226,6 +226,7 @@ class VerificationService:
     def verify_inline_exact(
         self,
         *,
+        operation_id: str,
         claim_schema_uri: str,
         candidate_schema_uri: str,
         semantics_uri: str,
@@ -310,6 +311,7 @@ class VerificationService:
             self._ensure_decision_endpoints_in_request(decision, set())
             record = InlineExactVerificationRecord(
                 witness_format=witness_format,
+                operation_id=operation_id,
                 checker_id=checker.checker_id,
                 checker_digest=checker.executable_digest,
                 runtime_digest=(

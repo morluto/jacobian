@@ -321,7 +321,7 @@ _DIAMOND: dict[str, Any] = {
 FINITE_POSET_CAPABILITIES: tuple[
     ComputedOperation[Any, Any] | MaterializedOperation[Any, Any, Any, Any], ...
 ] = (
-    MaterializedOperation(
+    ComputedOperation(
         capability_id="poset.finite.materialize",
         title="Materialize a canonical finite poset",
         description=(
@@ -348,7 +348,7 @@ FINITE_POSET_CAPABILITIES: tuple[
                 _DIAMOND,
             ),
         ),
-        version="3",
+        version="4",
     ),
     ComputedOperation(
         capability_id="poset.width.compute",

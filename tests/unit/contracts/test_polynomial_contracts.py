@@ -77,21 +77,23 @@ def test_evaluation_request_enforces_map_point_dimension() -> None:
         )
 
 
-def test_evaluation_artifact_enforces_point_image_dimension() -> None:
-    with pytest.raises(ValidationError, match="point and image dimensions"):
-        PolynomialMapEvaluation.model_validate(
-            {
-                "map_uri": "artifact://sha256/" + "a" * 64,
-                "point": {"values": [_rational()]},
-                "image": [_rational(), _rational()],
-                "backend": "sympy",
-                "backend_version": "1.14.0",
-            }
-        )
+def test_evaluation_artifact_accepts_rectangular_map_image() -> None:
+    evaluation = PolynomialMapEvaluation.model_validate(
+        {
+            "map_uri": "artifact://sha256/" + "a" * 64,
+            "point": {"values": [_rational()]},
+            "image": [_rational(), _rational()],
+            "backend": "sympy",
+            "backend_version": "1.14.0",
+        }
+    )
+
+    assert len(evaluation.point.values) == 1
+    assert len(evaluation.image) == 2
 
 
 def test_collision_payload_enforces_all_dimensions() -> None:
-    with pytest.raises(ValidationError, match="dimensions must agree"):
+    with pytest.raises(ValidationError, match="points must have matching dimensions"):
         PolynomialCollisionPayload.model_validate(
             {
                 "first_point": [_rational()],

@@ -55,7 +55,9 @@ from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
 from jacobian.schema_registry import model_schema
 from jacobian.worker_environment import worker_environment
 
-FLINT_HNF_STDOUT_LIMIT = 1_000_000
+# Two 32x32 integer matrices may each contain a supported 32,768-digit scalar.
+# The isolated protocol returns both the normal form and its transformation.
+FLINT_HNF_STDOUT_LIMIT = 80_000_000
 FLINT_HNF_STDERR_LIMIT = 64_000
 
 

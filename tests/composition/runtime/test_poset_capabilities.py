@@ -26,7 +26,11 @@ _DIAMOND = {
 
 
 def _result_payload(fresh_complete_runtime, result) -> dict[str, Any]:
-    return fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
+    if "result_uri" in result.output:
+        return fresh_complete_runtime.core.store.get(
+            result.output["result_uri"]
+        ).payload
+    return result.output["result"]
 
 
 def _materialize(
@@ -99,7 +103,7 @@ def test_partially_ordered_set_intent_finds_width(
     assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
 
 
-def test_materialization_is_canonical_complete_and_artifact_backed(
+def test_materialization_is_canonical_complete_and_inline(
     fresh_complete_runtime,
 ) -> None:
     result = fresh_complete_runtime.core.capabilities.invoke(
@@ -122,11 +126,7 @@ def test_materialization_is_canonical_complete_and_artifact_backed(
     assert poset["incomparable_pairs"] == [{"left": "a", "right": "b"}]
     assert poset["graded"] is True
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
-    assert (
-        fresh_complete_runtime.core.store.get(result.output["result_uri"]).payload
-        == payload
-    )
+    assert result.artifact_uris == ()
 
 
 def test_canonical_poset_is_directly_consumable_by_width(
@@ -160,13 +160,10 @@ def test_canonical_poset_is_directly_consumable_by_width(
 def test_width_rejects_artifact_uri_input_at_the_contract_boundary(
     fresh_complete_runtime,
 ) -> None:
-    materialized = fresh_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(capability_id="poset.finite.materialize", input=_DIAMOND)
-    )
     result = fresh_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="poset.width.compute",
-            input={"poset_artifact_uri": materialized.output["result_uri"]},
+            input={"poset_artifact_uri": "artifact://sha256/" + "a" * 64},
         )
     )
 

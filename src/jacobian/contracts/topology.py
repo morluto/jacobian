@@ -30,6 +30,7 @@ MAX_TOPOLOGY_FACETS = 128
 MAX_TOPOLOGY_DIMENSION = 7
 MAX_TOPOLOGY_FACES = 2048
 MAX_TOPOLOGY_CHAIN_GROUP = 512
+MAX_INLINE_HOMOLOGY_CHAIN_GROUP = 64
 MAX_TOPOLOGY_MATRIX_CELLS = 131_072
 MAX_TOPOLOGY_PRIME = 251
 MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP = 16
@@ -456,6 +457,13 @@ class SimplicialHomologyRequest(ContractModel):
         if not is_bounded_prime(self.prime):
             raise ValueError("homology coefficients require a bounded prime")
         require_linear_algebra_bounds(self.complex)
+        if any(
+            size > MAX_INLINE_HOMOLOGY_CHAIN_GROUP for size in self.complex.f_vector
+        ):
+            raise ValueError(
+                "inline homology bases require at most "
+                f"{MAX_INLINE_HOMOLOGY_CHAIN_GROUP} simplices in each chain group"
+            )
         return self
 
 

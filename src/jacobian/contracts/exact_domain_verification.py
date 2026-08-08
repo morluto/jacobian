@@ -99,6 +99,7 @@ class InlineExactVerificationRecord(ContractModel):
     record_schema_version: Literal["1"] = "1"
     evidence_kind: Literal[EvidenceKind.WITNESS] = EvidenceKind.WITNESS
     witness_format: str
+    operation_id: CapabilityId
     format_version: Literal["1"] = "1"
     checker_id: CheckerUri
     checker_digest: Sha256Digest

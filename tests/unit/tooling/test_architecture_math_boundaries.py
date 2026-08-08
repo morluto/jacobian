@@ -56,7 +56,8 @@ def test_native_math_cannot_load_runtime_or_capability_layers(tmp_path: Path) ->
         tmp_path,
         "src/jacobian/math/matrices.py",
         "from jacobian.runtime.model import JacobianRuntime\n"
-        "from jacobian.capabilities import install\n",
+        "from jacobian.adapters.mcp import tooling\n"
+        "from jacobian.capability_service import CapabilityService\n",
     )
 
     assert "native-math-boundary" in _codes(tmp_path)

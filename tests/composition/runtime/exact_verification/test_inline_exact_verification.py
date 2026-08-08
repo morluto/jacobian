@@ -51,10 +51,12 @@ def test_inline_exact_replay_persists_only_its_bound_record(
     assert verified.output["input_uri"] is None
     assert verified.output["result_uri"] is None
     assert verified.output["witness_uri"] is None
-    assert verified.artifact_uris == (verified.output["verification_record_uri"],)
+    assert verified.output["verification_record_uri"] in verified.artifact_uris
+    assert len(verified.artifact_uris) == 2
     record = runtime.core.store.get(verified.output["verification_record_uri"])
     parsed = InlineExactVerificationRecord.model_validate(record.payload)
     assert record.manifest.parents == (parsed.semantics_uri,)
+    assert parsed.semantics_uri in verified.artifact_uris
     assert parsed.decision.accepted is True
     assert verified.scope is not None
     assert parsed.bindings.claim_digest == verified.scope.parameters["claim_digest"]
@@ -62,3 +64,9 @@ def test_inline_exact_replay_persists_only_its_bound_record(
         parsed.bindings.candidate_digest
         == verified.scope.parameters["candidate_digest"]
     )
+    assert parsed.bindings.semantics_digest == verified.scope.parameters[
+        "semantics_digest"
+    ]
+    assert parsed.operation_id == verified.scope.parameters["operation_id"]
+    assert parsed.checker_id == verified.scope.parameters["checker_id"]
+    assert parsed.witness_format == verified.scope.parameters["witness_format"]

@@ -195,10 +195,8 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
             authorized_complete_runtime.core.capabilities.catalog().capabilities
         )
     }
-    produced = descriptors["poset.finite.materialize"].produced_artifact_types
-    accepted = descriptors["poset.width.compute"].accepted_artifact_types
-    assert produced
-    assert produced == accepted
+    assert descriptors["poset.finite.materialize"].produced_artifact_types == ()
+    assert descriptors["poset.width.compute"].accepted_artifact_types == ()
 
 
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(

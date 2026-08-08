@@ -51,7 +51,9 @@ class MCPBlockingWorkerRegistry:
 
     @property
     def active_count(self) -> int:
-        return sum(not worker.done() for worker in self._workers)
+        # A finished task still owns its request lease until its done callback
+        # consumes the late result and releases that scope.
+        return len(self._workers)
 
     def register(
         self,
@@ -121,7 +123,7 @@ class MCPBlockingWorkerRegistry:
         if timeout_seconds < 0:
             raise ValueError("timeout_seconds must be non-negative")
         self._closing = True
-        workers = tuple(worker for worker in self._workers if not worker.done())
+        workers = tuple(self._workers)
         if not workers:
             return
         _done, pending = await asyncio.wait(workers, timeout=timeout_seconds)
@@ -129,6 +131,10 @@ class MCPBlockingWorkerRegistry:
             raise MCPBlockingWorkerShutdownError(
                 "blocking MCP workers did not quiesce before server shutdown"
             )
+        # ``asyncio.wait`` observes task completion before every registered
+        # callback has necessarily run.  Yield once so scopes are released
+        # before a synchronous lifecycle close is allowed to proceed.
+        await asyncio.sleep(0)
 
 
 class _MCPBlockingRequestScope:

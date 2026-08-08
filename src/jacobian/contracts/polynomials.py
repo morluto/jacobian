@@ -732,13 +732,6 @@ class PolynomialMapEvaluation(ContractModel):
     backend: Literal["sympy"] = "sympy"
     backend_version: str = Field(min_length=1, max_length=64)
 
-    @model_validator(mode="after")
-    def require_equal_point_and_image_dimensions(self) -> Self:
-        if len(self.point.values) != len(self.image):
-            raise ValueError("evaluation point and image dimensions must agree")
-        return self
-
-
 class PolynomialJacobian(ContractModel):
     jacobian_schema_version: Literal["1"] = "1"
     map_uri: ArtifactUri
@@ -907,9 +900,9 @@ class PolynomialCollisionPayload(ContractModel):
     image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
 
     @model_validator(mode="after")
-    def require_matching_dimensions(self) -> Self:
-        if not (len(self.first_point) == len(self.second_point) == len(self.image)):
-            raise ValueError("collision points and image dimensions must agree")
+    def require_matching_point_dimensions(self) -> Self:
+        if len(self.first_point) != len(self.second_point):
+            raise ValueError("collision points must have matching dimensions")
         return self
 
 
@@ -937,13 +930,6 @@ class PolynomialEvaluationOutput(ContractModel):
     checker_id: None = None
     backend: Literal["sympy"] = "sympy"
     backend_version: str
-
-    @model_validator(mode="after")
-    def require_equal_point_and_image_dimensions(self) -> Self:
-        if len(self.point) != len(self.image):
-            raise ValueError("evaluation output dimensions must agree")
-        return self
-
 
 class PolynomialJacobianOutput(ContractModel):
     map_uri: ArtifactUri
@@ -985,12 +971,9 @@ class PolynomialCollisionOutput(ContractModel):
     def witness_matches_collision(self) -> Self:
         if self.first_evaluation_uri == self.second_evaluation_uri:
             raise ValueError("collision output requires distinct evaluation artifacts")
-        if not (
-            len(self.first_point)
-            == len(self.second_point)
-            == len(self.first_image)
-            == len(self.second_image)
-        ):
+        if len(self.first_point) != len(self.second_point) or len(
+            self.first_image
+        ) != len(self.second_image):
             raise ValueError("collision output point and image dimensions must agree")
         expected_collision = (
             self.first_point != self.second_point

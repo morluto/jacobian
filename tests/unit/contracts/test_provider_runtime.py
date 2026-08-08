@@ -81,6 +81,7 @@ def _lean_runtime_layout(
         "JacobianLeanRuntime.lean": b"import Mathlib",
         "JacobianLeanProofState.lean": b"import Mathlib",
         ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean": b"mathlib",
+        ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Algebra.olean": b"algebra",
         ".lake/build/lib/lean/JacobianLeanRuntime.olean": b"runtime-module",
         ".lake/build/lib/lean/JacobianLeanProofState.olean": b"state-module",
         ".lake/build/bin/jacobian_lean_proof_state": b"proof-state-helper",
@@ -506,6 +507,33 @@ def test_lean_semantic_runtime_identity_rejects_lake_launcher_drift(
     )
 
     executable.with_name("lake").write_bytes(b"replacement")
+
+    with pytest.raises(LeanRuntimeIdentityError, match="identity changed"):
+        require_lean_semantic_runtime_identity(runtime)
+
+
+def test_lean_semantic_runtime_identity_rejects_imported_mathlib_module_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable, project = _lean_runtime_layout(tmp_path, with_mathlib_project=True)
+    assert project is not None
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, project) if require_mathlib else (executable, None)
+        ),
+    )
+    runtime = lean_provider_runtime(
+        profiles={"mathlib": {"mathlib_commit": "pinned"}}, checker_ids=()
+    )
+
+    (
+        project / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Algebra.olean"
+    ).write_bytes(b"replacement")
 
     with pytest.raises(LeanRuntimeIdentityError, match="identity changed"):
         require_lean_semantic_runtime_identity(runtime)

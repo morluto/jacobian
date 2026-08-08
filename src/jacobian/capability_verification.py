@@ -115,6 +115,11 @@ def _validate_inline_exact_record(
         raise CapabilityError(
             "inline exact verification record has unexpected artifact parents"
         )
+    if record.semantics_uri not in result.artifact_uris:
+        raise CapabilityError(
+            "verified capability result does not expose the inline record semantics"
+        )
+    _validate_inline_exact_scope(result, record)
     projected_record = result.output.get("verification_record_uri")
     if projected_record is not None and projected_record != record_uri:
         raise CapabilityError(
@@ -146,6 +151,25 @@ def _validate_inline_exact_record(
         raise CapabilityError(
             "inline exact verification cannot certify artifact completeness"
         )
+
+
+def _validate_inline_exact_scope(
+    result: CapabilityResult,
+    record: InlineExactVerificationRecord,
+) -> None:
+    scope = result.scope
+    if scope is None or scope.parameters is None:
+        raise CapabilityError("verified inline replay has no bound scope parameters")
+    expected = {
+        "operation_id": record.operation_id,
+        "claim_digest": record.bindings.claim_digest,
+        "candidate_digest": record.bindings.candidate_digest,
+        "semantics_digest": record.bindings.semantics_digest,
+        "checker_id": record.checker_id,
+        "witness_format": record.witness_format,
+    }
+    if scope.parameters != expected:
+        raise CapabilityError("verified inline replay scope does not bind its record")
 
 
 def _validate_projected_output(

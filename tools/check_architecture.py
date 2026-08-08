@@ -812,16 +812,20 @@ _CONTRACT_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.providers",
     "jacobian.persistence",
     "jacobian.artifacts",
-    "jacobian.mcp",
-    "jacobian.capabilities",
+    "jacobian.adapters.mcp",
+    "jacobian.capability_service",
+    "jacobian.operation_installation",
+    "jacobian.installation",
 )
 _NATIVE_MATH_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.runtime",
     "jacobian.providers",
     "jacobian.persistence",
     "jacobian.artifacts",
-    "jacobian.mcp",
-    "jacobian.capabilities",
+    "jacobian.adapters.mcp",
+    "jacobian.capability_service",
+    "jacobian.operation_installation",
+    "jacobian.installation",
 )
 _SUPERSEDED_MATRIX_CONTRACTS = frozenset(
     {

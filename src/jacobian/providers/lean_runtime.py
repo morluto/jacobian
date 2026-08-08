@@ -54,6 +54,39 @@ def _identity_file(root: Path, relative_path: Path) -> dict[str, str]:
     return {"path": relative_path.as_posix(), "digest": digest}
 
 
+def _identity_tree(root: Path, relative_path: Path) -> dict[str, object]:
+    """Digest every imported Mathlib olean under one portable tree identity."""
+
+    candidate = root / relative_path
+    try:
+        resolved = candidate.resolve(strict=True)
+        if (
+            not resolved.is_dir()
+            or resolved.is_symlink()
+            or not resolved.is_relative_to(root)
+        ):
+            raise OSError("not an exact directory")
+        files = tuple(sorted(path for path in resolved.rglob("*.olean") if path.is_file()))
+        if not files or any(path.is_symlink() for path in files):
+            raise OSError("incomplete or symlinked module tree")
+    except OSError as exc:
+        raise LeanRuntimeIdentityError(
+            f"the required Lean runtime module tree {relative_path.as_posix()} is unavailable"
+        ) from exc
+    entries = [
+        {
+            "path": path.relative_to(resolved).as_posix(),
+            "digest": _sha256_file(path),
+        }
+        for path in files
+    ]
+    return {
+        "path": relative_path.as_posix(),
+        "digest": "sha256:" + hashlib.sha256(canonicalize_json(entries)).hexdigest(),
+        "file_count": len(entries),
+    }
+
+
 def lean_semantic_runtime_identity(
     *,
     executable: Path,
@@ -120,6 +153,10 @@ def lean_semantic_runtime_identity(
         "loaded_modules": [
             _identity_file(project_root, path) for path in _MATHLIB_LOADED_MODULES
         ],
+        "mathlib_module_tree": _identity_tree(
+            project_root,
+            Path(".lake/packages/mathlib/.lake/build/lib/lean/Mathlib"),
+        ),
     }
     return identity
 

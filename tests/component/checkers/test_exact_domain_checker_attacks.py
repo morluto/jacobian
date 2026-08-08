@@ -10,13 +10,17 @@ import pytest
 from tests.component.checkers.exact_domain_checker_support import (
     _CASES,
     _mutate_numeric_leaf,
+    _request,
 )
 from tests.support.artifacts import artifact_uri as _uri
 from tests.support.artifacts import canonical_digest as _digest
 
 import jacobian_checkers.exact_domain_operations as checker_module
 from jacobian.contracts.exact_domain_verification import inline_exact_value_digest
-from jacobian_checkers.exact_domain_operations import check_matrix_rank
+from jacobian_checkers.exact_domain_operations import (
+    check_matrix_determinant,
+    check_matrix_rank,
+)
 from jacobian_checkers.graph_exact_operations import check_graph_induced_tree_maximum
 
 
@@ -26,6 +30,39 @@ def test_exact_domain_checker_accepts_independent_replay(
     checker_request: dict[str, Any],
 ) -> None:
     assert checker(checker_request)["accepted"] is True
+
+
+def test_matrix_determinant_checker_accepts_supported_large_canonical_result() -> None:
+    diagonal_entry = "1" + "0" * 255
+    zero = {"num": "0", "den": "1"}
+    source = {
+        "matrix": {
+            "matrix_schema_version": "1",
+            "domain": "QQ",
+            "entries": [
+                [
+                    (
+                        {"num": diagonal_entry, "den": "1"}
+                        if row == column
+                        else zero
+                    )
+                    for column in range(32)
+                ]
+                for row in range(32)
+            ],
+        }
+    }
+    request = _request(
+        "matrix.determinant.compute",
+        "matrix.determinant.flint-replay",
+        source,
+        {
+            "determinant": {"num": "1" + "0" * (255 * 32), "den": "1"},
+            "method": "FRACTION_FREE_BAREISS",
+        },
+    )
+
+    assert check_matrix_determinant(request)["accepted"] is True
 
 
 @pytest.mark.parametrize(("checker", "checker_request"), _CASES)

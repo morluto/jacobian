@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from fractions import Fraction
 from itertools import product
 from typing import Any
 
 import flint
-from flint import fmpq, fmpq_mat, fmpq_poly, fmpz_mat
+from flint import fmpq, fmpq_mat, fmpq_poly, fmpz, fmpz_mat
 
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
 
@@ -76,31 +75,29 @@ def _accept_exhaustive_integer(detail: str) -> dict[str, Any]:
     }
 
 
-def _integer(value: object) -> int:
+def _integer(value: object) -> Any:
     if not isinstance(value, str) or _INTEGER.fullmatch(value) is None:
         raise ValueError("integer is not canonical")
-    parsed = int(value)
-    if str(parsed) != value:
-        raise ValueError("integer is not canonical")
-    return parsed
+    # FLINT parses decimal input without crossing Python's 4,300-digit limit.
+    return fmpz(value)
 
 
-def _fraction(value: object) -> Fraction:
+def _fraction(value: object) -> tuple[fmpz, fmpz]:
     if not isinstance(value, dict) or set(value) != {"num", "den"}:
         raise ValueError("rational is malformed")
     numerator = _integer(value["num"])
     denominator = _integer(value["den"])
     if denominator <= 0:
         raise ValueError("rational denominator must be positive")
-    result = Fraction(numerator, denominator)
-    if (result.numerator, result.denominator) != (numerator, denominator):
+    result = fmpq(numerator, denominator)
+    if (result.numer(), result.denom()) != (numerator, denominator):
         raise ValueError("rational is not reduced")
-    return result
+    return numerator, denominator
 
 
 def _q(value: object) -> fmpq:
-    value = _fraction(value)
-    return fmpq(value.numerator, value.denominator)
+    numerator, denominator = _fraction(value)
+    return fmpq(numerator, denominator)
 
 
 def _polynomial(value: object) -> fmpq_poly:
@@ -269,7 +266,7 @@ def _run(
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
-def _factorization_value(source: dict[str, Any], *, positive: bool) -> int:
+def _factorization_value(source: dict[str, Any], *, positive: bool) -> Any:
     if set(source) != {"value", "resource_budget"}:
         raise ValueError("factorization source is malformed")
     budget = source["resource_budget"]

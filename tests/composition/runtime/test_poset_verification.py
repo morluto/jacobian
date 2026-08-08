@@ -26,7 +26,9 @@ _PRESENTATION = {
 
 
 def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
-    return runtime.core.store.get(computed.output["result_uri"]).payload
+    if "result_uri" in computed.output:
+        return runtime.core.store.get(computed.output["result_uri"]).payload
+    return computed.output["result"]
 
 
 def _computed_cases(authorized_complete_runtime) -> list[tuple[str, dict, Any]]:
@@ -80,7 +82,7 @@ def test_poset_results_are_independently_verified(
             mode=CapabilityMode.VERIFY,
             input=(
                 {"input": producer_input, "candidate": computed.output["result"]}
-                if producer_id == "poset.width.compute"
+                if producer_id in {"poset.finite.materialize", "poset.width.compute"}
                 else {"result_uri": computed.output["result_uri"]}
             ),
         )

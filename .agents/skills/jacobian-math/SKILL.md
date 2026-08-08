@@ -48,6 +48,8 @@ known. When discovery exposes recovery paths, follow those fields (for example,
 `remove_unknown_domain_filter`, `remove_filters`, or `reformulate_query`) before
 treating absence as final. After invalid input, correct the reported constraint
 and retry within the task resource bounds as further errors appear. If one
+payload shape will be repeated in parallel, run one canary call first; fan out
+only after it succeeds. If one
 provider is unavailable, continue with other installed routes that can produce
 the outcome. Treat timeouts as non-conclusions. Accept only a completed result
 whose scope covers the input, and carry forward the smallest decisive value,

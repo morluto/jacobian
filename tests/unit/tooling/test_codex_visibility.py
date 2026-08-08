@@ -197,10 +197,11 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
         "composing already-known supporting operations remains allowed",
         "follow those fields",
         "retry within the task resource bounds",
+        "run one canary call first; fan out only after it succeeds",
         "continue with other installed routes",
         "completeness, and open obligations",
     ):
-        assert guidance in skill
+        assert guidance in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

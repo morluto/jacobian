@@ -32,6 +32,7 @@ _MAX_ENUMERATED_PARTITIONS = 10_000
 MAX_LINEAR_RECURRENCE_ORDER = 16
 MAX_LINEAR_RECURRENCE_INDEX = 512
 MAX_LINEAR_RECURRENCE_REQUESTED_INDICES = 256
+MAX_P_RECURSIVE_POLYNOMIAL_DEGREE = 16
 MAX_RATIONAL_GENERATING_FUNCTION_DEGREE = 32
 MAX_RATIONAL_SERIES_TRUNCATION_ORDER = 512
 MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS = 64
@@ -183,6 +184,94 @@ def _validate_recurrence_result_budget(
             "exactness": "EXACT_RATIONAL",
             "replay_prefix": [_fraction_wire(value) for value in replay],
             "replay_scope_end": requested_indices[-1],
+            "scope": scope,
+            "values": [
+                {"index": index, "value": _fraction_wire(replay[index])}
+                for index in requested_indices
+            ],
+            "verification": "UNVERIFIED",
+        }
+    )
+
+
+def _validate_p_recursive_result_budget(
+    *,
+    coefficient_polynomials: tuple[tuple[CanonicalRational, ...], ...],
+    initial_values: tuple[CanonicalRational, ...],
+    coefficient_convention: str,
+    polynomial_convention: str,
+    scope: str,
+    requested_indices: tuple[int, ...],
+) -> None:
+    polynomials = tuple(
+        tuple(value.as_fraction() for value in polynomial)
+        for polynomial in coefficient_polynomials
+    )
+    order = len(polynomials) - 1
+
+    def polynomial_value(polynomial: tuple[Fraction, ...], index: int) -> Fraction:
+        return sum(
+            (
+                coefficient * index**power
+                for power, coefficient in enumerate(polynomial)
+            ),
+            start=Fraction(),
+        )
+
+    end = requested_indices[-1]
+    replay = [value.as_fraction() for value in initial_values[: end + 1]]
+    residuals: list[tuple[int, Fraction]] = []
+    while len(replay) <= end:
+        index = len(replay)
+        coefficients = tuple(
+            polynomial_value(polynomial, index) for polynomial in polynomials
+        )
+        if coefficients[0] == 0:
+            raise ValueError(
+                f"leading coefficient polynomial vanishes at index {index}"
+            )
+        replay.append(
+            -sum(
+                (
+                    coefficients[offset] * replay[index - offset]
+                    for offset in range(1, order + 1)
+                ),
+                start=Fraction(),
+            )
+            / coefficients[0]
+        )
+        residuals.append(
+            (
+                index,
+                sum(
+                    (
+                        coefficients[offset] * replay[index - offset]
+                        for offset in range(order + 1)
+                    ),
+                    start=Fraction(),
+                ),
+            )
+        )
+    for value in replay:
+        _require_bounded_fraction(
+            value,
+            max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+            label="polynomial-coefficient recurrence result",
+        )
+    _validate_result_artifact_size(
+        {
+            "backend": "sympy",
+            "backend_version": "1.14.0",
+            "coefficient_convention": coefficient_convention,
+            "polynomial_convention": polynomial_convention,
+            "determinism": "DETERMINISTIC",
+            "exactness": "EXACT_RATIONAL",
+            "replay_prefix": [_fraction_wire(value) for value in replay],
+            "residuals": [
+                {"index": index, "value": _fraction_wire(value)}
+                for index, value in residuals
+            ],
+            "replay_scope_end": end,
             "scope": scope,
             "values": [
                 {"index": index, "value": _fraction_wire(replay[index])}
@@ -809,6 +898,122 @@ class LinearRecurrenceEvaluationResult(ContractModel):
             raise ValueError(
                 "PREFIX results must contain consecutive indices from zero"
             )
+        return self
+
+
+class PolynomialCoefficientRecurrenceEvaluationRequest(ContractModel):
+    """Evaluate a bounded exact polynomial-coefficient linear recurrence.
+
+    ``coefficient_polynomials[j]`` is the ascending coefficient vector of
+    ``p_j(n)`` in ``sum_{j=0}^d p_j(n) a[n-j] = 0``.  The initial vector is
+    exactly ``a[0], ..., a[d-1]``.
+    """
+
+    coefficient_polynomials: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=2, max_length=MAX_LINEAR_RECURRENCE_ORDER + 1
+    )
+    initial_values: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_RECURRENCE_ORDER
+    )
+    coefficient_convention: Literal[
+        "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+    ]
+    polynomial_convention: Literal["ASCENDING_POWERS_OF_N"]
+    scope: Literal["PREFIX", "INDICES"]
+    term_count: StrictInt | None = Field(
+        default=None, ge=1, le=MAX_LINEAR_RECURRENCE_INDEX + 1
+    )
+    indices: tuple[StrictInt, ...] = Field(
+        default=(), max_length=MAX_LINEAR_RECURRENCE_REQUESTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_regular_scope(self) -> Self:
+        order = len(self.coefficient_polynomials) - 1
+        if len(self.initial_values) != order:
+            raise ValueError("initial_values length must equal the recurrence order")
+        for polynomial in self.coefficient_polynomials:
+            if (
+                not polynomial
+                or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1
+            ):
+                raise ValueError("coefficient polynomial degree is outside the bound")
+            _require_canonical_polynomial(
+                polynomial, label="recurrence polynomial coefficient"
+            )
+        for value in self.initial_values:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+                label="recurrence initial value",
+            )
+        if self.scope == "PREFIX":
+            if self.term_count is None or self.indices:
+                raise ValueError("PREFIX scope requires term_count and forbids indices")
+            requested = tuple(range(self.term_count))
+        else:
+            if self.term_count is not None or not self.indices:
+                raise ValueError(
+                    "INDICES scope requires indices and forbids term_count"
+                )
+            if any(
+                index < 0 or index > MAX_LINEAR_RECURRENCE_INDEX
+                for index in self.indices
+            ):
+                raise ValueError("indices are outside the recurrence bound")
+            if any(left >= right for left, right in pairwise(self.indices)):
+                raise ValueError("indices must be strictly increasing")
+            requested = self.indices
+        _validate_p_recursive_result_budget(
+            coefficient_polynomials=self.coefficient_polynomials,
+            initial_values=self.initial_values,
+            coefficient_convention=self.coefficient_convention,
+            polynomial_convention=self.polynomial_convention,
+            scope=self.scope,
+            requested_indices=requested,
+        )
+        return self
+
+
+class PolynomialCoefficientRecurrenceEvaluationResult(ContractModel):
+    coefficient_convention: Literal[
+        "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+    ]
+    polynomial_convention: Literal["ASCENDING_POWERS_OF_N"]
+    scope: Literal["PREFIX", "INDICES"]
+    values: tuple[IndexedRationalValue, ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_RECURRENCE_INDEX + 1
+    )
+    replay_prefix: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_RECURRENCE_INDEX + 1
+    )
+    residuals: tuple[IndexedRationalValue, ...] = Field(
+        max_length=MAX_LINEAR_RECURRENCE_INDEX + 1
+    )
+    replay_scope_end: StrictInt = Field(ge=0, le=MAX_LINEAR_RECURRENCE_INDEX)
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["sympy"] = "sympy"
+    backend_version: Literal["1.14.0"] = "1.14.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def require_complete_replay(self) -> Self:
+        if len(self.replay_prefix) != self.replay_scope_end + 1:
+            raise ValueError("replay_prefix must cover the complete bounded scope")
+        indices = tuple(item.index for item in self.values)
+        if indices[-1] != self.replay_scope_end:
+            raise ValueError("the greatest requested index must bind replay_scope_end")
+        if any(item.value != self.replay_prefix[item.index] for item in self.values):
+            raise ValueError("indexed values must match the recurrence replay prefix")
+        for value in self.replay_prefix:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+                label="polynomial-coefficient recurrence replay value",
+            )
+        if any(item.value.as_fraction() != 0 for item in self.residuals):
+            raise ValueError("every recurrence residual must be exactly zero")
         return self
 
 

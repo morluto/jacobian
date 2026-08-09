@@ -149,7 +149,8 @@ def _validate_recurrence_values(
 ) -> bool:
     raw_replay = result["replay_prefix"]
     if (
-        result["replay_scope_end"] != end
+        type(result["replay_scope_end"]) is not int
+        or result["replay_scope_end"] != end
         or not isinstance(raw_replay, list)
         or len(raw_replay) != end + 1
         or [_fraction(item, max_digits=32_768) for item in raw_replay] != replay

@@ -249,3 +249,21 @@ def test_polynomial_recurrence_checker_rejects_boolean_result_integers(
 
     assert checked["accepted"] is False
     assert checked["conclusion"] == "UNKNOWN"
+
+
+def test_polynomial_recurrence_checker_rejects_boolean_replay_endpoint() -> None:
+    forged = copy.deepcopy(_CASES[1][1])
+    source = forged["claim"]["payload"]
+    source["term_count"] = 2
+    result = forged["candidate"]["payload"]
+    result["values"] = result["values"][:2]
+    result["replay_prefix"] = result["replay_prefix"][:2]
+    result["residuals"] = result["residuals"][:1]
+    result["replay_scope_end"] = True
+    forged["claim"]["payload_digest"] = _digest(source)
+    forged["candidate"]["payload_digest"] = _digest(result)
+
+    checked = check_polynomial_coefficient_recurrence_evaluation(forged)
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"

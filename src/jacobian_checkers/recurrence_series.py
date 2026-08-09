@@ -6,6 +6,7 @@ artifact-bound JSON values cross the checker boundary.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable
 from fractions import Fraction
@@ -26,6 +27,9 @@ _META = {
     "backend_version": "1.14.0",
     "verification": "UNVERIFIED",
 }
+_MAX_RESULT_DIGITS = 32_768
+_MAX_RESULT_BYTES = 10 * 1024 * 1024
+_LOG10_2 = math.log10(2)
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -294,7 +298,10 @@ def _p_recursive_residuals_match(
 
 
 def _p_recursive_replay(
-    polynomials: list[list[Fraction]], initial: list[Fraction], end: int
+    polynomials: list[list[Fraction]],
+    initial: list[Fraction],
+    end: int,
+    requested: set[int],
 ) -> tuple[list[Fraction], list[Fraction]] | None:
     order = len(polynomials) - 1
 
@@ -308,13 +315,17 @@ def _p_recursive_replay(
         )
 
     replay = initial[: end + 1]
+    minimum_size = 1_024 + sum(
+        _minimum_fraction_bytes(value) * (1 + (index in requested))
+        for index, value in enumerate(replay)
+    )
     residuals: list[Fraction] = []
     while len(replay) <= end:
         index = len(replay)
         coefficients = [polynomial_value(item, index) for item in polynomials]
         if coefficients[0] == 0:
             return None
-        replay.append(
+        next_value = (
             -sum(
                 (
                     coefficients[offset] * replay[index - offset]
@@ -324,6 +335,13 @@ def _p_recursive_replay(
             )
             / coefficients[0]
         )
+        if not _bounded_replay_fraction(next_value):
+            return None
+        minimum_size += _minimum_fraction_bytes(next_value) * (1 + (index in requested))
+        minimum_size += 32
+        if minimum_size > _MAX_RESULT_BYTES:
+            return None
+        replay.append(next_value)
         residuals.append(
             sum(
                 (
@@ -334,6 +352,23 @@ def _p_recursive_replay(
             )
         )
     return replay, residuals
+
+
+def _decimal_digits(value: int) -> int:
+    if value == 0:
+        return 1
+    return math.floor((abs(value).bit_length() - 1) * _LOG10_2) + 1
+
+
+def _minimum_fraction_bytes(value: Fraction) -> int:
+    return _decimal_digits(value.numerator) + _decimal_digits(value.denominator) + 20
+
+
+def _bounded_replay_fraction(value: Fraction) -> bool:
+    return all(
+        _decimal_digits(component) <= _MAX_RESULT_DIGITS
+        for component in (value.numerator, value.denominator)
+    )
 
 
 def _replay_polynomial_coefficient_recurrence(
@@ -371,7 +406,7 @@ def _replay_polynomial_coefficient_recurrence(
     if requested is None:
         return False
     end = requested[-1]
-    replayed = _p_recursive_replay(polynomials, initial, end)
+    replayed = _p_recursive_replay(polynomials, initial, end, set(requested))
     if replayed is None:
         return False
     replay, residuals = replayed

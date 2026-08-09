@@ -220,6 +220,11 @@ def _validate_p_recursive_result_budget(
 
     end = requested_indices[-1]
     replay = [value.as_fraction() for value in initial_values[: end + 1]]
+    requested_index_set = set(requested_indices)
+    minimum_size = 1_024 + sum(
+        _minimum_fraction_wire_bytes(value) * (1 + (index in requested_index_set))
+        for index, value in enumerate(replay)
+    )
     residuals: list[tuple[int, Fraction]] = []
     while len(replay) <= end:
         index = len(replay)
@@ -230,7 +235,7 @@ def _validate_p_recursive_result_budget(
             raise ValueError(
                 f"leading coefficient polynomial vanishes at index {index}"
             )
-        replay.append(
+        next_value = (
             -sum(
                 (
                     coefficients[offset] * replay[index - offset]
@@ -240,6 +245,28 @@ def _validate_p_recursive_result_budget(
             )
             / coefficients[0]
         )
+        if any(
+            _lower_decimal_digits(component) > MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS
+            for component in (next_value.numerator, next_value.denominator)
+        ):
+            raise ValueError(
+                "polynomial-coefficient recurrence result exceeds the "
+                f"{MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS}-digit bound"
+            )
+        _require_bounded_fraction(
+            next_value,
+            max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+            label="polynomial-coefficient recurrence result",
+        )
+        minimum_size += _minimum_fraction_wire_bytes(next_value) * (
+            1 + (index in requested_index_set)
+        )
+        minimum_size += 32
+        if minimum_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
+            raise ValueError(
+                "the exact combinatorics result exceeds the durable artifact limit"
+            )
+        replay.append(next_value)
         residuals.append(
             (
                 index,
@@ -251,12 +278,6 @@ def _validate_p_recursive_result_budget(
                     start=Fraction(),
                 ),
             )
-        )
-    for value in replay:
-        _require_bounded_fraction(
-            value,
-            max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
-            label="polynomial-coefficient recurrence result",
         )
     _validate_result_artifact_size(
         {

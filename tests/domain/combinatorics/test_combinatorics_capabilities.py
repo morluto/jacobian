@@ -47,3 +47,14 @@ def test_binomial_is_discoverable_from_number_theory_language(
 
     assert discovered.matches[0].capability_id == "combinatorics.compute.binomial"
     assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="combinatorics.compute.binomial",
+            input={"n": 1912, "k": 16},
+        )
+    )
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["value"] == (
+        "1431712059377249479518540967853195958045"
+    )

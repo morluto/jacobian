@@ -264,16 +264,21 @@ def resolve_evidence(
 
 
 _JSON_WHITESPACE = frozenset(" \t\n\r")
+_JSON_WHITESPACE_CHARS = " \t\n\r"
 _JSON_STRUCTURAL = frozenset("{}[],:")
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"invalid JSON constant: {value}")
 
 
 def _drain_stream_tail(stream, decoder) -> None:
     while block := stream.read(65_536):
         tail = decoder.decode(block)
-        if any(character not in _JSON_WHITESPACE for character in tail):
+        if tail.strip(_JSON_WHITESPACE_CHARS):
             raise ValueError("non-whitespace after evidence JSON value")
     tail = decoder.decode(b"", final=True)
-    if any(character not in _JSON_WHITESPACE for character in tail):
+    if tail.strip(_JSON_WHITESPACE_CHARS):
         raise ValueError("non-whitespace after evidence JSON value")
 
 
@@ -286,6 +291,8 @@ def _compact_json_chunk(
     previous: str | None,
 ) -> tuple[str, bool, bool, bool, str | None]:
     """Discard legal padding while preserving invalid token-splitting spaces."""
+    if not in_string and value and not value.strip(_JSON_WHITESPACE_CHARS):
+        return "", in_string, escaped, True, previous
     compacted: list[str] = []
     for character in value:
         if in_string:
@@ -319,7 +326,10 @@ def _compact_json_chunk(
 def _read_streaming_json_value(stream) -> Any:
     """Parse uncapped JSON padding with bounded semantic-content memory."""
     decoder = codecs.getincrementaldecoder("utf-8")()
-    parser = json.JSONDecoder(object_pairs_hook=_reject_duplicate_keys)
+    parser = json.JSONDecoder(
+        object_pairs_hook=_reject_duplicate_keys,
+        parse_constant=_reject_json_constant,
+    )
     buffer = ""
     in_string = False
     escaped = False

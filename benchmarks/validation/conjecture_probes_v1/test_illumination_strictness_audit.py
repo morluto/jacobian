@@ -135,6 +135,8 @@ def test_streaming_evidence_accepts_padding_but_preserves_token_boundaries() -> 
     }
     with pytest.raises(json.JSONDecodeError):
         module._read_streaming_json_value(io.BytesIO(b'{"value":- 1}'))
+    with pytest.raises(ValueError, match="invalid JSON constant"):
+        module._read_streaming_json_value(io.BytesIO(b'{"value":NaN}'))
 
 
 def test_evidence_copied_fields_bind_to_raw_submission():

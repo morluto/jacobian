@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Literal, overload
 
 from pydantic import ValidationError
 
@@ -35,9 +35,26 @@ from jacobian.contracts.lean_metavariable_fields import (
     LeanMetavariableFieldsArtifact,
     LeanMetavariableFieldsRequest,
 )
+from jacobian.lean_frontend.helper_protocol import (
+    LeanHelperErrorEnvelope,
+    LeanHelperPayload,
+    LeanMetavariableFieldsHelperPayload,
+    LeanMetavariableFieldsHelperRequest,
+    LeanMetavariableFieldsHelperResult,
+    LeanTypedGoalsHelperPayload,
+    LeanTypedGoalsHelperRequest,
+    LeanTypedGoalsHelperResult,
+)
 from jacobian.lean_frontend.repl import (
     LeanExplorationReplRuntime,
     _response_errors,
+)
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplErrorResponse,
+    LeanReplExecution,
+    LeanReplProofStepResponse,
+    LeanReplResponse,
+    LeanReplValidatedExecution,
 )
 from jacobian.process_policy import (
     ProcessRequest,
@@ -218,13 +235,10 @@ def _validate_source_parts(statement: str, tactics: tuple[str, ...]) -> None:
             raise ValueError("tactic contains a forbidden command")
 
 
-def _normalized_response_goals(response: Mapping[str, Any]) -> tuple[str, ...]:
-    goals_value = response.get("goals", [])
-    if not isinstance(goals_value, list) or any(
-        not isinstance(goal, str) for goal in goals_value
-    ):
-        raise RuntimeError("Lean REPL returned malformed goals")
-    return tuple(_normalize_goal(goal) for goal in goals_value)
+def _normalized_response_goals(
+    response: LeanReplProofStepResponse,
+) -> tuple[str, ...]:
+    return tuple(_normalize_goal(goal) for goal in response.goals)
 
 
 def _normalize_goal(goal: str) -> str:
@@ -233,7 +247,7 @@ def _normalize_goal(goal: str) -> str:
 
 
 def _tactic_diagnostics(
-    responses: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+    responses: LeanReplValidatedExecution,
 ) -> tuple[LeanTacticDiagnostic, ...]:
     diagnostics: list[LeanTacticDiagnostic] = []
     for response in responses:
@@ -243,27 +257,20 @@ def _tactic_diagnostics(
                 continue
             seen.add(message)
             diagnostics.append(LeanTacticDiagnostic(severity="ERROR", message=message))
-        structured = response.get("messages")
-        if not isinstance(structured, list):
+        if isinstance(response, LeanReplErrorResponse):
             continue
-        for item in structured:
-            if not isinstance(item, Mapping):
+        for item in response.messages:
+            if item.data in seen:
                 continue
-            data = item.get("data")
-            if not isinstance(data, str):
-                continue
-            if data in seen:
-                continue
-            seen.add(data)
-            raw_severity = item.get("severity")
+            seen.add(item.data)
             severity = (
                 "ERROR"
-                if raw_severity == "error"
-                else ("WARNING" if raw_severity == "warning" else "INFO")
+                if item.severity == "error"
+                else ("WARNING" if item.severity == "warning" else "INFO")
             )
             diagnostics.append(
                 LeanTacticDiagnostic.model_validate(
-                    {"severity": severity, "message": data}
+                    {"severity": severity, "message": item.data}
                 )
             )
     return tuple(diagnostics)
@@ -276,7 +283,7 @@ def _run_repl(
     tactic: str,
     environment: LeanEnvironment,
     pickle_path: Path | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> LeanReplExecution:
     return resources.repl.execute(
         command=command,
         tactic=tactic,
@@ -317,11 +324,30 @@ def _resolve_typed_goal_helper(
     return elan, arguments, environment
 
 
+@overload
 def _parse_typed_goal_envelope(
     stdout: bytes,
     *,
     request_id: str,
-) -> dict[str, Any]:
+    mode: Literal["typed_goals"] = "typed_goals",
+) -> LeanTypedGoalsHelperPayload: ...
+
+
+@overload
+def _parse_typed_goal_envelope(
+    stdout: bytes,
+    *,
+    request_id: str,
+    mode: Literal["metavariable_fields"],
+) -> LeanMetavariableFieldsHelperPayload: ...
+
+
+def _parse_typed_goal_envelope(
+    stdout: bytes,
+    *,
+    request_id: str,
+    mode: Literal["typed_goals", "metavariable_fields"] = "typed_goals",
+) -> LeanHelperPayload:
     """Extract and validate the typed-goal JSON envelope from helper output.
 
     If the helper emitted an error envelope (``JACOBIAN_PROOF_STATE_ERROR``),
@@ -335,39 +361,34 @@ def _parse_typed_goal_envelope(
         lines = stdout.decode("utf-8", errors="strict").splitlines()
     except UnicodeDecodeError as exc:
         raise RuntimeError("Lean typed proof-state extraction failed") from exc
-    error_lines = [line for line in lines if line.startswith(error_marker)]
-    if error_lines:
+    marked_lines = [
+        line for line in lines if line.startswith((result_marker, error_marker))
+    ]
+    if len(marked_lines) != 1:
+        raise RuntimeError("Lean typed proof-state extraction failed")
+    marked_line = marked_lines[0]
+    if marked_line.startswith(error_marker):
         try:
-            error_envelope = loads_strict_json(
-                error_lines[0].removeprefix(error_marker)
+            error_envelope = LeanHelperErrorEnvelope.model_validate(
+                loads_strict_json(marked_line.removeprefix(error_marker))
             )
-        except CanonicalizationError as exc:
+        except (CanonicalizationError, ValidationError) as exc:
             raise RuntimeError("Lean typed proof-state extraction failed") from exc
-        if isinstance(error_envelope, dict):
-            code = error_envelope.get("code")
-            message = error_envelope.get("message", "")
-            envelope_request_id = error_envelope.get("request_id")
-            if (
-                isinstance(code, str)
-                and isinstance(message, str)
-                and isinstance(envelope_request_id, str)
-                and envelope_request_id == request_id
-            ):
-                raise LeanHelperError(code, message)
-        raise RuntimeError("Lean typed proof-state extraction failed")
-    responses = [line for line in lines if line.startswith(result_marker)]
-    if len(responses) != 1:
-        raise RuntimeError("Lean typed proof-state extraction failed")
+        if error_envelope.request_id != request_id:
+            raise RuntimeError("Lean typed proof-state extraction failed")
+        raise LeanHelperError(error_envelope.code, error_envelope.message)
     try:
-        envelope = loads_strict_json(responses[0].removeprefix(result_marker))
-    except CanonicalizationError as exc:
+        decoded = loads_strict_json(marked_line.removeprefix(result_marker))
+        envelope = (
+            LeanTypedGoalsHelperResult.model_validate(decoded)
+            if mode == "typed_goals"
+            else LeanMetavariableFieldsHelperResult.model_validate(decoded)
+        )
+    except (CanonicalizationError, ValidationError) as exc:
         raise RuntimeError("Lean typed proof-state extraction failed") from exc
-    if not isinstance(envelope, dict) or envelope.get("request_id") != request_id:
+    if envelope.request_id != request_id:
         raise RuntimeError("Lean typed proof-state extraction returned invalid JSON")
-    payload = envelope.get("payload")
-    if not isinstance(payload, dict):
-        raise RuntimeError("Lean typed proof-state extraction returned invalid JSON")
-    return payload
+    return envelope.payload
 
 
 def _extract_typed_goals(
@@ -378,18 +399,14 @@ def _extract_typed_goals(
 ) -> tuple[LeanTypedGoal, ...]:
     query_path = pickle_path.with_name("typed-goal-query.json")
     request_id = uuid.uuid4().hex
-    query_path.write_bytes(
-        canonicalize_json(
-            {
-                "pickle_path": str(pickle_path),
-                "request_id": request_id,
-                "max_goals": request.max_goals,
-                "max_local_declarations": request.max_local_declarations,
-                "max_rendered_bytes": request.max_rendered_bytes,
-                "mode": "typed_goals",
-            }
-        )
+    helper_query = LeanTypedGoalsHelperRequest(
+        pickle_path=str(pickle_path),
+        request_id=request_id,
+        max_goals=request.max_goals,
+        max_local_declarations=request.max_local_declarations,
+        max_rendered_bytes=request.max_rendered_bytes,
     )
+    query_path.write_bytes(canonicalize_json(helper_query.model_dump(mode="json")))
     elan, arguments, environment = _resolve_typed_goal_helper(
         resources, request, query_path
     )
@@ -413,16 +430,7 @@ def _extract_typed_goals(
     if result.returncode != 0:
         raise RuntimeError("Lean typed proof-state extraction failed")
     payload = _parse_typed_goal_envelope(result.stdout, request_id=request_id)
-    if payload.get("expression_serialization") != "LEAN_PRETTY_PRINTED_EXPR":
-        raise RuntimeError("Lean typed proof-state serialization is unsupported")
-    try:
-        return tuple(
-            LeanTypedGoal.model_validate(goal) for goal in payload["typed_goals"]
-        )
-    except (KeyError, TypeError, ValidationError) as exc:
-        raise RuntimeError(
-            "Lean typed proof-state extraction returned invalid goals"
-        ) from exc
+    return payload.typed_goals
 
 
 def _extract_structured_metavariables(
@@ -430,7 +438,7 @@ def _extract_structured_metavariables(
     *,
     pickle_path: Path,
     request: LeanMetavariableFieldsRequest,
-) -> dict[str, Any]:
+) -> LeanMetavariableFieldsHelperPayload:
     """Extract structured metavariable fields via the pinned Lean helper.
 
     The helper is invoked with ``mode = "metavariable_fields"`` so it emits
@@ -441,18 +449,14 @@ def _extract_structured_metavariables(
 
     query_path = pickle_path.with_name("metavariable-fields-query.json")
     request_id = uuid.uuid4().hex
-    query_path.write_bytes(
-        canonicalize_json(
-            {
-                "pickle_path": str(pickle_path),
-                "request_id": request_id,
-                "max_goals": request.max_goals,
-                "max_local_declarations": request.max_local_declarations,
-                "max_rendered_bytes": request.max_rendered_bytes,
-                "mode": "metavariable_fields",
-            }
-        )
+    helper_query = LeanMetavariableFieldsHelperRequest(
+        pickle_path=str(pickle_path),
+        request_id=request_id,
+        max_goals=request.max_goals,
+        max_local_declarations=request.max_local_declarations,
+        max_rendered_bytes=request.max_rendered_bytes,
     )
+    query_path.write_bytes(canonicalize_json(helper_query.model_dump(mode="json")))
     helper_request = LeanProofStateRequest.model_validate(
         {
             "environment": request.environment.value,
@@ -485,28 +489,17 @@ def _extract_structured_metavariables(
         raise RuntimeError("Lean metavariable-field extraction failed")
     if result.returncode != 0:
         raise RuntimeError("Lean metavariable-field extraction failed")
-    payload = _parse_typed_goal_envelope(result.stdout, request_id=request_id)
-    if payload.get("expression_serialization") != "LEAN_PRETTY_PRINTED_EXPR":
-        raise RuntimeError("Lean metavariable-field serialization is unsupported")
-    if payload.get("coercion_provenance") != "UNAVAILABLE":
-        raise RuntimeError("Lean metavariable-field coercion provenance is invalid")
-    return payload
+    return _parse_typed_goal_envelope(
+        result.stdout,
+        request_id=request_id,
+        mode="metavariable_fields",
+    )
 
 
-def _response_messages(response: Mapping[str, Any]) -> tuple[str, ...]:
-    messages: list[str] = []
-    message = response.get("message")
-    if isinstance(message, str):
-        messages.append(message)
-    structured = response.get("messages")
-    if isinstance(structured, list):
-        for item in structured:
-            if not isinstance(item, Mapping):
-                continue
-            data = item.get("data")
-            if isinstance(data, str):
-                messages.append(data)
-    return tuple(messages)
+def _response_messages(response: LeanReplResponse) -> tuple[str, ...]:
+    if isinstance(response, LeanReplErrorResponse):
+        return (response.message,)
+    return tuple(message.data for message in response.messages)
 
 
 def _runtime_ms(started: float) -> int:

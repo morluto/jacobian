@@ -12,6 +12,7 @@ from jacobian.lean_frontend.repl import (
     LeanReplPolicy,
     PersistentLeanRepl,
 )
+from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
 
 _FAKE_REPL = r"""
 import json
@@ -39,7 +40,7 @@ while True:
         assert request.get("env") == 0
         response = {
             "env": env,
-            "sorries": [{"proofState": proof_state}],
+            "sorries": [{"goal": "⊢ True", "proofState": proof_state}],
         }
         env += 1
         proof_state += 1
@@ -72,7 +73,9 @@ def test_persistent_repl_reuses_import_then_restarts_at_request_limit(
     repl.close()
 
     assert all(
-        response[1]["proofStatus"] == "Completed" for response in (first, second, third)
+        isinstance(response[1], LeanReplProofStepResponse)
+        and response[1].proof_status == "Completed"
+        for response in (first, second, third)
     )
     assert starts.read_text() == "xx"
 
@@ -94,9 +97,10 @@ def test_validated_execution_inspects_state_before_requested_tactic(
     )
     repl.close()
 
-    assert command["sorries"]
-    assert validation["proofState"] == 1
-    assert transition["proofState"] == 2
+    assert command.sorries
+    assert validation.proof_state == 1
+    assert isinstance(transition, LeanReplProofStepResponse)
+    assert transition.proof_state == 2
     assert starts.read_text() == "x"
 
 

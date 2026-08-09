@@ -16,7 +16,12 @@ from jacobian.contracts.linear import (
     LinearRationalSolutionFindRequest,
 )
 from jacobian.domains.rational_linear import build_rational_linear_bundle
-from jacobian.domains.rational_linear.operations import _validate_worker_payload
+from jacobian.domains.rational_linear.protocol import (
+    RationalLinearCertificateProduced,
+    RationalLinearSolutionProduced,
+    parse_inconsistency_worker_response,
+    parse_solution_worker_response,
+)
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.operation_installation import OperationInstaller
 from jacobian.runtime import CheckerAuthorityMode
@@ -55,14 +60,11 @@ def test_rational_linear_worker_payloads_bind_status_and_source_dimensions() -> 
             {"num": "1", "den": "1"},
         ],
     }
-    assert (
-        _validate_worker_payload(
-            solution,
-            solution_request,
-            "jacobian.rational-linear-solution-worker/v1",
-        )
-        == solution
+    parsed_solution = parse_solution_worker_response(
+        solution,
+        expected_value_count=len(solution_request.system.variables),
     )
+    assert isinstance(parsed_solution, RationalLinearSolutionProduced)
 
     inconsistency_request = LinearRationalInconsistencyFindRequest.model_validate(
         _system()
@@ -76,24 +78,20 @@ def test_rational_linear_worker_payloads_bind_status_and_source_dimensions() -> 
         ],
         "rhs_pairing": {"num": "1", "den": "1"},
     }
-    assert (
-        _validate_worker_payload(
-            inconsistency,
-            inconsistency_request,
-            "jacobian.rational-linear-inconsistency-worker/v1",
-        )
-        == inconsistency
+    parsed_inconsistency = parse_inconsistency_worker_response(
+        inconsistency,
+        expected_witness_count=len(inconsistency_request.system.rhs),
     )
+    assert isinstance(parsed_inconsistency, RationalLinearCertificateProduced)
 
     for invalid in (
         {**solution, "values": solution["values"][:1]},
         {key: value for key, value in solution.items() if key != "values"},
     ):
         with pytest.raises((TypeError, ValueError)):
-            _validate_worker_payload(
+            parse_solution_worker_response(
                 invalid,
-                solution_request,
-                "jacobian.rational-linear-solution-worker/v1",
+                expected_value_count=len(solution_request.system.variables),
             )
 
 

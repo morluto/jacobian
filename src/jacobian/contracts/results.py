@@ -173,6 +173,10 @@ class ResultEnvelope(ContractModel):
             if self.assurance.verification != Verification.UNVERIFIED:
                 raise ValueError("non-completed or rejected results cannot be verified")
 
+        self._require_verification_evidence()
+        return self
+
+    def _require_verification_evidence(self) -> None:
         if self.assurance.verification == Verification.VERIFIED:
             if self.conclusion not in {Conclusion.TRUE, Conclusion.FALSE}:
                 raise ValueError(
@@ -190,8 +194,8 @@ class ResultEnvelope(ContractModel):
                 )
             if self.candidate_digest is None:
                 raise ValueError("verified results require a candidate binding")
-
-        return self
+        elif self.verification_record_uri is not None:
+            raise ValueError("an unverified result cannot carry a verification record")
 
 
 def validate_result_envelope(

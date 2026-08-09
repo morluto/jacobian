@@ -18,6 +18,10 @@ from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend.exploration import _Resources
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
 from jacobian.lean_frontend.repl import _single_proof_state
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplCommandResponse,
+    LeanReplProofStepResponse,
+)
 
 
 def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
@@ -45,13 +49,26 @@ def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
             provider_runtime=runtime,
             repl=SimpleNamespace(
                 execute_clean=lambda **_: (
-                    {"sorries": [{"proofState": 0}]},
-                    {"proofState": 0, "goals": ["⊢ True"]},
-                    {
-                        "proofState": 1,
-                        "goals": ["⊢ True"],
-                        "proofStatus": "InProgress",
-                    },
+                    LeanReplCommandResponse.model_validate(
+                        {
+                            "env": 0,
+                            "sorries": [{"goal": "⊢ True", "proofState": 0}],
+                        }
+                    ),
+                    LeanReplProofStepResponse.model_validate(
+                        {
+                            "proofState": 0,
+                            "goals": ["⊢ True"],
+                            "proofStatus": "InProgress",
+                        }
+                    ),
+                    LeanReplProofStepResponse.model_validate(
+                        {
+                            "proofState": 1,
+                            "goals": ["⊢ True"],
+                            "proofStatus": "InProgress",
+                        }
+                    ),
                 )
             ),
         ),
@@ -79,13 +96,24 @@ def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
 
 
 def test_single_proof_state_raises_with_lean_errors() -> None:
-    response = {
-        "sorries": [],
-        "messages": [
-            {"severity": "error", "data": "unknown identifier"},
-            {"severity": "error", "data": "type mismatch"},
-        ],
-    }
+    response = LeanReplCommandResponse.model_validate(
+        {
+            "env": 0,
+            "sorries": [],
+            "messages": [
+                {
+                    "pos": {"line": 0, "column": 0},
+                    "severity": "error",
+                    "data": "unknown identifier",
+                },
+                {
+                    "pos": {"line": 0, "column": 0},
+                    "severity": "error",
+                    "data": "type mismatch",
+                },
+            ],
+        }
+    )
 
     with pytest.raises(RuntimeError, match=r"unknown identifier.*type mismatch"):
         _single_proof_state(response)

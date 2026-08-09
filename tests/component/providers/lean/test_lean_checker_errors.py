@@ -208,6 +208,10 @@ def test_mathlib_validates_the_exact_lake_compiler_command(
         lambda command, *, cwd=None: validated.append((command, cwd)),
     )
     monkeypatch.setattr(
+        "jacobian_checkers.lean4._mathlib_process_path",
+        lambda _command: "/usr/bin",
+    )
+    monkeypatch.setattr(
         "jacobian_checkers.lean4.execute_process",
         lambda *_args, **_kwargs: ProcessResult(
             termination=ProcessTermination.EXITED,

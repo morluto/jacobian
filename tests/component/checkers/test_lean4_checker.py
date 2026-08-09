@@ -167,6 +167,57 @@ def test_lake_launcher_path_rejects_a_symlinked_sibling(
     assert lean4_checker.lake_launcher_path(lean) is None
 
 
+def test_mathlib_checker_gives_lake_a_bounded_path_with_git(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    toolchain = tmp_path / "toolchain" / "bin"
+    toolchain.mkdir(parents=True)
+    lake = toolchain / "lake"
+    lake.write_bytes(b"lake")
+    system_bin = tmp_path / "system" / "bin"
+    system_bin.mkdir(parents=True)
+    git = system_bin / "git"
+    git.write_bytes(b"git")
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    requests = []
+
+    monkeypatch.delenv("PATH", raising=False)
+    monkeypatch.setattr(lean4_checker, "_mathlib_runtime", lambda: runtime)
+    monkeypatch.setattr(
+        lean4_checker,
+        "_lean_command",
+        lambda name: (str(lake),) if name == "lake" else (str(toolchain / name),),
+    )
+    monkeypatch.setattr(lean4_checker, "_validate_lean", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        lean4_checker.shutil,
+        "which",
+        lambda name: str(git) if name == "git" else None,
+    )
+
+    def execute(request):
+        requests.append(request)
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+        )
+
+    monkeypatch.setattr(lean4_checker, "execute_process", execute)
+
+    lean4_checker._run_lean("#check True", environment_name="MATHLIB")
+
+    assert len(requests) == 1
+    assert requests[0].environment["PATH"] == (
+        f"{toolchain.resolve()}:{system_bin.resolve()}"
+    )
+
+
 def test_lean_checker_rejects_replaced_authorized_executable(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

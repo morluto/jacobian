@@ -39,6 +39,7 @@ def test_lean_capability_returns_bound_verified_result(
 
     assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert result.assurance.verification_record_uri is not None
+    assert result.assurance.verification_record_uri in result.artifact_uris
     assert result.output["conclusion"] == "TRUE"
 
 

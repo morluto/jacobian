@@ -40,6 +40,7 @@ from jacobian.lean_frontend.exploration import (
     _validate_source_parts,
 )
 from jacobian.lean_frontend.repl import _response_errors
+from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
 
 
 class LeanPremiseRetrievalAdapter:
@@ -125,7 +126,9 @@ class LeanPremiseRetrievalAdapter:
                 tactic=suggestion,
                 declaration_names=tuple(sorted(set(_DECLARATION.findall(suggestion)))),
                 tactic_replayed=(
-                    index == 1 and tactic_response.get("proofStatus") == "Completed"
+                    index == 1
+                    and isinstance(tactic_response, LeanReplProofStepResponse)
+                    and tactic_response.proof_status == "Completed"
                 ),
             )
             for index, suggestion in enumerate(suggestions, start=1)

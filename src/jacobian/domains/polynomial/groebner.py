@@ -17,6 +17,11 @@ from jacobian.contracts.polynomial_operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.domains.polynomial.groebner_protocol import (
+    GroebnerWorkerRequest,
+    GroebnerWorkerResultLimitExceeded,
+    parse_groebner_worker_response,
+)
 from jacobian.operations import (
     BoundedSearchOperation,
     BoundedSearchOutcome,
@@ -26,7 +31,6 @@ from jacobian.operations import (
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
-_PROTOCOL = "jacobian.polynomial.groebner.sympy.v1"
 _STDOUT_LIMIT = 2_000_000
 _STDERR_LIMIT = 64_000
 
@@ -59,10 +63,10 @@ def _compute(
                 "jacobian.domains.polynomial.groebner_worker",
             ),
             stdin_bytes=canonicalize_json(
-                {
-                    "protocol": _PROTOCOL,
-                    "request": request.model_dump(mode="json"),
-                }
+                GroebnerWorkerRequest(
+                    protocol="jacobian.polynomial.groebner.sympy.v1",
+                    request=request,
+                ).model_dump(mode="json")
             ),
             timeout_seconds=float(request.resource_budget.wall_seconds),
             environment=worker_environment(locale="C"),
@@ -100,26 +104,14 @@ def _compute(
             "The isolated SymPy Gröbner computation did not complete successfully.",
         )
     try:
-        payload = loads_strict_json(completed.stdout)
-        if not isinstance(payload, dict) or payload.get("protocol") != _PROTOCOL:
-            raise ValueError("worker protocol does not match")
-        if set(payload) == {"protocol", "error"}:
-            error = payload["error"]
-            if (
-                not isinstance(error, dict)
-                or set(error) != {"code", "message"}
-                or error["code"] != "POLYNOMIAL_GROEBNER_RESULT_LIMIT_EXCEEDED"
-                or not isinstance(error["message"], str)
-            ):
-                raise ValueError("unexpected worker error response")
+        response = parse_groebner_worker_response(loads_strict_json(completed.stdout))
+        if isinstance(response, GroebnerWorkerResultLimitExceeded):
             return _failure(
                 ExecutionStatus.ERROR,
                 "POLYNOMIAL_GROEBNER_RESULT_LIMIT_EXCEEDED",
-                error["message"],
+                response.error.message,
             )
-        if set(payload) != {"protocol", "result"}:
-            raise ValueError("unexpected worker response fields")
-        result = PolynomialGroebnerBasisResult.model_validate(payload["result"])
+        result = response.result
     except (TypeError, ValueError, ValidationError):
         return _failure(
             ExecutionStatus.ERROR,

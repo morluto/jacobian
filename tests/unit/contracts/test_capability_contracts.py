@@ -7,6 +7,7 @@ from pydantic import TypeAdapter, ValidationError
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
     CapabilityAssuranceLevel,
+    CapabilityCatalog,
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDiscoveryBrowseRecoveryPath,
@@ -15,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryReformulateQueryRecoveryPath,
     CapabilityDiscoveryRemoveFiltersRecoveryPath,
     CapabilityDiscoveryRemoveUnknownDomainRecoveryPath,
+    CapabilityDiscoveryResult,
     CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
@@ -26,6 +28,20 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import Execution, ExecutionStatus
 
 RECORD_URI = "artifact://sha256/" + "a" * 64
+POLICY_DIGEST = "sha256:" + "b" * 64
+
+
+def _descriptor(capability_id: str) -> dict[str, object]:
+    return {
+        "capability_id": capability_id,
+        "version": "1",
+        "title": capability_id,
+        "description": "A bounded test capability.",
+        "provider": "test",
+        "modes": ["EXPLORE"],
+        "input_schema": {"type": "object"},
+        "output_schema": {"type": "object"},
+    }
 
 
 def test_discovery_recovery_paths_are_closed_discriminated_contracts() -> None:
@@ -75,6 +91,48 @@ def test_discovery_recovery_paths_are_closed_discriminated_contracts() -> None:
         adapter.validate_python(tagless_path)
 
 
+def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
+    base = {
+        "routing_basis": "The request uses a compatible structured input.",
+        "matches": [
+            {
+                "capability_id": "integer.compute.gcd",
+                "title": "Compute gcd",
+                "description": "Compute one exact gcd.",
+                "modes": ["EXPLORE"],
+            }
+        ],
+        "total_matches": 2,
+        "portfolio_fit_basis": "One lexical candidate was found.",
+    }
+    with pytest.raises(ValidationError, match="truncated must agree"):
+        CapabilityDiscoveryResult.model_validate(
+            {**base, "truncated": True, "next_cursor": None}
+        )
+    with pytest.raises(ValidationError, match="final returned match"):
+        CapabilityDiscoveryResult.model_validate(
+            {
+                **base,
+                "truncated": True,
+                "next_cursor": "integer.compute.lcm",
+            }
+        )
+
+
+def test_catalog_rejects_duplicate_or_nondeterministic_capability_ids() -> None:
+    with pytest.raises(ValidationError, match="unique and sorted"):
+        CapabilityCatalog.model_validate(
+            {
+                "policy_profile": "DEFAULT",
+                "policy_digest": POLICY_DIGEST,
+                "capabilities": [
+                    _descriptor("integer.compute.lcm"),
+                    _descriptor("integer.compute.gcd"),
+                ],
+            }
+        )
+
+
 def test_explore_lane_cannot_claim_verified_assurance() -> None:
     with pytest.raises(ValidationError, match="exploration lane"):
         CapabilityResult(
@@ -97,6 +155,35 @@ def test_nonverified_assurance_cannot_smuggle_a_record_uri() -> None:
             basis="ordinary deterministic computation",
             verification_record_uri=RECORD_URI,
         )
+
+
+def test_verified_result_publishes_its_record_as_a_first_class_artifact() -> None:
+    with pytest.raises(ValidationError, match="included in artifact_uris"):
+        CapabilityResult(
+            capability_id="example.verify",
+            capability_version="1",
+            mode=CapabilityMode.VERIFY,
+            execution=Execution(status=ExecutionStatus.COMPLETED),
+            assurance=CapabilityAssurance(
+                level=CapabilityAssuranceLevel.VERIFIED,
+                basis="independent checker accepted the claim",
+                verification_record_uri=RECORD_URI,
+            ),
+        )
+
+    result = CapabilityResult(
+        capability_id="example.verify",
+        capability_version="1",
+        mode=CapabilityMode.VERIFY,
+        execution=Execution(status=ExecutionStatus.COMPLETED),
+        assurance=CapabilityAssurance(
+            level=CapabilityAssuranceLevel.VERIFIED,
+            basis="independent checker accepted the claim",
+            verification_record_uri=RECORD_URI,
+        ),
+        artifact_uris=(RECORD_URI,),
+    )
+    assert result.artifact_uris == (RECORD_URI,)
 
 
 def test_complete_result_requires_an_explicit_scope() -> None:

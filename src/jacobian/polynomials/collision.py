@@ -692,7 +692,9 @@ class PolynomialCollisionVerifyAdapter:
         verified = (
             checked.assurance.verification is Verification.VERIFIED
             and checked.conclusion is Conclusion.FALSE
+            and checked.verification_record_uri is not None
         )
+        record_uri = checked.verification_record_uri if verified else None
         output = PolynomialCollisionVerifyOutput(
             collision_verified=verified,
             conclusion="FALSE" if verified else "UNKNOWN",
@@ -700,7 +702,7 @@ class PolynomialCollisionVerifyAdapter:
             map_uri=map_uri,
             claim_uri=claim_artifact.artifact_uri,
             witness_uri=witness_artifact.artifact_uri,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
             first_point=validated.first_point,
             second_point=validated.second_point,
@@ -711,8 +713,8 @@ class PolynomialCollisionVerifyAdapter:
             claim_artifact.artifact_uri,
             witness_artifact.artifact_uri,
         ]
-        if checked.verification_record_uri is not None:
-            artifact_uris.append(checked.verification_record_uri)
+        if record_uri is not None:
+            artifact_uris.append(record_uri)
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -739,9 +741,7 @@ class PolynomialCollisionVerifyAdapter:
                         if verified
                         else CapabilityRelationshipStatus.PROPOSED
                     ),
-                    verification_record_uri=(
-                        checked.verification_record_uri if verified else None
-                    ),
+                    verification_record_uri=(record_uri),
                 ),
             ),
             assurance=CapabilityAssurance(
@@ -755,7 +755,7 @@ class PolynomialCollisionVerifyAdapter:
                     if verified
                     else "the checker did not accept the claimed collision"
                 ),
-                verification_record_uri=checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=tuple(artifact_uris),
         )
@@ -852,7 +852,9 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         verified = (
             checked.verification_record_uri is not None
             and checked.conclusion is Conclusion.TRUE
+            and checked.assurance.verification is Verification.VERIFIED
         )
+        record_uri = checked.verification_record_uri if verified else None
         output = PolynomialMapInverseCollisionVerifyOutput(
             noninvertibility_verified=verified if verified else None,
             conclusion=Conclusion.TRUE if verified else Conclusion.UNKNOWN,
@@ -860,7 +862,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
             map_uri=map_uri,
             claim_uri=claim.artifact_uri,
             witness_uri=witness_artifact.artifact_uri,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
             first_point=validated.first_point,
             second_point=validated.second_point,
@@ -868,8 +870,8 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         )
         artifact_uris = [map_artifact.artifact_uri, claim.artifact_uri]
         artifact_uris.append(witness_artifact.artifact_uri)
-        if checked.verification_record_uri is not None:
-            artifact_uris.append(checked.verification_record_uri)
+        if record_uri is not None:
+            artifact_uris.append(record_uri)
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -897,7 +899,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
                     source_artifact_uris=(witness_artifact.artifact_uri,),
                     target_artifact_uris=(claim.artifact_uri,),
                     status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 ),
             )
             if verified
@@ -914,7 +916,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
                     if verified
                     else "the independent inverse-obstruction checker did not accept"
                 ),
-                verification_record_uri=checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=tuple(artifact_uris),
         )

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
+
+from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
@@ -23,6 +25,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.claims import ClaimSpec, CorrespondenceStatus, PredicateSpec
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.graph_shrinking import (
     GraphCounterexampleShrinkOutput,
     GraphCounterexampleShrinkRequest,
@@ -37,6 +40,7 @@ from jacobian.contracts.plugins import (
 )
 from jacobian.contracts.plugins import CapabilityName, PluginManifest
 from jacobian.contracts.results import ExecutionStatus, InputStatus, Verification
+from jacobian.contracts.shrinking import ShrinkStep
 from jacobian.graphs.installation import GraphInstallation
 from jacobian.plugins.registry import PluginRegistry
 from jacobian.provider_runtime import known_provider_runtime
@@ -45,6 +49,7 @@ from jacobian.registry import CheckerRegistry, CheckerRegistryError
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.shrinking import ShrinkService
 from jacobian.storage.errors import StorageError
+from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
 
 _DOMAIN_ID = "jacobian.graph-shrinking"
@@ -58,6 +63,12 @@ class GraphShrinkingInstallation:
     claim_schema_uri: str
     trace_schema_uri: str
     property_checker_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _LoadedGraphArtifact:
+    stored: StoredArtifact
+    graph: SimpleUndirectedGraph
 
 
 def install_graph_shrinking(
@@ -352,7 +363,7 @@ class GraphCounterexampleShrinkAdapter:
             artifact_uris=(*parent_uris, trace.artifact_uri),
         )
 
-    def _load_graph_artifact(self, graph_uri: str) -> Any:
+    def _load_graph_artifact(self, graph_uri: str) -> _LoadedGraphArtifact:
         try:
             artifact = self.store.get(graph_uri)
             if (
@@ -360,13 +371,13 @@ class GraphCounterexampleShrinkAdapter:
                 or artifact.manifest.semantics_uri != self.graph.semantics_uri
             ):
                 raise ValueError
-            payload = artifact.payload
-            vertices = payload["vertices"]
-            edges = payload["edges"]
-            if vertices != sorted(vertices) or edges != sorted(edges):
+            graph = SimpleUndirectedGraph.model_validate(artifact.payload)
+            if graph.vertices != tuple(sorted(graph.vertices)) or graph.edges != tuple(
+                sorted(graph.edges)
+            ):
                 raise ValueError
-            return artifact
-        except (StorageError, KeyError, TypeError, ValueError) as exc:
+            return _LoadedGraphArtifact(stored=artifact, graph=graph)
+        except (StorageError, ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="GRAPH_SHRINK_INPUT_INVALID",
@@ -379,20 +390,20 @@ class GraphCounterexampleShrinkAdapter:
                 )
             ) from exc
 
-    def _load_graph(self, graph_uri: str) -> dict[str, Any]:
-        return cast(dict[str, Any], self._load_graph_artifact(graph_uri).payload)
+    def _load_graph(self, graph_uri: str) -> SimpleUndirectedGraph:
+        return self._load_graph_artifact(graph_uri).graph
 
-    def _attempt(self, step: Any) -> GraphReductionAttempt:
+    def _attempt(self, step: ShrinkStep) -> GraphReductionAttempt:
         deleted_vertex = None
         deleted_edge = None
         proposed_artifact = None
         if step.proposed_uri is not None:
             before = self._load_graph(step.from_uri)
             proposed_artifact = self._load_graph_artifact(step.proposed_uri)
-            after = cast(dict[str, Any], proposed_artifact.payload)
+            after = proposed_artifact.graph
             try:
                 deleted_vertex, deleted_edge = _exact_graph_reduction(
-                    step.reducer,
+                    GraphReduction(step.reducer),
                     before,
                     after,
                 )
@@ -421,7 +432,7 @@ class GraphCounterexampleShrinkAdapter:
             verification_record_uri=step.verification_record_uri,
             detail=step.detail,
             candidate_digest=(
-                proposed_artifact.manifest.object_digest
+                proposed_artifact.stored.manifest.object_digest
                 if proposed_artifact is not None
                 else None
             ),
@@ -433,43 +444,42 @@ def _validate_exact_graph_reduction(
     before: Any,
     after: Any,
 ) -> None:
-    if not isinstance(before, dict) or not isinstance(after, dict):
-        raise ValueError("graph reducer inputs must be objects")
-    _exact_graph_reduction(reducer, before, after)
+    _exact_graph_reduction(
+        GraphReduction(reducer),
+        SimpleUndirectedGraph.model_validate(before),
+        SimpleUndirectedGraph.model_validate(after),
+    )
 
 
 def _exact_graph_reduction(
-    reducer: str,
-    before: dict[str, Any],
-    after: dict[str, Any],
+    reducer: GraphReduction,
+    before: SimpleUndirectedGraph,
+    after: SimpleUndirectedGraph,
 ) -> tuple[str | None, tuple[str, str] | None]:
-    if reducer == GraphReduction.DELETE_VERTEX.value:
-        removed_vertices = sorted(set(before["vertices"]) - set(after["vertices"]))
+    if reducer is GraphReduction.DELETE_VERTEX:
+        removed_vertices = sorted(set(before.vertices) - set(after.vertices))
         if len(removed_vertices) != 1:
             raise ValueError("proposal is not an exact single-vertex deletion")
         deleted_vertex = removed_vertices[0]
-        expected = {
-            **before,
-            "vertices": [
-                vertex for vertex in before["vertices"] if vertex != deleted_vertex
-            ],
-            "edges": [edge for edge in before["edges"] if deleted_vertex not in edge],
-        }
+        expected = SimpleUndirectedGraph(
+            vertices=tuple(
+                vertex for vertex in before.vertices if vertex != deleted_vertex
+            ),
+            edges=tuple(edge for edge in before.edges if deleted_vertex not in edge),
+        )
         if after != expected:
             raise ValueError("proposal is not an exact single-vertex deletion")
         return deleted_vertex, None
 
-    if reducer == GraphReduction.DELETE_EDGE.value:
-        removed_edges = sorted(
-            set(map(tuple, before["edges"])) - set(map(tuple, after["edges"]))
-        )
+    if reducer is GraphReduction.DELETE_EDGE:
+        removed_edges = sorted(set(before.edges) - set(after.edges))
         if len(removed_edges) != 1:
             raise ValueError("proposal is not an exact single-edge deletion")
         deleted_edge = removed_edges[0]
-        expected = {
-            **before,
-            "edges": [edge for edge in before["edges"] if tuple(edge) != deleted_edge],
-        }
+        expected = SimpleUndirectedGraph(
+            vertices=before.vertices,
+            edges=tuple(edge for edge in before.edges if edge != deleted_edge),
+        )
         if after != expected:
             raise ValueError("proposal is not an exact single-edge deletion")
         return None, deleted_edge
@@ -477,7 +487,7 @@ def _exact_graph_reduction(
     raise ValueError("proposal uses an unsupported graph reducer")
 
 
-def _invalid_attempt(step: Any, detail: str) -> GraphReductionAttempt:
+def _invalid_attempt(step: ShrinkStep, detail: str) -> GraphReductionAttempt:
     return GraphReductionAttempt(
         index=step.index,
         reducer=GraphReduction(step.reducer),
@@ -490,7 +500,7 @@ def _invalid_attempt(step: Any, detail: str) -> GraphReductionAttempt:
 
 def _local_scope(
     *,
-    graph: dict[str, Any],
+    graph: SimpleUndirectedGraph,
     final_uri: str,
     reducers: tuple[GraphReduction, ...],
     attempts: tuple[GraphReductionAttempt, ...],
@@ -498,13 +508,9 @@ def _local_scope(
     execution_status: ExecutionStatus,
 ) -> GraphLocalMinimalityScope:
     expected_vertices = (
-        tuple(graph["vertices"]) if GraphReduction.DELETE_VERTEX in reducers else ()
+        graph.vertices if GraphReduction.DELETE_VERTEX in reducers else ()
     )
-    expected_edges = (
-        tuple(tuple(edge) for edge in graph["edges"])
-        if GraphReduction.DELETE_EDGE in reducers
-        else ()
-    )
+    expected_edges = graph.edges if GraphReduction.DELETE_EDGE in reducers else ()
     final_attempts = tuple(
         attempt for attempt in attempts if attempt.from_graph_uri == final_uri
     )

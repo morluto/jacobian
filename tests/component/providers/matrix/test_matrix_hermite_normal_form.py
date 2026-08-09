@@ -92,20 +92,23 @@ def test_hnf_worker_envelope_requires_identity_and_source_shapes() -> None:
     valid = {
         "protocol": "jacobian.matrix-lattice-hnf-worker/v1",
         "status": "NORMAL_FORM_PRODUCED",
-        "backend_version": "0.9.0",
-        "flint_library_version": "3.6.0",
-        "normal_form": [["1", "0", "0"], ["0", "1", "0"]],
-        "transformation": [["1", "0"], ["0", "1"]],
+        "result": {
+            "normal_form": {"entries": [["1", "0", "0"], ["0", "1", "0"]]},
+            "transformation": {"entries": [["1", "0"], ["0", "1"]]},
+        },
     }
     result = _parse_hnf_worker_result(valid, source)
     assert result.normal_form.entries == (("1", "0", "0"), ("0", "1", "0"))
 
     for invalid in (
         {key: value for key, value in valid.items() if key != "protocol"},
-        {**valid, "backend_version": "0.8.0"},
+        {**valid, "status": "ERROR"},
         {
             **valid,
-            "normal_form": [["1", "0"], ["0", "1"]],
+            "result": {
+                **valid["result"],
+                "normal_form": {"entries": [["1", "0"], ["0", "1"]]},
+            },
         },
     ):
         with pytest.raises((TypeError, ValueError)):

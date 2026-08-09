@@ -29,16 +29,24 @@ from jacobian.lean_frontend.exploration import (
     _Resources,
     install_lean_exploration_capabilities,
 )
+from jacobian.lean_frontend.helper_protocol import (
+    LeanMetavariableFieldsHelperPayload,
+)
 from jacobian.lean_frontend.metavariable_fields import LeanMetavariableFieldsAdapter
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
 from jacobian.lean_frontend.proof_state_inspect import LeanProofStateInspectAdapter
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplCommandResponse,
+    LeanReplProofStepResponse,
+    LeanReplValidatedExecution,
+)
 from jacobian.lean_frontend.term_apply import LeanTermApplyAdapter
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
-_ReplResponses = tuple[dict[str, object], dict[str, object], dict[str, object]]
+_ReplResponses = LeanReplValidatedExecution
 
 
 def _installation(environment: LeanEnvironment) -> LeanCheckerInstallation:
@@ -116,11 +124,21 @@ def _responses(
         "goals": after,
     }
     if error is not None:
-        tactic["messages"] = [{"severity": "error", "data": error}]
+        tactic["messages"] = [
+            {
+                "pos": {"line": 0, "column": 0},
+                "severity": "error",
+                "data": error,
+            }
+        ]
     return (
-        {"env": 0, "sorries": [{"proofState": 0}]},
-        {"proofState": 1, "proofStatus": "Goals", "goals": before},
-        tactic,
+        LeanReplCommandResponse.model_validate(
+            {"env": 0, "sorries": [{"goal": "⊢ True", "proofState": 0}]}
+        ),
+        LeanReplProofStepResponse.model_validate(
+            {"proofState": 1, "proofStatus": "Goals", "goals": before}
+        ),
+        LeanReplProofStepResponse.model_validate(tactic),
     )
 
 
@@ -134,11 +152,11 @@ def _stub_apply_runtime(
     def _execute_clean(**kwargs: object) -> _ReplResponses:
         del kwargs
         payload = responses()
-        goals = payload[2].get("goals", [])
-        if not isinstance(goals, list):
-            raise TypeError("stub tactic response goals must be a list")
+        tactic_response = payload[2]
+        if not isinstance(tactic_response, LeanReplProofStepResponse):
+            raise TypeError("stub tactic response must be a proof response")
         last_goals.clear()
-        last_goals.extend(str(goal) for goal in goals)
+        last_goals.extend(tactic_response.goals)
         return payload
 
     def _fake_extract(
@@ -181,19 +199,21 @@ def _stub_metavariable_runtime(
         *,
         pickle_path: Path,
         request: Any,
-    ) -> dict[str, Any]:
+    ) -> LeanMetavariableFieldsHelperPayload:
         del _resources, pickle_path, request
-        return {
-            "expression_serialization": "LEAN_PRETTY_PRINTED_EXPR",
-            "structured_metavariables": structured,
-            "elaboration_context": elaboration,
-            "coercion_provenance": "UNAVAILABLE",
-            "coercion_provenance_basis": (
-                "maintained Lean.Meta.Coe APIs operate on expressions during "
-                "elaboration; a pickled proof state retains no per-metavariable "
-                "coercion log"
-            ),
-        }
+        return LeanMetavariableFieldsHelperPayload.model_validate(
+            {
+                "expression_serialization": "LEAN_PRETTY_PRINTED_EXPR",
+                "structured_metavariables": structured,
+                "elaboration_context": elaboration,
+                "coercion_provenance": "UNAVAILABLE",
+                "coercion_provenance_basis": (
+                    "maintained Lean.Meta.Coe APIs operate on expressions during "
+                    "elaboration; a pickled proof state retains no per-metavariable "
+                    "coercion log"
+                ),
+            }
+        )
 
     monkeypatch.setattr(adapter.resources.repl, "execute_clean", _execute_clean)
     monkeypatch.setattr(
@@ -792,7 +812,7 @@ def test_helper_result_envelope_still_parses_normally() -> None:
         b'"LEAN_PRETTY_PRINTED_EXPR","typed_goals":[]}}\n',
         request_id="req1",
     )
-    assert payload["expression_serialization"] == "LEAN_PRETTY_PRINTED_EXPR"
+    assert payload.expression_serialization == "LEAN_PRETTY_PRINTED_EXPR"
 
 
 # ---------------------------------------------------------------------------

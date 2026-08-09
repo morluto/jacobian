@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from itertools import permutations
 from math import prod
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -16,7 +16,12 @@ from jacobian.contracts.exact import (
     bounded_rational_grid_size,
     require_bounded_rational,
 )
-from jacobian.contracts.results import Conclusion, ContractModel, InputValidation
+from jacobian.contracts.results import (
+    Conclusion,
+    ContractModel,
+    InputStatus,
+    InputValidation,
+)
 
 PolynomialVariable = Annotated[
     str,
@@ -625,7 +630,7 @@ class PolynomialMapInverseSynthesisArtifact(ContractModel):
     candidate_inverse_map: RationalPolynomialMap | None = None
     inverse_after_forward: tuple[SparseRationalPolynomial, ...] = ()
     forward_after_inverse: tuple[SparseRationalPolynomial, ...] = ()
-    verification_output: dict[str, Any] | None = None
+    verification_output: PolynomialMapInverseVerifyOutput | None = None
     verification_artifact_uri: ArtifactUri | None = None
     verification_failure: str | None = None
     noninvertibility_proved: Literal[False] = False
@@ -639,8 +644,27 @@ class PolynomialMapInverseSynthesisArtifact(ContractModel):
             raise ValueError("FOUND requires both composition residual families")
         if not found and (self.inverse_after_forward or self.forward_after_inverse):
             raise ValueError("only FOUND may carry composition residual families")
-        if self.verification_artifact_uri is not None and not found:
-            raise ValueError("only FOUND may carry a verification artifact")
+        if self.verification_output is not None and not found:
+            raise ValueError("only FOUND may carry a verification output")
+        if self.verification_output is None:
+            if self.verification_artifact_uri is not None:
+                raise ValueError("a verification artifact requires typed output")
+            if found and self.verification_failure is None:
+                raise ValueError("an unverified FOUND candidate requires a failure")
+            return self
+        expected_artifact_uri = (
+            self.verification_output.verification_record_uri
+            or self.verification_output.certificate_uri
+        )
+        if self.verification_artifact_uri != expected_artifact_uri:
+            raise ValueError(
+                "verification_artifact_uri must bind the typed verification output"
+            )
+        accepted = self.verification_output.inverse_verified is True
+        if accepted == (self.verification_failure is not None):
+            raise ValueError(
+                "verification_failure must be absent exactly when verification succeeds"
+            )
         return self
 
 
@@ -1019,6 +1043,9 @@ class PolynomialIdentityOutput(ContractModel):
             )
         if self.identical is not expected[self.conclusion]:
             raise ValueError("identical must preserve an unknown checker conclusion")
+        decisive = self.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+        if decisive != (self.verification_record_uri is not None):
+            raise ValueError("a decisive identity conclusion requires a record")
         return self
 
 
@@ -1050,6 +1077,9 @@ class RationalFunctionIdentityOutput(ContractModel):
             )
         if self.identical is not expected[self.conclusion]:
             raise ValueError("identical must preserve an unknown checker conclusion")
+        decisive = self.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+        if decisive != (self.verification_record_uri is not None):
+            raise ValueError("a decisive identity conclusion requires a record")
         return self
 
 
@@ -1081,6 +1111,11 @@ class PolynomialMapInverseVerifyOutput(ContractModel):
             raise ValueError("inverse conclusion must be TRUE, FALSE, or UNKNOWN")
         if self.inverse_verified is not expected[self.conclusion]:
             raise ValueError("inverse_verified must preserve checker conclusion")
+        decisive = self.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+        if decisive != (self.verification_record_uri is not None):
+            raise ValueError(
+                "a decisive inverse conclusion requires a verification record"
+            )
         return self
 
 
@@ -1152,6 +1187,19 @@ class PolynomialCollisionVerifyOutput(ContractModel):
     exactness: PolynomialExactness = PolynomialExactness.EXACT
     coverage: Literal["NOT_APPLICABLE"] = "NOT_APPLICABLE"
 
+    @model_validator(mode="after")
+    def bind_verified_collision(self) -> Self:
+        if self.collision_verified != (self.conclusion == "FALSE"):
+            raise ValueError("collision verification must agree with conclusion")
+        if self.collision_verified != (self.verification_record_uri is not None):
+            raise ValueError("a verified collision requires a verification record")
+        if (
+            self.collision_verified
+            and self.verification_input.status is not InputStatus.ACCEPTED
+        ):
+            raise ValueError("a verified collision requires accepted checker input")
+        return self
+
 
 class PolynomialKellerConditionVerifyOutput(ContractModel):
     keller_condition_verified: bool | None
@@ -1181,6 +1229,9 @@ class PolynomialKellerConditionVerifyOutput(ContractModel):
             raise ValueError(
                 "keller_condition_verified must preserve the checker conclusion"
             )
+        decisive = self.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+        if decisive != (self.verification_record_uri is not None):
+            raise ValueError("a decisive Keller-condition conclusion requires a record")
         return self
 
 
@@ -1213,5 +1264,14 @@ class PolynomialMapInverseCollisionVerifyOutput(ContractModel):
         if self.noninvertibility_verified is not expected[self.conclusion]:
             raise ValueError(
                 "noninvertibility_verified must preserve the checker conclusion"
+            )
+        decisive = self.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+        if decisive != (self.verification_record_uri is not None):
+            raise ValueError(
+                "a decisive non-invertibility conclusion requires a record"
+            )
+        if decisive and self.verification_input.status is not InputStatus.ACCEPTED:
+            raise ValueError(
+                "a decisive non-invertibility result requires accepted input"
             )
         return self

@@ -14,7 +14,15 @@ from jacobian.canonical import (
     loads_strict_json,
 )
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.validated_analysis import RationalLinearProgramRequest
+from jacobian.contracts.validated_analysis import (
+    RationalLinearProgramRequest,
+    RationalLinearProgramResult,
+)
+from jacobian.domains.optimization.protocol import (
+    PROTOCOL,
+    RationalOptimizationWorkerResponse,
+    parse_optimization_worker_request,
+)
 
 
 def _rational(value: CanonicalRational) -> Any:
@@ -23,17 +31,19 @@ def _rational(value: CanonicalRational) -> Any:
     return sympy.Rational(value.as_fraction())
 
 
-def _wire(value: Any) -> dict[str, str]:
+def _wire(value: Any) -> CanonicalRational:
     import sympy
 
     rational = sympy.Rational(value)
-    return {
-        "num": format_canonical_integer(int(rational.p)),
-        "den": format_canonical_integer(int(rational.q)),
-    }
+    return CanonicalRational(
+        num=format_canonical_integer(int(rational.p)),
+        den=format_canonical_integer(int(rational.q)),
+    )
 
 
-def _linear_program(request: RationalLinearProgramRequest) -> dict[str, Any]:
+def _linear_program(
+    request: RationalLinearProgramRequest,
+) -> RationalLinearProgramResult:
     import sympy
     from sympy.solvers.simplex import (
         InfeasibleLPError,
@@ -55,23 +65,21 @@ def _linear_program(request: RationalLinearProgramRequest) -> dict[str, Any]:
             b=rhs.col_join(-rhs),
         )
     except (InfeasibleLPError, UnboundedLPError) as exc:
-        return {
-            "status": "NO_CERTIFICATE",
-            "detail": (
+        return RationalLinearProgramResult(
+            status="NO_CERTIFICATE",
+            detail=(
                 "SymPy produced no primal candidate; solver status is not a "
                 f"certificate: {type(exc).__name__}."
             ),
-        }
+        )
 
     if len(primal_values) != objective.cols:
         raise RuntimeError("SymPy returned a primal candidate with the wrong dimension")
     primal = sympy.Matrix(primal_values)
     residuals = coefficients * primal - rhs
-    primal_payload = {
-        "primal_candidate": [_wire(value) for value in primal],
-        "primal_objective": _wire(primal_value),
-        "primal_residuals": [_wire(value) for value in residuals],
-    }
+    primal_candidate = tuple(_wire(value) for value in primal)
+    primal_objective = _wire(primal_value)
+    primal_residuals = tuple(_wire(value) for value in residuals)
     try:
         dual_symbols = sympy.symbols(f"_dual0:{rhs.rows}")
         dual_column = sympy.Matrix(dual_symbols)
@@ -87,14 +95,16 @@ def _linear_program(request: RationalLinearProgramRequest) -> dict[str, Any]:
             ],
         )
     except (InfeasibleLPError, UnboundedLPError) as exc:
-        return {
-            "status": "PRIMAL_ONLY",
-            **primal_payload,
-            "detail": (
+        return RationalLinearProgramResult(
+            status="PRIMAL_ONLY",
+            primal_candidate=primal_candidate,
+            primal_objective=primal_objective,
+            primal_residuals=primal_residuals,
+            detail=(
                 "SymPy produced a primal candidate but no dual candidate; "
                 f"solver status is not a certificate: {type(exc).__name__}."
             ),
-        }
+        )
 
     dual_values = [dual_solution.get(symbol, sympy.S.Zero) for symbol in dual_symbols]
     if len(dual_values) != rhs.rows:
@@ -107,38 +117,46 @@ def _linear_program(request: RationalLinearProgramRequest) -> dict[str, Any]:
         or any(value < 0 for value in slacks)
         or primal_value != dual_value
     ):
-        return {
-            "status": "PRIMAL_ONLY",
-            **primal_payload,
-            "detail": (
+        return RationalLinearProgramResult(
+            status="PRIMAL_ONLY",
+            primal_candidate=primal_candidate,
+            primal_objective=primal_objective,
+            primal_residuals=primal_residuals,
+            detail=(
                 "The maintained solver candidates failed the exact "
                 "producer-side primal/dual consistency checks."
             ),
-        }
-    return {
-        "status": "CERTIFICATE_PRODUCED",
-        **primal_payload,
-        "dual_candidate": [_wire(value) for value in dual],
-        "dual_objective": _wire(dual_value),
-        "dual_slacks": [_wire(value) for value in slacks],
-        "certificate_available": True,
-        "detail": (
+        )
+    return RationalLinearProgramResult(
+        status="CERTIFICATE_PRODUCED",
+        primal_candidate=primal_candidate,
+        primal_objective=primal_objective,
+        primal_residuals=primal_residuals,
+        dual_candidate=tuple(_wire(value) for value in dual),
+        dual_objective=_wire(dual_value),
+        dual_slacks=tuple(_wire(value) for value in slacks),
+        certificate_available=True,
+        detail=(
             "SymPy produced exact primal and dual candidates with equal "
             "objective values; independent replay remains required."
         ),
-    }
+    )
 
 
 def main() -> int:
     try:
-        payload = loads_strict_json(sys.stdin.buffer.read())
-        request = RationalLinearProgramRequest.model_validate(payload)
+        worker_request = parse_optimization_worker_request(
+            loads_strict_json(sys.stdin.buffer.read())
+        )
     except (CanonicalizationError, ValidationError, ValueError):
         sys.stderr.write("invalid rational optimization worker request\n")
         return 2
     sys.stdout.buffer.write(
         canonicalize_json(
-            _linear_program(request),
+            RationalOptimizationWorkerResponse(
+                protocol=PROTOCOL,
+                result=_linear_program(worker_request.request),
+            ).model_dump(mode="json"),
         )
     )
     return 0

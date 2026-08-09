@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Literal, cast
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -288,9 +288,14 @@ class PolynomialSystemSolutionAdapter:
             and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
-        conclusion = cast(
-            Literal["TRUE", "FALSE", "UNKNOWN"],
-            checked.conclusion.value,
+        conclusion: Literal["TRUE", "FALSE", "UNKNOWN"] = (
+            "TRUE"
+            if verified and checked.conclusion is Conclusion.TRUE
+            else (
+                "FALSE"
+                if verified and checked.conclusion is Conclusion.FALSE
+                else "UNKNOWN"
+            )
         )
         satisfies = {
             "TRUE": True,

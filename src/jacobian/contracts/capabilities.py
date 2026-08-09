@@ -212,6 +212,23 @@ class CapabilityDiscoveryResult(ContractModel):
     ] = "UNFILTERED"
     portfolio_fit_basis: str = Field(min_length=1, max_length=512)
 
+    @model_validator(mode="after")
+    def bind_page_metadata(self) -> Self:
+        capability_ids = tuple(match.capability_id for match in self.matches)
+        if len(set(capability_ids)) != len(capability_ids):
+            raise ValueError("discovery matches must have unique capability IDs")
+        if self.total_matches < len(self.matches):
+            raise ValueError("total_matches cannot be smaller than the returned page")
+        if self.truncated != (self.next_cursor is not None):
+            raise ValueError("truncated must agree with next_cursor")
+        if self.next_cursor is not None and (
+            not capability_ids or self.next_cursor != capability_ids[-1]
+        ):
+            raise ValueError("next_cursor must identify the final returned match")
+        if tuple(sorted(set(self.available_domains))) != self.available_domains:
+            raise ValueError("available domains must be unique and sorted")
+        return self
+
 
 class CapabilityInstallTier(StrEnum):
     """Operational cost and isolation required to install one provider."""
@@ -737,6 +754,10 @@ class CapabilityResult(ContractModel):
             self.assurance.level,
             record_uri,
         )
+        if record_uri is not None and record_uri not in self.artifact_uris:
+            raise ValueError(
+                "the verification record must be included in artifact_uris"
+            )
         return self
 
 
@@ -745,3 +766,12 @@ class CapabilityCatalog(ContractModel):
     policy_profile: str = Field(min_length=1, max_length=64)
     policy_digest: Sha256Digest
     capabilities: tuple[CapabilityDescriptor, ...]
+
+    @model_validator(mode="after")
+    def require_unique_sorted_capabilities(self) -> Self:
+        capability_ids = tuple(
+            descriptor.capability_id for descriptor in self.capabilities
+        )
+        if capability_ids != tuple(sorted(set(capability_ids))):
+            raise ValueError("catalog capability IDs must be unique and sorted")
+        return self

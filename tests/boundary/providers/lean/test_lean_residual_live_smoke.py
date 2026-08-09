@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
-from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
@@ -81,15 +80,7 @@ def _live_adapters(tmp_path: Path):
         schemas,
         artifacts,
         installations,
-        jacobian_provider_runtime(
-            "jacobian.lean4",
-            features=(
-                "clean-replay",
-                "immutable-proof-state",
-                "term-apply",
-                "metavariable-fields",
-            ),
-        ),
+        runtime,
     )
     return adapters  # (proof_state, premise, term_apply, inspect, metavariable)
 

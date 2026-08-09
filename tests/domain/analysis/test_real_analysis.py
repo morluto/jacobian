@@ -87,11 +87,7 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
 
     from jacobian.domains.analysis import operations
 
-    def timeout(
-        _payload: dict[str, object],
-        *,
-        wall_seconds: int,
-    ) -> dict[str, object]:
+    def timeout(_request: object) -> object:
         raise TimeoutError
 
     monkeypatch.setattr(operations, "_run_worker", timeout)

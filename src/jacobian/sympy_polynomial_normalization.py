@@ -34,10 +34,7 @@ from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionNormalizeOutput,
     PolynomialExpressionNormalizeRequest,
 )
-from jacobian.contracts.polynomials import (
-    RationalPolynomial,
-    SparseRationalPolynomial,
-)
+from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.process_policy import (
@@ -46,11 +43,15 @@ from jacobian.process_policy import (
     ProcessTermination,
     execute_process,
 )
-from jacobian.provider_runtime import SYMPY_POLYNOMIAL_WORKER_PROTOCOL, SYMPY_VERSION
+from jacobian.provider_runtime import SYMPY_VERSION
 from jacobian.providers.sympy_runtime import (
     sympy_polynomial_normalization_provider_runtime,
 )
 from jacobian.schema_registry import model_schema
+from jacobian.sympy_polynomial_protocol import (
+    make_sympy_polynomial_worker_request,
+    parse_sympy_polynomial_worker_response,
+)
 from jacobian.worker_environment import worker_environment
 
 SYMPY_NORMALIZATION_STDOUT_LIMIT = 2_000_000
@@ -105,10 +106,7 @@ class _SympyPolynomialNormalizationBackend:
                     "descriptor; no normalization evidence was retained."
                 ),
             )
-        worker_request = {
-            "protocol": SYMPY_POLYNOMIAL_WORKER_PROTOCOL,
-            "expression": request.expression.model_dump(mode="json"),
-        }
+        worker_request = make_sympy_polynomial_worker_request(request.expression)
         completed = execute_process(
             ProcessRequest(
                 executable=sys.executable,
@@ -117,7 +115,7 @@ class _SympyPolynomialNormalizationBackend:
                     "-m",
                     "jacobian.sympy_polynomial_worker",
                 ),
-                stdin_bytes=canonicalize_json(worker_request),
+                stdin_bytes=canonicalize_json(worker_request.model_dump(mode="json")),
                 timeout_seconds=float(request.resource_budget.wall_seconds),
                 environment=worker_environment(locale="C"),
                 cwd=str(Path.cwd()),
@@ -429,26 +427,10 @@ def _parse_worker_output(
 ) -> SparseRationalPolynomial:
     if not stdout.endswith(b"\n") or stdout.count(b"\n") != 1:
         raise ValueError("worker output is not exactly one line")
-    payload: Any = loads_strict_json(stdout[:-1])
-    if (
-        not isinstance(payload, dict)
-        or set(payload)
-        != {
-            "protocol",
-            "status",
-            "backend_version",
-            "normalized",
-        }
-        or payload.get("protocol") != SYMPY_POLYNOMIAL_WORKER_PROTOCOL
-        or payload.get("status") != "NORMALIZATION_PRODUCED"
-        or payload.get("backend_version") != SYMPY_VERSION
-    ):
-        raise ValueError("worker protocol is invalid")
-    polynomial = RationalPolynomial(
+    return parse_sympy_polynomial_worker_response(
+        loads_strict_json(stdout[:-1]),
         variables=variables,
-        polynomial=SparseRationalPolynomial.model_validate(payload["normalized"]),
     )
-    return polynomial.polynomial
 
 
 def _operational_failure(

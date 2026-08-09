@@ -214,20 +214,26 @@ class RationalFunctionIdentityAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             checker_id=checker_id,
         )
-        verified = checked.verification_record_uri is not None
+        record_uri = checked.verification_record_uri
+        verified = record_uri is not None
+        conclusion = (
+            checked.conclusion
+            if verified and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+            else Conclusion.UNKNOWN
+        )
         identical = {
             Conclusion.TRUE: True,
             Conclusion.FALSE: False,
             Conclusion.UNKNOWN: None,
-        }[checked.conclusion]
+        }[conclusion]
         output = RationalFunctionIdentityOutput(
             identical=identical,
-            conclusion=checked.conclusion,
+            conclusion=conclusion,
             left_uri=left.artifact_uri,
             right_uri=right.artifact_uri,
             claim_uri=claim.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
         )
         return CapabilityResult(
@@ -249,7 +255,7 @@ class RationalFunctionIdentityAdapter:
                     status=CapabilityCompletenessStatus.COMPLETE,
                     basis="both sparse cross products were replayed independently",
                     assurance_level=CapabilityAssuranceLevel.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 )
                 if verified
                 else CapabilityCompleteness(
@@ -263,10 +269,10 @@ class RationalFunctionIdentityAdapter:
                     source_artifact_uris=(left.artifact_uri,),
                     target_artifact_uris=(right.artifact_uri,),
                     status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 ),
             )
-            if checked.conclusion is Conclusion.TRUE and verified
+            if conclusion is Conclusion.TRUE and verified
             else (),
             assurance=CapabilityAssurance(
                 level=(
@@ -279,13 +285,13 @@ class RationalFunctionIdentityAdapter:
                     if verified
                     else "the independent checker did not accept the replay"
                 ),
-                verification_record_uri=checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=(
                 left.artifact_uri,
                 right.artifact_uri,
                 claim.artifact_uri,
                 certificate_artifact.artifact_uri,
-                *((checked.verification_record_uri,) if verified else ()),
+                *((record_uri,) if record_uri is not None else ()),
             ),
         )

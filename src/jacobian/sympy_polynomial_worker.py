@@ -17,7 +17,6 @@ from jacobian.canonical import (
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.polynomial_expressions import (
     PolynomialAddExpression,
-    PolynomialExpressionArtifact,
     PolynomialExpressionNode,
     PolynomialMultiplyExpression,
     PolynomialNegateExpression,
@@ -29,9 +28,11 @@ from jacobian.contracts.polynomials import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.provider_runtime import (
-    SYMPY_POLYNOMIAL_WORKER_PROTOCOL,
-    SYMPY_VERSION,
+from jacobian.provider_runtime import SYMPY_VERSION
+from jacobian.sympy_polynomial_protocol import (
+    SympyPolynomialWorkerRequest,
+    SympyPolynomialWorkerResponse,
+    parse_sympy_polynomial_worker_request,
 )
 
 
@@ -77,16 +78,10 @@ def _wire_polynomial(polynomial: Poly) -> SparseRationalPolynomial:
     )
 
 
-def _run(payload: object) -> dict[str, Any]:
-    if (
-        not isinstance(payload, dict)
-        or set(payload) != {"protocol", "expression"}
-        or payload.get("protocol") != SYMPY_POLYNOMIAL_WORKER_PROTOCOL
-    ):
-        raise ValueError("invalid worker request")
+def _run(request: SympyPolynomialWorkerRequest) -> SympyPolynomialWorkerResponse:
     if sympy.__version__ != SYMPY_VERSION:
         raise RuntimeError("unexpected SymPy version")
-    expression = PolynomialExpressionArtifact.model_validate(payload["expression"])
+    expression = request.expression
     generators = tuple(sympy.Symbol(name) for name in expression.variables)
     symbol_table = dict(zip(expression.variables, generators, strict=True))
     polynomial = Poly(
@@ -95,17 +90,19 @@ def _run(payload: object) -> dict[str, Any]:
         domain=QQ,
     )
     normalized = _wire_polynomial(polynomial)
-    return {
-        "protocol": SYMPY_POLYNOMIAL_WORKER_PROTOCOL,
-        "status": "NORMALIZATION_PRODUCED",
-        "backend_version": SYMPY_VERSION,
-        "normalized": normalized.model_dump(mode="json"),
-    }
+    return SympyPolynomialWorkerResponse(
+        protocol=request.protocol,
+        status="NORMALIZATION_PRODUCED",
+        backend_version="1.14.0",
+        normalized=normalized,
+    )
 
 
 def main() -> int:
     try:
-        request = loads_strict_json(sys.stdin.buffer.read())
+        request = parse_sympy_polynomial_worker_request(
+            loads_strict_json(sys.stdin.buffer.read())
+        )
         response = _run(request)
     except (
         ArithmeticError,
@@ -117,7 +114,7 @@ def main() -> int:
     ):
         sys.stderr.write("typed polynomial normalization failed\n")
         return 1
-    sys.stdout.buffer.write(canonicalize_json(response) + b"\n")
+    sys.stdout.buffer.write(canonicalize_json(response.model_dump(mode="json")) + b"\n")
     return 0
 
 

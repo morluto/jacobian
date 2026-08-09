@@ -145,6 +145,11 @@ class LeanCheckAdapter:
                 checked.candidate_uri,
                 *evidence,
                 *((scope_uri,) if scope_uri is not None else ()),
+                *(
+                    (checked.result.verification_record_uri,)
+                    if checked.result.verification_record_uri is not None
+                    else ()
+                ),
             ),
         )
 

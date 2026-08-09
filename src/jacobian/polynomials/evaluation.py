@@ -477,8 +477,13 @@ class PolynomialKellerConditionVerifyAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             checker_id=checker_id,
         )
-        verified = checked.verification_record_uri is not None
-        conclusion = checked.conclusion
+        record_uri = checked.verification_record_uri
+        verified = record_uri is not None
+        conclusion = (
+            checked.conclusion
+            if verified and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+            else Conclusion.UNKNOWN
+        )
         condition = {
             Conclusion.TRUE: True,
             Conclusion.FALSE: False,
@@ -492,7 +497,7 @@ class PolynomialKellerConditionVerifyAdapter:
             claim_uri=claim.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
             determinant=jacobian.determinant,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
         )
         artifact_uris = list(
@@ -504,8 +509,8 @@ class PolynomialKellerConditionVerifyAdapter:
                 )
             )
         )
-        if checked.verification_record_uri is not None:
-            artifact_uris.append(checked.verification_record_uri)
+        if record_uri is not None:
+            artifact_uris.append(record_uri)
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -538,7 +543,7 @@ class PolynomialKellerConditionVerifyAdapter:
                     source_artifact_uris=(map_uri,),
                     target_artifact_uris=(jacobian_uri,),
                     status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 ),
             )
             if verified and conclusion is Conclusion.TRUE
@@ -555,7 +560,7 @@ class PolynomialKellerConditionVerifyAdapter:
                     if verified
                     else "the independent Keller-condition checker did not accept"
                 ),
-                verification_record_uri=checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=tuple(artifact_uris),
         )

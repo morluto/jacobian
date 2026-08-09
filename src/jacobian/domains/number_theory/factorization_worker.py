@@ -3,17 +3,28 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
 
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.number_theory import (
-    ArithmeticFunctionRequest,
-    FactorizationRequest,
-    PowerfulNumberRequest,
+from jacobian.domains.number_theory.factorization_protocol import (
+    PROTOCOL,
+    DivisorsWorkerRequest,
+    DivisorsWorkerResponse,
+    FactorizationWorkerRequest,
+    FactorizationWorkerResponse,
+    PowerfulWorkerRequest,
+    PowerfulWorkerResponse,
+    PrimeFactorizationWorkerRequest,
+    PrimeFactorizationWorkerResponse,
+    ProperDivisorsWorkerRequest,
+    ProperDivisorsWorkerResponse,
+    RadicalWorkerRequest,
+    RadicalWorkerResponse,
+    SquarefreeWorkerRequest,
+    SquarefreeWorkerResponse,
+    parse_factorization_worker_request,
 )
-from jacobian.contracts.results import ContractModel
 from jacobian.domains.number_theory.operations import (
     compute_radical,
     decide_powerful,
@@ -23,57 +34,56 @@ from jacobian.domains.number_theory.operations import (
     factorize_primes,
 )
 
-PROTOCOL = "jacobian.number-theory.factorization.sympy.v1"
 
-
-def _validated_operation[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-](
-    request_model: type[RequestT],
-    operation: Callable[[RequestT], ResultT],
-) -> Callable[[object], ResultT]:
-    def invoke(payload: object) -> ResultT:
-        return operation(request_model.model_validate(payload))
-
-    return invoke
-
-
-_OPERATIONS: dict[str, Callable[[object], ContractModel]] = {
-    "divisors": _validated_operation(FactorizationRequest, enumerate_divisors),
-    "proper_divisors": _validated_operation(
-        FactorizationRequest, enumerate_proper_divisors
-    ),
-    "prime_factorization": _validated_operation(FactorizationRequest, factorize_primes),
-    "powerful": _validated_operation(PowerfulNumberRequest, decide_powerful),
-    "squarefree": _validated_operation(ArithmeticFunctionRequest, decide_squarefree),
-    "radical": _validated_operation(ArithmeticFunctionRequest, compute_radical),
-}
+def _run(worker_request: FactorizationWorkerRequest) -> FactorizationWorkerResponse:
+    if isinstance(worker_request, DivisorsWorkerRequest):
+        return DivisorsWorkerResponse(
+            protocol=PROTOCOL,
+            operation="divisors",
+            result=enumerate_divisors(worker_request.request),
+        )
+    if isinstance(worker_request, ProperDivisorsWorkerRequest):
+        return ProperDivisorsWorkerResponse(
+            protocol=PROTOCOL,
+            operation="proper_divisors",
+            result=enumerate_proper_divisors(worker_request.request),
+        )
+    if isinstance(worker_request, PrimeFactorizationWorkerRequest):
+        return PrimeFactorizationWorkerResponse(
+            protocol=PROTOCOL,
+            operation="prime_factorization",
+            result=factorize_primes(worker_request.request),
+        )
+    if isinstance(worker_request, PowerfulWorkerRequest):
+        return PowerfulWorkerResponse(
+            protocol=PROTOCOL,
+            operation="powerful",
+            result=decide_powerful(worker_request.request),
+        )
+    if isinstance(worker_request, SquarefreeWorkerRequest):
+        return SquarefreeWorkerResponse(
+            protocol=PROTOCOL,
+            operation="squarefree",
+            result=decide_squarefree(worker_request.request),
+        )
+    if isinstance(worker_request, RadicalWorkerRequest):
+        return RadicalWorkerResponse(
+            protocol=PROTOCOL,
+            operation="radical",
+            result=compute_radical(worker_request.request),
+        )
+    raise AssertionError("unreachable factorization worker request")
 
 
 def main() -> int:
     try:
-        payload = loads_strict_json(sys.stdin.buffer.read())
-        if not isinstance(payload, dict) or set(payload) != {
-            "operation",
-            "protocol",
-            "request",
-        }:
-            raise ValueError("unexpected worker request fields")
-        if payload["protocol"] != PROTOCOL:
-            raise ValueError("unsupported worker protocol")
-        operation = _OPERATIONS[payload["operation"]]
-        result = operation(payload["request"])
-        sys.stdout.buffer.write(
-            canonicalize_json(
-                {
-                    "protocol": PROTOCOL,
-                    "result": result.model_dump(mode="json"),
-                }
-            )
+        worker_request = parse_factorization_worker_request(
+            loads_strict_json(sys.stdin.buffer.read())
         )
+        response = _run(worker_request)
+        sys.stdout.buffer.write(canonicalize_json(response.model_dump(mode="json")))
         return 0
-    except (KeyError, TypeError, ValueError, ValidationError):
+    except (TypeError, ValueError, ValidationError):
         return 2
 
 

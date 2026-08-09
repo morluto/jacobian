@@ -232,6 +232,7 @@ class ForgedVerifiedAdapter:
     )
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        record_uri = "artifact://sha256/" + "f" * 64
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -240,8 +241,9 @@ class ForgedVerifiedAdapter:
             assurance=CapabilityAssurance(
                 level=CapabilityAssuranceLevel.VERIFIED,
                 basis="adapter says so",
-                verification_record_uri="artifact://sha256/" + "f" * 64,
+                verification_record_uri=record_uri,
             ),
+            artifact_uris=(record_uri,),
         )
 
 

@@ -165,7 +165,7 @@ class PolynomialMapInverseSynthesizeAdapter:
         RationalPolynomialMap | None,
         tuple[SparseRationalPolynomial, ...],
         tuple[SparseRationalPolynomial, ...],
-        dict[str, Any] | None,
+        PolynomialMapInverseVerifyOutput | None,
         str | None,
         str | None,
         int,
@@ -176,7 +176,7 @@ class PolynomialMapInverseSynthesizeAdapter:
         candidate: RationalPolynomialMap | None = None
         left_residuals: tuple[SparseRationalPolynomial, ...] = ()
         right_residuals: tuple[SparseRationalPolynomial, ...] = ()
-        verification_output: dict[str, Any] | None = None
+        verification_output: PolynomialMapInverseVerifyOutput | None = None
         verification_artifact_uri: str | None = None
         verification_failure: str | None = None
         residual_term_count = 0
@@ -368,7 +368,7 @@ class PolynomialMapInverseSynthesizeAdapter:
         RationalPolynomialMap | None,
         tuple[SparseRationalPolynomial, ...],
         tuple[SparseRationalPolynomial, ...],
-        dict[str, Any] | None,
+        PolynomialMapInverseVerifyOutput | None,
         str | None,
     ]:
         """Classify the solver result and run independent verification."""
@@ -376,7 +376,7 @@ class PolynomialMapInverseSynthesizeAdapter:
         candidate: RationalPolynomialMap | None = None
         left_residuals: tuple[SparseRationalPolynomial, ...] = ()
         right_residuals: tuple[SparseRationalPolynomial, ...] = ()
-        verification_output: dict[str, Any] | None = None
+        verification_output: PolynomialMapInverseVerifyOutput | None = None
         verification_artifact_uri: str | None = None
         verification_failure: str | None = None
 
@@ -417,14 +417,14 @@ class PolynomialMapInverseSynthesizeAdapter:
                         input=verify_request.model_dump(mode="json"),
                     )
                 )
-                verification_output = verified.output
-                artifact = verified.output.get(
-                    "verification_record_uri"
-                ) or verified.output.get("certificate_uri")
-                verification_artifact_uri = (
-                    artifact if isinstance(artifact, str) else None
+                verification_output = PolynomialMapInverseVerifyOutput.model_validate(
+                    verified.output
                 )
-                if verified.output.get("inverse_verified") is not True:
+                verification_artifact_uri = (
+                    verification_output.verification_record_uri
+                    or verification_output.certificate_uri
+                )
+                if verification_output.inverse_verified is not True:
                     verification_failure = (
                         "the independent two-sided verifier rejected "
                         "the synthesized candidate"
@@ -826,8 +826,14 @@ class PolynomialMapInverseVerifyAdapter:
             checker_id=checker_id,
             supporting_artifact_uris=supporting,
         )
-        verified = aggregate_checked.verification_record_uri is not None
-        conclusion = aggregate_checked.conclusion
+        record_uri = aggregate_checked.verification_record_uri
+        verified = record_uri is not None
+        conclusion = (
+            aggregate_checked.conclusion
+            if verified
+            and aggregate_checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+            else Conclusion.UNKNOWN
+        )
         output = PolynomialMapInverseVerifyOutput(
             inverse_verified={
                 Conclusion.TRUE: True,
@@ -842,7 +848,7 @@ class PolynomialMapInverseVerifyAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             inverse_after_forward_checker_records=tuple(left_records),
             forward_after_inverse_checker_records=tuple(right_records),
-            verification_record_uri=aggregate_checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
             source_variables=validated.source_variables,
             target_variables=validated.target_variables,
@@ -877,7 +883,7 @@ class PolynomialMapInverseVerifyAdapter:
                     if verified
                     else CapabilityAssuranceLevel.COMPUTED
                 ),
-                verification_record_uri=aggregate_checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             relationships=(),
             assurance=CapabilityAssurance(
@@ -891,7 +897,7 @@ class PolynomialMapInverseVerifyAdapter:
                     if verified
                     else "the independent checker did not accept the inverse request"
                 ),
-                verification_record_uri=aggregate_checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=tuple(
                 dict.fromkeys(
@@ -902,11 +908,7 @@ class PolynomialMapInverseVerifyAdapter:
                         claim.artifact_uri,
                         certificate_artifact.artifact_uri,
                         *identity_artifacts,
-                        *(
-                            (aggregate_checked.verification_record_uri,)
-                            if aggregate_checked.verification_record_uri is not None
-                            else ()
-                        ),
+                        *((record_uri,) if record_uri is not None else ()),
                     )
                 )
             ),

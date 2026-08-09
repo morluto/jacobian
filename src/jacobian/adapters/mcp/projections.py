@@ -41,6 +41,18 @@ def _mcp_text_json_bytes(value: object) -> bytes:
 
 
 _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
+    "polynomial.jacobian_syzygy.coefficients.materialize": (
+        (
+            "polynomial.jacobian_syzygy.coefficients.verify",
+            "independently verify the retained coefficient ledger",
+        ),
+    ),
+    "polynomial.jacobian_syzygy.coefficients.verify": (
+        (
+            "polynomial.jacobian_syzygy.coefficients.materialize",
+            "produce the retained coefficient ledger accepted by this verifier",
+        ),
+    ),
     "sat.cnf.materialize": (
         ("sat.model.find", "find a candidate named assignment"),
         ("sat.model.verify", "independently verify a candidate assignment"),

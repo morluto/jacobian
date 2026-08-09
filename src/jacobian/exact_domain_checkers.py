@@ -993,7 +993,30 @@ def _checker_supports(operation_id: str, payload: object) -> bool:
         "polynomial.jacobian_syzygy.minimum_degree.compute",
         "polynomial.jacobian_syzygy.coefficients.materialize",
     }:
-        return True
+        polynomial = payload.get("polynomial")
+        maximum_degree = payload.get("max_degree")
+        if not isinstance(polynomial, dict) or type(maximum_degree) is not int:
+            return False
+        body = polynomial.get("polynomial")
+        terms = body.get("terms") if isinstance(body, dict) else None
+        if not isinstance(terms, list):
+            return True
+        homogeneous_degree = max(
+            (
+                sum(term.get("exponents", ()))
+                for term in terms
+                if isinstance(term, dict)
+                and isinstance(term.get("exponents"), list)
+                and all(type(value) is int for value in term["exponents"])
+            ),
+            default=0,
+        )
+        replay_cells = sum(
+            (3 * ((degree + 2) * (degree + 1) // 2))
+            * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)
+            for degree in range(maximum_degree + 1)
+        )
+        return len(terms) * replay_cells <= 1_000_000
     polynomial_fields = {
         "polynomial.compute.gcd": ("left", "right"),
         "polynomial.compute.resultant": ("left", "right"),

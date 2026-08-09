@@ -95,7 +95,7 @@ ALL_BUNDLES = (
 _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (ArithIntegerValueRequest, {"value": "12"}),
     (IntegerBaseDigitsRequest, {"value": "12", "base": 2}),
-    (IntegerNthRootRequest, {"value": 8, "degree": 3}),
+    (IntegerNthRootRequest, {"value": "8", "degree": 3}),
     (CombNonnegIntRequest, {"n": 5}),
     (FibonacciPairRequest, {"n": 5}),
     (CombNonnegPairRequest, {"n": 5, "k": 2}),

@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["check_degree_sequence"]
-
-
 _MAX_ORDER = 512
 
 

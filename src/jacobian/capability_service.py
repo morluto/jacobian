@@ -32,6 +32,7 @@ from jacobian.capability_errors import (
 from jacobian.capability_registry import CapabilityRegistryMixin
 from jacobian.capability_verification import CapabilityVerificationMixin
 from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationship,
     CapabilityDescriptor,
     CapabilityMode,
     CapabilityRequest,
@@ -195,6 +196,28 @@ class CapabilityService(
         self.store = store
         self.policy = policy or CapabilityPolicy()
         self._adapters: dict[str, CapabilityAdapter] = {}
+        self._descriptors: dict[str, CapabilityDescriptor] = {}
+        self._catalog_relationships: dict[
+            str, dict[str, CapabilityCatalogRelationship]
+        ] = {}
+
+    def _register_catalog_relationship(
+        self,
+        source_capability_id: str,
+        relationship: CapabilityCatalogRelationship,
+    ) -> None:
+        """Register one installer-authorized directed catalog relationship."""
+
+        if source_capability_id == relationship.capability_id:
+            raise CapabilityError("a capability cannot relate to itself")
+        related = self._catalog_relationships.setdefault(source_capability_id, {})
+        previous = related.get(relationship.capability_id)
+        if previous is not None and previous != relationship:
+            raise CapabilityError(
+                "conflicting catalog relationship: "
+                f"{source_capability_id} -> {relationship.capability_id}"
+            )
+        related[relationship.capability_id] = relationship
 
 
 def load_capability_adapter(

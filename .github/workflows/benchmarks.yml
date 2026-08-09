@@ -310,7 +310,7 @@ jobs:
           name: benchmark-oracle-${{ matrix.dataset }}-${{ matrix.shard }}
           path: |
             benchmarks/results/${{ matrix.dataset }}-oracle
-            benchmarks/results/${{ matrix.dataset }}-oracle/jacobian-augmented-task-digests.json
+            benchmarks/results/${{ matrix.dataset }}-oracle/jacobian-augmented-task-digests.*.json
             benchmarks/results/${{ matrix.dataset }}-oracle/**/oracle-evidence.json
           if-no-files-found: ignore
           retention-days: ${{ github.event_name == 'pull_request' && 14 || 90 }}

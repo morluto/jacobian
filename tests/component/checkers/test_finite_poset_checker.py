@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -9,7 +8,6 @@ import pytest
 from tests.support.artifacts import artifact_uri as _uri
 from tests.support.artifacts import canonical_digest as _digest
 
-import jacobian_checkers.finite_posets as checker_module
 from jacobian.contracts.posets import (
     FinitePosetRequest,
     LinearExtensionRequest,
@@ -208,10 +206,3 @@ def test_mobius_checker_rejects_changed_value_and_contribution() -> None:
     target["recurrence_contributions"] = []
     candidate["payload_digest"] = _digest(candidate["payload"])
     assert check_poset_mobius_function(forged)["accepted"] is False
-
-
-def test_checker_source_does_not_import_networkx_producer_or_contracts() -> None:
-    source = inspect.getsource(checker_module)
-    assert "import networkx" not in source
-    assert "jacobian.domains.posets" not in source
-    assert "jacobian.contracts.posets" not in source

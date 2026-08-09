@@ -12,8 +12,6 @@ from jacobian.contracts.graph_coloring import (
 )
 from jacobian.graphs.coloring_semantics import canonical_graph, coloring_cnf
 
-__all__ = ["build_simple_graph", "solve_chromatic_number"]
-
 
 def build_simple_graph(graph: ChromaticGraph) -> Any:
     """Build a networkx Graph from a validated :class:`ChromaticGraph`.

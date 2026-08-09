@@ -8,7 +8,10 @@ import logging
 import threading
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from jacobian.adapters.mcp.constants import CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+from jacobian.adapters.mcp.constants import (
+    CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+    CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT,
+)
 from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityDiscoveryCursorError
@@ -62,54 +65,6 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
             "materialize named Boolean CNF for finite colorings and forbidden patterns",
         ),
     ),
-    "graph.invariant.maximum_matching.compute": (
-        (
-            "graph.invariant.maximum_matching.verify",
-            "independently replay the stored Tutte-Berge certificate",
-        ),
-    ),
-    "graph.invariant.maximum_matching.verify": (
-        (
-            "graph.invariant.maximum_matching.compute",
-            "produce a matching witness and Tutte-Berge certificate",
-        ),
-    ),
-    "graph.hamiltonian_path.decide": (
-        (
-            "graph.hamiltonian_path.verify",
-            "independently verify the stored positive or negative decision",
-        ),
-    ),
-    "graph.hamiltonian_path.verify": (
-        (
-            "graph.hamiltonian_path.decide",
-            "produce a complete bounded decision and optional path witness",
-        ),
-    ),
-    "polynomial.jacobian_syzygy.minimum_degree.compute": (
-        (
-            "polynomial.jacobian_syzygy.minimum_degree.verify",
-            "independently rebuild the graded maps, ranks, minors, and first kernel",
-        ),
-    ),
-    "polynomial.jacobian_syzygy.minimum_degree.verify": (
-        (
-            "polynomial.jacobian_syzygy.minimum_degree.compute",
-            "produce the provenance-bound graded rank ledger and kernel witness",
-        ),
-    ),
-    "geometry.projective_line_arrangement.flats.materialize": (
-        (
-            "geometry.projective_line_arrangement.flats.verify",
-            "independently rebuild all projective flats and pair accounting",
-        ),
-    ),
-    "geometry.projective_line_arrangement.flats.verify": (
-        (
-            "geometry.projective_line_arrangement.flats.materialize",
-            "materialize normalized lines, exact flats, incidences and multiplicities",
-        ),
-    ),
 }
 
 
@@ -128,16 +83,27 @@ def _capability_inspection_extensions(
     descriptors: dict[str, CapabilityDescriptor],
 ) -> dict[str, Any]:
     extensions: dict[str, Any] = {}
-    related = [
+    related = {
+        item.capability_id: item.model_dump(mode="json")
+        for item in descriptors[capability_id].related_capabilities
+        if item.capability_id in descriptors and item.capability_id != capability_id
+    }
+    related.update(
         {
-            "capability_id": related_id,
-            "relationship": relationship,
+            related_id: {
+                "capability_id": related_id,
+                "relationship": relationship,
+            }
+            for related_id, relationship in _RELATED_CAPABILITIES.get(capability_id, ())
+            if related_id in descriptors
+            and related_id != capability_id
+            and related_id not in related
         }
-        for related_id, relationship in _RELATED_CAPABILITIES.get(capability_id, ())
-        if related_id in descriptors
-    ]
+    )
     if related:
-        extensions["related_capabilities"] = related
+        extensions["related_capabilities"] = [
+            related[related_id] for related_id in sorted(related)
+        ]
     if capability_id.startswith(("sat.", "smt.")):
         extensions["synchronous_execution"] = {
             "remote_safe_wall_seconds_max": 150,
@@ -210,16 +176,26 @@ def _discovery_operation_card(
     """Add compact decision facts without recommending a research action."""
 
     runtime = descriptor.provider_runtime
-    related = [
+    related = {
+        item.capability_id: item.model_dump(mode="json")
+        for item in descriptor.related_capabilities
+        if item.capability_id in descriptors
+        and item.capability_id != descriptor.capability_id
+    }
+    related.update(
         {
-            "capability_id": related_id,
-            "relationship": relationship,
+            related_id: {
+                "capability_id": related_id,
+                "relationship": relationship,
+            }
+            for related_id, relationship in _RELATED_CAPABILITIES.get(
+                descriptor.capability_id, ()
+            )
+            if related_id in descriptors
+            and related_id != descriptor.capability_id
+            and related_id not in related
         }
-        for related_id, relationship in _RELATED_CAPABILITIES.get(
-            descriptor.capability_id, ()
-        )
-        if related_id in descriptors
-    ]
+    )
     invocation_example = None
     if descriptor.invocation_examples:
         example = descriptor.invocation_examples[0]
@@ -247,7 +223,7 @@ def _discovery_operation_card(
         "provider_availability": (
             runtime.availability.value if runtime is not None else "UNKNOWN"
         ),
-        "related_capabilities": related,
+        "related_capabilities": [related[item] for item in sorted(related)],
         **(
             {"invocation_example": invocation_example}
             if invocation_example is not None
@@ -256,6 +232,41 @@ def _discovery_operation_card(
             }
         ),
     }
+
+
+def _compact_discovery_relationships(
+    response: dict[str, Any],
+    matches: list[dict[str, Any]],
+) -> None:
+    """Remove deterministic suffix links until the discovery response is bounded."""
+
+    while (
+        len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+    ):
+        for match in reversed(matches):
+            related = match.get("related_capabilities")
+            if isinstance(related, list) and related:
+                related.pop()
+                response["related_capabilities_truncated"] = True
+                response["truncation_reason"] = "BYTE_LIMIT"
+                break
+        else:
+            return
+
+
+def _compact_inspection_relationships(response: dict[str, Any]) -> None:
+    """Bound exact-inspection relationships without truncating the descriptor."""
+
+    related = response.get("related_capabilities")
+    while (
+        len(_mcp_text_json_bytes(related))
+        > CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT
+        and isinstance(related, list)
+        and related
+    ):
+        related.pop()
+        response["related_capabilities_truncated"] = True
+        response["truncation_reason"] = "BYTE_LIMIT"
 
 
 def _discovery_recovery_paths(
@@ -313,7 +324,7 @@ def _capability_descriptor_view(
     view: CapabilityDescriptionView,
 ) -> dict[str, Any]:
     if view == "FULL":
-        return descriptor.model_dump(mode="json")
+        return descriptor.model_dump(mode="json", exclude={"related_capabilities"})
     runtime = descriptor.provider_runtime
     if view == "SUMMARY":
         runtime_summary = (
@@ -462,8 +473,13 @@ def _capability_discovery_response(
         "recovery_paths_are_unranked": True,
         "response_byte_limit": CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
         "truncation_reason": None,
+        "related_capabilities_truncated": False,
+        "available_domains_total": len(discovered_payload["available_domains"]),
+        "available_domains_truncated": False,
+        "match_metadata_truncated": False,
     }
     matches = cast(list[dict[str, Any]], response["matches"])
+    _compact_discovery_relationships(response, matches)
     while (
         len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
         and len(matches) > 1
@@ -473,8 +489,6 @@ def _capability_discovery_response(
         response["next_cursor"] = matches[-1]["capability_id"]
         response["truncation_reason"] = "BYTE_LIMIT"
     available_domains = cast(list[str], response["available_domains"])
-    response["available_domains_total"] = len(available_domains)
-    response["available_domains_truncated"] = False
     while (
         len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
         and available_domains
@@ -482,7 +496,6 @@ def _capability_discovery_response(
         available_domains.pop()
         response["available_domains_truncated"] = True
         response["truncation_reason"] = "BYTE_LIMIT"
-    response["match_metadata_truncated"] = False
     compact_fields = (
         "tags",
         "matched_on",

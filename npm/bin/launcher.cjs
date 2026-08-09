@@ -101,8 +101,20 @@ function hasProgram(program) {
  */
 function detectRuntime() {
   if (hasProgram("uv")) return { kind: "uv", path: "uv" };
-  if (hasProgram("python3")) return { kind: "python", path: "python3" };
-  if (hasProgram("python")) return { kind: "python", path: "python" };
+  for (const program of ["python3", "python"]) {
+    const version = run(
+      program,
+      ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+      { silent: true, shell: process.platform === "win32" },
+    );
+    if (
+      version.error === undefined &&
+      version.status === 0 &&
+      ["3.12", "3.13"].includes(version.stdout.trim())
+    ) {
+      return { kind: "python", path: program };
+    }
+  }
   return null;
 }
 
@@ -206,7 +218,7 @@ function requireRuntime() {
   if (!runtime) {
     process.exitCode = 1;
     throw new Error(
-      "Jacobian requires Python 3.12 or uv on PATH. Install one, then retry " +
+      "Jacobian requires Python 3.12/3.13 or uv on PATH. Install one, then retry " +
         "`npx jacobian doctor`.",
     );
   }

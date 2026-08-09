@@ -3,6 +3,7 @@
 const { spawn } = require("node:child_process");
 const { join } = require("node:path");
 const { stderr, stdout } = require("node:process");
+const { isDeepStrictEqual } = require("node:util");
 
 /**
  * Jacobian MCP doctor.
@@ -21,6 +22,14 @@ const EXPECTED_TOOLS = [
   "math.find",
   "math.run",
 ];
+
+function isSameLauncher(left, right) {
+  return (
+    left.command === right.command &&
+    isDeepStrictEqual(left.args, right.args) &&
+    isDeepStrictEqual(left.env || {}, right.env || {})
+  );
+}
 
 /**
  * Convert a server-side startup failure into a safe, actionable diagnosis.
@@ -175,16 +184,35 @@ function waitForResponse(child, id, timeoutMs) {
  */
 async function run(options = {}) {
   const json = options.json ?? false;
-  const launcher = require("./launcher.cjs");
+  const setup = require("./setup.cjs");
+  const launcher = setup.buildLauncher();
 
   if (!json) {
-    stderr.write("◇ Jacobian is checking the MCP handshake and tool catalog...\n");
+    stderr.write("◇ Jacobian is checking configured launchers and the MCP catalog...\n");
   }
 
-  // Resolve the Python executable and spawn the MCP server.
-  let python;
+  const definitions = setup.clientDefinitions(require("node:os").homedir());
+  const supported = new Set(definitions.map((definition) => definition.id));
+  const requested = options.all
+    ? definitions
+    : options.clients?.length > 0
+      ? definitions.filter((definition) => options.clients.includes(definition.id))
+      : definitions;
+  const invalid = (options.clients || []).filter((client) => !supported.has(client));
+  if (invalid.length > 0) {
+    throw new Error(`Unknown MCP client: ${invalid.join(", ")}.`);
+  }
+  if (options.all && options.clients?.length > 0) {
+    throw new Error("--all cannot be combined with --client.");
+  }
+
+  let inspections;
   try {
-    python = launcher.resolvePython();
+    inspections = await Promise.all(
+      requested.map((definition) =>
+        setup.inspectClientConfiguration(definition, launcher),
+      ),
+    );
   } catch (error) {
     const report = {
       status: "error",
@@ -193,7 +221,8 @@ async function run(options = {}) {
       instructionsLoaded: false,
       tools: [],
       integration: {
-        launcherStatus: "failed",
+        launcherStatus: "not_attempted",
+        configurationStatus: "invalid",
         handshakeStatus: "not_attempted",
         catalogStatus: "not_attempted",
         repairCommand: "npx jacobian setup",
@@ -211,10 +240,84 @@ async function run(options = {}) {
     return report;
   }
 
+  const explicitSelection = Boolean(options.all || options.clients?.length > 0);
+  const configured = inspections.filter((inspection) => inspection.status !== "not_configured");
+  const checked = explicitSelection ? inspections : configured;
+  const publicChecked = checked.map(({ client, path, status }) => ({
+    client,
+    path,
+    status,
+  }));
+  const invalidConfigurations = checked.filter(
+    (inspection) => !inspection.status.startsWith("configured"),
+  );
+  if (invalidConfigurations.length > 0) {
+    const names = invalidConfigurations
+      .map((inspection) => `${inspection.client} (${inspection.status})`)
+      .join(", ");
+    const report = {
+      status: "error",
+      serverName: "",
+      serverVersion: "",
+      instructionsLoaded: false,
+      tools: [],
+      integration: {
+        launcherStatus: "not_attempted",
+        configurationStatus: "failed",
+        checkedClients: publicChecked,
+        handshakeStatus: "not_attempted",
+        catalogStatus: "not_attempted",
+        repairCommand: "npx jacobian setup",
+      },
+      firstCall: { status: "not_attempted" },
+      error: `Client configuration is not current: ${names}.`,
+    };
+    if (json) stdout.write(JSON.stringify(report, null, 2) + "\n");
+    else {
+      stderr.write(`  ✗ Client configuration: ${names}\n`);
+      stderr.write("  Run `npx jacobian setup` to repair it.\n");
+    }
+    process.exitCode = 1;
+    return report;
+  }
+
+  const verifiedLauncher = checked[0]?.launcher ?? launcher;
+  const incompatibleLaunchers = checked.filter(
+    (inspection) =>
+      !isSameLauncher(inspection.launcher ?? launcher, verifiedLauncher),
+  );
+  if (incompatibleLaunchers.length > 0) {
+    const report = {
+      status: "error",
+      serverName: "",
+      serverVersion: "",
+      instructionsLoaded: false,
+      tools: [],
+      integration: {
+        launcherStatus: "not_attempted",
+        configurationStatus: "inconsistent",
+        checkedClients: publicChecked,
+        handshakeStatus: "not_attempted",
+        catalogStatus: "not_attempted",
+        repairCommand: "npx jacobian setup",
+      },
+      firstCall: { status: "not_attempted" },
+      error: "Selected clients do not use the same Jacobian launcher.",
+    };
+    if (json) stdout.write(JSON.stringify(report, null, 2) + "\n");
+    else stderr.write(`  ✗ ${report.error}\n`);
+    process.exitCode = 1;
+    return report;
+  }
+
   const stateDir = process.env.JACOBIAN_STATE_DIR || join(process.cwd(), ".jacobian");
-  const child = spawn(python, ["-m", "jacobian.adapters.mcp.server"], {
+  const child = spawn(verifiedLauncher.command, verifiedLauncher.args, {
     stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, JACOBIAN_STATE_DIR: stateDir },
+    env: {
+      ...process.env,
+      ...(verifiedLauncher.env || {}),
+      JACOBIAN_STATE_DIR: stateDir,
+    },
     windowsHide: true,
   });
   let stderrText = "";
@@ -287,6 +390,8 @@ async function run(options = {}) {
       tools,
       integration: {
         launcherStatus: "ok",
+        configurationStatus: checked.length > 0 ? "ok" : "not_checked",
+        checkedClients: publicChecked,
         handshakeStatus: "ok",
         catalogStatus,
         repairCommand: "npx jacobian setup",
@@ -301,12 +406,21 @@ async function run(options = {}) {
       stdout.write(JSON.stringify(report, null, 2) + "\n");
     } else {
       stderr.write(`\n  ✓ Launcher: ok\n`);
+      if (checked.length > 0) {
+        stderr.write(
+          `  ✓ Client configuration: ${checked.map((item) => item.client).join(", ")}\n`,
+        );
+      } else {
+        stderr.write("  – Client configuration: not checked (none configured)\n");
+      }
       stderr.write(`  ✓ Handshake: ok (server: ${serverName} ${serverVersion})\n`);
       stderr.write(`  ${catalogStatus === "complete" ? "✓" : "✗"} Tool catalog: ${catalogStatus} (${tools.length} tools)\n`);
       if (missingTools.length > 0) {
         stderr.write(`    Missing: ${missingTools.join(", ")}\n`);
       }
-      stderr.write(`\n  ${report.status === "ok" ? "✓ Jacobian MCP is ready." : "✗ Jacobian MCP has issues."}\n`);
+      stderr.write(
+        `\n  ${report.status === "ok" ? "✓ Jacobian launcher and MCP runtime are ready." : "✗ Jacobian MCP has issues."}\n`,
+      );
       stderr.write(`  Run \`npx jacobian setup\` to configure or repair MCP clients.\n\n`);
     }
 
@@ -325,6 +439,8 @@ async function run(options = {}) {
       tools: [],
       integration: {
         launcherStatus: "ok",
+        configurationStatus: checked.length > 0 ? "ok" : "not_checked",
+        checkedClients: publicChecked,
         handshakeStatus: "failed",
         catalogStatus: "not_attempted",
         repairCommand: diagnostic.recovery,

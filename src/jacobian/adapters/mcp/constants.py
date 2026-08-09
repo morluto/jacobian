@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
+CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT = 16_384
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
 
 

@@ -5,9 +5,6 @@ from __future__ import annotations
 from itertools import product
 from typing import Any, cast
 
-__all__ = ["check_law_evaluation"]
-
-
 _MAX_ORDER = 8
 _MAX_LAWS = 16
 _MAX_VARIABLES = 4

@@ -11,7 +11,12 @@ from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
 
-def _request(mode: CapabilityMode, *, missing_last: bool = False) -> CapabilityRequest:
+def _request(
+    mode: CapabilityMode,
+    *,
+    missing_last: bool = False,
+    require_disjoint: bool = True,
+) -> CapabilityRequest:
     return CapabilityRequest(
         capability_id="case.partition.finite",
         mode=mode,
@@ -24,7 +29,7 @@ def _request(mode: CapabilityMode, *, missing_last: bool = False) -> CapabilityR
                     "members": ["1", "3"] if missing_last else ["1", "3", "5"],
                 },
             ],
-            "require_disjoint": True,
+            "require_disjoint": require_disjoint,
         },
     )
 
@@ -58,6 +63,43 @@ def test_finite_partition_verify_replays_and_discharges_obligation(
     )
     assert result.relationships[0].status is CapabilityRelationshipStatus.VERIFIED
     assert result.obligations[0].status is CapabilityObligationStatus.DISCHARGED
+
+
+def test_finite_partition_contract_and_result_preserve_semantic_boundary(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    descriptor = next(
+        item
+        for item in runtime.core.capabilities.catalog().capabilities
+        if item.capability_id == "case.partition.finite"
+    )
+    result = runtime.core.capabilities.invoke(_request(CapabilityMode.VERIFY))
+
+    assert "opaque caller-supplied strings" in descriptor.description
+    assert "does not establish their mathematical meaning" in descriptor.description
+    assert "external-domain completeness" in result.scope.description
+    assert "member/case semantics were not checked" in result.assurance.basis
+    assert "member/case semantics" in result.completeness.basis
+
+
+def test_finite_partition_reports_conditional_disjointness_scope(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    request = _request(CapabilityMode.VERIFY, require_disjoint=False)
+    request.input["cases"][1]["members"].append("0")
+
+    result = runtime.core.capabilities.invoke(request)
+
+    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert result.output["overlaps"] == ["0"]
+    assert "disjointness was not required" in result.assurance.basis
+    assert "disjointness was not required" in result.completeness.basis
+    certificate = runtime.core.store.get(result.output["certificate_uri"])
+    assert certificate.payload["payload"]["replay"] == (
+        "equality-based finite coverage and conditional disjointness"
+    )
 
 
 def test_finite_partition_verify_fails_closed_on_incomplete_cases(

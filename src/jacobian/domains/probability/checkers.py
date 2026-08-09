@@ -79,6 +79,24 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         entrypoint_module=_ENTRYPOINT,
         replay_method="independent exhaustive edge-subset replay",
         reason=_REASON,
+        verification_capability_id=(
+            "probability.graph_reliability.connection_probability.verify"
+        ),
+        verification_title="Verify an exact terminal connection probability",
+        verification_description=(
+            "Independently enumerate every edge subset and replay exact terminal "
+            "connectivity for one bounded graph-reliability result."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "probability",
+            "graph",
+            "reliability",
+            "percolation",
+            "connection",
+            "terminals",
+        ),
     ),
 )
 

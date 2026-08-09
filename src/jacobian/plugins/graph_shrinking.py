@@ -10,8 +10,6 @@ from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.plugin_graphs import GraphShrinkRequest
 from jacobian.contracts.shrinking import PluginReductionResponse, ReductionProposal
 
-__all__ = ("reduce_simple_graph",)
-
 
 def reduce_simple_graph(request: dict[str, Any]) -> dict[str, Any]:
     """Propose every requested single deletion in canonical order."""

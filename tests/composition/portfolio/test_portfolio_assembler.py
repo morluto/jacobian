@@ -161,6 +161,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
             operations=operations,
             checker_authority=CheckerAuthorityMode.NONE,
             register_capability=register_capability,
+            register_checker_relationship=capabilities._register_catalog_relationship,
         )
         yield _RecordingContext(context=context, store=store, registered=registered)
     finally:

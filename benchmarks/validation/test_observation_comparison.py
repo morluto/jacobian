@@ -121,6 +121,7 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
         "agents": [
             {
                 "name": "codex",
+                "skills": [".agents/skills/jacobian-math"],
                 "mcp_servers": [
                     {
                         "name": "jacobian",
@@ -138,6 +139,10 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
     assert _comparison_job(control) != _comparison_job(treatment)
     treatment["artifacts"].pop()
 
+    treatment["agents"][0]["skills"].append("unexpected-skill")
+    assert _comparison_job(control) != _comparison_job(treatment)
+    treatment["agents"][0]["skills"].pop()
+
     heldout_treatment = {
         "artifacts": ["/logs/agent/trajectory.json"],
         "environment": {
@@ -149,6 +154,7 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
         "agents": [
             {
                 "name": "codex",
+                "skills": [".agents/skills/jacobian-math"],
                 "mcp_servers": [
                     {
                         "name": "jacobian",

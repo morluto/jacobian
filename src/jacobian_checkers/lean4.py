@@ -19,9 +19,6 @@ from jacobian.process_policy import (
 )
 from jacobian.worker_environment import worker_environment
 
-__all__ = ["check_kernel_certificate"]
-
-
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 LEAN_VERSION = "4.31.0"

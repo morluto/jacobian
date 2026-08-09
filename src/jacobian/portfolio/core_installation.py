@@ -206,6 +206,11 @@ class CoreApplicationInstaller:
         )
         for adapter in adapters:
             self.context.register_capability(adapter)
+        for relationship in result.exact_domain_checkers.catalog_relationships:
+            ctx.register_checker_relationship(
+                relationship.source_capability_id,
+                relationship.related_capability,
+            )
 
 
 def _conjecture_ingestion_installation(

@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any, TypeGuard
 
-__all__ = ["check_decomposition_table"]
-
-
 _MIN_N = 2
 _MAX_N = 10_000
 

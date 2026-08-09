@@ -188,8 +188,8 @@ def test_oracle_artifact_preserves_augmented_task_digest_manifest() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]
 
-    assert "jacobian-augmented-task-digests.json" in oracle
-    assert ".jacobian-augmented-task-digests.json" not in oracle
+    assert "jacobian-augmented-task-digests.*.json" in oracle
+    assert ".jacobian-augmented-task-digests.*.json" not in oracle
 
 
 def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
@@ -262,6 +262,15 @@ def test_local_oracle_targets_require_explicit_scope() -> None:
     assert '"$(TASKS)" -o "$(FULL)" = "1"' in oracle
     assert '"$(TASKS)" -o "$(FULL)" = "1"' in runner
     assert "DATASET=$$dataset FULL=1" in harbor
+
+
+def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:
+    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
+
+    assert "HARBOR_ORACLE_LOCK ?= benchmarks/results/.harbor-oracle.lock" in harbor
+    assert harbor.count('exec 9>"$(HARBOR_ORACLE_LOCK)"; flock 9;') == 2
+    assert "HARBOR_ORACLE_DOCKER_BUILD_MODE ?= auto" in harbor
+    assert "export DOCKER_BUILDKIT=0 COMPOSE_BAKE=false" in harbor
 
 
 def test_composition_lane_uses_timing_shards() -> None:

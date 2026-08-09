@@ -13,9 +13,11 @@ from jacobian.contracts.polynomials import (
     PolynomialCollisionPayload,
     PolynomialCollisionRequest,
     PolynomialCollisionSearchRequest,
+    PolynomialCollisionVerifyRequest,
     PolynomialEvaluationRequest,
     PolynomialJacobianRequest,
     PolynomialMapEvaluation,
+    PolynomialMapInverseCollisionVerifyRequest,
     RationalFunctionArtifact,
     RationalFunctionIdentityRequest,
     RationalPolynomialMap,
@@ -90,6 +92,55 @@ def test_evaluation_artifact_accepts_rectangular_map_image() -> None:
 
     assert len(evaluation.point.values) == 1
     assert len(evaluation.image) == 2
+
+
+def test_polynomial_map_point_contracts_accept_five_dimensions() -> None:
+    point = [_rational()] * 5
+    second_point = [_rational(1), *([_rational()] * 4)]
+    image = [_rational()] * 5
+    polynomial_map = _identity_map(5)
+
+    request = PolynomialEvaluationRequest.model_validate(
+        {"map": polynomial_map, "point": point}
+    )
+    evaluation = PolynomialMapEvaluation.model_validate(
+        {
+            "map_uri": "artifact://sha256/" + "a" * 64,
+            "point": {"values": point},
+            "image": image,
+            "backend": "sympy",
+            "backend_version": "1.14.0",
+        }
+    )
+    collision = PolynomialCollisionVerifyRequest.model_validate(
+        {
+            "map": polynomial_map,
+            "first_point": point,
+            "second_point": second_point,
+            "claimed_image": image,
+        }
+    )
+    inverse_collision = PolynomialMapInverseCollisionVerifyRequest.model_validate(
+        {
+            "map": polynomial_map,
+            "first_point": point,
+            "second_point": second_point,
+            "claimed_image": image,
+        }
+    )
+    payload = PolynomialCollisionPayload.model_validate(
+        {
+            "first_point": point,
+            "second_point": second_point,
+            "image": image,
+        }
+    )
+
+    assert len(request.point) == 5
+    assert len(evaluation.image) == 5
+    assert len(collision.claimed_image) == 5
+    assert len(inverse_collision.claimed_image) == 5
+    assert len(payload.image) == 5
 
 
 def test_collision_payload_enforces_all_dimensions() -> None:

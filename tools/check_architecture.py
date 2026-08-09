@@ -106,6 +106,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/tooling/test_topology_runner.py"),
         PurePosixPath("tests/boundary/process/tooling/test_cli_import_surface.py"),
         PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
+        PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),
         # MCP transport boundary tests spawn server processes.
         PurePosixPath("tests/boundary/mcp/test_mcp_operations.py"),
         PurePosixPath("tests/boundary/mcp/test_remote_mcp_auth.py"),

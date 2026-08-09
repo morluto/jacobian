@@ -55,10 +55,7 @@ while (($#)); do
   esac
 done
 
-case "$PROFILE" in
-  core|full-python|lean|external-proof) ;;
-  *) echo "unknown profile: $PROFILE" >&2; exit 2 ;;
-esac
+python3 "$REPO_ROOT/tools/development_profiles.py" validate --profile "$PROFILE" || exit $?
 if ((!ALL && ${#CLIENTS[@]} == 0)); then
   echo "select at least one --client or use --all" >&2
   exit 2
@@ -152,16 +149,12 @@ STATE_DIR=$("$PYTHON_PATH" -c 'from pathlib import Path; import sys; print(Path(
 require_checkout_path_ignored "the Jacobian state directory" "$STATE_DIR"
 UV_BIN=$(command -v uv)
 
-SYNC=(uv sync --project "$REPO_ROOT" --python "$PYTHON_PATH" --locked --no-dev)
-case "$PROFILE" in
-  full-python|lean|external-proof) SYNC+=(--all-extras) ;;
-esac
-if ((DEV)); then
-  SYNC=(uv sync --project "$REPO_ROOT" --python "$PYTHON_PATH" --locked --dev)
-  case "$PROFILE" in
-    full-python|lean|external-proof) SYNC+=(--all-extras) ;;
-  esac
-fi
+PROFILE_SYNC_ARGS=()
+SYNC_FLAG_ARGS=(sync-flags --profile "$PROFILE" --no-dev)
+((DEV)) && SYNC_FLAG_ARGS=(sync-flags --profile "$PROFILE")
+mapfile -t PROFILE_SYNC_ARGS < <("$PYTHON_PATH" "$REPO_ROOT/tools/development_profiles.py" "${SYNC_FLAG_ARGS[@]}")
+SYNC=(uv "${PROFILE_SYNC_ARGS[@]}" --project "$REPO_ROOT" --python "$PYTHON_PATH")
+PREPARE=("$PYTHON_PATH" "$REPO_ROOT/tools/development_profiles.py" prepare --profile "$PROFILE" --repo "$REPO_ROOT")
 INIT=(uv run --project "$REPO_ROOT" --locked --no-sync jacobian --state-dir "$STATE_DIR" init)
 CONFIG=(node "$REPO_ROOT/npm/bin/jacobian.cjs" setup --source "$REPO_ROOT" --state-dir "$STATE_DIR" --uv-bin "$UV_BIN" --profile "$PROFILE" --provider-path "$PATH")
 test -z "${UV_PROJECT_ENVIRONMENT:-}" || CONFIG+=(--project-environment "$UV_PROJECT_ENVIRONMENT")
@@ -185,6 +178,7 @@ test -z "${JACOBIAN_LEAN_RUNTIME:-}" || echo "  Lean dir: $JACOBIAN_LEAN_RUNTIME
 
 if ((DRY_RUN)); then
   printf '  sync:     '; printf '%q ' "${SYNC[@]}"; printf '\n'
+  printf '  prepare:  '; printf '%q ' "${PREPARE[@]}"; printf '\n'
   printf '  init:     '; printf '%q ' "${INIT[@]}"; printf '\n'
   printf '  doctor:   '; printf '%q ' "${DOCTOR[@]}"; printf '\n'
   "${CONFIG[@]}"
@@ -192,13 +186,7 @@ if ((DRY_RUN)); then
 fi
 
 "${SYNC[@]}"
-if test "$PROFILE" = lean; then
-  command -v lake >/dev/null || {
-    echo "the lean profile requires elan/lake and the pinned toolchain in lean/lean-toolchain" >&2
-    exit 2
-  }
-  (cd "$REPO_ROOT/lean" && lake build repl jacobian_lean_proof_state)
-fi
+"${PREPARE[@]}"
 mkdir -p -- "$STATE_DIR"
 "${INIT[@]}"
 "${DOCTOR[@]}"

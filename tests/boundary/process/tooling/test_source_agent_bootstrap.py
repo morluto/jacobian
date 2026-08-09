@@ -27,8 +27,13 @@ def _load_tool(name: str) -> ModuleType:
 def _bootstrap_checkout(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     checkout = tmp_path / "checkout"
     (checkout / "scripts").mkdir(parents=True)
+    (checkout / "tools").mkdir(parents=True)
     (checkout / "npm" / "bin").mkdir(parents=True)
     shutil.copy2(ROOT / "scripts" / "setup-agent", checkout / "scripts" / "setup-agent")
+    shutil.copy2(
+        ROOT / "tools" / "development_profiles.py",
+        checkout / "tools" / "development_profiles.py",
+    )
     (checkout / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
     (checkout / "uv.lock").touch()
     (checkout / ".uv-version").write_text("0.0.0\n")
@@ -157,6 +162,15 @@ def test_every_bootstrap_profile_audits_z3_and_networkx() -> None:
     for providers in doctor._PROFILE_PROVIDERS.values():
         assert "z3" in providers
         assert "networkx" in providers
+
+
+def test_source_bootstrap_delegates_profile_setup_to_shared_definitions() -> None:
+    script = (ROOT / "scripts" / "setup-agent").read_text(encoding="utf-8")
+
+    assert "tools/development_profiles.py" in script
+    assert 'prepare --profile "$PROFILE"' in script
+    assert "lake update" not in script
+    assert "lake build" not in script
 
 
 def test_bootstrap_dry_run_forwards_resolved_environment_without_downloads(

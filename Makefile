@@ -10,7 +10,7 @@ PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
-PUBLIC_COMMANDS := help setup check check-changed ci-plan test-plan test-changed test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e docs-command-check docs-linkcheck harbor-plan harbor-prepare-task harbor-validate-task harbor-execution-check harbor-check-task harbor-oracle-task npm-test test-all-ci check-static deploy-check
+PUBLIC_COMMANDS := setup doctor fix check-changed check ci-plan
 
 ifneq ($(strip $(PATHS)),)
 PATHS_FILE := $(shell mktemp)
@@ -27,12 +27,12 @@ include make/evaluations.mk
 # provider lanes run risky work in killable children and set their own deadline.
 .PHONY: help help-all
 
-help: ## Show available developer commands.
-	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian common developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / && ($$1 in wanted) {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+help: ## Show the primary developer workflow.
+	@awk -v public="$(PUBLIC_COMMANDS)" 'BEGIN {FS = ":.*## "; n = split(public, names, " "); for (i = 1; i <= n; i++) wanted[names[i]] = 1; printf "Jacobian primary developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / && ($$1 in wanted) {description[$$1] = $$2} END {for (i = 1; i <= n; i++) printf "  %-18s %s\n", names[i], description[names[i]]}' $(MAKEFILE_LIST)
 	@printf '\nAdvanced lifecycle and diagnostic commands are hidden from the daily index. Use `make help-all` to list them.\n'
 
 help-all: ## Show every low-level and lifecycle developer command.
-	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 
 test-plan: ## Print local validation selected for BASE..HEAD or explicit PATHS.
@@ -93,8 +93,7 @@ test-changed: ## Run changed-path tests, defaulting BASE to origin/main.
 		$(UV_RUN) python .github/scripts/plan-local-tests --base "$(or $(BASE),origin/main)" --execute; \
 	fi
 
-check-changed: ## Run format, types, and exact changed-path tests.
-	$(MAKE) lint typecheck
+check-changed: ## Plan and run the affected local handoff (BASE=origin/main).
 	$(MAKE) test-changed BASE="$(or $(BASE),origin/main)"
 
 define run_topology_lane

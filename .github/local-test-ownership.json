@@ -5,6 +5,10 @@
       "tests/boundary/process/tooling/test_ci_classification.py",
       "tests/unit/tooling/test_ci_execution_policy.py"
     ],
+    ".github/local-test-ownership.json": [
+      "tests/unit/tooling/test_plan_local_tests.py",
+      "tests/unit/tooling/test_ci_planner_catalog.py"
+    ],
     ".github/scripts/classify-ci-paths": [
       "tests/boundary/process/tooling/test_ci_classification.py",
       "tests/unit/tooling/test_ci_execution_policy.py"
@@ -28,6 +32,28 @@
     ],
     ".github/scripts/validate-benchmark-plan": [
       "tests/boundary/process/tooling/test_benchmark_classification.py"
+    ],
+    "Makefile": [
+      "tests/boundary/process/tooling/test_make_help.py",
+      "tests/unit/tooling/test_plan_local_tests.py"
+    ],
+    "make/development.mk": [
+      "tests/boundary/process/tooling/test_make_help.py",
+      "tests/boundary/process/tooling/test_source_agent_bootstrap.py"
+    ],
+    "scripts/setup-agent": [
+      "tests/boundary/process/tooling/test_source_agent_bootstrap.py"
+    ],
+    "tools/check_architecture.py": [
+      "tests/unit/tooling/test_architecture_policy.py",
+      "tests/unit/tooling/test_architecture_process_policies.py"
+    ],
+    "tools/development_profiles.py": [
+      "tests/unit/tooling/test_development_profiles.py",
+      "tests/boundary/process/tooling/test_source_agent_bootstrap.py"
+    ],
+    "tools/source_agent_doctor.py": [
+      "tests/boundary/process/tooling/test_source_agent_bootstrap.py"
     ],
     "tools/test_topology.py": [
       "tests/boundary/process/tooling/test_topology_runner.py",

@@ -67,6 +67,27 @@ digest, configuration digests, and canonical plan digest. `make harbor-plan`
 uses the pinned Harbor runtime because task digests are part of the plan
 contract.
 
+### Local development and CI ownership
+
+The contributor quick path is `make setup PROFILE=core` followed by
+`make check-changed BASE=origin/main` (see
+[CONTRIBUTING.md](../../CONTRIBUTING.md)). It keeps the local loop on the
+changed-path gate. CI owns the exhaustive correctness surface that the local
+loop intentionally skips: the supported Python and OS matrices, the full Lean
+and optional-provider environments, coverage enforcement, the compatibility
+smoke suite, packaging, the security audit, duplicate-code detection, and the
+complete semantic-lane matrix. You do not need to reproduce those locally for a
+routine change.
+
+Specialist lanes (`storage`, `process`, `mcp`, `provider`, `lean`, and `e2e`)
+own their named boundaries, but for routine contributor work they are
+troubleshooting and boundary-crossing work rather than a required local gate.
+Run one when a change crosses that boundary or when reproducing an
+environment-specific failure; CI runs the full matrix. The command inventory
+below is the authoritative reference for lane commands, narrowing, planning
+entry points, and CI classification, and is linked from
+[CONTRIBUTING.md](../../CONTRIBUTING.md) instead of being duplicated there.
+
 ## Purpose
 
 Jacobian is a mathematical capability toolbox with a fail-closed verification

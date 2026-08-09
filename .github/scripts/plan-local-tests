@@ -11,6 +11,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -82,6 +83,53 @@ TOPOLOGY_LANES = (
     "e2e",
 )
 
+# Independent local gates. Security, duplicate-code, compatibility, coverage,
+# and platform matrices remain hosted-CI evidence.
+GATE_LANES = ("static", "npm", "docs")
+
+LINT_TYPECHECK_COMMAND = "make lint typecheck"
+
+# Repository paths whose impact is structural rather than ordinary Python
+# behavior.  Such changes route to ``make check-static`` (which already includes
+# lint-full, typecheck, architecture, and a package build) instead of the
+# lighter ``make lint typecheck`` handoff.
+INFRASTRUCTURE_PREFIXES = (
+    ".github/",
+    "Makefile",
+    "make/",
+    "pyproject.toml",
+    "uv.lock",
+    "tools/",
+    ".pre-commit-config.yaml",
+    ".jscpd.json",
+    "tests/topology.toml",
+)
+
+
+def is_infrastructure_path(path: str) -> bool:
+    """Return whether a changed path is structural infrastructure."""
+
+    return any(
+        path == prefix.rstrip("/") or path.startswith(prefix)
+        for prefix in INFRASTRUCTURE_PREFIXES
+    )
+
+
+def is_ordinary_python_path(path: str) -> bool:
+    """Return whether a changed path is ordinary Python source or tests."""
+
+    return path.endswith(".py") and path.startswith(("src/", "tests/"))
+
+
+def is_documentation_path(path: str) -> bool:
+    """Return whether a path has no pytest ownership of its own."""
+
+    return (
+        path.startswith("docs/")
+        or path in {"README.md", "README.zh-CN.md", "CONTRIBUTING.md", "AGENTS.md"}
+        or path == ".github/pull_request_template.md"
+    )
+
 
 def local_command_lanes(lanes: list[str]) -> list[str]:
     """Remove lanes whose local command is already owned by a selected gate."""
@@ -94,6 +142,7 @@ def local_command_lanes(lanes: list[str]) -> list[str]:
         if str(subsumed_lane) in selected
     }
     return [lane for lane in lanes if lane not in subsumed]
+
 
 HIGH_IMPACT_PATHS = {
     "src/jacobian/__init__.py",
@@ -268,6 +317,8 @@ def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
 
     for entry in entries:
         path = entry.path
+        if is_documentation_path(path):
+            continue
         if entry.status not in {"A", "M"}:
             return [], f"{path}: {entry.status} changes are not exact"
         override_nodes = {
@@ -403,21 +454,157 @@ def _lane_for_path(path: str) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
+def planned_commands(
+    entries: list[Change],
+    plan: dict[str, str],
+    tests: list[str],
+    fallback: str | None,
+    deployment: bool,
+) -> list[str]:
+    """Build the ordered, affected-handoff command list.
+
+    Independent gates (docs, npm, check-static for infrastructure, lint/typecheck
+    once for ordinary Python, and the deployment gate) run regardless of whether
+    exact test selectors are available, so focused selection never suppresses an
+    independent check.  The pytest portion uses focused selectors when exact
+    ownership is available and falls back to the selected topology lane commands
+    otherwise.
+    """
+
+    lanes = [suite for suite in COMMANDS if plan.get(f"run-{suite}") == "true"]
+    command_lanes = local_command_lanes(lanes)
+    gate_lanes = [lane for lane in command_lanes if lane in GATE_LANES]
+    pytest_lanes = [lane for lane in command_lanes if lane in TOPOLOGY_LANES]
+
+    has_infrastructure = any(is_infrastructure_path(entry.path) for entry in entries)
+    has_ordinary_python = any(is_ordinary_python_path(entry.path) for entry in entries)
+    has_npm = any(entry.path.startswith("npm/") for entry in entries)
+    run_python = plan.get("run-python") == "true"
+
+    commands: list[str] = []
+    # ``make check-static`` already includes lint-full and typecheck, so the
+    # lighter lint/typecheck handoff is only added when ordinary Python is
+    # affected and the infrastructure gate is not.  Infrastructure-leaning
+    # changes (including static-only changes with no ordinary Python) route to
+    # check-static.
+    use_check_static = "static" in gate_lanes and (
+        has_infrastructure or not has_ordinary_python
+    )
+    use_lint_typecheck = not use_check_static and run_python and has_ordinary_python
+    if use_check_static:
+        commands.append(COMMANDS["static"][0])
+    elif use_lint_typecheck:
+        commands.append(LINT_TYPECHECK_COMMAND)
+
+    for lane in GATE_LANES:
+        if lane == "static":
+            continue
+        if lane == "npm" and not has_npm:
+            continue
+        if lane in gate_lanes:
+            commands.append(COMMANDS[lane][0])
+
+    if tests:
+        commands.extend(focused_commands(tests))
+    elif fallback:
+        commands.extend(COMMANDS[lane][0] for lane in pytest_lanes)
+
+    if deployment:
+        commands.append(DEPLOY_COMMAND)
+
+    return commands
+
+
 def _command_arguments(command: str) -> list[str]:
     """Convert a displayed make command into an executable argv."""
 
     return shlex.split(command)
 
 
-def execute_commands(commands: list[str]) -> int:
-    """Execute planner output in fresh make invocations and retain failures."""
+def _git_revision(revision: str) -> str:
+    """Resolve a revision to an immutable commit, or return ``(unknown)``."""
 
-    status = 0
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", f"{revision}^{{commit}}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return "(unknown)"
+    return result.stdout.strip() or "(unknown)"
+
+
+def _git_dirty() -> bool:
+    """Return whether the working tree has uncommitted or untracked changes."""
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return False
+    return bool(result.stdout.strip())
+
+
+def execute_commands(commands: list[str], *, base: str = "(explicit paths)") -> int:
+    """Execute planner output sequentially and print a complete summary.
+
+    Every command runs in order regardless of prior failures so the summary
+    reports the full affected-handoff result.  The return value is nonzero if
+    any command failed and zero only if every command succeeded (or there were
+    no commands to run).
+    """
+
+    results: list[tuple[str, int, float]] = []
     for command in commands:
+        start = time.monotonic()
         completed = subprocess.run(_command_arguments(command), cwd=ROOT, check=False)
-        if completed.returncode and status == 0:
-            status = completed.returncode
-    return status
+        duration = time.monotonic() - start
+        results.append((command, completed.returncode, duration))
+
+    return print_execution_summary(results, base=base)
+
+
+def print_execution_summary(
+    results: list[tuple[str, int, float]],
+    *,
+    base: str,
+    planning_failure: str | None = None,
+) -> int:
+    """Print one terminal summary for execution or planning failure."""
+
+    passed = sum(1 for _, returncode, _ in results if returncode == 0)
+    failed = len(results) - passed + (planning_failure is not None)
+    head = _git_revision("HEAD")
+    resolved_base = base if base == "(explicit paths)" else _git_revision(base)
+    dirty = _git_dirty()
+    print("summary:")
+    print(f"  base: {resolved_base}")
+    print(f"  head: {head}")
+    print(f"  dirty: {str(dirty).lower()}")
+    print(f"  total: {len(results) + (planning_failure is not None)}")
+    print(f"  passed: {passed}")
+    print(f"  failed: {failed}")
+    print(f"  result: {'pass' if failed == 0 else 'fail'}")
+    print("  commands:")
+    print("    status  seconds  command")
+    for command, returncode, duration in results:
+        status = "pass" if returncode == 0 else "fail"
+        print(f"    [{status}] {duration:.2f}s {command}")
+    if planning_failure is not None:
+        print(f"    [fail] 0.00s planner: {planning_failure}")
+    elif not results:
+        print("    [no-op] 0.00s (no commands selected)")
+    if planning_failure is not None:
+        return 2
+    return next((returncode for _, returncode, _ in results if returncode), 0)
 
 
 def classify(paths: list[str]) -> dict[str, str]:
@@ -480,13 +667,14 @@ def main() -> None:
     paths = sorted({entry.path for entry in entries})
     plan = classify(paths)
     lanes = [suite for suite in COMMANDS if plan.get(f"run-{suite}") == "true"]
-    command_lanes = local_command_lanes(lanes)
     tests, fallback = exact_tests(entries)
     # The classifier already owns deployment routing (run-deploy); re-deriving
     # it here would duplicate the deployment rule and could drift from it.
     deployment = plan.get("run-deploy") == "true"
+    commands = planned_commands(entries, plan, tests, fallback, deployment)
+    base_label = args.base or "(explicit paths)"
 
-    print(f"base: {args.base or '(explicit paths)'}")
+    print(f"base: {base_label}")
     print(f"classification: {plan['classification']}")
     print("paths:")
     for path in paths:
@@ -501,41 +689,35 @@ def main() -> None:
             print(f"  {test}")
     elif fallback and any(lane in TOPOLOGY_LANES for lane in lanes):
         print(f"  suite fallback ({fallback})")
-    elif fallback:
+    elif not any(lane in TOPOLOGY_LANES for lane in lanes):
         print("  not applicable (no pytest lane selected)")
     else:
         print("  none")
     print("commands:")
-    if tests:
-        print("  focused selectors:")
-        for command in focused_commands(tests):
-            print(f"    {command}")
-    else:
-        print("  planned lanes:")
-        for lane in command_lanes:
-            for command in COMMANDS[lane]:
-                print(f"    {command}")
-    if deployment:
-        print(f"  deployment gate: {DEPLOY_COMMAND}")
+    for command in commands:
+        print(f"  {command}")
+    if any("test-lean" in command for command in commands):
+        print("recovery: make setup PROFILE=lean")
+    if any("test-provider" in command for command in commands):
+        provider_profile = (
+            "external-proof"
+            if any("external_sat" in test for test in tests)
+            else "full-python"
+        )
+        print(f"recovery: make setup PROFILE={provider_profile}")
 
     if args.execute:
-        if tests:
-            commands = focused_commands(tests)
-            if not commands:
-                print(
-                    "cannot execute: selected tests have no unique topology lane",
-                    file=sys.stderr,
-                )
-                raise SystemExit(2)
-        elif fallback:
-            commands = [
-                command for lane in command_lanes for command in COMMANDS[lane]
-            ]
-        else:
-            commands = []
-        if deployment:
-            commands.append(DEPLOY_COMMAND)
-        raise SystemExit(execute_commands(commands))
+        sys.stdout.flush()
+        # Focused selection that cannot be narrowed to a unique topology lane is
+        # unsafe to execute; fail closed rather than silently dropping the pytest
+        # portion of the handoff.
+        if tests and not focused_commands(tests):
+            message = "selected tests have no unique topology lane"
+            print(f"cannot execute: {message}", file=sys.stderr)
+            raise SystemExit(
+                print_execution_summary([], base=base_label, planning_failure=message)
+            )
+        raise SystemExit(execute_commands(commands, base=base_label))
 
 
 if __name__ == "__main__":

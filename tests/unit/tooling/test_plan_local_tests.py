@@ -125,6 +125,13 @@ def test_explicit_paths_report_missing_files_as_deletes(
             "tools/check_doc_commands.py",
             {"tests/unit/tooling/test_doc_commands.py"},
         ),
+        (
+            "tools/development_profiles.py",
+            {
+                "tests/unit/tooling/test_development_profiles.py",
+                "tests/boundary/process/tooling/test_source_agent_bootstrap.py",
+            },
+        ),
     ],
 )
 def test_new_tooling_changes_use_narrow_owned_tests(
@@ -150,6 +157,23 @@ def test_deleted_ci_tooling_change_cannot_use_owned_process_override() -> None:
 
     assert selected == []
     assert fallback == ".github/scripts/emit-plan-receipt: D changes are not exact"
+
+
+def test_documentation_does_not_erase_exact_tooling_ownership() -> None:
+    planner = _load_script_module("plan_local_tests_docs_mixed", "plan-local-tests")
+
+    selected, fallback = planner.exact_tests(
+        [
+            planner.Change("M", "CONTRIBUTING.md"),
+            planner.Change("M", "tools/development_profiles.py"),
+        ]
+    )
+
+    assert fallback is None
+    assert selected == [
+        "tests/boundary/process/tooling/test_source_agent_bootstrap.py",
+        "tests/unit/tooling/test_development_profiles.py",
+    ]
 
 
 def test_plan_preserves_both_sides_of_rename(monkeypatch) -> None:
@@ -465,7 +489,7 @@ def test_plan_fails_closed_for_unknown_path_and_invalid_manifest(
     assert fallback == ".github/local-test-ownership.json: invalid manifest"
 
 
-def test_plan_labels_focused_commands_without_printing_lane_fallbacks(
+def test_plan_focused_tests_keep_independent_gates(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -476,7 +500,356 @@ def test_plan_labels_focused_commands_without_printing_lane_fallbacks(
     planner.main()
     output = capsys.readouterr().out
 
-    assert "focused selectors:" in output
+    # Focused selectors are still present...
     assert "make test-unit TESTS=tests/unit/tooling/test_doc_commands.py" in output
+    # ...but focused selection no longer suppresses the independent gates that
+    # the classification selected for this infrastructure tool path.
+    assert "make check-static" in output
+    assert "make docs-linkcheck" in output
+    # Broad pytest lane fallbacks are not printed for a focused selection.
+    assert "make test-process" not in output
     assert "make test-component" not in output
-    assert "make check-static" not in output
+
+
+def _plan(**selected: bool) -> dict[str, str]:
+    plan = {
+        "classification": "selective",
+        "run-python": "false",
+        "run-deploy": "false",
+    }
+    plan.update(
+        {
+            f"run-{name.replace('_', '-')}": str(value).lower()
+            for name, value in selected.items()
+        }
+    )
+    return plan
+
+
+def test_planned_commands_selects_docs_linkcheck_for_docs_paths() -> None:
+    planner = _load_script_module("plan_local_tests_docs_gate", "plan-local-tests")
+
+    commands = planner.planned_commands(
+        [planner.Change("M", "docs/explanation/goals.md")],
+        _plan(docs=True),
+        [],
+        None,
+        False,
+    )
+
+    assert commands == ["make docs-linkcheck"]
+
+
+def test_planned_commands_selects_npm_test_for_npm_paths() -> None:
+    planner = _load_script_module("plan_local_tests_npm_gate", "plan-local-tests")
+
+    commands = planner.planned_commands(
+        [planner.Change("M", "npm/index.js")],
+        _plan(npm=True),
+        [],
+        None,
+        False,
+    )
+
+    assert commands == ["make npm-test"]
+
+
+def test_planned_commands_uses_check_static_for_makefile() -> None:
+    planner = _load_script_module("plan_local_tests_makefile_gate", "plan-local-tests")
+
+    commands = planner.planned_commands(
+        [planner.Change("M", "Makefile")],
+        _plan(static=True),
+        [],
+        None,
+        False,
+    )
+
+    assert commands == ["make check-static"]
+    assert "make lint typecheck" not in commands
+
+
+def test_planned_commands_uses_lint_typecheck_once_for_ordinary_python(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = _load_script_module("plan_local_tests_lint_gate", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "focused_commands",
+        lambda tests: ["make test-unit TESTS=tests/unit/test_leaf.py"],
+    )
+
+    commands = planner.planned_commands(
+        [planner.Change("M", "src/jacobian/leaf.py")],
+        _plan(unit=True, component=True, static=True, python=True),
+        ["tests/unit/test_leaf.py"],
+        None,
+        False,
+    )
+
+    # Ordinary Python routes to the light lint/typecheck handoff once, even
+    # though the classifier also selected the heavier static lane.
+    assert commands[0] == "make lint typecheck"
+    assert commands.count("make lint typecheck") == 1
+    assert "make check-static" not in commands
+    # Focused selectors are preserved alongside the gate.
+    assert "make test-unit TESTS=tests/unit/test_leaf.py" in commands
+
+
+def test_planned_commands_uses_check_static_for_infrastructure_with_focused_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = _load_script_module("plan_local_tests_ci_tool_gate", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "focused_commands",
+        lambda tests: ["make test-unit TESTS=tests/unit/test_plan_local_tests.py"],
+    )
+
+    commands = planner.planned_commands(
+        [planner.Change("M", ".github/scripts/plan-local-tests")],
+        _plan(
+            unit=True,
+            process=True,
+            static=True,
+            npm=True,
+            security=True,
+            duplicate=True,
+            python=True,
+        ),
+        ["tests/unit/tooling/test_plan_local_tests.py"],
+        None,
+        False,
+    )
+
+    # Infrastructure routes to check-static (which already covers lint and
+    # typecheck), so the separate lint/typecheck handoff is not added.
+    assert commands[0] == "make check-static"
+    assert "make lint typecheck" not in commands
+    assert "make test-unit TESTS=tests/unit/test_plan_local_tests.py" in commands
+    assert all("security" not in command for command in commands)
+    assert all("duplicate" not in command for command in commands)
+    assert all("npm-test" not in command for command in commands)
+
+
+def test_planned_commands_mixed_infra_and_python_uses_check_static(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = _load_script_module("plan_local_tests_mixed", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "focused_commands",
+        lambda tests: ["make test-unit TESTS=tests/unit/test_leaf.py"],
+    )
+
+    commands = planner.planned_commands(
+        [
+            planner.Change("M", "src/jacobian/leaf.py"),
+            planner.Change("M", ".github/workflows/ci.yml"),
+        ],
+        _plan(unit=True, static=True, python=True),
+        ["tests/unit/test_leaf.py"],
+        None,
+        False,
+    )
+
+    assert commands[0] == "make check-static"
+    assert "make lint typecheck" not in commands
+    assert "make test-unit TESTS=tests/unit/test_leaf.py" in commands
+
+
+def test_planned_commands_adds_docs_gate_alongside_ordinary_python(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = _load_script_module("plan_local_tests_docs_py", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "focused_commands",
+        lambda tests: ["make test-unit TESTS=tests/unit/test_leaf.py"],
+    )
+
+    commands = planner.planned_commands(
+        [
+            planner.Change("M", "docs/explanation/goals.md"),
+            planner.Change("M", "src/jacobian/leaf.py"),
+        ],
+        _plan(unit=True, static=True, docs=True, python=True),
+        ["tests/unit/test_leaf.py"],
+        None,
+        False,
+    )
+
+    assert "make lint typecheck" in commands
+    assert "make docs-linkcheck" in commands
+    assert "make check-static" not in commands
+    assert "make test-unit TESTS=tests/unit/test_leaf.py" in commands
+
+
+def test_planned_commands_appends_deploy_gate_last() -> None:
+    planner = _load_script_module("plan_local_tests_deploy_gate", "plan-local-tests")
+
+    commands = planner.planned_commands(
+        [planner.Change("M", "deploy/install.sh")],
+        _plan(process=True),
+        [],
+        "deploy/install.sh: no exact Python ownership evidence",
+        True,
+    )
+
+    assert commands[-1] == "make deploy-check"
+    assert "make test-process" in commands
+
+
+def test_planned_commands_falls_back_to_pytest_lanes_with_lint_gate() -> None:
+    planner = _load_script_module("plan_local_tests_fallback_lanes", "plan-local-tests")
+
+    commands = planner.planned_commands(
+        [planner.Change("D", "src/jacobian/leaf.py")],
+        _plan(unit=True, component=True, static=True, python=True),
+        [],
+        "src/jacobian/leaf.py: D changes are not exact",
+        False,
+    )
+
+    # Delete -> fallback. Ordinary Python with no focused tests still gets the
+    # lint/typecheck handoff once, plus the selected pytest lanes (static is not
+    # re-run as a separate gate because ordinary Python routes to lint/typecheck).
+    assert commands[0] == "make lint typecheck"
+    assert "make test-unit" in commands
+    assert "make test-component" in commands
+    assert "make check-static" not in commands
+
+
+def test_planned_commands_clean_tree_selects_no_commands() -> None:
+    planner = _load_script_module("plan_local_tests_clean_cmds", "plan-local-tests")
+
+    commands = planner.planned_commands(
+        [],
+        {"classification": "clean", "run-python": "false", "run-deploy": "false"},
+        [],
+        None,
+        False,
+    )
+
+    assert commands == []
+
+
+def test_execute_commands_runs_all_and_summarizes_nonzero_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    planner = _load_script_module("plan_local_tests_exec_fail", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "_git_revision",
+        lambda revision: "deadbeef" if revision == "HEAD" else "basebeef",
+    )
+    monkeypatch.setattr(planner, "_git_dirty", lambda: True)
+    calls: list[list[str]] = []
+
+    def fake_run(argv, cwd, check):  # type: ignore[no-untyped-def]
+        calls.append(list(argv))
+        returncode = 1 if "boom" in argv[-1] else 0
+        return planner.subprocess.CompletedProcess(argv, returncode)
+
+    monkeypatch.setattr(planner.subprocess, "run", fake_run)
+
+    returncode = planner.execute_commands(
+        ["make lint typecheck", "make boom"], base="origin/main"
+    )
+    output = capsys.readouterr().out
+
+    assert returncode != 0
+    # Every command runs even after a failure so the summary is complete.
+    assert len(calls) == 2
+    assert "summary:" in output
+    assert "base: basebeef" in output
+    assert "head: deadbeef" in output
+    assert "dirty: true" in output
+    assert "total: 2" in output
+    assert "passed: 1" in output
+    assert "failed: 1" in output
+    assert "result: fail" in output
+    assert "[pass]" in output
+    assert "[fail]" in output
+    assert "make lint typecheck" in output
+    assert "make boom" in output
+
+
+def test_execute_commands_returns_zero_when_all_pass(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    planner = _load_script_module("plan_local_tests_exec_pass", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "_git_revision",
+        lambda revision: "abc123" if revision == "HEAD" else "base123",
+    )
+    monkeypatch.setattr(planner, "_git_dirty", lambda: False)
+    monkeypatch.setattr(
+        planner.subprocess,
+        "run",
+        lambda argv, cwd, check: planner.subprocess.CompletedProcess(argv, 0),
+    )
+
+    returncode = planner.execute_commands(
+        ["make lint typecheck", "make docs-linkcheck"], base="origin/main"
+    )
+    output = capsys.readouterr().out
+
+    assert returncode == 0
+    assert "result: pass" in output
+    assert "total: 2" in output
+    assert "failed: 0" in output
+    assert "passed: 2" in output
+
+
+def test_execute_commands_handles_empty_command_list(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    planner = _load_script_module("plan_local_tests_exec_empty", "plan-local-tests")
+    monkeypatch.setattr(
+        planner,
+        "_git_revision",
+        lambda revision: "abc123" if revision == "HEAD" else "base123",
+    )
+    monkeypatch.setattr(planner, "_git_dirty", lambda: False)
+
+    returncode = planner.execute_commands([], base="origin/main")
+    output = capsys.readouterr().out
+
+    assert returncode == 0
+    assert "total: 0" in output
+    assert "result: pass" in output
+    assert "passed: 0" in output
+    assert "failed: 0" in output
+
+
+def test_plan_discovery_preserves_deleted_renamed_and_untracked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = _load_script_module("plan_local_tests_discovery_all", "plan-local-tests")
+    responses = {
+        ("diff", "--name-status", "base..HEAD"): [planner.Change("D", "src/gone.py")],
+        ("diff", "--name-status"): [
+            planner.Change("R", "src/old.py"),
+            planner.Change("R", "src/new.py"),
+        ],
+        ("diff", "--cached", "--name-status"): [],
+    }
+    monkeypatch.setattr(planner, "ROOT", tmp_path)
+    monkeypatch.setattr(planner, "git_changes", lambda *args: responses[args])
+    monkeypatch.setattr(planner, "git_paths", lambda *args: ["untracked.py"])
+    monkeypatch.setattr(planner.subprocess, "run", lambda *args, **kwargs: None)
+
+    entries = [
+        (change.status, change.path) for change in planner.changed_entries("base")
+    ]
+
+    assert ("D", "src/gone.py") in entries
+    assert ("R", "src/old.py") in entries
+    assert ("R", "src/new.py") in entries
+    assert ("?", "untracked.py") in entries

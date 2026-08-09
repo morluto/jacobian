@@ -152,6 +152,10 @@ named `DomainBundle` values; composition tests cover complete runtime wiring;
 and boundary/e2e tests own persistence, processes, providers, MCP, Lean, and
 complete user workflows. Directory ownership replaces the old catch-all
 integration category.
+Complete-runtime fixtures belong only to assertions about global catalog,
+cross-bundle, checker-authority, or lifecycle wiring. A behavior that consumes
+one named bundle stays in its domain lane and opens that bundle directly;
+fixture scope must not be broadened to trade away mutable-state isolation.
 `make test-stress` repeats only tests marked `property`, while
 `make test-ordering ORDERING_LANE=<lane>` reproduces the scheduled ordering
 seed for one semantic lane. `ORDERING_LANE` is required; use `domain` or

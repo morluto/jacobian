@@ -446,6 +446,26 @@ def test_plan_keeps_a_changed_test_as_an_exact_node_selector(
     assert fallback is None
 
 
+def test_plan_discards_exact_selectors_when_a_mixed_change_needs_fallback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    planner = _planner_tree(tmp_path, monkeypatch)
+    test = tmp_path / "tests/unit/test_leaf.py"
+    test.parent.mkdir(parents=True)
+    test.write_text("def test_leaf(): pass\n", encoding="utf-8")
+
+    selected, fallback = planner.exact_tests(
+        [
+            planner.Change("M", "tests/unit/test_leaf.py"),
+            planner.Change("D", "src/jacobian/leaf.py"),
+        ]
+    )
+
+    assert selected == []
+    assert fallback == "src/jacobian/leaf.py: D changes are not exact"
+
+
 def test_plan_resolves_relative_imports_from_package_initializers(
     tmp_path: Path,
     monkeypatch,
@@ -509,6 +529,52 @@ def test_plan_focused_tests_keep_independent_gates(
     # Broad pytest lane fallbacks are not printed for a focused selection.
     assert "make test-process" not in output
     assert "make test-component" not in output
+
+
+def test_execute_refuses_a_focused_selection_without_a_unique_lane(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    planner = _load_script_module("plan_local_tests_execute_guard", "plan-local-tests")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "plan-local-tests",
+            "--paths",
+            "src/jacobian/example.py",
+            "--execute",
+        ],
+    )
+    monkeypatch.setattr(
+        planner,
+        "classify",
+        lambda paths: {
+            "classification": "selective",
+            "run-unit": "true",
+            "run-python": "true",
+            "run-deploy": "false",
+        },
+    )
+    monkeypatch.setattr(
+        planner,
+        "exact_tests",
+        lambda entries: (["tests/unit/test_example.py"], None),
+    )
+    monkeypatch.setattr(planner, "focused_commands", lambda tests: [])
+    monkeypatch.setattr(
+        planner,
+        "execute_commands",
+        lambda commands, base: pytest.fail("unsafe focused selection was executed"),
+    )
+
+    with pytest.raises(SystemExit) as exited:
+        planner.main()
+
+    assert exited.value.code != 0
+    assert "cannot execute: selected tests have no unique topology lane" in (
+        capsys.readouterr().err
+    )
 
 
 def _plan(**selected: bool) -> dict[str, str]:

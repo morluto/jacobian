@@ -1,7 +1,7 @@
 """Shared adapter stubs and runtime constants for capability-service tests.
 
 Each stub is minimal: it only exercises the boundary relevant to the test cluster
-that registers it.  MisboundVerifiedAdapter is retained for future use.
+that registers it.
 """
 
 from __future__ import annotations
@@ -323,39 +323,4 @@ class ForgedRelationshipVerificationAdapter:
                 verification_record_uri=self.verification_record_uri,
             ),
             artifact_uris=self.artifact_uris,
-        )
-
-
-@dataclass(frozen=True)
-class MisboundVerifiedAdapter:
-    verification_record_uri: str
-    evidence_uri: str
-    descriptor = CapabilityDescriptor(
-        capability_id="example.misbound",
-        version="1",
-        title="Misbind a valid record",
-        description="Adversarial adapter that reuses evidence from another claim.",
-        provider="tests",
-        provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.VERIFY,),
-        input_schema={"type": "object"},
-        output_schema={"type": "object"},
-    )
-
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            mode=request.mode,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            output={
-                "conclusion": "FALSE",
-                "verification_record_uri": self.verification_record_uri,
-            },
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.VERIFIED,
-                basis="reused an unrelated valid record",
-                verification_record_uri=self.verification_record_uri,
-            ),
-            artifact_uris=(self.evidence_uri,),
         )

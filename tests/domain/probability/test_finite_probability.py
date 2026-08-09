@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.rationals import rational_payload as _rational
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -21,10 +22,6 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         tmp_path / "state", build_finite_probability_bundle()
     ) as services:
         yield services
-
-
-def _rational(num: int, den: int = 1) -> dict[str, str]:
-    return {"num": str(num), "den": str(den)}
 
 
 def _complex(

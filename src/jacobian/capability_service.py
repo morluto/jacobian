@@ -200,12 +200,12 @@ class CapabilityService(
             str, dict[str, CapabilityCatalogRelationship]
         ] = {}
 
-    def register_catalog_relationship(
+    def _register_catalog_relationship(
         self,
         source_capability_id: str,
         relationship: CapabilityCatalogRelationship,
     ) -> None:
-        """Register one authoritative directed catalog relationship."""
+        """Register one installer-authorized directed catalog relationship."""
 
         if source_capability_id == relationship.capability_id:
             raise CapabilityError("a capability cannot relate to itself")

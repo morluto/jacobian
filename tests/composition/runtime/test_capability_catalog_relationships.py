@@ -94,7 +94,7 @@ def test_catalog_relationship_hides_missing_and_policy_hidden_endpoints(
                 )
             )
         )
-        service.register_catalog_relationship(source_id, _relationship(target_id))
+        service._register_catalog_relationship(source_id, _relationship(target_id))
 
         catalog = {
             descriptor.capability_id: descriptor
@@ -104,7 +104,7 @@ def test_catalog_relationship_hides_missing_and_policy_hidden_endpoints(
         assert catalog[source_id].related_capabilities == ()
 
         missing_id = "example.missing-target"
-        service.register_catalog_relationship(source_id, _relationship(missing_id))
+        service._register_catalog_relationship(source_id, _relationship(missing_id))
         catalog = {
             descriptor.capability_id: descriptor
             for descriptor in service.catalog().capabilities
@@ -143,14 +143,16 @@ def test_catalog_relationship_hides_unavailable_endpoint_and_rejects_bad_edges(
         )
         with pytest.raises(CapabilityError, match="is unavailable"):
             service.register(unavailable)
-        service.register_catalog_relationship(source_id, _relationship(target_id))
+        service._register_catalog_relationship(source_id, _relationship(target_id))
         assert service.catalog().capabilities[0].related_capabilities == ()
 
         with pytest.raises(CapabilityError, match="cannot relate to itself"):
-            service.register_catalog_relationship(source_id, _relationship(source_id))
-        service.register_catalog_relationship(source_id, _relationship("example.other"))
+            service._register_catalog_relationship(source_id, _relationship(source_id))
+        service._register_catalog_relationship(
+            source_id, _relationship("example.other")
+        )
         with pytest.raises(CapabilityError, match="conflicting catalog relationship"):
-            service.register_catalog_relationship(
+            service._register_catalog_relationship(
                 source_id,
                 CapabilityCatalogRelationship(
                     capability_id="example.other",
@@ -158,6 +160,17 @@ def test_catalog_relationship_hides_unavailable_endpoint_and_rejects_bad_edges(
                     relationship="conflicting fixture relationship",
                 ),
             )
+    finally:
+        store.close()
+
+
+def test_capability_service_has_no_public_relationship_authority(
+    tmp_path: Path,
+) -> None:
+    store = ArtifactRepository(tmp_path / "state")
+    try:
+        service = CapabilityService(store)
+        assert not hasattr(service, "register_catalog_relationship")
     finally:
         store.close()
 

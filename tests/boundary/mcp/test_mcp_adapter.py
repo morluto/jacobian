@@ -780,7 +780,7 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             )
             assert isinstance(matching_description.structured_content, dict)
             matching_contract = matching_description.structured_content
-            assert matching_contract["capability"]["version"] == "2"
+            assert matching_contract["capability"]["version"] == "3"
             assert matching_contract["invocations"][0]["name"] == ("triangle_with_tail")
             assert matching_contract["related_capabilities"] == [
                 {

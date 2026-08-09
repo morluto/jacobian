@@ -233,6 +233,99 @@ def test_math_find_compacts_related_capabilities_deterministically(
     assert text_result["truncation_reason"] == "BYTE_LIMIT"
 
 
+def test_math_find_compacts_relationships_before_ranked_discovery_data(
+    fresh_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.adapters.mcp import projections
+
+    arguments = {
+        "query": "polynomial",
+        "domain": None,
+        "mode": None,
+        "input_kind": None,
+        "artifact_type": None,
+        "limit": 5,
+        "cursor": None,
+    }
+    baseline = projections._capability_discovery_response(
+        fresh_complete_runtime, **arguments
+    )
+    baseline_match_ids = [item["capability_id"] for item in baseline["matches"]]
+    baseline_domains = baseline["available_domains"]
+    catalog_ids = tuple(
+        descriptor.capability_id
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+    )
+    for target_id in baseline_match_ids:
+        monkeypatch.setitem(
+            projections._RELATED_CAPABILITIES,
+            target_id,
+            tuple(
+                (capability_id, "compatible exact outcome " + "x" * 80)
+                for capability_id in catalog_ids
+                if capability_id != target_id
+            ),
+        )
+    monkeypatch.setattr(
+        projections,
+        "CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT",
+        len(projections._mcp_text_json_bytes(baseline)) + 512,
+    )
+
+    compacted = projections._capability_discovery_response(
+        fresh_complete_runtime, **arguments
+    )
+
+    assert [
+        item["capability_id"] for item in compacted["matches"]
+    ] == baseline_match_ids
+    assert compacted["available_domains"] == baseline_domains
+    assert compacted["related_capabilities_truncated"] is True
+    assert compacted["match_metadata_truncated"] is False
+
+
+def test_math_find_compacts_exact_inspection_relationships(
+    tmp_path: Path,
+    fresh_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.adapters.mcp import projections
+
+    target_id = "polynomial.integer.compute.gcd"
+    monkeypatch.setitem(
+        projections._RELATED_CAPABILITIES,
+        target_id,
+        tuple(
+            (descriptor.capability_id, "compatible exact outcome " + "x" * 200)
+            for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+            if descriptor.capability_id != target_id
+        ),
+    )
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "math.find", {"capability_id": target_id, "view": "CONTRACT"}
+            )
+
+        assert result.structured_content is not None
+        structured = result.structured_content
+        text_result = json.loads(result.content[0].text)
+        assert (
+            len(projections._mcp_text_json_bytes(structured))
+            <= structured["response_byte_limit"]
+        )
+        assert structured["related_capabilities_truncated"] is True
+        assert structured["truncation_reason"] == "BYTE_LIMIT"
+        assert text_result["related_capabilities_truncated"] is True
+        assert text_result["truncation_reason"] == "BYTE_LIMIT"
+
+    asyncio.run(scenario())
+
+
 def test_mcp_exposes_only_math_tools_with_read_only_resources(
     tmp_path: Path,
 ) -> None:

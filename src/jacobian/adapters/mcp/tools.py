@@ -10,12 +10,17 @@ from mcp.server.mcpserver import Context
 from mcp_types import CallToolResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, RootModel, StrictInt
 
-from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE, ReasoningLogMode
+from jacobian.adapters.mcp.constants import (
+    _CAPABILITY_SCOPE_RULE,
+    CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+    ReasoningLogMode,
+)
 from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.adapters.mcp.projections import (
     _capability_descriptor_view,
     _capability_discovery_response,
     _capability_inspection_extensions,
+    _compact_inspection_relationships,
 )
 from jacobian.adapters.mcp.tooling import (
     AgentRecoveryError,
@@ -93,6 +98,9 @@ class _CapabilityInspectionResult(_CapabilityDiscoveryFields):
     view: CapabilityDescriptionView
     capability: dict[str, Any]
     scope_rule: str | dict[str, Any]
+    response_byte_limit: StrictInt
+    truncation_reason: str | None = None
+    related_capabilities_truncated: bool
     invocations: list[dict[str, Any]] | None = None
     related_capabilities: list[dict[str, Any]] | None = None
     synchronous_execution: dict[str, Any] | None = None
@@ -234,6 +242,11 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
         projection["invocations"] = response["invocations"]
     if response.get("related_capabilities"):
         projection["related_capabilities"] = response["related_capabilities"]
+    projection["response_byte_limit"] = response.get("response_byte_limit")
+    projection["truncation_reason"] = response.get("truncation_reason")
+    projection["related_capabilities_truncated"] = response.get(
+        "related_capabilities_truncated"
+    )
     return projection
 
 
@@ -415,6 +428,9 @@ async def capability_describe(
             "policy_digest": capability_catalog.policy_digest,
             "capability": _capability_descriptor_view(descriptor, view=view),
             "scope_rule": _CAPABILITY_SCOPE_RULE,
+            "response_byte_limit": CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+            "truncation_reason": None,
+            "related_capabilities_truncated": False,
         }
         if view == "SUMMARY":
             response["next_views"] = {
@@ -461,6 +477,7 @@ async def capability_describe(
             response.update(
                 _capability_inspection_extensions(capability_id, descriptors)
             )
+            _compact_inspection_relationships(response)
         if (
             view != "SUMMARY"
             and capability_id == "lean.check"

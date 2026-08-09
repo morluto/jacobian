@@ -251,6 +251,20 @@ def _compact_discovery_relationships(
             return
 
 
+def _compact_inspection_relationships(response: dict[str, Any]) -> None:
+    """Bound exact inspection without discarding its authoritative contract."""
+
+    related = response.get("related_capabilities")
+    while (
+        len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+        and isinstance(related, list)
+        and related
+    ):
+        related.pop()
+        response["related_capabilities_truncated"] = True
+        response["truncation_reason"] = "BYTE_LIMIT"
+
+
 def _discovery_recovery_paths(
     request: CapabilityDiscoveryRequest,
     *,
@@ -458,6 +472,8 @@ def _capability_discovery_response(
         "related_capabilities_truncated": False,
     }
     matches = cast(list[dict[str, Any]], response["matches"])
+    response["match_metadata_truncated"] = False
+    _compact_discovery_relationships(response, matches)
     while (
         len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
         and len(matches) > 1
@@ -476,8 +492,6 @@ def _capability_discovery_response(
         available_domains.pop()
         response["available_domains_truncated"] = True
         response["truncation_reason"] = "BYTE_LIMIT"
-    response["match_metadata_truncated"] = False
-    _compact_discovery_relationships(response, matches)
     compact_fields = (
         "tags",
         "matched_on",

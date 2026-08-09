@@ -474,9 +474,11 @@ def _capability_discovery_response(
         "response_byte_limit": CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
         "truncation_reason": None,
         "related_capabilities_truncated": False,
+        "available_domains_total": len(discovered_payload["available_domains"]),
+        "available_domains_truncated": False,
+        "match_metadata_truncated": False,
     }
     matches = cast(list[dict[str, Any]], response["matches"])
-    response["match_metadata_truncated"] = False
     _compact_discovery_relationships(response, matches)
     while (
         len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
@@ -487,8 +489,6 @@ def _capability_discovery_response(
         response["next_cursor"] = matches[-1]["capability_id"]
         response["truncation_reason"] = "BYTE_LIMIT"
     available_domains = cast(list[str], response["available_domains"])
-    response["available_domains_total"] = len(available_domains)
-    response["available_domains_truncated"] = False
     while (
         len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
         and available_domains

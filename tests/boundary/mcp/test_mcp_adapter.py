@@ -285,6 +285,57 @@ def test_math_find_compacts_relationships_before_ranked_discovery_data(
     assert compacted["match_metadata_truncated"] is False
 
 
+def test_math_find_accounts_for_fixed_metadata_before_compacting_relationships(
+    fresh_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.adapters.mcp import projections
+
+    target_id = "polynomial.integer.compute.gcd"
+    arguments = {
+        "query": target_id,
+        "domain": None,
+        "mode": None,
+        "input_kind": None,
+        "artifact_type": None,
+        "limit": 1,
+        "cursor": None,
+    }
+    related_id = next(
+        descriptor.capability_id
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+        if descriptor.capability_id != target_id
+    )
+    monkeypatch.setitem(
+        projections._RELATED_CAPABILITIES,
+        target_id,
+        ((related_id, "compatible exact outcome"),),
+    )
+    monkeypatch.setattr(
+        projections,
+        "CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT",
+        10_000,
+    )
+    candidate = projections._capability_discovery_response(
+        fresh_complete_runtime, **arguments
+    )
+    candidate_domains = candidate["available_domains"]
+    monkeypatch.setattr(
+        projections,
+        "CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT",
+        len(projections._mcp_text_json_bytes(candidate)) - 2,
+    )
+
+    compacted = projections._capability_discovery_response(
+        fresh_complete_runtime, **arguments
+    )
+
+    assert compacted["matches"][0]["related_capabilities"] == []
+    assert compacted["related_capabilities_truncated"] is True
+    assert compacted["available_domains"] == candidate_domains
+    assert compacted["available_domains_truncated"] is False
+
+
 @pytest.mark.parametrize("view", ["CONTRACT", "FULL"])
 def test_math_find_compacts_exact_inspection_relationships(
     tmp_path: Path,

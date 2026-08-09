@@ -24,12 +24,16 @@ sys.meta_path.insert(0, BlockFlint())
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-runtime = create_runtime(Path(sys.argv[1]))
+runtime = create_runtime(
+    Path(sys.argv[1]),
+    checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+)
 ids = {
     descriptor.capability_id
     for descriptor in runtime.core.capabilities.catalog().capabilities
 }
 assert "integer.compute.gcd" in ids
+assert "finite_abelian_group.exact_factorization.verify" in ids
 assert "probability.finite_distribution.raw_moment.compute" not in ids
 """
     completed = subprocess.run(

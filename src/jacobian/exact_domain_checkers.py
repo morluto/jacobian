@@ -74,6 +74,7 @@ from jacobian.verification import VerificationService
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
 _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
+    "jacobian_checkers.finite_abelian_groups": "finite-abelian-group",
     "jacobian_checkers.exact_domain_operations": "python-flint",
     "jacobian_checkers.graph_exact_operations": "finite-graph",
     "jacobian_checkers.exact_probability_operations": "finite-probability",
@@ -134,6 +135,17 @@ def install_exact_domain_checkers(
     installer = CheckerInstaller(checkers)
     provider_runtimes = {
         "python-flint": exact_domain_checker_provider_runtime(),
+        "finite-abelian-group": source_provider_runtime(
+            "jacobian.finite-abelian-group-checker",
+            version="1",
+            entrypoint=(
+                "jacobian_checkers.finite_abelian_groups:"
+                "check_finite_abelian_group_exact_factorization"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-integer-replay", "clean-process-checker"),
+        ),
         "certified-snf": certified_snf_checker_provider_runtime(),
         "finite-graph": graph_exact_checker_provider_runtime(),
         "finite-probability": probability_exact_checker_provider_runtime(),
@@ -254,6 +266,21 @@ def install_exact_domain_checkers(
         provider_runtimes={
             "python-flint": exact_domain_checker_provider_runtime(
                 checker_ids=authorized_ids["python-flint"]
+            ),
+            "finite-abelian-group": source_provider_runtime(
+                "jacobian.finite-abelian-group-checker",
+                version="1",
+                entrypoint=(
+                    "jacobian_checkers.finite_abelian_groups:"
+                    "check_finite_abelian_group_exact_factorization"
+                ),
+                install_tier=CapabilityInstallTier.T1,
+                license_id="MIT",
+                features=(
+                    "standard-library-integer-replay",
+                    "clean-process-checker",
+                ),
+                checker_ids=authorized_ids["finite-abelian-group"],
             ),
             "certified-snf": certified_snf_checker_provider_runtime(
                 checker_ids=authorized_ids["certified-snf"]

@@ -9,6 +9,7 @@ from jacobian.contracts.number_theory import (
 )
 
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
+_FINITE_GROUP_ENTRYPOINT = "jacobian_checkers.finite_abelian_groups"
 
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
@@ -16,7 +17,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         FiniteAbelianGroupFactorizationRequest,
         "check_finite_abelian_group_exact_factorization",
         "finite-abelian-group.exact-factorization.stdlib-replay",
-        entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        entrypoint_module=_FINITE_GROUP_ENTRYPOINT,
         replay_method="Python standard-library exhaustive group replay",
         reason=(
             "operator-authorized checker independently normalizes both factors "

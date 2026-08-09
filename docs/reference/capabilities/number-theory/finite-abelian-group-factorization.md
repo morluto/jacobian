@@ -12,7 +12,7 @@ transversal is the special case where the right factor contains only zero.
 
 The current contract supports rank at most six, group order at most 4,096,
 factor sizes at most 256, and a factor Cartesian product no larger than the
-group order. Coordinates may be noncanonical integers and are reduced by their
+maximum supported group order (4,096). Coordinates may be noncanonical integers and are reduced by their
 corresponding cyclic moduli. Each factor must remain a set after normalization;
 congruent duplicate entries are rejected before computation.
 

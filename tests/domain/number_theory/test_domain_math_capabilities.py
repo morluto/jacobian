@@ -14,6 +14,7 @@ from jacobian.contracts.capabilities import (
     CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.number_theory import (
     FiniteAbelianGroupFactorizationResult,
     ModularPolynomialResidueImageRequest,
@@ -385,6 +386,11 @@ def test_finite_abelian_transversal_is_exact_and_verified(tmp_path: Path) -> Non
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED
         assert verified.output["status"] == "VERIFIED"
+        record = services.core.store.get(verified.output["verification_record_uri"])
+        parsed = InlineExactVerificationRecord.model_validate(record.payload)
+        assert parsed.decision.arithmetic.value == "EXACT_INTEGER"
+        assert parsed.decision.method.value == "EXHAUSTIVE_FINITE"
+        assert parsed.decision.coverage.value == "EXHAUSTIVE"
 
 
 def test_finite_abelian_factorization_returns_failure_witnesses(

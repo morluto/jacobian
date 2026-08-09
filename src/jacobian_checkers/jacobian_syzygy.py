@@ -371,7 +371,14 @@ def _matrix_digest(
         "source_monomial_basis": [list(item) for item in source_basis],
         "target_monomial_basis": [list(item) for item in target_basis],
         "entries": [
-            [row, column, f"{value.numerator}/{value.denominator}"]
+            [
+                row,
+                column,
+                (
+                    f"{format_canonical_integer(value.numerator)}/"
+                    f"{format_canonical_integer(value.denominator)}"
+                ),
+            ]
             for row, column, value in entries
         ],
     }

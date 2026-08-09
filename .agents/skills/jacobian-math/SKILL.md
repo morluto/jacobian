@@ -1,11 +1,9 @@
 ---
 name: jacobian-math
-description: Use Jacobian for specialized exact mathematics, including matrix determinants, polynomial or symbolic computation, structural analysis, counterexamples, bounded search, formal inspection, and requested independent verification. Trigger on relevant math tasks even when the user does not name Jacobian and shell code could calculate the answer.
+description: Use Jacobian for exact mathematics, symbolic computation, structural analysis, counterexamples, bounded search, formal inspection, and independent verification. Trigger on relevant math tasks even when the user does not name Jacobian.
 ---
 
 # Jacobian Math
-
-<!-- Managed by Jacobian's Codex integration. -->
 
 In Codex Code Mode, call the nested methods
 `tools.mcp__jacobian__math_find(...)` and
@@ -64,8 +62,9 @@ required task authorization and bindings are preserved; otherwise use lower
 task-permitted assurance. Verification is bound to the exact checked claim: do
 not transfer `VERIFIED` from an input, premise, factorization, or related
 artifact to a model-derived conclusion, which needs its own checker-bound record.
-Before each run, check its structured payload exactly represents the
-intended expression or object. Before concluding, account for every exact
-outcome in the final comparison. A `VERIFIED` sub-result does not validate
-another result or their comparison; use suitable installed operations and
-compare returned values.
+Before each run, compare every payload component with the intended object.
+Afterward, compare echoed scope parameters or its bound digest/URI with that
+same input. If either check is missing or mismatched, do not apply the output.
+Before concluding, account for every exact outcome in the final comparison. A
+`VERIFIED` sub-result does not validate another result or their comparison; use
+suitable installed operations and compare returned values.

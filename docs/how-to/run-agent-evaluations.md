@@ -150,7 +150,12 @@ make agent-eval DATASET=mathematical-benchmarks-v1 \
 ```
 
 Use `TASKS=graph-counterexample` for a small smoke run. The treatment run uses
-`benchmarks/config/jacobian.mcp.json`; task TOMLs remain agent-agnostic.
+`benchmarks/config/jacobian.mcp.json` and installs the repository's
+`.agents/skills/jacobian-math` skill. `agent-eval` passes both explicitly
+because its agent/model CLI overrides replace the agent block from the job
+JSON. Set `JACOBIAN_EVAL_SKILL` only for a deliberate development comparison;
+normalized evidence requires a matching job declaration. Task TOMLs remain
+agent-agnostic.
 
 ### Evaluate tool adoption and task design
 
@@ -217,8 +222,9 @@ task's structured submission contract. Otherwise a control answer can reuse
 `VERIFIED` as an ordinary English synonym and make the assurance comparison
 misleading.
 
-`JACOBIAN_ENABLED=1` selects the treatment job and passes
-Harbor's `--mcp-config` option. `JACOBIAN_EVAL_PROXY=1` selects matching
+`JACOBIAN_ENABLED=1` selects the treatment job and passes Harbor's
+`--mcp-config` and `--skill` options. `JACOBIAN_ENABLED=0` clears both
+interventions. `JACOBIAN_EVAL_PROXY=1` selects matching
 proxy-enabled control/treatment job configs and requires at least one proxy
 URL variable. The Makefile also passes Harbor's
 `web_search=disabled` agent kwarg explicitly, because the `-a codex` and
@@ -305,6 +311,11 @@ before invoking Make:
 ```sh
 export JACOBIAN_MODEL='your-model'
 ```
+
+When `OPENAI_API_KEY` is empty and `~/.codex/auth.json` exists, `agent-eval`
+sets `CODEX_FORCE_AUTH_JSON=1` for Harbor automatically. An explicitly set
+`CODEX_FORCE_AUTH_JSON` still wins. This avoids Harbor 0.20 selecting an empty
+API-key credential instead of an existing ChatGPT login.
 
 If the run stalls at `starting environment`, Docker may be building the task
 image or waiting on package installation. Check the Docker build output and

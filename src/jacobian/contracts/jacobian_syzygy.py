@@ -229,7 +229,7 @@ class GradedJacobianSyzygyResult(ContractModel):
     verification_capability_id: Literal[
         "polynomial.jacobian_syzygy.minimum_degree.verify"
     ] = "polynomial.jacobian_syzygy.minimum_degree.verify"
-    verification_input_field: Literal["result_uri"] = "result_uri"
+    verification_input_field: Literal["input_and_candidate"] = "input_and_candidate"
 
     @model_validator(mode="after")
     def bind_first_kernel_and_finite_scope(self) -> Self:

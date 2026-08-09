@@ -568,7 +568,7 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         "verification_capability_id": (
             "polynomial.jacobian_syzygy.minimum_degree.verify"
         ),
-        "verification_input_field": "result_uri",
+        "verification_input_field": "input_and_candidate",
     }
 
 

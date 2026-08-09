@@ -16,7 +16,14 @@ from collections import Counter
 from itertools import product
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from jacobian.contracts.results import ContractModel
 
@@ -236,6 +243,13 @@ class ModularPolynomialTerm(ContractModel):
         min_length=1,
         max_length=_MAX_RESIDUE_VARIABLES,
     )
+
+    @field_validator("coefficient")
+    @classmethod
+    def reject_negative_zero(cls, value: str) -> str:
+        if value == "-0":
+            raise ValueError("term coefficient must be a canonical integer")
+        return value
 
     @model_validator(mode="after")
     def require_nonnegative_exponents(self) -> Self:

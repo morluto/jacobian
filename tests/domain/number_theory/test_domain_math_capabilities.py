@@ -109,6 +109,18 @@ def test_modular_polynomial_identity_canonicalizes_formal_coefficients(
     assert [term.coefficient for term in comparison.normalized_left] == [1, 2, 3, 1, 1]
 
 
+def test_modular_polynomial_identity_rejects_negative_zero_coefficient() -> None:
+    with pytest.raises(ValidationError, match="canonical integer"):
+        ModularPolynomialIdentityRequest.model_validate(
+            {
+                "modulus": 5,
+                "variables": ["x"],
+                "left": [{"coefficient": "-0", "exponents": [1]}],
+                "right": [],
+            }
+        )
+
+
 @pytest.mark.parametrize("modulus", (4, 8, 7))
 def test_modular_polynomial_identity_combines_duplicates_and_detects_difference(
     domain_services: DomainTestServices,

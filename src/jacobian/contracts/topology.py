@@ -251,6 +251,11 @@ class FiniteSimplicialComplex(ContractModel):
             raise PydanticCustomError(
                 "jacobian.stale_complex_digest",
                 "complex_digest does not bind the canonical complex",
+                {
+                    "jacobian_validation_reason": (
+                        "complex_digest does not bind the canonical complex"
+                    )
+                },
             )
         return self
 

@@ -76,6 +76,11 @@ class _ControlledSecretValidatedRequest(ContractModel):
         raise PydanticCustomError(
             "jacobian.stale_complex_digest",
             f"unsafe dynamic message {value}",
+            {
+                "jacobian_validation_reason": (
+                    "complex_digest does not bind the canonical complex"
+                )
+            },
         )
 
 

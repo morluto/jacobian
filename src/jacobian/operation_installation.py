@@ -48,12 +48,6 @@ from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import ArtifactIntegrityError, ArtifactNotFoundError
 from jacobian.storage.repository import ArtifactRepository
 
-_CONTROLLED_VALIDATION_REASONS = {
-    "jacobian.stale_complex_digest": (
-        "complex_digest does not bind the canonical complex"
-    ),
-}
-
 
 def _validation_diagnostic(
     diagnostic: CapabilityDiagnostic,
@@ -70,9 +64,13 @@ def _validation_diagnostic(
     validation_type = str(first.get("type", "value_error"))
     context = first.get("ctx")
     context_error = context.get("error") if isinstance(context, dict) else None
-    controlled_reason = _CONTROLLED_VALIDATION_REASONS.get(validation_type)
-    if controlled_reason is not None:
-        reason = controlled_reason
+    domain_reason = (
+        context.get("jacobian_validation_reason")
+        if isinstance(context, dict)
+        else None
+    )
+    if validation_type.startswith("jacobian.") and isinstance(domain_reason, str):
+        reason = domain_reason[:128]
     elif isinstance(context_error, (ValueError, AssertionError)):
         reason = validation_type.replace("_", " ")[:128]
     else:

@@ -87,7 +87,6 @@ async def main() -> None:
     server = create_server(
         STATE_DIR,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-        reasoning_log_mode="off",
     )
     async with Client(server, raise_exceptions=True) as client:
         described = await tool(

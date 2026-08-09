@@ -12,7 +12,6 @@ from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
-from jacobian.adapters.mcp.constants import ReasoningLogMode
 from jacobian.adapters.mcp.server import JacobianCoreExtension, create_server
 from jacobian.contracts.capabilities import CapabilityResult
 
@@ -21,13 +20,10 @@ def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.0.0"
     assert importlib.metadata.version("mcp-types") == "2.0.0"
 
-    extension = JacobianCoreExtension(None, None, ReasoningLogMode.OFF)
+    extension = JacobianCoreExtension(None, None)
     assert isinstance(extension, Extension)
     assert extension.identifier == "io.jacobian/core"
-    assert extension.settings() == {
-        "version": "2",
-        "reasoning_log_mode": "OFF",
-    }
+    assert extension.settings() == {"version": "2"}
     assert all(isinstance(binding, ToolBinding) for binding in extension.tools())
     assert all(
         isinstance(binding, ResourceBinding) for binding in extension.resources()
@@ -57,6 +53,11 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 for tool in listed.tools
             )
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
+            assert set(invoke.input_schema["properties"]) == {
+                "capability_id",
+                "payload",
+                "mode",
+            }
             assert invoke.output_schema == CapabilityResult.model_json_schema()
             find = next(tool for tool in listed.tools if tool.name == "math.find")
             assert find.output_schema["type"] == "object"
@@ -75,6 +76,18 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert set(
                 find.output_schema["$defs"]["_CapabilityInspectionResult"]["required"]
             ) >= {"kind", "view", "capability"}
+            assert (
+                find.output_schema["$defs"]["_CapabilityDiscoveryOperationCard"][
+                    "additionalProperties"
+                ]
+                is False
+            )
+            assert (
+                find.output_schema["$defs"]["_CapabilityDiscoveryErrorDetail"][
+                    "additionalProperties"
+                ]
+                is False
+            )
             serialized_tools = serialize_server_result(
                 "tools/list",
                 "2026-07-28",
@@ -85,6 +98,30 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             with pytest.raises(MCPError) as unknown:
                 await client.call_tool("math.find", {"unknown_key": "rejected"})
             assert '"code": "INVALID_INPUT"' in str(unknown.value)
+
+            with pytest.raises(MCPError) as retired_reasoning_input:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "capability_id": "polynomial.expression.normalize",
+                        "payload": {},
+                        "mode": "EXPLORE",
+                        "reasoning_run_id": "retired",
+                    },
+                )
+            assert '"code": "INVALID_INPUT"' in str(retired_reasoning_input.value)
+
+            invalid_discovery_view = await client.call_tool(
+                "math.find",
+                {
+                    "query": "normalize a polynomial expression",
+                    "view": "FULL",
+                },
+            )
+            assert invalid_discovery_view.is_error is True
+            invalid_view_error = json.loads(invalid_discovery_view.content[0].text)
+            assert invalid_view_error["error"]["code"] == "INVALID_INPUT"
+            assert invalid_view_error["error"]["stage"] == "math.find"
 
             contract = json.loads(
                 (
@@ -112,7 +149,11 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 result.structured_content
             ).model_dump(mode="json")
 
-            with pytest.raises(MCPError):
+            with pytest.raises(MCPError) as missing_resource:
                 await client.read_resource("artifact://sha256/" + "f" * 64)
+            assert missing_resource.value.code == -32602
+            assert "requested Jacobian resource does not exist" in str(
+                missing_resource.value
+            )
 
     asyncio.run(scenario())

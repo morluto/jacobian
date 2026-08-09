@@ -8,19 +8,6 @@ from pathlib import Path
 from jacobian import __version__
 
 _CAPABILITY_MODES = ("EXPLORE", "VERIFY")
-_REASONING_LOG_MODES = ("required", "audit", "off")
-
-
-def _normalize_reasoning_log_mode(value: str) -> str:
-    """Accept case-insensitive reasoning-log mode values from the CLI."""
-
-    lowered = value.lower()
-    if lowered not in _REASONING_LOG_MODES:
-        raise argparse.ArgumentTypeError(
-            f"invalid reasoning_log_mode: {value!r} "
-            f"(choose from {', '.join(_REASONING_LOG_MODES)})"
-        )
-    return lowered
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -140,15 +127,6 @@ def _parser() -> argparse.ArgumentParser:
             "next acquisition"
         ),
     )
-    parser.add_argument(
-        "--reasoning-log-mode",
-        type=_normalize_reasoning_log_mode,
-        default="off",
-        help=(
-            "external reasoning-log enforcement; defaults to off. "
-            "Accepts case-insensitive values: required, audit, off."
-        ),
-    )
     return parser
 
 
@@ -165,12 +143,9 @@ def main() -> None:
         parser.error("--anonymous-tenant-id requires --allow-anonymous")
     args.path = args.path if args.path.startswith("/") else f"/{args.path}"
 
-    from jacobian.adapters.mcp.constants import ReasoningLogMode
     from jacobian.adapters.mcp.server import create_server
     from jacobian.capability_service import CapabilityPolicy
     from jacobian.contracts.capabilities import CapabilityMode
-
-    reasoning_log_mode = ReasoningLogMode(args.reasoning_log_mode.upper())
 
     capability_policy = CapabilityPolicy(
         profile=args.capability_policy_profile,
@@ -194,7 +169,6 @@ def main() -> None:
             state_dir=args.state_dir,
             capability_adapter_entrypoints=tuple(args.capability_adapter),
             capability_policy=capability_policy,
-            reasoning_log_mode=reasoning_log_mode,
         ).run("stdio")
         return
 
@@ -235,7 +209,6 @@ def main() -> None:
         capability_policy=capability_policy,
         max_tenant_runtimes=args.max_tenant_runtimes,
         tenant_idle_timeout_seconds=args.tenant_idle_timeout_seconds,
-        reasoning_log_mode=reasoning_log_mode,
     )
     if args.transport == "streamable-http":
         server.run(

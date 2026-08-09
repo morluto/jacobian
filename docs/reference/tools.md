@@ -6,23 +6,12 @@
 - Installed membership remains runtime-defined
 
 Jacobian exposes mathematical operations as namespaced capabilities. The
-model-facing MCP surface contains two capability tools and, in `REQUIRED` or
-`AUDIT` mode, one operational reasoning-log tool:
+model-facing MCP surface contains two stable capability tools:
 
 | MCP tool | Purpose |
 | --- | --- |
 | `math.find` | Find or inspect installed mathematical operations by desired outcome or exact ID. |
 | `math.run` | Run one installed mathematical operation in `EXPLORE` or `VERIFY` mode. |
-| `reasoning.write` | Append a bounded model-authored `PLAN`, `BEFORE_TOOL`, `AFTER_TOOL`, or `FINAL` summary. Available only in `REQUIRED` or `AUDIT` mode. |
-
-The reasoning log is not a mathematical capability, proof object, workspace, or
-chain-of-thought collector. In `REQUIRED` mode, every `math.run` must
-carry the `reasoning_run_id` and `reasoning_call_id` returned by the current
-`BEFORE_TOOL`. The server binds the actual execution status, assurance,
-completeness, result digest, and artifact URIs, then records whether the model's
-structured `AFTER_TOOL` report matches them, without copying the capability
-payload or output into the log. See the
-[reasoning-log protocol](reasoning-log.md).
 
 Read `capability://catalog` to discover installed capability IDs, provider
 versions, supported modes, compact schemas, and tags. Catalog membership means
@@ -34,10 +23,15 @@ The supported names are `math.find` and `math.run`. The superseded
 `capability.*` names are not exposed as aliases, so agents never choose between
 equivalent top-level tools. Adding a capability does not add a new MCP tool.
 
-The operator may separately set the reasoning-log enforcement mode to
-`REQUIRED`, `AUDIT`, or `OFF`; `OFF` is the default. Reasoning logging does not
-change capability membership, mathematical behavior, assurance, or checker
+The `math.run` input schema is invariant across local, remote, and evaluation
+deployments. Evaluation observation belongs outside the production tool
+contract and cannot change mathematical behavior, assurance, or checker
 authority.
+
+Because `math.run` dispatches the installed portfolio, its MCP annotation is
+conservatively `destructiveHint: true`: some installed operations can change
+runtime state, including cancellation. Individual capability descriptors remain
+the authoritative source for operation-specific `read_only` behavior.
 
 ## Capability contract
 
@@ -176,6 +170,12 @@ and other audit metadata:
   "view": "FULL"
 }
 ```
+
+An unknown exact ID does not copy the complete installed portfolio into the
+tool result. `math.find` and `math.run` return at most five lexical matches plus
+an explicit `math.find` retry and `capability://catalog` as the complete
+inventory path. These are bounded recovery choices, not ranked mathematical
+recommendations.
 
 `math.run` returns the complete Pydantic `CapabilityResult` in
 `structured_content`. MCP Python SDK 2.0 derives the output schema and validates

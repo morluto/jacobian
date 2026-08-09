@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context
-from mcp_types import CallToolResult, TextContent
+from mcp_types import CallToolResult, ResourceLink, TextContent
 from pydantic import BaseModel, ConfigDict, Field, RootModel, StrictInt
 
-from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE, ReasoningLogMode
+from jacobian.adapters.mcp.constants import _CAPABILITY_SCOPE_RULE
 from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.adapters.mcp.projections import (
     _capability_descriptor_view,
@@ -18,38 +17,168 @@ from jacobian.adapters.mcp.projections import (
     _capability_inspection_extensions,
 )
 from jacobian.adapters.mcp.tooling import (
-    AgentRecoveryError,
     _invoke_capability_attempt,
-    _run_blocking,
 )
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
+    CapabilityDescriptor,
+    CapabilityDiscoveryInspectCatalogRecoveryPath,
+    CapabilityDiscoveryMatch,
+    CapabilityDiscoveryRecoveryPath,
+    CapabilityDiscoveryRequest,
+    CapabilityId,
     CapabilityInputKind,
     CapabilityMode,
+    CapabilityProviderAvailability,
     CapabilityResult,
 )
-from jacobian.contracts.reasoning import (
-    ReasoningCallId,
-    ReasoningInterpretationStatus,
-    ReasoningPhase,
-    ReasoningRunId,
-    ReasoningWriteRequest,
-    ReasoningWriteResult,
-)
-from jacobian.contracts.results import ExecutionStatus
+from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
+from jacobian.runtime.model import JacobianRuntime
 
-_LOGGER = logging.getLogger(__name__)
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
 
 
-class _CapabilityDiscoveryFields(BaseModel):
-    """Shared catalog metadata with a closed MCP output shape."""
+class _MCPOutputModel(BaseModel):
+    """Closed validation model for structured MCP output."""
 
     model_config = ConfigDict(extra="forbid")
 
+
+class _CapabilityDiscoveryFields(_MCPOutputModel):
+    """Shared catalog metadata with a closed MCP output shape."""
+
     policy_profile: str
     policy_digest: str
+
+
+class _SchemaSummary(_MCPOutputModel):
+    """Bounded facts extracted from a capability JSON Schema."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: str | None
+    required: tuple[str, ...]
+    property_names: tuple[str, ...]
+    ref: str | None = Field(default=None, alias="$ref")
+    one_of_variants: StrictInt | None = None
+    any_of_variants: StrictInt | None = None
+
+
+class _RelatedCapability(_MCPOutputModel):
+    capability_id: CapabilityId
+    relationship: str
+
+
+class _DiscoveryInvocationExample(_MCPOutputModel):
+    mode: CapabilityMode
+    payload: dict[str, Any]
+
+
+class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
+    accepted_input_kinds: tuple[CapabilityInputKind, ...]
+    accepted_artifact_types: tuple[ArtifactUri, ...]
+    produced_artifact_types: tuple[ArtifactUri, ...]
+    output_schema_summary: _SchemaSummary
+    input_schema_summary: _SchemaSummary | None = None
+    scope: Literal["EXACT_SUPPLIED_INPUT_OR_CLAIM"]
+    assurance_ceiling: Literal["COMPUTED", "VERIFIED"]
+    provider_availability: CapabilityProviderAvailability | Literal["UNKNOWN"]
+    related_capabilities: tuple[_RelatedCapability, ...]
+    invocation_example: _DiscoveryInvocationExample | None = None
+
+
+class _ProviderRuntimeProjection(_MCPOutputModel):
+    availability: CapabilityProviderAvailability
+    version: str | None = None
+    digest: Sha256Digest | None = None
+    checker_ids: tuple[CheckerUri, ...] = ()
+    diagnostic: str | None = None
+
+
+class _CapabilityDescriptorProjection(_MCPOutputModel):
+    """Typed SUMMARY/CONTRACT projection used only at the MCP boundary."""
+
+    capability_id: CapabilityId
+    version: str
+    title: str
+    description: str
+    provider: str
+    provider_runtime: _ProviderRuntimeProjection | None
+    modes: tuple[CapabilityMode, ...]
+    tags: tuple[str, ...] | None = None
+    accepted_input_kinds: tuple[CapabilityInputKind, ...]
+    accepted_artifact_types: tuple[ArtifactUri, ...]
+    produced_artifact_types: tuple[ArtifactUri, ...]
+    input_schema_summary: _SchemaSummary | None = None
+    input_schema: dict[str, Any] | None = None
+    output_schema_summary: _SchemaSummary
+    has_invocation_examples: bool | None = None
+
+
+class _CapabilityScopeRule(_MCPOutputModel):
+    conclusion_scope: Literal["Only the exact supplied input or claim is covered."]
+    bounded_repetition: str
+
+
+class _CapabilityInvocationArguments(_MCPOutputModel):
+    capability_id: CapabilityId
+    mode: CapabilityMode
+    payload: dict[str, Any]
+
+
+class _CapabilityInvocation(_MCPOutputModel):
+    name: str
+    description: str | None = None
+    tool: Literal["math.run"]
+    arguments: _CapabilityInvocationArguments
+
+
+class _SynchronousExecution(_MCPOutputModel):
+    remote_safe_wall_seconds_max: StrictInt
+    timeout_is_a_non_conclusion: bool
+    larger_search_requires_multiple_bounded_invocations: bool
+    backend_suitability: str
+
+
+class _NextCapabilityViews(_MCPOutputModel):
+    CONTRACT: str
+    FULL: str
+
+
+class _LeanWarmupHealth(_MCPOutputModel):
+    status: str
+    detail: str | None
+
+
+class _LeanCacheDescription(_MCPOutputModel):
+    key: str
+    max_entries: StrictInt
+    warmup_environment_variable: Literal["JACOBIAN_LEAN_WARMUP=1"]
+    mathlib_warmup: _LeanWarmupHealth
+
+
+class _CapabilitySearchArguments(_MCPOutputModel):
+    query: str
+    limit: Literal[5] = 5
+
+
+class _CapabilitySearchRecoveryPath(_MCPOutputModel):
+    action: Literal["search"]
+    tool: Literal["math.find"] = "math.find"
+    arguments: _CapabilitySearchArguments
+
+
+CapabilityErrorRecoveryPath = (
+    _CapabilitySearchRecoveryPath | CapabilityDiscoveryInspectCatalogRecoveryPath
+)
+
+
+class _CapabilityDiscoveryErrorDetail(_MCPOutputModel):
+    code: Literal["INVALID_CURSOR", "UNKNOWN_CAPABILITY"]
+    stage: Literal["capability_discovery", "capability_resolution"]
+    message: str
+    hint: str
+    nearby_capability_ids: tuple[CapabilityId, ...] = ()
+    available_recovery_paths: tuple[CapabilityErrorRecoveryPath, ...] = ()
 
 
 class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
@@ -66,7 +195,7 @@ class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
     artifact_type: str | None = None
     routing_status: Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"]
     routing_basis: str
-    matches: list[dict[str, Any]]
+    matches: tuple[_CapabilityDiscoveryOperationCard, ...]
     total_matches: StrictInt
     truncated: bool
     next_cursor: str | None = None
@@ -78,7 +207,7 @@ class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
         "NO_LEXICAL_MATCHES",
     ]
     portfolio_fit_basis: str
-    available_recovery_paths: list[dict[str, Any]]
+    available_recovery_paths: tuple[CapabilityDiscoveryRecoveryPath, ...]
     recovery_paths_are_unranked: bool
     response_byte_limit: StrictInt
     truncation_reason: str | None = None
@@ -90,20 +219,18 @@ class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
 class _CapabilityInspectionResult(_CapabilityDiscoveryFields):
     kind: Literal["capability"]
     view: CapabilityDescriptionView
-    capability: dict[str, Any]
-    scope_rule: str | dict[str, Any]
-    invocations: list[dict[str, Any]] | None = None
-    related_capabilities: list[dict[str, Any]] | None = None
-    synchronous_execution: dict[str, Any] | None = None
-    next_views: dict[str, str] | None = None
-    cache: dict[str, Any] | None = None
+    capability: _CapabilityDescriptorProjection | CapabilityDescriptor
+    scope_rule: _CapabilityScopeRule
+    invocations: tuple[_CapabilityInvocation, ...] | None = None
+    related_capabilities: tuple[_RelatedCapability, ...] | None = None
+    synchronous_execution: _SynchronousExecution | None = None
+    next_views: _NextCapabilityViews | None = None
+    cache: _LeanCacheDescription | None = None
 
 
-class _CapabilityDiscoveryError(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class _CapabilityDiscoveryError(_MCPOutputModel):
     kind: Literal["error"]
-    error: dict[str, Any]
+    error: _CapabilityDiscoveryErrorDetail
 
 
 class CapabilityDiscoveryResponse(
@@ -134,6 +261,7 @@ CapabilityRunToolResult = Annotated[CallToolResult, CapabilityResult]
 def _text_result(
     structured_content: dict[str, Any],
     text_projection: dict[str, Any],
+    artifact_uris: tuple[str, ...] = (),
 ) -> CallToolResult:
     """Keep one typed wire result plus a small agent-facing text view."""
 
@@ -147,7 +275,16 @@ def _text_result(
                     sort_keys=True,
                     separators=(",", ":"),
                 ),
-            )
+            ),
+            *(
+                ResourceLink(
+                    uri=artifact_uri,
+                    name=artifact_uri,
+                    description="Durable Jacobian artifact returned by math.run.",
+                    mime_type="application/json",
+                )
+                for artifact_uri in artifact_uris
+            ),
         ],
         structured_content=structured_content,
     )
@@ -237,26 +374,63 @@ def _find_result(response: dict[str, Any]) -> CallToolResult:
         response = {"kind": "error", **response}
     structured = CapabilityDiscoveryResponse.model_validate(response)
     return _text_result(
-        structured.model_dump(mode="json", exclude_unset=True),
+        structured.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude_unset=True,
+        ),
         _find_text_projection(response),
     )
 
 
+def _unknown_capability_context(
+    runtime: JacobianRuntime,
+    capability_id: CapabilityId,
+) -> dict[str, Any]:
+    """Return bounded SDK-facing recovery without embedding the full catalog."""
+
+    discovered = runtime.core.capabilities.discover(
+        CapabilityDiscoveryRequest(query=capability_id, limit=5)
+    )
+    return {
+        "nearby_capability_ids": [match.capability_id for match in discovered.matches],
+        "available_recovery_paths": [
+            {
+                "action": "search",
+                "tool": "math.find",
+                "arguments": {"query": capability_id, "limit": 5},
+            },
+            {
+                "action": "inspect_catalog",
+                "resource_uri": "capability://catalog",
+            },
+        ],
+    }
+
+
+def _bounded_run_result(
+    runtime: JacobianRuntime,
+    result: CapabilityResult,
+) -> CapabilityResult:
+    """Keep unknown-capability recovery small in structured MCP output."""
+
+    if not (result.diagnostics and result.diagnostics[0].code == "UNKNOWN_CAPABILITY"):
+        return result
+    payload = result.model_dump(mode="json")
+    output = {
+        key: value
+        for key, value in payload["output"].items()
+        if key != "available_capability_ids"
+    }
+    output.update(_unknown_capability_context(runtime, result.capability_id))
+    payload["output"] = output
+    return CapabilityResult.model_validate(payload)
+
+
 def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
     payload = result.model_dump(mode="json")
-    output = payload["output"]
-    if (
-        result.diagnostics
-        and result.diagnostics[0].code == "UNKNOWN_CAPABILITY"
-        and "available_capability_ids" in output
-    ):
-        output = {
-            key: value
-            for key, value in output.items()
-            if key != "available_capability_ids"
-        }
     return {
-        key: output if key == "output" else payload[key]
+        key: payload[key]
         for key in (
             "capability_id",
             "mode",
@@ -275,7 +449,7 @@ def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
 
 async def capability_describe(
     capability_id: Annotated[
-        str | None,
+        CapabilityId | None,
         Field(
             description=(
                 "Exact installed ID; cannot be combined with discovery filters."
@@ -353,7 +527,8 @@ async def capability_describe(
             )
         ),
     ] = "SUMMARY",
-    ctx: Context[AppState, Any] | None = None,
+    *,
+    ctx: Context[AppState, Any],
 ) -> CapabilityDiscoveryToolResult:
     with _runtime(ctx) as active_runtime:
         search_arguments = (
@@ -368,12 +543,17 @@ async def capability_describe(
         if capability_id is not None and any(
             argument is not None for argument in search_arguments
         ):
-            raise AgentRecoveryError(
+            raise ValueError(
                 "capability_id is an exact lookup and cannot be combined with query, "
                 "domain, mode, input_kind, artifact_type, limit, or cursor. Use either "
                 "discovery arguments or one exact capability_id in this call."
             )
         if capability_id is None:
+            if view != "SUMMARY":
+                raise ValueError(
+                    "view applies only to an exact capability_id inspection; omit it "
+                    "for search or browse."
+                )
             discovery_response = _capability_discovery_response(
                 active_runtime,
                 query=query,
@@ -399,7 +579,10 @@ async def capability_describe(
                     "stage": "capability_resolution",
                     "message": f"Unknown capability: {capability_id}",
                     "hint": hint,
-                    "available_capability_ids": sorted(descriptors),
+                    **_unknown_capability_context(
+                        active_runtime,
+                        capability_id,
+                    ),
                 }
             }
             return _find_result(error_response)
@@ -423,7 +606,6 @@ async def capability_describe(
                 ),
             }
         else:
-            reasoning_mode = _reasoning_mode_from_context(ctx)
             invocations = []
             for example in descriptor.invocation_examples:
                 entry: dict[str, Any] = {
@@ -442,15 +624,6 @@ async def capability_describe(
                         "payload": example.input,
                     },
                 }
-                if reasoning_mode is ReasoningLogMode.REQUIRED:
-                    entry["requires_reasoning_ids"] = True
-                    entry["protocol_note"] = (
-                        "In REQUIRED mode, math.run also requires "
-                        "reasoning_run_id and reasoning_call_id. Create a "
-                        "reasoning run with reasoning.write (PLAN), then call "
-                        "reasoning.write (BEFORE_TOOL) to obtain the IDs before "
-                        "invoking."
-                    )
                 invocations.append(entry)
             response["invocations"] = invocations
             response.update(
@@ -475,10 +648,11 @@ async def capability_describe(
 
 
 async def capability_invoke(
-    capability_id: str,
+    capability_id: CapabilityId,
     payload: dict[str, Any],
     mode: CapabilityMode = CapabilityMode.EXPLORE,
-    ctx: Context[AppState, Any] | None = None,
+    *,
+    ctx: Context[AppState, Any],
 ) -> CapabilityRunToolResult:
     with _runtime(ctx) as active_runtime:
         result = await _invoke_capability_attempt(
@@ -488,113 +662,9 @@ async def capability_invoke(
             mode=mode,
             ctx=ctx,
         )
+        result = _bounded_run_result(active_runtime, result)
         return _text_result(
-            result.model_dump(mode="json"), _run_text_projection(result)
+            result.model_dump(mode="json"),
+            _run_text_projection(result),
+            result.artifact_uris,
         )
-
-
-async def capability_invoke_reasoned(
-    capability_id: str,
-    payload: dict[str, Any],
-    reasoning_run_id: ReasoningRunId,
-    reasoning_call_id: ReasoningCallId,
-    mode: CapabilityMode = CapabilityMode.EXPLORE,
-    ctx: Context[AppState, Any] | None = None,
-) -> CapabilityRunToolResult:
-    with _runtime(ctx) as active_runtime:
-        result = await _invoke_capability_attempt(
-            active_runtime,
-            capability_id=capability_id,
-            payload=payload,
-            mode=mode,
-            ctx=ctx,
-            reasoning_run_id=reasoning_run_id,
-            reasoning_call_id=reasoning_call_id,
-            reasoning_required=True,
-        )
-        return _text_result(
-            result.model_dump(mode="json"), _run_text_projection(result)
-        )
-
-
-async def capability_invoke_audit(
-    capability_id: str,
-    payload: dict[str, Any],
-    reasoning_run_id: ReasoningRunId | None = None,
-    reasoning_call_id: ReasoningCallId | None = None,
-    mode: CapabilityMode = CapabilityMode.EXPLORE,
-    ctx: Context[AppState, Any] | None = None,
-) -> CapabilityRunToolResult:
-    with _runtime(ctx) as active_runtime:
-        result = await _invoke_capability_attempt(
-            active_runtime,
-            capability_id=capability_id,
-            payload=payload,
-            mode=mode,
-            ctx=ctx,
-            reasoning_run_id=reasoning_run_id,
-            reasoning_call_id=reasoning_call_id,
-            reasoning_required=False,
-            reasoning_audit=True,
-        )
-        return _text_result(
-            result.model_dump(mode="json"), _run_text_projection(result)
-        )
-
-
-async def reasoning_write(
-    phase: ReasoningPhase,
-    summary: Annotated[str, Field(min_length=1, max_length=512)],
-    run_id: ReasoningRunId | None = None,
-    call_id: ReasoningCallId | None = None,
-    capability_id: str | None = None,
-    mode: CapabilityMode | None = None,
-    interpretation_status: ReasoningInterpretationStatus | None = None,
-    reported_execution_status: ExecutionStatus | None = None,
-    reported_assurance_level: CapabilityAssuranceLevel | None = None,
-    reported_completeness_status: CapabilityCompletenessStatus | None = None,
-    ctx: Context[AppState, Any] | None = None,
-) -> ReasoningWriteResult:
-    with _runtime(ctx) as active_runtime:
-        request = ReasoningWriteRequest(
-            phase=phase,
-            summary=summary,
-            run_id=run_id,
-            call_id=call_id,
-            capability_id=capability_id,
-            mode=mode,
-            interpretation_status=interpretation_status,
-            reported_execution_status=reported_execution_status,
-            reported_assurance_level=reported_assurance_level,
-            reported_completeness_status=reported_completeness_status,
-        )
-        if phase is ReasoningPhase.BEFORE_TOOL:
-            descriptors = {
-                item.capability_id: item
-                for item in active_runtime.core.capabilities.catalog().capabilities
-            }
-            descriptor = descriptors.get(str(capability_id))
-            if descriptor is None:
-                raise AgentRecoveryError(
-                    "BEFORE_TOOL names an unavailable capability. Use math.find "
-                    "to select an installed capability ID."
-                )
-            if mode not in descriptor.modes:
-                raise AgentRecoveryError(
-                    "BEFORE_TOOL selects a mode the capability does not advertise. "
-                    "Inspect its CONTRACT view and choose an installed mode."
-                )
-        return await _run_blocking(active_runtime.core.reasoning_log.write, request)
-
-
-def _reasoning_mode_from_context(
-    ctx: Context[AppState, Any] | None,
-) -> ReasoningLogMode:
-    """Read the server's reasoning-log mode from the request lifespan state."""
-
-    if ctx is None:
-        return ReasoningLogMode.OFF
-    state = ctx.request_context.lifespan_context
-    if isinstance(state, AppState):
-        return state.reasoning_log_mode
-    return ReasoningLogMode.OFF

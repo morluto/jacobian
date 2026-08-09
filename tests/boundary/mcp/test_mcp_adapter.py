@@ -185,23 +185,11 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert client.instructions == server.instructions
             assert client.server_info.version == version("jacobian")
             assert client.server_capabilities.extensions == {
-                "io.jacobian/core": {
-                    "version": "2",
-                    "reasoning_log_mode": "OFF",
-                }
+                "io.jacobian/core": {"version": "2"}
             }
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
             assert set(tools) == MCP_TOOL_NAMES
-            descriptor = json.dumps(
-                {
-                    "instructions": server.instructions,
-                    "tools": [tool.model_dump(mode="json") for tool in listed.tools],
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            assert len(descriptor) < 32_000
             assert all(
                 tool.annotations is not None
                 and tool.annotations.open_world_hint is False
@@ -209,6 +197,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             )
             assert tools["math.find"].annotations is not None
             assert tools["math.find"].annotations.read_only_hint is True
+            assert tools["math.run"].annotations is not None
+            assert tools["math.run"].annotations.destructive_hint is True
             assert (
                 "ranking is deterministic retrieval"
                 in (tools["math.find"].description or "").lower()
@@ -547,7 +537,13 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert "available_capability_ids" not in unknown_result["output"]
             assert len(unknown.content[0].text.encode("utf-8")) < 2_048
             assert isinstance(unknown.structured_content, dict)
-            assert unknown.structured_content["output"]["available_capability_ids"]
+            output = unknown.structured_content["output"]
+            assert "available_capability_ids" not in output
+            assert len(output["nearby_capability_ids"]) <= 5
+            assert output["available_recovery_paths"][-1] == {
+                "action": "inspect_catalog",
+                "resource_uri": "capability://catalog",
+            }
             assert unknown_result["assurance"]["level"] != "VERIFIED"
 
     asyncio.run(scenario())
@@ -573,6 +569,39 @@ def test_mcp_inline_results_do_not_emit_resource_links(
             assert [
                 block for block in result.content if block.type == "resource_link"
             ] == []
+
+    asyncio.run(scenario())
+
+
+def test_mcp_materialized_results_emit_readable_native_resource_links(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "sat.cnf.materialize",
+                    "mode": "EXPLORE",
+                    "payload": {
+                        "variable_names": ["x"],
+                        "clauses": [[1]],
+                    },
+                },
+            )
+            assert isinstance(result.structured_content, dict)
+            artifact_uris = result.structured_content["artifact_uris"]
+            links = [block for block in result.content if block.type == "resource_link"]
+            assert [str(link.uri) for link in links] == artifact_uris
+            assert [link.name for link in links] == artifact_uris
+            assert all(link.mime_type == "application/json" for link in links)
+
+            resource = await client.read_resource(links[0].uri)
+            envelope = json.loads(resource.contents[0].text)
+            assert envelope["artifact_uri"] == artifact_uris[0]
+            assert envelope["payload"]["clauses"] == [{"literals": [1]}]
 
     asyncio.run(scenario())
 

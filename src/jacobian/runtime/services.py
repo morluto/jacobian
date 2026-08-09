@@ -20,7 +20,6 @@ from jacobian.plugin_execution import PluginExecutor
 from jacobian.plugins.registry import PluginRegistry
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polytope import PolytopeService
-from jacobian.reasoning_log import ReasoningLogService
 from jacobian.references import ReferenceInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
@@ -49,7 +48,6 @@ class CoreServices:
     plugins: PluginRegistry
     checkers: CheckerRegistry
     capabilities: CapabilityService
-    reasoning_log: ReasoningLogService
 
     def close(self) -> None:
         self.store.close()

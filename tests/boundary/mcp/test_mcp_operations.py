@@ -15,9 +15,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from jacobian.adapters.mcp.context import _public_tool_error
+from jacobian.adapters.mcp.context import (
+    AppState,
+    _public_tool_error,
+    _runtime,
+    _runtime_scope,
+)
 from jacobian.adapters.mcp.server import (
-    JacobianCoreExtension,
     _runtime_lifespan,
     create_server,
 )
@@ -33,7 +37,6 @@ from jacobian.adapters.mcp.tooling import (
 MCP_TOOL_NAMES = {
     "math.find",
     "math.run",
-    "reasoning.write",
 }
 
 
@@ -131,9 +134,13 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
             assert "search installed capabilities" in response["error"]["hint"]
             assert "available_capability_ids" not in response["error"]
             assert isinstance(unknown_capability.structured_content, dict)
-            assert unknown_capability.structured_content["error"][
-                "available_capability_ids"
-            ]
+            error = unknown_capability.structured_content["error"]
+            assert len(error["nearby_capability_ids"]) <= 5
+            assert error["available_recovery_paths"][-1] == {
+                "action": "inspect_catalog",
+                "resource_uri": "capability://catalog",
+            }
+            assert len(json.dumps(error).encode("utf-8")) < 2_048
 
     asyncio.run(scenario())
 
@@ -191,7 +198,7 @@ def test_direct_tool_calls_reject_removed_and_malformed_arguments(
     asyncio.run(scenario())
 
 
-def test_mcp_stdio_entrypoint_exposes_required_reasoning_tool(
+def test_mcp_stdio_entrypoint_exposes_stable_math_tools(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
@@ -201,12 +208,7 @@ def test_mcp_stdio_entrypoint_exposes_required_reasoning_tool(
         environment["JACOBIAN_STATE_DIR"] = str(tmp_path)
         parameters = StdioServerParameters(
             command=sys.executable,
-            args=[
-                "-m",
-                "jacobian.adapters.mcp.server",
-                "--reasoning-log-mode",
-                "required",
-            ],
+            args=["-m", "jacobian.adapters.mcp.server"],
             env=environment,
             cwd=Path.cwd(),
         )
@@ -233,6 +235,7 @@ def test_mcp_entrypoint_has_nonstarting_help() -> None:
     assert "Run the Jacobian MCP server" in completed.stdout
     assert "--tool-profile" not in completed.stdout
     assert "--tool-name-profile" not in completed.stdout
+    assert "--reasoning-log-mode" not in completed.stdout
 
 
 def test_mcp_entrypoint_reports_distribution_version() -> None:
@@ -579,6 +582,7 @@ def test_failed_tenant_warmup_releases_the_acquired_lease(
     """Warmup executes inside the scope which owns every tenant lease."""
 
     released = threading.Event()
+    acquired = 0
 
     class Lease:
         runtime = object()
@@ -588,23 +592,79 @@ def test_failed_tenant_warmup_releases_the_acquired_lease(
 
     class Router:
         def lease_for(self, subject: str | None) -> Lease:
+            nonlocal acquired
             assert subject is None
+            acquired += 1
             return Lease()
 
-    async def scenario() -> None:
-        extension = JacobianCoreExtension(None, Router())  # type: ignore[arg-type]
-        monkeypatch.setattr(
-            "jacobian.adapters.mcp.server._start_lean_warmup",
-            lambda _: (_ for _ in ()).throw(RuntimeError("warmup failed")),
-        )
-        with pytest.raises(ToolError):
-            await extension.intercept_tool_call(
-                SimpleNamespace(name="math.find", arguments={}),
-                None,
-                lambda _: None,
-            )
-        assert released.is_set()
+    state = AppState(
+        runtime=None,
+        worker_registry=MCPBlockingWorkerRegistry(),
+        tenant_router=Router(),  # type: ignore[arg-type]
+    )
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(lifespan_context=state),
+    )
+    monkeypatch.setattr(
+        "jacobian.adapters.mcp.context._start_lean_warmup",
+        lambda _: (_ for _ in ()).throw(RuntimeError("warmup failed")),
+    )
 
-    from mcp.server.mcpserver.exceptions import ToolError
+    with (
+        pytest.raises(RuntimeError, match="warmup failed"),
+        _runtime(
+            ctx  # type: ignore[arg-type]
+        ),
+    ):
+        raise AssertionError("warmup failure must prevent request execution")
 
-    asyncio.run(scenario())
+    assert acquired == 1
+    assert released.is_set()
+
+
+def test_injected_context_reuses_the_interceptor_tenant_lease(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    acquired = 0
+    released = 0
+    runtime = object()
+
+    class Lease:
+        def __init__(self) -> None:
+            self.runtime = runtime
+
+        def release(self) -> None:
+            nonlocal released
+            released += 1
+
+    class Router:
+        def lease_for(self, subject: str | None) -> Lease:
+            nonlocal acquired
+            assert subject is None
+            acquired += 1
+            return Lease()
+
+    state = AppState(
+        runtime=None,
+        worker_registry=MCPBlockingWorkerRegistry(),
+        tenant_router=Router(),  # type: ignore[arg-type]
+    )
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(lifespan_context=state),
+    )
+    monkeypatch.setattr(
+        "jacobian.adapters.mcp.context._start_lean_warmup",
+        lambda _: None,
+    )
+
+    with (
+        _runtime_scope(state) as interceptor_runtime,
+        _runtime(
+            ctx  # type: ignore[arg-type]
+        ) as handler_runtime,
+    ):
+        assert interceptor_runtime is runtime
+        assert handler_runtime is runtime
+
+    assert acquired == 1
+    assert released == 1

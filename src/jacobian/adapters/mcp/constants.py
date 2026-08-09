@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-from enum import StrEnum
 from typing import Literal
 
-_LOGGER = logging.getLogger(__name__)
 CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
-
-
-class ReasoningLogMode(StrEnum):
-    REQUIRED = "REQUIRED"
-    AUDIT = "AUDIT"
-    OFF = "OFF"
 
 
 _CAPABILITY_SCOPE_RULE = {

@@ -177,49 +177,6 @@ wrapper containing additional fields (e.g. task_id, input_sha256, assignment).
 Do not claim VERIFIED when no agent-visible record content contract is available.
 """
 
-REASONING_WRITE_DESCRIPTION = """\
-Append one concise external reasoning summary. This records model-authored PLAN,
-BEFORE_TOOL, AFTER_TOOL, or FINAL entries; it does not request or expose hidden
-chain-of-thought and never establishes mathematical assurance. PLAN creates a run.
-BEFORE_TOOL reserves one capability call. AFTER_TOOL interprets the bound actual
-result or explicitly records RESULT_UNAVAILABLE after a lost response or runtime
-restart. FINAL audits the completed run. Do not copy prompts, secrets, payloads, or
-raw tool output into summary.
-"""
-
-_REASONING_PREFIX = (
-    "Before using Jacobian, call reasoning.write with phase PLAN and a concise "
-    "external work summary. Before each math.run call, write BEFORE_TOOL "
-    "with the selected capability ID and mode, then pass the returned run_id and "
-    "call_id to math.run. Write AFTER_TOOL after every result with the "
-    "reported status, assurance, and completeness; use RESULT_UNAVAILABLE only when "
-    "result content was lost. Write FINAL before completing the task. These are summaries, "
-    "not hidden chain-of-thought. Do not copy raw tool output. "
-)
-
-
-def server_instructions(*, reasoning_enabled: bool) -> str:
-    return (_REASONING_PREFIX if reasoning_enabled else "") + SERVER_INSTRUCTIONS
-
-
-def operating_guide(*, reasoning_enabled: bool) -> str:
-    if not reasoning_enabled:
-        return OPERATING_GUIDE
-    return OPERATING_GUIDE.replace(
-        "through two MCP tools.",
-        "through two capability tools plus the operational `reasoning.write` log tool.",
-    ).replace(
-        "## Mathematical affordances",
-        "## External reasoning log\n\n"
-        "Start with one concise `PLAN`. Surround every `math.run` with "
-        "`BEFORE_TOOL` and `AFTER_TOOL`, then write one `FINAL` audit. The server "
-        "binds actual status, assurance, completeness, and artifact URIs and records "
-        "whether the model's structured interpretation matches them, without "
-        "storing raw payload or output. This log is operational and unverified; it "
-        "is not hidden chain-of-thought or mathematical evidence.\n\n"
-        "## Mathematical affordances",
-    )
-
 
 def discovery_prompt(task: str) -> str:
     """Render optional protocol guidance without choosing a research strategy."""

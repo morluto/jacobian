@@ -196,17 +196,23 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "text(r.structuredContent ?? r)" in skill
     assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
     assert 'never send `mode: "CONTRACT"` to `math.run`' in skill_flat
+    assert "`matrix.determinant.verify` in `VERIFY` mode" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
     for guidance in (
         "Keep decomposition and routing decisions agent-owned",
         "composing already-known supporting operations remains allowed",
-        "follow those fields",
+        "Follow exposed recovery paths",
         "retry within the task resource bounds",
         "continue with other installed routes",
         "completeness, and open obligations",
+        "check payload fields against the intended object",
+        "compare it with the submitted input",
+        "does not replace server validation or evidence binding",
+        "Account for each requested outcome in the final comparison",
+        "does not verify another result or their comparison",
     ):
-        assert guidance in skill
+        assert guidance in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

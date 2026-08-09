@@ -12,10 +12,17 @@
   "engines": {
     "node": ">=18"
   },
+  "dependencies": {
+    "@decimalturn/toml-patch": "3.0.2"
+  },
+  "bundleDependencies": [
+    "@decimalturn/toml-patch"
+  ],
   "bin": {
     "jacobian": "bin/jacobian.cjs"
   },
   "scripts": {
+    "pretest": "npm ci --ignore-scripts --no-audit --no-fund",
     "test": "node --test npm-packaging.test.mjs cli-e2e.test.mjs installer.test.mjs"
   },
   "files": [

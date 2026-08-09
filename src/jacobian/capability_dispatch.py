@@ -47,7 +47,7 @@ class CapabilityDispatchMixin:
             result = _unknown_capability_failure(self, request)
             log_invocation(result, started)
             return result
-        descriptor = adapter.descriptor
+        descriptor = self._descriptors[request.capability_id]
         resolution = _capability_resolution_failure(self, request, descriptor)
         if resolution is not None:
             log_invocation(resolution, started)

@@ -80,14 +80,21 @@ class ApplicationServices:
     def close(self) -> None:
         """Quiesce application-owned workers before foundational teardown."""
 
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         for close in (self.search.close, self.experiments.close):
             try:
                 close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
         if failures:
-            raise ExceptionGroup("application services did not quiesce", failures)
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "application services did not quiesce", exception_failures
+                )
+            raise BaseExceptionGroup("application services did not quiesce", failures)
 
 
 def build_application_services(core: CoreServices) -> ApplicationServices:

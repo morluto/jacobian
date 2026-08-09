@@ -67,16 +67,17 @@ python -m pip install jacobian
 ```
 
 The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
-Node.js 18 or newer plus Python 3.12 or
+Node.js 18 or newer plus Python 3.12/3.13 or
 [`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
 `uv` release after confirmation. Run `jacobian mcp` to start the server
 directly.
 
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
 The npm package is a sub-100 KB thin launcher and MCP client installer for that
-same implementation; it is not a separate JavaScript API. The npm tarball has
-no npm runtime dependencies. The larger download is the local Python
-mathematical runtime, not a JavaScript dependency tree.
+same implementation; it is not a separate JavaScript API. It bundles one TOML
+parser for fail-closed Codex configuration updates and runs no install-time
+scripts. The larger download is the local Python mathematical runtime, not a
+JavaScript dependency tree.
 
 To run the exact code in a clone, follow
 [Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).

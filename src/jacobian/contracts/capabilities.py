@@ -412,6 +412,34 @@ class CapabilityCompletenessStatus(StrEnum):
     COMPLETE = "COMPLETE"
 
 
+class CapabilityCatalogRelationshipKind(StrEnum):
+    """Factual installed-capability relationship exposed by the catalog."""
+
+    INDEPENDENT_VERIFIER = "INDEPENDENT_VERIFIER"
+    VERIFIABLE_RESULT_PRODUCER = "VERIFIABLE_RESULT_PRODUCER"
+
+
+class CapabilityCatalogRelationship(ContractModel):
+    """One typed navigation edge to another installed capability."""
+
+    capability_id: CapabilityId
+    kind: CapabilityCatalogRelationshipKind
+    relationship: str = Field(min_length=1, max_length=256)
+
+
+class CapabilityCatalogRelationshipRegistration(ContractModel):
+    """One authoritative directed relationship before catalog projection."""
+
+    source_capability_id: CapabilityId
+    related_capability: CapabilityCatalogRelationship
+
+    @model_validator(mode="after")
+    def reject_self_relationship(self) -> Self:
+        if self.source_capability_id == self.related_capability.capability_id:
+            raise ValueError("a capability cannot relate to itself")
+        return self
+
+
 class CapabilityDescriptor(ContractModel):
     """One installed operation advertised by an operator-installed adapter."""
 
@@ -432,6 +460,7 @@ class CapabilityDescriptor(ContractModel):
     )
     accepted_artifact_types: tuple[ArtifactUri, ...] = ()
     produced_artifact_types: tuple[ArtifactUri, ...] = ()
+    related_capabilities: tuple[CapabilityCatalogRelationship, ...] = ()
     discovery_visible: bool = True
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
 
@@ -447,6 +476,11 @@ class CapabilityDescriptor(ContractModel):
         )
         if len(set(self.produced_artifact_types)) != len(self.produced_artifact_types):
             raise ValueError("produced artifact types must be unique")
+        related_ids = [item.capability_id for item in self.related_capabilities]
+        if self.capability_id in related_ids:
+            raise ValueError("a capability cannot relate to itself")
+        if len(set(related_ids)) != len(related_ids):
+            raise ValueError("related capability IDs must be unique")
         if len({example.name for example in self.invocation_examples}) != len(
             self.invocation_examples
         ):

@@ -23,14 +23,14 @@ const NPM_UPGRADE_HANDOFF = "JACOBIAN_NPM_UPGRADE_HANDOFF";
 const HELP = `Jacobian — composable mathematical capabilities for AI agents
 
 Usage:
-  jacobian setup [--client <id>...] [--all] [--yes] [--dry-run] [--json]
+  jacobian setup [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]
                  [--source <checkout> --state-dir <path> --profile <name>]
     Configure MCP clients to use Jacobian.
   jacobian upgrade
     Refresh the launcher-managed Python package.
-  jacobian doctor [--json]
-    Verify the MCP handshake and tool catalog.
-  jacobian remove [--client <id>...] [--all] [--yes] [--json]
+  jacobian doctor [--client <id>...] [--all] [--json]
+    Verify configured client launchers, the MCP handshake, and the tool catalog.
+  jacobian remove [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]
     Remove Jacobian from MCP client configs.
   jacobian mcp
     Run the Jacobian MCP server over stdio.
@@ -147,6 +147,8 @@ function main() {
           options.dryRun = true;
         } else if (arg === "--json") {
           options.json = true;
+        } else if (arg === "--plain") {
+          options.plain = true;
         } else if (arg === "--source") {
           options.source = requiredOptionValue(rest[++i], arg);
         } else if (arg.startsWith("--source=")) {
@@ -190,6 +192,8 @@ function main() {
           const value = requiredOptionValue(arg.slice(9), "--client");
           options.clients = options.clients || [];
           options.clients.push(...value.split(",").map((s) => s.trim()));
+        } else {
+          throw new Error(`Unknown setup option: ${arg}.`);
         }
       }
     } catch (error) {
@@ -236,40 +240,85 @@ function main() {
     const setup = require("./setup.cjs");
     const rest = args.slice(1);
     const options = { operation: "remove" };
-    for (let i = 0; i < rest.length; i++) {
-      const arg = rest[i];
-      if (arg === "--all") {
-        options.all = true;
-      } else if (arg === "--yes" || arg === "-y") {
-        options.yes = true;
-      } else if (arg === "--json") {
-        options.json = true;
-      } else if (arg === "--client" || arg === "-c") {
-        i++;
-        if (rest[i]) {
+    try {
+      for (let i = 0; i < rest.length; i++) {
+        const arg = rest[i];
+        if (arg === "--all") {
+          options.all = true;
+        } else if (arg === "--yes" || arg === "-y") {
+          options.yes = true;
+        } else if (arg === "--json") {
+          options.json = true;
+        } else if (arg === "--dry-run") {
+          options.dryRun = true;
+        } else if (arg === "--plain") {
+          options.plain = true;
+        } else if (arg === "--client" || arg === "-c") {
+          const value = requiredOptionValue(rest[++i], arg);
           options.clients = options.clients || [];
-          options.clients.push(...rest[i].split(",").map((s) => s.trim()));
+          options.clients.push(...value.split(",").map((s) => s.trim()));
+        } else if (arg.startsWith("--client=")) {
+          const value = requiredOptionValue(arg.slice(9), "--client");
+          options.clients = options.clients || [];
+          options.clients.push(...value.split(",").map((s) => s.trim()));
+        } else {
+          throw new Error(`Unknown remove option: ${arg}.`);
         }
-      } else if (arg.startsWith("--client=")) {
-        options.clients = options.clients || [];
-        options.clients.push(...arg.slice(9).split(",").map((s) => s.trim()));
       }
-    }
-    setup.run(options).catch((error) => {
+    } catch (error) {
       stderr.write(
-        `Jacobian removal did not finish: ${error.message}\n` +
-          "Inspect the named client configuration, then retry `npx jacobian remove`.\n",
+        `Jacobian removal did not start: ${error.message}\n` +
+          "Correct the option and retry `npx jacobian remove`.\n",
       );
       process.exitCode = 1;
-    });
+      return;
+    }
+    setup
+      .run(options)
+      .then((result) => {
+        if (result.cancelled) {
+          stderr.write("Jacobian removal cancelled; no client configuration was changed.\n");
+        }
+      })
+      .catch((error) => {
+        stderr.write(
+          `Jacobian removal did not finish: ${error.message}\n` +
+            "Inspect the named client configuration, then retry `npx jacobian remove`.\n",
+        );
+        process.exitCode = 1;
+      });
     return;
   }
 
   if (command === "doctor") {
     const doctor = require("./doctor.cjs");
     const rest = args.slice(1);
-    const json = rest.includes("--json") || rest.includes("-j");
-    doctor.run({ json }).catch((error) => {
+    const options = {};
+    try {
+      for (let i = 0; i < rest.length; i++) {
+        const arg = rest[i];
+        if (arg === "--json" || arg === "-j") {
+          options.json = true;
+        } else if (arg === "--all") {
+          options.all = true;
+        } else if (arg === "--client" || arg === "-c") {
+          const value = requiredOptionValue(rest[++i], arg);
+          options.clients = options.clients || [];
+          options.clients.push(...value.split(",").map((item) => item.trim()));
+        } else if (arg.startsWith("--client=")) {
+          const value = requiredOptionValue(arg.slice(9), "--client");
+          options.clients = options.clients || [];
+          options.clients.push(...value.split(",").map((item) => item.trim()));
+        } else {
+          throw new Error(`Unknown doctor option: ${arg}.`);
+        }
+      }
+    } catch (error) {
+      stderr.write(`Jacobian diagnostics did not start: ${error.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    doctor.run(options).catch((error) => {
       stderr.write(
         `Jacobian diagnostics did not finish: ${error.message}\n` +
           "Run `npx jacobian setup`, then retry `npx jacobian doctor`.\n",

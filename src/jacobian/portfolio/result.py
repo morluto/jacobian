@@ -263,7 +263,7 @@ class PortfolioInstallation:
 
         if self._closed:
             return
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         resources = (
             self.lean_declarations,
             self.lean_exploration.repl if self.lean_exploration is not None else None,
@@ -274,10 +274,17 @@ class PortfolioInstallation:
                 continue
             try:
                 resource.close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
         if failures:
-            raise ExceptionGroup("portfolio resources failed to close", failures)
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "portfolio resources failed to close", exception_failures
+                )
+            raise BaseExceptionGroup("portfolio resources failed to close", failures)
         self._closed = True
 
     def installed_bundle(self, domain_id: str) -> InstalledDomainBundle | None:

@@ -316,17 +316,26 @@ class LeanExplorationReplRuntime:
                 return
             self._closing = True
             sessions = tuple(self._sessions.items())
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         for environment, session in sessions:
             try:
                 session.close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
             else:
                 with self._lock:
                     self._sessions.pop(environment, None)
         if failures:
-            raise ExceptionGroup("Lean exploration sessions failed to close", failures)
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "Lean exploration sessions failed to close", exception_failures
+                )
+            raise BaseExceptionGroup(
+                "Lean exploration sessions failed to close", failures
+            )
         with self._lock:
             self._finalizer.detach()
             self._closed = True

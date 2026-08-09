@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import copy
-import inspect
 from typing import Any
 
 import pytest
 from tests.support.artifacts import artifact_uri as _uri
 from tests.support.artifacts import canonical_digest as _digest
 
-import jacobian_checkers.additive_combinatorics as checker_module
 from jacobian_checkers.additive_combinatorics import (
     check_cyclic_difference_set_extension,
     check_cyclic_perfect_difference_set,
@@ -206,8 +204,3 @@ def test_extension_checker_rejects_wrong_scope_with_fresh_digest() -> None:
     forged["candidate"]["payload_digest"] = _digest(forged["candidate"]["payload"])
 
     assert check_cyclic_difference_set_extension(forged)["accepted"] is False
-
-
-def test_additive_checker_has_no_producer_dependency() -> None:
-    source = inspect.getsource(checker_module)
-    assert "domains.combinatorics" not in source

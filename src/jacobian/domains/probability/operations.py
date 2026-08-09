@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import lcm
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer
@@ -18,6 +19,9 @@ from jacobian.contracts.probability import (
     FiniteDistributionAtom,
     FiniteEventProbabilityResult,
     FiniteEventRequest,
+    FiniteJointLikelihoodRatio,
+    FiniteJointTableMutualInformationRequest,
+    FiniteJointTableMutualInformationResult,
     FinitePushforwardContribution,
     FinitePushforwardRequest,
     FinitePushforwardResult,
@@ -28,6 +32,7 @@ from jacobian.contracts.probability import (
     GraphConnectionProbabilityRequest,
     GraphConnectionProbabilityResult,
     GraphReliabilityState,
+    MutualInformationLogProductCertificate,
 )
 from jacobian.contracts.validated_analysis import (
     FiniteRawMomentContribution,
@@ -121,6 +126,76 @@ def _raw_moment(
             order=request.order,
             moment=_wire(total),
             contributions=tuple(contributions),
+        )
+    )
+
+
+def _power_exponent(value: int, base: int) -> int | None:
+    exponent = 0
+    while value > 1 and value % base == 0:
+        value //= base
+        exponent += 1
+    return exponent if value == 1 else None
+
+
+def _mutual_information(
+    request: FiniteJointTableMutualInformationRequest,
+) -> ComputedOutcome[FiniteJointTableMutualInformationResult]:
+    from flint import fmpq
+
+    table = [[_fmpq(value) for value in row] for row in request.probabilities]
+    row_marginals = [sum(row, fmpq(0)) for row in table]
+    column_marginals = [
+        sum((table[row][column] for row in range(len(table))), fmpq(0))
+        for column in range(len(request.column_labels))
+    ]
+    support: list[FiniteJointLikelihoodRatio] = []
+    denominators: list[int] = []
+    ratios: list[tuple[Any, Any]] = []
+    for row_index, row in enumerate(table):
+        for column_index, probability in enumerate(row):
+            if probability == 0:
+                continue
+            product_marginal = row_marginals[row_index] * column_marginals[column_index]
+            if product_marginal == 0:
+                raise ValueError("positive joint mass has zero marginal support")
+            ratio = probability / product_marginal
+            denominators.append(int(probability.denom()))
+            ratios.append((probability, ratio))
+            support.append(
+                FiniteJointLikelihoodRatio(
+                    row_index=row_index,
+                    column_index=column_index,
+                    probability=_wire(probability),
+                    row_marginal=_wire(row_marginals[row_index]),
+                    column_marginal=_wire(column_marginals[column_index]),
+                    likelihood_ratio=_wire(ratio),
+                )
+            )
+    scale = lcm(*denominators)
+    product = fmpq(1)
+    for probability, ratio in ratios:
+        exponent = scale * int(probability.numer()) // int(probability.denom())
+        product *= ratio**exponent
+    if product < 1:
+        raise ValueError("mutual-information log product contradicts Gibbs inequality")
+    numerator_exponent = _power_exponent(int(product.numer()), request.log_base)
+    denominator_exponent = _power_exponent(int(product.denom()), request.log_base)
+    exact_value = None
+    if numerator_exponent is not None and denominator_exponent is not None:
+        exact_value = _wire(fmpq(numerator_exponent - denominator_exponent, scale))
+    return ComputedSuccess(
+        FiniteJointTableMutualInformationResult(
+            row_marginals=tuple(_wire(value) for value in row_marginals),
+            column_marginals=tuple(_wire(value) for value in column_marginals),
+            positive_support=tuple(support),
+            log_base=request.log_base,
+            log_product_certificate=MutualInformationLogProductCertificate(
+                scale=format_canonical_integer(scale),
+                product=_wire(product),
+            ),
+            exact_value=exact_value,
+            sign="ZERO" if product == 1 else "POSITIVE",
         )
     )
 
@@ -454,6 +529,48 @@ _FAIR_BIT = {
 
 
 FINITE_PROBABILITY_CAPABILITIES = (
+    ComputedOperation(
+        capability_id="probability.joint.mutual_information.compute",
+        title="Exact finite-table mutual information certificate",
+        description=(
+            "Compute ordered marginals and every positive-support likelihood "
+            "ratio for one bounded normalized rational joint table, returning "
+            "an exact scaled logarithmic product certificate without floating point."
+        ),
+        request_model=FiniteJointTableMutualInformationRequest,
+        result_model=FiniteJointTableMutualInformationResult,
+        implementation=_mutual_information,
+        relation_id="probability.joint.mutual_information.relation",
+        tags=(
+            "probability",
+            "information-theory",
+            "mutual-information",
+            "finite",
+            "exact",
+            "certificate",
+        ),
+        invocation_examples=(
+            example(
+                "perfectly_correlated_fair_bits",
+                "Compute exact base-two mutual information for two identical fair bits.",
+                {
+                    "row_labels": ["0", "1"],
+                    "column_labels": ["0", "1"],
+                    "probabilities": [
+                        [
+                            {"num": "1", "den": "2"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "2"},
+                        ],
+                    ],
+                    "log_base": 2,
+                },
+            ),
+        ),
+    ),
     ComputedOperation(
         capability_id="probability.finite_distribution.raw_moment.compute",
         title="Exact finite-distribution raw moment",

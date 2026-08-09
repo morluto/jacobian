@@ -31,6 +31,9 @@ MAX_GRAPH_RELIABILITY_VERTICES = 16
 MAX_GRAPH_RELIABILITY_EDGES = 12
 MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
 MAX_GRAPH_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
+MAX_FINITE_JOINT_TABLE_ROWS = 16
+MAX_FINITE_JOINT_TABLE_COLUMNS = 16
+MAX_FINITE_JOINT_TABLE_CELLS = 64
 
 
 def _require_bounded_fraction(
@@ -847,9 +850,89 @@ class FiniteConvolutionResult(ContractModel):
         return self
 
 
+class FiniteJointTableMutualInformationRequest(ContractModel):
+    """One normalized finite rational joint table with ordered outcomes."""
+
+    row_labels: tuple[str, ...] = Field(
+        min_length=1, max_length=MAX_FINITE_JOINT_TABLE_ROWS
+    )
+    column_labels: tuple[str, ...] = Field(
+        min_length=1, max_length=MAX_FINITE_JOINT_TABLE_COLUMNS
+    )
+    probabilities: tuple[tuple[CanonicalRational, ...], ...] = Field(min_length=1)
+    log_base: StrictInt = Field(default=2, ge=2, le=36)
+
+    @model_validator(mode="after")
+    def require_normalized_rectangular_table(self) -> Self:
+        if len(set(self.row_labels)) != len(self.row_labels):
+            raise ValueError("joint-table row labels must be unique")
+        if len(set(self.column_labels)) != len(self.column_labels):
+            raise ValueError("joint-table column labels must be unique")
+        if len(self.probabilities) != len(self.row_labels):
+            raise ValueError("joint-table row count must match row labels")
+        if any(len(row) != len(self.column_labels) for row in self.probabilities):
+            raise ValueError("joint-table rows must match column labels")
+        if (
+            len(self.row_labels) * len(self.column_labels)
+            > MAX_FINITE_JOINT_TABLE_CELLS
+        ):
+            raise ValueError("joint table exceeds the bounded cell count")
+        total = Fraction()
+        for row in self.probabilities:
+            for probability in row:
+                _require_bounded_fraction(
+                    probability.as_fraction(),
+                    max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                    label="joint-table probability",
+                )
+                value = probability.as_fraction()
+                if value < 0:
+                    raise ValueError("joint-table probabilities must be nonnegative")
+                total += value
+        if total != 1:
+            raise ValueError("joint-table probabilities must sum exactly to 1")
+        return self
+
+
+class FiniteJointLikelihoodRatio(ContractModel):
+    row_index: StrictInt = Field(ge=0, lt=MAX_FINITE_JOINT_TABLE_ROWS)
+    column_index: StrictInt = Field(ge=0, lt=MAX_FINITE_JOINT_TABLE_COLUMNS)
+    probability: CanonicalRational
+    row_marginal: CanonicalRational
+    column_marginal: CanonicalRational
+    likelihood_ratio: CanonicalRational
+
+
+class MutualInformationLogProductCertificate(ContractModel):
+    scale: CanonicalInteger
+    product: CanonicalRational
+    identity: Literal["SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"] = (
+        "SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"
+    )
+
+
+class FiniteJointTableMutualInformationResult(ContractModel):
+    row_marginals: tuple[CanonicalRational, ...] = Field(min_length=1)
+    column_marginals: tuple[CanonicalRational, ...] = Field(min_length=1)
+    positive_support: tuple[FiniteJointLikelihoodRatio, ...] = Field(min_length=1)
+    log_base: StrictInt = Field(ge=2, le=36)
+    log_product_certificate: MutualInformationLogProductCertificate
+    exact_value: CanonicalRational | None = None
+    sign: Literal["ZERO", "POSITIVE"]
+    zero_cell_convention: Literal["ZERO_MASS_TERMS_OMITTED"] = "ZERO_MASS_TERMS_OMITTED"
+    exactness: Literal["EXACT_SYMBOLIC_LOG"] = "EXACT_SYMBOLIC_LOG"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["python-flint"] = "python-flint"
+    backend_version: Literal["0.9.0"] = "0.9.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+
 __all__ = [
     "MAX_FINITE_CONVOLUTION_PAIRS",
     "MAX_FINITE_DISTRIBUTION_ATOMS",
+    "MAX_FINITE_JOINT_TABLE_CELLS",
+    "MAX_FINITE_JOINT_TABLE_COLUMNS",
+    "MAX_FINITE_JOINT_TABLE_ROWS",
     "MAX_GAUSSIAN_EXPANSION_PATHS",
     "MAX_GAUSSIAN_MOMENT_ORDER",
     "MAX_GAUSSIAN_POLYNOMIAL_TERMS",
@@ -867,6 +950,9 @@ __all__ = [
     "FiniteDistributionAtom",
     "FiniteEventProbabilityResult",
     "FiniteEventRequest",
+    "FiniteJointLikelihoodRatio",
+    "FiniteJointTableMutualInformationRequest",
+    "FiniteJointTableMutualInformationResult",
     "FinitePushforwardContribution",
     "FinitePushforwardMapEntry",
     "FinitePushforwardRequest",
@@ -881,5 +967,6 @@ __all__ = [
     "GraphConnectionProbabilityResult",
     "GraphReliabilityEdgeProbability",
     "GraphReliabilityState",
+    "MutualInformationLogProductCertificate",
     "require_input_distribution",
 ]

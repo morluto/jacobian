@@ -15,11 +15,12 @@ def build_finite_probability_bundle() -> DomainBundle:
         schema_namespace="jacobian.validated-analysis",
         semantics=DomainSemantics(
             name="jacobian.probability",
-            version="4",
+            version="5",
             definition={
                 "description": "bounded exact rational probability operations",
                 "scope": (
-                    "raw moments, explicit event mass and conditioning, total "
+                    "raw moments, finite-table mutual-information log-product "
+                    "certificates, explicit event mass and conditioning, total "
                     "pushforwards, independent finite convolutions, and one fixed-order "
                     "moment of a sparse complex-rational polynomial in independent "
                     "standard real Gaussian variables, and exact small-graph terminal "

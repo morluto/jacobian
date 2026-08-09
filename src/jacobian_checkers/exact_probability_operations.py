@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from fractions import Fraction
+from math import lcm
 from typing import Any
 
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
@@ -105,6 +106,148 @@ def _complex_multiply(
     return (
         left[0] * right[0] - left[1] * right[1],
         left[0] * right[1] + left[1] * right[0],
+    )
+
+
+def _base_power_exponent(value: int, base: int) -> int | None:
+    exponent = 0
+    while value > 1 and value % base == 0:
+        value //= base
+        exponent += 1
+    return exponent if value == 1 else None
+
+
+def _replay_finite_joint_mutual_information(  # noqa: C901
+    source: dict[str, Any], result: dict[str, Any]
+) -> bool:
+    if set(source) != {"row_labels", "column_labels", "probabilities", "log_base"}:
+        return False
+    rows = source["row_labels"]
+    columns = source["column_labels"]
+    table_wire = source["probabilities"]
+    base = source["log_base"]
+    if (
+        not isinstance(rows, list)
+        or not 1 <= len(rows) <= 16
+        or len(set(rows)) != len(rows)
+        or not isinstance(columns, list)
+        or not 1 <= len(columns) <= 16
+        or len(set(columns)) != len(columns)
+        or len(rows) * len(columns) > 64
+        or type(base) is not int
+        or not 2 <= base <= 36
+        or not isinstance(table_wire, list)
+        or len(table_wire) != len(rows)
+    ):
+        raise ValueError("finite joint-table source is malformed")
+    table: list[list[Fraction]] = []
+    for row in table_wire:
+        if not isinstance(row, list) or len(row) != len(columns):
+            raise ValueError("finite joint table is not rectangular")
+        parsed = [_fraction(value) for value in row]
+        if any(value < 0 for value in parsed):
+            raise ValueError("finite joint table has negative mass")
+        table.append(parsed)
+    if sum((sum(row, Fraction()) for row in table), Fraction()) != 1:
+        raise ValueError("finite joint table is not normalized")
+    row_marginals = [sum(row, Fraction()) for row in table]
+    column_marginals = [
+        sum((table[row][column] for row in range(len(rows))), Fraction())
+        for column in range(len(columns))
+    ]
+    support: list[dict[str, object]] = []
+    weighted_ratios: list[tuple[Fraction, Fraction]] = []
+    for row_index, row in enumerate(table):
+        for column_index, probability in enumerate(row):
+            if probability == 0:
+                continue
+            denominator = row_marginals[row_index] * column_marginals[column_index]
+            if denominator == 0:
+                raise ValueError("positive joint mass has zero marginal support")
+            ratio = probability / denominator
+            weighted_ratios.append((probability, ratio))
+            support.append(
+                {
+                    "row_index": row_index,
+                    "column_index": column_index,
+                    "probability": probability,
+                    "row_marginal": row_marginals[row_index],
+                    "column_marginal": column_marginals[column_index],
+                    "likelihood_ratio": ratio,
+                }
+            )
+    scale = lcm(*(probability.denominator for probability, _ in weighted_ratios))
+    product = Fraction(1)
+    for probability, ratio in weighted_ratios:
+        product *= ratio ** (scale * probability.numerator // probability.denominator)
+    if product < 1:
+        raise ValueError("mutual-information product contradicts Gibbs inequality")
+    numerator_exponent = _base_power_exponent(product.numerator, base)
+    denominator_exponent = _base_power_exponent(product.denominator, base)
+    exact_value = (
+        Fraction(numerator_exponent - denominator_exponent, scale)
+        if numerator_exponent is not None and denominator_exponent is not None
+        else None
+    )
+    if set(result) != {
+        "row_marginals",
+        "column_marginals",
+        "positive_support",
+        "log_base",
+        "log_product_certificate",
+        "exact_value",
+        "sign",
+        "zero_cell_convention",
+        "exactness",
+        "determinism",
+        "backend",
+        "backend_version",
+        "verification",
+    }:
+        return False
+    declared_support = result["positive_support"]
+    if not isinstance(declared_support, list) or len(declared_support) != len(support):
+        return False
+    for declared, expected in zip(declared_support, support, strict=True):
+        if not isinstance(declared, dict) or set(declared) != set(expected):
+            return False
+        for key in ("row_index", "column_index"):
+            if declared[key] != expected[key]:
+                return False
+        for key in (
+            "probability",
+            "row_marginal",
+            "column_marginal",
+            "likelihood_ratio",
+        ):
+            if _fraction(declared[key]) != expected[key]:
+                return False
+    certificate = result["log_product_certificate"]
+    return (
+        [_fraction(value) for value in result["row_marginals"]] == row_marginals
+        and [_fraction(value) for value in result["column_marginals"]]
+        == column_marginals
+        and result["log_base"] == base
+        and isinstance(certificate, dict)
+        and set(certificate) == {"scale", "product", "identity"}
+        and _integer(certificate["scale"]) == scale
+        and _fraction(certificate["product"]) == product
+        and certificate["identity"] == "SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"
+        and (
+            (
+                _fraction(result["exact_value"])
+                if result["exact_value"] is not None
+                else None
+            )
+            == exact_value
+        )
+        and result["sign"] == ("ZERO" if product == 1 else "POSITIVE")
+        and result["zero_cell_convention"] == "ZERO_MASS_TERMS_OMITTED"
+        and result["exactness"] == "EXACT_SYMBOLIC_LOG"
+        and result["determinism"] == "DETERMINISTIC"
+        and result["backend"] == "python-flint"
+        and result["backend_version"] == "0.9.0"
+        and result["verification"] == "UNVERIFIED"
     )
 
 
@@ -766,6 +909,15 @@ def check_finite_raw_moment(request: object) -> dict[str, Any]:
     )
 
 
+def check_finite_joint_mutual_information(request: object) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="probability.joint.mutual_information.compute",
+        witness_format="probability.finite-joint-mutual-information.fraction-replay",
+        replay=_replay_finite_joint_mutual_information,
+    )
+
+
 def check_finite_event_probability(request: object) -> dict[str, Any]:
     return _run(
         request,
@@ -824,6 +976,7 @@ __all__ = [
     "check_finite_condition",
     "check_finite_convolution",
     "check_finite_event_probability",
+    "check_finite_joint_mutual_information",
     "check_finite_pushforward",
     "check_finite_raw_moment",
     "check_gaussian_polynomial_moment",

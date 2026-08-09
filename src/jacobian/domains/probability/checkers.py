@@ -4,6 +4,7 @@ from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.probability import (
     FiniteConvolutionRequest,
     FiniteEventRequest,
+    FiniteJointTableMutualInformationRequest,
     FinitePushforwardRequest,
     GaussianPolynomialMomentRequest,
     GraphConnectionProbabilityRequest,
@@ -17,6 +18,29 @@ _REASON = (
 )
 
 PROBABILITY_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "probability.joint.mutual_information.compute",
+        FiniteJointTableMutualInformationRequest,
+        "check_finite_joint_mutual_information",
+        "probability.finite-joint-mutual-information.fraction-replay",
+        entrypoint_module=_ENTRYPOINT,
+        replay_method="standard-library Fraction logarithmic-product replay",
+        reason=_REASON,
+        verification_capability_id="probability.joint.mutual_information.verify",
+        verification_title="Verify a finite-table mutual-information certificate",
+        verification_description=(
+            "Independently reconstruct ordered marginals, positive-support "
+            "likelihood ratios, and the exact scaled logarithmic product for "
+            "one stored normalized rational joint table."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "probability",
+            "information-theory",
+            "mutual-information",
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "probability.finite_distribution.raw_moment.compute",
         FiniteRawMomentRequest,

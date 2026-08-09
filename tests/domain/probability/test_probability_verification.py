@@ -39,6 +39,15 @@ _GAUSSIAN_POLYNOMIAL = {
     ("capability_id", "payload"),
     (
         (
+            "probability.joint.mutual_information.compute",
+            {
+                "row_labels": ["0", "1"],
+                "column_labels": ["0", "1"],
+                "probabilities": [[_q(1, 2), _q(0)], [_q(0), _q(1, 2)]],
+                "log_base": 2,
+            },
+        ),
+        (
             "probability.finite_distribution.raw_moment.compute",
             {"atoms": _FAIR_BIT["atoms"], "order": 2},
         ),

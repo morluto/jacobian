@@ -59,12 +59,12 @@ Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned.
 
 Model-authored calculations or programs are not independent evidence. Use
-installed `VERIFY` when requested. A writable path or schema alone is not
+installed `VERIFY` when requested; a writable path or schema alone is not
 authorization. For task-level `VERIFIED`, require result assurance `VERIFIED`,
 exact record bytes, and that required task authorization and bindings are preserved;
 the visible contract must authorize the checker identity, digest, or Jacobian
 record type. Otherwise claim the highest lower permitted assurance (`CHECKED` or
-`COMPUTED`), even if Jacobian returned `VERIFIED`. Never reconstruct or
+`COMPUTED`), even if Jacobian returned `VERIFIED`; never reconstruct or
 paraphrase such a record from tool fields or transfer verification between
 claims or artifacts.
 For locally constructed inline input, check payload fields against the intended

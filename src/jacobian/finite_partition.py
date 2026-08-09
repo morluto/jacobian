@@ -375,6 +375,15 @@ class FinitePartitionAdapter:
             and not duplicate_case_ids
             and (not require_disjoint or not overlaps)
         )
+        verified_replay_basis = (
+            "authorized checker replayed equality-based coverage and required "
+            "disjointness within the caller-supplied universe"
+            if require_disjoint
+            else (
+                "authorized checker replayed equality-based coverage within the "
+                "caller-supplied universe; disjointness was not required"
+            )
+        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -414,9 +423,8 @@ class FinitePartitionAdapter:
                     else CapabilityCompletenessStatus.PARTIAL
                 ),
                 basis=(
-                    "authorized checker replayed equality-based coverage and "
-                    "disjointness within the caller-supplied universe; it did not "
-                    "check external-domain completeness or member/case semantics"
+                    f"{verified_replay_basis}; it did not check external-domain "
+                    "completeness or member/case semantics"
                     if verified
                     else "generator-side membership accounting; not independently checked"
                 ),
@@ -443,9 +451,8 @@ class FinitePartitionAdapter:
             assurance=CapabilityAssurance(
                 level=assurance_level,
                 basis=(
-                    "operator-authorized checker accepted equality-based coverage and "
-                    "disjointness within the caller-supplied universe; external-domain "
-                    "completeness and member/case semantics were not checked"
+                    f"{verified_replay_basis}; external-domain completeness and "
+                    "member/case semantics were not checked"
                     if verified
                     else "partition was proposed and inspected by its generator only"
                 ),
@@ -475,7 +482,7 @@ class FinitePartitionAdapter:
             scope_digest=scope.manifest.object_digest,
         )
         payload: dict[str, Any] = {
-            "replay": "exact finite membership",
+            "replay": "equality-based finite coverage and conditional disjointness",
             "relation_id": "case.relation.partitions",
             "obligation_uri": claim_uri,
         }

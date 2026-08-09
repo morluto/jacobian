@@ -60,6 +60,24 @@ def test_finite_partition_verify_replays_and_discharges_obligation(
     assert result.obligations[0].status is CapabilityObligationStatus.DISCHARGED
 
 
+def test_finite_partition_contract_and_result_preserve_semantic_boundary(
+    authorized_complete_runtime,
+) -> None:
+    runtime = authorized_complete_runtime
+    descriptor = next(
+        item
+        for item in runtime.core.capabilities.catalog().capabilities
+        if item.capability_id == "case.partition.finite"
+    )
+    result = runtime.core.capabilities.invoke(_request(CapabilityMode.VERIFY))
+
+    assert "opaque caller-supplied strings" in descriptor.description
+    assert "does not establish their mathematical meaning" in descriptor.description
+    assert "external-domain completeness" in result.scope.description
+    assert "member/case semantics were not checked" in result.assurance.basis
+    assert "member/case semantics" in result.completeness.basis
+
+
 def test_finite_partition_verify_fails_closed_on_incomplete_cases(
     authorized_complete_runtime,
 ) -> None:

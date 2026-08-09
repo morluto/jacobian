@@ -195,7 +195,10 @@ class FinitePartitionAdapter:
             title="Partition an explicit finite domain",
             description=(
                 "Materialize named cases over an explicit finite scope and optionally "
-                "replay exact coverage and disjointness with an authorized checker."
+                "replay exact coverage and disjointness with an authorized checker. "
+                "Members and case labels are opaque caller-supplied strings; the "
+                "checker does not establish their mathematical meaning or that the "
+                "supplied universe exhausts an external domain."
             ),
             provider="jacobian.finite",
             provider_runtime=known_provider_runtime(
@@ -397,7 +400,10 @@ class FinitePartitionAdapter:
                 "duplicate_case_ids": duplicate_case_ids,
             },
             scope=CapabilityScope(
-                description="the exact supplied finite universe",
+                description=(
+                    "the exact caller-supplied finite universe; external-domain "
+                    "completeness and member semantics are not checked"
+                ),
                 parameters={"element_count": len(universe)},
                 artifact_uri=scope.artifact_uri,
             ),
@@ -408,7 +414,9 @@ class FinitePartitionAdapter:
                     else CapabilityCompletenessStatus.PARTIAL
                 ),
                 basis=(
-                    "authorized checker replayed exact finite membership"
+                    "authorized checker replayed equality-based coverage and "
+                    "disjointness within the caller-supplied universe; it did not "
+                    "check external-domain completeness or member/case semantics"
                     if verified
                     else "generator-side membership accounting; not independently checked"
                 ),
@@ -435,7 +443,9 @@ class FinitePartitionAdapter:
             assurance=CapabilityAssurance(
                 level=assurance_level,
                 basis=(
-                    "operator-authorized independent finite partition checker accepted"
+                    "operator-authorized checker accepted equality-based coverage and "
+                    "disjointness within the caller-supplied universe; external-domain "
+                    "completeness and member/case semantics were not checked"
                     if verified
                     else "partition was proposed and inspected by its generator only"
                 ),

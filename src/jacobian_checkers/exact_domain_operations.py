@@ -1274,12 +1274,25 @@ def _finite_field_polynomial_map_fibers(
 def check_finite_field_polynomial_map_fibers(
     request: dict[str, Any],
 ) -> dict[str, Any]:
-    return _run(
-        request,
-        operation_id="finite_field.polynomial_map.fibers.compute",
-        witness_format="finite-field.polynomial-map-fibers.stdlib-replay",
-        replay=_finite_field_polynomial_map_fibers,
-    )
+    operation_id = "finite_field.polynomial_map.fibers.compute"
+    try:
+        source, result = _bound_request(
+            request,
+            operation_id=operation_id,
+            witness_format="finite-field.polynomial-map-fibers.stdlib-replay",
+        )
+        if not _finite_field_polynomial_map_fibers(source, result):
+            return _reject_exact_integer(
+                "declared result does not match independent exhaustive finite-field "
+                "replay"
+            )
+        return _accept_exhaustive_integer(
+            f"independent exhaustive integer replay accepted {operation_id}"
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return _reject_exact_integer(
+            "malformed, unsupported, or mismatched checker request"
+        )
 
 
 __all__ = [

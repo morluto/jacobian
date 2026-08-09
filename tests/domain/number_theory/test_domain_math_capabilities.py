@@ -15,6 +15,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.number_theory import (
+    FiniteFieldPolynomialMapRequest,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
 )
@@ -376,6 +377,20 @@ def test_extension_field_permutation_map_is_complete_and_verified(
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED
         assert verified.output["status"] == "VERIFIED"
+
+
+def test_extension_field_request_rejects_unverifiable_replay_cost() -> None:
+    with pytest.raises(ValidationError, match="exhaustive replay exceeds"):
+        FiniteFieldPolynomialMapRequest.model_validate(
+            {
+                "characteristic": 139,
+                "modulus_coefficients_ascending": [1, 0, 1],
+                "terms": [
+                    {"coefficient": [1, 0], "exponent": 999_999_900 + index}
+                    for index in range(32)
+                ],
+            }
+        )
 
 
 def test_extension_field_map_reports_first_collision(

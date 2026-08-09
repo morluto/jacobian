@@ -43,6 +43,7 @@ _MAX_EXTENSION_FIELD_ORDER = 20_000
 _MAX_EXTENSION_DEGREE = 4
 _MAX_EXTENSION_TERMS = 32
 _MAX_EXTENSION_EXPONENT = 1_000_000_000
+_MAX_EXTENSION_REPLAY_COST = 2_000_000
 
 BoundedInteger = Annotated[
     str,
@@ -346,6 +347,13 @@ class FiniteFieldPolynomialMapRequest(ContractModel):
             raise ValueError("term exponents must be unique and increasing")
         if any(not any(term.coefficient) for term in self.terms):
             raise ValueError("zero terms must be omitted")
+        replay_cost = p**degree * sum(
+            max(1, term.exponent.bit_length()) for term in self.terms
+        )
+        if replay_cost > _MAX_EXTENSION_REPLAY_COST:
+            raise ValueError(
+                "finite-field exhaustive replay exceeds the supported cost bound"
+            )
         return self
 
 

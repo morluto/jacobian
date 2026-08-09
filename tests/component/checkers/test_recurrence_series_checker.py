@@ -224,3 +224,28 @@ def test_recurrence_series_checker_has_no_sympy_or_producer_dependency() -> None
     source = inspect.getsource(checker_module)
     assert "import sympy" not in source
     assert "domains.combinatorics" not in source
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("recurrence_order",), True),
+        (("values", 0, "index"), False),
+        (("residuals", 0, "index"), True),
+    ],
+)
+def test_polynomial_recurrence_checker_rejects_boolean_result_integers(
+    path: tuple[str | int, ...],
+    value: bool,
+) -> None:
+    forged = copy.deepcopy(_CASES[1][1])
+    target: Any = forged["candidate"]["payload"]
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    forged["candidate"]["payload_digest"] = _digest(forged["candidate"]["payload"])
+
+    checked = check_polynomial_coefficient_recurrence_evaluation(forged)
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"

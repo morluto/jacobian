@@ -895,7 +895,9 @@ class LinearRecurrenceEvaluationResult(ContractModel):
             raise ValueError("the greatest requested index must bind replay_scope_end")
         if any(item.value != self.replay_prefix[item.index] for item in self.values):
             raise ValueError("indexed values must match the recurrence replay prefix")
-        if self.scope == "PREFIX" and indices != tuple(range(len(indices))):
+        if self.scope == "PREFIX" and indices != tuple(
+            range(self.replay_scope_end + 1)
+        ):
             raise ValueError(
                 "PREFIX results must contain consecutive indices from zero"
             )

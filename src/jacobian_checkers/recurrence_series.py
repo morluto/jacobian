@@ -162,6 +162,7 @@ def _validate_recurrence_values(
         if (
             not isinstance(item, dict)
             or set(item) != {"index", "value"}
+            or type(item["index"]) is not int
             or item["index"] != index
             or _fraction(item["value"], max_digits=32_768) != replay[index]
         ):
@@ -281,6 +282,7 @@ def _p_recursive_residuals_match(
     return all(
         isinstance(item, dict)
         and set(item) == {"index", "value"}
+        and type(item["index"]) is int
         and item["index"] == index
         and _fraction(item["value"], max_digits=32_768) == residual
         and residual == 0
@@ -354,7 +356,12 @@ def _replay_polynomial_coefficient_recurrence(
         return False
     initial = _fractions(source["initial_values"], minimum=1, maximum=16, max_digits=64)
     order = len(polynomials) - 1
-    if len(initial) != order or result["recurrence_order"] != order:
+    if (
+        len(initial) != order
+        or type(result["recurrence_order"]) is not int
+        or not 1 <= result["recurrence_order"] <= 16
+        or result["recurrence_order"] != order
+    ):
         return False
     raw_indices = source["indices"]
     if not isinstance(raw_indices, list) or len(raw_indices) > 256:

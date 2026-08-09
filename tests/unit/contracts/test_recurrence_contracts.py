@@ -51,6 +51,19 @@ def _result() -> dict[str, object]:
             {"index": 2, "value": _q(2)},
             {"index": 3, "value": _q(3)},
         ],
+        [
+            {"index": 0, "value": _q(1)},
+            {"index": 2, "value": _q(2)},
+            {"index": 1, "value": _q(1)},
+            {"index": 3, "value": _q(3)},
+        ],
+        [
+            {"index": 0, "value": _q(1)},
+            {"index": 1, "value": _q(1)},
+            {"index": 2, "value": _q(2)},
+            {"index": 3, "value": _q(3)},
+            {"index": 4, "value": _q(5)},
+        ],
     ],
 )
 def test_polynomial_recurrence_result_rejects_malformed_prefix_projection(
@@ -75,6 +88,10 @@ def test_polynomial_recurrence_result_rejects_malformed_prefix_projection(
         [
             {"index": 2, "value": _q(0)},
             {"index": 4, "value": _q(0)},
+        ],
+        [
+            {"index": 3, "value": _q(0)},
+            {"index": 2, "value": _q(0)},
         ],
     ],
 )

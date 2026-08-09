@@ -47,14 +47,14 @@ reformulating the query before
 treating absence as final. After invalid input, correct the reported constraint
 and retry within the task resource bounds. If
 one provider is unavailable, continue with other installed routes that can
-produce the outcome. Treat timeouts as non-conclusions. Accept only a completed
+produce the outcome. Treat timeouts, cancellations, errors, incomplete searches,
+and missing witnesses as non-conclusions. Accept only a completed
 result whose scope covers the input, and carry forward the smallest decisive
 value, witness, status, assurance, completeness, and open obligations; preserve
 artifact refs, including verification record URIs.
 
 Keep representation, decomposition, composition, iteration, verification
-timing, and stopping decisions agent-owned. Incomplete searches and missing
-witnesses are non-conclusions.
+timing, and stopping decisions agent-owned.
 
 When independent checking is requested, model-authored calculations or programs
 are not independent evidence. Use installed `VERIFY` when available. An artifact

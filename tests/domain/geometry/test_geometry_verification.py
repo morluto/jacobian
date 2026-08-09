@@ -78,6 +78,73 @@ def test_geometry_checker_availability_does_not_grant_authority(
         )
 
 
+def _weighted_square() -> dict[str, object]:
+    return {
+        "polygon": {"points": [P0, PX, PXY, PY]},
+        "diagonal_weights": [
+            {"first": 0, "second": 2, "weight": ONE},
+            {"first": 1, "second": 3, "weight": TWO},
+        ],
+        "objective": "NON_HULL_DIAGONAL_WEIGHT_SUM",
+    }
+
+
+def test_minimum_weight_triangulation_charges_one_diagonal_once(
+    geometry_services: DomainTestServices,
+) -> None:
+    payload = _weighted_square()
+    computed = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.compute",
+            input=payload,
+        )
+    )
+
+    assert computed.output["result"]["optimum"] == ONE
+    assert computed.output["result"]["diagonals"] == [
+        {"first": 0, "second": 2, "weight": ONE}
+    ]
+    assert computed.output["result"]["triangles"] == [
+        {"vertices": [0, 1, 2]},
+        {"vertices": [0, 2, 3]},
+    ]
+
+    verified = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": computed.output["result"]},
+        )
+    )
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+
+
+def test_triangulation_checker_rejects_double_counted_cost(
+    geometry_services: DomainTestServices,
+) -> None:
+    payload = _weighted_square()
+    computed = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.compute",
+            input=payload,
+        )
+    )
+    forged = dict(computed.output["result"])
+    forged["optimum"] = TWO
+
+    rejected = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": forged},
+        )
+    )
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+
+
 _GEOMETRY_CASES = (
     (
         "geometry.points.compute.squared_distance",

@@ -26,7 +26,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         verification_description=(
             "Independently reconstruct every bounded homogeneous coefficient map, "
             "rank ledger, nonzero minor, and first kernel from the exact producer "
-            "input and its inline candidate result."
+            "input and the complete, unmodified producer output.result object."
         ),
         verification_tags=(
             "verification",

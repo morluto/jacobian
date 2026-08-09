@@ -264,7 +264,9 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     result = _result_payload(frontier_services, computed)
     assert result["status"] == "FOUND"
     assert result["first_syzygy_degree"] == 1
-    assert result["verification_input_field"] == "input_and_candidate"
+    assert (
+        result["verification_input_field"] == "input_and_complete_output_result"
+    )
     assert [(item["rank"], item["nullity"]) for item in result["degree_maps"]] == [
         (3, 0),
         (7, 2),
@@ -295,7 +297,7 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
         if descriptor.capability_id
         == "polynomial.jacobian_syzygy.minimum_degree.verify"
     )
-    assert "exact producer input and its inline candidate result" in (
+    assert "complete, unmodified producer output.result object" in (
         verifier.description
     )
 

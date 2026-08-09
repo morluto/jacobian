@@ -20,6 +20,14 @@ class ServiceLifecycleState(StrEnum):
     CLOSED = "CLOSED"
 
 
+class WorkerLaunchStatus(StrEnum):
+    """Outcome of attempting to start one runtime-owned worker."""
+
+    STARTED = "STARTED"
+    ALREADY_RUNNING = "ALREADY_RUNNING"
+    SERVICE_CLOSING = "SERVICE_CLOSING"
+
+
 def wait_for_worker_quiescence(
     *,
     lock: threading.Lock,
@@ -51,8 +59,71 @@ def wait_for_worker_quiescence(
             thread.join(timeout=min(remaining, 0.05))
 
 
+def launch_worker(
+    *,
+    lock: threading.Lock,
+    lifecycle_state: Callable[[], ServiceLifecycleState],
+    workers: dict[str, threading.Thread],
+    worker_id: str,
+    target: Callable[[str], None],
+    name: str,
+    lifecycle_reserved: bool,
+) -> WorkerLaunchStatus:
+    """Start one worker unless its service is closing or it is already active."""
+
+    with lock:
+        state = lifecycle_state()
+        if state is ServiceLifecycleState.CLOSED or (
+            state is ServiceLifecycleState.CLOSING and not lifecycle_reserved
+        ):
+            return WorkerLaunchStatus.SERVICE_CLOSING
+        current = workers.get(worker_id)
+        if current is not None and current.is_alive():
+            return WorkerLaunchStatus.ALREADY_RUNNING
+        worker = threading.Thread(
+            target=target,
+            args=(worker_id,),
+            name=name,
+            daemon=True,
+        )
+        workers[worker_id] = worker
+        worker.start()
+    return WorkerLaunchStatus.STARTED
+
+
+def wait_for_worker_settlement[SnapshotT](
+    *,
+    lock: threading.Lock,
+    workers: Mapping[str, threading.Thread],
+    worker_id: str,
+    inspect: Callable[[str], SnapshotT],
+    is_settled: Callable[[SnapshotT], bool],
+    timeout_seconds: float,
+    timeout_message: str,
+) -> SnapshotT:
+    """Poll one durable snapshot while joining its local worker when present."""
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        snapshot = inspect(worker_id)
+        if is_settled(snapshot):
+            return snapshot
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(timeout_message)
+        with lock:
+            worker = workers.get(worker_id)
+        if worker is not None:
+            worker.join(timeout=min(remaining, 0.05))
+        else:
+            time.sleep(min(remaining, 0.05))
+
+
 __all__ = [
     "LifecycleTimeoutError",
     "ServiceLifecycleState",
+    "WorkerLaunchStatus",
+    "launch_worker",
     "wait_for_worker_quiescence",
+    "wait_for_worker_settlement",
 ]

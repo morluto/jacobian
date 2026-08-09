@@ -130,6 +130,21 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
                 if match["capability_id"] == "matrix.determinant.verify"
             )
             assert "invocation_example" not in verifier
+            assert verifier["invocation_protocol"] == {
+                "tool": "math.run",
+                "arguments_shape": {
+                    "capability_id": "matrix.determinant.verify",
+                    "mode": "VERIFY",
+                    "payload": {
+                        "input": "<exact producer input object>",
+                        "candidate": "<exact producer result object>",
+                    },
+                },
+                "payload_rule": (
+                    "input and candidate are sibling fields inside payload; neither "
+                    "field belongs beside payload or nested inside the other"
+                ),
+            }
             assert verifier["input_schema_summary"] == {
                 "type": "object",
                 "required": ["input", "candidate"],
@@ -143,6 +158,31 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
             assert (
                 verifier_text["input_schema_summary"]
                 == verifier["input_schema_summary"]
+            )
+            assert (
+                verifier_text["invocation_protocol"] == verifier["invocation_protocol"]
+            )
+
+            verifier_contract_result = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "matrix.determinant.verify",
+                    "view": "CONTRACT",
+                },
+            )
+            assert isinstance(verifier_contract_result.structured_content, dict)
+            verifier_contract = verifier_contract_result.structured_content
+            assert (
+                verifier_contract["invocation_protocol"]
+                == verifier["invocation_protocol"]
+            )
+            assert verifier_contract["invocations"] == []
+            verifier_contract_text = json.loads(
+                verifier_contract_result.content[0].text
+            )
+            assert (
+                verifier_contract_text["invocation_protocol"]
+                == verifier["invocation_protocol"]
             )
 
             compute_contract = await client.call_tool(

@@ -25,8 +25,8 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify a first graded Jacobian syzygy degree",
         verification_description=(
             "Independently reconstruct every bounded homogeneous coefficient map, "
-            "rank ledger, nonzero minor, and first kernel from a stored producer "
-            "result."
+            "rank ledger, nonzero minor, and first kernel from the producer's exact "
+            "inline input and result."
         ),
         verification_tags=(
             "verification",

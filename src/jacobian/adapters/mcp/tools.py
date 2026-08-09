@@ -90,6 +90,7 @@ class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
     provider_availability: CapabilityProviderAvailability | Literal["UNKNOWN"]
     related_capabilities: tuple[_RelatedCapability, ...]
     invocation_example: _DiscoveryInvocationExample | None = None
+    invocation_protocol: dict[str, Any] | None = None
 
 
 class _ProviderRuntimeProjection(_MCPOutputModel):
@@ -232,6 +233,7 @@ class _CapabilityInspectionResult(_CapabilityDiscoveryFields):
     truncation_reason: str | None = None
     related_capabilities_truncated: bool
     invocations: tuple[_CapabilityInvocation, ...] | None = None
+    invocation_protocol: dict[str, Any] | None = None
     related_capabilities: tuple[_RelatedCapability, ...] | None = None
     synchronous_execution: _SynchronousExecution | None = None
     next_views: _NextCapabilityViews | None = None
@@ -331,6 +333,7 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
                         "provider_availability",
                         "related_capabilities",
                         "invocation_example",
+                        "invocation_protocol",
                         "lexical_fit",
                     )
                     if key in match
@@ -387,6 +390,8 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
     projection["related_capabilities_truncated"] = response.get(
         "related_capabilities_truncated"
     )
+    if response.get("invocation_protocol"):
+        projection["invocation_protocol"] = response["invocation_protocol"]
     return projection
 
 

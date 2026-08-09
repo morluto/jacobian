@@ -104,6 +104,11 @@ def _capability_inspection_extensions(
         extensions["related_capabilities"] = [
             related[related_id] for related_id in sorted(related)
         ]
+    invocation_protocol = _inline_verifier_invocation_protocol(
+        capability_id, descriptors[capability_id]
+    )
+    if invocation_protocol is not None:
+        extensions["invocation_protocol"] = invocation_protocol
     if capability_id.startswith(("sat.", "smt.")):
         extensions["synchronous_execution"] = {
             "remote_safe_wall_seconds_max": 150,
@@ -116,6 +121,34 @@ def _capability_inspection_extensions(
             ),
         }
     return extensions
+
+
+def _inline_verifier_invocation_protocol(
+    capability_id: str,
+    descriptor: CapabilityDescriptor,
+) -> dict[str, Any] | None:
+    """Expose the generic ``math.run`` envelope for inline replay verifiers."""
+
+    schema = descriptor.input_schema
+    if CapabilityMode.VERIFY not in descriptor.modes or set(
+        schema.get("required", [])
+    ) != {"input", "candidate"}:
+        return None
+    return {
+        "tool": "math.run",
+        "arguments_shape": {
+            "capability_id": capability_id,
+            "mode": "VERIFY",
+            "payload": {
+                "input": "<exact producer input object>",
+                "candidate": "<exact producer result object>",
+            },
+        },
+        "payload_rule": (
+            "input and candidate are sibling fields inside payload; neither field "
+            "belongs beside payload or nested inside the other"
+        ),
+    }
 
 
 def _compact_json_schema(value: Any) -> Any:
@@ -208,6 +241,9 @@ def _discovery_operation_card(
             <= _DISCOVERY_INVOCATION_EXAMPLE_BYTE_LIMIT
         ):
             invocation_example = candidate
+    invocation_protocol = _inline_verifier_invocation_protocol(
+        descriptor.capability_id, descriptor
+    )
     return {
         **match,
         "accepted_input_kinds": [
@@ -230,6 +266,11 @@ def _discovery_operation_card(
             else {
                 "input_schema_summary": _input_schema_summary(descriptor.input_schema)
             }
+        ),
+        **(
+            {"invocation_protocol": invocation_protocol}
+            if invocation_protocol is not None
+            else {}
         ),
     }
 

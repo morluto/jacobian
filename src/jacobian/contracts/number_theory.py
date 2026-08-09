@@ -546,6 +546,8 @@ class ModularPolynomialIdentityResult(ContractModel):
 
     @model_validator(mode="after")
     def require_canonical_comparison(self) -> Self:
+        if len(self.variable_order) != len(set(self.variable_order)):
+            raise ValueError("result variable order must contain unique names")
         for terms in (
             self.normalized_left,
             self.normalized_right,

@@ -142,6 +142,22 @@ def test_modular_polynomial_identity_result_rejects_out_of_scope_exponents(
         )
 
 
+def test_modular_polynomial_identity_result_rejects_duplicate_variables() -> None:
+    with pytest.raises(ValidationError, match="unique names"):
+        ModularPolynomialIdentityResult.model_validate(
+            {
+                "semantics_version": "modular-polynomial-identity.v1",
+                "modulus": 5,
+                "variable_order": ["x", "x"],
+                "normalized_left": [],
+                "normalized_right": [],
+                "residual": [],
+                "identical": True,
+                "comparison_scope": "FORMAL_COEFFICIENTWISE_IDENTITY",
+            }
+        )
+
+
 @pytest.mark.parametrize("modulus", (4, 8, 7))
 def test_modular_polynomial_identity_combines_duplicates_and_detects_difference(
     domain_services: DomainTestServices,

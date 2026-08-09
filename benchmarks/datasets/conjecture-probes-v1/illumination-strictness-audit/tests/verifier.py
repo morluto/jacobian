@@ -68,8 +68,7 @@ def _evidence_payload_matches_submission(payload: Any, raw: Any) -> bool:
         return bool(
             isinstance(payload, dict)
             and isinstance(raw, dict)
-            and set(payload)
-            == {"schema_version", "task_id", "result", "limitations"}
+            and set(payload) == {"schema_version", "task_id", "result", "limitations"}
             and payload.get("schema_version") == "1"
             and _json_equal(payload.get("task_id"), raw.get("task_id"))
             and _json_equal(payload.get("result"), raw.get("result"))

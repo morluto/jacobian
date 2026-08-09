@@ -2,7 +2,7 @@ schema_version = "1.4"
 artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/jcb-postdoc-015"
-version = "2.0.0"
+version = "2.1.0"
 description = "Research diagnostic: Erdős Problem 707 finite Sidon and fixed-order extension evidence"
 keywords = ["research", "diagnostic", "mathematical-sciences", "additive combinatorics", "finite geometry", "modular arithmetic"]
 [metadata]

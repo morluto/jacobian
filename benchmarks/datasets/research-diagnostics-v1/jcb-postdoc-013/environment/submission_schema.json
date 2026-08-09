@@ -47,14 +47,19 @@
           "minLength": 1
         },
         "key_facts": {
-          "additionalProperties": {
-            "type": "string",
-            "minLength": 1
+          "additionalProperties": false,
+          "properties": {
+            "identity_holds": {
+              "const": "true"
+            },
+            "index_order": {
+              "const": "a<a+1<2a<2a+2<c<c+1"
+            }
           },
-          "minProperties": 1,
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9_]*$"
-          },
+          "required": [
+            "identity_holds",
+            "index_order"
+          ],
           "type": "object"
         }
       }

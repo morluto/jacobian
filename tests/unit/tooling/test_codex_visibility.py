@@ -20,6 +20,7 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
+from jacobian.contracts.combinatorics import CyclicDifferenceSetExtensionRequest
 from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
 from jacobian.contracts.number_theory import IntegerPairRequest
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
@@ -162,6 +163,8 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
         "polynomial.compute.gcd",
         "polynomial.expression.normalize",
         "matrix.determinant.verify",
+        "combinatorics.cyclic_difference_set.extension.decide",
+        "combinatorics.cyclic_difference_set.extension.verify",
     ):
         assert f"`{capability_id}`" in skill
     integer_payload = '{"left":"84","right":"30"}'
@@ -174,12 +177,20 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert integer_payload in skill
     assert matrix_payload in skill
     assert polynomial in skill
+    extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
+    assert extension_payload in skill
+    assert '"mode":"EXPLORE","payload":<JSON>' in skill
+    assert "(not `COMPUTE`/`input`)" in skill
+    assert "No discovery for stable producers" in skill
+    assert "never with `capability_id`" in skill
+    assert '"candidate":<producer output.result>' in skill
     IntegerPairRequest.model_validate_json(integer_payload)
     MatrixDeterminantRequest.model_validate_json(matrix_payload)
     polynomial_value = json.loads(polynomial)
     PolynomialGcdRequest.model_validate(
         {"left": polynomial_value, "right": polynomial_value}
     )
+    CyclicDifferenceSetExtensionRequest.model_validate_json(extension_payload)
     assert len(skill.encode("utf-8")) <= 4 * 1024
 
 

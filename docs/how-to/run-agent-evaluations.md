@@ -41,6 +41,15 @@ paths only for shared Harbor tooling, schemas, registry, suite policy, or
 other control-plane changes. Pass `TASKS="..."` for a bounded dataset Oracle;
 pass `FULL=1` only when a complete dataset sweep is intentional.
 
+Oracle attempts are serialized on a shared Docker host and receive a unique
+job name plus a content-bound preparation receipt. The receipt includes task
+digests, Harbor and Docker runtime versions, the Oracle job digest, and
+normalized execution arguments. On Docker Engine versions older than 23, the
+Make target selects the classic builder because the bundled legacy BuildKit
+can reuse a same-named Dockerfile from another task through Compose Bake. Set
+`HARBOR_ORACLE_DOCKER_BUILD_MODE` only for an explicit compatibility test; the
+resolved mode remains part of the recorded experiment identity.
+
 For changes limited to Harbor job JSON, MCP configuration, job-level Compose
 overlays, or their execution helpers, use the focused local handoff instead:
 
@@ -230,6 +239,14 @@ URL variable. The Makefile also passes Harbor's
 `web_search=disabled` agent kwarg explicitly, because the `-a codex` and
 `-m <model>` command-line overrides replace the agent block from the job JSON.
 The default treatment job does not include the proxy overlay.
+
+The pinned Harbor Codex adapter creates a fresh temporary `CODEX_HOME` for
+each trial and copies only the job-declared configuration and skills into it.
+Therefore a direct host `codex exec`, even with user configuration partially
+disabled, is not a valid control for this protocol: installed host apps or
+plugins may still be visible. For first-party evidence, inspect each trial's
+`lock.json`: control must have empty `skills` and `mcp_servers`, while
+treatment must contain exactly the declared Jacobian skill and MCP server.
 
 ## Docker and Daytona
 

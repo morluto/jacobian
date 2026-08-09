@@ -9,6 +9,8 @@ import importlib.metadata
 import json
 import math
 import re
+import secrets
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -16,7 +18,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
-_AUGMENTED_DIGEST_MANIFEST = "jacobian-augmented-task-digests.json"
+_AUGMENTED_DIGEST_MANIFEST = "jacobian-augmented-task-digests"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -45,13 +47,66 @@ def _prefixed_digest(value: str) -> str:
     return value if value.startswith("sha256:") else f"sha256:{value}"
 
 
-def _augmented_job_name(*, dataset: str, digests: dict[str, str]) -> str:
+def _augmented_job_identity(
+    *,
+    dataset: str,
+    digests: dict[str, str],
+    job_config_digest: str,
+    harbor_version: str,
+    execution_args: tuple[str, ...],
+    docker_build_mode: str,
+    docker_server_version: str,
+    docker_compose_version: str,
+) -> str:
     identity = json.dumps(
-        {"dataset": dataset, "tasks": sorted(digests.items())},
+        {
+            "dataset": dataset,
+            "docker_build_mode": docker_build_mode,
+            "docker_compose_version": docker_compose_version,
+            "docker_server_version": docker_server_version,
+            "execution_args": execution_args,
+            "harbor_version": harbor_version,
+            "job_config_digest": job_config_digest,
+            "tasks": sorted(digests.items()),
+        },
         separators=(",", ":"),
         sort_keys=True,
     ).encode()
-    return f"jacobian-oracle-{hashlib.sha256(identity).hexdigest()}"
+    return f"sha256:{hashlib.sha256(identity).hexdigest()}"
+
+
+def _augmented_job_name(*, job_identity: str, attempt_id: str) -> str:
+    digest = job_identity.removeprefix("sha256:")
+    if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise HarborSuiteError("invalid augmented Oracle job identity")
+    if re.fullmatch(r"[0-9a-f]{16}", attempt_id) is None:
+        raise HarborSuiteError("invalid augmented Oracle attempt identity")
+    return f"jacobian-oracle-{digest[:32]}-{attempt_id}"
+
+
+def _augmented_digest_manifest_path(jobs_dir: Path, job_name: str) -> Path:
+    return jobs_dir / f"{_AUGMENTED_DIGEST_MANIFEST}.{job_name}.json"
+
+
+def _job_config_digest(path: Path) -> str:
+    try:
+        return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    except OSError as exc:
+        raise HarborSuiteError(
+            f"unable to read Harbor job config {path}: {exc}"
+        ) from exc
+
+
+def _execution_args(value: str) -> tuple[str, ...]:
+    try:
+        normalized = tuple(shlex.split(value))
+    except ValueError as exc:
+        raise HarborSuiteError(
+            f"unable to parse Harbor execution arguments: {exc}"
+        ) from exc
+    if any(arg == "--job-name" or arg.startswith("--job-name=") for arg in normalized):
+        raise HarborSuiteError("EVAL_ARGS must not override the bound Oracle job name")
+    return normalized
 
 
 def _is_nonnegative_integer(value: Any) -> bool:
@@ -251,7 +306,15 @@ def _load_trial_results(result_path: Path) -> tuple[list[Any], list[Path], list[
 
 
 def _prepare_augmented_digest_manifest(
-    *, dataset: str, tasks: tuple[str, ...] | None, jobs_dir: Path
+    *,
+    dataset: str,
+    tasks: tuple[str, ...] | None,
+    jobs_dir: Path,
+    job_config: Path,
+    execution_args: str,
+    docker_build_mode: str,
+    docker_server_version: str,
+    docker_compose_version: str,
 ) -> Path:
     """Record the augmented task identity before Harbor starts an Oracle run."""
 
@@ -262,19 +325,42 @@ def _prepare_augmented_digest_manifest(
     if unknown:
         raise HarborSuiteError(f"unknown task(s) for {dataset}: {', '.join(unknown)}")
     jobs_dir.mkdir(parents=True, exist_ok=True)
-    manifest = jobs_dir / _AUGMENTED_DIGEST_MANIFEST
     augmented_digests = {
         task_id: _prefixed_digest(task_digest(known[task_id].path))
         for task_id in sorted(requested)
     }
+    prepared_at_ns = time.time_ns()
+    attempt_id = secrets.token_hex(8)
+    harbor_version = importlib.metadata.version("harbor")
+    job_config_digest = _job_config_digest(job_config)
+    normalized_execution_args = _execution_args(execution_args)
+    job_identity = _augmented_job_identity(
+        dataset=suite.id,
+        digests=augmented_digests,
+        job_config_digest=job_config_digest,
+        harbor_version=harbor_version,
+        execution_args=normalized_execution_args,
+        docker_build_mode=docker_build_mode,
+        docker_server_version=docker_server_version,
+        docker_compose_version=docker_compose_version,
+    )
+    job_name = _augmented_job_name(job_identity=job_identity, attempt_id=attempt_id)
+    manifest = _augmented_digest_manifest_path(jobs_dir, job_name)
     manifest.write_text(
         json.dumps(
             {
+                "schema_version": "2",
                 "dataset": suite.id,
-                "job_name": _augmented_job_name(
-                    dataset=suite.id, digests=augmented_digests
-                ),
-                "prepared_at_ns": time.time_ns(),
+                "job_identity": job_identity,
+                "job_name": job_name,
+                "attempt_id": attempt_id,
+                "prepared_at_ns": prepared_at_ns,
+                "harbor_version": harbor_version,
+                "job_config_digest": job_config_digest,
+                "execution_args": normalized_execution_args,
+                "docker_build_mode": docker_build_mode,
+                "docker_server_version": docker_server_version,
+                "docker_compose_version": docker_compose_version,
                 "tasks": [
                     {
                         "task": task_id,
@@ -309,23 +395,70 @@ def _validate_augmented_manifest_metadata(
     manifest: dict[str, Any],
     result_path: Path,
     dataset: str,
-    expected_job_name: str,
+    expected_job_identity: str,
 ) -> list[str]:
+    if manifest.get("schema_version") != "2":
+        return ["augmented task digest manifest has the wrong schema version"]
     if manifest.get("dataset") != dataset:
         return ["augmented task digest manifest has the wrong dataset"]
-    if manifest.get("job_name") != expected_job_name:
+    if manifest.get("job_identity") != expected_job_identity:
         return ["augmented task digest manifest has the wrong job identity"]
+    attempt_id = manifest.get("attempt_id")
+    if not isinstance(attempt_id, str):
+        return ["augmented task digest manifest has no attempt identity"]
+    try:
+        expected_job_name = _augmented_job_name(
+            job_identity=expected_job_identity, attempt_id=attempt_id
+        )
+    except HarborSuiteError:
+        return ["augmented task digest manifest has an invalid attempt identity"]
+    if manifest.get("job_name") != expected_job_name:
+        return ["augmented task digest manifest has the wrong attempt name"]
     if result_path.parent.name != expected_job_name:
-        return ["Harbor result is not bound to its augmented task identity"]
+        return ["Harbor result is not bound to its augmented task attempt"]
+    return []
+
+
+def _validate_execution_identity_fields(
+    *,
+    manifest: dict[str, Any],
+    expected_harbor_version: str,
+    expected_job_config_digest: str,
+    expected_execution_args: tuple[str, ...],
+    expected_docker_build_mode: str,
+    expected_docker_server_version: str,
+    expected_docker_compose_version: str,
+) -> list[str]:
+    expected = {
+        "harbor_version": expected_harbor_version,
+        "job_config_digest": expected_job_config_digest,
+        "execution_args": list(expected_execution_args),
+        "docker_build_mode": expected_docker_build_mode,
+        "docker_server_version": expected_docker_server_version,
+        "docker_compose_version": expected_docker_compose_version,
+    }
+    return [
+        f"augmented task digest manifest has the wrong {key}"
+        for key, value in expected.items()
+        if manifest.get(key) != value
+    ]
+
+
+def _validate_attempt_freshness(
+    *, manifest: dict[str, Any], result_path: Path, trial_paths: list[Path]
+) -> list[str]:
     prepared_at_ns = manifest.get("prepared_at_ns")
     if not isinstance(prepared_at_ns, int) or isinstance(prepared_at_ns, bool):
         return ["augmented task digest manifest has no preparation timestamp"]
     try:
-        result_mtime_ns = result_path.stat().st_mtime_ns
+        result_paths = [result_path, *trial_paths]
+        stale = [
+            path for path in result_paths if path.stat().st_mtime_ns < prepared_at_ns
+        ]
     except OSError as exc:
         return [f"unable to stat Harbor result: {exc}"]
-    if result_mtime_ns < prepared_at_ns:
-        return ["Harbor result predates its augmented task digest manifest"]
+    if stale:
+        return ["Harbor result predates its augmented task attempt"]
     return []
 
 
@@ -357,6 +490,14 @@ def _validate_augmented_digest_manifest(
     result_path: Path,
     dataset: str,
     expected_digests: dict[str, str],
+    expected_job_identity: str,
+    expected_harbor_version: str,
+    expected_job_config_digest: str,
+    expected_execution_args: tuple[str, ...],
+    expected_docker_build_mode: str,
+    expected_docker_server_version: str,
+    expected_docker_compose_version: str,
+    trial_paths: list[Path] | None = None,
 ) -> list[str]:
     """Require the result to be newer than and bound to its pre-run identity."""
 
@@ -367,13 +508,28 @@ def _validate_augmented_digest_manifest(
         manifest=manifest,
         result_path=result_path,
         dataset=dataset,
-        expected_job_name=_augmented_job_name(
-            dataset=dataset, digests=expected_digests
-        ),
+        expected_job_identity=expected_job_identity,
     )
     if failures:
         return failures
-    return _validate_augmented_task_entries(manifest.get("tasks"), expected_digests)
+    failures = _validate_execution_identity_fields(
+        manifest=manifest,
+        expected_harbor_version=expected_harbor_version,
+        expected_job_config_digest=expected_job_config_digest,
+        expected_execution_args=expected_execution_args,
+        expected_docker_build_mode=expected_docker_build_mode,
+        expected_docker_server_version=expected_docker_server_version,
+        expected_docker_compose_version=expected_docker_compose_version,
+    )
+    failures.extend(
+        _validate_attempt_freshness(
+            manifest=manifest, result_path=result_path, trial_paths=trial_paths or []
+        )
+    )
+    failures.extend(
+        _validate_augmented_task_entries(manifest.get("tasks"), expected_digests)
+    )
+    return failures
 
 
 def validate(
@@ -381,6 +537,11 @@ def validate(
     dataset: str,
     tasks: tuple[str, ...] | None,
     jobs_dir: Path,
+    job_config: Path,
+    execution_args: str,
+    docker_build_mode: str,
+    docker_server_version: str,
+    docker_compose_version: str,
     result_path: Path | None = None,
 ) -> Path:
     jobs_dir = jobs_dir.resolve()
@@ -407,12 +568,34 @@ def validate(
         for task_id, ref in known.items()
         if task_id in requested
     }
+    harbor_version = importlib.metadata.version("harbor")
+    job_config_digest = _job_config_digest(job_config)
+    normalized_execution_args = _execution_args(execution_args)
+    expected_job_identity = _augmented_job_identity(
+        dataset=suite.id,
+        digests=augmented_digests,
+        job_config_digest=job_config_digest,
+        harbor_version=harbor_version,
+        execution_args=normalized_execution_args,
+        docker_build_mode=docker_build_mode,
+        docker_server_version=docker_server_version,
+        docker_compose_version=docker_compose_version,
+    )
     trial_results, trial_paths, trial_digests = _load_trial_results(result_path)
+    manifest_path = _augmented_digest_manifest_path(jobs_dir, result_path.parent.name)
     failures = _validate_augmented_digest_manifest(
-        manifest_path=jobs_dir / _AUGMENTED_DIGEST_MANIFEST,
+        manifest_path=manifest_path,
         result_path=result_path,
         dataset=suite.id,
         expected_digests=augmented_digests,
+        expected_job_identity=expected_job_identity,
+        expected_harbor_version=harbor_version,
+        expected_job_config_digest=job_config_digest,
+        expected_execution_args=normalized_execution_args,
+        expected_docker_build_mode=docker_build_mode,
+        expected_docker_server_version=docker_server_version,
+        expected_docker_compose_version=docker_compose_version,
+        trial_paths=trial_paths,
     )
     failures.extend(
         _validate_payload(
@@ -430,7 +613,17 @@ def validate(
         json.dumps(
             {
                 "source_sha": _git_sha(),
-                "harbor_version": importlib.metadata.version("harbor"),
+                "harbor_version": harbor_version,
+                "job_identity": expected_job_identity,
+                "job_config_digest": job_config_digest,
+                "execution_args": normalized_execution_args,
+                "docker_build_mode": docker_build_mode,
+                "docker_server_version": docker_server_version,
+                "docker_compose_version": docker_compose_version,
+                "manifest": {
+                    "path": manifest_path.relative_to(ROOT).as_posix(),
+                    "sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                },
                 "dataset": suite.id,
                 "tasks": [
                     {
@@ -468,6 +661,13 @@ def main() -> int:
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--tasks", nargs="*")
     parser.add_argument("--jobs-dir", type=Path, required=True)
+    parser.add_argument("--job-config", type=Path, required=True)
+    parser.add_argument("--execution-args", default="")
+    parser.add_argument(
+        "--docker-build-mode", choices=("legacy", "buildkit"), required=True
+    )
+    parser.add_argument("--docker-server-version", required=True)
+    parser.add_argument("--docker-compose-version", required=True)
     parser.add_argument("--result", type=Path)
     parser.add_argument("--prepare", action="store_true")
     args = parser.parse_args()
@@ -478,6 +678,11 @@ def main() -> int:
                 dataset=args.dataset,
                 tasks=task_selection,
                 jobs_dir=args.jobs_dir,
+                job_config=args.job_config,
+                execution_args=args.execution_args,
+                docker_build_mode=args.docker_build_mode,
+                docker_server_version=args.docker_server_version,
+                docker_compose_version=args.docker_compose_version,
             )
             manifest = json.loads(evidence.read_text(encoding="utf-8"))
             evidence = manifest["job_name"]
@@ -486,6 +691,11 @@ def main() -> int:
                 dataset=args.dataset,
                 tasks=task_selection,
                 jobs_dir=args.jobs_dir,
+                job_config=args.job_config,
+                execution_args=args.execution_args,
+                docker_build_mode=args.docker_build_mode,
+                docker_server_version=args.docker_server_version,
+                docker_compose_version=args.docker_compose_version,
                 result_path=args.result,
             )
     except HarborSuiteError as exc:

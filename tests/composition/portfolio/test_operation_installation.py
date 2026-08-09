@@ -62,6 +62,17 @@ class _RootValidatedRequest(ContractModel):
         return self
 
 
+class _AmbiguousRootValidatedRequest(ContractModel):
+    base: int
+    target: int
+
+    @model_validator(mode="after")
+    def require_target_after_base(self) -> Self:
+        if self.target <= self.base:
+            raise ValueError("base and target are not in canonical order")
+        return self
+
+
 class _SecretValidatedRequest(ContractModel):
     token: str
 
@@ -166,6 +177,19 @@ def test_validation_diagnostic_uses_document_root_pointer() -> None:
             message="Invalid synthetic input.",
         ),
         _validation_error(_RootValidatedRequest, {"left": 1, "right": 2}),
+    )
+
+    assert diagnostic.path is None
+
+
+def test_validation_diagnostic_does_not_guess_cross_field_path() -> None:
+    diagnostic = _validation_diagnostic(
+        CapabilityDiagnostic(
+            code="INVALID_SYNTHETIC_REQUEST",
+            stage="synthetic_input_validation",
+            message="Invalid synthetic input.",
+        ),
+        _validation_error(_AmbiguousRootValidatedRequest, {"base": 2, "target": 1}),
     )
 
     assert diagnostic.path is None

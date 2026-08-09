@@ -90,6 +90,8 @@ def _validation_diagnostic(
     rejected_container = raw_errors[0].get("input")
     field_match = re.match(r"(?:Value error, )?([a-z][a-z0-9_]*)\b", raw_reason)
     if (
+        path_parts
+        and
         field_match is not None
         and isinstance(rejected_container, dict)
         and field_match.group(1) in rejected_container

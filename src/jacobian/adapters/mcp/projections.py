@@ -231,6 +231,26 @@ def _discovery_operation_card(
     }
 
 
+def _compact_discovery_relationships(
+    response: dict[str, Any],
+    matches: list[dict[str, Any]],
+) -> None:
+    """Remove deterministic suffix links until the discovery response is bounded."""
+
+    while (
+        len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+    ):
+        for match in reversed(matches):
+            related = match.get("related_capabilities")
+            if isinstance(related, list) and related:
+                related.pop()
+                response["related_capabilities_truncated"] = True
+                response["truncation_reason"] = "BYTE_LIMIT"
+                break
+        else:
+            return
+
+
 def _discovery_recovery_paths(
     request: CapabilityDiscoveryRequest,
     *,
@@ -435,6 +455,7 @@ def _capability_discovery_response(
         "recovery_paths_are_unranked": True,
         "response_byte_limit": CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
         "truncation_reason": None,
+        "related_capabilities_truncated": False,
     }
     matches = cast(list[dict[str, Any]], response["matches"])
     while (
@@ -456,6 +477,7 @@ def _capability_discovery_response(
         response["available_domains_truncated"] = True
         response["truncation_reason"] = "BYTE_LIMIT"
     response["match_metadata_truncated"] = False
+    _compact_discovery_relationships(response, matches)
     compact_fields = (
         "tags",
         "matched_on",

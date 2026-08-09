@@ -4,6 +4,7 @@ import asyncio
 import json
 from importlib.metadata import version
 from pathlib import Path
+from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -169,6 +170,67 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
             ]
 
     asyncio.run(scenario())
+
+
+def test_math_find_compacts_related_capabilities_deterministically(
+    fresh_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.adapters.mcp import projections
+    from jacobian.adapters.mcp.tools import _find_result
+
+    target_id = "polynomial.integer.compute.gcd"
+    catalog_ids = tuple(
+        descriptor.capability_id
+        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+        if descriptor.capability_id != target_id
+    )
+    monkeypatch.setitem(
+        projections._RELATED_CAPABILITIES,
+        target_id,
+        tuple(
+            (capability_id, f"compatible exact outcome {index:04d} " + "x" * 80)
+            for index, capability_id in enumerate(catalog_ids)
+        ),
+    )
+    byte_limit = 8 * 1024
+    monkeypatch.setattr(
+        projections,
+        "CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT",
+        byte_limit,
+    )
+
+    def discover() -> dict[str, Any]:
+        return projections._capability_discovery_response(
+            fresh_complete_runtime,
+            query=target_id,
+            domain=None,
+            mode=None,
+            input_kind=None,
+            artifact_type=None,
+            limit=1,
+            cursor=None,
+        )
+
+    first = discover()
+    second = discover()
+
+    assert first == second
+    assert first["matches"][0]["capability_id"] == target_id
+    assert len(projections._mcp_text_json_bytes(first)) <= byte_limit
+    assert first["related_capabilities_truncated"] is True
+    assert first["truncation_reason"] == "BYTE_LIMIT"
+    related = first["matches"][0]["related_capabilities"]
+    assert [item["capability_id"] for item in related] == sorted(catalog_ids)[
+        : len(related)
+    ]
+
+    tool_result = _find_result(first)
+    text_result = json.loads(tool_result.content[0].text)
+    assert tool_result.structured_content is not None
+    assert tool_result.structured_content["related_capabilities_truncated"] is True
+    assert text_result["related_capabilities_truncated"] is True
+    assert text_result["truncation_reason"] == "BYTE_LIMIT"
 
 
 def test_mcp_exposes_only_math_tools_with_read_only_resources(

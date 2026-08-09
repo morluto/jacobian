@@ -84,6 +84,7 @@ class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
     truncation_reason: str | None = None
     available_domains_total: StrictInt
     available_domains_truncated: bool
+    related_capabilities_truncated: bool
     match_metadata_truncated: bool
 
 
@@ -198,6 +199,10 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             "routing_basis": response.get("routing_basis"),
             "total_matches": response.get("total_matches"),
             "truncated": response.get("truncated"),
+            "truncation_reason": response.get("truncation_reason"),
+            "related_capabilities_truncated": response.get(
+                "related_capabilities_truncated"
+            ),
             "next_cursor": response.get("next_cursor"),
             "available_recovery_paths": response.get("available_recovery_paths"),
         }

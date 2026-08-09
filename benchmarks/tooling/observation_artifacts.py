@@ -17,10 +17,9 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.errors import HarborSuiteError
-from jacobian.eval.telemetry import parse_reasoning_protocol_trace
 
 _MCP_TOOL_CALL = re.compile(
-    r"\bMCP tool call tool=(math\.(?:find|run)|reasoning\.write)\b"
+    r"\bMCP tool call tool=(math\.(?:find|run))\b"
     r".{0,512}?\bstatus=(success|error)\b"
     r".{0,512}?\brequest_digest=([0-9a-f]{16}|none)\b",
     re.DOTALL,
@@ -36,7 +35,6 @@ def _canonical_tool_name(value: str) -> str:
     aliases = {
         "mcp__jacobian__math_find": "math.find",
         "mcp__jacobian__math_run": "math.run",
-        "mcp__jacobian__reasoning_write": "reasoning.write",
     }
     return aliases.get(value, value)
 
@@ -611,9 +609,7 @@ def trial_artifacts(
         )
     ]
     ignored_tools = (
-        frozenset({"math.find", "math.run", "reasoning.write"})
-        if runtime_logs
-        else frozenset()
+        frozenset({"math.find", "math.run"}) if runtime_logs else frozenset()
     )
     errors = sum(
         _read_trace(path, calls, ignored_tools=ignored_tools) for path in agent_traces
@@ -622,67 +618,6 @@ def trial_artifacts(
         _read_trace(path, calls, mcp_runtime_log=True) for path in runtime_logs
     )
     return artifacts, dict(sorted(calls.items())), errors, failures
-
-
-def trial_reasoning_protocol(
-    trial_path: Path | None,
-    artifacts: list[dict[str, Any]],
-) -> dict[str, int | str]:
-    """Extract bounded reasoning-protocol facts without retaining summary text."""
-
-    empty: dict[str, int | str] = {
-        "status": "INCOMPLETE",
-        "plan_count": 0,
-        "before_tool_count": 0,
-        "after_tool_count": 0,
-        "final_count": 0,
-        "run_count": 0,
-        "bound_invoke_count": 0,
-        "missing_after_tool_count": 0,
-        "pending_call_count": 0,
-        "unavailable_after_tool_count": 0,
-        "reported_actual_mismatch_count": 0,
-        "summary_characters": 0,
-    }
-    if trial_path is None:
-        return empty
-    root = trial_path.parent
-    candidates = [
-        _artifact_host_path(root, artifact)
-        for artifact in artifacts
-        if Path(artifact["artifact_path"]).suffix in {".json", ".jsonl"}
-        and any(
-            marker in Path(artifact["artifact_path"]).name.lower()
-            for marker in ("trajectory", "atif", "telemetry")
-        )
-    ]
-    observed: list[dict[str, int | str]] = []
-    for path in candidates:
-        try:
-            protocol = parse_reasoning_protocol_trace(path)
-        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
-            continue
-        if isinstance(protocol, dict) and any(
-            int(protocol.get(field, 0)) > 0
-            for field in (
-                "plan_count",
-                "before_tool_count",
-                "after_tool_count",
-                "final_count",
-                "bound_invoke_count",
-            )
-        ):
-            observed.append(protocol)
-    if len(observed) == 1:
-        return observed[0]
-    if not observed:
-        return empty
-    combined = dict(empty)
-    for field in empty:
-        if field == "status":
-            continue
-        combined[field] = sum(int(item.get(field, 0)) for item in observed)
-    return combined
 
 
 def artifact_source_reuse(trials: list[dict[str, Any]]) -> list[str]:
@@ -707,5 +642,4 @@ def artifact_source_reuse(trials: list[dict[str, Any]]) -> list[str]:
 __all__ = [
     "artifact_source_reuse",
     "trial_artifacts",
-    "trial_reasoning_protocol",
 ]

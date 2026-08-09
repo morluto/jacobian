@@ -40,113 +40,6 @@ class _McpResourceTelemetry:
     digest_preservation_successes: int = 0
 
 
-@dataclass
-class _ReasoningProtocolTelemetry:
-    phase_counts: Counter[str] = field(default_factory=Counter)
-    run_ids: set[str] = field(default_factory=set)
-    before_call_ids: set[str] = field(default_factory=set)
-    after_call_ids: set[str] = field(default_factory=set)
-    bound_call_ids: set[str] = field(default_factory=set)
-    bound_invoke_count: int = 0
-    summary_characters: int = 0
-    finalized_run_ids: set[str] = field(default_factory=set)
-    unavailable_after_tool_count: int = 0
-    reported_actual_mismatch_count: int = 0
-
-    def record_attempt(self, tool: str, arguments: object) -> None:
-        if tool != "math.run" or not isinstance(arguments, Mapping):
-            return
-        if isinstance(arguments.get("reasoning_run_id"), str) and isinstance(
-            arguments.get("reasoning_call_id"), str
-        ):
-            self.bound_invoke_count += 1
-            self.bound_call_ids.add(arguments["reasoning_call_id"])
-
-    def record_write(
-        self,
-        tool: str,
-        arguments: object,
-        response: object,
-    ) -> None:
-        if tool != "reasoning.write" or not isinstance(arguments, Mapping):
-            return
-        phase = arguments.get("phase")
-        if isinstance(phase, str):
-            self.phase_counts[phase] += 1
-        summary = arguments.get("summary")
-        if isinstance(summary, str):
-            self.summary_characters += len(summary)
-        if (
-            phase == "AFTER_TOOL"
-            and arguments.get("interpretation_status") == "RESULT_UNAVAILABLE"
-        ):
-            self.unavailable_after_tool_count += 1
-        if isinstance(response, Mapping):
-            self.reported_actual_mismatch_count += sum(
-                response.get(field) is False
-                for field in (
-                    "execution_status_matches",
-                    "assurance_level_matches",
-                    "completeness_status_matches",
-                )
-            )
-            if phase == "FINAL" and response.get("state") == "FINALIZED":
-                response_run_id = response.get("run_id")
-                if isinstance(response_run_id, str):
-                    self.finalized_run_ids.add(response_run_id)
-        self._record_identity(phase, arguments, response)
-
-    def _record_identity(
-        self,
-        phase: object,
-        arguments: Mapping[str, Any],
-        response: object,
-    ) -> None:
-        run_id = arguments.get("run_id")
-        if isinstance(run_id, str):
-            self.run_ids.add(run_id)
-        if isinstance(response, Mapping) and isinstance(response.get("run_id"), str):
-            self.run_ids.add(response["run_id"])
-        call_id = arguments.get("call_id")
-        if phase == "AFTER_TOOL" and isinstance(call_id, str):
-            self.after_call_ids.add(call_id)
-        if (
-            phase == "BEFORE_TOOL"
-            and isinstance(response, Mapping)
-            and isinstance(response.get("call_id"), str)
-        ):
-            self.before_call_ids.add(response["call_id"])
-
-    def payload(self) -> dict[str, int | str]:
-        missing_after = self.before_call_ids - self.after_call_ids
-        call_sets_match = (
-            self.before_call_ids == self.after_call_ids == self.bound_call_ids
-        )
-        complete = (
-            self.phase_counts["PLAN"] == 1
-            and self.phase_counts["FINAL"] == 1
-            and len(self.run_ids) == 1
-            and len(self.finalized_run_ids) == 1
-            and call_sets_match
-        )
-        return {
-            "status": "COMPLETE" if complete else "INCOMPLETE",
-            "plan_count": self.phase_counts["PLAN"],
-            "before_tool_count": self.phase_counts["BEFORE_TOOL"],
-            "after_tool_count": self.phase_counts["AFTER_TOOL"],
-            "final_count": self.phase_counts["FINAL"],
-            "run_count": len(self.run_ids),
-            "bound_invoke_count": self.bound_invoke_count,
-            "missing_after_tool_count": len(missing_after),
-            "pending_call_count": len(
-                (self.before_call_ids | self.bound_call_ids) - self.after_call_ids
-            ),
-            "unavailable_after_tool_count": self.unavailable_after_tool_count,
-            "reported_actual_mismatch_count": self.reported_actual_mismatch_count,
-            "summary_characters": self.summary_characters,
-        }
-
-
 def _contains_value(value: object, *, field: str, accepted: set[object]) -> bool:
     if isinstance(value, Mapping):
         candidate = value.get(field)
@@ -365,100 +258,6 @@ def _mcp_call_signature(tool: str, arguments: object) -> tuple[str, str]:
     return tool, f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
-def _reasoning_tool_name(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.replace("__", ".").replace("_", ".").lower()
-    if normalized.endswith("reasoning.write"):
-        return "reasoning.write"
-    if normalized.endswith("math.run"):
-        return "math.run"
-    return None
-
-
-def _atif_mapping_response(value: Mapping[str, Any]) -> dict[str, Any] | None:
-    for key in ("structured_content", "structuredContent"):
-        response = value.get(key)
-        if isinstance(response, dict):
-            return response
-    if value.get("type") == "text" and isinstance(value.get("text"), str):
-        return _atif_response(value["text"])
-    content = value.get("content")
-    if isinstance(content, list):
-        response = _atif_response(content)
-        if response is not None:
-            return response
-    return dict(value)
-
-
-def _atif_response(value: object) -> dict[str, Any] | None:
-    if isinstance(value, str):
-        try:
-            return _atif_response(json.loads(value))
-        except json.JSONDecodeError:
-            return None
-    if isinstance(value, list):
-        for item in value:
-            response = _atif_response(item)
-            if response is not None:
-                return response
-        return None
-    if not isinstance(value, Mapping):
-        return None
-    return _atif_mapping_response(value)
-
-
-def _parse_atif_reasoning_protocol(value: object) -> dict[str, int | str]:
-    telemetry = _ReasoningProtocolTelemetry()
-    if not isinstance(value, Mapping) or not isinstance(value.get("steps"), list):
-        return telemetry.payload()
-    for step in value["steps"]:
-        if not isinstance(step, Mapping):
-            continue
-        observation = step.get("observation")
-        raw_results = (
-            observation.get("results") if isinstance(observation, Mapping) else None
-        )
-        results = raw_results if isinstance(raw_results, list) else []
-        responses = {
-            item["source_call_id"]: _atif_response(item.get("content"))
-            for item in results
-            if isinstance(item, Mapping) and isinstance(item.get("source_call_id"), str)
-        }
-        calls = step.get("tool_calls")
-        if not isinstance(calls, list):
-            continue
-        for call in calls:
-            if not isinstance(call, Mapping):
-                continue
-            tool = _reasoning_tool_name(call.get("function_name"))
-            arguments = call.get("arguments")
-            if tool is None or not isinstance(arguments, Mapping):
-                continue
-            telemetry.record_attempt(tool, arguments)
-            call_id = call.get("tool_call_id")
-            response = responses.get(call_id) if isinstance(call_id, str) else None
-            if response is not None:
-                telemetry.record_write(tool, arguments, response)
-    return telemetry.payload()
-
-
-def parse_reasoning_protocol_trace(path: Path) -> dict[str, int | str]:
-    """Parse reasoning protocol facts from Codex JSONL or Harbor ATIF JSON."""
-
-    if path.suffix == ".jsonl":
-        protocol = parse_agent_transcript(path).get("reasoning_protocol")
-        if not isinstance(protocol, dict):
-            raise ValueError("agent transcript omitted reasoning protocol telemetry")
-        return {
-            str(key): item
-            for key, item in protocol.items()
-            if isinstance(item, int | str)
-        }
-    value = json.loads(path.read_text(encoding="utf-8"))
-    return _parse_atif_reasoning_protocol(value)
-
-
 @dataclass
 class _AgentTranscriptTelemetry:
     mcp_calls: list[str] = field(default_factory=list)
@@ -482,9 +281,6 @@ class _AgentTranscriptTelemetry:
     mcp_call_signatures: Counter[tuple[str, str]] = field(default_factory=Counter)
     capability_describe_index_calls: int = 0
     capability_describe_exact_calls: int = 0
-    reasoning_telemetry: _ReasoningProtocolTelemetry = field(
-        default_factory=_ReasoningProtocolTelemetry
-    )
     resource_telemetry: _McpResourceTelemetry = field(
         default_factory=_McpResourceTelemetry
     )
@@ -657,7 +453,6 @@ def _record_successful_mcp_call(
     response: Mapping[str, Any] | None,
 ) -> None:
     telemetry.successful_calls.append(tool)
-    telemetry.reasoning_telemetry.record_write(tool, arguments, response)
     if tool == "math.find" and isinstance(arguments, Mapping):
         telemetry.capability_descriptions.append(
             _build_capability_description(arguments, response)
@@ -682,7 +477,6 @@ def _process_mcp_tool_call(
     tool = item["tool"]
     telemetry.mcp_calls.append(tool)
     arguments = item.get("arguments")
-    telemetry.reasoning_telemetry.record_attempt(tool, arguments)
     text_response, structured_response = _record_mcp_byte_metrics(telemetry, item, tool)
     telemetry.mcp_call_signatures[_mcp_call_signature(tool, arguments)] += 1
     _record_describe_and_attempt(telemetry, tool, arguments)
@@ -759,7 +553,6 @@ def _transcript_payload(telemetry: _AgentTranscriptTelemetry) -> dict[str, Any]:
         ],
         "capability_describe_index_calls": telemetry.capability_describe_index_calls,
         "capability_describe_exact_calls": telemetry.capability_describe_exact_calls,
-        "reasoning_protocol": telemetry.reasoning_telemetry.payload(),
     }
 
 

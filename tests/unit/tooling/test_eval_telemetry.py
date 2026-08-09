@@ -5,10 +5,7 @@ import json
 from pathlib import Path
 
 from jacobian.canonical import canonicalize_json
-from jacobian.eval.telemetry import (
-    parse_agent_transcript,
-    parse_reasoning_protocol_trace,
-)
+from jacobian.eval.telemetry import parse_agent_transcript
 
 
 def _tool_event(
@@ -207,120 +204,6 @@ def test_agent_telemetry_ignores_non_string_mcp_tool(tmp_path: Path) -> None:
 
     assert telemetry["mcp_calls"] == []
     assert telemetry["mcp_resource_read_attempts"] == 0
-
-
-def test_agent_telemetry_reports_reasoning_protocol_without_summary_text(
-    tmp_path: Path,
-) -> None:
-    run_id = "00000000-0000-4000-8000-000000000000"
-    call_id = "11111111-1111-4111-8111-111111111111"
-    events = [
-        _tool_event(
-            "reasoning.write",
-            {"phase": "PLAN", "summary": "private plan marker"},
-            {"run_id": run_id},
-        ),
-        _tool_event(
-            "reasoning.write",
-            {
-                "phase": "BEFORE_TOOL",
-                "summary": "private before marker",
-                "run_id": run_id,
-            },
-            {"run_id": run_id, "call_id": call_id},
-        ),
-        _tool_event(
-            "math.run",
-            {
-                "capability_id": "integer.compute.gcd",
-                "payload": {},
-                "reasoning_run_id": run_id,
-                "reasoning_call_id": call_id,
-            },
-            {"execution": {"status": "ERROR"}},
-        ),
-    ]
-    transcript = tmp_path / "reasoning.jsonl"
-    transcript.write_text(
-        "\n".join(json.dumps(event) for event in events) + "\n",
-        encoding="utf-8",
-    )
-
-    telemetry = parse_agent_transcript(transcript)
-
-    assert telemetry["reasoning_protocol"] == {
-        "status": "INCOMPLETE",
-        "plan_count": 1,
-        "before_tool_count": 1,
-        "after_tool_count": 0,
-        "final_count": 0,
-        "run_count": 1,
-        "bound_invoke_count": 1,
-        "missing_after_tool_count": 1,
-        "pending_call_count": 1,
-        "unavailable_after_tool_count": 0,
-        "reported_actual_mismatch_count": 0,
-        "summary_characters": len("private plan markerprivate before marker"),
-    }
-    assert "private plan marker" not in json.dumps(telemetry)
-
-
-def test_reasoning_protocol_parser_supports_harbor_atif(tmp_path: Path) -> None:
-    run_id = "00000000-0000-4000-8000-000000000000"
-    trajectory = {
-        "schema_version": "ATIF-v1.7",
-        "steps": [
-            {
-                "tool_calls": [
-                    {
-                        "tool_call_id": "plan",
-                        "function_name": "mcp__jacobian__reasoning_write",
-                        "arguments": {"phase": "PLAN", "summary": "private"},
-                    }
-                ],
-                "observation": {
-                    "results": [
-                        {
-                            "source_call_id": "plan",
-                            "content": json.dumps({"run_id": run_id}),
-                        }
-                    ]
-                },
-            },
-            {
-                "tool_calls": [
-                    {
-                        "tool_call_id": "final",
-                        "function_name": "reasoning.write",
-                        "arguments": {
-                            "phase": "FINAL",
-                            "summary": "private final",
-                            "run_id": run_id,
-                        },
-                    }
-                ],
-                "observation": {
-                    "results": [
-                        {
-                            "source_call_id": "final",
-                            "content": json.dumps(
-                                {"run_id": run_id, "state": "FINALIZED"}
-                            ),
-                        }
-                    ]
-                },
-            },
-        ],
-    }
-    path = tmp_path / "trajectory.json"
-    path.write_text(json.dumps(trajectory), encoding="utf-8")
-
-    protocol = parse_reasoning_protocol_trace(path)
-
-    assert protocol["status"] == "COMPLETE"
-    assert protocol["plan_count"] == 1
-    assert protocol["final_count"] == 1
-    assert "private" not in json.dumps(protocol)
 
 
 def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(

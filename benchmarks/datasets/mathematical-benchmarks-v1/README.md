@@ -54,27 +54,6 @@ both jobs; only the treatment adds the Jacobian sidecar and MCP config. This
 paired setup is for workflow comparison; the public dataset is not held-out
 evidence.
 
-To isolate the external reasoning-log protocol, keep Jacobian enabled in both
-arms and vary only its mode:
-
-```sh
-# Control: identical Jacobian portfolio without the log protocol.
-JACOBIAN_REASONING_LOG_MODE=off make agent-eval \
-  DATASET=mathematical-benchmarks-v1 JACOBIAN_ENABLED=1 \
-  TASKS=graph-counterexample EVAL_EXECUTE=1
-
-# Treatment: identical Jacobian portfolio with required bracketing.
-JACOBIAN_REASONING_LOG_MODE=required make agent-eval \
-  DATASET=mathematical-benchmarks-v1 JACOBIAN_ENABLED=1 \
-  TASKS=graph-counterexample EVAL_EXECUTE=1
-```
-
-Bind `reasoning_log_mode` in each runtime snapshot's condition. The normalizer
-requires a structurally complete `PLAN`/call-cycle/`FINAL` trace for every
-`REQUIRED` trial and excludes summary text from normalized evidence. Public
-workflow observations remain non-causal; protected runs must also freeze the
-model, prompt, agent version, task digests, sampling settings, and budgets.
-
 To evaluate the canonical `math.find` and `math.run` surface, keep each model,
 task set, and prompt condition in a separate result root:
 
@@ -93,8 +72,8 @@ tool adoption. Public-suite observations remain directional workflow evidence,
 not a causal performance claim.
 
 Jacobian-enabled jobs collect both Codex ATIF and the Jacobian sidecar's MCP
-runtime log. The runtime log is authoritative for `math.find`, `math.run`, and
-`reasoning.write` counts and failed capability attempts; the normalizer does
+runtime log. The runtime log is authoritative for `math.find` and `math.run`
+counts and failed capability attempts; the normalizer does
 not infer executions from JavaScript source text. A missing configured trace or
 sidecar log makes the observation incomplete. Control jobs collect ATIF only
 because they do not start the Jacobian sidecar.

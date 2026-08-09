@@ -141,7 +141,7 @@ mkdir -p "$(dirname "$RUNTIME_SNAPSHOT")"
 jq --arg model "$JACOBIAN_MODEL" \
   '{snapshot_id, harbor_version: "0.20.0", model: $model,
     condition: {id: "treatment", role: "PRIMARY_TREATMENT",
-                jacobian_enabled: true, reasoning_log_mode: "OFF"}}' \
+                jacobian_enabled: true}}' \
   "$SNAPSHOT_LOCK" > "$RUNTIME_SNAPSHOT"
 
 make agent-eval DATASET=mathematical-benchmarks-v1 \

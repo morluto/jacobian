@@ -278,6 +278,21 @@ def install_exact_domain_checkers(
             "python-flint": exact_domain_checker_provider_runtime(
                 checker_ids=authorized_ids["python-flint"]
             ),
+            "finite-field": source_provider_runtime(
+                "jacobian.finite-field-checker",
+                version="1",
+                entrypoint=(
+                    "jacobian_checkers.exact_domain_operations:"
+                    "check_finite_field_polynomial_map_fibers"
+                ),
+                install_tier=CapabilityInstallTier.T1,
+                license_id="MIT",
+                features=(
+                    "standard-library-finite-field-replay",
+                    "clean-process-checker",
+                ),
+                checker_ids=authorized_ids["finite-field"],
+            ),
             "certified-snf": certified_snf_checker_provider_runtime(
                 checker_ids=authorized_ids["certified-snf"]
             ),

@@ -18,7 +18,7 @@ try:
     from flint import fmpq, fmpq_mat, fmpq_poly, fmpz, fmpz_mat
 except ModuleNotFoundError:  # The standard-library finite-field replay needs no FLINT.
     flint = None  # type: ignore[assignment]
-    fmpq = fmpq_mat = fmpq_poly = fmpz = fmpz_mat = None  # type: ignore[assignment]
+    fmpq = fmpq_mat = fmpq_poly = fmpz = fmpz_mat = None  # type: ignore[misc,assignment]
 
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
 

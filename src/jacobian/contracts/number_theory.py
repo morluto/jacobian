@@ -39,6 +39,9 @@ _MAX_RESIDUE_TERMS = 64
 _MAX_RESIDUE_EXPONENT = 32
 _MAX_RESIDUE_ASSIGNMENTS = 4_096
 _MAX_POLYNOMIAL_RESIDUE_MODULUS = 1_000_000
+_MAX_FINITE_GROUP_ORDER = 4_096
+_MAX_FINITE_GROUP_RANK = 6
+_MAX_FINITE_GROUP_FACTOR_SIZE = 256
 
 BoundedInteger = Annotated[
     str,
@@ -294,6 +297,43 @@ class ModularPolynomialResidueImageRequest(ContractModel):
         return self
 
 
+class FiniteAbelianGroupFactorizationRequest(ContractModel):
+    """Two bounded integer-vector factors in a product of cyclic groups."""
+
+    moduli: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+    left: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_FACTOR_SIZE
+    )
+    right: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_FACTOR_SIZE
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_product_group(self) -> Self:
+        if any(modulus < 2 or modulus > 1_000_000 for modulus in self.moduli):
+            raise ValueError("cyclic moduli must be between 2 and 1,000,000")
+        if math.prod(self.moduli) > _MAX_FINITE_GROUP_ORDER:
+            raise ValueError("finite abelian group exceeds the 4,096-element bound")
+        if len(self.left) * len(self.right) > _MAX_FINITE_GROUP_ORDER:
+            raise ValueError("factor Cartesian product exceeds the group-order bound")
+        if any(
+            len(element) != len(self.moduli)
+            for factor in (self.left, self.right)
+            for element in factor
+        ):
+            raise ValueError("every factor element must match the group rank")
+        if any(
+            abs(coordinate) > 1_000_000
+            for factor in (self.left, self.right)
+            for element in factor
+            for coordinate in element
+        ):
+            raise ValueError("factor coordinates exceed the input bound")
+        return self
+
+
 class ChineseRemainderRequest(ContractModel):
     """A finite system of integer congruences with parallel residues and moduli."""
 
@@ -538,6 +578,90 @@ class ModularPolynomialResidueImageResult(ContractModel):
         assignments = _validate_residue_image_shape(self)
         residues = _validate_residue_image_table(self, assignments)
         _validate_residue_image_summaries(self, assignments, residues)
+        return self
+
+
+class FiniteAbelianRepresentationCount(ContractModel):
+    representation_count: StrictInt = Field(ge=0, le=_MAX_FINITE_GROUP_ORDER)
+    element_count: StrictInt = Field(ge=1, le=_MAX_FINITE_GROUP_ORDER)
+
+
+class FiniteAbelianRepresentationWitness(ContractModel):
+    element: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+    left: tuple[StrictInt, ...] = Field(min_length=1, max_length=_MAX_FINITE_GROUP_RANK)
+    right: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+    other_left: tuple[StrictInt, ...] | None = Field(
+        default=None, min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+    other_right: tuple[StrictInt, ...] | None = Field(
+        default=None, min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+
+
+class FiniteAbelianGroupFactorizationResult(ContractModel):
+    """Complete unique-representation summary for ``G = left + right``."""
+
+    semantics_version: Literal["finite-abelian-group-factorization.v1"]
+    moduli: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+    normalized_left: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_FACTOR_SIZE
+    )
+    normalized_right: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=_MAX_FINITE_GROUP_FACTOR_SIZE
+    )
+    group_order: StrictInt = Field(ge=2, le=_MAX_FINITE_GROUP_ORDER)
+    pair_count: StrictInt = Field(ge=1, le=_MAX_FINITE_GROUP_ORDER)
+    distinct_sum_count: StrictInt = Field(ge=1, le=_MAX_FINITE_GROUP_ORDER)
+    representation_histogram: tuple[FiniteAbelianRepresentationCount, ...] = Field(
+        min_length=1
+    )
+    is_exact_factorization: StrictBool
+    first_missing: tuple[StrictInt, ...] | None = Field(
+        default=None, min_length=1, max_length=_MAX_FINITE_GROUP_RANK
+    )
+    first_duplicate: FiniteAbelianRepresentationWitness | None = None
+
+    @model_validator(mode="after")
+    def bind_factorization_summary(self) -> Self:
+        if self.group_order != math.prod(self.moduli):
+            raise ValueError("group order must equal the product of cyclic moduli")
+        if self.pair_count != len(self.normalized_left) * len(self.normalized_right):
+            raise ValueError("pair count must equal the factor Cartesian-product size")
+        counts = tuple(
+            item.representation_count for item in self.representation_histogram
+        )
+        if counts != tuple(sorted(set(counts))):
+            raise ValueError(
+                "representation histogram counts must be unique and increasing"
+            )
+        if (
+            sum(item.element_count for item in self.representation_histogram)
+            != self.group_order
+        ):
+            raise ValueError("representation histogram must cover the complete group")
+        if (
+            sum(
+                item.representation_count * item.element_count
+                for item in self.representation_histogram
+            )
+            != self.pair_count
+        ):
+            raise ValueError("representation histogram must cover every factor pair")
+        expected = self.pair_count == self.group_order and all(
+            item.representation_count == 1 for item in self.representation_histogram
+        )
+        if self.is_exact_factorization != expected:
+            raise ValueError(
+                "factorization decision does not match the complete histogram"
+            )
+        if self.is_exact_factorization and (self.first_missing or self.first_duplicate):
+            raise ValueError("exact factorizations cannot carry failure witnesses")
         return self
 
 

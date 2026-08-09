@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    FiniteAbelianGroupFactorizationRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
@@ -10,6 +11,32 @@ from jacobian.contracts.number_theory import (
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "finite_abelian_group.exact_factorization.compute",
+        FiniteAbelianGroupFactorizationRequest,
+        "check_finite_abelian_group_exact_factorization",
+        "finite-abelian-group.exact-factorization.stdlib-replay",
+        entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        replay_method="Python standard-library exhaustive group replay",
+        reason=(
+            "operator-authorized checker independently normalizes both factors "
+            "and replays every sum in the complete finite group"
+        ),
+        verification_capability_id="finite_abelian_group.exact_factorization.verify",
+        verification_title="Verify a finite abelian group exact factorization",
+        verification_description=(
+            "Independently verify the complete representation histogram, exact "
+            "factorization decision, and first failure witnesses."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "number-theory",
+            "finite-abelian-group",
+            "factorization",
+            "coset-transversal",
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "integer.compute.prime_factorization",
         FactorizationRequest,

@@ -28,6 +28,10 @@ from jacobian.contracts.number_theory import (
     FactorialValuationRequest,
     FactorialValuationResult,
     FactorizationRequest,
+    FiniteAbelianGroupFactorizationRequest,
+    FiniteAbelianGroupFactorizationResult,
+    FiniteAbelianRepresentationCount,
+    FiniteAbelianRepresentationWitness,
     FloorSquareRootRequest,
     FloorSquareRootResult,
     IntegerPairRequest,
@@ -62,6 +66,7 @@ __all__ = [
     "compute_euler_totient",
     "compute_extended_gcd",
     "compute_factorial_valuation",
+    "compute_finite_abelian_group_factorization",
     "compute_floor_square_root",
     "compute_gcd",
     "compute_jacobi_symbol",
@@ -440,6 +445,77 @@ def compute_modular_polynomial_residue_image(
 ) -> ModularPolynomialResidueImageResult:
     """Enumerate one sparse polynomial over its declared finite residue domains."""
     return _compute_modular_polynomial_residue_image(request, include_table=False)
+
+
+def compute_finite_abelian_group_factorization(
+    request: FiniteAbelianGroupFactorizationRequest,
+) -> FiniteAbelianGroupFactorizationResult:
+    """Exhaustively test unique representation in a product of cyclic groups."""
+    from collections import Counter
+    from itertools import product
+
+    moduli = request.moduli
+
+    def normalize(element: tuple[int, ...]) -> tuple[int, ...]:
+        return tuple(
+            coordinate % modulus
+            for coordinate, modulus in zip(element, moduli, strict=True)
+        )
+
+    left = tuple(normalize(element) for element in request.left)
+    right = tuple(normalize(element) for element in request.right)
+    representations: dict[
+        tuple[int, ...], list[tuple[tuple[int, ...], tuple[int, ...]]]
+    ] = {}
+    for left_element in left:
+        for right_element in right:
+            total = tuple(
+                (left_coordinate + right_coordinate) % modulus
+                for left_coordinate, right_coordinate, modulus in zip(
+                    left_element, right_element, moduli, strict=True
+                )
+            )
+            representations.setdefault(total, []).append((left_element, right_element))
+    group = tuple(product(*(range(modulus) for modulus in moduli)))
+    histogram = Counter(len(representations.get(element, ())) for element in group)
+    first_missing = next(
+        (element for element in group if element not in representations), None
+    )
+    duplicate_element = next(
+        (element for element in group if len(representations.get(element, ())) > 1),
+        None,
+    )
+    duplicate = None
+    if duplicate_element is not None:
+        first, second = representations[duplicate_element][:2]
+        duplicate = FiniteAbelianRepresentationWitness(
+            element=duplicate_element,
+            left=first[0],
+            right=first[1],
+            other_left=second[0],
+            other_right=second[1],
+        )
+    group_order = math.prod(moduli)
+    exact = len(left) * len(right) == group_order and histogram == {1: group_order}
+    return FiniteAbelianGroupFactorizationResult(
+        semantics_version="finite-abelian-group-factorization.v1",
+        moduli=moduli,
+        normalized_left=left,
+        normalized_right=right,
+        group_order=group_order,
+        pair_count=len(left) * len(right),
+        distinct_sum_count=len(representations),
+        representation_histogram=tuple(
+            FiniteAbelianRepresentationCount(
+                representation_count=count,
+                element_count=histogram[count],
+            )
+            for count in sorted(histogram)
+        ),
+        is_exact_factorization=exact,
+        first_missing=None if exact else first_missing,
+        first_duplicate=None if exact else duplicate,
+    )
 
 
 def materialize_modular_polynomial_residue_assignments(

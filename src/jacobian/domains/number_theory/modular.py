@@ -3,6 +3,8 @@
 from jacobian.contracts.number_theory import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
+    FiniteAbelianGroupFactorizationRequest,
+    FiniteAbelianGroupFactorizationResult,
     IntegerValueResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
@@ -21,6 +23,7 @@ from jacobian.domains.number_theory.discrete_logarithm import (
     DISCRETE_LOGARITHM_CAPABILITY,
 )
 from jacobian.domains.number_theory.operations import (
+    compute_finite_abelian_group_factorization,
     compute_jacobi_symbol,
     compute_modular_inverse,
     compute_modular_polynomial_residue_image,
@@ -31,6 +34,45 @@ from jacobian.domains.number_theory.operations import (
 )
 
 MODULAR_CAPABILITIES = (
+    number_theory_operation(
+        "finite_abelian_group.exact_factorization.compute",
+        "Compute a finite abelian group exact factorization",
+        (
+            "Normalize two supplied integer-vector factors in a bounded product "
+            "of cyclic groups and exhaustively decide whether every group element "
+            "has exactly one representation as a left-plus-right sum."
+        ),
+        FiniteAbelianGroupFactorizationRequest,
+        FiniteAbelianGroupFactorizationResult,
+        compute_finite_abelian_group_factorization,
+        "number-theory",
+        "finite-abelian-group",
+        "exact-factorization",
+        "coset-transversal",
+        "unique-representation",
+        "enumeration",
+        relation_id="finite_abelian_group.exact_factorization.relation",
+        invocation_examples=(
+            example(
+                "transversal_mod_2_4",
+                "Verify eight representatives of Z/2 x Z/4.",
+                {
+                    "moduli": [2, 4],
+                    "left": [
+                        [0, 0],
+                        [3, 0],
+                        [0, 2],
+                        [3, 2],
+                        [1, 1],
+                        [4, 1],
+                        [1, 3],
+                        [4, 3],
+                    ],
+                    "right": [[0, 0]],
+                },
+            ),
+        ),
+    ),
     number_theory_operation(
         "number_theory.compute.jacobi_symbol",
         "Compute Jacobi symbol",

@@ -6,7 +6,9 @@ SymPy nor Jacobian code; only passive JSON values cross the checker boundary.
 
 from __future__ import annotations
 
+import math
 import re
+from collections import Counter
 from collections.abc import Callable
 from itertools import product
 from typing import Any
@@ -1066,7 +1068,139 @@ def check_matrix_smith_normal_form(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _finite_group_source(
+    source: dict[str, Any],
+) -> tuple[list[int], list[list[int]], list[list[int]]]:
+    if set(source) != {"moduli", "left", "right"}:
+        raise ValueError("malformed finite-group request")
+    moduli, left, right = source["moduli"], source["left"], source["right"]
+    if not isinstance(moduli, list) or not 1 <= len(moduli) <= 6:
+        raise ValueError("malformed finite-group moduli")
+    if any(
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 2 <= value <= 1_000_000
+        for value in moduli
+    ):
+        raise ValueError("malformed finite-group modulus")
+    if math.prod(moduli) > 4_096:
+        raise ValueError("finite-group order exceeds checker budget")
+    if not _valid_finite_group_factor(
+        left, len(moduli)
+    ) or not _valid_finite_group_factor(right, len(moduli)):
+        raise ValueError("malformed finite-group factor")
+    if len(left) * len(right) > 4_096:
+        raise ValueError("factor product exceeds checker budget")
+    return moduli, left, right
+
+
+def _valid_finite_group_factor(value: object, rank: int) -> bool:
+    if not isinstance(value, list) or not 1 <= len(value) <= 256:
+        return False
+    return all(
+        isinstance(element, list)
+        and len(element) == rank
+        and all(
+            isinstance(coordinate, int)
+            and not isinstance(coordinate, bool)
+            and abs(coordinate) <= 1_000_000
+            for coordinate in element
+        )
+        for element in value
+    )
+
+
+def _finite_group_factorization_expected(
+    moduli: list[int], left_source: list[list[int]], right_source: list[list[int]]
+) -> dict[str, object]:
+    def normalize(element: list[int]) -> tuple[int, ...]:
+        return tuple(
+            coordinate % modulus
+            for coordinate, modulus in zip(element, moduli, strict=True)
+        )
+
+    left = tuple(normalize(element) for element in left_source)
+    right = tuple(normalize(element) for element in right_source)
+    representations: dict[
+        tuple[int, ...], list[tuple[tuple[int, ...], tuple[int, ...]]]
+    ] = {}
+    for left_element in left:
+        for right_element in right:
+            total = tuple(
+                (a + b) % modulus
+                for a, b, modulus in zip(
+                    left_element, right_element, moduli, strict=True
+                )
+            )
+            representations.setdefault(total, []).append((left_element, right_element))
+    group = tuple(product(*(range(modulus) for modulus in moduli)))
+    histogram = Counter(len(representations.get(element, ())) for element in group)
+    missing = next(
+        (element for element in group if element not in representations), None
+    )
+    duplicate_element = next(
+        (element for element in group if len(representations.get(element, ())) > 1),
+        None,
+    )
+    duplicate = _finite_group_duplicate_witness(duplicate_element, representations)
+    order = math.prod(moduli)
+    exact = len(left) * len(right) == order and histogram == {1: order}
+    return {
+        "semantics_version": "finite-abelian-group-factorization.v1",
+        "moduli": moduli,
+        "normalized_left": [list(element) for element in left],
+        "normalized_right": [list(element) for element in right],
+        "group_order": order,
+        "pair_count": len(left) * len(right),
+        "distinct_sum_count": len(representations),
+        "representation_histogram": [
+            {"representation_count": count, "element_count": histogram[count]}
+            for count in sorted(histogram)
+        ],
+        "is_exact_factorization": exact,
+        "first_missing": None if exact else (list(missing) if missing else None),
+        "first_duplicate": None if exact else duplicate,
+    }
+
+
+def _finite_group_duplicate_witness(
+    element: tuple[int, ...] | None,
+    representations: dict[
+        tuple[int, ...], list[tuple[tuple[int, ...], tuple[int, ...]]]
+    ],
+) -> dict[str, object] | None:
+    if element is None:
+        return None
+    first, second = representations[element][:2]
+    return {
+        "element": list(element),
+        "left": list(first[0]),
+        "right": list(first[1]),
+        "other_left": list(second[0]),
+        "other_right": list(second[1]),
+    }
+
+
+def _finite_abelian_group_factorization(
+    source: dict[str, Any], result: dict[str, Any]
+) -> bool:
+    moduli, left, right = _finite_group_source(source)
+    return result == _finite_group_factorization_expected(moduli, left, right)
+
+
+def check_finite_abelian_group_exact_factorization(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="finite_abelian_group.exact_factorization.compute",
+        witness_format="finite-abelian-group.exact-factorization.stdlib-replay",
+        replay=_finite_abelian_group_factorization,
+    )
+
+
 __all__ = [
+    "check_finite_abelian_group_exact_factorization",
     "check_integer_powerful_number",
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",

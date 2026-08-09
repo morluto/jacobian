@@ -11,6 +11,7 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
     CapabilityDiscoveryRequest,
+    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.number_theory import (
@@ -19,6 +20,9 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.exact_domain_checkers import install_exact_domain_verification
+from jacobian.operation_installation import OperationInstaller
+from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
@@ -298,6 +302,117 @@ def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
     assert output["image"] == [0]
     assert output["witnesses"] == [{"residue": 0, "assignment": [18, 1]}]
     assert output["table"] == [{"assignment": [18, 1], "residue": 0}]
+
+
+def _nivat_transversal_payload() -> dict[str, object]:
+    return {
+        "moduli": [2, 4],
+        "left": [
+            [0, 0],
+            [3, 0],
+            [0, 2],
+            [3, 2],
+            [1, 1],
+            [4, 1],
+            [1, 3],
+            [4, 3],
+        ],
+        "right": [[0, 0]],
+    }
+
+
+def test_finite_abelian_transversal_is_exact_and_verified(tmp_path: Path) -> None:
+    with open_domain_services(
+        tmp_path / "finite-group-verified",
+        build_number_theory_bundle(),
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as services:
+        bundle = build_number_theory_bundle()
+        installed = OperationInstaller(
+            services.core.store, services.core.schemas, services.core.artifacts
+        ).install(bundle)
+        adapters, _installation = install_exact_domain_verification(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+            services.installation.verification,
+            services.core.checkers,
+            bundles={"number_theory": (bundle, installed)},
+            authorize=True,
+        )
+        for adapter in adapters:
+            services.installation.register_capability(adapter)
+
+        payload = _nivat_transversal_payload()
+        computed = services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="finite_abelian_group.exact_factorization.compute",
+                input=payload,
+            )
+        )
+        assert computed.execution.status is ExecutionStatus.COMPLETED
+        assert computed.output["result"] == {
+            "semantics_version": "finite-abelian-group-factorization.v1",
+            "moduli": [2, 4],
+            "normalized_left": [
+                [0, 0],
+                [1, 0],
+                [0, 2],
+                [1, 2],
+                [1, 1],
+                [0, 1],
+                [1, 3],
+                [0, 3],
+            ],
+            "normalized_right": [[0, 0]],
+            "group_order": 8,
+            "pair_count": 8,
+            "distinct_sum_count": 8,
+            "representation_histogram": [
+                {"representation_count": 1, "element_count": 8}
+            ],
+            "is_exact_factorization": True,
+            "first_missing": None,
+            "first_duplicate": None,
+        }
+        verified = services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="finite_abelian_group.exact_factorization.verify",
+                mode=CapabilityMode.VERIFY,
+                input={"input": payload, "candidate": computed.output["result"]},
+            )
+        )
+        assert verified.execution.status is ExecutionStatus.COMPLETED
+        assert verified.output["status"] == "VERIFIED"
+
+
+def test_finite_abelian_factorization_returns_failure_witnesses(
+    domain_services: DomainTestServices,
+) -> None:
+    computed = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_abelian_group.exact_factorization.compute",
+            input={
+                "moduli": [4],
+                "left": [[0], [2]],
+                "right": [[0], [2]],
+            },
+        )
+    )
+    result = computed.output["result"]
+    assert result["is_exact_factorization"] is False
+    assert result["first_missing"] == [1]
+    assert result["first_duplicate"] == {
+        "element": [0],
+        "left": [0],
+        "right": [0],
+        "other_left": [2],
+        "other_right": [2],
+    }
+    assert result["representation_histogram"] == [
+        {"representation_count": 0, "element_count": 2},
+        {"representation_count": 2, "element_count": 2},
+    ]
 
 
 @pytest.mark.parametrize(

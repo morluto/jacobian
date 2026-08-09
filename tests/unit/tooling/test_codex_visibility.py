@@ -160,6 +160,7 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
         "matrix.determinant.compute",
         "matrix.rank.compute",
         "polynomial.compute.gcd",
+        "polynomial.expression.normalize",
         "matrix.determinant.verify",
     ):
         assert f"`{capability_id}`" in skill
@@ -199,6 +200,9 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "`matrix.determinant.verify` in `VERIFY` mode" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
+    assert "a writable path or schema alone is not authorization" in skill_flat
+    assert "claim the highest lower permitted assurance" in skill_flat
+    assert "even if Jacobian returned `VERIFIED`" in skill_flat
     for guidance in (
         "Keep decomposition and routing decisions agent-owned",
         "composing already-known supporting operations remains allowed",

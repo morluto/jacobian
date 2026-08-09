@@ -285,10 +285,12 @@ def test_math_find_compacts_relationships_before_ranked_discovery_data(
     assert compacted["match_metadata_truncated"] is False
 
 
+@pytest.mark.parametrize("view", ["CONTRACT", "FULL"])
 def test_math_find_compacts_exact_inspection_relationships(
     tmp_path: Path,
     fresh_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
+    view: str,
 ) -> None:
     from jacobian.adapters.mcp import projections
 
@@ -308,7 +310,7 @@ def test_math_find_compacts_exact_inspection_relationships(
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             result = await client.call_tool(
-                "math.find", {"capability_id": target_id, "view": "CONTRACT"}
+                "math.find", {"capability_id": target_id, "view": view}
             )
 
         assert result.structured_content is not None
@@ -320,6 +322,7 @@ def test_math_find_compacts_exact_inspection_relationships(
         )
         assert structured["related_capabilities_truncated"] is True
         assert structured["truncation_reason"] == "BYTE_LIMIT"
+        assert "related_capabilities" not in structured["capability"]
         assert text_result["related_capabilities_truncated"] is True
         assert text_result["truncation_reason"] == "BYTE_LIMIT"
 

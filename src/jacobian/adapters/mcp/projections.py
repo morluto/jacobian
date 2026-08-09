@@ -320,7 +320,7 @@ def _capability_descriptor_view(
     view: CapabilityDescriptionView,
 ) -> dict[str, Any]:
     if view == "FULL":
-        return descriptor.model_dump(mode="json")
+        return descriptor.model_dump(mode="json", exclude={"related_capabilities"})
     runtime = descriptor.provider_runtime
     if view == "SUMMARY":
         runtime_summary = (

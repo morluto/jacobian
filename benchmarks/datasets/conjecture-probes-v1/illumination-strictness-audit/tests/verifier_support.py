@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import codecs
 import hashlib
 import json
 import math
@@ -263,74 +262,6 @@ def resolve_evidence(
     return target
 
 
-_JSON_WHITESPACE = frozenset(" \t\n\r")
-_JSON_WHITESPACE_CHARS = " \t\n\r"
-
-
-def _drain_stream_tail(stream, decoder) -> None:
-    while True:
-        block = stream.read(65_536)
-        if not block:
-            break
-        tail = decoder.decode(block)
-        if tail and not all(character in _JSON_WHITESPACE for character in tail):
-            raise ValueError("non-whitespace after evidence JSON value")
-    tail = decoder.decode(b"", final=True)
-    if tail and not all(character in _JSON_WHITESPACE for character in tail):
-        raise ValueError("non-whitespace after evidence JSON value")
-
-
-def _compact_json_whitespace(
-    value: str, *, in_string: bool, escaped: bool
-) -> tuple[str, bool, bool]:
-    compacted: list[str] = []
-    for character in value:
-        if in_string:
-            compacted.append(character)
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == '"':
-                in_string = False
-        elif character == '"':
-            in_string = True
-            compacted.append(character)
-        elif character not in _JSON_WHITESPACE:
-            compacted.append(character)
-    return "".join(compacted), in_string, escaped
-
-
-def _read_streaming_json_value(stream) -> Any:
-    """Parse one JSON value without retaining arbitrary whitespace padding."""
-
-    decoder = codecs.getincrementaldecoder("utf-8")()
-    parser = json.JSONDecoder(object_pairs_hook=_reject_duplicate_keys)
-    buffer = ""
-    in_string = False
-    escaped = False
-    while True:
-        block = stream.read(65_536)
-        if block:
-            decoded = decoder.decode(block)
-            compacted, in_string, escaped = _compact_json_whitespace(
-                decoded, in_string=in_string, escaped=escaped
-            )
-            buffer += compacted
-        if buffer[:1] in _JSON_WHITESPACE:
-            buffer = buffer.lstrip(_JSON_WHITESPACE_CHARS)
-        try:
-            value, end = parser.raw_decode(buffer)
-        except json.JSONDecodeError:
-            if not block:
-                raise
-            continue
-        if not all(character in _JSON_WHITESPACE for character in buffer[end:]):
-            raise ValueError("non-whitespace after evidence JSON value")
-        _drain_stream_tail(stream, decoder)
-        return value
-
-
 def read_evidence_json(
     descriptor: object,
     *,
@@ -349,8 +280,10 @@ def read_evidence_json(
     if target is None:
         return None
     try:
-        with target.open("rb") as stream:
-            value = _read_streaming_json_value(stream)
+        value = json.loads(
+            target.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None

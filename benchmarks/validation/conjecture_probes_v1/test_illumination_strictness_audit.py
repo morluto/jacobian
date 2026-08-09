@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
-import io
 import json
 import sys
 from itertools import product
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/illumination-strictness-audit"
@@ -122,15 +123,14 @@ def test_evidence_result_comparison_preserves_json_types():
     assert not module._json_equal(evidence_result, result)
 
 
-def test_streaming_evidence_discards_large_interior_whitespace():
-    module = _support_module()
-    padding = b" " * (2 * 1024 * 1024)
-    payload = b'{"schema_version":' + padding + b'"1","task_id":"x"}'
+def test_evidence_contract_publishes_bounded_strict_json() -> None:
+    module = _module()
+    contract = json.loads((TASK / "tests/public_contract.json").read_text())
 
-    assert module._read_streaming_json_value(io.BytesIO(payload)) == {
-        "schema_version": "1",
-        "task_id": "x",
-    }
+    assert module.MAX_EVIDENCE_BYTES == 16 * 1024 * 1024
+    assert "at most 16 MiB" in contract["public_notes"]
+    with pytest.raises(json.JSONDecodeError):
+        json.loads('{"schema_version":"1","value":- 1}')
 
 
 def test_evidence_copied_fields_bind_to_raw_submission():

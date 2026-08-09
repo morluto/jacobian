@@ -218,3 +218,44 @@ def test_adapter_descriptors_cannot_authorize_verification_relationships(
             service.register(source)
     finally:
         store.close()
+
+
+def test_registration_snapshots_the_validated_descriptor(tmp_path: Path) -> None:
+    target_id = "example.ordinary-computation"
+    relationship = CapabilityCatalogRelationship(
+        capability_id=target_id,
+        kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+        relationship="untrusted late relationship",
+    )
+    safe_descriptor = ComputedAdapter.descriptor
+    unsafe_descriptor = safe_descriptor.model_copy(
+        update={"related_capabilities": (relationship,)}
+    )
+
+    class StatefulDescriptorAdapter:
+        descriptor_reads = 0
+
+        @property
+        def descriptor(self):
+            self.descriptor_reads += 1
+            return safe_descriptor if self.descriptor_reads == 1 else unsafe_descriptor
+
+        def invoke(self, request):
+            return ComputedAdapter().invoke(request)
+
+    adapter = StatefulDescriptorAdapter()
+    store = ArtifactRepository(tmp_path / "state")
+    try:
+        service = CapabilityService(store)
+        service.register(adapter)
+
+        descriptor = next(
+            item
+            for item in service.catalog().capabilities
+            if item.capability_id == safe_descriptor.capability_id
+        )
+
+        assert adapter.descriptor_reads == 1
+        assert descriptor.related_capabilities == ()
+    finally:
+        store.close()

@@ -196,6 +196,7 @@ class CapabilityService(
         self.store = store
         self.policy = policy or CapabilityPolicy()
         self._adapters: dict[str, CapabilityAdapter] = {}
+        self._descriptors: dict[str, CapabilityDescriptor] = {}
         self._catalog_relationships: dict[
             str, dict[str, CapabilityCatalogRelationship]
         ] = {}

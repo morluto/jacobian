@@ -9,6 +9,7 @@ from jacobian.capability_validation import validator
 from jacobian.contracts.capabilities import (
     CapabilityCatalog,
     CapabilityCatalogRelationshipKind,
+    CapabilityDescriptor,
     CapabilityProviderAvailability,
 )
 
@@ -21,6 +22,7 @@ class AdapterLike(Protocol):
 class RegistryOwner(Protocol):
     policy: Any
     _adapters: dict[str, AdapterLike]
+    _descriptors: dict[str, CapabilityDescriptor]
 
 
 class CapabilityRegistryMixin:
@@ -68,14 +70,14 @@ class CapabilityRegistryMixin:
                     f"capability {descriptor.capability_id} invocation example "
                     f"{example.name!r} does not match its input schema"
                 ) from exc
+        self._descriptors[descriptor.capability_id] = descriptor.model_copy(deep=True)
         self._adapters[descriptor.capability_id] = adapter
 
     def catalog(self: Any) -> CapabilityCatalog:
         projected = tuple(
             projected
             for name in sorted(self._adapters)
-            if (projected := self.policy.project(self._adapters[name].descriptor))
-            is not None
+            if (projected := self.policy.project(self._descriptors[name])) is not None
         )
         visible_ids = {descriptor.capability_id for descriptor in projected}
         visible = []

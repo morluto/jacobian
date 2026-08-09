@@ -15,8 +15,6 @@ from verifier_support import (
     workspace_input_is_bound,
 )
 
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
-
 TASK_ID = "jacobian/illumination-strictness-audit"
 SCOPE = "cube-illumination-strictness-audit-v1"
 LIMITATIONS = [
@@ -66,15 +64,19 @@ def _json_equal(left: Any, right: Any) -> bool:
 
 def _evidence_payload_matches_submission(payload: Any, raw: Any) -> bool:
     """Bind every copied evidence field to the submitted JSON value."""
-    return bool(
-        isinstance(payload, dict)
-        and isinstance(raw, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload.get("schema_version") == "1"
-        and _json_equal(payload.get("task_id"), raw.get("task_id"))
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and _json_equal(payload.get("limitations"), raw.get("limitations"))
-    )
+    try:
+        return bool(
+            isinstance(payload, dict)
+            and isinstance(raw, dict)
+            and set(payload)
+            == {"schema_version", "task_id", "result", "limitations"}
+            and payload.get("schema_version") == "1"
+            and _json_equal(payload.get("task_id"), raw.get("task_id"))
+            and _json_equal(payload.get("result"), raw.get("result"))
+            and _json_equal(payload.get("limitations"), raw.get("limitations"))
+        )
+    except RecursionError:
+        return False
 
 
 def mathematics(result):
@@ -141,15 +143,13 @@ def main():
     )
     evidence_ok = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(
-            raw.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES
-        )
+        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
             raw["evidence"][0],
             expected_path="evidence/answer.json",
-            max_bytes=MAX_EVIDENCE_BYTES,
+            max_bytes=None,
         )
         if evidence_ok
         else None

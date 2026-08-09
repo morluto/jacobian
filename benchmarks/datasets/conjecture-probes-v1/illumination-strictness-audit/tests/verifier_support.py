@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import json
 import math
@@ -262,6 +263,95 @@ def resolve_evidence(
     return target
 
 
+_JSON_WHITESPACE = frozenset(" \t\n\r")
+_JSON_STRUCTURAL = frozenset("{}[],:")
+
+
+def _drain_stream_tail(stream, decoder) -> None:
+    while block := stream.read(65_536):
+        tail = decoder.decode(block)
+        if any(character not in _JSON_WHITESPACE for character in tail):
+            raise ValueError("non-whitespace after evidence JSON value")
+    tail = decoder.decode(b"", final=True)
+    if any(character not in _JSON_WHITESPACE for character in tail):
+        raise ValueError("non-whitespace after evidence JSON value")
+
+
+def _compact_json_chunk(
+    value: str,
+    *,
+    in_string: bool,
+    escaped: bool,
+    pending_space: bool,
+    previous: str | None,
+) -> tuple[str, bool, bool, bool, str | None]:
+    """Discard legal padding while preserving invalid token-splitting spaces."""
+    compacted: list[str] = []
+    for character in value:
+        if in_string:
+            compacted.append(character)
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+                previous = character
+            continue
+        if character in _JSON_WHITESPACE:
+            pending_space = True
+            continue
+        if (
+            pending_space
+            and previous is not None
+            and previous not in _JSON_STRUCTURAL
+            and character not in _JSON_STRUCTURAL
+        ):
+            compacted.append(" ")
+        pending_space = False
+        compacted.append(character)
+        previous = character
+        if character == '"':
+            in_string = True
+    return "".join(compacted), in_string, escaped, pending_space, previous
+
+
+def _read_streaming_json_value(stream) -> Any:
+    """Parse uncapped JSON padding with bounded semantic-content memory."""
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    parser = json.JSONDecoder(object_pairs_hook=_reject_duplicate_keys)
+    buffer = ""
+    in_string = False
+    escaped = False
+    pending_space = False
+    previous: str | None = None
+    while True:
+        block = stream.read(65_536)
+        if block:
+            compacted, in_string, escaped, pending_space, previous = (
+                _compact_json_chunk(
+                    decoder.decode(block),
+                    in_string=in_string,
+                    escaped=escaped,
+                    pending_space=pending_space,
+                    previous=previous,
+                )
+            )
+            buffer += compacted
+            if len(buffer) > MAX_SUBMISSION_BYTES:
+                raise ValueError("evidence semantic content exceeds submission bound")
+        try:
+            parsed, end = parser.raw_decode(buffer)
+        except json.JSONDecodeError:
+            if not block:
+                raise
+            continue
+        if buffer[end:]:
+            raise ValueError("non-whitespace after evidence JSON value")
+        _drain_stream_tail(stream, decoder)
+        return parsed
+
+
 def read_evidence_json(
     descriptor: object,
     *,
@@ -280,10 +370,8 @@ def read_evidence_json(
     if target is None:
         return None
     try:
-        value = json.loads(
-            target.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-        )
+        with target.open("rb") as stream:
+            value = _read_streaming_json_value(stream)
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None

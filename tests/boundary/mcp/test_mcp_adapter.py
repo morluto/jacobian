@@ -338,6 +338,57 @@ def test_math_find_compacts_exact_inspection_relationships(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("view", ["CONTRACT", "FULL"])
+def test_math_find_does_not_advertise_a_whole_response_limit_for_large_contracts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    view: str,
+) -> None:
+    from jacobian.adapters.mcp import projections, tools
+
+    original_view = projections._capability_descriptor_view
+
+    def oversized_view(*args, **kwargs):
+        projected = original_view(*args, **kwargs)
+        if kwargs["view"] == view:
+            projected["input_schema"] = {
+                "type": "object",
+                "x-contract-padding": "x"
+                * projections.CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+            }
+        return projected
+
+    monkeypatch.setattr(tools, "_capability_descriptor_view", oversized_view)
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "polynomial.integer.compute.gcd",
+                    "view": view,
+                },
+            )
+
+        assert result.structured_content is not None
+        structured = result.structured_content
+        assert structured["view"] == view
+        assert structured["capability"]["input_schema"]["x-contract-padding"]
+        assert "response_byte_limit" not in structured
+        assert (
+            len(
+                projections._mcp_text_json_bytes(
+                    structured.get("related_capabilities", [])
+                )
+            )
+            <= structured["related_capabilities_byte_limit"]
+        )
+
+    asyncio.run(scenario())
+
+
 def test_mcp_exposes_only_math_tools_with_read_only_resources(
     tmp_path: Path,
 ) -> None:

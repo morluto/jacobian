@@ -1,9 +1,11 @@
 ---
 name: jacobian-math
-description: Use Jacobian for exact mathematics, symbolic computation, structural analysis, counterexamples, bounded search, formal inspection, and independent verification. Trigger on relevant math tasks even when the user does not name Jacobian.
+description: Use Jacobian for exact mathematics, matrix determinants, symbolic computation, structural analysis, counterexamples, bounded search, and independent verification. Trigger on relevant math tasks even when the user does not name Jacobian.
 ---
 
 # Jacobian Math
+
+<!-- Managed by Jacobian's Codex integration. -->
 
 In Codex Code Mode, call the nested methods
 `tools.mcp__jacobian__math_find(...)` and
@@ -38,7 +40,7 @@ stable built-in contracts; replace examples but preserve JSON types:
 
 For other outcomes or unfamiliar payloads, use `math.find` with a specific
 plain-language outcome and implied domain or mode; no capability ID is required.
-Use low `limit` values. For a selected operation's schema, call
+For a selected operation's schema, call
 `math.find({"capability_id":"<exact-id>","view":"CONTRACT"})`; never send
 `mode: "CONTRACT"` to `math.run` or put `CONTRACT` in a query. A card's
 `invocation_example`, or required top-level fields, may be enough.
@@ -63,7 +65,7 @@ task-permitted assurance. Verification is bound to the exact checked claim: do
 not transfer `VERIFIED` from an input, premise, factorization, or related
 artifact to a model-derived conclusion, which needs its own checker-bound record.
 Before each run, compare every payload component with the intended object.
-Afterward, compare echoed scope parameters or its bound digest/URI with that
+Then compare echoed scope parameters or its bound digest/URI with that
 same input. If either check is missing or mismatched, do not apply the output.
 Before concluding, account for every exact outcome in the final comparison. A
 `VERIFIED` sub-result does not validate another result or their comparison; use

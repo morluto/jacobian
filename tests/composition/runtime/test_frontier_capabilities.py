@@ -302,7 +302,6 @@ def test_graded_jacobian_syzygy_handles_a_zero_partial_derivative(
             input=input_payload,
         )
     )
-
     assert computed.execution.status is ExecutionStatus.COMPLETED
     result = computed.output["result"]
     assert result["first_syzygy_degree"] == 0
@@ -325,6 +324,42 @@ def test_graded_jacobian_syzygy_handles_a_zero_partial_derivative(
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
+
+
+def test_syzygy_checker_reports_oversized_candidate_validation_cleanly(
+    frontier_services: DomainTestServices,
+) -> None:
+    input_payload = {
+        "polynomial": _polynomial([(1, (1, 1, 1))]),
+        "max_degree": 1,
+    }
+    computed = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+            input=input_payload,
+        )
+    )
+    malformed = deepcopy(computed.output["result"])
+    malformed_zero_term = {
+        "coefficient": _q(0),
+        "exponents": [0],
+    }
+    malformed["kernel_witness"]["multipliers"][0]["polynomial"]["terms"].extend(
+        deepcopy(malformed_zero_term) for _ in range(64)
+    )
+
+    checked = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.jacobian_syzygy.minimum_degree.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": input_payload, "candidate": malformed},
+        )
+    )
+
+    assert checked.execution.status is ExecutionStatus.ERROR
+    assert [item.code for item in checked.diagnostics] == ["INVALID_EXACT_DOMAIN_INPUT"]
+    assert len(checked.diagnostics[0].message) <= 1024
+    assert checked.diagnostics[0].message.endswith("... [validation detail truncated]")
 
 
 @pytest.mark.parametrize(

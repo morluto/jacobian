@@ -666,8 +666,9 @@ def _modular_identity_terms(
     *,
     variable_count: int,
     modulus: int,
+    max_terms: int = _MAX_RESIDUE_TERMS,
 ) -> list[dict[str, object]]:
-    if not isinstance(raw_terms, list) or len(raw_terms) > _MAX_RESIDUE_TERMS:
+    if not isinstance(raw_terms, list) or len(raw_terms) > max_terms:
         raise ValueError("modular-polynomial terms are malformed")
     coefficients: dict[tuple[int, ...], fmpz] = {}
     flint_modulus = fmpz(modulus)
@@ -733,7 +734,10 @@ def _modular_polynomial_identity(
             }
         )
     residual = _modular_identity_terms(
-        signed_terms, variable_count=len(variables), modulus=modulus
+        signed_terms,
+        variable_count=len(variables),
+        modulus=modulus,
+        max_terms=2 * _MAX_RESIDUE_TERMS,
     )
     return result == {
         "semantics_version": "modular-polynomial-identity.v1",

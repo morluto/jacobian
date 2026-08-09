@@ -94,6 +94,36 @@ def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
     assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
+def test_modular_polynomial_identity_replays_both_declared_term_budgets(
+    authorized_complete_runtime,
+) -> None:
+    payload = {
+        "modulus": 101,
+        "variables": ["x"],
+        "left": [
+            {"coefficient": "1", "exponents": [index]} for index in range(33)
+        ],
+        "right": [
+            {"coefficient": "1", "exponents": [index]} for index in range(32)
+        ],
+    }
+    computed = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_identity.compute", input=payload
+        )
+    )
+    verified = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+
+
 @pytest.mark.parametrize("value", ("360", "-360", "1", "-1", "101"))
 def test_prime_factorization_result_uses_independent_python_flint_replay(
     authorized_complete_runtime,

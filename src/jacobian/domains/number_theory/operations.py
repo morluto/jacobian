@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 from typing import Literal, cast
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.number_theory import (
     ArithmeticFunctionRequest,
     BooleanResult,
@@ -456,7 +457,13 @@ def compute_modular_polynomial_identity(
         (
             *request.left,
             *(
-                term.model_copy(update={"coefficient": str(-int(term.coefficient))})
+                term.model_copy(
+                    update={
+                        "coefficient": format_canonical_integer(
+                            -parse_canonical_integer(term.coefficient)
+                        )
+                    }
+                )
                 for term in request.right
             ),
         ),
@@ -481,7 +488,8 @@ def _normalize_modular_terms(
     coefficients: dict[tuple[int, ...], int] = {}
     for term in terms:
         coefficients[term.exponents] = (
-            coefficients.get(term.exponents, 0) + int(term.coefficient)
+            coefficients.get(term.exponents, 0)
+            + parse_canonical_integer(term.coefficient)
         ) % modulus
     return tuple(
         NormalizedModularPolynomialTerm(coefficient=coefficient, exponents=exponents)

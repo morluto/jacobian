@@ -4,7 +4,10 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.capabilities import (
+    CapabilityDiscoveryRequest,
+    CapabilityRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 
@@ -29,3 +32,18 @@ def test_bernoulli_number_has_exact_rational_value(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == {"value": {"num": "-1", "den": "30"}}
+
+
+def test_binomial_is_discoverable_from_number_theory_language(
+    domain_services: DomainTestServices,
+) -> None:
+    discovered = domain_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="compute exact binomial coefficients for large integers",
+            domain="number_theory",
+            limit=5,
+        )
+    )
+
+    assert discovered.matches[0].capability_id == "combinatorics.compute.binomial"
+    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"

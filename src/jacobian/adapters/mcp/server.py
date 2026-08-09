@@ -95,6 +95,11 @@ class JacobianMCPServer(MCPServer[AppState]):
             argument_model.model_config["extra"] = "forbid"
             argument_model.model_rebuild(force=True)
             tool.parameters = argument_model.model_json_schema(by_alias=True)
+            if tool.output_schema is not None and "type" not in tool.output_schema:
+                # MCP 2 validates Tool.outputSchema as an object schema on the HTTP
+                # boundary. Pydantic RootModel unions emit a root ``oneOf`` without
+                # the otherwise implied object type, so make it explicit.
+                tool.output_schema = {"type": "object", **tool.output_schema}
 
 
 class JacobianCoreExtension(Extension):

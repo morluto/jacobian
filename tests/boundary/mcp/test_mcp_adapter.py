@@ -229,6 +229,12 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 "cursor",
                 "view",
             }
+            input_kind_description = describe_schema["properties"]["input_kind"][
+                "description"
+            ]
+            assert "Omit this filter" in input_kind_description
+            assert "STRUCTURED_REQUEST" in input_kind_description
+            assert "FORMAL_PROPOSITION" in input_kind_description
             assert set(tools["math.run"].input_schema["properties"]) == {
                 "capability_id",
                 "payload",

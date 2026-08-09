@@ -304,7 +304,15 @@ async def capability_describe(
     ] = None,
     input_kind: Annotated[
         CapabilityInputKind | None,
-        Field(description=("Input boundary used to reject incompatible routes.")),
+        Field(
+            description=(
+                "Optional input boundary used to reject incompatible routes. Omit "
+                "this filter when searching by mathematical intent. Use "
+                "STRUCTURED_REQUEST for JSON payloads that encode an exact claim; "
+                "FORMAL_PROPOSITION is reserved for operations that consume a "
+                "formal-language proposition directly."
+            )
+        ),
     ] = None,
     artifact_type: Annotated[
         str | None,

@@ -196,6 +196,7 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "text(r.structuredContent ?? r)" in skill
     assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
     assert 'never send `mode: "CONTRACT"` to `math.run`' in skill_flat
+    assert "`matrix.determinant.verify` in `VERIFY` mode" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
     for guidance in (

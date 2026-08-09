@@ -31,7 +31,7 @@ Call `math.run` directly for these stable contracts, preserving JSON types:
 - `polynomial.compute.gcd` in `EXPLORE` mode: payload keys are `left` and
   `right`; each value has shape
   `{"polynomial_schema_version":"1","domain":"QQ","variables":["x"],"polynomial":{"terms":[{"coefficient":{"num":"1","den":"1"},"exponents":[2]}]}}`.
-- `matrix.determinant.verify` for an independent determinant check:
+- `matrix.determinant.verify` in `VERIFY` mode for an independent check:
   `{"determinant_uri":"<determinant_uri from compute output>"}`.
 
 For other outcomes, use `math.find` with a specific plain-language outcome;

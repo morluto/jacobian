@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
+from math import comb
 from typing import Any, Literal
 
 from pydantic import ValidationError
@@ -967,6 +968,41 @@ class ExactComputedVerificationAdapter:
         return input_artifact, result_artifact, semantics_artifact
 
 
+def _syzygy_checker_supports(payload: dict[str, Any]) -> bool:
+    polynomial = payload.get("polynomial")
+    factors = payload.get("linear_factors")
+    maximum_degree = payload.get("max_degree")
+    if type(maximum_degree) is not int:
+        return False
+    if isinstance(polynomial, dict):
+        body = polynomial.get("polynomial")
+        terms = body.get("terms") if isinstance(body, dict) else None
+        if not isinstance(terms, list):
+            return False
+        homogeneous_degree = max(
+            (
+                sum(term.get("exponents", ()))
+                for term in terms
+                if isinstance(term, dict)
+                and isinstance(term.get("exponents"), list)
+                and all(type(value) is int for value in term["exponents"])
+            ),
+            default=0,
+        )
+        term_count = len(terms)
+    elif isinstance(factors, list):
+        homogeneous_degree = len(factors)
+        term_count = comb(homogeneous_degree + 2, 2)
+    else:
+        return False
+    replay_cells = sum(
+        (3 * ((degree + 2) * (degree + 1) // 2))
+        * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)
+        for degree in range(maximum_degree + 1)
+    )
+    return term_count * replay_cells <= 1_000_000
+
+
 def _checker_supports(operation_id: str, payload: object) -> bool:
     if operation_id in {
         "graph.hamiltonian_path.decide",
@@ -993,30 +1029,7 @@ def _checker_supports(operation_id: str, payload: object) -> bool:
         "polynomial.jacobian_syzygy.minimum_degree.compute",
         "polynomial.jacobian_syzygy.coefficients.materialize",
     }:
-        polynomial = payload.get("polynomial")
-        maximum_degree = payload.get("max_degree")
-        if not isinstance(polynomial, dict) or type(maximum_degree) is not int:
-            return False
-        body = polynomial.get("polynomial")
-        terms = body.get("terms") if isinstance(body, dict) else None
-        if not isinstance(terms, list):
-            return True
-        homogeneous_degree = max(
-            (
-                sum(term.get("exponents", ()))
-                for term in terms
-                if isinstance(term, dict)
-                and isinstance(term.get("exponents"), list)
-                and all(type(value) is int for value in term["exponents"])
-            ),
-            default=0,
-        )
-        replay_cells = sum(
-            (3 * ((degree + 2) * (degree + 1) // 2))
-            * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)
-            for degree in range(maximum_degree + 1)
-        )
-        return len(terms) * replay_cells <= 1_000_000
+        return _syzygy_checker_supports(payload)
     polynomial_fields = {
         "polynomial.compute.gcd": ("left", "right"),
         "polynomial.compute.resultant": ("left", "right"),

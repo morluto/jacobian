@@ -78,6 +78,28 @@ def _installed(
     )
 
 
+def test_syzygy_checker_support_accepts_bounded_linear_factor_input() -> None:
+    payload = {
+        "linear_factors": [{"coefficients": ["1", "0", "1"]}] * 9,
+        "max_degree": 5,
+    }
+
+    assert exact_domain_checkers._checker_supports(
+        "polynomial.jacobian_syzygy.minimum_degree.compute", payload
+    )
+
+
+def test_syzygy_checker_support_rejects_excessive_linear_factor_replay() -> None:
+    payload = {
+        "linear_factors": [{"coefficients": ["1", "0", "1"]}] * 64,
+        "max_degree": 64,
+    }
+
+    assert not exact_domain_checkers._checker_supports(
+        "polynomial.jacobian_syzygy.minimum_degree.compute", payload
+    )
+
+
 def install_exact_domain_checkers(
     registry: CheckerRegistry,
     *,

@@ -1191,12 +1191,25 @@ def _finite_abelian_group_factorization(
 def check_finite_abelian_group_exact_factorization(
     request: dict[str, Any],
 ) -> dict[str, Any]:
-    return _run(
-        request,
-        operation_id="finite_abelian_group.exact_factorization.compute",
-        witness_format="finite-abelian-group.exact-factorization.stdlib-replay",
-        replay=_finite_abelian_group_factorization,
-    )
+    operation_id = "finite_abelian_group.exact_factorization.compute"
+    try:
+        source, result = _bound_request(
+            request,
+            operation_id=operation_id,
+            witness_format="finite-abelian-group.exact-factorization.stdlib-replay",
+        )
+        if not _finite_abelian_group_factorization(source, result):
+            return _reject_exact_integer(
+                "declared result does not match independent exhaustive finite-group "
+                "replay"
+            )
+        return _accept_exhaustive_integer(
+            f"independent exhaustive integer replay accepted {operation_id}"
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return _reject_exact_integer(
+            "malformed, unsupported, or mismatched checker request"
+        )
 
 
 __all__ = [

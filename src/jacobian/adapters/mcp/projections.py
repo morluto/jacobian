@@ -251,8 +251,8 @@ def _compact_discovery_relationships(
             return
 
 
-def _compact_inspection_relationships(response: dict[str, Any]) -> None:
-    """Bound exact inspection without discarding its authoritative contract."""
+def _bound_capability_inspection(response: dict[str, Any]) -> None:
+    """Bound inspection, falling back to the canonical catalog when necessary."""
 
     related = response.get("related_capabilities")
     while (
@@ -263,6 +263,27 @@ def _compact_inspection_relationships(response: dict[str, Any]) -> None:
         related.pop()
         response["related_capabilities_truncated"] = True
         response["truncation_reason"] = "BYTE_LIMIT"
+    if len(_mcp_text_json_bytes(response)) <= CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT:
+        return
+
+    response.clear()
+    response.update(
+        {
+            "kind": "error",
+            "error": {
+                "code": "CAPABILITY_INSPECTION_TOO_LARGE",
+                "stage": "capability_inspection",
+                "message": (
+                    "The requested capability inspection exceeds the bounded "
+                    "math.find response size."
+                ),
+                "hint": (
+                    "Read capability://catalog for the complete descriptor. A "
+                    "SUMMARY view may fit when CONTRACT or FULL was requested."
+                ),
+            },
+        }
+    )
 
 
 def _discovery_recovery_paths(

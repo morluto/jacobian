@@ -17,10 +17,10 @@ from jacobian.adapters.mcp.constants import (
 )
 from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.adapters.mcp.projections import (
+    _bound_capability_inspection,
     _capability_descriptor_view,
     _capability_discovery_response,
     _capability_inspection_extensions,
-    _compact_inspection_relationships,
 )
 from jacobian.adapters.mcp.tooling import (
     AgentRecoveryError,
@@ -477,7 +477,6 @@ async def capability_describe(
             response.update(
                 _capability_inspection_extensions(capability_id, descriptors)
             )
-            _compact_inspection_relationships(response)
         if (
             view != "SUMMARY"
             and capability_id == "lean.check"
@@ -493,6 +492,7 @@ async def capability_describe(
                     else {"status": "UNAVAILABLE", "detail": None}
                 ),
             }
+        _bound_capability_inspection(response)
         return _find_result(response)
 
 

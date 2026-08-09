@@ -15,6 +15,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.number_theory import (
+    FiniteAbelianGroupFactorizationResult,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
 )
@@ -413,6 +414,72 @@ def test_finite_abelian_factorization_returns_failure_witnesses(
         {"representation_count": 0, "element_count": 2},
         {"representation_count": 2, "element_count": 2},
     ]
+
+
+def _nonfactorization_result() -> dict[str, object]:
+    return {
+        "semantics_version": "finite-abelian-group-factorization.v1",
+        "moduli": [4],
+        "normalized_left": [[0], [2]],
+        "normalized_right": [[0], [2]],
+        "group_order": 4,
+        "pair_count": 4,
+        "distinct_sum_count": 2,
+        "representation_histogram": [
+            {"representation_count": 0, "element_count": 2},
+            {"representation_count": 2, "element_count": 2},
+        ],
+        "is_exact_factorization": False,
+        "first_missing": [1],
+        "first_duplicate": {
+            "element": [0],
+            "left": [0],
+            "right": [0],
+            "other_left": [2],
+            "other_right": [2],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda result: result.update(distinct_sum_count=3), "distinct sum count"),
+        (lambda result: result.update(first_missing=None), "missing witness presence"),
+        (
+            lambda result: result["normalized_left"].__setitem__(0, [4]),
+            "canonical residues",
+        ),
+        (
+            lambda result: result["first_duplicate"].update(other_right=None),
+            "two complete representations",
+        ),
+        (
+            lambda result: result["first_duplicate"].update(other_left=[1]),
+            "must produce its element",
+        ),
+    ],
+)
+def test_finite_abelian_result_rejects_inconsistent_bounded_summaries(
+    mutation,
+    message: str,
+) -> None:
+    result = _nonfactorization_result()
+    mutation(result)
+
+    with pytest.raises(ValidationError, match=message):
+        FiniteAbelianGroupFactorizationResult.model_validate(result)
+
+
+def test_finite_abelian_request_rejects_duplicate_normalized_factor_elements() -> None:
+    with pytest.raises(ValidationError, match="distinct after normalization"):
+        number_theory_contracts.FiniteAbelianGroupFactorizationRequest.model_validate(
+            {
+                "moduli": [4],
+                "left": [[0], [4]],
+                "right": [[0]],
+            }
+        )
 
 
 @pytest.mark.parametrize(

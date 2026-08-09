@@ -331,6 +331,18 @@ class FiniteAbelianGroupFactorizationRequest(ContractModel):
             for coordinate in element
         ):
             raise ValueError("factor coordinates exceed the input bound")
+        normalized_factors = tuple(
+            tuple(
+                tuple(
+                    coordinate % modulus
+                    for coordinate, modulus in zip(element, self.moduli, strict=True)
+                )
+                for element in factor
+            )
+            for factor in (self.left, self.right)
+        )
+        if any(len(factor) != len(set(factor)) for factor in normalized_factors):
+            raise ValueError("factor elements must be distinct after normalization")
         return self
 
 
@@ -601,6 +613,12 @@ class FiniteAbelianRepresentationWitness(ContractModel):
         default=None, min_length=1, max_length=_MAX_FINITE_GROUP_RANK
     )
 
+    @model_validator(mode="after")
+    def require_two_representations(self) -> Self:
+        if self.other_left is None or self.other_right is None:
+            raise ValueError("duplicate witnesses require two complete representations")
+        return self
+
 
 class FiniteAbelianGroupFactorizationResult(ContractModel):
     """Complete unique-representation summary for ``G = left + right``."""
@@ -619,7 +637,7 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
     pair_count: StrictInt = Field(ge=1, le=_MAX_FINITE_GROUP_ORDER)
     distinct_sum_count: StrictInt = Field(ge=1, le=_MAX_FINITE_GROUP_ORDER)
     representation_histogram: tuple[FiniteAbelianRepresentationCount, ...] = Field(
-        min_length=1
+        min_length=1, max_length=_MAX_FINITE_GROUP_ORDER
     )
     is_exact_factorization: StrictBool
     first_missing: tuple[StrictInt, ...] | None = Field(
@@ -629,10 +647,37 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
 
     @model_validator(mode="after")
     def bind_factorization_summary(self) -> Self:
+        self._require_bounded_group_shape()
+        self._require_histogram_invariants()
+        self._require_witness_invariants()
+        self._require_complete_replay()
+        return self
+
+    def _require_bounded_group_shape(self) -> None:
+        if any(modulus < 2 or modulus > 1_000_000 for modulus in self.moduli):
+            raise ValueError("cyclic moduli must be between 2 and 1,000,000")
         if self.group_order != math.prod(self.moduli):
             raise ValueError("group order must equal the product of cyclic moduli")
+        factors = (self.normalized_left, self.normalized_right)
+        if any(
+            len(element) != len(self.moduli) for factor in factors for element in factor
+        ):
+            raise ValueError(
+                "every normalized factor element must match the group rank"
+            )
+        if any(
+            coordinate < 0 or coordinate >= modulus
+            for factor in factors
+            for element in factor
+            for coordinate, modulus in zip(element, self.moduli, strict=True)
+        ):
+            raise ValueError("normalized factor coordinates must be canonical residues")
+        if any(len(factor) != len(set(factor)) for factor in factors):
+            raise ValueError("normalized factor elements must be unique")
         if self.pair_count != len(self.normalized_left) * len(self.normalized_right):
             raise ValueError("pair count must equal the factor Cartesian-product size")
+
+    def _require_histogram_invariants(self) -> None:
         counts = tuple(
             item.representation_count for item in self.representation_histogram
         )
@@ -653,6 +698,15 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
             != self.pair_count
         ):
             raise ValueError("representation histogram must cover every factor pair")
+        distinct_sum_count = sum(
+            item.element_count
+            for item in self.representation_histogram
+            if item.representation_count > 0
+        )
+        if self.distinct_sum_count != distinct_sum_count:
+            raise ValueError(
+                "distinct sum count must match the positive histogram entries"
+            )
         expected = self.pair_count == self.group_order and all(
             item.representation_count == 1 for item in self.representation_histogram
         )
@@ -660,9 +714,107 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
             raise ValueError(
                 "factorization decision does not match the complete histogram"
             )
+
+    def _require_witness_invariants(self) -> None:
         if self.is_exact_factorization and (self.first_missing or self.first_duplicate):
             raise ValueError("exact factorizations cannot carry failure witnesses")
-        return self
+        has_missing = any(
+            item.representation_count == 0 for item in self.representation_histogram
+        )
+        has_duplicate = any(
+            item.representation_count > 1 for item in self.representation_histogram
+        )
+        if (self.first_missing is not None) != has_missing:
+            raise ValueError("missing witness presence must match the histogram")
+        if (self.first_duplicate is not None) != has_duplicate:
+            raise ValueError("duplicate witness presence must match the histogram")
+        if self.first_missing is not None:
+            self._require_canonical_group_element(
+                self.first_missing, field="missing witness"
+            )
+        if self.first_duplicate is not None:
+            duplicate = self.first_duplicate
+            for field, element in (
+                ("duplicate element", duplicate.element),
+                ("duplicate left", duplicate.left),
+                ("duplicate right", duplicate.right),
+                ("duplicate other_left", duplicate.other_left),
+                ("duplicate other_right", duplicate.other_right),
+            ):
+                assert element is not None
+                self._require_canonical_group_element(element, field=field)
+            first_pair = (duplicate.left, duplicate.right)
+            second_pair = (duplicate.other_left, duplicate.other_right)
+            if first_pair == second_pair:
+                raise ValueError("duplicate witness representations must be distinct")
+            for left, right in (first_pair, second_pair):
+                assert left is not None and right is not None
+                total = tuple(
+                    (left_coordinate + right_coordinate) % modulus
+                    for left_coordinate, right_coordinate, modulus in zip(
+                        left, right, self.moduli, strict=True
+                    )
+                )
+                if total != duplicate.element:
+                    raise ValueError(
+                        "duplicate witness representations must produce its element"
+                    )
+
+    def _require_canonical_group_element(
+        self, element: tuple[int, ...], *, field: str
+    ) -> None:
+        if len(element) != len(self.moduli) or any(
+            coordinate < 0 or coordinate >= modulus
+            for coordinate, modulus in zip(element, self.moduli, strict=True)
+        ):
+            raise ValueError(f"{field} must be a canonical group element")
+
+    def _require_complete_replay(self) -> None:
+        representations: dict[
+            tuple[int, ...], list[tuple[tuple[int, ...], tuple[int, ...]]]
+        ] = {}
+        for left in self.normalized_left:
+            for right in self.normalized_right:
+                total = tuple(
+                    (left_coordinate + right_coordinate) % modulus
+                    for left_coordinate, right_coordinate, modulus in zip(
+                        left, right, self.moduli, strict=True
+                    )
+                )
+                representations.setdefault(total, []).append((left, right))
+        group = tuple(product(*(range(modulus) for modulus in self.moduli)))
+        expected_histogram = Counter(
+            len(representations.get(element, ())) for element in group
+        )
+        actual_histogram = {
+            item.representation_count: item.element_count
+            for item in self.representation_histogram
+        }
+        if actual_histogram != dict(expected_histogram):
+            raise ValueError("representation histogram must match exact replay")
+        if self.distinct_sum_count != len(representations):
+            raise ValueError("distinct sum count must match exact replay")
+        expected_missing = next(
+            (element for element in group if element not in representations), None
+        )
+        if self.first_missing != expected_missing:
+            raise ValueError("missing witness must be the first missing group element")
+        duplicate_element = next(
+            (element for element in group if len(representations.get(element, ())) > 1),
+            None,
+        )
+        expected_duplicate = None
+        if duplicate_element is not None:
+            first, second = representations[duplicate_element][:2]
+            expected_duplicate = FiniteAbelianRepresentationWitness(
+                element=duplicate_element,
+                left=first[0],
+                right=first[1],
+                other_left=second[0],
+                other_right=second[1],
+            )
+        if self.first_duplicate != expected_duplicate:
+            raise ValueError("duplicate witness must match the first exact replay")
 
 
 def _evaluate_normalized_modular_polynomial(

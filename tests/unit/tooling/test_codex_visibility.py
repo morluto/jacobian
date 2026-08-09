@@ -201,16 +201,15 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     for guidance in (
         "Keep decomposition and routing decisions agent-owned",
         "composing already-known supporting operations remains allowed",
-        "follow those fields",
+        "Follow exposed recovery paths",
         "retry within the task resource bounds",
         "continue with other installed routes",
         "completeness, and open obligations",
-        "compare every payload component with the intended object",
-        "compare echoed scope parameters or its bound digest/URI",
-        "If either check is missing or mismatched, do not apply the output",
-        "account for every exact outcome in the final comparison",
-        "does not validate another result or their comparison",
-        "compare returned values",
+        "check payload fields against the intended object",
+        "compare it with the submitted input",
+        "does not replace server validation or evidence binding",
+        "Account for each requested outcome in the final comparison",
+        "does not verify another result or their comparison",
     ):
         assert guidance in skill_flat
 

@@ -13,8 +13,12 @@ from collections.abc import Callable
 from itertools import product
 from typing import Any
 
-import flint
-from flint import fmpq, fmpq_mat, fmpq_poly, fmpz, fmpz_mat
+try:
+    import flint
+    from flint import fmpq, fmpq_mat, fmpq_poly, fmpz, fmpz_mat
+except ModuleNotFoundError:  # The standard-library finite-field replay needs no FLINT.
+    flint = None  # type: ignore[assignment]
+    fmpq = fmpq_mat = fmpq_poly = fmpz = fmpz_mat = None  # type: ignore[assignment]
 
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
 

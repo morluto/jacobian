@@ -114,6 +114,11 @@ class _InstalledDeclaration:
 
 
 def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
+    if (
+        declaration.entrypoint_module == "jacobian_checkers.exact_domain_operations"
+        and declaration.function == "check_finite_field_polynomial_map_fibers"
+    ):
+        return "finite-field"
     if declaration.entrypoint_module == "jacobian_checkers.linear":
         return {
             "check_rational_solution": "linear-solution",
@@ -138,6 +143,20 @@ def install_exact_domain_checkers(
     installer = CheckerInstaller(checkers)
     provider_runtimes = {
         "python-flint": exact_domain_checker_provider_runtime(),
+        "finite-field": source_provider_runtime(
+            "jacobian.finite-field-checker",
+            version="1",
+            entrypoint=(
+                "jacobian_checkers.exact_domain_operations:"
+                "check_finite_field_polynomial_map_fibers"
+            ),
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=(
+                "standard-library-finite-field-replay",
+                "clean-process-checker",
+            ),
+        ),
         "certified-snf": certified_snf_checker_provider_runtime(),
         "finite-graph": graph_exact_checker_provider_runtime(),
         "finite-probability": probability_exact_checker_provider_runtime(),

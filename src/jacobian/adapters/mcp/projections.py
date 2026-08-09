@@ -16,6 +16,7 @@ from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityDiscoveryCursorError
 from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationshipKind,
     CapabilityDescriptor,
     CapabilityDiscoveryBrowseRecoveryPath,
     CapabilityDiscoveryInspectCatalogRecoveryPath,
@@ -130,9 +131,16 @@ def _inline_verifier_invocation_protocol(
     """Expose the generic ``math.run`` envelope for inline replay verifiers."""
 
     schema = descriptor.input_schema
-    if CapabilityMode.VERIFY not in descriptor.modes or set(
-        schema.get("required", [])
-    ) != {"input", "candidate"}:
+    has_producer_relationship = any(
+        relationship.kind
+        is CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER
+        for relationship in descriptor.related_capabilities
+    )
+    if (
+        CapabilityMode.VERIFY not in descriptor.modes
+        or not has_producer_relationship
+        or set(schema.get("required", [])) != {"input", "candidate"}
+    ):
         return None
     return {
         "tool": "math.run",

@@ -62,66 +62,6 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
             "materialize named Boolean CNF for finite colorings and forbidden patterns",
         ),
     ),
-    "graph.invariant.maximum_matching.compute": (
-        (
-            "graph.invariant.maximum_matching.verify",
-            "independently replay the stored Tutte-Berge certificate",
-        ),
-    ),
-    "graph.invariant.maximum_matching.verify": (
-        (
-            "graph.invariant.maximum_matching.compute",
-            "produce a matching witness and Tutte-Berge certificate",
-        ),
-    ),
-    "probability.graph_reliability.connection_probability.compute": (
-        (
-            "probability.graph_reliability.connection_probability.verify",
-            "independently replay every edge state and terminal connection",
-        ),
-    ),
-    "probability.graph_reliability.connection_probability.verify": (
-        (
-            "probability.graph_reliability.connection_probability.compute",
-            "compute the complete exact edge-state ledger",
-        ),
-    ),
-    "graph.hamiltonian_path.decide": (
-        (
-            "graph.hamiltonian_path.verify",
-            "independently verify the stored positive or negative decision",
-        ),
-    ),
-    "graph.hamiltonian_path.verify": (
-        (
-            "graph.hamiltonian_path.decide",
-            "produce a complete bounded decision and optional path witness",
-        ),
-    ),
-    "polynomial.jacobian_syzygy.minimum_degree.compute": (
-        (
-            "polynomial.jacobian_syzygy.minimum_degree.verify",
-            "independently rebuild the graded maps, ranks, minors, and first kernel",
-        ),
-    ),
-    "polynomial.jacobian_syzygy.minimum_degree.verify": (
-        (
-            "polynomial.jacobian_syzygy.minimum_degree.compute",
-            "produce the provenance-bound graded rank ledger and kernel witness",
-        ),
-    ),
-    "geometry.projective_line_arrangement.flats.materialize": (
-        (
-            "geometry.projective_line_arrangement.flats.verify",
-            "independently rebuild all projective flats and pair accounting",
-        ),
-    ),
-    "geometry.projective_line_arrangement.flats.verify": (
-        (
-            "geometry.projective_line_arrangement.flats.materialize",
-            "materialize normalized lines, exact flats, incidences and multiplicities",
-        ),
-    ),
 }
 
 
@@ -140,16 +80,27 @@ def _capability_inspection_extensions(
     descriptors: dict[str, CapabilityDescriptor],
 ) -> dict[str, Any]:
     extensions: dict[str, Any] = {}
-    related = [
+    related = {
+        item.capability_id: item.model_dump(mode="json")
+        for item in descriptors[capability_id].related_capabilities
+        if item.capability_id in descriptors and item.capability_id != capability_id
+    }
+    related.update(
         {
-            "capability_id": related_id,
-            "relationship": relationship,
+            related_id: {
+                "capability_id": related_id,
+                "relationship": relationship,
+            }
+            for related_id, relationship in _RELATED_CAPABILITIES.get(capability_id, ())
+            if related_id in descriptors
+            and related_id != capability_id
+            and related_id not in related
         }
-        for related_id, relationship in _RELATED_CAPABILITIES.get(capability_id, ())
-        if related_id in descriptors
-    ]
+    )
     if related:
-        extensions["related_capabilities"] = related
+        extensions["related_capabilities"] = [
+            related[related_id] for related_id in sorted(related)
+        ]
     if capability_id.startswith(("sat.", "smt.")):
         extensions["synchronous_execution"] = {
             "remote_safe_wall_seconds_max": 150,
@@ -222,16 +173,26 @@ def _discovery_operation_card(
     """Add compact decision facts without recommending a research action."""
 
     runtime = descriptor.provider_runtime
-    related = [
+    related = {
+        item.capability_id: item.model_dump(mode="json")
+        for item in descriptor.related_capabilities
+        if item.capability_id in descriptors
+        and item.capability_id != descriptor.capability_id
+    }
+    related.update(
         {
-            "capability_id": related_id,
-            "relationship": relationship,
+            related_id: {
+                "capability_id": related_id,
+                "relationship": relationship,
+            }
+            for related_id, relationship in _RELATED_CAPABILITIES.get(
+                descriptor.capability_id, ()
+            )
+            if related_id in descriptors
+            and related_id != descriptor.capability_id
+            and related_id not in related
         }
-        for related_id, relationship in _RELATED_CAPABILITIES.get(
-            descriptor.capability_id, ()
-        )
-        if related_id in descriptors
-    ]
+    )
     invocation_example = None
     if descriptor.invocation_examples:
         example = descriptor.invocation_examples[0]
@@ -259,7 +220,7 @@ def _discovery_operation_card(
         "provider_availability": (
             runtime.availability.value if runtime is not None else "UNKNOWN"
         ),
-        "related_capabilities": related,
+        "related_capabilities": [related[item] for item in sorted(related)],
         **(
             {"invocation_example": invocation_example}
             if invocation_example is not None

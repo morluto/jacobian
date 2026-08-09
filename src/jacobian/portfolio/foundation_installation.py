@@ -15,6 +15,8 @@ import logging
 from dataclasses import dataclass
 
 from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
 )
@@ -196,3 +198,24 @@ class FoundationInstaller:
             )
         else:
             self.context.register_capability(adapter)
+            if verification_adapter is not None:
+                producer_id = adapter.descriptor.capability_id
+                verifier_id = verification_adapter.descriptor.capability_id
+                ctx.register_checker_relationship(
+                    producer_id,
+                    CapabilityCatalogRelationship(
+                        capability_id=verifier_id,
+                        kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+                        relationship="independently verify this exact normalization",
+                    ),
+                )
+                ctx.register_checker_relationship(
+                    verifier_id,
+                    CapabilityCatalogRelationship(
+                        capability_id=producer_id,
+                        kind=(
+                            CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER
+                        ),
+                        relationship="produce the exact normalization accepted here",
+                    ),
+                )

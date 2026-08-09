@@ -74,6 +74,20 @@ def test_all_authorized_exact_checker_pairs_are_reciprocal(
         item.capability_id for item in catalog[modular_verifier].related_capabilities
     }
 
+    normalization_producer = "polynomial.expression.normalize"
+    normalization_verifier = "polynomial.expression_normalization.verify"
+    assert normalization_verifier in {
+        item.capability_id
+        for item in catalog[normalization_producer].related_capabilities
+    }
+    assert normalization_producer in {
+        item.capability_id
+        for item in catalog[normalization_verifier].related_capabilities
+    }
+    assert {"expansion", "product", "power", "coefficients"} <= set(
+        catalog[normalization_producer].tags
+    )
+
 
 def test_catalog_relationship_hides_missing_and_policy_hidden_endpoints(
     tmp_path: Path,

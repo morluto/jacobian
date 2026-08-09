@@ -104,6 +104,7 @@ __all__ = [
     "solve_chinese_remainder",
 ]
 
+
 def compute_gcd(request: IntegerPairRequest) -> IntegerValueResult:
     """Compute gcd(a, b) using ``math.gcd``."""
     pair = request

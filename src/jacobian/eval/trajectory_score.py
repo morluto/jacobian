@@ -123,65 +123,97 @@ class TrajectoryScoreReplay(ContractModel):
     assurance_authority: Literal[False] = False
 
     @model_validator(mode="after")
-    def require_bound_ordered_replay(self) -> Self:  # noqa: C901
+    def require_bound_ordered_replay(self) -> Self:
         _require_terminal_pair(
             self.eventual_terminal_result, self.eventual_terminal_reward
         )
-        if self.states[0].boundary is not StateBoundary.PLAN:
-            raise ValueError("replay must begin at a PLAN observation")
-        if any(state.trajectory_id != self.trajectory_id for state in self.states):
-            raise ValueError("replay state trajectory identity mismatch")
-        if any(state.task_group != self.task_group for state in self.states):
-            raise ValueError("replay state task-group mismatch")
-        if any(state.estimator is not self.estimator for state in self.states):
-            raise ValueError("replay state estimator mismatch")
-        if tuple(state.state_index for state in self.states) != tuple(
-            sorted(state.state_index for state in self.states)
-        ):
-            raise ValueError("replay states must be ordered by source state index")
-        if len({state.state_index for state in self.states}) != len(self.states):
-            raise ValueError("replay state indices must be unique")
-        if any(
-            state.eventual_terminal_reward != self.eventual_terminal_reward
-            or state.eventual_terminal_result is not self.eventual_terminal_result
-            for state in self.states
-        ):
-            raise ValueError("replay states must share the bound terminal result")
-        if self.total_milestone_credit != self.states[-1].cumulative_milestone_credit:
-            raise ValueError("total credit must equal the last cumulative credit")
-        running_cumulative = 0.0
-        previous_id: str | None = None
-        previous_value: float | None = None
-        for index, state in enumerate(self.states):
-            if index == 0:
-                if state.previous_observation_id is not None:
-                    raise ValueError(
-                        "initial replay state must not reference a previous observation"
-                    )
-            else:
-                if state.previous_observation_id != previous_id:
-                    raise ValueError(
-                        "replay state previous observation must chain to its predecessor"
-                    )
-                if previous_value is None:
-                    raise ValueError(
-                        "non-initial replay state requires a previous estimated value"
-                    )
-                expected_delta = _round_value(state.estimated_value - previous_value)
-                if state.value_delta is None or state.value_delta != expected_delta:
-                    raise ValueError(
-                        "replay value delta must equal the adjacent estimated value difference"
-                    )
-            running_cumulative = _round_value(
-                running_cumulative + state.transition_credit
-            )
-            if state.cumulative_milestone_credit != running_cumulative:
-                raise ValueError(
-                    "replay cumulative credit must equal the running total of transition credits"
-                )
-            previous_id = state.observation_id
-            previous_value = state.estimated_value
+        _require_replay_header(self)
+        _require_replay_indices(self.states)
+        _require_replay_terminal_binding(
+            self.states,
+            self.eventual_terminal_result,
+            self.eventual_terminal_reward,
+        )
+        _require_replay_credit_chain(self.states, self.total_milestone_credit)
         return self
+
+
+def _require_replay_header(replay: TrajectoryScoreReplay) -> None:
+    """Require every state to belong to its declared replay identity."""
+
+    if replay.states[0].boundary is not StateBoundary.PLAN:
+        raise ValueError("replay must begin at a PLAN observation")
+    if any(state.trajectory_id != replay.trajectory_id for state in replay.states):
+        raise ValueError("replay state trajectory identity mismatch")
+    if any(state.task_group != replay.task_group for state in replay.states):
+        raise ValueError("replay state task-group mismatch")
+    if any(state.estimator is not replay.estimator for state in replay.states):
+        raise ValueError("replay state estimator mismatch")
+
+
+def _require_replay_indices(states: tuple[ScoredTrajectoryState, ...]) -> None:
+    """Require source ordering without silently normalizing a replay."""
+
+    if tuple(state.state_index for state in states) != tuple(
+        sorted(state.state_index for state in states)
+    ):
+        raise ValueError("replay states must be ordered by source state index")
+    if len({state.state_index for state in states}) != len(states):
+        raise ValueError("replay state indices must be unique")
+
+
+def _require_replay_terminal_binding(
+    states: tuple[ScoredTrajectoryState, ...],
+    terminal_result: TerminalResult,
+    terminal_reward: Literal[0, 1],
+) -> None:
+    """Bind each state to the replay's one eventual terminal outcome."""
+
+    if any(
+        state.eventual_terminal_reward != terminal_reward
+        or state.eventual_terminal_result is not terminal_result
+        for state in states
+    ):
+        raise ValueError("replay states must share the bound terminal result")
+
+
+def _require_replay_credit_chain(
+    states: tuple[ScoredTrajectoryState, ...], total_milestone_credit: float
+) -> None:
+    """Require adjacency and cumulative credit invariants across replay states."""
+
+    if total_milestone_credit != states[-1].cumulative_milestone_credit:
+        raise ValueError("total credit must equal the last cumulative credit")
+    running_cumulative = 0.0
+    previous_id: str | None = None
+    previous_value: float | None = None
+    for index, state in enumerate(states):
+        if index == 0:
+            if state.previous_observation_id is not None:
+                raise ValueError(
+                    "initial replay state must not reference a previous observation"
+                )
+        else:
+            if state.previous_observation_id != previous_id:
+                raise ValueError(
+                    "replay state previous observation must chain to its predecessor"
+                )
+            if previous_value is None:
+                raise ValueError(
+                    "non-initial replay state requires a previous estimated value"
+                )
+            expected_delta = _round_value(state.estimated_value - previous_value)
+            if state.value_delta is None or state.value_delta != expected_delta:
+                raise ValueError(
+                    "replay value delta must equal the adjacent estimated value difference"
+                )
+        running_cumulative = _round_value(running_cumulative + state.transition_credit)
+        if state.cumulative_milestone_credit != running_cumulative:
+            raise ValueError(
+                "replay cumulative credit must equal the running total of transition credits"
+            )
+        previous_id = state.observation_id
+        previous_value = state.estimated_value
 
 
 def _round_value(value: float) -> float:

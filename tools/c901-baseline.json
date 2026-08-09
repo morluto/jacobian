@@ -1,11 +1,5 @@
 {
   "version": 1,
   "max_complexity": 10,
-  "violations": [
-    {
-      "path": "src/jacobian/eval/trajectory_score.py",
-      "symbol": "require_bound_ordered_replay",
-      "complexity": 16
-    }
-  ]
+  "violations": []
 }

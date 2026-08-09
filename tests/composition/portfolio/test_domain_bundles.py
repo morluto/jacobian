@@ -47,6 +47,7 @@ from jacobian.contracts.number_theory import (
     DivisibilityRequest,
     FactorialValuationRequest,
     FactorizationRequest,
+    FiniteAbelianGroupFactorizationRequest,
     FloorSquareRootRequest,
     JacobiSymbolRequest,
     LegendreSymbolRequest,
@@ -170,6 +171,14 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
                 {"name": "x", "residues": [0, 1, 2, 3, 4, 5, 6]},
             ],
             "terms": [{"coefficient": "4", "exponents": [3]}],
+        },
+    ),
+    (
+        FiniteAbelianGroupFactorizationRequest,
+        {
+            "moduli": [4],
+            "left": [[0], [2]],
+            "right": [[0], [2]],
         },
     ),
     (ChineseRemainderRequest, {"residues": [2, 3], "moduli": [3, 5]}),

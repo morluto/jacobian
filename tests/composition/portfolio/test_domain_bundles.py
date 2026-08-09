@@ -50,6 +50,7 @@ from jacobian.contracts.number_theory import (
     FloorSquareRootRequest,
     JacobiSymbolRequest,
     LegendreSymbolRequest,
+    ModularPolynomialIdentityRequest,
     ModularPolynomialResidueImageRequest,
     ModularValueRequest,
     ModulusRequest,
@@ -162,6 +163,15 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (PositiveIntegerRequest, {"n": 10}),
     (ModularValueRequest, {"value": "3", "modulus": 7}),
     (ModulusRequest, {"modulus": 7}),
+    (
+        ModularPolynomialIdentityRequest,
+        {
+            "modulus": 4,
+            "variables": ["x"],
+            "left": [{"coefficient": "5", "exponents": [2]}],
+            "right": [{"coefficient": "1", "exponents": [2]}],
+        },
+    ),
     (
         ModularPolynomialResidueImageRequest,
         {

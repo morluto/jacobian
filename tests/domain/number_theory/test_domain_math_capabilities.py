@@ -14,6 +14,8 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.number_theory import (
+    ModularPolynomialIdentityRequest,
+    ModularPolynomialIdentityResult,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
 )
@@ -69,6 +71,73 @@ def test_extended_gcd_returns_a_valid_bezout_identity(
         "left_coefficient": "-1",
         "right_coefficient": "3",
     }
+
+
+def test_modular_polynomial_identity_canonicalizes_formal_coefficients(
+    domain_services: DomainTestServices,
+) -> None:
+    payload = {
+        "modulus": 4,
+        "variables": ["z"],
+        "left": [
+            {"coefficient": "1", "exponents": [8]},
+            {"coefficient": "9", "exponents": [6]},
+            {"coefficient": "27", "exponents": [4]},
+            {"coefficient": "30", "exponents": [2]},
+            {"coefficient": "9", "exponents": [0]},
+        ],
+        "right": [
+            {"coefficient": "1", "exponents": [8]},
+            {"coefficient": "-7", "exponents": [6]},
+            {"coefficient": "15", "exponents": [4]},
+            {"coefficient": "-10", "exponents": [2]},
+            {"coefficient": "1", "exponents": [0]},
+        ],
+    }
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_identity.compute",
+            input=payload,
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    comparison = ModularPolynomialIdentityResult.model_validate(result.output["result"])
+    assert comparison.identical is True
+    assert comparison.residual == ()
+    assert comparison.comparison_scope == "FORMAL_COEFFICIENTWISE_IDENTITY"
+    assert [term.coefficient for term in comparison.normalized_left] == [1, 2, 3, 1, 1]
+
+
+@pytest.mark.parametrize("modulus", (4, 8, 7))
+def test_modular_polynomial_identity_combines_duplicates_and_detects_difference(
+    domain_services: DomainTestServices,
+    modulus: int,
+) -> None:
+    payload = {
+        "modulus": modulus,
+        "variables": ["x", "y"],
+        "left": [
+            {"coefficient": "3", "exponents": [1, 2]},
+            {"coefficient": "-3", "exponents": [1, 2]},
+            {"coefficient": "1", "exponents": [0, 0]},
+        ],
+        "right": [{"coefficient": "2", "exponents": [0, 0]}],
+    }
+    request = ModularPolynomialIdentityRequest.model_validate(payload)
+    assert len(request.left) == 3
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_identity.compute",
+            input=payload,
+        )
+    )
+
+    comparison = ModularPolynomialIdentityResult.model_validate(result.output["result"])
+    assert comparison.identical is False
+    assert comparison.normalized_left[0].coefficient == 1
+    assert comparison.residual[0].coefficient == modulus - 1
 
 
 def test_domain_error_fails_before_artifact_writes(domain_services) -> None:

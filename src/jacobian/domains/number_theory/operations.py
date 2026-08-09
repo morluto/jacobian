@@ -37,11 +37,14 @@ from jacobian.contracts.number_theory import (
     JacobiSymbolResult,
     LegendreSymbolRequest,
     LegendreSymbolResult,
+    ModularPolynomialIdentityRequest,
+    ModularPolynomialIdentityResult,
     ModularPolynomialResidueCount,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
     ModularPolynomialResidueTableRow,
     ModularPolynomialResidueWitness,
+    ModularPolynomialTerm,
     ModularValueRequest,
     ModulusRequest,
     NonnegativeIntegerRequest,
@@ -69,6 +72,7 @@ __all__ = [
     "compute_legendre_symbol",
     "compute_mobius",
     "compute_modular_inverse",
+    "compute_modular_polynomial_identity",
     "compute_modular_polynomial_residue_image",
     "compute_multiplicative_order",
     "compute_next_prime",
@@ -440,6 +444,50 @@ def compute_modular_polynomial_residue_image(
 ) -> ModularPolynomialResidueImageResult:
     """Enumerate one sparse polynomial over its declared finite residue domains."""
     return _compute_modular_polynomial_residue_image(request, include_table=False)
+
+
+def compute_modular_polynomial_identity(
+    request: ModularPolynomialIdentityRequest,
+) -> ModularPolynomialIdentityResult:
+    """Compare canonical sparse coefficients in ``(Z/mZ)[x_1, ..., x_n]``."""
+    left = _normalize_modular_terms(request.left, request.modulus)
+    right = _normalize_modular_terms(request.right, request.modulus)
+    residual = _normalize_modular_terms(
+        (
+            *request.left,
+            *(
+                term.model_copy(update={"coefficient": str(-int(term.coefficient))})
+                for term in request.right
+            ),
+        ),
+        request.modulus,
+    )
+    return ModularPolynomialIdentityResult(
+        semantics_version="modular-polynomial-identity.v1",
+        modulus=request.modulus,
+        variable_order=request.variables,
+        normalized_left=left,
+        normalized_right=right,
+        residual=residual,
+        identical=not residual,
+        comparison_scope="FORMAL_COEFFICIENTWISE_IDENTITY",
+    )
+
+
+def _normalize_modular_terms(
+    terms: tuple[ModularPolynomialTerm, ...],
+    modulus: int,
+) -> tuple[NormalizedModularPolynomialTerm, ...]:
+    coefficients: dict[tuple[int, ...], int] = {}
+    for term in terms:
+        coefficients[term.exponents] = (
+            coefficients.get(term.exponents, 0) + int(term.coefficient)
+        ) % modulus
+    return tuple(
+        NormalizedModularPolynomialTerm(coefficient=coefficient, exponents=exponents)
+        for exponents, coefficient in sorted(coefficients.items())
+        if coefficient
+    )
 
 
 def materialize_modular_polynomial_residue_assignments(

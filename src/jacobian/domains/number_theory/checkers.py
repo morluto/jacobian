@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    ModularPolynomialIdentityRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
@@ -58,6 +59,33 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "integer",
             "number-theory",
             "powerful-number",
+        ),
+    ),
+    ExactReplayCheckerDeclaration(
+        "modular.polynomial_identity.compute",
+        ModularPolynomialIdentityRequest,
+        "check_modular_polynomial_identity",
+        "modular.polynomial-identity.flint-replay",
+        entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        replay_method="Python-FLINT coefficientwise modular-polynomial replay",
+        reason=(
+            "operator-authorized Python-FLINT checker independently canonicalizes "
+            "and compares every formal polynomial coefficient modulo m"
+        ),
+        verification_capability_id="modular.polynomial_identity.verify",
+        verification_title="Verify a modular polynomial identity",
+        verification_description=(
+            "Independently verify one formal coefficientwise polynomial identity "
+            "over Z/mZ; this does not compare induced polynomial functions."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "number-theory",
+            "modular",
+            "polynomial",
+            "identity",
+            "coefficientwise",
         ),
     ),
     ExactReplayCheckerDeclaration(

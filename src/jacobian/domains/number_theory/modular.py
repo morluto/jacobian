@@ -6,6 +6,8 @@ from jacobian.contracts.number_theory import (
     IntegerValueResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
+    ModularPolynomialIdentityRequest,
+    ModularPolynomialIdentityResult,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
     ModularValueRequest,
@@ -23,6 +25,7 @@ from jacobian.domains.number_theory.discrete_logarithm import (
 from jacobian.domains.number_theory.operations import (
     compute_jacobi_symbol,
     compute_modular_inverse,
+    compute_modular_polynomial_identity,
     compute_modular_polynomial_residue_image,
     compute_multiplicative_order,
     enumerate_quadratic_residues,
@@ -98,6 +101,36 @@ MODULAR_CAPABILITIES = (
                 "quadratic_residues_mod_10",
                 "Enumerate quadratic residues modulo 10.",
                 {"modulus": 10},
+            ),
+        ),
+    ),
+    number_theory_operation(
+        "modular.polynomial_identity.compute",
+        "Compare modular polynomial coefficients",
+        (
+            "Canonicalize two sparse integer polynomials and compare their formal "
+            "coefficients modulo m. This is polynomial-ring identity, not equality "
+            "of the induced functions on residue assignments."
+        ),
+        ModularPolynomialIdentityRequest,
+        ModularPolynomialIdentityResult,
+        compute_modular_polynomial_identity,
+        "number-theory",
+        "modular",
+        "polynomial",
+        "identity",
+        "coefficientwise",
+        relation_id="modular.polynomial_identity.relation",
+        invocation_examples=(
+            example(
+                "coefficientwise_identity_mod_4",
+                "Compare two formal polynomial coefficients modulo 4.",
+                {
+                    "modulus": 4,
+                    "variables": ["z"],
+                    "left": [{"coefficient": "9", "exponents": [6]}],
+                    "right": [{"coefficient": "-7", "exponents": [6]}],
+                },
             ),
         ),
     ),

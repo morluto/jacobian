@@ -661,6 +661,121 @@ def check_modular_polynomial_residue_image(
         )
 
 
+def _modular_identity_terms(
+    raw_terms: object,
+    *,
+    variable_count: int,
+    modulus: int,
+) -> list[dict[str, object]]:
+    if not isinstance(raw_terms, list) or len(raw_terms) > _MAX_RESIDUE_TERMS:
+        raise ValueError("modular-polynomial terms are malformed")
+    coefficients: dict[tuple[int, ...], fmpz] = {}
+    flint_modulus = fmpz(modulus)
+    for term in raw_terms:
+        if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
+            raise ValueError("modular-polynomial term is malformed")
+        exponents = term["exponents"]
+        if (
+            not isinstance(exponents, list)
+            or len(exponents) != variable_count
+            or any(
+                type(exponent) is not int
+                or exponent < 0
+                or exponent > _MAX_RESIDUE_EXPONENT
+                for exponent in exponents
+            )
+        ):
+            raise ValueError("modular-polynomial exponents are malformed")
+        exponent_vector = tuple(exponents)
+        coefficients[exponent_vector] = (
+            coefficients.get(exponent_vector, fmpz(0)) + _integer(term["coefficient"])
+        ) % flint_modulus
+    return [
+        {"coefficient": int(coefficient), "exponents": list(exponents)}
+        for exponents, coefficient in sorted(coefficients.items())
+        if coefficient
+    ]
+
+
+def _modular_polynomial_identity(
+    source: dict[str, Any],
+    result: dict[str, Any],
+) -> bool:
+    if set(source) != {"modulus", "variables", "left", "right"}:
+        return False
+    modulus = source["modulus"]
+    variables = source["variables"]
+    if (
+        type(modulus) is not int
+        or modulus < 2
+        or modulus > _MAX_RESIDUE_MODULUS
+        or not isinstance(variables, list)
+        or not 1 <= len(variables) <= _MAX_RESIDUE_VARIABLES
+        or any(
+            not isinstance(name, str) or _RESIDUE_VARIABLE.fullmatch(name) is None
+            for name in variables
+        )
+        or len(set(variables)) != len(variables)
+    ):
+        raise ValueError("modular-polynomial identity scope is malformed")
+    left = _modular_identity_terms(
+        source["left"], variable_count=len(variables), modulus=modulus
+    )
+    right = _modular_identity_terms(
+        source["right"], variable_count=len(variables), modulus=modulus
+    )
+    signed_terms = list(source["left"])
+    for term in source["right"]:
+        signed_terms.append(
+            {
+                "coefficient": str(-_integer(term["coefficient"])),
+                "exponents": term["exponents"],
+            }
+        )
+    residual = _modular_identity_terms(
+        signed_terms, variable_count=len(variables), modulus=modulus
+    )
+    return result == {
+        "semantics_version": "modular-polynomial-identity.v1",
+        "modulus": modulus,
+        "variable_order": variables,
+        "normalized_left": left,
+        "normalized_right": right,
+        "residual": residual,
+        "identical": not residual,
+        "comparison_scope": "FORMAL_COEFFICIENTWISE_IDENTITY",
+    }
+
+
+def check_modular_polynomial_identity(request: dict[str, Any]) -> dict[str, Any]:
+    operation_id = "modular.polynomial_identity.compute"
+    try:
+        if (
+            flint.__version__ != _PYTHON_FLINT_VERSION
+            or flint.__FLINT_VERSION__ != _FLINT_VERSION
+        ):
+            return _reject_exact_integer(
+                "authorized Python-FLINT runtime is unavailable"
+            )
+        source, result = _bound_request(
+            request,
+            operation_id=operation_id,
+            witness_format="modular.polynomial-identity.flint-replay",
+        )
+        if not _modular_polynomial_identity(source, result):
+            return _reject_exact_integer(
+                "declared result does not match independent Python-FLINT "
+                "coefficientwise modular-polynomial replay"
+            )
+        return _accept_exhaustive_integer(
+            f"independent Python-FLINT coefficient replay accepted {operation_id}"
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return _reject_exact_integer(
+            "malformed, unsupported, or mismatched checker request"
+        )
+
+
 def _gcd(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if set(source) != {"left", "right"} or set(result) != {
         "gcd",
@@ -1076,6 +1191,7 @@ __all__ = [
     "check_matrix_rank",
     "check_matrix_rref",
     "check_matrix_smith_normal_form",
+    "check_modular_polynomial_identity",
     "check_modular_polynomial_residue_image",
     "check_polynomial_discriminant",
     "check_polynomial_gcd",

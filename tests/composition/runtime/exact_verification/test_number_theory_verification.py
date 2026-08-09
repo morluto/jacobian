@@ -22,6 +22,78 @@ def _modular_residue_payload(*, coefficient: str = "4") -> dict[str, object]:
     }
 
 
+def _modular_identity_payload() -> dict[str, object]:
+    return {
+        "modulus": 4,
+        "variables": ["z"],
+        "left": [
+            {"coefficient": "9", "exponents": [6]},
+            {"coefficient": "27", "exponents": [4]},
+            {"coefficient": "30", "exponents": [2]},
+            {"coefficient": "9", "exponents": [0]},
+        ],
+        "right": [
+            {"coefficient": "-7", "exponents": [6]},
+            {"coefficient": "15", "exponents": [4]},
+            {"coefficient": "-10", "exponents": [2]},
+            {"coefficient": "1", "exponents": [0]},
+        ],
+    }
+
+
+def test_modular_polynomial_identity_uses_independent_python_flint_replay(
+    authorized_complete_runtime,
+) -> None:
+    producer_id = "modular.polynomial_identity.compute"
+    verifier_id = "modular.polynomial_identity.verify"
+    payload = _modular_identity_payload()
+    computed = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(capability_id=producer_id, input=payload)
+    )
+
+    verified = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=verifier_id,
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.output["conclusion"] == "TRUE"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.output["verification_record_uri"] in verified.artifact_uris
+
+
+def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
+    authorized_complete_runtime,
+) -> None:
+    payload = _modular_identity_payload()
+    computed = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_identity.compute",
+            input=payload,
+        )
+    )
+    forged = deepcopy(computed.output["result"])
+    forged["identical"] = False
+    forged["residual"] = [{"coefficient": 1, "exponents": [0]}]
+
+    rejected = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_identity.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": forged},
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
+
+
 @pytest.mark.parametrize("value", ("360", "-360", "1", "-1", "101"))
 def test_prime_factorization_result_uses_independent_python_flint_replay(
     authorized_complete_runtime,

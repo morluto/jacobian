@@ -294,6 +294,35 @@ class ModularPolynomialResidueImageRequest(ContractModel):
         return self
 
 
+class ModularPolynomialIdentityRequest(ContractModel):
+    """Two bounded sparse integer polynomials compared coefficientwise modulo m."""
+
+    modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
+    variables: tuple[ResidueVariableName, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+    left: tuple[ModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS,
+    )
+    right: tuple[ModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS,
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_polynomials(self) -> Self:
+        if len(self.variables) != len(set(self.variables)):
+            raise ValueError("polynomial variable names must be unique")
+        if any(
+            len(term.exponents) != len(self.variables)
+            for term in (*self.left, *self.right)
+        ):
+            raise ValueError("every term exponent vector must match the variable count")
+        return self
+
+
 class ChineseRemainderRequest(ContractModel):
     """A finite system of integer congruences with parallel residues and moduli."""
 
@@ -473,6 +502,51 @@ class NormalizedModularPolynomialTerm(ContractModel):
         min_length=1,
         max_length=_MAX_RESIDUE_VARIABLES,
     )
+
+
+class ModularPolynomialIdentityResult(ContractModel):
+    """Canonical coefficientwise comparison in a formal polynomial ring."""
+
+    semantics_version: Literal["modular-polynomial-identity.v1"]
+    modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
+    variable_order: tuple[ResidueVariableName, ...] = Field(
+        min_length=1,
+        max_length=_MAX_RESIDUE_VARIABLES,
+    )
+    normalized_left: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS,
+    )
+    normalized_right: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS,
+    )
+    residual: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        min_length=0,
+        max_length=_MAX_RESIDUE_TERMS * 2,
+    )
+    identical: StrictBool
+    comparison_scope: Literal["FORMAL_COEFFICIENTWISE_IDENTITY"]
+
+    @model_validator(mode="after")
+    def require_canonical_comparison(self) -> Self:
+        for terms in (
+            self.normalized_left,
+            self.normalized_right,
+            self.residual,
+        ):
+            if any(
+                len(term.exponents) != len(self.variable_order)
+                or term.coefficient >= self.modulus
+                for term in terms
+            ):
+                raise ValueError("normalized terms do not match the result scope")
+            exponents = [term.exponents for term in terms]
+            if exponents != sorted(set(exponents)):
+                raise ValueError("normalized term exponents must be canonical")
+        if self.identical != (not self.residual):
+            raise ValueError("identity decision must match the canonical residual")
+        return self
 
 
 class ModularPolynomialResidueCount(ContractModel):

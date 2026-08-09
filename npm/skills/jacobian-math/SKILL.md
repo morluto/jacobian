@@ -64,7 +64,8 @@ required task authorization and bindings are preserved; otherwise use lower
 task-permitted assurance. Verification is bound to the exact checked claim: do
 not transfer `VERIFIED` from an input, premise, factorization, or related
 artifact to a model-derived conclusion, which needs its own checker-bound record.
-Before concluding, account for every exact outcome in the final comparison. A
-`VERIFIED` sub-result does not validate another result or their comparison. When
-a suitable installed operation exists, run it for each outcome and compare the
-exact returned values.
+Before each run, check its structured payload exactly represents the
+intended expression or object. Before concluding, account for every exact
+outcome in the final comparison. A `VERIFIED` sub-result does not validate
+another result or their comparison; use suitable installed operations and
+compare returned values.

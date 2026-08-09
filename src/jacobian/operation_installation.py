@@ -49,6 +49,18 @@ from jacobian.storage.errors import ArtifactIntegrityError, ArtifactNotFoundErro
 from jacobian.storage.repository import ArtifactRepository
 
 
+def _validation_pointer(parts: list[object]) -> str | None:
+    """Return a bounded RFC 6901 pointer without echoing oversized keys."""
+    encoded: list[str] = []
+    for part in parts:
+        component = str(part)
+        if len(component) > 64:
+            component = "<invalid-key>"
+        encoded.append(component.replace("~", "~0").replace("/", "~1"))
+    pointer = "/" + "/".join(encoded) if encoded else None
+    return pointer if pointer is None or len(pointer) <= 512 else None
+
+
 def _validation_diagnostic(
     diagnostic: CapabilityDiagnostic,
     exc: ValidationError,
@@ -59,7 +71,7 @@ def _validation_diagnostic(
     if not errors:
         return diagnostic
     first = errors[0]
-    path_parts = [str(part) for part in first.get("loc", ())]
+    path_parts = list(first.get("loc", ()))
     raw_reason = str(first.get("msg", "invalid value"))
     validation_type = str(first.get("type", "value_error"))
     context = first.get("ctx")
@@ -83,9 +95,10 @@ def _validation_diagnostic(
         and field_match.group(1) in rejected_container
     ):
         path_parts.append(field_match.group(1))
-    path = "/" + "/".join(path_parts) if path_parts else None
-    return diagnostic.model_copy(
-        update={
+    path = _validation_pointer(path_parts)
+    return CapabilityDiagnostic.model_validate(
+        {
+            **diagnostic.model_dump(mode="python"),
             "path": diagnostic.path or path,
             "details": {
                 **diagnostic.details,

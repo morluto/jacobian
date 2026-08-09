@@ -11,7 +11,11 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
-from jacobian.operation_installation import OperationInstaller, _validation_diagnostic
+from jacobian.operation_installation import (
+    OperationInstaller,
+    _validation_diagnostic,
+    _validation_pointer,
+)
 from jacobian.operations import (
     BoundedSearchInterrupted,
     BoundedSearchOperation,
@@ -165,6 +169,11 @@ def test_validation_diagnostic_uses_document_root_pointer() -> None:
     )
 
     assert diagnostic.path is None
+
+
+def test_validation_pointer_escapes_components_and_redacts_oversized_keys() -> None:
+    assert _validation_pointer(["items", "a/b~c", 2]) == "/items/a~1b~0c/2"
+    assert _validation_pointer(["items", "x" * 1024]) == "/items/<invalid-key>"
 
 
 def test_validation_diagnostic_redacts_custom_validator_values() -> None:

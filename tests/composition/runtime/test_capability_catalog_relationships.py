@@ -160,3 +160,48 @@ def test_catalog_relationship_hides_unavailable_endpoint_and_rejects_bad_edges(
             )
     finally:
         store.close()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+        CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
+    ],
+)
+def test_adapter_descriptors_cannot_authorize_verification_relationships(
+    tmp_path: Path,
+    kind: CapabilityCatalogRelationshipKind,
+) -> None:
+    target_id = "example.ordinary-computation"
+    relationship = CapabilityCatalogRelationship(
+        capability_id=target_id,
+        kind=kind,
+        relationship="untrusted verification-sensitive navigation",
+    )
+    source = DiscoveryAdapter(
+        ComputedAdapter.descriptor.model_copy(
+            update={"related_capabilities": (relationship,)}
+        )
+    )
+    store = ArtifactRepository(tmp_path / "state")
+    try:
+        service = CapabilityService(store)
+        service.register(
+            DiscoveryAdapter(
+                ComputedAdapter.descriptor.model_copy(
+                    update={
+                        "capability_id": target_id,
+                        "title": "Ordinary computation",
+                    }
+                )
+            )
+        )
+
+        with pytest.raises(
+            CapabilityError,
+            match="operator-authorized checker registration",
+        ):
+            service.register(source)
+    finally:
+        store.close()

@@ -8,6 +8,7 @@ from jacobian.capability_errors import CapabilityError
 from jacobian.capability_validation import validator
 from jacobian.contracts.capabilities import (
     CapabilityCatalog,
+    CapabilityCatalogRelationshipKind,
     CapabilityProviderAvailability,
 )
 
@@ -42,6 +43,18 @@ class CapabilityRegistryMixin:
             raise CapabilityError(
                 f"capability {descriptor.capability_id} is unavailable: "
                 f"{descriptor.provider_runtime.diagnostic}"
+            )
+        verification_relationship_kinds = {
+            CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+            CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
+        }
+        if any(
+            relationship.kind in verification_relationship_kinds
+            for relationship in descriptor.related_capabilities
+        ):
+            raise CapabilityError(
+                "verification-sensitive catalog relationships require "
+                "operator-authorized checker registration"
             )
         validator(descriptor.input_schema)
         validator(descriptor.output_schema)

@@ -583,6 +583,34 @@ def test_close_cannot_race_connection_configuration_and_registration(
     assert connect_errors == []
 
 
+def test_close_preserves_handle_cleanup_failure_after_checkpoint_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = StateDatabase(tmp_path / "state.sqlite3", synchronous="FULL")
+    checkpoint_failure = sqlite3.OperationalError("injected checkpoint failure")
+    close_failure = StateDatabaseError("injected handle close failure")
+
+    monkeypatch.setattr(
+        database,
+        "_checkpoint_for_close",
+        lambda: checkpoint_failure,
+    )
+
+    def fail_close_all_connections() -> None:
+        raise close_failure
+
+    monkeypatch.setattr(database, "_close_all_connections", fail_close_all_connections)
+
+    with pytest.raises(StateDatabaseError, match="could not checkpoint") as exc:
+        database.close(checkpoint=True)
+
+    assert exc.value.__cause__ is checkpoint_failure
+    assert exc.value.__notes__ == [
+        "state database handle cleanup also failed: injected handle close failure"
+    ]
+
+
 def test_two_processes_can_race_to_migrate_empty_state(tmp_path: Path) -> None:
     ready = tmp_path / "start"
     script = """

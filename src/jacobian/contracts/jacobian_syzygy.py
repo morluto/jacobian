@@ -226,6 +226,7 @@ class GradedJacobianSyzygyResult(ContractModel):
     first_syzygy_degree: StrictInt | None = Field(default=None, ge=0, le=8)
     kernel_witness: GradedJacobianKernelWitness | None = None
     completion: Literal["COMPLETE_THROUGH_BOUND"] = "COMPLETE_THROUGH_BOUND"
+
     @model_validator(mode="after")
     def bind_first_kernel_and_finite_scope(self) -> Self:
         if self.expanded_polynomial.variables != self.variables:

@@ -280,16 +280,43 @@ def _drain_stream_tail(stream, decoder) -> None:
         raise ValueError("non-whitespace after evidence JSON value")
 
 
+def _compact_json_whitespace(
+    value: str, *, in_string: bool, escaped: bool
+) -> tuple[str, bool, bool]:
+    compacted: list[str] = []
+    for character in value:
+        if in_string:
+            compacted.append(character)
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+            compacted.append(character)
+        elif character not in _JSON_WHITESPACE:
+            compacted.append(character)
+    return "".join(compacted), in_string, escaped
+
+
 def _read_streaming_json_value(stream) -> Any:
     """Parse one JSON value without retaining arbitrary whitespace padding."""
 
     decoder = codecs.getincrementaldecoder("utf-8")()
     parser = json.JSONDecoder(object_pairs_hook=_reject_duplicate_keys)
     buffer = ""
+    in_string = False
+    escaped = False
     while True:
         block = stream.read(65_536)
         if block:
-            buffer += decoder.decode(block)
+            decoded = decoder.decode(block)
+            compacted, in_string, escaped = _compact_json_whitespace(
+                decoded, in_string=in_string, escaped=escaped
+            )
+            buffer += compacted
         if buffer[:1] in _JSON_WHITESPACE:
             buffer = buffer.lstrip(_JSON_WHITESPACE_CHARS)
         try:

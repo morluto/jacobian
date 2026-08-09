@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 from itertools import product
@@ -27,6 +28,16 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
+def _support_module():
+    spec = importlib.util.spec_from_file_location(
+        "illumination_verifier_support", TASK / "tests/verifier_support.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_raw_submission_is_bounded_before_read(monkeypatch):
@@ -109,6 +120,17 @@ def test_evidence_result_comparison_preserves_json_types():
     evidence_result = _result(module)
     evidence_result["weak_false_positive_pairs"][0]["direction_index"] = 0.0
     assert not module._json_equal(evidence_result, result)
+
+
+def test_streaming_evidence_discards_large_interior_whitespace():
+    module = _support_module()
+    padding = b" " * (2 * 1024 * 1024)
+    payload = b'{"schema_version":' + padding + b'"1","task_id":"x"}'
+
+    assert module._read_streaming_json_value(io.BytesIO(payload)) == {
+        "schema_version": "1",
+        "task_id": "x",
+    }
 
 
 def test_evidence_copied_fields_bind_to_raw_submission():

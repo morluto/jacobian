@@ -13,6 +13,7 @@ from jacobian.contracts.exact import (
 )
 from jacobian.contracts.polynomials import (
     MAX_POLYNOMIAL_TERMS,
+    MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
     require_polynomial_budget,
@@ -219,7 +220,10 @@ class PolynomialGroebnerBasisRequest(ContractModel):
 
 
 class PolynomialGroebnerBasisResult(ContractModel):
-    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"]
     basis: tuple[RationalPolynomial, ...] = Field(max_length=64)
     completion: Literal["COMPLETE"] = "COMPLETE"

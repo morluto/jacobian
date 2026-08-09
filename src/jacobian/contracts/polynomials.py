@@ -701,9 +701,15 @@ class PolynomialCollisionSearchStopReason(StrEnum):
 
 class PolynomialCollisionVerifyRequest(ContractModel):
     map: RationalPolynomialMap
-    first_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    second_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    claimed_image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    first_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    second_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    claimed_image: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
 
     @model_validator(mode="after")
     def require_collision_dimensions_and_distinct_points(self) -> Self:
@@ -725,11 +731,15 @@ class PolynomialMapInverseCollisionVerifyRequest(ContractModel):
     """Use one exact collision to refute a two-sided polynomial inverse."""
 
     map: RationalPolynomialMap
-    first_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    second_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    first_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    second_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
     claimed_image: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=4,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
     )
 
     @model_validator(mode="after")
@@ -752,7 +762,9 @@ class PolynomialMapEvaluation(ContractModel):
     evaluation_schema_version: Literal["1"] = "1"
     map_uri: ArtifactUri
     point: RationalPolynomialPoint
-    image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    image: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
     backend: Literal["sympy"] = "sympy"
     backend_version: str = Field(min_length=1, max_length=64)
 
@@ -920,9 +932,15 @@ class PolynomialKellerConditionReplayPayload(ContractModel):
 
 
 class PolynomialCollisionPayload(ContractModel):
-    first_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    second_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    first_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    second_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    image: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
 
     @model_validator(mode="after")
     def require_matching_point_dimensions(self) -> Self:

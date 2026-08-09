@@ -280,10 +280,11 @@ def read_evidence_json(
     if target is None:
         return None
     try:
-        value = json.loads(
-            target.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-        )
+        with target.open("rb") as stream:
+            value = json.load(
+                stream,
+                object_pairs_hook=_reject_duplicate_keys,
+            )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None

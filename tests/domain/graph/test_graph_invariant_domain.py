@@ -107,7 +107,7 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
             "upper_bound": 2,
         },
     }
-    assert matching.capability_version == "2"
+    assert matching.capability_version == "3"
 
     star = domain_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -128,6 +128,48 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
         "odd_component_count": 3,
         "upper_bound": 1,
     }
+
+
+def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
+    domain_services,
+) -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    edges = [[vertices[index], vertices[index + 1]] for index in range(0, 64, 2)]
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input={"graph": _graph(vertices, edges)},
+        )
+    )
+
+    assert result.output["result"]["maximum_matching_cardinality"] == 32
+    assert result.output["result"]["witness_edges"] == edges
+    assert result.output["result"]["certificate"] == {
+        "certificate_schema_version": "1",
+        "kind": "TUTTE_BERGE_BARRIER",
+        "barrier_vertices": [],
+        "odd_component_count": 0,
+        "upper_bound": 32,
+    }
+
+    too_large = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input={"graph": _graph([*vertices, "v64"], edges)},
+        )
+    )
+    assert too_large.execution.status is ExecutionStatus.ERROR
+    assert too_large.diagnostics[0].code == "INVALID_REQUEST"
+
+    unrelated_invariant = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.diameter.compute",
+            input={"graph": _graph(vertices[:33], edges[:16])},
+        )
+    )
+    assert unrelated_invariant.execution.status is ExecutionStatus.ERROR
+    assert unrelated_invariant.diagnostics[0].code == "INVALID_REQUEST"
 
 
 def test_disconnected_and_acyclic_graph_conventions(domain_services) -> None:

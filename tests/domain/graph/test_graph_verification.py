@@ -165,7 +165,7 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
         )
     )
 
-    assert computed.capability_version == "2"
+    assert computed.capability_version == "3"
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == (
@@ -211,6 +211,37 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
+
+
+def test_maximum_matching_verifier_replays_a_64_vertex_certificate(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    producer_input = {
+        "graph": {
+            "vertices": vertices,
+            "edges": [
+                [vertices[index], vertices[index + 1]] for index in range(0, 64, 2)
+            ],
+        }
+    }
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input=producer_input,
+        )
+    )
+
+    verified = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": producer_input, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
 @pytest.mark.parametrize(

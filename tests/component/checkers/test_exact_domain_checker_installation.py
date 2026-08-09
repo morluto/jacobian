@@ -7,7 +7,10 @@ from tests.support.artifacts import artifact_uri as _uri
 
 import jacobian.exact_domain_checkers as exact_domain_checkers
 from jacobian.contracts.capabilities import CapabilityProviderAvailability
-from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
+from jacobian.contracts.graph_invariant_operations import (
+    GraphInvariantRequest,
+    GraphMaximumMatchingRequest,
+)
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphMinimumSpanningTreeRequest,
@@ -174,7 +177,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             character="7",
         ),
         graph_invariants=_installed(
-            (GraphInvariantRequest,),
+            (GraphInvariantRequest, GraphMaximumMatchingRequest),
             graph_ids[3:],
             character="8",
         ),
@@ -325,7 +328,7 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
         character="7",
     )
     graph_invariants = _installed(
-        (GraphInvariantRequest,),
+        (GraphInvariantRequest, GraphMaximumMatchingRequest),
         (
             "graph.invariant.diameter.compute",
             "graph.invariant.radius.compute",

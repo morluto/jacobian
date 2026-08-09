@@ -141,7 +141,7 @@ def _inline_verifier_invocation_protocol(
             "mode": "VERIFY",
             "payload": {
                 "input": "<exact producer input object>",
-                "candidate": "<exact producer result object>",
+                "candidate": "<producer response.output.result>",
             },
         },
         "payload_rule": (

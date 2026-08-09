@@ -137,7 +137,7 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
                     "mode": "VERIFY",
                     "payload": {
                         "input": "<exact producer input object>",
-                        "candidate": "<exact producer result object>",
+                        "candidate": "<producer response.output.result>",
                     },
                 },
                 "payload_rule": (

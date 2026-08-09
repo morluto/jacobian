@@ -79,6 +79,29 @@ class _DiscoveryInvocationExample(_MCPOutputModel):
     payload: dict[str, Any]
 
 
+class _InlineVerifierPayload(_MCPOutputModel):
+    """Producer values required by an inline verifier replay."""
+
+    input: Literal["<exact producer input object>"]
+    candidate: Literal["<producer response.output.result>"]
+
+
+class _InlineVerifierArguments(_MCPOutputModel):
+    """Complete ``math.run`` argument envelope for inline verification."""
+
+    capability_id: CapabilityId
+    mode: Literal[CapabilityMode.VERIFY]
+    payload: _InlineVerifierPayload
+
+
+class _InlineVerifierInvocationProtocol(_MCPOutputModel):
+    """Closed discovery contract for invoking an inline verifier."""
+
+    tool: Literal["math.run"]
+    arguments_shape: _InlineVerifierArguments
+    payload_rule: str
+
+
 class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
     accepted_input_kinds: tuple[CapabilityInputKind, ...]
     accepted_artifact_types: tuple[ArtifactUri, ...]
@@ -90,7 +113,7 @@ class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
     provider_availability: CapabilityProviderAvailability | Literal["UNKNOWN"]
     related_capabilities: tuple[_RelatedCapability, ...]
     invocation_example: _DiscoveryInvocationExample | None = None
-    invocation_protocol: dict[str, Any] | None = None
+    invocation_protocol: _InlineVerifierInvocationProtocol | None = None
 
 
 class _ProviderRuntimeProjection(_MCPOutputModel):
@@ -233,7 +256,7 @@ class _CapabilityInspectionResult(_CapabilityDiscoveryFields):
     truncation_reason: str | None = None
     related_capabilities_truncated: bool
     invocations: tuple[_CapabilityInvocation, ...] | None = None
-    invocation_protocol: dict[str, Any] | None = None
+    invocation_protocol: _InlineVerifierInvocationProtocol | None = None
     related_capabilities: tuple[_RelatedCapability, ...] | None = None
     synchronous_execution: _SynchronousExecution | None = None
     next_views: _NextCapabilityViews | None = None

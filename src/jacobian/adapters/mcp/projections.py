@@ -8,7 +8,10 @@ import logging
 import threading
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from jacobian.adapters.mcp.constants import CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+from jacobian.adapters.mcp.constants import (
+    CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+    CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT,
+)
 from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityDiscoveryCursorError
@@ -251,39 +254,19 @@ def _compact_discovery_relationships(
             return
 
 
-def _bound_capability_inspection(response: dict[str, Any]) -> None:
-    """Bound inspection, falling back to the canonical catalog when necessary."""
+def _compact_inspection_relationships(response: dict[str, Any]) -> None:
+    """Bound exact-inspection relationships without truncating the descriptor."""
 
     related = response.get("related_capabilities")
     while (
-        len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+        len(_mcp_text_json_bytes(related))
+        > CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT
         and isinstance(related, list)
         and related
     ):
         related.pop()
         response["related_capabilities_truncated"] = True
         response["truncation_reason"] = "BYTE_LIMIT"
-    if len(_mcp_text_json_bytes(response)) <= CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT:
-        return
-
-    response.clear()
-    response.update(
-        {
-            "kind": "error",
-            "error": {
-                "code": "CAPABILITY_INSPECTION_TOO_LARGE",
-                "stage": "capability_inspection",
-                "message": (
-                    "The requested capability inspection exceeds the bounded "
-                    "math.find response size."
-                ),
-                "hint": (
-                    "Read capability://catalog for the complete descriptor. A "
-                    "SUMMARY view may fit when CONTRACT or FULL was requested."
-                ),
-            },
-        }
-    )
 
 
 def _discovery_recovery_paths(

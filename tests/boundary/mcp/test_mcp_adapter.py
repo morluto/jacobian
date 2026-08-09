@@ -317,62 +317,22 @@ def test_math_find_compacts_exact_inspection_relationships(
         structured = result.structured_content
         text_result = json.loads(result.content[0].text)
         assert (
-            len(projections._mcp_text_json_bytes(structured))
-            <= structured["response_byte_limit"]
+            len(
+                projections._mcp_text_json_bytes(
+                    structured.get("related_capabilities", [])
+                )
+            )
+            <= structured["related_capabilities_byte_limit"]
         )
         assert structured["related_capabilities_truncated"] is True
         assert structured["truncation_reason"] == "BYTE_LIMIT"
+        assert "response_byte_limit" not in structured
         assert "related_capabilities" not in structured["capability"]
         assert text_result["related_capabilities_truncated"] is True
         assert text_result["truncation_reason"] == "BYTE_LIMIT"
-
-    asyncio.run(scenario())
-
-
-@pytest.mark.parametrize("view", ["CONTRACT", "FULL"])
-def test_math_find_falls_back_when_exact_inspection_contract_exceeds_limit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    view: str,
-) -> None:
-    from jacobian.adapters.mcp import projections, tools
-
-    original_view = projections._capability_descriptor_view
-
-    def oversized_view(*args, **kwargs):
-        projected = original_view(*args, **kwargs)
-        if kwargs["view"] == view:
-            projected["input_schema"] = {
-                "type": "object",
-                "x-contract-padding": "x"
-                * projections.CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
-            }
-        return projected
-
-    monkeypatch.setattr(tools, "_capability_descriptor_view", oversized_view)
-
-    async def scenario() -> None:
-        from mcp import Client
-
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            result = await client.call_tool(
-                "math.find",
-                {
-                    "capability_id": "polynomial.integer.compute.gcd",
-                    "view": view,
-                },
-            )
-
-        assert result.structured_content is not None
-        structured = result.structured_content
-        text_result = json.loads(result.content[0].text)
-        assert structured["kind"] == "error"
-        assert structured["error"]["code"] == "CAPABILITY_INSPECTION_TOO_LARGE"
-        assert "capability://catalog" in structured["error"]["hint"]
-        assert text_result == {"error": structured["error"]}
         assert (
-            len(projections._mcp_text_json_bytes(structured))
-            <= projections.CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+            text_result["related_capabilities_byte_limit"]
+            == structured["related_capabilities_byte_limit"]
         )
 
     asyncio.run(scenario())

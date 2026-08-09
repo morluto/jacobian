@@ -208,11 +208,13 @@ performs no Jacobian probe.
 Keep the assurance vocabulary identical in both conditions. In particular,
 reserve `VERIFIED` for a result bound to the exact task input by an
 operator-authorized checker and its verification record. A correct manual
-derivation, self-written check, source citation, or producer result may support
-`COMPUTED`, but it is not `VERIFIED`. Put this rule in any ad hoc prompt that
-does not already expose the task's structured submission contract. Otherwise a
-control answer can reuse `VERIFIED` as an ordinary English synonym and make the
-assurance comparison misleading.
+derivation, self-written check, or source citation may support mathematical
+correctness, but does not itself establish `COMPUTED` and is not `VERIFIED`. A
+producer result carries only the assurance stated by its operation contract.
+Put this rule in any ad hoc prompt that does not already expose the task's
+structured submission contract. Otherwise a control answer can reuse
+`VERIFIED` as an ordinary English synonym and make the assurance comparison
+misleading.
 
 `JACOBIAN_ENABLED=1` selects the treatment job and passes
 Harbor's `--mcp-config` option. `JACOBIAN_EVAL_PROXY=1` selects matching

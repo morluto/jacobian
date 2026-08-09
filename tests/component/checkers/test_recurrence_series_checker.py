@@ -13,6 +13,7 @@ from tests.support.rationals import rational_payload as _q
 import jacobian_checkers.recurrence_series as checker_module
 from jacobian_checkers.recurrence_series import (
     check_linear_recurrence_evaluation,
+    check_polynomial_coefficient_recurrence_evaluation,
     check_rational_generating_function_coefficients,
 )
 
@@ -24,6 +25,7 @@ _META = {
     "verification": "UNVERIFIED",
 }
 _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
+_P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
 
 
 def _artifact(
@@ -126,6 +128,38 @@ _CASES: tuple[
         ),
     ),
     (
+        check_polynomial_coefficient_recurrence_evaluation,
+        _request(
+            "combinatorics.recurrence.p_recursive.evaluate",
+            "combinatorics.p-recursive.fraction-residual-replay",
+            {
+                "coefficient_polynomials": [[_q(1)], [_q(0), _q(-1)]],
+                "initial_values": [_q(1)],
+                "coefficient_convention": _P_RECURSIVE_CONVENTION,
+                "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                "scope": "PREFIX",
+                "term_count": 6,
+                "indices": [],
+            },
+            {
+                "coefficient_convention": _P_RECURSIVE_CONVENTION,
+                "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                "scope": "PREFIX",
+                "recurrence_order": 1,
+                "values": [
+                    {"index": index, "value": _q(value)}
+                    for index, value in enumerate((1, 1, 2, 6, 24, 120))
+                ],
+                "replay_prefix": [_q(value) for value in (1, 1, 2, 6, 24, 120)],
+                "residuals": [
+                    {"index": index, "value": _q(0)} for index in range(1, 6)
+                ],
+                "replay_scope_end": 5,
+                **_META,
+            },
+        ),
+    ),
+    (
         check_rational_generating_function_coefficients,
         _request(
             "combinatorics.generating_function.coefficients.compute",
@@ -173,6 +207,9 @@ def test_recurrence_series_checkers_reject_false_candidates_with_fresh_digest(
     if checker is check_linear_recurrence_evaluation:
         forged["candidate"]["payload"]["replay_prefix"][5] = _q(6)
         forged["candidate"]["payload"]["values"][5]["value"] = _q(6)
+    elif checker is check_polynomial_coefficient_recurrence_evaluation:
+        forged["candidate"]["payload"]["replay_prefix"][5] = _q(121)
+        forged["candidate"]["payload"]["values"][5]["value"] = _q(121)
     else:
         forged["candidate"]["payload"]["coefficients"][5] = _q(9)
     forged["candidate"]["payload_digest"] = _digest(forged["candidate"]["payload"])
@@ -187,3 +224,46 @@ def test_recurrence_series_checker_has_no_sympy_or_producer_dependency() -> None
     source = inspect.getsource(checker_module)
     assert "import sympy" not in source
     assert "domains.combinatorics" not in source
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("recurrence_order",), True),
+        (("values", 0, "index"), False),
+        (("residuals", 0, "index"), True),
+    ],
+)
+def test_polynomial_recurrence_checker_rejects_boolean_result_integers(
+    path: tuple[str | int, ...],
+    value: bool,
+) -> None:
+    forged = copy.deepcopy(_CASES[1][1])
+    target: Any = forged["candidate"]["payload"]
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    forged["candidate"]["payload_digest"] = _digest(forged["candidate"]["payload"])
+
+    checked = check_polynomial_coefficient_recurrence_evaluation(forged)
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"
+
+
+def test_polynomial_recurrence_checker_rejects_boolean_replay_endpoint() -> None:
+    forged = copy.deepcopy(_CASES[1][1])
+    source = forged["claim"]["payload"]
+    source["term_count"] = 2
+    result = forged["candidate"]["payload"]
+    result["values"] = result["values"][:2]
+    result["replay_prefix"] = result["replay_prefix"][:2]
+    result["residuals"] = result["residuals"][:1]
+    result["replay_scope_end"] = True
+    forged["claim"]["payload_digest"] = _digest(source)
+    forged["candidate"]["payload_digest"] = _digest(result)
+
+    checked = check_polynomial_coefficient_recurrence_evaluation(forged)
+
+    assert checked["accepted"] is False
+    assert checked["conclusion"] == "UNKNOWN"

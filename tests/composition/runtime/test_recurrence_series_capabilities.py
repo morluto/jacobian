@@ -14,6 +14,7 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 
 _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
+_P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
 _PUBLIC_TASKS = (
     Path(__file__).resolve().parents[3]
     / "benchmarks"
@@ -84,6 +85,7 @@ def test_combinatorics_bundle_preserves_named_sequences_and_adds_atomic_generic_
         "combinatorics.compute.fibonacci_pair",
         "combinatorics.compute.lucas",
         "combinatorics.recurrence.linear.evaluate",
+        "combinatorics.recurrence.p_recursive.evaluate",
         "combinatorics.generating_function.coefficients.compute",
     }.issubset(ids)
     catalog_ids = {
@@ -144,6 +146,75 @@ def test_linear_recurrence_exposes_requested_values_and_complete_replay(
     assert len(sparse.output["result"]["replay_prefix"]) == 8
     assert sparse.artifact_uris == ()
     assert sparse.relationships == ()
+
+
+def test_polynomial_coefficient_recurrence_exposes_exact_terms_and_residuals(
+    fresh_complete_runtime,
+) -> None:
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="combinatorics.recurrence.p_recursive.evaluate",
+            input={
+                "coefficient_polynomials": [
+                    [_q(1), _q(1)],
+                    [_q(2), _q(-6)],
+                    [_q(-13), _q(9)],
+                    [_q(-4)],
+                    [_q(16), _q(-4)],
+                ],
+                "initial_values": [_q(1), _q(1), _q(1), _q(2)],
+                "coefficient_convention": _P_RECURSIVE_CONVENTION,
+                "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                "scope": "PREFIX",
+                "term_count": 17,
+                "indices": [],
+            },
+        )
+    )
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert [item["value"]["num"] for item in result.output["result"]["values"]] == [
+        "1",
+        "1",
+        "1",
+        "2",
+        "5",
+        "14",
+        "41",
+        "123",
+        "375",
+        "1158",
+        "3615",
+        "11393",
+        "36209",
+        "115940",
+        "373709",
+        "1211740",
+        "3949969",
+    ]
+    assert {item["value"]["num"] for item in result.output["result"]["residuals"]} == {
+        "0"
+    }
+
+
+def test_polynomial_coefficient_recurrence_rejects_singular_required_step(
+    fresh_complete_runtime,
+) -> None:
+    result = fresh_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="combinatorics.recurrence.p_recursive.evaluate",
+            input={
+                "coefficient_polynomials": [[_q(-2), _q(1)], [_q(-1)]],
+                "initial_values": [_q(1)],
+                "coefficient_convention": _P_RECURSIVE_CONVENTION,
+                "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                "scope": "PREFIX",
+                "term_count": 4,
+                "indices": [],
+            },
+        )
+    )
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_COMBINATORICS_REQUEST"
 
 
 def test_large_rational_results_cross_the_python_conversion_limit_safely(

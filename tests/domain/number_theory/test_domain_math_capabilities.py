@@ -121,6 +121,27 @@ def test_modular_polynomial_identity_rejects_negative_zero_coefficient() -> None
         )
 
 
+@pytest.mark.parametrize("exponent", (-1, 33))
+def test_modular_polynomial_identity_result_rejects_out_of_scope_exponents(
+    exponent: int,
+) -> None:
+    with pytest.raises(ValidationError):
+        ModularPolynomialIdentityResult.model_validate(
+            {
+                "semantics_version": "modular-polynomial-identity.v1",
+                "modulus": 5,
+                "variable_order": ["x"],
+                "normalized_left": [
+                    {"coefficient": 1, "exponents": [exponent]}
+                ],
+                "normalized_right": [],
+                "residual": [],
+                "identical": False,
+                "comparison_scope": "FORMAL_COEFFICIENTWISE_IDENTITY",
+            }
+        )
+
+
 @pytest.mark.parametrize("modulus", (4, 8, 7))
 def test_modular_polynomial_identity_combines_duplicates_and_detects_difference(
     domain_services: DomainTestServices,

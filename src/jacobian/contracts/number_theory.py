@@ -512,7 +512,9 @@ class NormalizedModularPolynomialTerm(ContractModel):
     """One sparse term with its coefficient reduced to the canonical residue."""
 
     coefficient: StrictInt = Field(ge=1, lt=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
-    exponents: tuple[StrictInt, ...] = Field(
+    exponents: tuple[
+        Annotated[StrictInt, Field(ge=0, le=_MAX_RESIDUE_EXPONENT)], ...
+    ] = Field(
         min_length=1,
         max_length=_MAX_RESIDUE_VARIABLES,
     )

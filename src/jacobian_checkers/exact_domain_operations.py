@@ -671,6 +671,28 @@ def _modular_identity_terms(
     if not isinstance(raw_terms, list) or len(raw_terms) > max_terms:
         raise ValueError("modular-polynomial terms are malformed")
     coefficients: dict[tuple[int, ...], fmpz] = {}
+    _accumulate_modular_identity_terms(
+        raw_terms,
+        coefficients=coefficients,
+        variable_count=variable_count,
+        modulus=modulus,
+        sign=1,
+    )
+    return [
+        {"coefficient": int(coefficient), "exponents": list(exponents)}
+        for exponents, coefficient in sorted(coefficients.items())
+        if coefficient
+    ]
+
+
+def _accumulate_modular_identity_terms(
+    raw_terms: list[object],
+    *,
+    coefficients: dict[tuple[int, ...], fmpz],
+    variable_count: int,
+    modulus: int,
+    sign: int,
+) -> None:
     flint_modulus = fmpz(modulus)
     for term in raw_terms:
         if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
@@ -689,8 +711,36 @@ def _modular_identity_terms(
             raise ValueError("modular-polynomial exponents are malformed")
         exponent_vector = tuple(exponents)
         coefficients[exponent_vector] = (
-            coefficients.get(exponent_vector, fmpz(0)) + _integer(term["coefficient"])
+            coefficients.get(exponent_vector, fmpz(0))
+            + sign * _integer(term["coefficient"])
         ) % flint_modulus
+
+
+def _modular_identity_residual(
+    left: object, right: object, *, variable_count: int, modulus: int
+) -> list[dict[str, object]]:
+    if (
+        not isinstance(left, list)
+        or len(left) > _MAX_RESIDUE_TERMS
+        or not isinstance(right, list)
+        or len(right) > _MAX_RESIDUE_TERMS
+    ):
+        raise ValueError("modular-polynomial terms are malformed")
+    coefficients: dict[tuple[int, ...], fmpz] = {}
+    _accumulate_modular_identity_terms(
+        left,
+        coefficients=coefficients,
+        variable_count=variable_count,
+        modulus=modulus,
+        sign=1,
+    )
+    _accumulate_modular_identity_terms(
+        right,
+        coefficients=coefficients,
+        variable_count=variable_count,
+        modulus=modulus,
+        sign=-1,
+    )
     return [
         {"coefficient": int(coefficient), "exponents": list(exponents)}
         for exponents, coefficient in sorted(coefficients.items())
@@ -725,19 +775,11 @@ def _modular_polynomial_identity(
     right = _modular_identity_terms(
         source["right"], variable_count=len(variables), modulus=modulus
     )
-    signed_terms = list(source["left"])
-    for term in source["right"]:
-        signed_terms.append(
-            {
-                "coefficient": str(-_integer(term["coefficient"])),
-                "exponents": term["exponents"],
-            }
-        )
-    residual = _modular_identity_terms(
-        signed_terms,
+    residual = _modular_identity_residual(
+        source["left"],
+        source["right"],
         variable_count=len(variables),
         modulus=modulus,
-        max_terms=2 * _MAX_RESIDUE_TERMS,
     )
     return result == {
         "semantics_version": "modular-polynomial-identity.v1",

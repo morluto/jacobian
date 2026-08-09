@@ -205,8 +205,11 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
         "retry within the task resource bounds",
         "continue with other installed routes",
         "completeness, and open obligations",
+        "account for every exact outcome in the final comparison",
+        "does not validate another result or their comparison",
+        "compare the exact returned values",
     ):
-        assert guidance in skill
+        assert guidance in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

@@ -46,19 +46,14 @@ Use low `limit` values. For a selected operation's schema, call
 `invocation_example`, or required top-level fields, may be enough.
 
 Do not add a discovery domain filter unless its exact installed spelling is
-known. When discovery exposes recovery paths, follow those fields (for example,
-`remove_unknown_domain_filter`, `remove_filters`, or `reformulate_query`) before
+known. When discovery exposes recovery paths, follow those fields before
 treating absence as final. After invalid input, correct the reported constraint
-and retry within the task resource bounds as further errors appear. If one
-provider is unavailable, continue with other installed routes that can produce
-the outcome. Treat timeouts as non-conclusions. Accept only a completed result
-whose scope covers the input, and carry forward the smallest decisive value,
-witness, status, assurance, completeness, and open obligations; preserve artifact
-refs, including verification record URIs.
-
-Keep representation, decomposition, composition, iteration, verification
-timing, and stopping decisions agent-owned. Treat timeouts, errors, incomplete
-searches, and missing witnesses as non-conclusions.
+and retry within the task resource bounds. If
+one provider is unavailable, continue with other installed routes that can
+produce the outcome. Treat timeouts as non-conclusions. Accept only a completed
+result whose scope covers the input, and carry forward the smallest decisive
+value, witness, status, assurance, completeness, and open obligations; preserve
+artifact refs, including verification record URIs.
 
 When independent checking is requested, model-authored calculations or programs
 are not independent evidence. Use installed `VERIFY` when available. An artifact
@@ -69,3 +64,7 @@ required task authorization and bindings are preserved; otherwise use lower
 task-permitted assurance. Verification is bound to the exact checked claim: do
 not transfer `VERIFIED` from an input, premise, factorization, or related
 artifact to a model-derived conclusion, which needs its own checker-bound record.
+Before concluding, account for every exact outcome in the final comparison. A
+`VERIFIED` sub-result does not validate another result or their comparison. When
+a suitable installed operation exists, run it for each outcome and compare the
+exact returned values.

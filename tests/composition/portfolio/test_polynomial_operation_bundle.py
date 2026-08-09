@@ -276,6 +276,36 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
     assert timeout_result.artifact_uris == ()
 
 
+def test_groebner_result_preserves_advertised_input_variable_bound(
+    attached_complete_runtime,
+) -> None:
+    variables = ["a", "b", "c", "d", "e"]
+    result = _invoke(
+        attached_complete_runtime,
+        "polynomial.groebner_basis.compute",
+        {
+            "generators": [
+                _polynomial(variables, [((0, 0, 0, 0, 0), 1, 1)]),
+            ],
+            "monomial_order": "lex",
+            "resource_budget": {
+                "wall_seconds": 10,
+                "maximum_basis_polynomials": 64,
+                "maximum_output_terms": 1024,
+            },
+        },
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output == {
+        "variables": variables,
+        "monomial_order": "lex",
+        "basis": [_polynomial(variables, [((0, 0, 0, 0, 0), 1, 1)])],
+        "completion": "COMPLETE",
+        "normalization": "REDUCED_MONIC",
+    }
+
+
 def test_polynomial_output_budget_failure_is_explicit_and_writes_no_artifacts(
     attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,

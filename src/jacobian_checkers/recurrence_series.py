@@ -261,6 +261,7 @@ def _p_recursive_metadata_matches(
             "coefficient_convention",
             "polynomial_convention",
             "scope",
+            "recurrence_order",
             "values",
             "replay_prefix",
             "residuals",
@@ -353,7 +354,7 @@ def _replay_polynomial_coefficient_recurrence(
         return False
     initial = _fractions(source["initial_values"], minimum=1, maximum=16, max_digits=64)
     order = len(polynomials) - 1
-    if len(initial) != order:
+    if len(initial) != order or result["recurrence_order"] != order:
         return False
     raw_indices = source["indices"]
     if not isinstance(raw_indices, list) or len(raw_indices) > 256:

@@ -125,6 +125,7 @@ def evaluate_polynomial_coefficient_recurrence(
         coefficient_convention=request.coefficient_convention,
         polynomial_convention=request.polynomial_convention,
         scope=request.scope,
+        recurrence_order=order,
         values=tuple(
             IndexedRationalValue(index=index, value=replay_wire[index])
             for index in requested_indices

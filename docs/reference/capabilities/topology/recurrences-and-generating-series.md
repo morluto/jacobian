@@ -30,8 +30,9 @@ coefficient vectors for polynomials \(p_0(n),\ldots,p_d(n)\) and evaluates
 
 The initial vector is exactly \((a_0,\ldots,a_{d-1})\). Requests select a
 prefix or strictly increasing indices, while the result preserves the complete
-prefix through the greatest requested index and every exact recurrence
-residual from index \(d\) onward. The request is rejected before execution if
+prefix through the greatest requested index, the recurrence order \(d\), and
+every exact recurrence residual at the consecutive indices from \(d\) through
+that endpoint. The request is rejected before execution if
 the leading polynomial \(p_0(n)\) vanishes at a required recurrence step;
 singular relations are not divided by zero or interpreted as conclusions.
 

@@ -145,6 +145,7 @@ _CASES: tuple[
                 "coefficient_convention": _P_RECURSIVE_CONVENTION,
                 "polynomial_convention": "ASCENDING_POWERS_OF_N",
                 "scope": "PREFIX",
+                "recurrence_order": 1,
                 "values": [
                     {"index": index, "value": _q(value)}
                     for index, value in enumerate((1, 1, 2, 6, 24, 120))

@@ -266,6 +266,7 @@ def _validate_p_recursive_result_budget(
             "polynomial_convention": polynomial_convention,
             "determinism": "DETERMINISTIC",
             "exactness": "EXACT_RATIONAL",
+            "recurrence_order": order,
             "replay_prefix": [_fraction_wire(value) for value in replay],
             "residuals": [
                 {"index": index, "value": _fraction_wire(value)}
@@ -981,6 +982,7 @@ class PolynomialCoefficientRecurrenceEvaluationResult(ContractModel):
     ]
     polynomial_convention: Literal["ASCENDING_POWERS_OF_N"]
     scope: Literal["PREFIX", "INDICES"]
+    recurrence_order: StrictInt = Field(ge=1, le=MAX_LINEAR_RECURRENCE_ORDER)
     values: tuple[IndexedRationalValue, ...] = Field(
         min_length=1, max_length=MAX_LINEAR_RECURRENCE_INDEX + 1
     )
@@ -1002,15 +1004,28 @@ class PolynomialCoefficientRecurrenceEvaluationResult(ContractModel):
         if len(self.replay_prefix) != self.replay_scope_end + 1:
             raise ValueError("replay_prefix must cover the complete bounded scope")
         indices = tuple(item.index for item in self.values)
+        if any(left >= right for left, right in pairwise(indices)):
+            raise ValueError("result indices must be strictly increasing")
         if indices[-1] != self.replay_scope_end:
             raise ValueError("the greatest requested index must bind replay_scope_end")
         if any(item.value != self.replay_prefix[item.index] for item in self.values):
             raise ValueError("indexed values must match the recurrence replay prefix")
+        if self.scope == "PREFIX" and indices != tuple(range(len(indices))):
+            raise ValueError(
+                "PREFIX results must contain consecutive indices from zero"
+            )
         for value in self.replay_prefix:
             require_bounded_rational(
                 value,
                 max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
                 label="polynomial-coefficient recurrence replay value",
+            )
+        residual_indices = tuple(item.index for item in self.residuals)
+        if residual_indices != tuple(
+            range(self.recurrence_order, self.replay_scope_end + 1)
+        ):
+            raise ValueError(
+                "residuals must cover every recurrence step through replay_scope_end"
             )
         if any(item.value.as_fraction() != 0 for item in self.residuals):
             raise ValueError("every recurrence residual must be exactly zero")

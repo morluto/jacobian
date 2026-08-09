@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.number_theory import (
     FiniteFieldPolynomialMapRequest,
+    FiniteFieldPolynomialMapResult,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
 )
@@ -33,6 +34,12 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         build_number_theory_bundle(),
     ) as services:
         yield services
+
+
+def test_finite_field_fiber_histogram_has_contract_level_bound() -> None:
+    schema = FiniteFieldPolynomialMapResult.model_json_schema()
+
+    assert schema["properties"]["fiber_histogram"]["maxItems"] == 20_000
 
 
 def _stored_modular_residue_result(

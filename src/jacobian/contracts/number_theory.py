@@ -637,7 +637,9 @@ class FiniteFieldPolynomialMapResult(ContractModel):
     total_inputs: StrictInt = Field(ge=2, le=_MAX_EXTENSION_FIELD_ORDER)
     distinct_outputs: StrictInt = Field(ge=1, le=_MAX_EXTENSION_FIELD_ORDER)
     collision_excess: StrictInt = Field(ge=0, le=_MAX_EXTENSION_FIELD_ORDER)
-    fiber_histogram: tuple[FiniteFieldFiberCount, ...] = Field(min_length=1)
+    fiber_histogram: tuple[FiniteFieldFiberCount, ...] = Field(
+        min_length=1, max_length=_MAX_EXTENSION_FIELD_ORDER
+    )
     is_permutation: StrictBool
     first_collision: FiniteFieldCollisionWitness | None = None
     output_sequence_sha256: Annotated[

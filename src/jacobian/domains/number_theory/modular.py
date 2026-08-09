@@ -3,6 +3,8 @@
 from jacobian.contracts.number_theory import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
+    FiniteFieldPolynomialMapRequest,
+    FiniteFieldPolynomialMapResult,
     IntegerValueResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
@@ -21,6 +23,7 @@ from jacobian.domains.number_theory.discrete_logarithm import (
     DISCRETE_LOGARITHM_CAPABILITY,
 )
 from jacobian.domains.number_theory.operations import (
+    compute_finite_field_polynomial_map_fibers,
     compute_jacobi_symbol,
     compute_modular_inverse,
     compute_modular_polynomial_residue_image,
@@ -31,6 +34,41 @@ from jacobian.domains.number_theory.operations import (
 )
 
 MODULAR_CAPABILITIES = (
+    number_theory_operation(
+        "finite_field.polynomial_map.fibers.compute",
+        "Compute extension-field polynomial-map fibers",
+        (
+            "Exhaustively evaluate a bounded univariate polynomial map on "
+            "F_p[t]/(m), returning its complete fiber histogram, first collision, "
+            "permutation decision, and an encoding-bound output-sequence digest."
+        ),
+        FiniteFieldPolynomialMapRequest,
+        FiniteFieldPolynomialMapResult,
+        compute_finite_field_polynomial_map_fibers,
+        "number-theory",
+        "finite-field",
+        "extension-field",
+        "polynomial",
+        "permutation",
+        "collision",
+        "enumeration",
+        relation_id="finite_field.polynomial_map.fibers.relation",
+        invocation_examples=(
+            example(
+                "f121_squared_permutation_trinomial",
+                "Audit the p=11, degree-four permutation-trinomial instance.",
+                {
+                    "characteristic": 11,
+                    "modulus_coefficients_ascending": [2, 1, 0, 0, 1],
+                    "terms": [
+                        {"coefficient": [1, 0, 0, 0], "exponent": 131},
+                        {"coefficient": [1, 0, 0, 0], "exponent": 1211},
+                        {"coefficient": [10, 0, 0, 0], "exponent": 1331},
+                    ],
+                },
+            ),
+        ),
+    ),
     number_theory_operation(
         "number_theory.compute.jacobi_symbol",
         "Compute Jacobi symbol",

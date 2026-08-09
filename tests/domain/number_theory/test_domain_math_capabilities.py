@@ -11,6 +11,7 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
     CapabilityDiscoveryRequest,
+    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.number_theory import (
@@ -19,6 +20,9 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.exact_domain_checkers import install_exact_domain_verification
+from jacobian.operation_installation import OperationInstaller
+from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
@@ -298,6 +302,117 @@ def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
     assert output["image"] == [0]
     assert output["witnesses"] == [{"residue": 0, "assignment": [18, 1]}]
     assert output["table"] == [{"assignment": [18, 1], "residue": 0}]
+
+
+def _permutation_trinomial_payload() -> dict[str, object]:
+    return {
+        "characteristic": 11,
+        "modulus_coefficients_ascending": [2, 1, 0, 0, 1],
+        "terms": [
+            {"coefficient": [1, 0, 0, 0], "exponent": 131},
+            {"coefficient": [1, 0, 0, 0], "exponent": 1211},
+            {"coefficient": [10, 0, 0, 0], "exponent": 1331},
+        ],
+    }
+
+
+def test_extension_field_permutation_map_is_complete_and_verified(
+    tmp_path: Path,
+) -> None:
+    with open_domain_services(
+        tmp_path / "verified-extension-field",
+        build_number_theory_bundle(),
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as domain_services:
+        bundle = build_number_theory_bundle()
+        installed = OperationInstaller(
+            domain_services.core.store,
+            domain_services.core.schemas,
+            domain_services.core.artifacts,
+        ).install(bundle)
+        adapters, _installation = install_exact_domain_verification(
+            domain_services.core.store,
+            domain_services.core.schemas,
+            domain_services.core.artifacts,
+            domain_services.installation.verification,
+            domain_services.core.checkers,
+            bundles={"number_theory": (bundle, installed)},
+            authorize=True,
+        )
+        for adapter in adapters:
+            domain_services.installation.register_capability(adapter)
+        payload = _permutation_trinomial_payload()
+        computed = domain_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="finite_field.polynomial_map.fibers.compute",
+                input=payload,
+            )
+        )
+        assert computed.execution.status is ExecutionStatus.COMPLETED
+        assert computed.output["result"] == {
+            "semantics_version": "finite-field-polynomial-map.v1",
+            "characteristic": 11,
+            "extension_degree": 4,
+            "modulus_coefficients_ascending": [2, 1, 0, 0, 1],
+            "terms": payload["terms"],
+            "enumeration_order": "BASE_P_LEAST_SIGNIFICANT_COEFFICIENT_FIRST",
+            "total_inputs": 14641,
+            "distinct_outputs": 14641,
+            "collision_excess": 0,
+            "fiber_histogram": [{"fiber_size": 1, "output_count": 14641}],
+            "is_permutation": True,
+            "first_collision": None,
+            "output_sequence_sha256": (
+                "6b30b8bcd45642e6320e79cffb547f4fb8b74291a5c2476e010403b94c2d57a6"
+            ),
+        }
+
+        verified = domain_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="finite_field.polynomial_map.fibers.verify",
+                mode=CapabilityMode.VERIFY,
+                input={"input": payload, "candidate": computed.output["result"]},
+            )
+        )
+        assert verified.execution.status is ExecutionStatus.COMPLETED
+        assert verified.output["status"] == "VERIFIED"
+
+
+def test_extension_field_map_reports_first_collision(
+    domain_services: DomainTestServices,
+) -> None:
+    computed = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.polynomial_map.fibers.compute",
+            input={
+                "characteristic": 3,
+                "modulus_coefficients_ascending": [1, 0, 1],
+                "terms": [{"coefficient": [1, 0], "exponent": 2}],
+            },
+        )
+    )
+    result = computed.output["result"]
+    assert result["is_permutation"] is False
+    assert result["distinct_outputs"] == 5
+    assert result["collision_excess"] == 4
+    assert result["first_collision"] is not None
+
+
+def test_extension_field_map_rejects_reducible_modulus_without_artifacts(
+    domain_services: DomainTestServices,
+) -> None:
+    computed = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.polynomial_map.fibers.compute",
+            input={
+                "characteristic": 3,
+                "modulus_coefficients_ascending": [2, 0, 1],
+                "terms": [{"coefficient": [1, 0], "exponent": 1}],
+            },
+        )
+    )
+    assert computed.execution.status is ExecutionStatus.ERROR
+    assert computed.artifact_uris == ()
 
 
 @pytest.mark.parametrize(

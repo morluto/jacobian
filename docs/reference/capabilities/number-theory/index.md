@@ -4,3 +4,4 @@
 
 - [Powerful-number decision](integer-powerful-number-decision.md)
 - [Integer prime-factorization verification](integer-prime-factorization-verification.md)
+- [Extension-field polynomial-map fibers](finite-field-polynomial-map-fibers.md)

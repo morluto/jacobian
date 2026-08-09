@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    FiniteFieldPolynomialMapRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
@@ -10,6 +11,32 @@ from jacobian.contracts.number_theory import (
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "finite_field.polynomial_map.fibers.compute",
+        FiniteFieldPolynomialMapRequest,
+        "check_finite_field_polynomial_map_fibers",
+        "finite-field.polynomial-map-fibers.stdlib-replay",
+        entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        replay_method="independent Python standard-library extension-field replay",
+        reason=(
+            "operator-authorized checker independently validates the quotient field "
+            "and exhaustively replays every polynomial-map evaluation"
+        ),
+        verification_capability_id="finite_field.polynomial_map.fibers.verify",
+        verification_title="Verify extension-field polynomial-map fibers",
+        verification_description=(
+            "Independently validate the extension-field modulus and replay the "
+            "complete fiber summary, collision witness, and sequence digest."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "number-theory",
+            "finite-field",
+            "polynomial",
+            "permutation",
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "integer.compute.prime_factorization",
         FactorizationRequest,

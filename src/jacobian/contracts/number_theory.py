@@ -39,6 +39,10 @@ _MAX_RESIDUE_TERMS = 64
 _MAX_RESIDUE_EXPONENT = 32
 _MAX_RESIDUE_ASSIGNMENTS = 4_096
 _MAX_POLYNOMIAL_RESIDUE_MODULUS = 1_000_000
+_MAX_EXTENSION_FIELD_ORDER = 20_000
+_MAX_EXTENSION_DEGREE = 4
+_MAX_EXTENSION_TERMS = 32
+_MAX_EXTENSION_EXPONENT = 1_000_000_000
 
 BoundedInteger = Annotated[
     str,
@@ -294,6 +298,57 @@ class ModularPolynomialResidueImageRequest(ContractModel):
         return self
 
 
+class FiniteFieldPolynomialTerm(ContractModel):
+    """One term of a univariate polynomial over a declared extension field."""
+
+    coefficient: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_EXTENSION_DEGREE
+    )
+    exponent: StrictInt = Field(ge=0, le=_MAX_EXTENSION_EXPONENT)
+
+
+class FiniteFieldPolynomialMapRequest(ContractModel):
+    """A bounded polynomial map on ``F_p[t]/(modulus)``."""
+
+    characteristic: StrictInt = Field(ge=2, le=257)
+    modulus_coefficients_ascending: tuple[StrictInt, ...] = Field(
+        min_length=2, max_length=_MAX_EXTENSION_DEGREE + 1
+    )
+    terms: tuple[FiniteFieldPolynomialTerm, ...] = Field(
+        min_length=0, max_length=_MAX_EXTENSION_TERMS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_extension_payload(self) -> Self:
+        p = self.characteristic
+        if any(p % divisor == 0 for divisor in range(2, math.isqrt(p) + 1)):
+            raise ValueError("finite-field characteristic must be prime")
+        degree = len(self.modulus_coefficients_ascending) - 1
+        if self.modulus_coefficients_ascending[-1] != 1:
+            raise ValueError("extension modulus must be monic")
+        if any(
+            coefficient < 0 or coefficient >= p
+            for coefficient in self.modulus_coefficients_ascending
+        ):
+            raise ValueError("modulus coefficients must be canonical residues")
+        if p**degree > _MAX_EXTENSION_FIELD_ORDER:
+            raise ValueError("extension field exceeds the 20,000-element bound")
+        if any(len(term.coefficient) != degree for term in self.terms):
+            raise ValueError("term coefficients must match the extension degree")
+        if any(
+            coordinate < 0 or coordinate >= p
+            for term in self.terms
+            for coordinate in term.coefficient
+        ):
+            raise ValueError("term coefficients must be canonical field elements")
+        exponents = tuple(term.exponent for term in self.terms)
+        if exponents != tuple(sorted(set(exponents))):
+            raise ValueError("term exponents must be unique and increasing")
+        if any(not any(term.coefficient) for term in self.terms):
+            raise ValueError("zero terms must be omitted")
+        return self
+
+
 class ChineseRemainderRequest(ContractModel):
     """A finite system of integer congruences with parallel residues and moduli."""
 
@@ -538,6 +593,76 @@ class ModularPolynomialResidueImageResult(ContractModel):
         assignments = _validate_residue_image_shape(self)
         residues = _validate_residue_image_table(self, assignments)
         _validate_residue_image_summaries(self, assignments, residues)
+        return self
+
+
+class FiniteFieldFiberCount(ContractModel):
+    fiber_size: StrictInt = Field(ge=1, le=_MAX_EXTENSION_FIELD_ORDER)
+    output_count: StrictInt = Field(ge=1, le=_MAX_EXTENSION_FIELD_ORDER)
+
+
+class FiniteFieldCollisionWitness(ContractModel):
+    left_input: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_EXTENSION_DEGREE
+    )
+    right_input: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_EXTENSION_DEGREE
+    )
+    common_output: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=_MAX_EXTENSION_DEGREE
+    )
+
+
+class FiniteFieldPolynomialMapResult(ContractModel):
+    """Complete fiber summary for one bounded extension-field polynomial map."""
+
+    semantics_version: Literal["finite-field-polynomial-map.v1"]
+    characteristic: StrictInt = Field(ge=2, le=257)
+    extension_degree: StrictInt = Field(ge=1, le=_MAX_EXTENSION_DEGREE)
+    modulus_coefficients_ascending: tuple[StrictInt, ...] = Field(
+        min_length=2, max_length=_MAX_EXTENSION_DEGREE + 1
+    )
+    terms: tuple[FiniteFieldPolynomialTerm, ...] = Field(
+        max_length=_MAX_EXTENSION_TERMS
+    )
+    enumeration_order: Literal["BASE_P_LEAST_SIGNIFICANT_COEFFICIENT_FIRST"]
+    total_inputs: StrictInt = Field(ge=2, le=_MAX_EXTENSION_FIELD_ORDER)
+    distinct_outputs: StrictInt = Field(ge=1, le=_MAX_EXTENSION_FIELD_ORDER)
+    collision_excess: StrictInt = Field(ge=0, le=_MAX_EXTENSION_FIELD_ORDER)
+    fiber_histogram: tuple[FiniteFieldFiberCount, ...] = Field(min_length=1)
+    is_permutation: StrictBool
+    first_collision: FiniteFieldCollisionWitness | None = None
+    output_sequence_sha256: Annotated[
+        str, StringConstraints(pattern=r"^[0-9a-f]{64}$", strict=True)
+    ]
+
+    @model_validator(mode="after")
+    def bind_complete_fiber_summary(self) -> Self:
+        if self.total_inputs != self.characteristic**self.extension_degree:
+            raise ValueError("total inputs must equal the extension-field order")
+        if self.distinct_outputs + self.collision_excess != self.total_inputs:
+            raise ValueError(
+                "collision excess must be total inputs minus distinct outputs"
+            )
+        sizes = tuple(item.fiber_size for item in self.fiber_histogram)
+        if sizes != tuple(sorted(set(sizes))):
+            raise ValueError("fiber histogram sizes must be unique and increasing")
+        if (
+            sum(item.output_count for item in self.fiber_histogram)
+            != self.distinct_outputs
+        ):
+            raise ValueError("fiber histogram must count every distinct output")
+        if (
+            sum(item.fiber_size * item.output_count for item in self.fiber_histogram)
+            != self.total_inputs
+        ):
+            raise ValueError("fiber histogram must count every input")
+        if self.is_permutation != (self.distinct_outputs == self.total_inputs):
+            raise ValueError("permutation decision does not match the fiber summary")
+        if self.is_permutation != (self.first_collision is None):
+            raise ValueError(
+                "collision witness presence must match the permutation decision"
+            )
         return self
 
 

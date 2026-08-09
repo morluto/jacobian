@@ -6,7 +6,9 @@ SymPy nor Jacobian code; only passive JSON values cross the checker boundary.
 
 from __future__ import annotations
 
+import hashlib
 import re
+from collections import Counter
 from collections.abc import Callable
 from itertools import product
 from typing import Any
@@ -1066,7 +1068,222 @@ def check_matrix_smith_normal_form(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _finite_field_source(
+    source: dict[str, Any],
+) -> tuple[int, list[int], list[tuple[tuple[int, ...], int]]]:
+    if set(source) != {
+        "characteristic",
+        "modulus_coefficients_ascending",
+        "terms",
+    }:
+        raise ValueError("malformed finite-field request")
+    p = source["characteristic"]
+    modulus = source["modulus_coefficients_ascending"]
+    terms = source["terms"]
+    if not _valid_finite_field_prime(p) or not _valid_extension_modulus(modulus, p):
+        raise ValueError("unsupported finite-field request")
+    degree = len(modulus) - 1
+    if p**degree > 20_000 or not isinstance(terms, list) or len(terms) > 32:
+        raise ValueError("extension field exceeds checker budget")
+    return p, modulus, _finite_field_terms(terms, p, degree)
+
+
+def _valid_finite_field_prime(value: object) -> bool:
+    if not isinstance(value, int) or isinstance(value, bool) or not 2 <= value <= 257:
+        return False
+    return not any(value % divisor == 0 for divisor in range(2, int(value**0.5) + 1))
+
+
+def _valid_extension_modulus(value: object, p: int) -> bool:
+    if not isinstance(value, list) or not 2 <= len(value) <= 5 or value[-1] != 1:
+        return False
+    return all(
+        isinstance(coordinate, int)
+        and not isinstance(coordinate, bool)
+        and 0 <= coordinate < p
+        for coordinate in value
+    )
+
+
+def _finite_field_terms(
+    terms: list[object], p: int, degree: int
+) -> list[tuple[tuple[int, ...], int]]:
+    normalized: list[tuple[tuple[int, ...], int]] = []
+    for term in terms:
+        if not isinstance(term, dict) or set(term) != {"coefficient", "exponent"}:
+            raise ValueError("malformed finite-field term")
+        coefficient, exponent = term["coefficient"], term["exponent"]
+        if not _valid_field_element(coefficient, p, degree) or not _valid_exponent(
+            exponent
+        ):
+            raise ValueError("malformed finite-field term")
+        normalized.append((tuple(coefficient), exponent))
+    return normalized
+
+
+def _valid_field_element(value: object, p: int, degree: int) -> bool:
+    if not isinstance(value, list) or len(value) != degree:
+        return False
+    return all(
+        isinstance(coordinate, int)
+        and not isinstance(coordinate, bool)
+        and 0 <= coordinate < p
+        for coordinate in value
+    )
+
+
+def _valid_exponent(value: object) -> bool:
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 0 <= value <= 1_000_000_000
+    )
+
+
+def _polynomial_remainder(
+    dividend: list[int], divisor: tuple[int, ...], p: int
+) -> list[int]:
+    value = [coordinate % p for coordinate in dividend]
+    while len(value) >= len(divisor):
+        leading = value[-1]
+        offset = len(value) - len(divisor)
+        for index, coordinate in enumerate(divisor):
+            value[offset + index] = (value[offset + index] - leading * coordinate) % p
+        while value and value[-1] == 0:
+            value.pop()
+    return value
+
+
+def _require_irreducible_modulus(modulus: list[int], p: int) -> None:
+    degree = len(modulus) - 1
+    for divisor_degree in range(1, degree // 2 + 1):
+        for lower in product(range(p), repeat=divisor_degree):
+            if not _polynomial_remainder(modulus, (*lower, 1), p):
+                raise ValueError("extension modulus is reducible")
+
+
+class _FiniteFieldReplay:
+    def __init__(
+        self,
+        p: int,
+        modulus: list[int],
+        terms: list[tuple[tuple[int, ...], int]],
+    ) -> None:
+        self.p = p
+        self.modulus = modulus
+        self.degree = len(modulus) - 1
+        self.terms = terms
+
+    def multiply(
+        self, left: tuple[int, ...], right: tuple[int, ...]
+    ) -> tuple[int, ...]:
+        coefficients = [0] * (2 * self.degree - 1)
+        for left_index, left_coordinate in enumerate(left):
+            for right_index, right_coordinate in enumerate(right):
+                coefficients[left_index + right_index] = (
+                    coefficients[left_index + right_index]
+                    + left_coordinate * right_coordinate
+                ) % self.p
+        for index in range(2 * self.degree - 2, self.degree - 1, -1):
+            leading = coefficients[index]
+            for modulus_index in range(self.degree):
+                target = index - self.degree + modulus_index
+                coefficients[target] = (
+                    coefficients[target] - leading * self.modulus[modulus_index]
+                ) % self.p
+        return tuple(coefficients[: self.degree])
+
+    def power(self, value: tuple[int, ...], exponent: int) -> tuple[int, ...]:
+        powered = (1,) + (0,) * (self.degree - 1)
+        base = value
+        while exponent:
+            if exponent & 1:
+                powered = self.multiply(powered, base)
+            base = self.multiply(base, base)
+            exponent //= 2
+        return powered
+
+    def evaluate(self, value: tuple[int, ...]) -> tuple[int, ...]:
+        output = [0] * self.degree
+        for coefficient, exponent in self.terms:
+            contribution = self.multiply(coefficient, self.power(value, exponent))
+            output = [
+                (left + right) % self.p
+                for left, right in zip(output, contribution, strict=True)
+            ]
+        return tuple(output)
+
+
+def _finite_field_replay_summary(
+    evaluator: _FiniteFieldReplay,
+) -> tuple[Counter[tuple[int, ...]], dict[str, object] | None, str]:
+    p, degree = evaluator.p, evaluator.degree
+    field_order = p**degree
+
+    counts: Counter[tuple[int, ...]] = Counter()
+    first_inputs: dict[tuple[int, ...], tuple[int, ...]] = {}
+    collision: dict[str, object] | None = None
+    digest = hashlib.sha256()
+    byte_width = max(1, (p.bit_length() + 7) // 8)
+    for encoded in range(field_order):
+        value = tuple((encoded // (p**index)) % p for index in range(degree))
+        output_tuple = evaluator.evaluate(value)
+        for coordinate in output_tuple:
+            digest.update(coordinate.to_bytes(byte_width, "big"))
+        if collision is None and output_tuple in first_inputs:
+            collision = {
+                "left_input": list(first_inputs[output_tuple]),
+                "right_input": list(value),
+                "common_output": list(output_tuple),
+            }
+        first_inputs.setdefault(output_tuple, value)
+        counts[output_tuple] += 1
+    return counts, collision, digest.hexdigest()
+
+
+def _finite_field_polynomial_map_fibers(
+    source: dict[str, Any], result: dict[str, Any]
+) -> bool:
+    p, modulus, terms = _finite_field_source(source)
+    _require_irreducible_modulus(modulus, p)
+    evaluator = _FiniteFieldReplay(p, modulus, terms)
+    counts, collision, digest = _finite_field_replay_summary(evaluator)
+    field_order = p**evaluator.degree
+    histogram = Counter(counts.values())
+    expected = {
+        "semantics_version": "finite-field-polynomial-map.v1",
+        "characteristic": p,
+        "extension_degree": evaluator.degree,
+        "modulus_coefficients_ascending": modulus,
+        "terms": source["terms"],
+        "enumeration_order": "BASE_P_LEAST_SIGNIFICANT_COEFFICIENT_FIRST",
+        "total_inputs": field_order,
+        "distinct_outputs": len(counts),
+        "collision_excess": field_order - len(counts),
+        "fiber_histogram": [
+            {"fiber_size": size, "output_count": histogram[size]}
+            for size in sorted(histogram)
+        ],
+        "is_permutation": len(counts) == field_order,
+        "first_collision": collision,
+        "output_sequence_sha256": digest,
+    }
+    return result == expected
+
+
+def check_finite_field_polynomial_map_fibers(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="finite_field.polynomial_map.fibers.compute",
+        witness_format="finite-field.polynomial-map-fibers.stdlib-replay",
+        replay=_finite_field_polynomial_map_fibers,
+    )
+
+
 __all__ = [
+    "check_finite_field_polynomial_map_fibers",
     "check_integer_powerful_number",
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",

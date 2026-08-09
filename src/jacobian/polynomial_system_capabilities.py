@@ -158,7 +158,10 @@ class PolynomialSystemSolutionAdapter:
     def __init__(self, resources: PolynomialSystemResources) -> None:
         self.resources = resources
         checker_id = resources.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError(
+                "polynomial system solution adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="polynomial.system.solution.verify",
             version="1",
@@ -207,7 +210,17 @@ class PolynomialSystemSolutionAdapter:
             ) from exc
         installation = self.resources.installation
         checker_id = installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="POLYNOMIAL_SYSTEM_CHECKER_UNAVAILABLE",
+                    stage="solution_verification",
+                    message=(
+                        "The independent polynomial-system checker is not installed "
+                        "in this runtime."
+                    ),
+                )
+            )
         equation_residuals, inequation_values = _evaluate_request(validated)
         system = self.resources.artifacts.put(
             schema_uri=installation.system_schema_uri,

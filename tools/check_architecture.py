@@ -144,6 +144,11 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
         # SAT assignment composition test invokes the SAT checker directly.
         PurePosixPath("tests/composition/runtime/test_sat_assignment_verification.py"),
+        # Polynomial-system composition test exercises checker authorization
+        # under an optimized Python interpreter.
+        PurePosixPath(
+            "tests/composition/runtime/test_polynomial_system_capabilities.py"
+        ),
         # Untrusted plugin entrypoints manage their own process lifecycle.
         PurePosixPath("tests/support/process_entrypoints.py"),
         # Architecture policy test uses subprocess in a synthetic import probe.
@@ -197,6 +202,10 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath(
             "benchmarks/validation/conjecture_probes_v1/"
             "test_yang_mills_gauge_invariance_certificate.py"
+        ),
+        PurePosixPath(
+            "benchmarks/validation/conjecture_probes_v1/"
+            "test_zarankiewicz_projective_plane_certificate.py"
         ),
         # Repository-command integration tests deliberately invoke CLI entrypoints.
         PurePosixPath("benchmarks/validation/test_benchmark_plan_validation.py"),

@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-__all__ = ["check_non_bipartite_preservation"]
-
 
 def check_non_bipartite_preservation(request: dict[str, Any]) -> dict[str, Any]:
     """Check independently that the reduced graph remains non-bipartite."""

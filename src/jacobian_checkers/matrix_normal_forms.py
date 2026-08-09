@@ -9,8 +9,6 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.matrices import MAX_MATRIX_SCALAR_DIGITS
 from jacobian_checkers.bound_artifacts import bound_request
 
-__all__ = ["check_hermite_normal_form"]
-
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 MAX_MATRIX_DIMENSION = 32
 MAX_INTEGER_DIGITS = MAX_MATRIX_SCALAR_DIGITS

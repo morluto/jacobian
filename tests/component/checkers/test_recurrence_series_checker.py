@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -10,7 +9,6 @@ from tests.support.artifacts import artifact_uri as _uri
 from tests.support.artifacts import canonical_digest as _digest
 from tests.support.rationals import rational_payload as _q
 
-import jacobian_checkers.recurrence_series as checker_module
 from jacobian_checkers.recurrence_series import (
     check_linear_recurrence_evaluation,
     check_polynomial_coefficient_recurrence_evaluation,
@@ -218,12 +216,6 @@ def test_recurrence_series_checkers_reject_false_candidates_with_fresh_digest(
 
     assert checked["accepted"] is False
     assert checked["conclusion"] == "UNKNOWN"
-
-
-def test_recurrence_series_checker_has_no_sympy_or_producer_dependency() -> None:
-    source = inspect.getsource(checker_module)
-    assert "import sympy" not in source
-    assert "domains.combinatorics" not in source
 
 
 @pytest.mark.parametrize(

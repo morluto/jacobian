@@ -7,9 +7,6 @@ from typing import Any
 
 from jacobian.canonical import canonicalize_json
 
-__all__ = ["check_finite_coverage"]
-
-
 _SPECS: dict[str, dict[str, str]] = {
     "finite.integer.decimal@1": {
         "item_type": "INTEGER",

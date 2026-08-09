@@ -13,8 +13,6 @@ from jacobian.contracts.plugin_number_theory import (
     ErdosStrausClaim,
 )
 
-__all__ = ("evaluate_capability", "find_witness_capability")
-
 
 def _decompose(n: int) -> tuple[int, int, int] | None:
     """Find ordered positive denominators using exact rational arithmetic."""

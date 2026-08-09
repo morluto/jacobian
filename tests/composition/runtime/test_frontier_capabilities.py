@@ -250,6 +250,27 @@ def test_hamiltonian_path_decision_has_independent_replay(
 def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     frontier_services: DomainTestServices,
 ) -> None:
+    descriptor = next(
+        item
+        for item in frontier_services.core.capabilities.catalog().capabilities
+        if item.capability_id == "polynomial.jacobian_syzygy.minimum_degree.compute"
+    )
+    sparse_example = next(
+        item
+        for item in descriptor.invocation_examples
+        if item.name == "sparse-homogeneous-polynomial"
+    )
+    example_result = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=descriptor.capability_id,
+            input=sparse_example.input,
+        )
+    )
+    assert example_result.execution.status is ExecutionStatus.COMPLETED
+    assert "unique exponent tuples in descending lexicographic order" in (
+        descriptor.description
+    )
+
     computed = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),

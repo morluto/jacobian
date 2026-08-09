@@ -325,7 +325,9 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
         "or as a labelled product of linear forms, exactly construct every "
         "graded map (QQ[x,y,z]_q)^3 -> QQ[x,y,z]_(q+deg(h)-1) from q=0, "
         "report rank certificates, and stop at the first nonzero kernel or the "
-        "declared finite degree bound. Full sparse maps are optional."
+        "declared finite degree bound. Sparse polynomial terms must have "
+        "nonzero coefficients and unique exponent tuples in descending "
+        "lexicographic order. Full sparse maps are optional."
     ),
     GradedJacobianSyzygyRequest,
     GradedJacobianSyzygyResult,
@@ -338,8 +340,38 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
     "rank",
     "kernel",
     "exact",
-    version="3",
+    version="4",
     invocation_examples=(
+        CapabilityInvocationExample(
+            name="sparse-homogeneous-polynomial",
+            description=(
+                "Supply h=x^2+y^2+z^2 with unique nonzero terms in descending "
+                "lexicographic exponent order."
+            ),
+            mode=CapabilityMode.EXPLORE,
+            input={
+                "polynomial": {
+                    "variables": ["x", "y", "z"],
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [2, 0, 0],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0, 2, 0],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0, 0, 2],
+                            },
+                        ]
+                    },
+                },
+                "max_degree": 0,
+            },
+        ),
         CapabilityInvocationExample(
             name="labelled-linear-factor-product",
             description=(

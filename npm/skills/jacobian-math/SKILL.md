@@ -31,6 +31,8 @@ Call `math.run` directly for these stable contracts, preserving JSON types:
 - `polynomial.compute.gcd` in `EXPLORE` mode: payload keys are `left` and
   `right`; each value has shape
   `{"polynomial_schema_version":"1","domain":"QQ","variables":["x"],"polynomial":{"terms":[{"coefficient":{"num":"1","den":"1"},"exponents":[2]}]}}`.
+- For expression normalization, inspect the known
+  `polynomial.expression.normalize` contract directly.
 - `matrix.determinant.verify` in `VERIFY` mode for an independent check:
   `{"determinant_uri":"<determinant_uri from compute output>"}`.
 
@@ -56,15 +58,15 @@ artifact refs, including verification record URIs.
 Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned.
 
-When independent checking is requested, model-authored calculations or programs
-are not independent evidence. Use installed `VERIFY` when available. An artifact
-URI or checker summary is not a task-local verification-record file: never
-reconstruct or paraphrase such a record from returned fields. Claim `VERIFIED`
-only when the result has assurance level `VERIFIED`, exact record bytes, and
-required task authorization and bindings are preserved; otherwise use lower
-task-permitted assurance. Verification is bound to the exact checked claim: do
-not transfer `VERIFIED` from an input, premise, factorization, or related
-artifact to a model-derived conclusion, which needs its own checker-bound record.
+Model-authored calculations or programs are not independent evidence. Use
+installed `VERIFY` when requested; a writable path or schema alone is not
+authorization. For task-level `VERIFIED`, require result assurance `VERIFIED`,
+exact record bytes, and that required task authorization and bindings are preserved;
+the visible contract must authorize the checker identity, digest, or Jacobian
+record type. Otherwise claim the highest lower permitted assurance (`CHECKED` or
+`COMPUTED`), even if Jacobian returned `VERIFIED`; never reconstruct or
+paraphrase such a record from tool fields or transfer verification between
+claims or artifacts.
 For locally constructed inline input, check payload fields against the intended
 object. When output echoes scope or a bound digest/URI, compare it with the
 submitted input; do not use mismatched output. This catches routing and

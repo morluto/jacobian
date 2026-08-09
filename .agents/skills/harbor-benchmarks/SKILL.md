@@ -104,6 +104,15 @@ configuration and MCP sidecar. Keep credentials, raw caches, host paths,
 floating dependencies, and Oracle/verifier material out of agent-visible
 files.
 
+Validate that the agent image and runtime expose no solution, verifier, Oracle,
+repository-internal, or host-path material. Harbor's phase ordering and
+separate-verifier mode support this boundary but do not prove it.
+
+Check that verifier timeout, network, CPU, memory, storage, and dependency
+behavior agree with the published task contract. Harbor applies configured
+limits subject to provider capabilities; Jacobian owns contract consistency and
+validation.
+
 Before choosing the mutating workflow, confirm that the dataset uses the
 current public-contract shape. Some older or provider-focused bundles have a
 Harbor `task.toml` but a task-local `tests/public_contract.json` that is not
@@ -302,6 +311,10 @@ verifier status. Use Harbor's artifact manifest as the source of truth for
 artifact identity and reject traversal, escaping symlinks, missing entries, and
 non-conclusion execution states.
 
+Bind committed studies to a retained immutable source revision or Jacobian
+snapshot identity. Reject relative or moving Git references such as `HEAD^`,
+branches, and unretained commits.
+
 Current separate-verifier tasks retain task-local `tests/verifier_support.py`
 copies because Harbor requires the separate verifier image to contain its test
 runtime in the task `tests/` build context. The local copy is authoritative and
@@ -355,6 +368,11 @@ and descriptions, invocation and parameter errors, artifact and verification
 record flow, repeated or irrelevant calls, shell/file activity, tokens, time,
 cost, and completion. Record the git tree, task digests, provider/runtime,
 model/settings, prompt, seeds, raw traces, and structured reports.
+
+For Jacobian studies that require reasoning telemetry, classify a trial as
+study-complete only after validating the required terminal reasoning event.
+Otherwise record it as `INCONCLUSIVE`. This classification is separate from
+Harbor's process and verifier completion.
 
 ## Handoff and publication
 

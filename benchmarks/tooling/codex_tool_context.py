@@ -64,14 +64,15 @@ def _visible_results(step: dict[str, Any]) -> dict[str, int]:
     return visible_by_call
 
 
-def _analyze_step(step: object) -> tuple[int, int, int, int, int, int]:
+def _analyze_step(step: object) -> tuple[int, int, int, int, int, int, int]:
     if not isinstance(step, dict):
-        return (0, 0, 0, 0, 0, 0)
+        return (0, 0, 0, 0, 0, 0, 0)
     visible_by_call = _visible_results(step)
     tool_calls = step.get("tool_calls", [])
     if not isinstance(tool_calls, list):
-        return (0, 0, 0, 0, 0, 0)
+        return (0, 0, 0, 0, 0, 0, 0)
     scan_count = scan_bytes = unbound_scan_count = tool_output_bytes = 0
+    jacobian_output_bytes = 0
     direct_find_references = direct_run_references = 0
     for call in tool_calls:
         if not isinstance(call, dict):
@@ -83,8 +84,12 @@ def _analyze_step(step: object) -> tuple[int, int, int, int, int, int]:
         source = arguments.get("input") if isinstance(arguments, dict) else None
         if call.get("function_name") != "exec" or not isinstance(source, str):
             continue
-        direct_find_references += source.count(_JACOBIAN_FIND)
-        direct_run_references += source.count(_JACOBIAN_RUN)
+        find_references = source.count(_JACOBIAN_FIND)
+        run_references = source.count(_JACOBIAN_RUN)
+        direct_find_references += find_references
+        direct_run_references += run_references
+        if find_references or run_references:
+            jacobian_output_bytes += visible
         if "ALL_TOOLS" in source:
             scan_count += 1
             scan_bytes += visible
@@ -95,6 +100,7 @@ def _analyze_step(step: object) -> tuple[int, int, int, int, int, int]:
         scan_bytes,
         unbound_scan_count,
         tool_output_bytes,
+        jacobian_output_bytes,
         direct_find_references,
         direct_run_references,
     )
@@ -108,6 +114,7 @@ def analyze_trajectory(path: Path) -> dict[str, Any]:
     scan_bytes = 0
     unbound_scan_count = 0
     tool_output_bytes = 0
+    jacobian_output_bytes = 0
     direct_find_references = 0
     direct_run_references = 0
 
@@ -117,8 +124,9 @@ def analyze_trajectory(path: Path) -> dict[str, Any]:
         scan_bytes += step_counts[1]
         unbound_scan_count += step_counts[2]
         tool_output_bytes += step_counts[3]
-        direct_find_references += step_counts[4]
-        direct_run_references += step_counts[5]
+        jacobian_output_bytes += step_counts[4]
+        direct_find_references += step_counts[5]
+        direct_run_references += step_counts[6]
 
     metrics = trajectory.get("final_metrics")
     metrics = metrics if isinstance(metrics, dict) else {}
@@ -137,6 +145,7 @@ def analyze_trajectory(path: Path) -> dict[str, Any]:
         "all_tools_model_visible_bytes": scan_bytes,
         "all_tools_unbound_observation_count": unbound_scan_count,
         "tool_model_visible_bytes": tool_output_bytes,
+        "direct_jacobian_find_run_model_visible_bytes": jacobian_output_bytes,
         "direct_jacobian_find_references": direct_find_references,
         "direct_jacobian_run_references": direct_run_references,
         "prompt_tokens": prompt_tokens,
@@ -165,6 +174,33 @@ def build_report(paths: list[Path], *, label: str) -> dict[str, Any]:
         "label": label,
         "trial_count": len(trials),
         "summary": {
+            "jacobian_invocation_trials": sum(
+                int(
+                    trial["direct_jacobian_find_references"] > 0
+                    or trial["direct_jacobian_run_references"] > 0
+                )
+                for trial in trials
+            ),
+            "jacobian_execution_trials": sum(
+                int(trial["direct_jacobian_run_references"] > 0) for trial in trials
+            ),
+            "jacobian_unused_trials": sum(
+                int(
+                    trial["direct_jacobian_find_references"] == 0
+                    and trial["direct_jacobian_run_references"] == 0
+                )
+                for trial in trials
+            ),
+            "direct_jacobian_find_references": sum(
+                int(trial["direct_jacobian_find_references"]) for trial in trials
+            ),
+            "direct_jacobian_run_references": sum(
+                int(trial["direct_jacobian_run_references"]) for trial in trials
+            ),
+            "direct_jacobian_find_run_model_visible_bytes": sum(
+                int(trial["direct_jacobian_find_run_model_visible_bytes"])
+                for trial in trials
+            ),
             "all_tools_scan_trials": sum(
                 int(trial["all_tools_scan_count"] > 0) for trial in trials
             ),

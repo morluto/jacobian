@@ -31,6 +31,25 @@ def _tool_event(
     }
 
 
+def test_agent_telemetry_records_itemless_turn_usage(tmp_path: Path) -> None:
+    usage = {
+        "input_tokens": 13550,
+        "cached_input_tokens": 13056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2522,
+        "reasoning_output_tokens": 1552,
+    }
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps({"type": "turn.completed", "usage": usage}) + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["usage"] == usage
+
+
 def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
     tmp_path: Path,
 ) -> None:

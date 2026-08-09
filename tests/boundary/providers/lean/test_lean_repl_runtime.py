@@ -334,3 +334,56 @@ def test_runtime_close_retries_failed_sessions_and_rejects_new_execution(
             tactic="skip",
             environment=LeanEnvironment.CORE,
         )
+
+
+def test_runtime_close_continues_after_keyboard_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = LeanExplorationReplRuntime(tmp_path, {})
+
+    class FakeSession:
+        def __init__(self, *, interrupt: bool) -> None:
+            self.interrupt = interrupt
+            self.close_calls = 0
+
+        def execute(
+            self,
+            *,
+            command: str,
+            tactic: str,
+            pickle_path: Path | None = None,
+        ) -> tuple[dict[str, object], dict[str, object]]:
+            return {}, {}
+
+        def close(self) -> None:
+            self.close_calls += 1
+            if self.interrupt:
+                raise KeyboardInterrupt("injected session close interrupt")
+
+    sessions = [FakeSession(interrupt=True), FakeSession(interrupt=False)]
+    monkeypatch.setattr(
+        runtime, "_create_session", lambda _environment: sessions.pop(0)
+    )
+    runtime.execute(command="first", tactic="skip", environment=LeanEnvironment.CORE)
+    runtime.execute(
+        command="second", tactic="skip", environment=LeanEnvironment.MATHLIB
+    )
+    interrupted, closed = tuple(
+        runtime._sessions[environment]
+        for environment in (LeanEnvironment.CORE, LeanEnvironment.MATHLIB)
+    )
+
+    with pytest.raises(
+        BaseExceptionGroup, match="Lean exploration sessions failed to close"
+    ) as exc:
+        runtime.close()
+
+    assert interrupted.close_calls == 1
+    assert closed.close_calls == 1
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "injected session close interrupt",
+    ]
+
+    interrupted.interrupt = False
+    runtime.close()

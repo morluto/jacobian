@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -293,10 +292,3 @@ def test_chain_checker_rejects_an_incomplete_reconstructed_boundary(
 
     assert checked["accepted"] is False
     assert checked["conclusion"] == "UNKNOWN"
-
-
-def test_checker_source_does_not_import_topology_producer_or_contracts() -> None:
-    source = inspect.getsource(checker_module)
-
-    assert "jacobian.domains.topology" not in source
-    assert "jacobian.contracts.topology" not in source

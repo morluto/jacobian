@@ -19,7 +19,6 @@ unavailable/diagnostic behavior rather than a silent success.
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import tempfile
 from dataclasses import dataclass
@@ -322,13 +321,10 @@ def _execute_lean_source(
     temp_path: str | None = None
     result: ProcessResult | None = None
     try:
-        fd, temp_path = tempfile.mkstemp(suffix=".lean")
-        try:
-            handle = os.fdopen(fd, "w")
-        except OSError:
-            os.close(fd)
-            raise
-        with handle:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".lean", delete=False
+        ) as handle:
+            temp_path = handle.name
             handle.write(source)
         lean_bin = executable or _lean_executable()
         environment = _lean_process_environment(lean_bin)

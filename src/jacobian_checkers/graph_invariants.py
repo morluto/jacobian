@@ -6,9 +6,6 @@ import re
 from fractions import Fraction
 from typing import Any
 
-__all__ = ["check_neighborhood_independence"]
-
-
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _MAX_GRAPH_ORDER = 256
 _MAX_NEIGHBORHOOD_ORDER = 24

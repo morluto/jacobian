@@ -382,6 +382,7 @@ def combinatorics_exact_checker_provider_runtime(
             "additive-difference-set-replay",
             "fixed-order-extension-exhaustion",
             "linear-recurrence-replay",
+            "polynomial-coefficient-recurrence-replay",
             "rational-series-residual-replay",
             "standard-library-only",
         ),

@@ -8,6 +8,7 @@ from typing import Literal
 
 _LOGGER = logging.getLogger(__name__)
 CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
+CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT = 16_384
 CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
 
 

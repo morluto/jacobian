@@ -307,7 +307,7 @@ def test_tenant_router_shutdown_is_retryable_after_base_exception(
     )
     router.runtime_for("alpha")
 
-    with pytest.raises(KeyboardInterrupt):
+    with pytest.raises(BaseExceptionGroup, match="tenant runtimes failed to close"):
         router.close()
 
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
@@ -318,6 +318,36 @@ def test_tenant_router_shutdown_is_retryable_after_base_exception(
     assert runtime.close_calls == 2
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
         router.lease_for("alpha")
+
+
+def test_tenant_router_closes_remaining_runtimes_after_base_exception(
+    tmp_path: Path,
+) -> None:
+    class InterruptOnceRuntime(_FakeRuntime):
+        def close(self) -> None:
+            self.close_calls += 1
+            if self.close_calls == 1:
+                raise KeyboardInterrupt("interrupt first runtime close")
+
+    first = InterruptOnceRuntime(tmp_path / "first")
+    second = _FakeRuntime(tmp_path / "second")
+    created = iter((first, second))
+    router = TenantRuntimeRouter(
+        tmp_path,
+        max_tenant_runtimes=2,
+        runtime_factory=lambda _path, **_kwargs: next(created),  # type: ignore[arg-type]
+    )
+    router.runtime_for("alpha")
+    router.runtime_for("beta")
+
+    with pytest.raises(BaseExceptionGroup, match="tenant runtimes failed to close"):
+        router.close()
+
+    assert [first.close_calls, second.close_calls] == [1, 1]
+
+    router.close()
+
+    assert [first.close_calls, second.close_calls] == [2, 1]
 
 
 def test_tenant_router_releases_shutdown_claim_when_condition_exit_is_interrupted(

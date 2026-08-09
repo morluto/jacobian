@@ -289,6 +289,44 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     assert verified.output["status"] == "VERIFIED"
 
 
+def test_graded_jacobian_syzygy_handles_a_zero_partial_derivative(
+    frontier_services: DomainTestServices,
+) -> None:
+    input_payload = {
+        "polynomial": _polynomial([(1, (2, 0, 1))]),
+        "max_degree": 0,
+    }
+    computed = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+            input=input_payload,
+        )
+    )
+
+    assert computed.execution.status is ExecutionStatus.COMPLETED
+    result = computed.output["result"]
+    assert result["first_syzygy_degree"] == 0
+    assert [(item["rank"], item["nullity"]) for item in result["degree_maps"]] == [
+        (2, 1)
+    ]
+    assert result["partial_derivatives"][1]["polynomial"]["terms"] == []
+    assert [item["num"] for item in result["kernel_witness"]["coefficient_vector"]] == [
+        "0",
+        "1",
+        "0",
+    ]
+
+    verified = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.jacobian_syzygy.minimum_degree.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": input_payload, "candidate": result},
+        )
+    )
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+
+
 @pytest.mark.parametrize(
     "forgery",
     ("map_digest", "rank_minor", "kernel_vector", "partial_derivative"),

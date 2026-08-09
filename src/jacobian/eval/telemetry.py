@@ -774,6 +774,10 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
             continue
         if not isinstance(event, dict):
             continue
+        if event.get("type") == "turn.completed" and isinstance(
+            event.get("usage"), dict
+        ):
+            telemetry.usage = event["usage"]
         item = event.get("item")
         if not isinstance(item, dict):
             _record_mcp_resource_telemetry(telemetry.resource_telemetry, item)
@@ -784,8 +788,4 @@ def parse_agent_transcript(path: Path) -> dict[str, Any]:
         if _is_mcp_tool_call_event(event, item):
             _process_mcp_tool_call(telemetry, item)
         _record_mcp_resource_telemetry(telemetry.resource_telemetry, item)
-        if event.get("type") == "turn.completed" and isinstance(
-            event.get("usage"), dict
-        ):
-            telemetry.usage = event["usage"]
     return _transcript_payload(telemetry)

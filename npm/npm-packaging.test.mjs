@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { PassThrough } from "node:stream";
 import {
   chmod,
   mkdtemp,
@@ -18,6 +19,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { parse as parseToml } from "@decimalturn/toml-patch";
 
 const require = createRequire(import.meta.url);
 const npmRoot = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +63,9 @@ import {
   buildLauncher,
   buildSourceLauncher,
   applyEdits,
+  inspectClientConfiguration,
+  interactiveSelect,
+  publicPlan,
   resolveClientEdit,
   SERVER_NAME,
 } from "./bin/setup.cjs";
@@ -130,6 +135,96 @@ test("isClientDetected recognizes installed client markers", async () => {
     assert.equal(isClientDetected(home, "gemini"), false);
   } finally {
     await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("interactive setup supports Tab, arrows, Space, and Enter", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  input.isTTY = true;
+  input.isRaw = false;
+  input.setRawMode = (enabled) => {
+    input.isRaw = enabled;
+    return input;
+  };
+  output.isTTY = true;
+  let rendered = "";
+  output.setEncoding("utf8");
+  output.on("data", (chunk) => {
+    rendered += chunk;
+  });
+
+  const clients = clientDefinitions("/tmp/fake");
+  const selection = interactiveSelect(clients, ["codex"], input, output);
+  input.write("\t");
+  input.write("\u001b[B");
+  input.write(" ");
+  input.write("\r");
+
+  assert.deepEqual((await selection).map((client) => client.id), ["opencode"]);
+  assert.equal(input.isRaw, false);
+  assert.equal(input.isPaused(), true);
+  assert.match(rendered, /Tab to move/);
+  assert.match(rendered, /OpenCode/);
+  assert.match(rendered, /Agents: OpenCode/);
+});
+
+test("Ctrl-C cancels interactive setup and restores terminal mode", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  input.isTTY = true;
+  input.isRaw = false;
+  input.setRawMode = (enabled) => {
+    input.isRaw = enabled;
+    return input;
+  };
+  output.isTTY = true;
+
+  const selection = interactiveSelect(
+    clientDefinitions("/tmp/fake"),
+    [],
+    input,
+    output,
+  );
+  input.write("\u0003");
+
+  assert.deepEqual(await selection, []);
+  assert.equal(input.isRaw, false);
+  assert.equal(input.isPaused(), true);
+});
+
+test("interactive setup keeps every rendered line within a narrow terminal", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  input.isTTY = true;
+  input.isRaw = false;
+  input.setRawMode = (enabled) => {
+    input.isRaw = enabled;
+    return input;
+  };
+  output.isTTY = true;
+  output.columns = 32;
+  let rendered = "";
+  output.setEncoding("utf8");
+  output.on("data", (chunk) => {
+    rendered += chunk;
+  });
+
+  const selection = interactiveSelect(
+    clientDefinitions("/tmp/fake"),
+    [],
+    input,
+    output,
+  );
+  input.write(" ");
+  input.write("\r");
+  await selection;
+
+  const visible = rendered.replaceAll(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+  assert.match(visible, /Move: ↑\/↓ or Tab/);
+  assert.match(visible, /Toggle: Space/);
+  for (const line of visible.split("\n")) {
+    assert.ok(line.length <= output.columns, line);
   }
 });
 
@@ -330,6 +425,205 @@ test("doctor validates the canonical math MCP surface", () => {
   ]);
 });
 
+test("doctor fails before launch when a selected client configuration is stale", async () => {
+  const home = await mkdtemp(join(tmpdir(), "jacobian-doctor-stale-client-"));
+  try {
+    await writeFile(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        mcpServers: {
+          jacobian: { command: "stale-jacobian", args: ["mcp"] },
+        },
+      }),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(npmRoot, "bin", "jacobian.cjs"),
+        "doctor",
+        "--client",
+        "claude",
+        "--json",
+      ],
+      { encoding: "utf8", env: { ...process.env, HOME: home } },
+    );
+    assert.equal(result.status, 1);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.integration.configurationStatus, "failed");
+    assert.equal(report.integration.launcherStatus, "not_attempted");
+    assert.match(report.error, /claude \(stale\)/);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test(
+  "doctor executes the exact configured launcher for a selected client",
+  { skip: process.platform === "win32" },
+  async () => {
+    const base = await mkdtemp(join(tmpdir(), "jacobian-doctor-configured-"));
+    try {
+      const home = join(base, "home");
+      const dataHome = join(base, "data");
+      const python = join(
+        dataHome,
+        "jacobian",
+        "jacobian-venv",
+        "bin",
+        "python",
+      );
+      await mkdir(home, { recursive: true });
+      await mkdir(dirname(python), { recursive: true });
+      await writeFile(
+        python,
+        `#!/usr/bin/env node
+if (process.argv[2] === "-c") {
+  console.log(${JSON.stringify(packageMetadata.version)});
+  process.exit(0);
+}
+let buffer = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  const lines = buffer.split("\\n");
+  buffer = lines.pop() || "";
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const message = JSON.parse(line);
+    if (message.id === 1) {
+      console.log(JSON.stringify({ jsonrpc: "2.0", id: 1, result: {
+        serverInfo: { name: "jacobian", version: ${JSON.stringify(packageMetadata.version)} },
+        instructions: "ready"
+      }}));
+    } else if (message.id === 2) {
+      console.log(JSON.stringify({ jsonrpc: "2.0", id: 2, result: { tools: [
+        { name: "math.find" }, { name: "math.run" }
+      ] }}));
+    }
+  }
+});
+`,
+      );
+      await chmod(python, 0o755);
+      const env = { ...process.env, HOME: home, XDG_DATA_HOME: dataHome };
+      const cli = join(npmRoot, "bin", "jacobian.cjs");
+      const setup = spawnSync(
+        process.execPath,
+        [cli, "setup", "--client", "claude", "--yes", "--json"],
+        { encoding: "utf8", env },
+      );
+      assert.equal(setup.status, 0, setup.stderr);
+
+      const doctor = spawnSync(
+        process.execPath,
+        [cli, "doctor", "--client", "claude", "--json"],
+        {
+          encoding: "utf8",
+          env: {
+            ...env,
+            npm_lifecycle_event: "npx",
+            npm_node_execpath: process.execPath,
+            npm_execpath: join(base, "npx-cli.js"),
+          },
+          timeout: 10_000,
+        },
+      );
+      assert.equal(doctor.status, 0, doctor.stderr);
+      const report = JSON.parse(doctor.stdout);
+      assert.equal(report.integration.configurationStatus, "ok");
+      assert.equal(report.integration.launcherStatus, "ok");
+      assert.equal(report.integration.handshakeStatus, "ok");
+      assert.equal(report.integration.catalogStatus, "complete");
+      assert.deepEqual(
+        report.integration.checkedClients.map((item) => item.client),
+        ["claude"],
+      );
+      assert.equal(
+        report.integration.checkedClients[0].status,
+        "configured_managed",
+      );
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "doctor preserves and executes a selected source-bound launcher",
+  { skip: process.platform === "win32" },
+  async () => {
+    const base = await mkdtemp(join(tmpdir(), "jacobian-doctor-source-"));
+    try {
+      const home = join(base, "home");
+      const source = join(base, "source");
+      const stateDir = join(base, "state");
+      const fakeUv = join(base, "uv");
+      await mkdir(join(source, "src", "jacobian"), { recursive: true });
+      await mkdir(home, { recursive: true });
+      await writeFile(join(source, "pyproject.toml"), '[project]\nname = "jacobian"\n');
+      await writeFile(join(source, "uv.lock"), "version = 1\n");
+      await writeFile(join(source, "src", "jacobian", "__init__.py"), "");
+      await writeFile(
+        fakeUv,
+        `#!/usr/bin/env node
+let buffer = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  const lines = buffer.split("\\n");
+  buffer = lines.pop() || "";
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const message = JSON.parse(line);
+    if (message.id === 1) {
+      console.log(JSON.stringify({ jsonrpc: "2.0", id: 1, result: {
+        serverInfo: { name: "jacobian", version: "source" },
+        instructions: "ready"
+      }}));
+    } else if (message.id === 2) {
+      console.log(JSON.stringify({ jsonrpc: "2.0", id: 2, result: { tools: [
+        { name: "math.find" }, { name: "math.run" }
+      ] }}));
+    }
+  }
+});
+`,
+      );
+      await chmod(fakeUv, 0o755);
+
+      const launcher = buildSourceLauncher(
+        source,
+        stateDir,
+        fakeUv,
+        "full-python",
+        process.env.PATH,
+      );
+      const claude = clientDefinitions(home).find((definition) => definition.id === "claude");
+      const edit = await resolveClientEdit("setup", claude, launcher);
+      applyEdits([edit]);
+
+      const doctor = spawnSync(
+        process.execPath,
+        [join(npmRoot, "bin", "jacobian.cjs"), "doctor", "--client", "claude", "--json"],
+        {
+          encoding: "utf8",
+          env: { ...process.env, HOME: home },
+          timeout: 10_000,
+        },
+      );
+      assert.equal(doctor.status, 0, doctor.stderr);
+      const report = JSON.parse(doctor.stdout);
+      assert.equal(report.serverVersion, "source");
+      assert.equal(report.integration.configurationStatus, "ok");
+      assert.deepEqual(report.integration.checkedClients, [
+        { client: "claude", path: claude.configPath, status: "configured_source" },
+      ]);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  },
+);
+
 test("launcher explains how to recover when no runtime is on PATH", () => {
   const script = [
     "try {",
@@ -344,7 +638,7 @@ test("launcher explains how to recover when no runtime is on PATH", () => {
     env: { ...process.env, PATH: "" },
   });
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /requires Python 3\.12 or uv on PATH/);
+  assert.match(result.stdout, /requires Python 3\.12\/3\.13 or uv on PATH/);
   assert.match(result.stdout, /npx jacobian doctor/);
   assert.doesNotMatch(result.stdout, /no Python runtime found/);
 });
@@ -357,7 +651,7 @@ test("setup writes a JSON config for Claude Code", async () => {
     const claude = defs.find((d) => d.id === "claude");
     const launcher = { command: "/usr/bin/node", args: ["/path/to/jacobian", "mcp"], version: packageMetadata.version, package: null, env: { PATH: "/providers/bin" } };
 
-    const edit = resolveClientEdit("setup", claude, launcher);
+    const edit = await resolveClientEdit("setup", claude, launcher);
     assert.equal(edit.action, "create");
     assert.equal(edit.original, null);
     assert.ok(edit.updated !== null);
@@ -375,7 +669,7 @@ test("setup writes a JSON config for Claude Code", async () => {
     assert.deepEqual(config.mcpServers[SERVER_NAME].env, { PATH: "/providers/bin" });
 
     // Re-resolving should report already_current.
-    const edit2 = resolveClientEdit("setup", claude, launcher);
+    const edit2 = await resolveClientEdit("setup", claude, launcher);
     assert.equal(edit2.action, "already_current");
   } finally {
     await rm(base, { recursive: true, force: true });
@@ -390,11 +684,10 @@ test("setup writes a TOML config for Codex", async () => {
     const codex = defs.find((d) => d.id === "codex");
     const launcher = { command: "/usr/bin/node", args: ["/path/to/jacobian", "mcp"], version: packageMetadata.version, package: null, env: { PATH: "/providers/bin" } };
 
-    const edit = resolveClientEdit("setup", codex, launcher);
+    const edit = await resolveClientEdit("setup", codex, launcher);
     assert.equal(edit.action, "create");
     assert.ok(edit.updated !== null);
-    assert.ok(edit.updated.includes("[mcp_servers]"));
-    assert.ok(edit.updated.includes("jacobian"));
+    assert.ok(edit.updated.includes("[mcp_servers.jacobian]"));
     assert.ok(edit.updated.includes('env = { PATH = "/providers/bin" }'));
 
     // Apply and re-read.
@@ -402,19 +695,109 @@ test("setup writes a TOML config for Codex", async () => {
     writeFileSync(codex.configPath, edit.updated);
 
     // Re-resolving should report already_current.
-    const edit2 = resolveClientEdit("setup", codex, launcher);
+    const edit2 = await resolveClientEdit("setup", codex, launcher);
     assert.equal(edit2.action, "already_current");
 
     // Remove should work.
     await writeFile(
       codex.configPath,
-      edit2.original === null
-        ? `${edit.updated}jacobian_theme = "preserve"\n`
-        : `${edit2.original}jacobian_theme = "preserve"\n`,
+      `jacobian_theme = "preserve"\n${edit2.original ?? edit.updated}`,
     );
-    const edit3 = resolveClientEdit("remove", codex, launcher);
+    const edit3 = await resolveClientEdit("remove", codex, launcher);
     assert.equal(edit3.action, "remove");
     assert.match(edit3.updated, /jacobian_theme = "preserve"/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup updates Codex subtable syntax without corrupting TOML", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-toml-subtable-"));
+  try {
+    const home = await fakeHome(base, ["codex"]);
+    const codex = clientDefinitions(home).find((d) => d.id === "codex");
+    const original = [
+      "# preserve this comment",
+      "[mcp_servers.jacobian]",
+      'command = "old"',
+      'args = ["serve"]',
+      "",
+      "[mcp_servers.other]",
+      'command = "other"',
+      "",
+    ].join("\n");
+    await writeFile(codex.configPath, original);
+    const launcher = {
+      command: "/usr/bin/node",
+      args: ["/path/to/jacobian", "mcp"],
+      version: packageMetadata.version,
+      package: null,
+    };
+
+    const edit = await resolveClientEdit("setup", codex, launcher);
+    assert.equal(edit.action, "update");
+    const parsed = parseToml(edit.updated);
+    assert.equal(parsed.mcp_servers.jacobian.command, launcher.command);
+    assert.deepEqual(parsed.mcp_servers.jacobian.args, launcher.args);
+    assert.equal(parsed.mcp_servers.other.command, "other");
+    assert.match(edit.updated, /# preserve this comment/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup adds Codex to an existing explicit mcp_servers table", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-toml-existing-table-"));
+  try {
+    const home = await fakeHome(base, ["codex"]);
+    const codex = clientDefinitions(home).find((definition) => definition.id === "codex");
+    const original = [
+      "# keep the parent table and other server",
+      "[mcp_servers]",
+      'other = { command = "other" }',
+      "",
+    ].join("\n");
+    await writeFile(codex.configPath, original);
+    const launcher = {
+      command: "/usr/bin/node",
+      args: ["/path/to/jacobian", "mcp"],
+      version: packageMetadata.version,
+      package: null,
+      env: { PATH: "/providers/bin" },
+    };
+
+    const edit = await resolveClientEdit("setup", codex, launcher);
+    const parsed = parseToml(edit.updated);
+    assert.equal(parsed.mcp_servers.other.command, "other");
+    assert.equal(parsed.mcp_servers.jacobian.command, launcher.command);
+    assert.deepEqual(
+      Object.fromEntries(Object.entries(parsed.mcp_servers.jacobian.env)),
+      launcher.env,
+    );
+    assert.match(edit.updated, /# keep the parent table and other server/);
+    assert.equal((edit.updated.match(/^\[mcp_servers]$/gm) || []).length, 1);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup rejects malformed Codex TOML before planning writes", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-toml-invalid-"));
+  try {
+    const home = await fakeHome(base, ["codex"]);
+    const codex = clientDefinitions(home).find((d) => d.id === "codex");
+    await writeFile(codex.configPath, "[mcp_servers.jacobian\ncommand = 'old'\n");
+    const launcher = {
+      command: "/usr/bin/node",
+      args: ["/path/to/jacobian", "mcp"],
+      version: packageMetadata.version,
+      package: null,
+    };
+
+    await assert.rejects(
+      resolveClientEdit("setup", codex, launcher),
+      /Invalid TOML[\s\S]*No changes were written/,
+    );
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -428,7 +811,7 @@ test("remove on a non-configured client reports not_configured", async () => {
     const claude = defs.find((d) => d.id === "claude");
     const launcher = { command: "/usr/bin/node", args: ["/path/to/jacobian", "mcp"], version: packageMetadata.version, package: null };
 
-    const edit = resolveClientEdit("remove", claude, launcher);
+    const edit = await resolveClientEdit("remove", claude, launcher);
     assert.equal(edit.action, "not_configured");
   } finally {
     await rm(base, { recursive: true, force: true });
@@ -454,7 +837,7 @@ test("setup updates an existing JSON config without losing other servers", async
     writeFileSync(configPath, JSON.stringify(existing, null, 2) + "\n");
 
     const launcher = { command: "/usr/bin/node", args: ["/path/to/jacobian", "mcp"], version: packageMetadata.version, package: null };
-    const edit = resolveClientEdit("setup", claude, launcher);
+    const edit = await resolveClientEdit("setup", claude, launcher);
     assert.equal(edit.action, "update");
 
     // Apply.
@@ -463,6 +846,67 @@ test("setup updates an existing JSON config without losing other servers", async
     assert.ok(config.mcpServers["other-server"]);
     assert.ok(config.mcpServers[SERVER_NAME]);
     assert.equal(config.someOtherSetting, true);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("public setup plans exclude rollback content and unrelated secrets", () => {
+  const plan = publicPlan({
+    operation: "setup",
+    launcher: {
+      command: "/usr/bin/node",
+      args: ["jacobian", "mcp"],
+      version: packageMetadata.version,
+      package: null,
+      runtimePlan: { status: "deferred_until_first_use" },
+    },
+    edits: [
+      {
+        client: clientDefinitions("/tmp/fake")[0],
+        action: "update",
+        detected: true,
+        path: "/tmp/config.json",
+        original: '{"token":"test-token"}',
+        updated: '{"token":"test-token","jacobian":{}}',
+      },
+    ],
+  });
+  const serialized = JSON.stringify(plan);
+  assert.doesNotMatch(serialized, /test-token|original|updated/);
+  assert.equal(plan.effects[0].action, "update");
+});
+
+test("client inspection distinguishes configured, stale, and absent entries", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-inspect-client-"));
+  try {
+    const home = await fakeHome(base, ["claude"]);
+    const claude = clientDefinitions(home).find((d) => d.id === "claude");
+    const launcher = {
+      command: "/usr/bin/node",
+      args: ["/path/to/jacobian", "mcp"],
+      version: packageMetadata.version,
+      package: null,
+    };
+    assert.equal(
+      (await inspectClientConfiguration(claude, launcher)).status,
+      "not_configured",
+    );
+    const edit = await resolveClientEdit("setup", claude, launcher);
+    await writeFile(claude.configPath, edit.updated);
+    assert.equal(
+      (await inspectClientConfiguration(claude, launcher)).status,
+      "configured",
+    );
+    assert.equal(
+      (
+        await inspectClientConfiguration(claude, {
+          ...launcher,
+          args: ["different", "mcp"],
+        })
+      ).status,
+      "stale",
+    );
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -482,7 +926,7 @@ test("remove preserves unrelated JSON settings and MCP servers", async () => {
     };
     await writeFile(claude.configPath, JSON.stringify(original, null, 2) + "\n");
     const launcher = buildLauncher();
-    const edit = resolveClientEdit("remove", claude, launcher);
+    const edit = await resolveClientEdit("remove", claude, launcher);
     applyEdits([edit]);
     const updated = JSON.parse(await readFile(claude.configPath, "utf8"));
     assert.equal(updated.mcpServers.jacobian, undefined);
@@ -675,8 +1119,8 @@ test("invalid JSON explains that setup made no changes", async () => {
     };
     await writeFile(claude.configPath, "{ invalid", "utf8");
 
-    assert.throws(
-      () => resolveClientEdit("setup", claude, launcher),
+    await assert.rejects(
+      resolveClientEdit("setup", claude, launcher),
       /No changes were written\. Repair this file, then retry/,
     );
     assert.equal(await readFile(claude.configPath, "utf8"), "{ invalid");
@@ -715,7 +1159,90 @@ test("top-level setup failure gives a retry action without a stack trace", async
   }
 });
 
-test("declining setup exits nonzero without claiming completion", async () => {
+test("JSON dry-run is redacted and emits no human plan", async () => {
+  const home = await mkdtemp(join(tmpdir(), "jacobian-cli-redacted-plan-"));
+  try {
+    await writeFile(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        mcpServers: {
+          private: { command: "private", env: { TOKEN: "test-token" } },
+        },
+      }),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(npmRoot, "bin", "jacobian.cjs"),
+        "setup",
+        "--client",
+        "claude",
+        "--dry-run",
+        "--json",
+      ],
+      { encoding: "utf8", env: { ...process.env, HOME: home } },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /test-token|original|updated/);
+    assert.equal(result.stderr, "");
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.plan.effects[0].action, "update");
+    assert.equal(report.plan.launcher.runtime.status, "deferred_until_first_use");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("setup rejects unknown options and non-interactive implicit prompts", async () => {
+  const home = await mkdtemp(join(tmpdir(), "jacobian-cli-strict-"));
+  try {
+    const unknown = spawnSync(
+      process.execPath,
+      [join(npmRoot, "bin", "jacobian.cjs"), "setup", "--not-a-real-option"],
+      { encoding: "utf8", env: { ...process.env, HOME: home } },
+    );
+    assert.equal(unknown.status, 1);
+    assert.match(unknown.stderr, /Unknown setup option/);
+
+    const eof = spawnSync(
+      process.execPath,
+      [join(npmRoot, "bin", "jacobian.cjs"), "setup"],
+      { encoding: "utf8", env: { ...process.env, HOME: home }, input: "" },
+    );
+    assert.equal(eof.status, 1);
+    assert.match(eof.stderr, /Non-interactive setup requires --client/);
+    assert.equal(eof.stdout, "");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("setup blocks before writes when its external runtime is unavailable", async () => {
+  const home = await mkdtemp(join(tmpdir(), "jacobian-cli-runtime-blocked-"));
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(npmRoot, "bin", "jacobian.cjs"),
+        "setup",
+        "--client",
+        "codex",
+        "--yes",
+        "--json",
+      ],
+      { encoding: "utf8", env: { ...process.env, HOME: home, PATH: "" } },
+    );
+    assert.equal(result.status, 1);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.blocked, true);
+    assert.match(report.plan.launcher.runtime.recovery, /Python 3\.12\/3\.13 or uv/);
+    assert.equal(existsSync(join(home, ".codex", "config.toml")), false);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("non-interactive setup requires explicit consent", async () => {
   const home = await mkdtemp(join(tmpdir(), "jacobian-cli-cancel-"));
   try {
     const result = spawnSync(
@@ -724,12 +1251,11 @@ test("declining setup exits nonzero without claiming completion", async () => {
       {
         encoding: "utf8",
         env: { ...process.env, HOME: home },
-        input: "n\n",
       },
     );
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /setup cancelled/);
-    assert.doesNotMatch(result.stderr, /Setup complete/);
+    assert.match(result.stderr, /Non-interactive setup requires --yes/);
+    assert.doesNotMatch(result.stderr, /Configuration complete/);
     assert.equal(existsSync(join(home, ".codex", "config.toml")), false);
   } finally {
     await rm(home, { recursive: true, force: true });

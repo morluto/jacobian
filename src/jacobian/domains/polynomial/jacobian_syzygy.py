@@ -127,6 +127,8 @@ def _coefficient_matrix(
         for basis_index, multiplier_exponents in enumerate(source_basis):
             column = component * len(source_basis) + basis_index
             for partial_exponents, coefficient in partial.terms():
+                if coefficient == 0:
+                    continue
                 target_exponents = cast(
                     tuple[int, int, int],
                     tuple(

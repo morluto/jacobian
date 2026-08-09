@@ -13,6 +13,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 
 _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
+_P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:
@@ -26,6 +27,18 @@ _CASES = (
             "coefficients": [_q(1), _q(1)],
             "initial_values": [_q(0), _q(1)],
             "coefficient_convention": _RECURRENCE_CONVENTION,
+            "scope": "PREFIX",
+            "term_count": 8,
+            "indices": [],
+        },
+    ),
+    (
+        "combinatorics.recurrence.p_recursive.evaluate",
+        {
+            "coefficient_polynomials": [[_q(1)], [_q(0), _q(-1)]],
+            "initial_values": [_q(1)],
+            "coefficient_convention": _P_RECURSIVE_CONVENTION,
+            "polynomial_convention": "ASCENDING_POWERS_OF_N",
             "scope": "PREFIX",
             "term_count": 8,
             "indices": [],
@@ -85,6 +98,9 @@ def test_checker_rejects_contract_valid_false_results(
     if capability_id == "combinatorics.recurrence.linear.evaluate":
         forged_candidate["replay_prefix"][7] = _q(14)
         forged_candidate["values"][7]["value"] = _q(14)
+    elif capability_id == "combinatorics.recurrence.p_recursive.evaluate":
+        forged_candidate["replay_prefix"][7] = _q(5039)
+        forged_candidate["values"][7]["value"] = _q(5039)
     else:
         forged_candidate["coefficients"][7] = _q(22)
     rejected = runtime.core.capabilities.invoke(

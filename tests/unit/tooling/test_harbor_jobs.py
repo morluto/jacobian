@@ -36,7 +36,13 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
             "task_names": ["graph-counterexample"],
         }
     ]
-    assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
+    assert job["agents"] == [
+        {
+            "name": "codex",
+            "skills": [".agents/skills/jacobian-math"],
+            "kwargs": {"web_search": "disabled"},
+        }
+    ]
 
 
 @pytest.mark.timeout(30)

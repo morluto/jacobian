@@ -50,7 +50,13 @@ def _read_json(path: Path) -> dict[str, object]:
 def test_observation_job_keeps_the_minimal_jacobian_treatment() -> None:
     job = _read_json(JOB)
 
-    assert job["agents"] == [{"name": "codex", "kwargs": {"web_search": "disabled"}}]
+    assert job["agents"] == [
+        {
+            "name": "codex",
+            "skills": [".agents/skills/jacobian-math"],
+            "kwargs": {"web_search": "disabled"},
+        }
+    ]
     assert job["environment"]["extra_docker_compose"] == [
         "benchmarks/datasets/mathematical-benchmarks-v1/jacobian-observation.compose.yaml",
     ]
@@ -76,12 +82,15 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
     assert "JACOBIAN_EVAL_CODEX_BINARY" in evaluations
     assert "benchmarks.tooling.codex_binary" in evaluations
     assert "JACOBIAN_EVAL_UPSTREAM_PROXY" in evaluations
+    assert "export CODEX_FORCE_AUTH_JSON=1" in evaluations
     assert "benchmarks.tooling.harbor_proxy" in evaluations
     assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in evaluations
     assert 'JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)"' in evaluations
     assert "mathematical-benchmarks-v1-control-proxy.json" in evaluations
     assert "jacobian-observation-proxy.json" in evaluations
     assert "jacobian-loopback.mcp.json" in evaluations
+    assert "JACOBIAN_EVAL_SKILL ?= .agents/skills/jacobian-math" in evaluations
+    assert '--skill "$(JACOBIAN_EVAL_SKILL)"' in evaluations
     validate_recipe = evaluations.split("agent-eval-validate:", maxsplit=1)[1].split(
         "\n\n", maxsplit=1
     )[0]

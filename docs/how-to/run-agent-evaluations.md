@@ -150,7 +150,12 @@ make agent-eval DATASET=mathematical-benchmarks-v1 \
 ```
 
 Use `TASKS=graph-counterexample` for a small smoke run. The treatment run uses
-`benchmarks/config/jacobian.mcp.json`; task TOMLs remain agent-agnostic.
+`benchmarks/config/jacobian.mcp.json` and installs the repository's
+`.agents/skills/jacobian-math` skill. `agent-eval` passes both explicitly
+because its agent/model CLI overrides replace the agent block from the job
+JSON. Set `JACOBIAN_EVAL_SKILL` only for a deliberate development comparison;
+normalized evidence requires a matching job declaration. Task TOMLs remain
+agent-agnostic.
 
 ### Evaluate tool adoption and task design
 
@@ -204,8 +209,22 @@ make agent-eval DATASET=mathematical-benchmarks-v1 \
 MCP configuration. In the held-out runner, that condition records
 infrastructure status `NOT_CONFIGURED` and routing status `NOT_APPLICABLE`, and
 performs no Jacobian probe.
-`JACOBIAN_ENABLED=1` selects the treatment job and passes
-Harbor's `--mcp-config` option. `JACOBIAN_EVAL_PROXY=1` selects matching
+
+Keep the assurance vocabulary identical in both conditions. In particular,
+reserve `VERIFIED` for a result whose operator-authorized independent-checker
+record satisfies the task contract and binds the exact task input, claim,
+semantics, candidate, scope, certificate format, and checker identity. A correct
+manual derivation, self-written check, or source citation may support
+mathematical correctness, but does not itself establish `COMPUTED` and is not
+`VERIFIED`. A producer result carries only the assurance stated by its operation
+contract. Put this rule in any ad hoc prompt that does not already expose the
+task's structured submission contract. Otherwise a control answer can reuse
+`VERIFIED` as an ordinary English synonym and make the assurance comparison
+misleading.
+
+`JACOBIAN_ENABLED=1` selects the treatment job and passes Harbor's
+`--mcp-config` and `--skill` options. `JACOBIAN_ENABLED=0` clears both
+interventions. `JACOBIAN_EVAL_PROXY=1` selects matching
 proxy-enabled control/treatment job configs and requires at least one proxy
 URL variable. The Makefile also passes Harbor's
 `web_search=disabled` agent kwarg explicitly, because the `-a codex` and
@@ -275,6 +294,15 @@ Record the git tree, task digests, provider/runtime, model and prompt settings,
 raw trace location, and validation actually run. A public workflow result is
 regression or observation evidence; it is not held-out causal evidence.
 
+For unstructured pilot answers, validate every claimed assurance level against
+its supporting evidence or operation contract and record every unsupported
+label as an assurance-vocabulary violation. In particular, `VERIFIED` requires
+the complete task-bound record above. Score assurance separately from
+mathematical correctness: a correct scalar or proof can still be correct while
+its assurance claim is false. Missing checker availability, a timeout, or
+failure to obtain a verification record is not evidence that the claim is
+false, but it also cannot raise the claim to `VERIFIED`.
+
 ## Troubleshooting
 
 If the command exits with `JACOBIAN_MODEL must be exported`, export the model
@@ -283,6 +311,11 @@ before invoking Make:
 ```sh
 export JACOBIAN_MODEL='your-model'
 ```
+
+When `OPENAI_API_KEY` is empty and `~/.codex/auth.json` exists, `agent-eval`
+sets `CODEX_FORCE_AUTH_JSON=1` for Harbor automatically. An explicitly set
+`CODEX_FORCE_AUTH_JSON` still wins. This avoids Harbor 0.20 selecting an empty
+API-key credential instead of an existing ChatGPT login.
 
 If the run stalls at `starting environment`, Docker may be building the task
 image or waiting on package installation. Check the Docker build output and

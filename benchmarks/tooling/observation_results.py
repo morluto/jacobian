@@ -192,6 +192,15 @@ def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
             ]
     for agent in normalized.get("agents", []):
         if isinstance(agent, dict):
+            skills = agent.get("skills")
+            if isinstance(skills, list):
+                remaining_skills = [
+                    skill for skill in skills if skill != ".agents/skills/jacobian-math"
+                ]
+                if remaining_skills:
+                    agent["skills"] = remaining_skills
+                else:
+                    agent.pop("skills", None)
             servers = agent.get("mcp_servers")
             if isinstance(servers, list):
                 remaining = [

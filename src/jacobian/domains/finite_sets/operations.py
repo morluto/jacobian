@@ -9,19 +9,6 @@ from jacobian.contracts.finite_sets import (
     FiniteSetPairRequest,
 )
 
-__all__ = [
-    "decide_disjoint",
-    "decide_proper_subset",
-    "decide_subset",
-    "intersection_cardinality",
-    "left_cardinality",
-    "set_difference",
-    "set_intersection",
-    "set_symmetric_difference",
-    "set_union",
-    "union_cardinality",
-]
-
 
 def _pair(request: FiniteSetPairRequest) -> tuple[set[int], set[int]]:
     pair = request

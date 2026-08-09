@@ -591,3 +591,79 @@ def test_close_attempts_every_owner_before_raising_failures(
     monkeypatch.undo()
     runtime.close()
     runtime.close()
+
+
+def test_close_attempts_every_owner_after_keyboard_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Interrupting one owner must not skip shutdown of the remaining owners."""
+
+    runtime = create_runtime(tmp_path)
+    store = runtime.core.store
+    close_order: list[str] = []
+    services_close = ApplicationServices.close
+    portfolio_close = PortfolioInstallation.close
+    core_close = CoreServices.close
+
+    def interrupt_after_services_close(self: ApplicationServices) -> None:
+        close_order.append("services")
+        services_close(self)
+        raise KeyboardInterrupt("services close interrupted")
+
+    def record_portfolio_close(self: PortfolioInstallation) -> None:
+        close_order.append("portfolio")
+        portfolio_close(self)
+
+    def record_core_close(self: CoreServices) -> None:
+        close_order.append("core")
+        core_close(self)
+
+    monkeypatch.setattr(ApplicationServices, "close", interrupt_after_services_close)
+    monkeypatch.setattr(PortfolioInstallation, "close", record_portfolio_close)
+    monkeypatch.setattr(CoreServices, "close", record_core_close)
+
+    with pytest.raises(
+        BaseExceptionGroup, match="runtime resources failed to close"
+    ) as exc:
+        runtime.close()
+
+    assert close_order == ["services", "portfolio", "core"]
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "services close interrupted",
+    ]
+    with pytest.raises(StorageClosedError), store.connection():
+        pass
+
+
+def test_application_services_close_continues_after_keyboard_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An interrupt from search must not leave experiment workers running."""
+
+    runtime = create_runtime(tmp_path)
+    close_order: list[str] = []
+
+    def interrupt_search_close(self: SearchService) -> None:
+        close_order.append("search")
+        raise KeyboardInterrupt("search close interrupted")
+
+    def record_experiment_close(self: ExperimentService) -> None:
+        close_order.append("experiments")
+
+    monkeypatch.setattr(SearchService, "close", interrupt_search_close)
+    monkeypatch.setattr(ExperimentService, "close", record_experiment_close)
+
+    with pytest.raises(
+        BaseExceptionGroup, match="application services did not quiesce"
+    ) as exc:
+        runtime.services.close()
+
+    assert close_order == ["search", "experiments"]
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "search close interrupted",
+    ]
+
+    monkeypatch.undo()
+    runtime.close()

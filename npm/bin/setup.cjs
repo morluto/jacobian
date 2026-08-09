@@ -15,7 +15,9 @@ const { randomUUID } = require("node:crypto");
 const { homedir } = require("node:os");
 const { basename, dirname, join, resolve } = require("node:path");
 const readline = require("node:readline/promises");
+const { emitKeypressEvents } = require("node:readline");
 const { stdin, stdout, stderr } = require("node:process");
+const { isDeepStrictEqual } = require("node:util");
 
 /**
  * Jacobian MCP setup wizard.
@@ -29,7 +31,6 @@ const { stdin, stdout, stderr } = require("node:process");
  */
 
 const SERVER_NAME = "jacobian";
-const TOML_SERVER_ENTRY = /^jacobian\s*=/;
 const CODEX_SKILL_MARKER = "<!-- Managed by Jacobian's Codex integration. -->";
 const CODEX_SKILL_SOURCE = join(
   __dirname,
@@ -38,6 +39,12 @@ const CODEX_SKILL_SOURCE = join(
   "jacobian-math",
   "SKILL.md",
 );
+let tomlConfigModule;
+
+async function loadTomlConfig() {
+  tomlConfigModule ??= import("./toml-config.mjs");
+  return tomlConfigModule;
+}
 
 /**
  * @typedef {"claude" | "cursor" | "opencode" | "codex" | "gemini"} ClientId
@@ -134,6 +141,20 @@ function isClientDetected(home, id) {
  */
 function buildLauncher() {
   const version = require("../package.json").version;
+  const managedRuntime = require("./launcher.cjs");
+  const runtime = managedRuntime.detectRuntime();
+  const runtimePlan = {
+    status: runtime === null ? "blocked" : "deferred_until_first_use",
+    prerequisite: runtime?.kind ?? null,
+    environment: managedRuntime.venvRoot(),
+    pythonPackage: managedRuntime.PACKAGE_SPEC,
+    approximateInstallSizeMb: 160,
+    approximateManagedPythonSizeMb: runtime?.kind === "uv" ? 110 : 0,
+    network: "The Python package index may be contacted on first use.",
+    recovery: runtime === null
+      ? "Install Python 3.12/3.13 or uv, then retry setup."
+      : null,
+  };
 
   if (process.env.npm_lifecycle_event === "npx") {
     const node = process.env.npm_node_execpath;
@@ -148,6 +169,7 @@ function buildLauncher() {
         args: [npm, ...npmArgs],
         version,
         package: pkg,
+        runtimePlan,
       };
     }
   }
@@ -159,6 +181,7 @@ function buildLauncher() {
     args: [binPath, "mcp"],
     version,
     package: null,
+    runtimePlan,
   };
 }
 
@@ -253,6 +276,16 @@ function buildSourceLauncher(
     stateDir: statePath,
     profile,
     env: environment,
+    runtimePlan: {
+      status: "source_managed",
+      prerequisite: "uv",
+      environment: projectEnvironment || join(sourcePath, ".venv"),
+      pythonPackage: "source checkout",
+      approximateInstallSizeMb: null,
+      approximateManagedPythonSizeMb: 0,
+      network: "No dependency sync occurs when the configured client starts.",
+      recovery: null,
+    },
   };
 }
 
@@ -279,6 +312,192 @@ function jsonEntry(def, launcher) {
     command: launcher.command,
     args: launcher.args,
     ...(Object.keys(launcher.env || {}).length > 0 ? { env: launcher.env } : {}),
+  };
+}
+
+function publicLauncher(launcher) {
+  return {
+    command: launcher.command,
+    args: launcher.args,
+    version: launcher.version,
+    package: launcher.package,
+    ...(launcher.source ? { source: launcher.source, stateDir: launcher.stateDir } : {}),
+    runtime: launcher.runtimePlan,
+  };
+}
+
+function publicPlan(plan) {
+  return {
+    operation: plan.operation,
+    launcher: publicLauncher(plan.launcher),
+    effects: plan.edits.map((edit) => ({
+      client: edit.client.id,
+      displayName: edit.client.displayName,
+      kind: edit.kind ?? "mcp_configuration",
+      action: edit.action,
+      detected: edit.detected,
+      path: edit.path,
+    })),
+  };
+}
+
+function plainValue(value) {
+  if (Array.isArray(value)) return value.map(plainValue);
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, plainValue(item)]),
+  );
+}
+
+function configuredLauncher(def, configured) {
+  if (def.jsonShape !== "opencode") {
+    return {
+      command: configured.command,
+      args: configured.args,
+      env: configured.env || {},
+    };
+  }
+  if (typeof configured.command !== "string") return null;
+  const source = configured.command.match(
+    /^(.*?) run --project (.*?) --locked --no-sync jacobian-mcp --state-dir (.*)$/,
+  );
+  if (!source) return null;
+  return {
+    command: source[1],
+    args: [
+      "run",
+      "--project",
+      source[2],
+      "--locked",
+      "--no-sync",
+      "jacobian-mcp",
+      "--state-dir",
+      source[3],
+    ],
+    env: configured.environment || {},
+  };
+}
+
+function sourceLauncher(configured) {
+  if (
+    configured === null ||
+    typeof configured.command !== "string" ||
+    !Array.isArray(configured.args) ||
+    configured.args.length !== 8 ||
+    configured.args[0] !== "run" ||
+    configured.args[1] !== "--project" ||
+    configured.args[3] !== "--locked" ||
+    configured.args[4] !== "--no-sync" ||
+    configured.args[5] !== "jacobian-mcp" ||
+    configured.args[6] !== "--state-dir"
+  ) {
+    return null;
+  }
+  try {
+    const launcher = buildSourceLauncher(
+      configured.args[2],
+      configured.args[7],
+      configured.command,
+      "core",
+      configured.env?.PATH || "",
+      configured.env?.UV_PROJECT_ENVIRONMENT || "",
+      configured.env?.ELAN_HOME || "",
+      configured.env?.JACOBIAN_LEAN_RUNTIME || "",
+    );
+    return isDeepStrictEqual(plainValue(configured.env || {}), launcher.env)
+      ? launcher
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function managedLauncher(configured, version) {
+  if (
+    configured === null ||
+    typeof configured.command !== "string" ||
+    !Array.isArray(configured.args)
+  ) {
+    return null;
+  }
+  const nodeExecutable = ["node", "node.exe"].includes(
+    basename(configured.command).toLowerCase(),
+  );
+  const direct =
+    nodeExecutable &&
+    configured.args.length === 2 &&
+    configured.args[1] === "mcp" &&
+    basename(configured.args[0]).toLowerCase() === "jacobian.cjs" &&
+    basename(dirname(configured.args[0])).toLowerCase() === "bin";
+  const npmPackage = `--package=jacobian@${version}`;
+  const npmExec =
+    nodeExecutable &&
+    configured.args.includes(npmPackage) &&
+    configured.args.at(-3) === "--" &&
+    configured.args.at(-2) === "jacobian" &&
+    configured.args.at(-1) === "mcp" &&
+    ["npm-cli.js", "npx-cli.js"].includes(
+      basename(configured.args[0]).toLowerCase(),
+    );
+  return direct || npmExec ? configured : null;
+}
+
+async function inspectClientConfiguration(def, launcher) {
+  const original = readOptional(def.configPath);
+  let configured;
+  if (def.format === "toml") {
+    configured = (await loadTomlConfig()).readTomlLauncher(
+      def.configPath,
+      original,
+    );
+  } else if (original === null) {
+    configured = null;
+  } else {
+    let root;
+    try {
+      root = JSON.parse(original);
+    } catch (error) {
+      throw new Error(`Invalid JSON in ${def.configPath}: ${error.message}.`);
+    }
+    configured = root?.[def.jsonSection]?.[SERVER_NAME] ?? null;
+  }
+  if (configured === null) {
+    return { client: def.id, path: def.configPath, status: "not_configured" };
+  }
+  const expected = def.format === "toml"
+    ? {
+        command: launcher.command,
+        args: launcher.args,
+        startup_timeout_sec: 30,
+        ...(Object.keys(launcher.env || {}).length > 0 ? { env: launcher.env } : {}),
+      }
+    : jsonEntry(def, launcher);
+  if (isDeepStrictEqual(plainValue(configured), expected)) {
+    return {
+      client: def.id,
+      path: def.configPath,
+      status: "configured",
+      launcher,
+    };
+  }
+  const configuredProcess = configuredLauncher(def, configured);
+  const source = sourceLauncher(configuredProcess);
+  const managed = source === null
+    ? managedLauncher(configuredProcess, launcher.version)
+    : null;
+  return {
+    client: def.id,
+    path: def.configPath,
+    status: source !== null
+      ? "configured_source"
+      : managed !== null
+        ? "configured_managed"
+        : "stale",
+    ...(source !== null
+      ? { launcher: source }
+      : managed !== null
+        ? { launcher: managed }
+        : {}),
   };
 }
 
@@ -407,114 +626,24 @@ function resolveJsonEdit(operation, def, launcher) {
 }
 
 /**
- * Resolve a TOML config edit for setup or removal (Codex).
- *
- * Uses a minimal TOML editor that preserves the structure we need.
- *
- * @param {"setup" | "remove"} operation
- * @param {ClientDef} def
- * @param {{ command: string, args: string[] }} launcher
- * @returns {{ action: string, original: string | null, updated: string | null }}
- */
-function resolveTomlEdit(operation, def, launcher) {
-  const original = readOptional(def.configPath);
-  const source = original ?? "";
-  const lines = source.split("\n");
-
-  // Find or create the [mcp_servers] section.
-  let sectionStart = -1;
-  let sectionEnd = lines.length;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === "[mcp_servers]") {
-      sectionStart = i;
-      // Find where this section ends (next top-level table or EOF).
-      for (let j = i + 1; j < lines.length; j++) {
-        if (lines[j].startsWith("[") && !lines[j].startsWith("[[")) {
-          sectionEnd = j;
-          break;
-        }
-      }
-      break;
-    }
-  }
-
-  if (operation === "remove") {
-    if (sectionStart === -1) {
-      return { action: "not_configured", original, updated: null };
-    }
-    // Remove the jacobian entry lines.
-    const before = lines.slice(0, sectionStart);
-    const sectionLines = lines.slice(sectionStart, sectionEnd);
-    const after = lines.slice(sectionEnd);
-
-    const filtered = sectionLines.filter(
-      (line) => !TOML_SERVER_ENTRY.test(line.trim()),
-    );
-    // If only the header remains, remove the section entirely.
-    const nonHeader = filtered.filter(
-      (line) => line.trim() !== "" && line.trim() !== "[mcp_servers]",
-    );
-    let updated;
-    if (nonHeader.length === 0) {
-      updated = [...before, ...after].join("\n");
-    } else {
-      updated = [...before, ...filtered, ...after].join("\n");
-    }
-    return { action: "remove", original, updated };
-  }
-
-  // Setup: build the entry.
-  const environment = Object.entries(launcher.env || {});
-  const environmentEntry =
-    environment.length > 0
-      ? `, env = { ${environment.map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join(", ")} }`
-      : "";
-  const expectedEntry = `jacobian = { command = ${JSON.stringify(launcher.command)}, args = [${launcher.args.map((argument) => JSON.stringify(argument)).join(", ")}], startup_timeout_sec = 30${environmentEntry} }`;
-  const entryLines = [`[mcp_servers]`, expectedEntry];
-
-  if (sectionStart === -1) {
-    // No existing section: append.
-    const updated =
-      source.trim() === ""
-        ? entryLines.join("\n") + "\n"
-        : source.trimEnd() + "\n\n" + entryLines.join("\n") + "\n";
-    return { action: original === null ? "create" : "update", original, updated };
-  }
-
-  // Check if jacobian is already there with the right config.
-  const sectionLines = lines.slice(sectionStart, sectionEnd);
-  for (const line of sectionLines) {
-    if (line.trim() === expectedEntry) {
-      return { action: "already_current", original, updated: null };
-    }
-  }
-
-  // Replace or add the jacobian entry.
-  const before = lines.slice(0, sectionStart + 1);
-  const after = lines.slice(sectionStart + 1, sectionEnd);
-  const rest = lines.slice(sectionEnd);
-
-  // Remove any existing jacobian entry in the section.
-  const cleanedAfter = after.filter(
-    (line) => !TOML_SERVER_ENTRY.test(line.trim()),
-  );
-  const updated = [...before, expectedEntry, ...cleanedAfter, ...rest].join("\n");
-  return { action: "update", original, updated };
-}
-
-/**
  * Resolve one client edit.
  *
  * @param {"setup" | "remove"} operation
  * @param {ClientDef} def
  * @param {{ command: string, args: string[] }} launcher
- * @returns {{ client: ClientDef, action: string, detected: boolean, path: string, original: string | null, updated: string | null }}
+ * @returns {Promise<{ client: ClientDef, action: string, detected: boolean, path: string, original: string | null, updated: string | null }>}
  */
-function resolveClientEdit(operation, def, launcher) {
+async function resolveClientEdit(operation, def, launcher) {
+  const original = readOptional(def.configPath);
   const result =
     def.format === "json"
       ? resolveJsonEdit(operation, def, launcher)
-      : resolveTomlEdit(operation, def, launcher);
+      : (await loadTomlConfig()).resolveTomlEdit(
+          operation,
+          def.configPath,
+          original,
+          launcher,
+        );
   return {
     client: def,
     action: result.action,
@@ -667,7 +796,8 @@ function applyEdits(edits) {
  * @param {{ operation: string, launcher: object, edits: object[] }} plan
  */
 function printPlan(plan) {
-  stderr.write(`\n◆ Jacobian // MCP Setup\n`);
+  const title = plan.operation === "remove" ? "MCP Removal" : "MCP Setup";
+  stderr.write(`\n◆ Jacobian // ${title}\n`);
   stderr.write(`  Launcher: ${plan.launcher.command} ${plan.launcher.args.join(" ")}\n`);
   stderr.write(`  Version:  ${plan.launcher.version}\n`);
   if (plan.launcher.package) {
@@ -681,7 +811,27 @@ function printPlan(plan) {
       `    ${edit.client.displayName}${label}${det}: ${edit.action} → ${edit.path}\n`,
     );
   }
+  const runtime = plan.launcher.runtimePlan;
+  if (plan.operation === "setup" && runtime?.status === "deferred_until_first_use") {
+    stderr.write(`\n  Runtime on first use:\n`);
+    stderr.write(`    Environment: ${runtime.environment}\n`);
+    stderr.write(`    Package: ${runtime.pythonPackage} (~${runtime.approximateInstallSizeMb} MB)\n`);
+    if (runtime.approximateManagedPythonSizeMb > 0) {
+      stderr.write(
+        `    Managed Python: up to ~${runtime.approximateManagedPythonSizeMb} MB\n`,
+      );
+    }
+    stderr.write(`    Network: ${runtime.network}\n`);
+  }
   stderr.write("\n");
+}
+
+function printBlocked(plan) {
+  const runtime = plan.launcher.runtimePlan;
+  stderr.write("\n◆ Jacobian // Setup blocked\n");
+  stderr.write("  No changes were made.\n\n");
+  stderr.write(`  ${runtime.recovery}\n`);
+  stderr.write("  Then run `npx jacobian setup` again.\n\n");
 }
 
 /**
@@ -689,18 +839,121 @@ function printPlan(plan) {
  *
  * @param {ClientDef[]} clients
  * @param {ClientId[]} detected
+ * @param {NodeJS.ReadStream} [input]
+ * @param {NodeJS.WriteStream} [output]
  * @returns {Promise<ClientDef[]>}
  */
-async function interactiveSelect(clients, detected) {
-  stderr.write("\n  Select coding agents to configure (Space to toggle, Enter to confirm):\n\n");
+async function interactiveSelect(
+  clients,
+  detected,
+  input = stdin,
+  output = stderr,
+  options = {},
+) {
+  if (
+    options.plain ||
+    !input.isTTY ||
+    !output.isTTY ||
+    typeof input.setRawMode !== "function"
+  ) {
+    return typedSelect(clients, detected, input, output);
+  }
+
+  emitKeypressEvents(input);
+  const selected = new Set();
+  let focused = 0;
+  let renderedLines = 0;
+
+  const render = () => {
+    const columns = output.columns || 80;
+    const title = columns >= 36
+      ? "  Select coding agents to configure"
+      : "  Select agents to configure";
+    const help = columns >= 76
+      ? ["  ↑/↓ or Tab to move · Space to toggle · Enter to confirm · Ctrl-C to cancel"]
+      : columns >= 36
+        ? ["  ↑/↓ or Tab moves · Space toggles", "  Enter confirms · Ctrl-C cancels"]
+        : ["  Move: ↑/↓ or Tab", "  Toggle: Space", "  Confirm: Enter", "  Cancel: Ctrl-C"];
+    const lines = [
+      title,
+      ...help,
+      "",
+      ...clients.map((def, index) => {
+        const cursor = index === focused ? ">" : " ";
+        const mark = selected.has(index) ? "●" : "○";
+        const det = detected.includes(def.id) ? " · detected" : "";
+        return `  ${cursor} ${mark} ${def.displayName}${det}`;
+      }),
+    ];
+    if (renderedLines > 0) {
+      output.write(`\u001b[${renderedLines}A\r\u001b[J`);
+    }
+    output.write(lines.join("\n") + "\n");
+    renderedLines = lines.length;
+  };
+
+  const settle = (summary) => {
+    output.write(`\u001b[${renderedLines}A\r\u001b[J  ${summary}\n`);
+  };
+
+  output.write("\n");
+  render();
+  const wasRaw = Boolean(input.isRaw);
+  input.setRawMode(true);
+  input.resume();
+
+  return new Promise((resolve) => {
+    const finish = (result, summary) => {
+      input.removeListener("keypress", onKeypress);
+      input.setRawMode(wasRaw);
+      input.pause();
+      settle(summary);
+      resolve(result);
+    };
+    const onKeypress = (_sequence, key = {}) => {
+      if (key.ctrl && key.name === "c") {
+        finish([], "Agents: none");
+        return;
+      }
+      if (key.name === "up" || (key.name === "tab" && key.shift)) {
+        focused = (focused - 1 + clients.length) % clients.length;
+        render();
+        return;
+      }
+      if (key.name === "down" || key.name === "tab") {
+        focused = (focused + 1) % clients.length;
+        render();
+        return;
+      }
+      if (key.name === "space") {
+        if (selected.has(focused)) selected.delete(focused);
+        else selected.add(focused);
+        render();
+        return;
+      }
+      if (key.name === "return" || key.name === "enter") {
+        const result = clients.filter((_client, index) => selected.has(index));
+        const summary = result.length > 0
+          ? `Agents: ${result.map((client) => client.displayName).join(", ")}`
+          : "Agents: none";
+        finish(result, summary);
+      }
+    };
+    input.on("keypress", onKeypress);
+  });
+}
+
+/** Typed fallback for piped input and terminals without raw-mode support. */
+async function typedSelect(clients, detected, input = stdin, output = stderr) {
+  output.write("\n  Select coding agents to configure:\n\n");
   for (let i = 0; i < clients.length; i++) {
     const def = clients[i];
     const det = detected.includes(def.id) ? " — detected" : "";
-    stderr.write(`  [ ] ${i + 1}. ${def.displayName}${det}\n`);
+    output.write(`  [ ] ${i + 1}. ${def.displayName}${det}\n`);
   }
-  stderr.write("\n  Enter comma-separated numbers (e.g. 1,3) or 'all': ");
+  output.write("\n  Enter comma-separated numbers (e.g. 1,3) or 'all': ");
 
-  const rl = readline.createInterface({ input: stdin, output: stderr });
+  const rl = readline.createInterface({ input, output });
   try {
     const answer = (await rl.question("")).trim();
     rl.close();
@@ -743,6 +996,7 @@ async function interactiveConfirm() {
  * @param {boolean} [options.yes] Skip confirmation.
  * @param {boolean} [options.dryRun] Print plan without writing.
  * @param {boolean} [options.json] Output as JSON.
+ * @param {boolean} [options.plain] Use a non-animated numbered prompt.
  * @param {string} [options.source] Absolute or relative source checkout.
  * @param {string} [options.stateDir] Fixed state directory for source launches.
  * @param {string} [options.uvBin] uv executable used by source launches.
@@ -764,6 +1018,9 @@ async function run(options) {
   if (invalidClients.length > 0) {
     throw new Error(`Unknown MCP client: ${invalidClients.join(", ")}.`);
   }
+  if (options.all && options.clients && options.clients.length > 0) {
+    throw new Error("--all cannot be combined with --client.");
+  }
   const launcher = options.source
     ? buildSourceLauncher(
         options.source,
@@ -777,6 +1034,7 @@ async function run(options) {
       )
     : buildLauncher();
   const detectedIds = defs.filter((d) => isClientDetected(home, d.id)).map((d) => d.id);
+  const interactive = Boolean(stdin.isTTY && stderr.isTTY);
 
   let selected;
   if (options.all) {
@@ -784,44 +1042,87 @@ async function run(options) {
   } else if (options.clients && options.clients.length > 0) {
     const wanted = new Set(options.clients);
     selected = defs.filter((d) => wanted.has(d.id));
-  } else if (options.yes) {
-    stderr.write("--yes requires explicit --client flags or --all; detection is not consent.\n");
-    process.exitCode = 1;
-    return { error: "missing client selection" };
+  } else if (!interactive) {
+    throw new Error(
+      "Non-interactive setup requires --client <id> or --all; detection is not consent.",
+    );
   } else {
-    selected = await interactiveSelect(defs, detectedIds);
+    selected = await interactiveSelect(
+      defs,
+      detectedIds,
+      stdin,
+      stderr,
+      { plain: options.plain },
+    );
   }
 
   if (selected.length === 0) {
-    return { operation, cancelled: true, dryRun: false, results: [] };
+    const report = { operation, cancelled: true, dryRun: false, results: [] };
+    if (options.json) stdout.write(JSON.stringify(report, null, 2) + "\n");
+    return report;
+  }
+  if (!interactive && !options.yes && !options.dryRun) {
+    throw new Error("Non-interactive setup requires --yes after explicit client selection.");
   }
 
-  const configEdits = selected.map((def) =>
-    resolveClientEdit(operation, def, launcher),
+  if (operation === "setup" && launcher.runtimePlan?.status === "blocked") {
+    const blockedPlan = { operation, launcher, edits: [] };
+    const report = {
+      operation,
+      cancelled: false,
+      blocked: true,
+      dryRun: Boolean(options.dryRun),
+      plan: publicPlan(blockedPlan),
+      results: [],
+    };
+    if (options.json) stdout.write(JSON.stringify(report, null, 2) + "\n");
+    else printBlocked(blockedPlan);
+    process.exitCode = 1;
+    return report;
+  }
+
+  const configEdits = await Promise.all(
+    selected.map((def) => resolveClientEdit(operation, def, launcher)),
   );
   const skillEdits = selected
     .filter((def) => def.id === "codex")
     .map((def) => resolveCodexSkillEdit(operation, def));
   const edits = [...configEdits, ...skillEdits];
   const plan = { operation, launcher, edits };
+  const reportPlan = publicPlan(plan);
 
   if (options.dryRun) {
+    const report = {
+      operation,
+      cancelled: false,
+      dryRun: true,
+      plan: reportPlan,
+      results: [],
+    };
     if (options.json) {
-      stdout.write(JSON.stringify({ operation, cancelled: false, dryRun: true, plan, results: [] }, null, 2) + "\n");
+      stdout.write(JSON.stringify(report, null, 2) + "\n");
     } else {
       printPlan(plan);
       stderr.write("  (dry-run: no changes written)\n\n");
     }
-    return { operation, cancelled: false, dryRun: true, plan, results: [] };
+    return report;
   }
 
   if (!options.yes) {
     printPlan(plan);
     const confirmed = await interactiveConfirm();
     if (!confirmed) {
-      return { operation, cancelled: true, dryRun: false, plan, results: [] };
+      const report = {
+        operation,
+        cancelled: true,
+        dryRun: false,
+        plan: reportPlan,
+        results: [],
+      };
+      if (options.json) stdout.write(JSON.stringify(report, null, 2) + "\n");
+      return report;
     }
-  } else {
+  } else if (!options.json) {
     printPlan(plan);
   }
 
@@ -845,19 +1146,25 @@ async function run(options) {
   if (options.json) {
     stdout.write(JSON.stringify({ operation, cancelled: false, dryRun: false, results }, null, 2) + "\n");
   } else {
-    stderr.write("\n  Setup complete.\n");
+    const noun = operation === "remove" ? "Removal" : "Configuration";
+    stderr.write(`\n  ${noun} complete.\n`);
     for (const result of results) {
       const status = result.error ? `FAILED: ${result.error}` : result.status;
       stderr.write(`    ${result.client}: ${status}\n`);
     }
-    if (launcher.source) {
+    if (operation === "remove") {
+      stderr.write("\n  Restart or reload the affected clients.\n\n");
+    } else if (launcher.source) {
       stderr.write(
         "\n  Restart or reload configured clients. Re-run the checkout's " +
           "`scripts/setup-agent` command after source updates.\n\n",
       );
     } else {
+      const clientArgs = selected.map((client) => `--client ${client.id}`).join(" ");
       stderr.write(
-        "\n  Restart or reload configured clients, then run `npx jacobian doctor` to verify.\n\n",
+        "\n  Runtime installation is deferred until verification or first use. " +
+          "Restart or reload configured clients, then run " +
+          `\`npx jacobian doctor ${clientArgs}\` to verify the configured launcher.\n\n`,
       );
     }
   }
@@ -872,7 +1179,10 @@ module.exports = {
   buildLauncher,
   buildSourceLauncher,
   applyEdits,
+  publicPlan,
+  inspectClientConfiguration,
   resolveCodexSkillEdit,
   resolveClientEdit,
+  interactiveSelect,
   run,
 };

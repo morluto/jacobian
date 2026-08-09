@@ -25,12 +25,6 @@ from jacobian.process_policy import (
 from jacobian.worker_environment import worker_environment
 from jacobian_checkers.bound_artifacts import valid_unscoped_unencoded_bindings
 
-__all__ = [
-    "check_assignment",
-    "check_unsat_proof",
-]
-
-
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _VARIABLE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$")

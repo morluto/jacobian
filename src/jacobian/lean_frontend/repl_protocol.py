@@ -118,6 +118,10 @@ class LeanReplProofStepResponse(LeanReplWireModel):
     )
 
 
+class LeanReplPickleProofStateResponse(LeanReplWireModel):
+    """Empty acknowledgement returned after a successful ``pickleTo`` request."""
+
+
 class LeanReplErrorResponse(LeanReplWireModel):
     message: StrictStr
 
@@ -126,6 +130,7 @@ type LeanReplResponse = (
     LeanReplCommandResponse | LeanReplProofStepResponse | LeanReplErrorResponse
 )
 type LeanReplProofResponse = LeanReplProofStepResponse | LeanReplErrorResponse
+type LeanReplPickleResponse = LeanReplPickleProofStateResponse | LeanReplErrorResponse
 type LeanReplExecution = tuple[LeanReplCommandResponse, LeanReplProofResponse]
 type LeanReplValidatedExecution = tuple[
     LeanReplCommandResponse,
@@ -141,6 +146,8 @@ __all__ = [
     "LeanReplExecution",
     "LeanReplMessage",
     "LeanReplPickleProofStateRequest",
+    "LeanReplPickleProofStateResponse",
+    "LeanReplPickleResponse",
     "LeanReplProofResponse",
     "LeanReplProofStepRequest",
     "LeanReplProofStepResponse",

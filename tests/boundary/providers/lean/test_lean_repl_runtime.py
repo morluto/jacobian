@@ -44,6 +44,10 @@ while True:
         }
         env += 1
         proof_state += 1
+    elif "pickleTo" in request:
+        assert request["proofState"] == proof_state - 1
+        pathlib.Path(request["pickleTo"]).write_text("pickled")
+        response = {}
     else:
         assert request["proofState"] == proof_state - 1
         response = {
@@ -102,6 +106,29 @@ def test_validated_execution_inspects_state_before_requested_tactic(
     assert isinstance(transition, LeanReplProofStepResponse)
     assert transition.proof_state == 2
     assert starts.read_text() == "x"
+
+
+def test_persistent_repl_accepts_empty_pickle_acknowledgement(
+    tmp_path: Path,
+) -> None:
+    starts = tmp_path / "starts"
+    pickle_path = tmp_path / "proof-state.pickle"
+    repl = PersistentLeanRepl(
+        command=(sys.executable, "-u", "-c", _FAKE_REPL, str(starts)),
+        cwd=tmp_path,
+        base_command="import Mathlib",
+        policy=LeanReplPolicy(max_requests=1, max_age_seconds=60, max_rss_kb=0),
+    )
+
+    _, transition = repl.execute(
+        command="example : True := by sorry",
+        tactic="trivial",
+        pickle_path=pickle_path,
+    )
+    repl.close()
+
+    assert isinstance(transition, LeanReplProofStepResponse)
+    assert pickle_path.read_text() == "pickled"
 
 
 def test_persistent_repl_kills_a_timed_out_process(tmp_path: Path) -> None:

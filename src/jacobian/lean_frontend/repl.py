@@ -20,6 +20,8 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplErrorResponse,
     LeanReplExecution,
     LeanReplPickleProofStateRequest,
+    LeanReplPickleProofStateResponse,
+    LeanReplPickleResponse,
     LeanReplProofResponse,
     LeanReplProofStepRequest,
     LeanReplProofStepResponse,
@@ -112,13 +114,13 @@ class PersistentLeanRepl:
                     raise RuntimeError(
                         "Lean REPL did not return a successor proof state"
                     )
-                pickled = self._exchange_proof(
+                pickled = self._exchange_pickle(
                     LeanReplPickleProofStateRequest(
                         proof_state=tactic_response.proof_state,
                         pickle_to=str(pickle_path),
                     )
                 )
-                if _response_errors(pickled):
+                if not isinstance(pickled, LeanReplPickleProofStateResponse):
                     raise RuntimeError("Lean REPL could not pickle the proof state")
             self._requests += 1
             return command_response, tactic_response
@@ -158,13 +160,13 @@ class PersistentLeanRepl:
                     raise RuntimeError(
                         "Lean REPL did not return a successor proof state"
                     )
-                pickled = self._exchange_proof(
+                pickled = self._exchange_pickle(
                     LeanReplPickleProofStateRequest(
                         proof_state=tactic_response.proof_state,
                         pickle_to=str(pickle_path),
                     )
                 )
-                if _response_errors(pickled):
+                if not isinstance(pickled, LeanReplPickleProofStateResponse):
                     raise RuntimeError("Lean REPL could not pickle the proof state")
             self._requests += 1
             return command_response, validation_response, tactic_response
@@ -232,9 +234,15 @@ class PersistentLeanRepl:
 
     def _exchange_proof(
         self,
-        request: LeanReplProofStepRequest | LeanReplPickleProofStateRequest,
+        request: LeanReplProofStepRequest,
     ) -> LeanReplProofResponse:
         return _parse_proof_response(self._exchange(request))
+
+    def _exchange_pickle(
+        self,
+        request: LeanReplPickleProofStateRequest,
+    ) -> LeanReplPickleResponse:
+        return _parse_pickle_response(self._exchange(request))
 
     def _exchange(self, request: LeanReplRequest) -> dict[str, Any]:
         process = self._process
@@ -459,6 +467,18 @@ def _parse_proof_response(response: Mapping[str, Any]) -> LeanReplProofResponse:
         return LeanReplProofStepResponse.model_validate(response)
     except ValidationError as exc:
         raise RuntimeError("Lean REPL returned a malformed proof response") from exc
+
+
+def _parse_pickle_response(response: Mapping[str, Any]) -> LeanReplPickleResponse:
+    if set(response) == {"message"}:
+        try:
+            return LeanReplErrorResponse.model_validate(response)
+        except ValidationError as exc:
+            raise RuntimeError("Lean REPL returned a malformed error response") from exc
+    try:
+        return LeanReplPickleProofStateResponse.model_validate(response)
+    except ValidationError as exc:
+        raise RuntimeError("Lean REPL returned a malformed pickle response") from exc
 
 
 def _response_errors(response: LeanReplResponse) -> tuple[str, ...]:

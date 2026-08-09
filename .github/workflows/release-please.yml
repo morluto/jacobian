@@ -83,6 +83,15 @@ jobs:
           git add uv.lock
           git commit -m "chore(release): synchronize uv lock"
           git push origin "HEAD:$RELEASE_BRANCH"
+      - name: Dispatch release candidate CI
+        if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: release-please--branches--main--components--jacobian
+        run: >-
+          gh workflow run ci.yml
+          --repo "$GITHUB_REPOSITORY"
+          --ref "$RELEASE_BRANCH"
       - name: Dispatch release publishing
         if: steps.release.outputs.release_created == 'true'
         env:

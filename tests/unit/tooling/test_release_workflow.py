@@ -6,6 +6,8 @@ ROOT = Path(__file__).resolve().parents[3]
 RELEASE_PLEASE_CONFIG = ROOT / "release-please-config.json"
 SERVER_METADATA = ROOT / "server.json"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+RELEASE_PLEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-please.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_release_build_resolves_and_verifies_one_immutable_sha() -> None:
@@ -22,6 +24,24 @@ def test_release_build_resolves_and_verifies_one_immutable_sha() -> None:
     assert source.index("Require successful CI for release commit") < source.index(
         "Build Python distributions"
     )
+
+
+def test_release_candidate_dispatches_full_ci_after_lockfile_sync() -> None:
+    release_please = RELEASE_PLEASE_WORKFLOW.read_text(encoding="utf-8")
+    ci = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    ci_triggers = ci.split("on:", 1)[1].split("concurrency:", 1)[0]
+    assert "workflow_dispatch:" in ci_triggers
+    assert "plan_output=$(.github/scripts/classify-ci-paths --force-exhaustive)" in ci
+
+    lockfile_sync = release_please.index("name: Synchronize release lockfile")
+    candidate_dispatch = release_please.index("name: Dispatch release candidate CI")
+    assert lockfile_sync < candidate_dispatch
+
+    dispatch = release_please[candidate_dispatch:]
+    assert "steps.release.outputs.prs_created == 'true'" in dispatch
+    assert "gh workflow run ci.yml" in dispatch
+    assert '--ref "$RELEASE_BRANCH"' in dispatch
 
 
 def test_mcp_publisher_is_verified_before_oidc_or_publication() -> None:

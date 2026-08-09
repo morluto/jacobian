@@ -7,16 +7,41 @@
 - Independent replay: standard-library `Fraction` clean-process checker
 - Producer assurance: at most `COMPUTED`
 
-The explicit `combinatorics` bundle includes two generic, bounded operations:
+The explicit `combinatorics` bundle includes three generic, bounded operations:
 
-- `combinatorics.recurrence.linear.evaluate`; and
+- `combinatorics.recurrence.linear.evaluate`;
+- `combinatorics.recurrence.p_recursive.evaluate`; and
 - `combinatorics.generating_function.coefficients.compute`.
 
 They complement rather than replace the named Fibonacci, consecutive-Fibonacci,
-and Lucas capabilities. `combinatorics.recurrence.linear.verify` and
+and Lucas capabilities. `combinatorics.recurrence.linear.verify`,
+`combinatorics.recurrence.p_recursive.verify`, and
 `combinatorics.generating_function.coefficients.verify` independently replay
-the corresponding producer result when bundled checker authorization is
-enabled.
+the corresponding producer result when bundled checker authorization is enabled.
+
+## Polynomial-coefficient recurrence evaluation
+
+`combinatorics.recurrence.p_recursive.evaluate` accepts canonical ascending
+coefficient vectors for polynomials \(p_0(n),\ldots,p_d(n)\) and evaluates
+
+\[
+\sum_{j=0}^{d} p_j(n)a_{n-j}=0.
+\]
+
+The initial vector is exactly \((a_0,\ldots,a_{d-1})\). Requests select a
+prefix or strictly increasing indices, while the result preserves the complete
+prefix through the greatest requested index, the recurrence order \(d\), and
+every exact recurrence residual at the consecutive indices from \(d\) through
+that endpoint. The request is rejected before execution if
+the leading polynomial \(p_0(n)\) vanishes at a required recurrence step;
+singular relations are not divided by zero or interpreted as conclusions.
+
+`combinatorics.recurrence.p_recursive.verify` independently evaluates the
+polynomials and replays the recurrence with standard-library `Fraction`, then
+requires every bound residual to be exactly zero. This supports finite exact
+evaluation and candidate checking only. It does not prove the recurrence for
+all indices or establish that a supplied recurrence follows from an external
+generating function or theorem.
 
 ## Constant-coefficient recurrence evaluation
 
@@ -68,6 +93,8 @@ Version 2 of the combinatorics semantics uses these fail-closed limits:
 | Quantity | Limit |
 | --- | ---: |
 | Linear recurrence order | 16 |
+| Polynomial-coefficient recurrence order | 16 |
+| Coefficient polynomial degree | 16 |
 | Greatest recurrence index | 512 |
 | Sparse requested indices | 256 |
 | Numerator or denominator degree | 32 |

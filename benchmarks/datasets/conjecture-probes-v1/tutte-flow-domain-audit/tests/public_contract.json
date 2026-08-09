@@ -1,0 +1,216 @@
+{
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "task_id": "jacobian/tutte-flow-domain-audit",
+  "conclusion": {
+    "const": "CONSERVATION_ONLY_IS_UNSOUND_AND_REPAIRED"
+  },
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "scope": {
+    "type": "string",
+    "const": "petersen-nowhere-zero-five-flow-audit-v1"
+  },
+  "limitations": {
+    "const": [
+      "ONE_PETERSEN_GRAPH_INSTANCE",
+      "MODULAR_FLOW_DOMAIN_AUDIT_ONLY",
+      "TUTTE_FIVE_FLOW_CONJECTURE_NOT_ASSESSED"
+    ]
+  },
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "min_items": 1,
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "payload_shape": null
+  },
+  "schema_definitions": {
+    "flow": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4
+      }
+    },
+    "balances": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4
+      }
+    }
+  },
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "flawed_flow",
+      "flawed_balances",
+      "zero_edge_index",
+      "repair_flow",
+      "repair_balances"
+    ],
+    "properties": {
+      "flawed_flow": {
+        "$ref": "#/$defs/flow"
+      },
+      "flawed_balances": {
+        "$ref": "#/$defs/balances"
+      },
+      "zero_edge_index": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 14
+      },
+      "repair_flow": {
+        "$ref": "#/$defs/flow"
+      },
+      "repair_balances": {
+        "$ref": "#/$defs/balances"
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/tutte-flow-domain-audit"
+      },
+      "conclusion": {
+        "const": "CONSERVATION_ONLY_IS_UNSOUND_AND_REPAIRED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flawed_flow",
+          "flawed_balances",
+          "zero_edge_index",
+          "repair_flow",
+          "repair_balances"
+        ],
+        "properties": {
+          "flawed_flow": {
+            "$ref": "#/$defs/flow"
+          },
+          "flawed_balances": {
+            "$ref": "#/$defs/balances"
+          },
+          "zero_edge_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 14
+          },
+          "repair_flow": {
+            "$ref": "#/$defs/flow"
+          },
+          "repair_balances": {
+            "$ref": "#/$defs/balances"
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "petersen-nowhere-zero-five-flow-audit-v1"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "ONE_PETERSEN_GRAPH_INSTANCE",
+          "MODULAR_FLOW_DOMAIN_AUDIT_ONLY",
+          "TUTTE_FIVE_FLOW_CONJECTURE_NOT_ASSESSED"
+        ]
+      }
+    },
+    "$defs": {
+      "flow": {
+        "type": "array",
+        "minItems": 15,
+        "maxItems": 15,
+        "items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        }
+      },
+      "balances": {
+        "type": "array",
+        "minItems": 10,
+        "maxItems": 10,
+        "items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        }
+      }
+    }
+  },
+  "verification_record": null,
+  "public_notes": "Exact nonzero-domain audit and repair for one Petersen-graph modular flow only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list."
+}

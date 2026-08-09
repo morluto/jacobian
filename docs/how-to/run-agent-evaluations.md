@@ -204,6 +204,19 @@ make agent-eval DATASET=mathematical-benchmarks-v1 \
 MCP configuration. In the held-out runner, that condition records
 infrastructure status `NOT_CONFIGURED` and routing status `NOT_APPLICABLE`, and
 performs no Jacobian probe.
+
+Keep the assurance vocabulary identical in both conditions. In particular,
+reserve `VERIFIED` for a result whose operator-authorized independent-checker
+record satisfies the task contract and binds the exact task input, claim,
+semantics, candidate, scope, certificate format, and checker identity. A correct
+manual derivation, self-written check, or source citation may support
+mathematical correctness, but does not itself establish `COMPUTED` and is not
+`VERIFIED`. A producer result carries only the assurance stated by its operation
+contract. Put this rule in any ad hoc prompt that does not already expose the
+task's structured submission contract. Otherwise a control answer can reuse
+`VERIFIED` as an ordinary English synonym and make the assurance comparison
+misleading.
+
 `JACOBIAN_ENABLED=1` selects the treatment job and passes
 Harbor's `--mcp-config` option. `JACOBIAN_EVAL_PROXY=1` selects matching
 proxy-enabled control/treatment job configs and requires at least one proxy
@@ -274,6 +287,15 @@ for the full evidence roles and interpretation boundaries.
 Record the git tree, task digests, provider/runtime, model and prompt settings,
 raw trace location, and validation actually run. A public workflow result is
 regression or observation evidence; it is not held-out causal evidence.
+
+For unstructured pilot answers, validate every claimed assurance level against
+its supporting evidence or operation contract and record every unsupported
+label as an assurance-vocabulary violation. In particular, `VERIFIED` requires
+the complete task-bound record above. Score assurance separately from
+mathematical correctness: a correct scalar or proof can still be correct while
+its assurance claim is false. Missing checker availability, a timeout, or
+failure to obtain a verification record is not evidence that the claim is
+false, but it also cannot raise the claim to `VERIFIED`.
 
 ## Troubleshooting
 

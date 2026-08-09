@@ -12,6 +12,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian_checkers.bound_artifacts import bound_request
 
 
@@ -44,14 +45,21 @@ def _rational(value: object) -> Fraction:
     denominator = value["den"]
     if not isinstance(numerator, str) or not isinstance(denominator, str):
         raise ValueError("malformed rational components")
-    fraction = Fraction(int(numerator), int(denominator))
-    if numerator != str(fraction.numerator) or denominator != str(fraction.denominator):
+    fraction = Fraction(
+        parse_canonical_integer(numerator), parse_canonical_integer(denominator)
+    )
+    if numerator != format_canonical_integer(
+        fraction.numerator
+    ) or denominator != format_canonical_integer(fraction.denominator):
         raise ValueError("noncanonical rational")
     return fraction
 
 
 def _wire_rational(value: Fraction) -> dict[str, str]:
-    return {"num": str(value.numerator), "den": str(value.denominator)}
+    return {
+        "num": format_canonical_integer(value.numerator),
+        "den": format_canonical_integer(value.denominator),
+    }
 
 
 def _parse_polynomial(

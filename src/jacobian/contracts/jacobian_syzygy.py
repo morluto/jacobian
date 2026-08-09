@@ -227,7 +227,8 @@ class GradedJacobianSyzygyResult(ContractModel):
     kernel_witness: GradedJacobianKernelWitness | None = None
     completion: Literal["COMPLETE_THROUGH_BOUND"] = "COMPLETE_THROUGH_BOUND"
     verification_capability_id: Literal[
-        "polynomial.jacobian_syzygy.minimum_degree.verify"
+        "polynomial.jacobian_syzygy.minimum_degree.verify",
+        "polynomial.jacobian_syzygy.coefficients.verify",
     ] = "polynomial.jacobian_syzygy.minimum_degree.verify"
     verification_input_field: Literal["result_uri"] = "result_uri"
 

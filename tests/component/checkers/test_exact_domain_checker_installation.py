@@ -113,6 +113,7 @@ def install_exact_domain_checkers(
 def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
     polynomial_ids = (
         "polynomial.jacobian_syzygy.minimum_degree.compute",
+        "polynomial.jacobian_syzygy.coefficients.materialize",
         "polynomial.compute.gcd",
         "polynomial.compute.resultant",
         "polynomial.compute.discriminant",
@@ -145,6 +146,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
         registry,
         polynomial=_installed(
             (
+                GradedJacobianSyzygyRequest,
                 GradedJacobianSyzygyRequest,
                 PolynomialGcdRequest,
                 PolynomialResultantRequest,

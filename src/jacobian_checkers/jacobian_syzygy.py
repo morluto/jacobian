@@ -481,7 +481,9 @@ def _build_kernel_witness(
     }
 
 
-def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
+def _expected_result(source: dict[str, Any], *, operation_id: str) -> dict[str, Any]:
+    if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize":
+        source = {**source, "coefficient_map_detail": "SPARSE_ENTRIES"}
     max_degree, detail = _validate_syzygy_request(source)
     variables, polynomial, source_kind, homogeneous_degree = _parse_syzygy_source(
         source
@@ -566,20 +568,24 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         "kernel_witness": kernel_witness,
         "completion": "COMPLETE_THROUGH_BOUND",
         "verification_capability_id": (
-            "polynomial.jacobian_syzygy.minimum_degree.verify"
+            "polynomial.jacobian_syzygy.coefficients.verify"
+            if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize"
+            else "polynomial.jacobian_syzygy.minimum_degree.verify"
         ),
         "verification_input_field": "result_uri",
     }
 
 
-def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:
+def _check_graded_jacobian_syzygy(
+    request: dict[str, Any], *, operation_id: str
+) -> dict[str, Any]:
     try:
         source, result = bound_request(
             request,
-            operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+            operation_id=operation_id,
             witness_format="polynomial.jacobian-syzygy.graded-fraction-replay",
         )
-        expected = _expected_result(source)
+        expected = _expected_result(source, operation_id=operation_id)
         if result != expected:
             return _reject(
                 "stored result does not match independent exact graded-map replay"
@@ -592,4 +598,23 @@ def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
-__all__ = ["check_graded_jacobian_syzygy"]
+def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:
+    return _check_graded_jacobian_syzygy(
+        request,
+        operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+    )
+
+
+def check_materialized_graded_jacobian_syzygy(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    return _check_graded_jacobian_syzygy(
+        request,
+        operation_id="polynomial.jacobian_syzygy.coefficients.materialize",
+    )
+
+
+__all__ = [
+    "check_graded_jacobian_syzygy",
+    "check_materialized_graded_jacobian_syzygy",
+]

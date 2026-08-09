@@ -390,6 +390,38 @@ def test_sparse_map_detail_is_explicitly_opt_in(
     assert entries == sorted(entries, key=lambda item: (item["row"], item["column"]))
 
 
+def test_materialized_syzygy_ledger_is_end_to_end_verified(
+    frontier_services: DomainTestServices,
+) -> None:
+    computed = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=("polynomial.jacobian_syzygy.coefficients.materialize"),
+            input={
+                "polynomial": _polynomial([(1, (1, 1, 1))]),
+                "max_degree": 1,
+                "coefficient_map_detail": "CERTIFICATES",
+            },
+        )
+    )
+    assert computed.execution.status is ExecutionStatus.COMPLETED
+    result = _result_payload(frontier_services, computed)
+    assert result["verification_capability_id"] == (
+        "polynomial.jacobian_syzygy.coefficients.verify"
+    )
+
+    verified = frontier_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.jacobian_syzygy.coefficients.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"result_uri": computed.output["result_uri"]},
+        )
+    )
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED", verified.output
+    assert verified.output["conclusion"] == "TRUE"
+    assert verified.output["result_uri"] == computed.output["result_uri"]
+
+
 @pytest.mark.parametrize(
     ("factors", "expected_degree"),
     (

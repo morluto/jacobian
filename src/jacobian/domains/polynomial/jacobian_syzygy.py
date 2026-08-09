@@ -164,8 +164,15 @@ def materialize_graded_jacobian_syzygy_coefficients(
     request: GradedJacobianSyzygyRequest,
 ) -> GradedJacobianSyzygyResult:
     """Retain the full sparse coefficient maps as explicit evidence."""
-    return _compute_graded_jacobian_syzygy(
+    result = _compute_graded_jacobian_syzygy(
         request.model_copy(update={"coefficient_map_detail": "SPARSE_ENTRIES"})
+    )
+    return result.model_copy(
+        update={
+            "verification_capability_id": (
+                "polynomial.jacobian_syzygy.coefficients.verify"
+            )
+        }
     )
 
 

@@ -989,7 +989,10 @@ def _checker_supports(operation_id: str, payload: object) -> bool:
         return True
     if not isinstance(payload, dict):
         return False
-    if operation_id == "polynomial.jacobian_syzygy.minimum_degree.compute":
+    if operation_id in {
+        "polynomial.jacobian_syzygy.minimum_degree.compute",
+        "polynomial.jacobian_syzygy.coefficients.materialize",
+    }:
         return True
     polynomial_fields = {
         "polynomial.compute.gcd": ("left", "right"),

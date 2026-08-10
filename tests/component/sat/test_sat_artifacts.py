@@ -177,13 +177,15 @@ def test_model_backed_schema_rejects_noncanonical_generic_artifact_put(
                 payload=payload,
             )
 
-    with open_domain_services(state_root) as restarted:
-        with pytest.raises(ArtifactValidationError):
-            restarted.core.artifacts.put(
-                schema_uri=restarted.core.sat.installation.cnf_schema_uri,
-                semantics_uri=restarted.core.sat.installation.semantics_uri,
-                payload=payload,
-            )
+    with (
+        open_domain_services(state_root) as restarted,
+        pytest.raises(ArtifactValidationError),
+    ):
+        restarted.core.artifacts.put(
+            schema_uri=restarted.core.sat.installation.cnf_schema_uri,
+            semantics_uri=restarted.core.sat.installation.semantics_uri,
+            payload=payload,
+        )
 
 
 def test_assignment_and_raw_proof_bind_exact_cnf_identity_and_lineage(

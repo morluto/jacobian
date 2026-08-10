@@ -229,7 +229,10 @@ class PolynomialFactorizationResult(ContractModel):
                 key=lambda record: (
                     record.multiplicity,
                     max(
-                        (sum(term.exponents) for term in record.factor.polynomial.terms),
+                        (
+                            sum(term.exponents)
+                            for term in record.factor.polynomial.terms
+                        ),
                         default=0,
                     ),
                     tuple(

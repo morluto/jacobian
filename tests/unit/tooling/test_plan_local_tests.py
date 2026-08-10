@@ -213,9 +213,7 @@ def _planner_tree(tmp_path: Path, monkeypatch) -> ModuleType:
     return planner
 
 
-def _append_exact_override(
-    manifest: Path, path: str, selectors: list[str]
-) -> None:
+def _append_exact_override(manifest: Path, path: str, selectors: list[str]) -> None:
     lines = [
         "",
         "[[local_planning.exact_overrides]]",

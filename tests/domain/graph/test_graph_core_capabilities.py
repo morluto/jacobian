@@ -42,7 +42,9 @@ def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
         },
     )
 
-    assert services.core.store.get(accepted.artifact_uri).payload["vertices"] == vertices
+    assert (
+        services.core.store.get(accepted.artifact_uri).payload["vertices"] == vertices
+    )
     with pytest.raises(ArtifactValidationError, match="does not match its schema"):
         services.core.artifacts.put(
             schema_uri=installation.graph_schema_uri,

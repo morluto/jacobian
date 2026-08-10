@@ -9,12 +9,11 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
-from jacobian.adapters.mcp.server import create_server
-
 MCP_TOOL_NAMES = {
     "math.find",
     "math.run",
 }
+
 
 def test_mcp_stdio_entrypoint_exposes_stable_math_tools(
     tmp_path: Path,
@@ -67,5 +66,3 @@ def test_mcp_entrypoint_reports_distribution_version() -> None:
 
     assert completed.returncode == 0
     assert completed.stdout.strip() == f"jacobian-mcp {version('jacobian')}"
-
-

@@ -3,8 +3,8 @@
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
-    PolynomialFactorRequest,
     PolynomialFactorizationResult,
+    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialGcdResult,
     PolynomialResultantRequest,

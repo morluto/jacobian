@@ -267,7 +267,8 @@ def test_search_batch_respects_archive_parent_limit(attached_complete_runtime) -
     assert snapshot.accounting.iterations == 2
     for page_uri in snapshot.archive_page_uris:
         assert (
-            len(attached_complete_runtime.core.store.get(page_uri).manifest.parents) <= 6
+            len(attached_complete_runtime.core.store.get(page_uri).manifest.parents)
+            <= 6
         )
 
 
@@ -336,7 +337,8 @@ def test_refiner_can_fit_previous_nominations_to_archive_parent_limit(
     assert checkpoint.state["observed_lineage_parent_limit"] == 2
     for page_uri in snapshot.archive_page_uris:
         assert (
-            len(attached_complete_runtime.core.store.get(page_uri).manifest.parents) <= 6
+            len(attached_complete_runtime.core.store.get(page_uri).manifest.parents)
+            <= 6
         )
 
 

@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from jacobian.runtime import CheckerAuthorityMode
 from tests.support.runtime_profiles import (
     ATTACHED_COMPUTE,
     ATTACHED_COMPUTE_READ_ONLY,
@@ -17,6 +15,8 @@ from tests.support.runtime_profiles import (
     open_runtime_for,
 )
 from tests.support.state import copy_template, publish_template
+
+from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_read_only_attach_still_copies_away_from_session_template(

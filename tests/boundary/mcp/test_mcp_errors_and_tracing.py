@@ -170,5 +170,3 @@ def test_direct_tool_calls_reject_removed_and_malformed_arguments(
             )
 
     asyncio.run(scenario())
-
-

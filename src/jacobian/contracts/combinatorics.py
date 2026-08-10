@@ -1063,6 +1063,92 @@ class PolynomialCoefficientRecurrenceEvaluationResult(ContractModel):
         return self
 
 
+class PolynomialCoefficientRecurrenceTableRequest(ContractModel):
+    """Check a caller-supplied finite table against one P-recursive relation."""
+
+    coefficient_polynomials: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=2, max_length=MAX_LINEAR_RECURRENCE_ORDER + 1
+    )
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=2, max_length=MAX_LINEAR_RECURRENCE_INDEX + 1
+    )
+    coefficient_convention: Literal[
+        "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+    ]
+    polynomial_convention: Literal["ASCENDING_POWERS_OF_N"]
+    table_convention: Literal["VALUES_A_0_THROUGH_A_N_IN_ORDER"]
+
+    @model_validator(mode="after")
+    def require_complete_bounded_table(self) -> Self:
+        order = len(self.coefficient_polynomials) - 1
+        if len(self.values) <= order:
+            raise ValueError(
+                "values must include the initial range and at least one checked step"
+            )
+        for polynomial in self.coefficient_polynomials:
+            if (
+                not polynomial
+                or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1
+            ):
+                raise ValueError("coefficient polynomial degree is outside the bound")
+            _require_canonical_polynomial(
+                polynomial, label="recurrence polynomial coefficient"
+            )
+        for value in self.values:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+                label="submitted recurrence table value",
+            )
+        return self
+
+
+class PolynomialCoefficientRecurrenceTableResult(ContractModel):
+    """Exact residual ledger for a caller-supplied finite recurrence table."""
+
+    coefficient_convention: Literal[
+        "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+    ]
+    polynomial_convention: Literal["ASCENDING_POWERS_OF_N"]
+    table_convention: Literal["VALUES_A_0_THROUGH_A_N_IN_ORDER"]
+    recurrence_order: StrictInt = Field(ge=1, le=MAX_LINEAR_RECURRENCE_ORDER)
+    term_count: StrictInt = Field(ge=2, le=MAX_LINEAR_RECURRENCE_INDEX + 1)
+    checked_index_start: StrictInt = Field(ge=1, le=MAX_LINEAR_RECURRENCE_INDEX)
+    checked_index_end: StrictInt = Field(ge=1, le=MAX_LINEAR_RECURRENCE_INDEX)
+    residuals: tuple[IndexedRationalValue, ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_RECURRENCE_INDEX
+    )
+    satisfies_recurrence: StrictBool
+    first_failure_index: StrictInt | None = Field(
+        default=None, ge=1, le=MAX_LINEAR_RECURRENCE_INDEX
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+    backend: Literal["sympy"] = "sympy"
+    backend_version: Literal["1.14.0"] = "1.14.0"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def require_complete_consistent_residual_ledger(self) -> Self:
+        if self.checked_index_start != self.recurrence_order:
+            raise ValueError("checked_index_start must equal recurrence_order")
+        if self.checked_index_end != self.term_count - 1:
+            raise ValueError("checked_index_end must equal term_count minus one")
+        expected = tuple(range(self.checked_index_start, self.checked_index_end + 1))
+        if tuple(item.index for item in self.residuals) != expected:
+            raise ValueError("residuals must cover every checked table index")
+        failures = tuple(
+            item.index for item in self.residuals if item.value.as_fraction() != 0
+        )
+        if self.satisfies_recurrence != (not failures):
+            raise ValueError("satisfies_recurrence must agree with exact residuals")
+        if self.first_failure_index != (failures[0] if failures else None):
+            raise ValueError(
+                "first_failure_index must identify the first nonzero residual"
+            )
+        return self
+
+
 class RationalGeneratingFunctionCoefficientsRequest(ContractModel):
     """Expand N(x)/D(x) at zero through one explicit finite order."""
 

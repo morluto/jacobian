@@ -7,6 +7,7 @@ from jacobian.contracts.combinatorics import (
     IntegerSidonRequest,
     LinearRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationRequest,
+    PolynomialCoefficientRecurrenceTableRequest,
     RationalGeneratingFunctionCoefficientsRequest,
 )
 
@@ -69,6 +70,15 @@ COMBINATORICS_EXACT_REPLAY_CHECKERS = (
         "combinatorics.p-recursive.fraction-residual-replay",
         entrypoint_module=_ENTRYPOINT,
         replay_method="standard-library Fraction polynomial recurrence replay",
+        reason=_REASON,
+    ),
+    ExactReplayCheckerDeclaration(
+        "combinatorics.recurrence.p_recursive.table_residuals.compute",
+        PolynomialCoefficientRecurrenceTableRequest,
+        "check_polynomial_coefficient_recurrence_table_residuals",
+        "combinatorics.p-recursive.submitted-table-residual-replay",
+        entrypoint_module=_ENTRYPOINT,
+        replay_method="standard-library Fraction submitted-table residual replay",
         reason=_REASON,
     ),
     ExactReplayCheckerDeclaration(

@@ -187,6 +187,95 @@ def test_polynomial_coefficient_recurrence_exposes_exact_terms_and_residuals(
     }
 
 
+def test_submitted_p_recursive_table_reports_complete_exact_residuals(
+    combinatorics_services,
+) -> None:
+    payload = {
+        "coefficient_polynomials": [
+            [_q(1), _q(1)],
+            [_q(2), _q(-6)],
+            [_q(-13), _q(9)],
+            [_q(-4)],
+            [_q(16), _q(-4)],
+        ],
+        "values": [
+            _q(value)
+            for value in (
+                1,
+                1,
+                1,
+                2,
+                5,
+                14,
+                41,
+                123,
+                375,
+                1158,
+                3615,
+                11393,
+                36209,
+                115940,
+                373709,
+                1211740,
+                3949969,
+            )
+        ],
+        "coefficient_convention": _P_RECURSIVE_CONVENTION,
+        "polynomial_convention": "ASCENDING_POWERS_OF_N",
+        "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+    }
+    result = combinatorics_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "combinatorics.recurrence.p_recursive.table_residuals.compute"
+            ),
+            input=payload,
+        )
+    )
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    output = result.output["result"]
+    assert output["satisfies_recurrence"] is True
+    assert output["first_failure_index"] is None
+    assert [item["index"] for item in output["residuals"]] == list(range(4, 17))
+    assert {item["value"]["num"] for item in output["residuals"]} == {"0"}
+
+    payload["values"][-1] = _q(3949970)
+    failed = combinatorics_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "combinatorics.recurrence.p_recursive.table_residuals.compute"
+            ),
+            input=payload,
+        )
+    )
+    failed_output = failed.output["result"]
+    assert failed_output["satisfies_recurrence"] is False
+    assert failed_output["first_failure_index"] == 16
+    assert failed_output["residuals"][-1]["value"] != _q(0)
+
+
+def test_submitted_p_recursive_table_requires_one_checked_step(
+    combinatorics_services,
+) -> None:
+    result = combinatorics_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=(
+                "combinatorics.recurrence.p_recursive.table_residuals.compute"
+            ),
+            input={
+                "coefficient_polynomials": [[_q(1)], [_q(-1)]],
+                "values": [_q(1)],
+                "coefficient_convention": _P_RECURSIVE_CONVENTION,
+                "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+            },
+        )
+    )
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_REQUEST"
+
+
 def test_polynomial_coefficient_recurrence_rejects_singular_required_step(
     combinatorics_services,
 ) -> None:

@@ -30,6 +30,7 @@ from jacobian.contracts.combinatorics import (
     IntegerSidonRequest,
     LinearRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationRequest,
+    PolynomialCoefficientRecurrenceTableRequest,
     RationalGeneratingFunctionCoefficientsRequest,
 )
 from jacobian.contracts.combinatorics import (
@@ -156,6 +157,27 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
             "scope": "PREFIX",
             "term_count": 6,
             "indices": [],
+        },
+    ),
+    (
+        PolynomialCoefficientRecurrenceTableRequest,
+        {
+            "coefficient_polynomials": [
+                [{"num": "1", "den": "1"}],
+                [
+                    {"num": "0", "den": "1"},
+                    {"num": "-1", "den": "1"},
+                ],
+            ],
+            "values": [
+                {"num": value, "den": "1"}
+                for value in ("1", "1", "2", "6", "24", "120")
+            ],
+            "coefficient_convention": (
+                "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+            ),
+            "polynomial_convention": "ASCENDING_POWERS_OF_N",
+            "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
         },
     ),
     (

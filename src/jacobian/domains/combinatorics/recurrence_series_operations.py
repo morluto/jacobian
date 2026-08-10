@@ -11,6 +11,8 @@ from jacobian.contracts.combinatorics import (
     LinearRecurrenceEvaluationResult,
     PolynomialCoefficientRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationResult,
+    PolynomialCoefficientRecurrenceTableRequest,
+    PolynomialCoefficientRecurrenceTableResult,
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
 )
@@ -136,6 +138,58 @@ def evaluate_polynomial_coefficient_recurrence(
     )
 
 
+def compute_polynomial_coefficient_recurrence_table_residuals(
+    request: PolynomialCoefficientRecurrenceTableRequest,
+) -> PolynomialCoefficientRecurrenceTableResult:
+    """Compute every exact residual without generating or repairing table terms."""
+
+    polynomials = tuple(
+        tuple(_sympy_rational(item) for item in polynomial)
+        for polynomial in request.coefficient_polynomials
+    )
+    values = tuple(_sympy_rational(item) for item in request.values)
+    order = len(polynomials) - 1
+
+    def evaluate_polynomial(polynomial: tuple[Any, ...], index: int) -> Any:
+        return sum(
+            (
+                coefficient * index**power
+                for power, coefficient in enumerate(polynomial)
+            ),
+            start=polynomial[0] * 0,
+        )
+
+    residuals = tuple(
+        IndexedRationalValue(
+            index=index,
+            value=_wire(
+                sum(
+                    (
+                        evaluate_polynomial(polynomials[offset], index)
+                        * values[index - offset]
+                        for offset in range(order + 1)
+                    ),
+                    start=values[0] * 0,
+                )
+            ),
+        )
+        for index in range(order, len(values))
+    )
+    failures = tuple(item.index for item in residuals if item.value.as_fraction() != 0)
+    return PolynomialCoefficientRecurrenceTableResult(
+        coefficient_convention=request.coefficient_convention,
+        polynomial_convention=request.polynomial_convention,
+        table_convention=request.table_convention,
+        recurrence_order=order,
+        term_count=len(values),
+        checked_index_start=order,
+        checked_index_end=len(values) - 1,
+        residuals=residuals,
+        satisfies_recurrence=not failures,
+        first_failure_index=failures[0] if failures else None,
+    )
+
+
 def compute_rational_generating_function_coefficients(
     request: RationalGeneratingFunctionCoefficientsRequest,
 ) -> RationalGeneratingFunctionCoefficientsResult:
@@ -180,6 +234,7 @@ def compute_rational_generating_function_coefficients(
 
 
 __all__ = [
+    "compute_polynomial_coefficient_recurrence_table_residuals",
     "compute_rational_generating_function_coefficients",
     "evaluate_linear_recurrence",
     "evaluate_polynomial_coefficient_recurrence",

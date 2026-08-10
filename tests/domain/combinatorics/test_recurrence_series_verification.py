@@ -57,6 +57,16 @@ _CASES = (
         },
     ),
     (
+        "combinatorics.recurrence.p_recursive.table_residuals.compute",
+        {
+            "coefficient_polynomials": [[_q(1)], [_q(0), _q(-1)]],
+            "values": [_q(value) for value in (1, 1, 2, 6, 24, 120)],
+            "coefficient_convention": _P_RECURSIVE_CONVENTION,
+            "polynomial_convention": "ASCENDING_POWERS_OF_N",
+            "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+        },
+    ),
+    (
         "combinatorics.generating_function.coefficients.compute",
         {
             "numerator": [_q(1)],
@@ -112,6 +122,12 @@ def test_checker_rejects_contract_valid_false_results(
     elif capability_id == "combinatorics.recurrence.p_recursive.evaluate":
         forged_candidate["replay_prefix"][7] = _q(5039)
         forged_candidate["values"][7]["value"] = _q(5039)
+    elif capability_id == (
+        "combinatorics.recurrence.p_recursive.table_residuals.compute"
+    ):
+        forged_candidate["residuals"][-1]["value"] = _q(1)
+        forged_candidate["satisfies_recurrence"] = False
+        forged_candidate["first_failure_index"] = 5
     else:
         forged_candidate["coefficients"][7] = _q(22)
     rejected = runtime.core.capabilities.invoke(

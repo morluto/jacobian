@@ -7,15 +7,17 @@
 - Independent replay: standard-library `Fraction` clean-process checker
 - Producer assurance: at most `COMPUTED`
 
-The explicit `combinatorics` bundle includes three generic, bounded operations:
+The explicit `combinatorics` bundle includes four generic, bounded operations:
 
 - `combinatorics.recurrence.linear.evaluate`;
-- `combinatorics.recurrence.p_recursive.evaluate`; and
+- `combinatorics.recurrence.p_recursive.evaluate`;
+- `combinatorics.recurrence.p_recursive.table_residuals.compute`; and
 - `combinatorics.generating_function.coefficients.compute`.
 
 They complement rather than replace the named Fibonacci, consecutive-Fibonacci,
 and Lucas capabilities. `combinatorics.recurrence.linear.verify`,
-`combinatorics.recurrence.p_recursive.verify`, and
+`combinatorics.recurrence.p_recursive.verify`,
+`combinatorics.recurrence.p_recursive.table_residuals.verify`, and
 `combinatorics.generating_function.coefficients.verify` independently replay
 the corresponding producer result when bundled checker authorization is enabled.
 
@@ -42,6 +44,25 @@ requires every bound residual to be exactly zero. This supports finite exact
 evaluation and candidate checking only. It does not prove the recurrence for
 all indices or establish that a supplied recurrence follows from an external
 generating function or theorem.
+
+### Caller-supplied table residuals
+
+`combinatorics.recurrence.p_recursive.table_residuals.compute` accepts a
+complete caller-supplied table \((a_0,\ldots,a_N)\) and the same canonical
+polynomial-coefficient relation. It never generates, repairs, or fills a term.
+Instead it returns every exact residual from the recurrence order through
+\(N\), a Boolean that is true exactly when all those residuals vanish, and the
+first failing index when one exists. Unlike recurrence evaluation, this
+operation does not divide by the leading coefficient, so a zero leading
+coefficient at an index is not itself an error: the declared relation is still
+evaluated exactly at that index.
+
+The separate `table_residuals.verify` capability independently reconstructs
+the complete residual ledger with standard-library `Fraction`. It can verify
+either a passing table or an accurately reported failing table. Verification
+means only that the finite supplied table has the reported residuals; it does
+not establish an infinite recurrence, a generating-function identity, or the
+method by which the caller obtained the table.
 
 ## Constant-coefficient recurrence evaluation
 
@@ -88,7 +109,7 @@ the truncated polynomial product without importing SymPy or producer code.
 
 ## Bounds and canonical input
 
-Version 2 of the combinatorics semantics uses these fail-closed limits:
+Version 3 of the combinatorics semantics uses these fail-closed limits:
 
 | Quantity | Limit |
 | --- | ---: |

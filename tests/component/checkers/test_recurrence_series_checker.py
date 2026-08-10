@@ -12,6 +12,7 @@ from tests.support.rationals import rational_payload as _q
 from jacobian_checkers.recurrence_series import (
     check_linear_recurrence_evaluation,
     check_polynomial_coefficient_recurrence_evaluation,
+    check_polynomial_coefficient_recurrence_table_residuals,
     check_rational_generating_function_coefficients,
 )
 
@@ -259,3 +260,50 @@ def test_polynomial_recurrence_checker_rejects_boolean_replay_endpoint() -> None
 
     assert checked["accepted"] is False
     assert checked["conclusion"] == "UNKNOWN"
+
+
+def test_submitted_table_checker_accepts_failures_and_rejects_forged_success() -> None:
+    source = {
+        "coefficient_polynomials": [[_q(1)], [_q(0), _q(-1)]],
+        "values": [_q(value) for value in (1, 1, 2, 6, 25)],
+        "coefficient_convention": _P_RECURSIVE_CONVENTION,
+        "polynomial_convention": "ASCENDING_POWERS_OF_N",
+        "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+    }
+    result = {
+        "coefficient_convention": _P_RECURSIVE_CONVENTION,
+        "polynomial_convention": "ASCENDING_POWERS_OF_N",
+        "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+        "recurrence_order": 1,
+        "term_count": 5,
+        "checked_index_start": 1,
+        "checked_index_end": 4,
+        "residuals": [
+            {"index": index, "value": _q(value)}
+            for index, value in enumerate((0, 0, 0, 1), start=1)
+        ],
+        "satisfies_recurrence": False,
+        "first_failure_index": 4,
+        **_META,
+    }
+    request = _request(
+        "combinatorics.recurrence.p_recursive.table_residuals.compute",
+        "combinatorics.p-recursive.submitted-table-residual-replay",
+        source,
+        result,
+    )
+    assert (
+        check_polynomial_coefficient_recurrence_table_residuals(request)["accepted"]
+        is True
+    )
+
+    forged = copy.deepcopy(request)
+    forged_result = forged["candidate"]["payload"]
+    forged_result["residuals"][-1]["value"] = _q(0)
+    forged_result["satisfies_recurrence"] = True
+    forged_result["first_failure_index"] = None
+    forged["candidate"]["payload_digest"] = _digest(forged_result)
+    assert (
+        check_polynomial_coefficient_recurrence_table_residuals(forged)["accepted"]
+        is False
+    )

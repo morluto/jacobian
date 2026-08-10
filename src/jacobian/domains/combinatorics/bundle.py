@@ -25,11 +25,12 @@ def build_combinatorics_bundle() -> DomainBundle:
         schema_namespace="jacobian.combinatorics",
         semantics=DomainSemantics(
             name="jacobian.exact-combinatorics",
-            version="2",
+            version="3",
             definition={
                 "description": (
-                    "Exact finite combinatorics, bounded linear recurrences, and "
-                    "finite rational-series truncations"
+                    "Exact finite combinatorics, bounded linear recurrences, "
+                    "submitted recurrence-table residuals, and finite "
+                    "rational-series truncations"
                 ),
                 "arithmetic": "exact integer and rational via maintained SymPy and stdlib APIs",
                 "assurance": (

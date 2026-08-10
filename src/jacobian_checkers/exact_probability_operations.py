@@ -117,9 +117,9 @@ def _base_power_exponent(value: int, base: int) -> int | None:
     return exponent if value == 1 else None
 
 
-def _replay_finite_joint_mutual_information(  # noqa: C901
-    source: dict[str, Any], result: dict[str, Any]
-) -> bool:
+def _finite_joint_table(
+    source: dict[str, Any],
+) -> tuple[list[object], list[object], list[list[Fraction]], int]:
     if set(source) != {"row_labels", "column_labels", "probabilities", "log_base"}:
         return False
     rows = source["row_labels"]
@@ -150,10 +150,21 @@ def _replay_finite_joint_mutual_information(  # noqa: C901
         table.append(parsed)
     if sum((sum(row, Fraction()) for row in table), Fraction()) != 1:
         raise ValueError("finite joint table is not normalized")
+    return rows, columns, table, base
+
+
+def _finite_joint_support(
+    table: list[list[Fraction]],
+) -> tuple[
+    list[Fraction],
+    list[Fraction],
+    list[dict[str, object]],
+    list[tuple[Fraction, Fraction]],
+]:
     row_marginals = [sum(row, Fraction()) for row in table]
     column_marginals = [
-        sum((table[row][column] for row in range(len(rows))), Fraction())
-        for column in range(len(columns))
+        sum((table[row][column] for row in range(len(table))), Fraction())
+        for column in range(len(table[0]))
     ]
     support: list[dict[str, object]] = []
     weighted_ratios: list[tuple[Fraction, Fraction]] = []
@@ -176,6 +187,40 @@ def _replay_finite_joint_mutual_information(  # noqa: C901
                     "likelihood_ratio": ratio,
                 }
             )
+    return row_marginals, column_marginals, support, weighted_ratios
+
+
+def _support_matches(
+    declared_support: object,
+    support: list[dict[str, object]],
+) -> bool:
+    if not isinstance(declared_support, list) or len(declared_support) != len(support):
+        return False
+    for declared, expected in zip(declared_support, support, strict=True):
+        if not isinstance(declared, dict) or set(declared) != set(expected):
+            return False
+        if any(declared[key] != expected[key] for key in ("row_index", "column_index")):
+            return False
+        if any(
+            _fraction(declared[key]) != expected[key]
+            for key in (
+                "probability",
+                "row_marginal",
+                "column_marginal",
+                "likelihood_ratio",
+            )
+        ):
+            return False
+    return True
+
+
+def _replay_finite_joint_mutual_information(
+    source: dict[str, Any], result: dict[str, Any]
+) -> bool:
+    _rows, _columns, table, base = _finite_joint_table(source)
+    row_marginals, column_marginals, support, weighted_ratios = _finite_joint_support(
+        table
+    )
     scale = lcm(*(probability.denominator for probability, _ in weighted_ratios))
     product = Fraction(1)
     for probability, ratio in weighted_ratios:
@@ -205,29 +250,13 @@ def _replay_finite_joint_mutual_information(  # noqa: C901
         "verification",
     }:
         return False
-    declared_support = result["positive_support"]
-    if not isinstance(declared_support, list) or len(declared_support) != len(support):
-        return False
-    for declared, expected in zip(declared_support, support, strict=True):
-        if not isinstance(declared, dict) or set(declared) != set(expected):
-            return False
-        for key in ("row_index", "column_index"):
-            if declared[key] != expected[key]:
-                return False
-        for key in (
-            "probability",
-            "row_marginal",
-            "column_marginal",
-            "likelihood_ratio",
-        ):
-            if _fraction(declared[key]) != expected[key]:
-                return False
     certificate = result["log_product_certificate"]
     return (
         [_fraction(value) for value in result["row_marginals"]] == row_marginals
         and [_fraction(value) for value in result["column_marginals"]]
         == column_marginals
         and result["log_base"] == base
+        and _support_matches(result["positive_support"], support)
         and isinstance(certificate, dict)
         and set(certificate) == {"scale", "product", "identity"}
         and _integer(certificate["scale"]) == scale

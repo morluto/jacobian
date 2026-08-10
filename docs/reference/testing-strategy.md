@@ -22,15 +22,16 @@ matrix when the change also affects shared infrastructure.
 
 ## Ownership model
 
-The suite is migrating to a **dimensional** control plane. One reviewed
-manifest ([`tests/plan_manifest.toml`](../../tests/plan_manifest.toml)) is the
-authoritative source for pytest lane execution; `make compile-test-plan`
-projects it to [`tests/topology.toml`](../../tests/topology.toml). Path-impact
-rules still live in [`.github/ci-impact.json`](../../.github/ci-impact.json)
-during the cutover, with rule-local `suppresses` replacing the old hardcoded
-classifier map.
+One reviewed manifest
+([`tests/plan_manifest.toml`](../../tests/plan_manifest.toml)) is the
+authoritative source for pytest lanes, gates, and path-impact rules.
+`make compile-test-plan` projects it to
+[`tests/topology.toml`](../../tests/topology.toml) and
+[`.github/ci-impact.json`](../../.github/ci-impact.json). Rule-local
+`suppresses` fields drive classifier specificity; do not hand-edit the
+generated projections.
 
-| Dimension | Answers | Authority (target) |
+| Dimension | Answers | Authority |
 | --- | --- | --- |
 | Semantic owner | What assertion layer? | Test directories (`unit` / `component` / `domain` / `composition` / `e2e` + boundary seams) |
 | Resources | What isolation hardware? | Typed fixture contracts (`sqlite`, `process-group`, `mcp`, `complete-runtime`, …) |
@@ -38,9 +39,9 @@ classifier map.
 | CI policy | When does it run? | Manifest `ci` / `runs_on` + impact rules |
 | Execution profile | Workers/timeout/scheduler | Compiled from the dimensions above |
 
-**Transitional dual sources:** lane identity still appears in Make targets and
-workflow jobs. Prefer editing `tests/plan_manifest.toml` and regenerating
-topology rather than hand-editing `tests/topology.toml`.
+Lane identity also appears in Make targets and workflow jobs. Edit
+`tests/plan_manifest.toml` and regenerate rather than hand-editing
+`tests/topology.toml` or `.github/ci-impact.json`.
 
 ### Hydration ladder
 
@@ -54,10 +55,7 @@ Use the narrowest complete-runtime profile that proves the claim:
 
 `authorized_complete_runtime` requires asserting authority, `VERIFY` /
 `VERIFIED`, or authorized-catalog presence. Inventory unjustified uses with
-`make test-runtime-inventory`.
-
-Spine issues: #888 (plan compiler), #1032 (profiles), #1161 (fixture closure),
-#1164 (semantic x resource). Leaf migrations: #995-#1000, #1165-#1170.
+`make test-runtime-inventory`; the inventory fails closed when any remain.
 
 A test's directory answers what kind of behavior it owns. A marker is retained
 only when it changes execution. The CI impact manifest maps changed paths to
@@ -228,8 +226,8 @@ writes raw coverage data and a dependent job combines the files before enforcing
 the repository threshold. The shard count and lane policy are owned by
 [`.github/ci-config.json`](../../.github/ci-config.json).
 
-For pull requests, a tested path planner reads
-[`.github/ci-impact.json`](../../.github/ci-impact.json) and makes
+For pull requests, a tested path planner reads the compiled
+[`.github/ci-impact.json`](../../.github/ci-impact.json) projection and makes
 independent semantic Python, Lean, npm, static, build,
 security, and duplicate-code decisions. Documentation-only changes run only
 the dedicated link checker; npm-only changes stay narrow. Ordinary capability

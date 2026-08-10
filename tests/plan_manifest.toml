@@ -2,7 +2,7 @@ version = 1
 
 # Authoritative test/CI plan manifest.
 # Compile with: make compile-test-plan
-# Projections: tests/topology.toml (generated), suppressions consumed by classify.
+# Projections: tests/topology.toml and .github/ci-impact.json (generated).
 
 [[lanes]]
 name = "unit"
@@ -201,11 +201,104 @@ topology_lane = false
 local_only = true
 ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
 
+# Path-impact rules. Pytest lane directory ownership (`*-tests`) is derived
+# from [[lanes]] paths by the compiler and must not be duplicated here.
+
 [[impact_rules]]
-name = "domain-mathematical-sources"
-patterns = ["src/jacobian/domains/**"]
-suites = ["unit", "component", "domain", "static", "build"]
-suppresses = ["python-source"]
+name = "documentation"
+patterns = ["docs/**", "*.md", ".github/ISSUE_TEMPLATE/**", ".github/CODEOWNERS"]
+suites = ["docs"]
+
+[[impact_rules]]
+name = "deployment"
+patterns = ["deploy/**"]
+suites = ["process"]
+
+[[impact_rules]]
+name = "npm-package"
+patterns = ["npm/**"]
+suites = ["npm"]
+
+[[impact_rules]]
+name = "lean-runtime"
+patterns = ["lean/**"]
+suites = ["lean"]
+
+[[impact_rules]]
+name = "optional-provider-sources"
+patterns = [
+  "src/jacobian/provider_runtime.py",
+  "src/jacobian/**/*provider*.py",
+  "src/jacobian/cvc5*.py",
+  "src/jacobian/flint*.py",
+  "src/jacobian/**/*cvc5*.py",
+  "src/jacobian/**/*flint*.py",
+]
+suites = ["provider"]
+
+[[impact_rules]]
+name = "verification-boundary"
+patterns = [
+  "src/jacobian/runtime/**",
+  "src/jacobian/installation/**",
+  "src/jacobian/portfolio/**",
+  "src/jacobian/providers/**",
+  "src/jacobian/artifacts.py",
+  "src/jacobian/checker_artifacts.py",
+  "src/jacobian/registry.py",
+  "src/jacobian/schema_registry.py",
+  "src/jacobian/plugins/registry.py",
+]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "lean",
+  "npm",
+  "static",
+  "build",
+  "security",
+  "duplicate",
+]
+
+[[impact_rules]]
+name = "lean-python-adapter"
+patterns = [
+  "src/jacobian/lean*.py",
+  "src/jacobian/**/*lean*.py",
+  "src/jacobian_checkers/lean4.py",
+]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "lean",
+  "static",
+  "build",
+]
+
+[[impact_rules]]
+name = "lean-shared-contracts"
+patterns = [
+  "src/jacobian/contracts/capabilities.py",
+  "src/jacobian/contracts/checkers.py",
+  "src/jacobian/contracts/common.py",
+  "src/jacobian/contracts/evidence.py",
+  "src/jacobian/contracts/plugins.py",
+  "src/jacobian/contracts/results.py",
+  "src/jacobian/contracts/verification.py",
+]
+suites = ["lean"]
 
 [[impact_rules]]
 name = "npm-facing-adapter"
@@ -214,16 +307,103 @@ suites = ["unit", "component", "mcp", "e2e", "npm", "static", "build"]
 suppresses = ["python-source"]
 
 [[impact_rules]]
+name = "domain-mathematical-sources"
+patterns = ["src/jacobian/domains/**"]
+suites = ["unit", "component", "domain", "static", "build"]
+suppresses = ["python-source"]
+
+[[impact_rules]]
+name = "python-source"
+patterns = ["src/jacobian/**", "src/jacobian_checkers/**"]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "static",
+  "build",
+]
+
+[[impact_rules]]
+name = "ci-automation"
+patterns = [".github/actions/**", ".github/workflows/**"]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "static",
+  "build",
+]
+
+[[impact_rules]]
 name = "ci-planning-tools"
-patterns = [".github/local-test-ownership.json", ".github/scripts/_ci_paths.py", ".github/scripts/classify-ci-paths", ".github/scripts/emit-plan-receipt", ".github/scripts/normalize-ci-paths", ".github/scripts/plan-local-tests", ".github/scripts/validate-ci-plan"]
+patterns = [
+  ".github/local-test-ownership.json",
+  ".github/scripts/_ci_paths.py",
+  ".github/scripts/classify-ci-paths",
+  ".github/scripts/emit-plan-receipt",
+  ".github/scripts/normalize-ci-paths",
+  ".github/scripts/plan-local-tests",
+  ".github/scripts/validate-ci-plan",
+]
 suites = ["unit", "process", "static", "build"]
 suppresses = ["ci-scripts"]
 
 [[impact_rules]]
 name = "benchmark-ci-automation"
-patterns = [".github/scripts/_ci_paths.py", ".github/scripts/plan-benchmarks", ".github/scripts/validate-benchmark-plan", ".github/workflows/benchmarks.yml"]
+patterns = [
+  ".github/scripts/_ci_paths.py",
+  ".github/scripts/plan-benchmarks",
+  ".github/scripts/validate-benchmark-plan",
+  ".github/workflows/benchmarks.yml",
+]
 suites = ["unit", "process", "static", "build"]
 suppresses = ["ci-scripts", "ci-automation"]
+
+[[impact_rules]]
+name = "ci-scripts"
+patterns = [".github/scripts/**"]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "static",
+  "build",
+]
+
+[[impact_rules]]
+name = "ci-plan-config"
+patterns = [
+  ".github/ci-impact.json",
+  ".github/ci-config.json",
+  "tests/plan_manifest.toml",
+]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "static",
+  "build",
+]
 
 [[impact_rules]]
 name = "topology-runner-tool"
@@ -243,5 +423,148 @@ patterns = ["tools/check_benchmark_static.py"]
 suites = ["static", "build"]
 suppresses = ["test-topology-runners"]
 
+[[impact_rules]]
+name = "test-topology-runners"
+patterns = ["tools/**", "tests/topology.toml"]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "static",
+  "build",
+]
+
+[[impact_rules]]
+name = "makefile"
+patterns = ["Makefile", "make/**"]
+suites = ["static", "build"]
+
+[[impact_rules]]
+name = "python-packaging"
+patterns = ["pyproject.toml", "uv.lock"]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "e2e",
+  "lean",
+  "npm",
+  "static",
+  "build",
+  "security",
+  "duplicate",
+]
+
+[[impact_rules]]
+name = "pre-commit"
+patterns = [".pre-commit-config.yaml"]
+suites = ["static"]
+
+[[impact_rules]]
+name = "duplicate-code-policy"
+patterns = [".jscpd.json"]
+suites = ["duplicate"]
+
+[[impact_rules]]
+name = "generic-test-support"
+patterns = [
+  "tests/support/__init__.py",
+  "tests/support/runtime_templates.py",
+  "tests/support/runtime_instances.py",
+  "tests/support/runtime_profiles.py",
+  "tests/support/execution_profiles.py",
+  "tests/support/resource_contracts.py",
+  "tests/support/resource_closure_plugin.py",
+  "tests/support/fail_closed.py",
+  "tests/support/exact_domain.py",
+  "tests/support/process_entrypoints.py",
+  "tests/support/search_entrypoints.py",
+  "tests/support/conjecture_entrypoints.py",
+  "tests/support/shrinking_entrypoints.py",
+  "tests/support/plugin_noisy_module.py",
+  "tests/support/services.py",
+  "tests/support/state.py",
+  "tests/support/artifacts.py",
+  "tests/support/capabilities.py",
+  "tests/support/capability_installations.py",
+  "tests/support/nullstellensatz.py",
+  "tests/support/polynomials.py",
+  "tests/support/mcp.py",
+  "tests/conftest.py",
+]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "provider",
+  "e2e",
+  "lean",
+  "static",
+]
+
+[[impact_rules]]
+name = "rational-test-support"
+patterns = ["tests/support/rationals.py"]
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "provider",
+  "e2e",
+  "static",
+]
+
+[[impact_rules]]
+name = "provider-spike-isolation-support"
+patterns = ["tests/composition/runtime/provider_spike_isolation.py"]
+suites = ["composition", "static"]
+
+[[impact_rules]]
+name = "lean-readiness-test-support"
+patterns = ["tests/support/provider_lean.py"]
+suites = ["composition", "e2e", "lean", "static"]
+
+[[impact_rules]]
+name = "external-sat-readiness-test-support"
+patterns = ["tests/support/provider_external_sat.py"]
+suites = ["provider", "static"]
+
+[[impact_rules]]
+name = "benchmarks"
+patterns = ["benchmarks/**"]
+suites = []
+
 [fallback]
-suites = ["unit", "component", "domain", "composition", "storage", "process", "mcp", "provider", "e2e", "lean", "npm", "static", "build", "security", "duplicate", "docs"]
+name = "unclassified-fail-closed"
+suites = [
+  "unit",
+  "component",
+  "domain",
+  "composition",
+  "storage",
+  "process",
+  "mcp",
+  "provider",
+  "e2e",
+  "lean",
+  "npm",
+  "static",
+  "build",
+  "security",
+  "duplicate",
+  "docs",
+]

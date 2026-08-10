@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import fnmatch
 import json
 import os
@@ -12,12 +11,14 @@ import shlex
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 CLASSIFIER = ROOT / ".github" / "scripts" / "classify-ci-paths"
 OWNERSHIP = ROOT / ".github" / "local-test-ownership.json"
+TOPOLOGY_MANIFEST = ROOT / "tests" / "topology.toml"
 
 # The planner scripts live without a package context; make the sibling helper
 # importable both when run as a subprocess and when loaded in-process by tests.
@@ -62,6 +63,23 @@ def _catalog() -> dict[str, dict[str, object]]:
     return catalog
 
 
+def _topology_lanes() -> tuple[str, ...]:
+    """Return pytest topology lane names from the checked-in manifest."""
+
+    raw = tomllib.loads(TOPOLOGY_MANIFEST.read_text(encoding="utf-8"))
+    lanes = raw.get("lanes", [])
+    if not isinstance(lanes, list):
+        raise ValueError("tests/topology.toml lanes must be a list")
+    names: list[str] = []
+    for lane in lanes:
+        if not isinstance(lane, dict) or not isinstance(lane.get("name"), str):
+            raise ValueError("tests/topology.toml lane entries require a name")
+        names.append(lane["name"])
+    if not names:
+        raise ValueError("tests/topology.toml must declare at least one lane")
+    return tuple(names)
+
+
 _CATALOG = _catalog()
 COMMANDS = {
     name: (str(entry["command"]),)
@@ -70,18 +88,7 @@ COMMANDS = {
 }
 DEPLOY_COMMAND = str(_CATALOG["deploy"]["command"])
 
-TOPOLOGY_LANES = (
-    "unit",
-    "component",
-    "domain",
-    "composition",
-    "storage",
-    "process",
-    "mcp",
-    "provider",
-    "lean",
-    "e2e",
-)
+TOPOLOGY_LANES = _topology_lanes()
 
 # Independent local gates. Security, duplicate-code, compatibility, coverage,
 # and platform matrices remain hosted-CI evidence.
@@ -103,6 +110,7 @@ INFRASTRUCTURE_PREFIXES = (
     ".pre-commit-config.yaml",
     ".jscpd.json",
     "tests/topology.toml",
+    "tests/plan_manifest.toml",
 )
 
 
@@ -213,74 +221,6 @@ def changed_entries(base: str) -> list[Change]:
     return sorted(entries, key=lambda entry: (entry.path, entry.status))
 
 
-def source_module(path: str) -> str | None:
-    source = Path(path)
-    try:
-        relative = source.relative_to("src")
-    except ValueError:
-        return None
-    if relative.suffix != ".py":
-        return None
-    parts = list(relative.with_suffix("").parts)
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts)
-
-
-def imports(path: Path) -> set[str] | None:
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    except (OSError, SyntaxError, UnicodeError):
-        return None
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module
-            if node.level:
-                try:
-                    relative = path.relative_to(ROOT / "src")
-                except ValueError:
-                    continue
-                module_parts = list(relative.with_suffix("").parts)
-                # Relative imports are resolved from the containing package.
-                # For __init__.py that package is still its parent directory;
-                # retaining "__init__" would invent modules such as
-                # jacobian.pkg.__init__.leaf.
-                package_parts = module_parts[:-1]
-                drop = node.level - 1
-                if drop > len(package_parts):
-                    return None
-                resolved = package_parts[: len(package_parts) - drop]
-                if module:
-                    resolved.extend(module.split("."))
-                module = ".".join(resolved)
-            if module:
-                imported.add(module)
-                imported.update(
-                    f"{module}.{alias.name}"
-                    for alias in node.names
-                    if alias.name != "*"
-                )
-    return imported
-
-
-def directly_imports(imported: set[str], module: str) -> bool:
-    return any(
-        imported_module == module or imported_module.startswith(f"{module}.")
-        for imported_module in imported
-    )
-
-
-def test_files() -> list[Path]:
-    return sorted((ROOT / "tests").rglob("test_*.py"))
-
-
-def source_files() -> list[Path]:
-    return sorted((ROOT / "src").rglob("*.py"))
-
-
 def ownership_overrides() -> dict[str, list[str]] | None:
     try:
         data = json.loads(OWNERSHIP.read_text(encoding="utf-8"))
@@ -305,15 +245,18 @@ def ownership_overrides() -> dict[str, list[str]] | None:
 
 
 def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
-    """Return focused pytest selectors, or a reason selection is ambiguous."""
+    """Return focused pytest selectors, or a reason selection is ambiguous.
+
+    Exact ownership is limited to documentation skips, ownership overrides, and
+    changed ``tests/**/test_*.py`` paths. Source modules and other paths fall
+    back to the selected topology lanes without reverse-import scanning.
+    """
     if not entries:
         return [], None
     overrides = ownership_overrides()
     if overrides is None:
         return [], ".github/local-test-ownership.json: invalid manifest"
     selected: set[str] = set()
-    parsed_tests: dict[Path, set[str]] = {}
-    parsed_sources: dict[Path, set[str]] = {}
 
     for entry in entries:
         path = entry.path
@@ -338,54 +281,24 @@ def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
             continue
 
         if (
+            path.startswith("tests/")
+            and path.endswith(".py")
+            and Path(path).name.startswith("test_")
+        ):
+            selected.add(path)
+            continue
+
+        if (
             path in HIGH_IMPACT_PATHS
-            or path.startswith(".github/")
             or path.endswith("/conftest.py")
+            or is_infrastructure_path(path)
         ):
             return [], f"{path}: shared infrastructure has broad impact"
 
-        if path.startswith("tests/") and path.endswith(".py"):
-            if Path(path).name.startswith("test_"):
-                selected.add(path)
-                continue
+        if path.startswith("tests/"):
             return [], f"{path}: test support code has broad impact"
 
-        module = source_module(path)
-        if module is None:
-            return [], f"{path}: no exact Python ownership evidence"
-
-        source_path = ROOT / path
-        if not source_path.is_file():
-            return [], f"{path}: source is unavailable"
-
-        for candidate in source_files():
-            if candidate == source_path:
-                continue
-            imported = parsed_sources.get(candidate)
-            if imported is None:
-                imported = imports(candidate)
-                if imported is None:
-                    return [], f"{candidate.relative_to(ROOT)}: import scan failed"
-                parsed_sources[candidate] = imported
-            if directly_imports(imported, module):
-                return [], (
-                    f"{path}: imported by {candidate.relative_to(ROOT)}; "
-                    "transitive impact is ambiguous"
-                )
-
-        direct = set()
-        for candidate in test_files():
-            imported = parsed_tests.get(candidate)
-            if imported is None:
-                imported = imports(candidate)
-                if imported is None:
-                    return [], f"{candidate.relative_to(ROOT)}: import scan failed"
-                parsed_tests[candidate] = imported
-            if directly_imports(imported, module):
-                direct.add(candidate.relative_to(ROOT).as_posix())
-        if not direct:
-            return [], f"{path}: no direct importing tests"
-        selected.update(direct)
+        return [], f"{path}: no exact ownership; use lane fallback"
 
     return sorted(selected), None
 
@@ -413,8 +326,6 @@ def _lane_for_path(path: str) -> str | None:
     if not manifest.is_file():
         return None
     try:
-        import tomllib
-
         raw = tomllib.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None

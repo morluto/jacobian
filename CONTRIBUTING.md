@@ -239,10 +239,11 @@ matching `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`, `performance`,
 `property`, and `destructive_process`. They do not replace directory ownership.
 
-Lane execution is authored in
+Lane execution and CI path-impact rules are authored in
 [`tests/plan_manifest.toml`](tests/plan_manifest.toml) and compiled to
-[`tests/topology.toml`](tests/topology.toml) via `make compile-test-plan`. Do
-not hand-edit the generated topology. Prefer the hydration ladder in the
+[`tests/topology.toml`](tests/topology.toml) and
+[`.github/ci-impact.json`](.github/ci-impact.json) via `make compile-test-plan`.
+Do not hand-edit the generated projections. Prefer the hydration ladder in the
 [testing strategy](docs/reference/testing-strategy.md): domain services before
 `attached_complete_runtime` before `authorized_complete_runtime` before
 `fresh_complete_runtime`. Inventory complete-runtime usage with
@@ -256,8 +257,7 @@ builders or one stable test concept rather than hidden setup.
 The [testing strategy](docs/reference/testing-strategy.md) is the authoritative
 source for the change matrix, the canonical lane commands, planning entry
 points, CI classification, shard scheduling, marker policy, and the
-specialist-lane escalation rules. CI change impact is declared in
-[`.github/ci-impact.json`](.github/ci-impact.json); its matching rules are
-additive, so a path may require several suites. Integration timing history is a
+specialist-lane escalation rules. Compiled impact matching rules are additive,
+so a path may require several suites. Integration timing history is a
 scheduling hint produced by successful `main` runs; it is not committed state,
 and missing or invalid history falls back to equal-weight sharding.

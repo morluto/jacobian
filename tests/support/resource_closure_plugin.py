@@ -1,22 +1,53 @@
-"""Collection-time resource-closure reporting for the test architecture overhaul.
+"""Collection-time enforcement of typed fixture resource contracts.
 
-Report-only plugin: records requested fixture names that have registered
-resource contracts. Enforcement ratchets land after profiles stabilize.
+Rejects complete-runtime fixtures outside owning semantic/boundary paths and
+rejects authorized-checker hydration without a verify/authority signal.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
 
 import pytest
 
-from tests.support.resource_contracts import resource_contract
+from tests.support.resource_contracts import ResourceKind, resource_contract
+from tools.test_plan.authority_signals import VERIFY_AUTHORITY_SIGNALS
+
+_COMPLETE_RUNTIME_OWNERS = (
+    "tests/composition/",
+    "tests/e2e/",
+    "tests/boundary/storage/",
+    "tests/boundary/providers/",
+    "tests/boundary/mcp/",
+    "tests/support/",
+)
+
+
+def _relative_path(item: pytest.Item) -> str:
+    path = Path(str(item.path))
+    try:
+        return path.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _module_source(item: pytest.Item) -> str:
+    path = Path(str(item.path))
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _allowed_complete_runtime(relative: str) -> bool:
+    return any(relative.startswith(prefix) for prefix in _COMPLETE_RUNTIME_OWNERS)
 
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
-        "jacobian_resources(name): declare an explicit resource profile override",
+        "jacobian_authorized_runtime: allow authorized_complete_runtime without "
+        "inline verify/authority source signals",
     )
 
 
@@ -27,28 +58,42 @@ def pytest_collection_modifyitems(
     items: list[pytest.Item],
 ) -> None:
     del session, config
+    errors: list[str] = []
     for item in items:
+        relative = _relative_path(item)
         fixturenames = getattr(item, "fixturenames", ())
         contracts = [
-            resource_contract(name)
+            contract
             for name in fixturenames
-            if resource_contract(name) is not None
+            if (contract := resource_contract(name)) is not None
         ]
-        if contracts:
-            item.user_properties.append(
-                (
-                    "jacobian_resources",
-                    sorted(
-                        {
-                            resource.value
-                            for contract in contracts
-                            if contract is not None
-                            for resource in contract.resources
-                        }
-                    ),
-                )
+        if not contracts:
+            continue
+        resources = {
+            resource for contract in contracts for resource in contract.resources
+        }
+        item.user_properties.append(
+            ("jacobian_resources", sorted(resource.value for resource in resources))
+        )
+        if ResourceKind.COMPLETE_RUNTIME in resources and not _allowed_complete_runtime(
+            relative
+        ):
+            errors.append(
+                f"{item.nodeid}: complete-runtime fixtures are not permitted "
+                f"under {relative}; use open_domain_services or move the test"
             )
-
-
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> None:
-    del item, call
+        if ResourceKind.AUTHORIZED_CHECKERS in resources:
+            marker = item.get_closest_marker("jacobian_authorized_runtime")
+            source = _module_source(item)
+            if marker is None and not any(
+                signal in source for signal in VERIFY_AUTHORITY_SIGNALS
+            ):
+                errors.append(
+                    f"{item.nodeid}: authorized_complete_runtime requires a "
+                    "verify/authority assertion or "
+                    "@pytest.mark.jacobian_authorized_runtime"
+                )
+    if errors:
+        raise pytest.UsageError(
+            "jacobian resource-closure policy violations:\n" + "\n".join(errors)
+        )

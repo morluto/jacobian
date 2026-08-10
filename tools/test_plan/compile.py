@@ -10,9 +10,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from tools.test_plan.execution_profiles import (
+    profile_for_lane,
+    validate_lane_against_profile,
+)
+
 DEFAULT_MANIFEST = Path("tests/plan_manifest.toml")
 DEFAULT_TOPOLOGY = Path("tests/topology.toml")
 DEFAULT_IMPACT = Path(".github/ci-impact.json")
+DEFAULT_FALLBACK_NAME = "unclassified-fail-closed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +55,7 @@ class TestPlanManifest:
     version: int
     lanes: tuple[LaneSpec, ...]
     impact_rules: tuple[ImpactRule, ...]
+    fallback_name: str
     fallback_suites: tuple[str, ...]
     source: Path
 
@@ -115,13 +122,28 @@ def load_manifest(path: Path) -> TestPlanManifest:
         for raw in payload.get("impact_rules", ())
     )
     fallback = payload.get("fallback", {})
-    return TestPlanManifest(
+    manifest = TestPlanManifest(
         version=version,
         lanes=tuple(lanes),
         impact_rules=rules,
+        fallback_name=str(fallback.get("name", DEFAULT_FALLBACK_NAME)),
         fallback_suites=tuple(str(item) for item in fallback.get("suites", ())),
         source=path,
     )
+    errors: list[str] = []
+    for lane in manifest.pytest_lanes:
+        errors.extend(
+            validate_lane_against_profile(
+                name=lane.name,
+                required_environment=lane.required_environment,
+                workers=lane.workers,
+                distribution=lane.distribution,
+                timeout_seconds=lane.timeout_seconds,
+            )
+        )
+    if errors:
+        raise ValueError("execution profile conflicts:\n" + "\n".join(errors))
+    return manifest
 
 
 def render_topology(manifest: TestPlanManifest) -> str:
@@ -133,6 +155,13 @@ def render_topology(manifest: TestPlanManifest) -> str:
         "",
     ]
     for lane in manifest.pytest_lanes:
+        profile = profile_for_lane(
+            name=lane.name,
+            required_environment=lane.required_environment,
+            workers=lane.workers,
+            distribution=lane.distribution,
+            timeout_seconds=lane.timeout_seconds,
+        )
         lines.append("[[lanes]]")
         lines.append(f'name = "{lane.name}"')
         lines.append(f'tier = "{lane.tier or lane.name}"')
@@ -145,6 +174,15 @@ def render_topology(manifest: TestPlanManifest) -> str:
         lines.append(f"required_environment = [{envs}]")
         lines.append(f'required_provider = "{lane.required_provider}"')
         lines.append(f"timing_sharding = {'true' if lane.timing_sharding else 'false'}")
+        lines.append(f'execution_profile = "{profile.name}"')
+        lines.append(
+            f"process_supervision = "
+            f"{'true' if profile.process_supervision else 'false'}"
+        )
+        if profile.setup_affinity is not None:
+            lines.append(f'setup_affinity = "{profile.setup_affinity}"')
+        else:
+            lines.append('setup_affinity = ""')
         ci = lane.runs_on
         lines.append(
             "ci = { "
@@ -163,6 +201,8 @@ def _catalog_entry(lane: LaneSpec) -> dict[str, Any]:
         "command": lane.command,
         "topology_lane": lane.name if lane.topology_lane else None,
     }
+    if lane.matrix:
+        entry["matrix"] = True
     if lane.providers:
         entry["providers"] = list(lane.providers)
     if lane.local_subsumes:
@@ -172,20 +212,53 @@ def _catalog_entry(lane: LaneSpec) -> dict[str, Any]:
     return entry
 
 
+def _lane_test_patterns(lane: LaneSpec) -> tuple[str, ...]:
+    return tuple(f"{path.rstrip('/')}/**" for path in lane.paths)
+
+
+def _derived_test_rule(
+    lane: LaneSpec, *, catalog: Mapping[str, Any]
+) -> dict[str, Any]:
+    suites = [lane.name, "static"] if "static" in catalog else [lane.name]
+    return {
+        "name": f"{lane.name}-tests",
+        "patterns": list(_lane_test_patterns(lane)),
+        "suites": suites,
+    }
+
+
+def _explicit_covers_lane_dirs(
+    rule: ImpactRule, lane: LaneSpec
+) -> bool:
+    """Return True when an explicit rule already owns this lane's test dirs."""
+
+    derived = frozenset(_lane_test_patterns(lane))
+    if not derived:
+        return False
+    explicit = frozenset(rule.patterns)
+    if explicit == derived:
+        return True
+    # Same test directories under alternate naming (e.g. optional-provider-tests).
+    lane_dirs = frozenset(path.rstrip("/") for path in lane.paths)
+    explicit_dirs = frozenset(
+        pattern[:-3] if pattern.endswith("/**") else pattern.rstrip("/")
+        for pattern in rule.patterns
+    )
+    return bool(lane_dirs) and lane_dirs == explicit_dirs
+
+
+def _generated_from(path: Path) -> str:
+    """Stable relative label for compiled meta, independent of caller cwd."""
+
+    as_posix = path.as_posix().replace("\\", "/")
+    marker = "tests/plan_manifest.toml"
+    if as_posix == marker or as_posix.endswith(f"/{marker}"):
+        return marker
+    return as_posix
+
+
 def render_impact(manifest: TestPlanManifest) -> dict[str, Any]:
     catalog = {lane.name: _catalog_entry(lane) for lane in manifest.lanes}
-    # Auto-derive test-directory ownership rules for pytest lanes.
-    derived_rules: list[dict[str, Any]] = []
-    for lane in manifest.pytest_lanes:
-        patterns = [f"{path.rstrip('/')}/**" for path in lane.paths]
-        suites = [lane.name, "static"] if "static" in catalog else [lane.name]
-        derived_rules.append(
-            {
-                "name": f"{lane.name}-tests",
-                "patterns": patterns,
-                "suites": suites,
-            }
-        )
     explicit_rules = [
         {
             "name": rule.name,
@@ -195,16 +268,29 @@ def render_impact(manifest: TestPlanManifest) -> dict[str, Any]:
         }
         for rule in manifest.impact_rules
     ]
+    explicit_names = {rule.name for rule in manifest.impact_rules}
+    derived_rules: list[dict[str, Any]] = []
+    for lane in manifest.pytest_lanes:
+        derived_name = f"{lane.name}-tests"
+        if derived_name in explicit_names:
+            continue
+        if any(
+            _explicit_covers_lane_dirs(rule, lane) for rule in manifest.impact_rules
+        ):
+            continue
+        derived_rules.append(_derived_test_rule(lane, catalog=catalog))
     suites = list(manifest.suite_order)
-    # Ensure deploy appears in catalog even if local_only.
     return {
         "version": 2,
         "suites": suites,
         "catalog": catalog,
         "rules": explicit_rules + derived_rules,
-        "fallback": {"suites": list(manifest.fallback_suites or suites)},
+        "fallback": {
+            "name": manifest.fallback_name,
+            "suites": list(manifest.fallback_suites or suites),
+        },
         "meta": {
-            "generated_from": str(manifest.source).replace("\\", "/"),
+            "generated_from": _generated_from(manifest.source),
             "compiler": "tools.test_plan.compile",
         },
     }
@@ -232,6 +318,10 @@ def compile_manifest(path: Path) -> CompileResult:
     )
 
 
+def impact_json(impact: Mapping[str, Any]) -> str:
+    return json.dumps(impact, indent=2, sort_keys=False) + "\n"
+
+
 def write_outputs(
     result: CompileResult,
     *,
@@ -241,10 +331,7 @@ def write_outputs(
     topology_path.parent.mkdir(parents=True, exist_ok=True)
     impact_path.parent.mkdir(parents=True, exist_ok=True)
     topology_path.write_text(result.topology, encoding="utf-8")
-    impact_path.write_text(
-        json.dumps(result.impact, indent=2, sort_keys=False) + "\n",
-        encoding="utf-8",
-    )
+    impact_path.write_text(impact_json(result.impact), encoding="utf-8")
 
 
 def check_outputs(
@@ -258,6 +345,10 @@ def check_outputs(
         errors.append(f"missing topology: {topology_path}")
     elif topology_path.read_text(encoding="utf-8") != result.topology:
         errors.append(f"stale topology: {topology_path}")
+    if not impact_path.is_file():
+        errors.append(f"missing impact: {impact_path}")
+    elif impact_path.read_text(encoding="utf-8") != impact_json(result.impact):
+        errors.append(f"stale impact: {impact_path}")
     return errors
 
 
@@ -274,12 +365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="Write the topology.toml projection from the manifest.",
-    )
-    parser.add_argument(
-        "--write-impact",
-        action="store_true",
-        help="Write ci-impact.json (experimental; prefer embedding suppressions).",
+        help="Write topology.toml and ci-impact.json from the manifest.",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     result = compile_manifest(args.manifest)
@@ -293,21 +379,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print("test plan projections are up to date")
         return 0
-    if args.write or args.write_impact:
-        if args.write:
-            args.topology.parent.mkdir(parents=True, exist_ok=True)
-            args.topology.write_text(result.topology, encoding="utf-8")
-            print(f"wrote {args.topology}")
-        if args.write_impact:
-            args.impact.parent.mkdir(parents=True, exist_ok=True)
-            args.impact.write_text(
-                json.dumps(result.impact, indent=2, sort_keys=False) + "\n",
-                encoding="utf-8",
-            )
-            print(f"wrote {args.impact}")
+    if args.write:
+        write_outputs(
+            result, topology_path=args.topology, impact_path=args.impact
+        )
+        print(f"wrote {args.topology}")
+        print(f"wrote {args.impact}")
         return 0
     print(result.topology)
-    print(json.dumps(result.impact, indent=2))
+    print(impact_json(result.impact), end="")
     return 0
 
 

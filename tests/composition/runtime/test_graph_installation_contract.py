@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from jacobian.graphs import GraphInstallation
 
 _GRAPH_CAPABILITY_VERSIONS = {
@@ -11,6 +13,7 @@ _GRAPH_CAPABILITY_VERSIONS = {
 }
 
 
+@pytest.mark.jacobian_authorized_runtime
 def test_graph_installation_preserves_public_identity_and_adapter_order(
     authorized_complete_runtime,
 ) -> None:

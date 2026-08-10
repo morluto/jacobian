@@ -205,91 +205,21 @@ def _planner_tree(tmp_path: Path, monkeypatch) -> ModuleType:
     return planner
 
 
-def test_plan_selects_tests_that_directly_import_changed_leaf_module(
+def test_plan_falls_back_for_changed_source_without_exact_ownership(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
     source = tmp_path / "src/jacobian/leaf.py"
-    direct = tmp_path / "tests/unit/test_leaf.py"
-    unrelated = tmp_path / "tests/unit/test_other.py"
     source.parent.mkdir(parents=True)
-    direct.parent.mkdir(parents=True)
     source.write_text("VALUE = 1\n", encoding="utf-8")
-    direct.write_text("from jacobian.leaf import VALUE\n", encoding="utf-8")
-    unrelated.write_text("import jacobian.other\n", encoding="utf-8")
-
-    tests, fallback = planner.exact_tests([planner.Change("M", "src/jacobian/leaf.py")])
-
-    assert tests == ["tests/unit/test_leaf.py"]
-    assert fallback is None
-
-
-def test_plan_falls_back_when_source_dependency_makes_impact_transitive(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    planner = _planner_tree(tmp_path, monkeypatch)
-    leaf = tmp_path / "src/jacobian/leaf.py"
-    consumer = tmp_path / "src/jacobian/consumer.py"
-    test = tmp_path / "tests/unit/test_consumer.py"
-    leaf.parent.mkdir(parents=True)
-    test.parent.mkdir(parents=True)
-    leaf.write_text("VALUE = 1\n", encoding="utf-8")
-    consumer.write_text("from jacobian.leaf import VALUE\n", encoding="utf-8")
-    test.write_text("import jacobian.consumer\n", encoding="utf-8")
 
     tests, fallback = planner.exact_tests([planner.Change("M", "src/jacobian/leaf.py")])
 
     assert tests == []
-    assert fallback is not None
-    assert "transitive impact is ambiguous" in fallback
-
-
-def test_plan_treats_package_prefix_import_as_transitive(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    planner = _planner_tree(tmp_path, monkeypatch)
-    package = tmp_path / "src/jacobian/domain/__init__.py"
-    consumer = tmp_path / "src/jacobian/consumer.py"
-    test = tmp_path / "tests/unit/test_consumer.py"
-    package.parent.mkdir(parents=True)
-    test.parent.mkdir(parents=True)
-    package.write_text("VALUE = 1\n", encoding="utf-8")
-    consumer.write_text("import jacobian.domain.child\n", encoding="utf-8")
-    test.write_text("import jacobian.consumer\n", encoding="utf-8")
-
-    tests, fallback = planner.exact_tests(
-        [planner.Change("M", "src/jacobian/domain/__init__.py")]
+    assert fallback == (
+        "src/jacobian/leaf.py: no exact ownership; use lane fallback"
     )
-
-    assert tests == []
-    assert fallback is not None
-    assert "transitive impact is ambiguous" in fallback
-
-
-def test_plan_resolves_relative_source_imports_as_transitive(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    planner = _planner_tree(tmp_path, monkeypatch)
-    leaf = tmp_path / "src/jacobian/domain/leaf.py"
-    consumer = tmp_path / "src/jacobian/domain/consumer.py"
-    test = tmp_path / "tests/unit/test_consumer.py"
-    leaf.parent.mkdir(parents=True)
-    test.parent.mkdir(parents=True)
-    leaf.write_text("VALUE = 1\n", encoding="utf-8")
-    consumer.write_text("from .leaf import VALUE\n", encoding="utf-8")
-    test.write_text("import jacobian.domain.consumer\n", encoding="utf-8")
-
-    tests, fallback = planner.exact_tests(
-        [planner.Change("M", "src/jacobian/domain/leaf.py")]
-    )
-
-    assert tests == []
-    assert fallback is not None
-    assert "transitive impact is ambiguous" in fallback
 
 
 def test_plan_falls_back_for_delete_rename_and_untracked_changes(
@@ -466,32 +396,28 @@ def test_plan_discards_exact_selectors_when_a_mixed_change_needs_fallback(
     assert fallback == "src/jacobian/leaf.py: D changes are not exact"
 
 
-def test_plan_resolves_relative_imports_from_package_initializers(
+def test_plan_falls_back_for_high_impact_and_infrastructure_paths(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    package = tmp_path / "src/jacobian/pkg"
-    leaf = package / "leaf.py"
-    initializer = package / "__init__.py"
-    direct = tmp_path / "tests/unit/test_leaf.py"
-    package_user = tmp_path / "tests/unit/test_package.py"
-    package.mkdir(parents=True)
-    direct.parent.mkdir(parents=True)
-    leaf.write_text("VALUE = 1\n", encoding="utf-8")
-    initializer.write_text("from .leaf import VALUE\n", encoding="utf-8")
-    direct.write_text("from jacobian.pkg.leaf import VALUE\n", encoding="utf-8")
-    package_user.write_text("from jacobian.pkg import VALUE\n", encoding="utf-8")
-
-    selected, fallback = planner.exact_tests(
-        [planner.Change("M", "src/jacobian/pkg/leaf.py")]
+    conftest = tmp_path / "tests/unit/conftest.py"
+    conftest.parent.mkdir(parents=True)
+    conftest.write_text("import pytest\n", encoding="utf-8")
+    (tmp_path / "tests/plan_manifest.toml").parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tests/plan_manifest.toml").write_text(
+        "version = 1\n", encoding="utf-8"
     )
 
-    assert selected == []
-    assert fallback == (
-        "src/jacobian/pkg/leaf.py: imported by src/jacobian/pkg/__init__.py; "
-        "transitive impact is ambiguous"
-    )
+    for path in (
+        "tests/conftest.py",
+        "tests/unit/conftest.py",
+        "tests/plan_manifest.toml",
+        "src/jacobian/__init__.py",
+    ):
+        selected, fallback = planner.exact_tests([planner.Change("M", path)])
+        assert selected == []
+        assert fallback == f"{path}: shared infrastructure has broad impact"
 
 
 def test_plan_fails_closed_for_unknown_path_and_invalid_manifest(
@@ -507,6 +433,18 @@ def test_plan_fails_closed_for_unknown_path_and_invalid_manifest(
 
     assert tests == []
     assert fallback == ".github/local-test-ownership.json: invalid manifest"
+
+
+def test_plan_falls_back_for_paths_without_exact_ownership(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    planner = _planner_tree(tmp_path, monkeypatch)
+
+    tests, fallback = planner.exact_tests([planner.Change("M", "mystery.asset")])
+
+    assert tests == []
+    assert fallback == "mystery.asset: no exact ownership; use lane fallback"
 
 
 def test_plan_focused_tests_keep_independent_gates(
@@ -774,7 +712,7 @@ def test_planned_commands_appends_deploy_gate_last() -> None:
         [planner.Change("M", "deploy/install.sh")],
         _plan(process=True),
         [],
-        "deploy/install.sh: no exact Python ownership evidence",
+        "deploy/install.sh: no exact ownership; use lane fallback",
         True,
     )
 

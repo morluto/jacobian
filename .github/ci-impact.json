@@ -9,8 +9,8 @@
     "process",
     "mcp",
     "provider",
-    "e2e",
     "lean",
+    "e2e",
     "npm",
     "static",
     "build",
@@ -25,7 +25,8 @@
     },
     "component": {
       "command": "make test-component",
-      "topology_lane": "component"
+      "topology_lane": "component",
+      "matrix": true
     },
     "domain": {
       "command": "make test-domain",
@@ -37,7 +38,8 @@
     },
     "storage": {
       "command": "make test-storage",
-      "topology_lane": "storage"
+      "topology_lane": "storage",
+      "matrix": true
     },
     "process": {
       "command": "make test-process",
@@ -45,11 +47,13 @@
     },
     "mcp": {
       "command": "make test-mcp",
-      "topology_lane": "mcp"
+      "topology_lane": "mcp",
+      "matrix": true
     },
     "provider": {
       "command": "make test-provider",
       "topology_lane": "provider",
+      "matrix": true,
       "providers": [
         "cvc5",
         "external_sat",
@@ -58,13 +62,14 @@
         "sympy"
       ]
     },
-    "e2e": {
-      "command": "make test-e2e",
-      "topology_lane": "e2e"
-    },
     "lean": {
       "command": "make test-lean",
       "topology_lane": "lean"
+    },
+    "e2e": {
+      "command": "make test-e2e",
+      "topology_lane": "e2e",
+      "matrix": true
     },
     "npm": {
       "command": "make npm-test",
@@ -140,30 +145,6 @@
       ]
     },
     {
-      "name": "lean-python-tests",
-      "patterns": [
-        "tests/boundary/providers/lean/**"
-      ],
-      "suites": [
-        "lean",
-        "static"
-      ]
-    },
-    {
-      "name": "optional-provider-tests",
-      "patterns": [
-        "tests/boundary/providers/cvc5/**",
-        "tests/boundary/providers/external_sat/**",
-        "tests/boundary/providers/flint/**",
-        "tests/boundary/providers/graph/**",
-        "tests/boundary/providers/sympy/**"
-      ],
-      "suites": [
-        "provider",
-        "static"
-      ]
-    },
-    {
       "name": "optional-provider-sources",
       "patterns": [
         "src/jacobian/provider_runtime.py",
@@ -175,86 +156,6 @@
       ],
       "suites": [
         "provider"
-      ]
-    },
-    {
-      "name": "unit-tests",
-      "patterns": [
-        "tests/unit/**"
-      ],
-      "suites": [
-        "unit",
-        "static"
-      ]
-    },
-    {
-      "name": "component-tests",
-      "patterns": [
-        "tests/component/**"
-      ],
-      "suites": [
-        "component",
-        "static"
-      ]
-    },
-    {
-      "name": "domain-tests",
-      "patterns": [
-        "tests/domain/**"
-      ],
-      "suites": [
-        "domain",
-        "static"
-      ]
-    },
-    {
-      "name": "composition-tests",
-      "patterns": [
-        "tests/composition/**"
-      ],
-      "suites": [
-        "composition",
-        "static"
-      ]
-    },
-    {
-      "name": "storage-tests",
-      "patterns": [
-        "tests/boundary/storage/**"
-      ],
-      "suites": [
-        "storage",
-        "static"
-      ]
-    },
-    {
-      "name": "process-tests",
-      "patterns": [
-        "tests/boundary/process/**"
-      ],
-      "suites": [
-        "process",
-        "static"
-      ]
-    },
-    {
-      "name": "mcp-tests",
-      "patterns": [
-        "tests/boundary/mcp/**"
-      ],
-      "suites": [
-        "mcp",
-        "static"
-      ]
-    },
-    {
-      "name": "end-to-end-tests",
-      "patterns": [
-        "tests/e2e/**"
-      ],
-      "suites": [
-        "e2e",
-        "static"
       ]
     },
     {
@@ -457,7 +358,8 @@
       "name": "ci-plan-config",
       "patterns": [
         ".github/ci-impact.json",
-        ".github/ci-config.json"
+        ".github/ci-config.json",
+        "tests/plan_manifest.toml"
       ],
       "suites": [
         "unit",
@@ -592,6 +494,12 @@
         "tests/support/__init__.py",
         "tests/support/runtime_templates.py",
         "tests/support/runtime_instances.py",
+        "tests/support/runtime_profiles.py",
+        "tests/support/execution_profiles.py",
+        "tests/support/resource_contracts.py",
+        "tests/support/resource_closure_plugin.py",
+        "tests/support/fail_closed.py",
+        "tests/support/exact_domain.py",
         "tests/support/process_entrypoints.py",
         "tests/support/search_entrypoints.py",
         "tests/support/conjecture_entrypoints.py",
@@ -674,6 +582,110 @@
         "benchmarks/**"
       ],
       "suites": []
+    },
+    {
+      "name": "unit-tests",
+      "patterns": [
+        "tests/unit/**"
+      ],
+      "suites": [
+        "unit",
+        "static"
+      ]
+    },
+    {
+      "name": "component-tests",
+      "patterns": [
+        "tests/component/**"
+      ],
+      "suites": [
+        "component",
+        "static"
+      ]
+    },
+    {
+      "name": "domain-tests",
+      "patterns": [
+        "tests/domain/**"
+      ],
+      "suites": [
+        "domain",
+        "static"
+      ]
+    },
+    {
+      "name": "composition-tests",
+      "patterns": [
+        "tests/composition/**"
+      ],
+      "suites": [
+        "composition",
+        "static"
+      ]
+    },
+    {
+      "name": "storage-tests",
+      "patterns": [
+        "tests/boundary/storage/**"
+      ],
+      "suites": [
+        "storage",
+        "static"
+      ]
+    },
+    {
+      "name": "process-tests",
+      "patterns": [
+        "tests/boundary/process/**"
+      ],
+      "suites": [
+        "process",
+        "static"
+      ]
+    },
+    {
+      "name": "mcp-tests",
+      "patterns": [
+        "tests/boundary/mcp/**"
+      ],
+      "suites": [
+        "mcp",
+        "static"
+      ]
+    },
+    {
+      "name": "provider-tests",
+      "patterns": [
+        "tests/boundary/providers/cvc5/**",
+        "tests/boundary/providers/external_sat/**",
+        "tests/boundary/providers/flint/**",
+        "tests/boundary/providers/graph/**",
+        "tests/boundary/providers/sympy/**"
+      ],
+      "suites": [
+        "provider",
+        "static"
+      ]
+    },
+    {
+      "name": "lean-tests",
+      "patterns": [
+        "tests/boundary/providers/lean/**"
+      ],
+      "suites": [
+        "lean",
+        "static"
+      ]
+    },
+    {
+      "name": "e2e-tests",
+      "patterns": [
+        "tests/e2e/**"
+      ],
+      "suites": [
+        "e2e",
+        "static"
+      ]
     }
   ],
   "fallback": {
@@ -698,7 +710,7 @@
     ]
   },
   "meta": {
-    "plan_manifest": "tests/plan_manifest.toml",
-    "suppressions_source": "rules[].suppresses"
+    "generated_from": "tests/plan_manifest.toml",
+    "compiler": "tools.test_plan.compile"
   }
 }

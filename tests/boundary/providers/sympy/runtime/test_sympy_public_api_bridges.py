@@ -19,8 +19,8 @@ def _assert_computed_result(result) -> None:
     assert result.relationships == ()
 
 
-def test_native_and_capability_arithmetic_agree(authorized_complete_runtime) -> None:
-    runtime = authorized_complete_runtime
+def test_native_and_capability_arithmetic_agree(attached_complete_runtime) -> None:
+    runtime = attached_complete_runtime
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="rational.compute.sum",
@@ -40,9 +40,9 @@ def test_native_and_capability_arithmetic_agree(authorized_complete_runtime) -> 
 
 
 def test_native_and_capability_matrix_inverse_agree(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    runtime = authorized_complete_runtime
+    runtime = attached_complete_runtime
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.inverse.compute",
@@ -68,11 +68,11 @@ def test_native_and_capability_matrix_inverse_agree(
 
 
 def test_capability_provider_provenance_is_unchanged(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     providers = {
         descriptor.capability_id: descriptor.provider
-        for descriptor in authorized_complete_runtime.core.capabilities.catalog().capabilities
+        for descriptor in attached_complete_runtime.core.capabilities.catalog().capabilities
         if descriptor.capability_id
         in {"rational.compute.sum", "matrix.inverse.compute"}
     }

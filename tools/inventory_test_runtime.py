@@ -1,17 +1,13 @@
 """Inventory complete-runtime fixture usage and resource escapes per test module.
 
-Report-only helper for the test/CI architecture overhaul.  Emits one row per
-``tests/**/test_*.py`` module with:
-
-- semantic owner (topology lane)
-- complete-runtime fixtures referenced in the source
-- whether VERIFY / VERIFIED / authority signals appear
-- direct sqlite3 / subprocess ownership
+Fails closed when ``authorized_complete_runtime`` appears without a verify /
+authority signal. Collection-time enforcement lives in
+``tests.support.resource_closure_plugin``; this inventory is the static audit.
 
 Usage::
 
     uv run python tools/inventory_test_runtime.py
-    uv run python tools/inventory_test_runtime.py --format json
+    uv run python tools/inventory_test_runtime.py --unjustified-only
     make test-runtime-inventory
 """
 
@@ -25,6 +21,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from tools.test_plan.authority_signals import VERIFY_AUTHORITY_SIGNALS
+
 _COMPLETE_RUNTIME_FIXTURES = frozenset(
     {
         "fresh_complete_runtime",
@@ -32,20 +30,6 @@ _COMPLETE_RUNTIME_FIXTURES = frozenset(
         "authorized_complete_runtime",
         "complete_portfolio_template",
         "authorized_portfolio_template",
-    }
-)
-_VERIFY_SIGNALS = frozenset(
-    {
-        "VERIFIED",
-        "VERIFY",
-        "verify_",
-        ".verify",
-        "certificate.verify",
-        "CheckerAuthorityMode",
-        "HYDRATE_EXISTING",
-        "INSTALL_BUNDLED",
-        "authorized checker",
-        "verification_record",
     }
 )
 _RESOURCE_IMPORTS = frozenset({"sqlite3", "subprocess", "multiprocessing"})
@@ -109,7 +93,7 @@ def _source_signals(tree: ast.AST, source: str) -> tuple[set[str], bool, set[str
     for node in ast.walk(tree):
         _collect_resource_imports(node, resources)
         _collect_runtime_fixtures(node, fixtures)
-    has_verify = any(signal in source for signal in _VERIFY_SIGNALS)
+    has_verify = any(signal in source for signal in VERIFY_AUTHORITY_SIGNALS)
     return fixtures, has_verify, resources
 
 
@@ -181,14 +165,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Only print modules that request authorized_complete_runtime without verify signals.",
     )
+    parser.add_argument(
+        "--fail-on-unjustified",
+        action="store_true",
+        help="Exit non-zero when any unjustified authorized_complete_runtime use remains.",
+    )
     args = parser.parse_args(argv)
     rows = inventory_modules(args.root.resolve())
+    display = rows
     if args.unjustified_only:
-        rows = tuple(row for row in rows if row.unjustified_authorized)
+        display = tuple(row for row in rows if row.unjustified_authorized)
     if args.fmt == "json":
-        print(json.dumps([asdict(row) for row in rows], indent=2, sort_keys=True))
+        print(json.dumps([asdict(row) for row in display], indent=2, sort_keys=True))
     else:
-        print(_render_text(rows), end="")
+        print(_render_text(display), end="")
+    if args.fail_on_unjustified and any(row.unjustified_authorized for row in rows):
+        return 1
     return 0
 
 

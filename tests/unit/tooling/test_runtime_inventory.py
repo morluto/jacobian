@@ -16,3 +16,13 @@ def test_inventory_flags_modules_and_owners() -> None:
     assert row.semantic_owner == "composition"
     assert "attached_complete_runtime" in row.complete_runtime_fixtures
     assert "authorized_complete_runtime" not in row.complete_runtime_fixtures
+
+
+def test_inventory_accepts_authorized_catalog_presence() -> None:
+    root = Path(__file__).resolve().parents[3]
+    rows = inventory_modules(root)
+    by_path = {row.path: row for row in rows}
+    row = by_path["tests/composition/runtime/test_graph_installation_contract.py"]
+    assert "authorized_complete_runtime" in row.complete_runtime_fixtures
+    assert row.has_verify_signal
+    assert not row.unjustified_authorized

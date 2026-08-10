@@ -596,7 +596,7 @@ def test_planned_commands_selects_docs_linkcheck_for_docs_paths() -> None:
     planner = _load_script_module("plan_local_tests_docs_gate", "plan-local-tests")
 
     commands = planner.planned_commands(
-        [planner.Change("M", "docs/explanation/goals.md")],
+        [planner.Change("M", "docs/explanation/product-blueprint.md")],
         _plan(docs=True),
         [],
         None,
@@ -752,7 +752,7 @@ def test_planned_commands_adds_docs_gate_alongside_ordinary_python(
 
     commands = planner.planned_commands(
         [
-            planner.Change("M", "docs/explanation/goals.md"),
+            planner.Change("M", "docs/explanation/product-blueprint.md"),
             planner.Change("M", "src/jacobian/leaf.py"),
         ],
         _plan(unit=True, static=True, docs=True, python=True),

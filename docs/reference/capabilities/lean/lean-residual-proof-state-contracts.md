@@ -1,6 +1,6 @@
 # Lean residual proof-state contracts
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 This page documents three bounded Lean proof-state contracts that extend the
 [replayable proof-state transitions](lean-replayable-proof-states.md) surface

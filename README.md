@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="docs/explanation/hero-image.md"><img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output."></a>
+  <img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output.">
 </p>
 
 <h1 align="center">Jacobian</h1>
@@ -189,9 +189,6 @@ research may change experimental contracts between releases.
   Lean setup
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md) — HTTP deployment and
   authentication
-
-The background to the repository artwork is documented in
-[About the hero image](docs/explanation/hero-image.md).
 
 ## Contributing
 

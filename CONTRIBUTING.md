@@ -1,18 +1,18 @@
 # Contributing to Jacobian
 
-Jacobian is a pre-stable 0.6.0 capability workbench. It exposes composable mathematical
-capabilities that AI agents use to investigate conjectures and other
-mathematically specified problems. Contributions should preserve mathematically
-atomic, agent-visible outcomes, agent-owned composition, and the boundary
-between heuristic search or evaluation and independently verified evidence.
+Jacobian is a pre-stable 0.6.0 **math toolbox for agents**: atomic tools behind
+`math.find` / `math.run`, math-first results, agent-owned composition, and
+optional checker tools as **separate catalog IDs** (not dual-mode producers).
+Contributions should preserve that product model—see
+[product-blueprint](docs/explanation/product-blueprint.md) and
+[architecture](docs/explanation/architecture.md).
 
 ## Before changing code
 
 Read the [documentation home](docs/index.md), the
-[product goals](docs/explanation/goals.md), and the
+[product model](docs/explanation/product-blueprint.md), and the
 [testing strategy](docs/reference/testing-strategy.md).
-Use the installed catalog and current reference documents for present
-capability membership.
+Use the installed catalog and current references for present tool membership.
 
 ## Contributor quick path
 
@@ -188,7 +188,8 @@ Domain-owned capability references live in `docs/reference/capabilities/<domain>
 Adding an operation or provider does not require editing a central documentation
 list.
 
-Keep rolling product goals separate from supported release behavior.
+Keep product intent (product model / architecture) separate from supported
+release behavior.
 For hosted MCP changes, update and validate
 [`docs/how-to/deploy-remote-mcp.md`](docs/how-to/deploy-remote-mcp.md) together
 with any affected files under `deploy/`. Do not promote ignored `tmp/`
@@ -227,9 +228,8 @@ hypotheses, name the affected public contract or conformance case, include a
 minimal reproduction or failing test where practical, and state whether the
 change can affect artifact identity, checker authority, evidence binding, or
 experiment integrity. Do not prescribe a solver or backend unless the
-requirement depends on it. Do not open umbrella issues that restate product
-goals; product goals become issues only when the problem and success criteria
-are concrete.
+requirement depends on it. Do not open umbrella issues that only restate the
+product model; open issues when the problem and success criteria are concrete.
 
 ## Test ownership and selection
 

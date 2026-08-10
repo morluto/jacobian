@@ -1,6 +1,6 @@
 # Finite math capability references
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 - [Bounded finite coverage verification](finite-coverage-verification.md)
 - [Finite posets](finite-posets.md)

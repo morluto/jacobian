@@ -6,75 +6,151 @@
 
 ## Purpose
 
-The [product model](product-blueprint.md) defines Jacobian's composable
-mathematical primitives and their intended users. This document describes the
-runtime, ownership boundaries, and trust zones that support that model.
-
-Models, search algorithms, and domain solvers are allowed to be heuristic,
-stochastic, incomplete, and frequently replaced. Verification is performed by
-small, operator-authorized checkers against versioned formal claims and domain
-semantics.
-
-The agent-facing product has two assurance lanes. They are invocation modes,
-not a prescribed workflow: agents compose `EXPLORE` and `VERIFY` calls in
-whatever order a research strategy requires, and the runtime does not prescribe
-that order. A checker-backed verification capability may be distinct from the
-capability that produced its evidence.
+The [product model](product-blueprint.md) defines Jacobian as a toolbox of
+atomic math tools behind a fixed search/execute surface. This document
+describes the runtime, ownership boundaries, and trust zones that support that
+model.
 
 ```text
 agent
-  │
-  ├── EXPLORE ──► retrieval, computation, search, solver, candidate, witness
-  │                    │
-  │                    └── HEURISTIC or COMPUTED
-  │
-  └── VERIFY  ──► checker-backed capability + authorized checker/proof engine
-                       │
-                       └── VERIFIED + immutable verification record
+  ├── math.find ──► discover / inspect math tools
+  └── math.run  ──► one named tool → mathematical value or checker verdict
 ```
 
-The durable trust contract behind the optional verification lane is:
+Ordinary tools return **calculations** (values) plus execution status. Checker
+tools are **additional catalog IDs** that return a check **verdict**; they are
+never a second mode on the same tool. Independent checkers are
+operator-authorized packages, not self-certified producer success. Legacy
+`mode` / dual-mode descriptors are tech debt
+([#1143](https://github.com/morluto/jacobian/issues/1143)).
 
-```text
-informal statement
-    │ human or formal correspondence review
-    ▼
-formal ClaimSpec + versioned DomainSemantics
-    │
-    ├── untrusted generation, transformation, search, and evaluation
-    │                         │
-    │                         ▼
-    │                candidate + witness/certificate
-    │                         │
-    └─────────────────────────┴──► authorized independent checker
-                                      │
-                                      ▼
-                                  VerifiedResult
-```
+Models, search algorithms, and domain solvers may be heuristic or incomplete.
+That does not change the product rule: return the math; use a separate tool
+when independent checking is required.
 
-The formal claim may still be a poor translation of the informal conjecture.
-Jacobian records that correspondence and its review status; it does not pretend
-that schema validation can establish it automatically.
+When a checker tool accepts a claim, it may persist a bound verification
+record. Schema validation alone does not establish informal↔formal
+correspondence or a theorem.
 
 ## Ownership boundaries
 
-The runtime owns artifact identity, execution status, assurance, checker
-authorization, budgets, and provenance. It governs trust and execution policy,
-not mathematical strategy. Capability adapters translate between the primitive
-contract and external mathematical systems and expose a broad portfolio of
-installed capabilities through one registry. Domain plugins own schemas,
-transformations, invariants, witness meanings, and required checker roles.
-Independent checker packages implement replay and are authorized by an
-operator, never by the plugin or adapter whose output they check.
+The runtime owns catalog install, execution bounds, artifact identity where
+used, and operator authorization of checker packages—not mathematical strategy.
+Adapters expose external systems as catalog tools. Domains own schemas and
+kernels. Checker packages implement independent replay and never self-authorize.
 
-Agents own multi-step exploration and proof strategies.
-Capability adapters may provide durable execution or coordinate backend calls
-that jointly produce one coherent mathematical outcome. They must not hide a
-multi-step research strategy behind an opaque operation: material stage
-artifacts, relationships, proof obligations, scope, assurance, and independent
-verification boundaries stay visible to the agent. Worked cases and expected
-outcomes belong in scenario and benchmark documents, not in generic runtime
-types.
+Agents own multi-step strategy. A tool may coordinate backend calls only for
+**one** agent-visible outcome; useful intermediate values stay visible. Worked
+examples belong in scenarios and benchmarks, not generic runtime types.
+
+## Search and execute
+
+Two agent verbs over a growing catalog of **atomic math tools** (API name:
+*capabilities*). Progressive disclosure of operations—not one MCP tool per
+domain, not a code-execution sandbox, not explore/verify modes.
+
+```text
+Agent sees (fixed surface)
+  math.find                 search / inspect math tools
+  math.run                  execute one math tool
+  capability://catalog      full installed inventory when needed
+
+Host owns (three zones)
+  catalog / search          what exists and how to find it
+  execute                   one named run → value or verdict
+  host plumbing             process, store, install facts, lifecycle
+```
+
+| Verb | MCP tool | Meaning |
+| --- | --- | --- |
+| Search | `math.find` | Find or inspect tools by query, browse, or exact ID (schemas, examples). |
+| Execute | `math.run` | Run one tool by ID. Primary payload is the **mathematical result** (or checker **verdict**). |
+
+The catalog grows; the MCP tool count does not. Multi-step work is several
+find/run turns. The runtime does not prescribe order or recommend next steps.
+
+The [tool surface reference](../reference/tools.md) defines current schemas and
+projections.
+
+### What this is not
+
+- A new top-level MCP tool per mathematical operation or paper.
+- Dual-mode tools (one ID that both computes and independently verifies).
+- Code Mode-style host orchestration via generated sandbox scripts.
+- A planner with “recommended next tool” rankings.
+- A product whose main return type is an assurance slogan rather than a value.
+
+### Catalog and search zone
+
+Owns what is installed and how agents discover it—not running mathematics.
+
+- Descriptors: ID, version, description, tags, provider identity, schemas.
+- Compact search cards and inspect-by-ID full contracts.
+- Shared mathematical object vocabulary as it becomes first-class.
+- Portfolio growth via reusable primitives, not paper-shaped mega-tools.
+- Honest retrieval (lexical today; typed applicability later without policy).
+
+`capability://catalog` is the full inventory. `math.find` is progressive
+discovery.
+
+### Execute zone
+
+Owns one named invocation and its typed result—not research strategy.
+
+```text
+math.run
+  → resolve tool by ID
+  → validate request
+  → run kernel (ordinary tool) or authorized checker (checker tool ID)
+  → return mathematical value or checker verdict + execution status
+  → attach only explicitly declared artifact references
+```
+
+- Ordinary tools: primary output is the **calculation**; they do not become
+  formal theorems by succeeding.
+- Checker tools: **separate IDs**; verdict from operator-authorized independent
+  replay only.
+- Timeout, cancel, error, invalid input: non-conclusions.
+- No new dual-mode tools; split leftovers
+  ([#1143](https://github.com/morluto/jacobian/issues/1143)).
+
+One `math.run` may call several backends only when they implement **one**
+agent-visible outcome.
+
+### Host plumbing zone
+
+Owns process boundaries, durable state, provider inventory, and lifecycle—not
+mathematical meaning.
+
+- Shared worker harness; lifecycle state machines; inventory ≠ install ≠
+  checker auth; lazy probes; content-addressed artifacts and lock budgets.
+
+### Domain and checker contributions
+
+Domains: request/result models, kernels, catalog registration for ordinary
+tools. Checkers: independent replay as **additional** catalog entries.
+Neither adds a private MCP tool nor a second hand-written wire language for the
+same contract.
+
+```text
+tool_id, version
+request / result models     source of truth
+primary result              math value OR checker verdict
+object types, cost bounds
+provider requirements       host inventory
+```
+
+Search projects that packet. Execute enforces it. Host installs and bounds it.
+
+### Organizing changes
+
+| Change | Zone |
+| --- | --- |
+| How agents discover or inspect operations | Catalog / search |
+| What a single run means, returns, or may claim | Execute |
+| Process, store, install, or lifecycle without math semantics | Host plumbing |
+| New top-level MCP tool or encoded research strategy | Reject |
+| Second hand-written copy of an existing contract | Reject or generate from the authoritative model |
 
 ## Trust zones
 
@@ -142,18 +218,24 @@ small mutable snapshot index.
 
 ## Model-facing capability API
 
+The agent product shape is [search and execute](#search-and-execute):
+`math.find` discovers math tools; `math.run` executes one tool. This section
+describes the registry and installation machinery behind that pair.
+
 `CapabilityService` is a registry of operator-installed adapters exposing a
 broad portfolio of mathematical capabilities. Each adapter declares a
-namespaced operation ID, version, supported `EXPLORE` and `VERIFY` modes, input
-and output JSON Schemas, and discovery metadata. The MCP projection exposes the
+namespaced operation ID, version, input and output JSON Schemas, and discovery
+metadata. (Legacy wire fields may still list a single `mode` per tool until
+[#1143](https://github.com/morluto/jacobian/issues/1143) lands.) The MCP projection exposes the
 installed descriptors through `capability://catalog` and the tool-callable
 `math.find` and `math.run` pair, so a new Alloy, Lean,
 SAT/SMT, CAS, or domain adapter does not require another MCP tool or a
 generic-core type. The current catalog returns full descriptors. As the
-portfolio grows, discovery should add compact summaries, search, and ranking
-rather than placing every schema in the agent's initial context. Domain
-descriptions project exact schemas, binding rules, and executable examples
-without moving mathematical semantics into the generic runtime.
+portfolio grows, discovery should keep progressive search (`math.find`) and
+compact cards strong enough that agents need not load every schema into the
+initial context. Domain descriptions project exact schemas, binding rules, and
+executable examples without moving mathematical semantics into the generic
+runtime.
 
 Registration also enforces the
 [provider runtime contract](../reference/provider-runtime.md). The catalog
@@ -458,8 +540,9 @@ using exact rational arithmetic without importing Z3.
 
 ## Durable capability execution
 
-Long-running capability adapters may use the durable runtime described in
-[Durable search capability runtime](search-runtime.md):
+Long-running tools (for example bounded search) may use a durable experiment
+runtime. This is still ordinary `math.find` / `math.run`—not a separate MCP
+workflow or agent research mode:
 
 ```text
 idempotent request
@@ -508,15 +591,17 @@ the generic runtime only enforces bindings and evidence state.
 ## MCP boundary
 
 The engine is also available as a Python library and CLI. The public MCP
-surface is deliberately small:
+surface implements [search and execute](#search-and-execute) and stays
+deliberately small:
 
-- `math.find` returns the exact contract for an installed capability.
-- `math.run` performs the selected bounded operation.
-- `capability://catalog` exposes installed capability descriptors.
+- `math.find` searches or inspects installed math tools (capabilities).
+- `math.run` executes one named math tool by ID.
+- `capability://catalog` exposes the full installed capability inventory.
 - Resources expose large artifacts, traces, and experiment state.
 - Tool responses return typed mathematical values in MCP structured content;
   durable or large objects are exposed as resource URIs.
-- Long-running searches return an experiment handle.
+- Long-running bounded searches return an experiment handle when their
+  capability contract requires durable state.
 - Scope and archive artifacts are immutable; the experiment snapshot is a
   durable lifecycle record.
 

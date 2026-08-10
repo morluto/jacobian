@@ -141,7 +141,7 @@ witness.verify   →  FALSE  · VERIFIED
 | Lean | 发现声明、获取前提、检查证明状态，并在固定环境中检查证明 |
 | 研究记忆 | 存储带有修订版本的草稿、发现、尝试、关注点和依赖关系上下文 |
 
-请参阅[工具参考](docs/reference/tools.md)了解公共接口，参阅[原子能力组合](docs/contributing/atomic-capability-portfolio.md)了解能力组合设计和评估门槛。
+请参阅[工具参考](docs/reference/tools.md)了解公共接口，参阅[产品模型](docs/explanation/product-blueprint.md)了解产品方向。
 
 ## 设计
 
@@ -162,8 +162,7 @@ Jacobian 将四项职责分开：
 | --- | --- |
 | [文档主页](docs/index.md) | 教程、操作指南、参考和设计说明 |
 | [架构](docs/explanation/architecture.md) | 系统结构和独立验证边界 |
-| [产品模型](docs/explanation/product-blueprint.md) | 能力契约、所有权、artifact 和 assurance |
-| [产品目标](docs/explanation/goals.md) | 当前优先事项和研究方向 |
+| [产品模型](docs/explanation/product-blueprint.md) | 数学工具箱、search/execute、所有权边界 |
 | [工具接口](docs/reference/tools.md) | MCP 资源、工具和调用契约 |
 | [领域操作库](docs/reference/domain-operation-library.md) | 内置 producer、有界搜索、artifact 和精确重放契约 |
 | [Provider 运行时](docs/reference/provider-runtime.md) | backend 可用性、兼容性和身份 |

@@ -1,74 +1,63 @@
-# Capability surface
+# Math tool surface (search and execute)
 
 [Documentation home](../index.md)
 
 - Status: Current pre-stable MCP surface
 - Installed membership remains runtime-defined
+- Product model: [Product model](../explanation/product-blueprint.md)
 
-Jacobian exposes mathematical operations as namespaced capabilities. The
-model-facing MCP surface contains two stable capability tools:
+Jacobian is a **toolbox**: many atomic math tools behind a fixed surface.
 
 | MCP tool | Purpose |
 | --- | --- |
-| `math.find` | Find or inspect installed mathematical operations by desired outcome or exact ID. |
-| `math.run` | Run one installed mathematical operation in `EXPLORE` or `VERIFY` mode. |
+| `math.find` | Search or inspect installed tools (ID, schema, examples). |
+| `math.run` | Run **one** tool by ID; primary return is the **mathematical result**. |
 
-Read `capability://catalog` to discover installed capability IDs, provider
-versions, supported modes, compact schemas, and tags. Catalog membership means
-that an operation is installed and invocable. It does not imply compatibility
-support, recommendation, conformance coverage, or authority to return
-`VERIFIED`.
+Read `capability://catalog` for the full inventory. Membership means installed
+and invocable—not recommended, release-supported, or formally verified.
 
-The supported names are `math.find` and `math.run`. The superseded
-`capability.*` names are not exposed as aliases, so agents never choose between
-equivalent top-level tools. Adding a capability does not add a new MCP tool.
+Adding a math tool does **not** add an MCP tool. Superseded `capability.*` MCP
+names are not aliases.
 
-The `math.run` input schema is invariant across local, remote, and evaluation
-deployments. Evaluation observation belongs outside the production tool
-contract and cannot change mathematical behavior, assurance, or checker
-authority.
+See [Search and execute](../explanation/architecture.md#search-and-execute).
 
-Because `math.run` dispatches the installed portfolio, its MCP annotation is
-conservatively `destructiveHint: true`: some installed operations can change
-runtime state, including cancellation. Individual capability descriptors remain
-the authoritative source for operation-specific `read_only` behavior.
+Because `math.run` dispatches the whole portfolio, its MCP annotation is
+conservatively `destructiveHint: true`. Per-tool `read_only` lives on the
+descriptor.
 
-## Capability contract
+## What `math.run` returns (product intent)
 
-Each capability has one agent-visible mathematical outcome. It consumes typed
-inputs and returns a typed result with:
+**Ordinary tools** (compute, search, transform, materialize, …):
 
-- execution status and operation-specific output;
-- artifact references and relationships;
-- scope and completeness;
-- exact, approximate, bounded, exhaustive, deterministic, or heuristic
-  qualifiers as applicable;
-- assurance and any remaining proof obligations;
-- provider and execution provenance.
+1. **Value** — the calculation (`output` / domain result model).
+2. **Execution status** — completed, invalid input, timeout, error, cancelled.
+3. Optional diagnostics, artifact URIs when durable identity or size requires
+   them, provider provenance for operators.
 
-Installed descriptors expose the exact provider version, digest kind and
-digest, platform, install tier, license metadata, detected features, and fixed
-checker identities. Results repeat the selected provider and provider digest.
-The [provider runtime contract](provider-runtime.md) defines health probing,
-fail-closed registration, and repeatable local measurement.
+**Checker tools** (separate catalog IDs only):
 
-Backend-call atomicity is not required. An adapter may coordinate several
-backend calls when they jointly implement one coherent operation, but it must
-not hide mathematically useful intermediate values or artifacts, failures,
-relationships, or obligations.
+1. **Verdict** — accepted, rejected, or non-conclusion for a claim/candidate.
+2. Bindings to what was checked; optional verification record URI when accepted.
+3. Execution status as above.
 
-`EXPLORE` returns proposed, heuristic, or computed evidence. `VERIFY` may
-return `VERIFIED` only when an operator-authorized independent checker accepts
-evidence bound to the exact claim, semantics, candidate, scope, certificate
-format, and checker version. Search, generation, evaluation, and computation
-cannot certify their own conclusions.
+There are **no dual-mode tools** in the product model: one ID is not both
+“compute X” and “independently verify X.” Use two IDs (e.g.
+`polynomial.compute.gcd` and `polynomial.gcd.verify`).
 
-Invalid requests, adapter failures, timeouts, and cancellations return
-stage-aware diagnostics. They do not become mathematical conclusions.
-Domain adapters validate their complete Pydantic request model before
-computation or artifact writes. JSON Schema remains the discovery contract;
-Pydantic enforces cross-field conditions such as polynomial-map dimensions,
-finite operation-table closure, and bounded exact encodings.
+Failed or incomplete runs are not mathematical conclusions. A successful
+ordinary run is a value, not a self-certified theorem.
+
+### Legacy wire (migration)
+
+Until [#1143](https://github.com/morluto/jacobian/issues/1143):
+
+- `mode` (`EXPLORE` | `VERIFY`) may still appear on `math.run` / find filters.
+- Envelope fields such as `assurance` may still be present.
+- Do not design new tools or agent guidance around them.
+- Split any remaining dual-mode descriptors into two tools.
+
+Domain adapters validate the full Pydantic request before work. JSON Schema is
+for discovery; Pydantic owns cross-field rules.
 
 ## Installed capability discovery
 
@@ -85,15 +74,15 @@ browse retrieves compact installed outcomes without loading every schema:
 {
   "query": "find a counterexample to associativity",
   "domain": "universal_algebra",
-  "mode": "EXPLORE",
   "limit": 3
 }
 ```
 
 `query` searches published capability IDs, titles, descriptions, and tags.
 `domain` filters the domain-owned capability namespace, with exact tag matches
-also accepted. `mode` and `limit` are optional; `limit` defaults to 5 and is
-bounded from 1 through 20. Omit `query` to browse the installed inventory in
+also accepted. `limit` is optional; it defaults to 5 and is
+bounded from 1 through 20. (A legacy optional `mode` filter may still be
+accepted until [#1143](https://github.com/morluto/jacobian/issues/1143).) Omit `query` to browse the installed inventory in
 stable ID order. Each response includes stable catalog and operator-policy
 digests and is bounded to 16 KiB; when `next_cursor` is present, pass it back
 with the same filters and limit to continue. Results report `matched_on` and
@@ -115,13 +104,11 @@ the filter is not assessed. The response does not guess or silently substitute
 another domain; `available_domains` remains a bounded vocabulary aid drawn from
 discoverable capabilities.
 
-Each match is an operation card containing accepted input and artifact kinds,
-an output-schema summary, provider availability, exact-input scope, assurance
-ceiling, factual relationships to installed compatible operations, and one
-size-bounded validated invocation example when the descriptor supplies one. If
-there is no example, the card instead exposes the input schema's required and
-available top-level fields. These fields support the agent's decision; examples
-illustrate valid payloads and do not recommend what it should do next.
+Each match is an operation card: accepted input and artifact kinds, output
+schema summary, provider availability, factual relationships to compatible
+tools, and one size-bounded invocation example when present (otherwise
+required/available top-level input fields). Cards support the agent's choice
+of tool; examples do not recommend a research strategy.
 
 Discovery can also be constrained by `input_kind`. Installed descriptors
 declare whether they accept a structured request, formal proposition, or typed
@@ -140,9 +127,10 @@ next step. These paths do not imply that the requested operation is
 mathematically impossible or absent in principle.
 
 Passing one `capability_id` returns the default `SUMMARY` exact projection. It
-contains the one-line outcome, modes, tags, provider availability, input/output
-field summaries, and whether descriptor-owned invocation examples are
-available:
+contains the one-line outcome, tags, provider availability, input/output field
+summaries, and whether descriptor-owned invocation examples are available
+(legacy mode lists may still appear on the wire until
+[#1143](https://github.com/morluto/jacobian/issues/1143)):
 
 ```json
 {"capability_id": "universal_algebra.search.countermodel"}
@@ -177,17 +165,19 @@ an explicit `math.find` retry and `capability://catalog` as the complete
 inventory path. These are bounded recovery choices, not ranked mathematical
 recommendations.
 
-`math.run` returns the complete Pydantic `CapabilityResult` in
-`structured_content`. MCP Python SDK 2.0 derives the output schema and validates
-that typed value. Its text `content` is a deliberate compact projection of the
-same result's execution, output, completeness, assurance, diagnostics, and
-artifact references rather than a second full serialization. Scope,
-relationships, and obligations remain visible in that projection. `math.find`
-uses the same pattern; a `CONTRACT` text projection retains the complete input
-schema so text-oriented clients can construct a valid request. Small, bounded
-mathematical outputs remain inline in the result. An empty `artifact_uris`
-means the value was not retained.
-An agent that already has an exact operation contract may invoke it directly;
+`math.run` returns a Pydantic result envelope in `structured_content`. **Read
+the mathematical value first** (`output` / domain fields). Execution status,
+optional diagnostics, and artifact URIs support composition and failure
+handling. Legacy envelope fields (for example `assurance`, `mode`) may still be
+present during migration; they are not the product focus.
+
+Text `content` is a compact projection of that same result, not a second full
+serialization. `math.find` uses the same pattern; a `CONTRACT` text projection
+retains the complete input schema so text-oriented clients can construct a
+valid request. Small, bounded mathematical outputs remain inline. An empty
+`artifact_uris` means the value was not retained as a durable artifact.
+
+An agent that already has an exact tool contract may invoke it directly;
 search, browse, and inspection are composable access paths, not a required
 sequence.
 

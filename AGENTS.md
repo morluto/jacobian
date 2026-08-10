@@ -3,65 +3,55 @@
 Follow [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, documentation,
 commits, and pull requests. This file lists only Jacobian-specific constraints.
 Load the [product model](docs/explanation/product-blueprint.md),
-[goals](docs/explanation/goals.md), or
+[architecture](docs/explanation/architecture.md), or
 [tool reference](docs/reference/tools.md) when needed. For built-in mathematical
 operations, also use the
 [domain operation library reference](docs/reference/domain-operation-library.md).
 
 ## Product Constraints
 
-Jacobian is a mathematical execution environment for increasingly capable
-models, not a workflow engine for reproducing how we solve mathematics today.
+Jacobian is a **toolbox of atomic math tools** for agents, not a workflow
+engine and not a trust-OS with explore/verify research phases.
 
-- The server owns hard invariants: typed contracts, resource bounds, evidence
-  semantics, completeness, assurance, and checker authorization.
-- The model owns research decisions: how to represent the problem, what to
-  search for, which operations to invoke, how to combine them, when to verify,
-  and when to stop.
-- Discovery may expose factual relationships and compatibility, but must not
-  become a hidden planner through "recommended next step" rankings.
-- Evaluations must reward correct mathematical outcomes, useful evidence,
-  safety, and efficiency, not adherence to an expected sequence of tool calls.
+| Agent verb | MCP tool | Meaning |
+| --- | --- | --- |
+| Search | `math.find` | Find or inspect math tools (IDs, schemas, examples). |
+| Execute | `math.run` | Run **one** tool → **mathematical value** (or checker **verdict**). |
+| Inventory | `capability://catalog` | Full catalog when needed. |
 
-Jacobian gives agents composable mathematical capabilities. Its principles are:
+See [product model](docs/explanation/product-blueprint.md) and
+[Search and execute](docs/explanation/architecture.md#search-and-execute).
+Not a required sequence: agents may run a known ID, search first, or re-find
+mid-investigation.
 
-- a broad mathematical portfolio;
-- atomic, agent-visible outcomes;
-- agent-owned composition and research strategy;
-- inspectable intermediate values and, where durable identity matters,
-  artifacts; and
-- independent verification of exact claims and evidence.
+**Results are math-first.** Ordinary tools return calculations (GCD, matrix,
+path, factors, …) plus execution status. They do not primarily return
+HEURISTIC/COMPUTED/VERIFIED slogans. Optional envelope fields may exist on the
+wire during migration; do not design new behavior around them as the product.
 
-Each capability exposes one coherent, inspectable mathematical outcome. It may
-coordinate backend calls, but useful intermediate values and artifacts,
-failures, relationships, scope, completeness, assurance, and proof obligations
-remain visible.
+**Checker tools are additional tools.** Independent check is a **separate
+catalog ID** (e.g. `….verify`, `lean.check`), not a mode on the producer. **No
+dual-mode tools.** Legacy `mode` / dual-mode descriptors:
+[#1143](https://github.com/morluto/jacobian/issues/1143).
 
-Jacobian exposes mathematical affordances, not research policy. Capabilities
-must remain atomic, searchable, and freely composable. Do not prescribe
-preferred decompositions, proof strategies, cross-capability workflows,
-verification order, or stopping criteria through discovery, ranking, prompts,
-or adapters. Capabilities may implement specific mathematical methods, while
-agents remain free to choose and compose them. Prompts and resources may
-explain protocol and evidence semantics, but remain optional.
+- Server: typed contracts, resource bounds, catalog install, checker
+  authorization.
+- Model: representation, which tools to run, how to compose values, when to
+  call checker tools, when to stop.
+- Discovery must not become a hidden planner (“recommended next step”).
+- Evaluations reward correct math, useful intermediate values, safety, and
+  efficiency—not a fixed tool-call sequence.
 
-Design against the existing portfolio. Reuse typed values or artifacts that
-expose the needed outcome; do not materialize an inline value merely to pass it
-between ordinary mathematical operations. Declare overlap and keep useful
-intermediates. Before
-stabilizing or recommending a capability, inspect nearby catalog entries by
-domain, artifact type, and outcome. If overlap remains ambiguous or
-consequential, use the
-[evaluation plan](docs/reference/evaluations/benchmark-contracts.md). Routine
-additions need no exhaustive pairwise or leave-one-out evaluation.
+**Naming.** Agent-facing: **math tool** / **operation**. Code/catalog often
+still say **capability** for the same thing. No parallel rename without a plan.
 
-The MCP interface exposes `math.find` for search and contract
-inspection, `math.run` for execution, and `capability://catalog` for
-the complete machine-readable inventory. These are composable access paths,
-not a required sequence: an agent may invoke a known capability directly,
-search, browse, or revisit discovery as its investigation requires. Prefer
-domain-owned capability IDs to generic schemas, verb taxonomies, mechanical
-backend wrappers, or new top-level MCP tools.
+Tools stay atomic, searchable, and freely composable. No prescribed proof
+strategy, verification order, or stopping criteria in discovery, ranking,
+prompts, or adapters.
+
+Design against the portfolio. Reuse values/artifacts; prefer composable
+primitives over paper-shaped mega-tools. Domain-owned tool IDs over generic
+verb taxonomies or new top-level MCP tools.
 
 Prefer thin adapters to maintained mathematical systems. Pin versions when
 reproducibility, certificates, or verification depend on them.

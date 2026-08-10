@@ -81,7 +81,6 @@ class CapabilityDiscoveryRequest(ContractModel):
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
     )
-    mode: CapabilityMode | None = None
     input_kind: CapabilityInputKind | None = None
     artifact_type: ArtifactUri | None = None
     limit: int = Field(default=5, ge=1, le=20, strict=True)
@@ -133,8 +132,8 @@ class CapabilityDiscoveryRemoveFiltersRecoveryPath(ContractModel):
 
     action: Literal["remove_filters"]
     tool: Literal["math.find"] = "math.find"
-    change: Literal["Remove domain, mode, input_kind, or artifact_type filters."] = (
-        "Remove domain, mode, input_kind, or artifact_type filters."
+    change: Literal["Remove domain, input_kind, or artifact_type filters."] = (
+        "Remove domain, input_kind, or artifact_type filters."
     )
 
 
@@ -194,7 +193,6 @@ class CapabilityDiscoveryResult(ContractModel):
         min_length=1,
         max_length=512,
     )
-    mode: CapabilityMode | None = None
     resolved_input_kind: CapabilityInputKind | None = None
     artifact_type: ArtifactUri | None = None
     routing_status: Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"] = "UNFILTERED"
@@ -487,6 +485,13 @@ class CapabilityDescriptor(ContractModel):
             raise ValueError("a capability must support at least one mode")
         if len(set(self.modes)) != len(self.modes):
             raise ValueError("capability modes must be unique")
+        # Product rule: one tool ID, one role. Dual-mode (EXPLORE+VERIFY) tools
+        # are forbidden; checkers are separate catalog IDs.
+        if len(self.modes) > 1:
+            raise ValueError(
+                "a capability must advertise exactly one mode; "
+                "use a separate checker tool ID instead of dual-mode tools"
+            )
         _validate_descriptor_input_contract(
             self.accepted_input_kinds,
             self.accepted_artifact_types,
@@ -525,7 +530,8 @@ class CapabilityDescriptor(ContractModel):
 class CapabilityRequest(ContractModel):
     request_version: Literal["1"] = "1"
     capability_id: CapabilityId
-    mode: CapabilityMode = CapabilityMode.EXPLORE
+    # None means "use the tool's sole advertised mode" (resolved at dispatch).
+    mode: CapabilityMode | None = None
     input: dict[str, Any]
 
 

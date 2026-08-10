@@ -77,7 +77,6 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
                 "math.run",
                 {
                     "capability_id": "missing.capability",
-                    "mode": "EXPLORE",
                     "payload": {"private": "private-payload-marker"},
                 },
             )

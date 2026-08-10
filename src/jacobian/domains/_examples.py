@@ -6,11 +6,15 @@ from jacobian.contracts.capabilities import CapabilityInvocationExample, Capabil
 
 
 def example(
-    name: str, description: str, payload: dict[str, Any]
+    name: str,
+    description: str,
+    payload: dict[str, Any],
+    *,
+    mode: CapabilityMode = CapabilityMode.EXPLORE,
 ) -> CapabilityInvocationExample:
     return CapabilityInvocationExample(
         name=name,
         description=description,
-        mode=CapabilityMode.EXPLORE,
+        mode=mode,
         input=payload,
     )

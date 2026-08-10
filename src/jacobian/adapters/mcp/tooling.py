@@ -412,38 +412,44 @@ async def _invoke_capability_attempt(
     *,
     capability_id: str,
     payload: dict[str, Any],
-    mode: CapabilityMode,
+    mode: CapabilityMode | None = None,
     ctx: Any | None,
 ) -> CapabilityResult:
     started = time.monotonic()
     argument_digest = _argument_digest(
         {
             "capability_id": capability_id,
-            "mode": mode.value,
             "payload": payload,
         }
     )
     trace_digest, trace_source = _request_trace_digest(ctx)
     request_digest = _request_id_digest(ctx)
     cancellation_event = threading.Event()
+    # mode is stamped from the tool descriptor at dispatch; clients do not choose it.
+    request = CapabilityRequest(
+        capability_id=capability_id,
+        mode=mode,
+        input=payload,
+    )
     try:
         result = await _run_blocking(
             _invoke_capability_with_cancellation,
             runtime,
-            CapabilityRequest(
-                capability_id=capability_id,
-                mode=mode,
-                input=payload,
-            ),
+            request,
             cancellation_event,
             on_cancel=cancellation_event.set,
         )
     except asyncio.CancelledError as exc:
         drained = getattr(exc, "drained_result", None)
+        log_mode = (
+            drained.mode
+            if isinstance(drained, CapabilityResult)
+            else CapabilityMode.EXPLORE
+        )
         if isinstance(drained, CapabilityResult):
             _log_capability_attempt(
                 capability_id=capability_id,
-                mode=mode,
+                mode=log_mode,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -454,7 +460,7 @@ async def _invoke_capability_attempt(
         else:
             _log_capability_attempt(
                 capability_id=capability_id,
-                mode=mode,
+                mode=log_mode,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -467,7 +473,7 @@ async def _invoke_capability_attempt(
     except Exception:
         _log_capability_attempt(
             capability_id=capability_id,
-            mode=mode,
+            mode=CapabilityMode.EXPLORE,
             started=started,
             argument_digest=argument_digest,
             request_digest=request_digest,
@@ -479,7 +485,7 @@ async def _invoke_capability_attempt(
         raise
     _log_capability_attempt(
         capability_id=capability_id,
-        mode=mode,
+        mode=result.mode,
         started=started,
         argument_digest=argument_digest,
         request_digest=request_digest,

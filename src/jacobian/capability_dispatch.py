@@ -17,6 +17,7 @@ from jacobian.contracts.capabilities import (
     CapabilityAssurance,
     CapabilityAssuranceLevel,
     CapabilityDiagnostic,
+    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -48,6 +49,9 @@ class CapabilityDispatchMixin:
             log_invocation(result, started)
             return result
         descriptor = self._descriptors[request.capability_id]
+        # Hard rule: tool identity owns role. Client mode is ignored; stamp the
+        # sole advertised mode from the descriptor (dual-mode tools are banned).
+        request = request.model_copy(update={"mode": descriptor.modes[0]})
         resolution = _capability_resolution_failure(self, request, descriptor)
         if resolution is not None:
             log_invocation(resolution, started)
@@ -168,25 +172,6 @@ def _capability_resolution_failure(
                 },
             ),
             context={"capability_policy": dispatch.policy.definition},
-        )
-        return result.model_copy(update=provider_provenance(descriptor))
-    if request.mode not in descriptor.modes:
-        result = resolution_failure(
-            request=request,
-            capability_version=descriptor.version,
-            diagnostic=CapabilityDiagnostic(
-                code="UNSUPPORTED_MODE",
-                stage="capability_resolution",
-                message=(
-                    f"Capability {request.capability_id!r} does not support "
-                    f"{request.mode.value} mode."
-                ),
-                hint=(
-                    "Call math.find for this capability, then retry "
-                    "with one of its advertised modes."
-                ),
-            ),
-            context={"available_modes": [mode.value for mode in descriptor.modes]},
         )
         return result.model_copy(update=provider_provenance(descriptor))
     return None
@@ -350,10 +335,11 @@ def failed_result(
     *, descriptor: Any, request: CapabilityRequest, diagnostic: CapabilityDiagnostic
 ) -> CapabilityResult:
     provenance = provider_provenance(descriptor)
+    mode = request.mode if request.mode is not None else descriptor.modes[0]
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
+        mode=mode,
         execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
         output={"error": diagnostic.model_dump(mode="json", exclude_none=True)},
         diagnostics=(diagnostic,),
@@ -416,10 +402,11 @@ def resolution_failure(
     diagnostic: CapabilityDiagnostic,
     context: dict[str, object],
 ) -> CapabilityResult:
+    mode = request.mode if request.mode is not None else CapabilityMode.EXPLORE
     return CapabilityResult(
         capability_id=request.capability_id,
         capability_version=capability_version,
-        mode=request.mode,
+        mode=mode,
         execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
         output={
             "error": diagnostic.model_dump(mode="json", exclude_none=True),

@@ -89,7 +89,6 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "math.run",
                 {
                     "capability_id": "polynomial.compute.gcd",
-                    "mode": "EXPLORE",
                     "payload": gcd_input,
                 },
             )
@@ -102,7 +101,6 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
-                    "mode": "VERIFY",
                     "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
@@ -128,7 +126,6 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
-                    "mode": "VERIFY",
                     "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
@@ -158,7 +155,6 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 "math.run",
                 {
                     "capability_id": "polynomial.compute.gcd",
-                    "mode": "EXPLORE",
                     "payload": gcd_input,
                 },
             )
@@ -171,7 +167,6 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
-                    "mode": "VERIFY",
                     "payload": {
                         "input": gcd_input,
                         "candidate": computed["output"]["result"],
@@ -207,7 +202,6 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
             "math.run",
             {
                 "capability_id": "lean.proof_edit.validate",
-                "mode": "VERIFY",
                 "payload": {
                     "environment": "CORE",
                     "statement": "True",

@@ -170,7 +170,6 @@ def test_evaluate_laws_returns_exact_truth_and_counterexample(
     )
     assert result.output["verification_handoff"] == {
         "capability_id": "certificate.verify",
-        "mode": "VERIFY",
         "payload": {
             "certificate_uri": result.output["certificate_uri"],
             "checker_id": result.output["checker_id"],

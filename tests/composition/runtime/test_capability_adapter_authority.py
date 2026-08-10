@@ -98,24 +98,24 @@ def test_unknown_capability_returns_an_actionable_result(
     assert result.output["available_capability_ids"]
 
 
-def test_unsupported_capability_mode_lists_available_modes(
+def test_client_mode_is_ignored_tool_id_owns_role(
     capability_core_services: DomainTestServices,
 ) -> None:
+    """Client-supplied mode is stamped over by the tool's sole descriptor mode."""
     core = capability_core_services.core
     capability_core_services.installation.register_capability(ComputedAdapter())
 
     result = core.capabilities.invoke(
         CapabilityRequest(
             capability_id="example.double",
-            mode=CapabilityMode.VERIFY,
+            mode=CapabilityMode.VERIFY,  # ignored
             input={"value": 21},
         )
     )
 
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "UNSUPPORTED_MODE"
-    assert "math.find" in (result.diagnostics[0].hint or "")
-    assert result.output["available_modes"] == ["EXPLORE"]
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.mode is CapabilityMode.EXPLORE
+    assert result.output["value"] == 42
 
 
 def test_invalid_capability_input_does_not_echo_payload(
@@ -310,8 +310,7 @@ def test_verified_relationship_must_match_checker_selected_endpoints(
     runtime = authorized_complete_runtime
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="case.partition.finite",
-            mode=CapabilityMode.VERIFY,
+            capability_id="case.partition.finite.verify",
             input={
                 "universe": ["a", "b"],
                 "cases": [
@@ -350,8 +349,7 @@ def test_verified_relationship_must_match_checker_selected_obligation(
     runtime = authorized_complete_runtime
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="case.partition.finite",
-            mode=CapabilityMode.VERIFY,
+            capability_id="case.partition.finite.verify",
             input={
                 "universe": ["a"],
                 "cases": [{"case_id": "only", "members": ["a"]}],

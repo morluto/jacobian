@@ -330,7 +330,6 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
                 "math.run",
                 {
                     "capability_id": "lean.check",
-                    "mode": "VERIFY",
                     "payload": {
                         "statement": "∀ n : Nat, n + 0 = n",
                         "proof": (

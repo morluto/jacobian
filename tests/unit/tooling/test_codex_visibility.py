@@ -179,7 +179,7 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert polynomial in skill
     extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
     assert extension_payload in skill
-    assert '"mode":"EXPLORE","payload":<JSON>' in skill
+    assert '"payload":<JSON>' in skill
     assert "(not `COMPUTE`/`input`)" in skill
     assert "No discovery for stable producers" in skill
     assert "never with `capability_id`" in skill

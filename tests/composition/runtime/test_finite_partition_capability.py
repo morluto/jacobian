@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityDescriptor,
     CapabilityMode,
     CapabilityObligationStatus,
     CapabilityRelationshipStatus,
@@ -12,14 +16,15 @@ from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
 
 def _request(
-    mode: CapabilityMode,
     *,
+    verify: bool = False,
     missing_last: bool = False,
     require_disjoint: bool = True,
 ) -> CapabilityRequest:
     return CapabilityRequest(
-        capability_id="case.partition.finite",
-        mode=mode,
+        capability_id=(
+            "case.partition.finite.verify" if verify else "case.partition.finite"
+        ),
         input={
             "universe": ["0", "1", "2", "3", "4", "5"],
             "cases": [
@@ -34,14 +39,13 @@ def _request(
     )
 
 
-def test_finite_partition_explore_keeps_coverage_obligation_open(
+def test_finite_partition_produce_keeps_coverage_obligation_open(
     attached_complete_runtime,
 ) -> None:
 
-    result = attached_complete_runtime.core.capabilities.invoke(
-        _request(CapabilityMode.EXPLORE)
-    )
+    result = attached_complete_runtime.core.capabilities.invoke(_request())
 
+    assert result.capability_id == "case.partition.finite"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["missing"] == []
     assert result.output["verification_record_uri"] is None
@@ -54,8 +58,9 @@ def test_finite_partition_verify_replays_and_discharges_obligation(
 ) -> None:
 
     runtime = authorized_complete_runtime
-    result = runtime.core.capabilities.invoke(_request(CapabilityMode.VERIFY))
+    result = runtime.core.capabilities.invoke(_request(verify=True))
 
+    assert result.capability_id == "case.partition.finite.verify"
     assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert result.assurance.verification_record_uri is not None
     assert result.completeness.verification_record_uri == (
@@ -69,15 +74,21 @@ def test_finite_partition_contract_and_result_preserve_semantic_boundary(
     authorized_complete_runtime,
 ) -> None:
     runtime = authorized_complete_runtime
-    descriptor = next(
+    producer = next(
         item
         for item in runtime.core.capabilities.catalog().capabilities
         if item.capability_id == "case.partition.finite"
     )
-    result = runtime.core.capabilities.invoke(_request(CapabilityMode.VERIFY))
+    checker = next(
+        item
+        for item in runtime.core.capabilities.catalog().capabilities
+        if item.capability_id == "case.partition.finite.verify"
+    )
+    result = runtime.core.capabilities.invoke(_request(verify=True))
 
-    assert "opaque caller-supplied strings" in descriptor.description
-    assert "does not establish their mathematical meaning" in descriptor.description
+    assert producer.modes == (CapabilityMode.EXPLORE,)
+    assert checker.modes == (CapabilityMode.VERIFY,)
+    assert "opaque caller-supplied strings" in producer.description
     assert "external-domain completeness" in result.scope.description
     assert "member/case semantics were not checked" in result.assurance.basis
     assert "member/case semantics" in result.completeness.basis
@@ -87,7 +98,7 @@ def test_finite_partition_reports_conditional_disjointness_scope(
     authorized_complete_runtime,
 ) -> None:
     runtime = authorized_complete_runtime
-    request = _request(CapabilityMode.VERIFY, require_disjoint=False)
+    request = _request(verify=True, require_disjoint=False)
     request.input["cases"][1]["members"].append("0")
 
     result = runtime.core.capabilities.invoke(request)
@@ -108,7 +119,7 @@ def test_finite_partition_verify_fails_closed_on_incomplete_cases(
 
     runtime = authorized_complete_runtime
     result = runtime.core.capabilities.invoke(
-        _request(CapabilityMode.VERIFY, missing_last=True)
+        _request(verify=True, missing_last=True)
     )
 
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
@@ -151,7 +162,7 @@ def test_verification_rejects_checker_obligation_outside_request(
         accept_with_unbound_obligation,
     )
 
-    result = runtime.core.capabilities.invoke(_request(CapabilityMode.VERIFY))
+    result = runtime.core.capabilities.invoke(_request(verify=True))
 
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["verification_record_uri"] is None
@@ -161,10 +172,24 @@ def test_verification_rejects_checker_obligation_outside_request(
 def test_finite_partition_duplicate_case_ids_cannot_report_complete(
     attached_complete_runtime,
 ) -> None:
-    request = _request(CapabilityMode.EXPLORE)
+    request = _request()
     request.input["cases"][1]["case_id"] = "even"
 
     result = attached_complete_runtime.core.capabilities.invoke(request)
 
     assert result.output["duplicate_case_ids"] == ["even"]
     assert result.completeness.status.value == "PARTIAL"
+
+
+def test_dual_mode_descriptor_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="exactly one mode"):
+        CapabilityDescriptor(
+            capability_id="bad.dual",
+            version="1",
+            title="Dual",
+            description="must fail",
+            provider="test",
+            modes=(CapabilityMode.EXPLORE, CapabilityMode.VERIFY),
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+        )

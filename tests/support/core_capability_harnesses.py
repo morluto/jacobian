@@ -15,7 +15,9 @@ from jacobian.finite_partition import (
     FinitePartitionInstallation,
     install_finite_partition,
 )
+from jacobian.graphs import GraphInstallation, install_graph_capabilities
 from jacobian.runtime.config import CheckerAuthorityMode
+from jacobian.sat_smt.sat_capabilities import SatCnfMaterializationAdapter
 from jacobian.universal_algebra_capabilities import (
     UniversalAlgebraInstallation,
     install_universal_algebra_capabilities,
@@ -122,3 +124,35 @@ def open_universal_algebra_services(
         for adapter in adapters:
             services.installation.register_capability(adapter)
         yield UniversalAlgebraTestServices(services=services, installation=installation)
+
+
+@contextmanager
+def open_graph_core_services(
+    root: str | Path,
+) -> Iterator[tuple[DomainTestServices, GraphInstallation]]:
+    """Install core graph construction/search/property capabilities only."""
+
+    with open_domain_services(root) as services:
+        adapters, installation = install_graph_capabilities(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+            services.core.checkers,
+            authorize_checker=False,
+        )
+        for adapter in adapters:
+            services.installation.register_capability(adapter)
+        yield services, installation
+
+
+@contextmanager
+def open_sat_materialization_services(
+    root: str | Path,
+) -> Iterator[DomainTestServices]:
+    """Register sat.cnf.materialize on a domain service graph."""
+
+    with open_domain_services(root) as services:
+        services.installation.register_capability(
+            SatCnfMaterializationAdapter(services.core.sat)
+        )
+        yield services

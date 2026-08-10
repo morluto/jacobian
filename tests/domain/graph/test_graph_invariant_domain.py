@@ -7,7 +7,10 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.capability_service import CapabilityInvocationError
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.capabilities import (
+    CapabilityAssuranceLevel,
+    CapabilityRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
     build_graph_invariant_bundle,
@@ -318,3 +321,65 @@ def test_np_hard_invariants_are_budgeted_and_carry_obligations(
     assert len(result.artifact_uris) == 3
     obligation = domain_services.core.store.get(result.obligations[0].obligation_uri)
     assert obligation.payload["claimed_value"] == optimum
+
+
+def test_graph_invariant_resource_atomics_are_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
+        (
+            "graph.invariant.triangle_count.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                }
+            },
+            {"triangle_count": 1},
+        ),
+        (
+            "graph.invariant.radius.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                }
+            },
+            {
+                "status": "COMPUTED",
+                "radius": 1,
+                "connected": True,
+                "exactness": "EXACT",
+                "detail": None,
+            },
+        ),
+        (
+            "graph.invariant.radius.compute",
+            {"graph": {"vertices": [], "edges": []}},
+            {
+                "status": "NOT_APPLICABLE",
+                "radius": None,
+                "connected": False,
+                "exactness": "NOT_APPLICABLE",
+                "detail": "radius requires a nonempty connected graph",
+            },
+        ),
+        (
+            "graph.k_core.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [["a", "b"], ["a", "c"], ["b", "c"], ["c", "d"]],
+                },
+                "k": 2,
+            },
+            {"k": 2, "vertices": ["a", "b", "c"]},
+        ),
+    )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        assert result.output["result"] == expected

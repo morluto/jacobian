@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from pathlib import Path
+
 import pytest
+from tests.support.core_capability_harnesses import open_graph_core_services
+from tests.support.services import DomainTestServices
 
 from jacobian.artifacts import ArtifactValidationError
 from jacobian.contracts.capabilities import (
@@ -10,19 +15,24 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.graphs import GraphInstallation
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "MIXED"
+
+@pytest.fixture
+def graph_core(
+    tmp_path: Path,
+) -> Iterator[tuple[DomainTestServices, GraphInstallation]]:
+    with open_graph_core_services(tmp_path / "state") as services_and_installation:
+        yield services_and_installation
 
 
 def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
-    runtime = attached_complete_runtime
-    installation = runtime.portfolio.graph
+    services, installation = graph_core
     vertices = [f"v{index:03d}" for index in range(256)]
 
-    accepted = runtime.core.artifacts.put(
+    accepted = services.core.artifacts.put(
         schema_uri=installation.graph_schema_uri,
         semantics_uri=installation.semantics_uri,
         payload={
@@ -32,9 +42,9 @@ def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
         },
     )
 
-    assert runtime.core.store.get(accepted.artifact_uri).payload["vertices"] == vertices
+    assert services.core.store.get(accepted.artifact_uri).payload["vertices"] == vertices
     with pytest.raises(ArtifactValidationError, match="does not match its schema"):
-        runtime.core.artifacts.put(
+        services.core.artifacts.put(
             schema_uri=installation.graph_schema_uri,
             semantics_uri=installation.semantics_uri,
             payload={
@@ -71,14 +81,13 @@ def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
     ],
 )
 def test_generic_graph_artifacts_reject_noncanonical_simple_graphs(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
     payload: dict[str, object],
 ) -> None:
-    runtime = attached_complete_runtime
-    installation = runtime.portfolio.graph
+    services, installation = graph_core
 
     with pytest.raises(ArtifactValidationError, match="does not match its schema"):
-        runtime.core.artifacts.put(
+        services.core.artifacts.put(
             schema_uri=installation.graph_schema_uri,
             semantics_uri=installation.semantics_uri,
             payload=payload,
@@ -86,11 +95,10 @@ def test_generic_graph_artifacts_reject_noncanonical_simple_graphs(
 
 
 def test_graph_consumers_reject_forged_malformed_payloads(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
-    runtime = attached_complete_runtime
-    installation = runtime.portfolio.graph
-    forged = runtime.core.store.put(
+    services, installation = graph_core
+    forged = services.core.store.put(
         schema_uri=installation.graph_schema_uri,
         semantics_uri=installation.semantics_uri,
         payload={
@@ -101,7 +109,7 @@ def test_graph_consumers_reject_forged_malformed_payloads(
         summary="forged malformed graph",
     )
 
-    result = runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={"graph_uri": forged.artifact_uri, "properties": ["order"]},
@@ -113,10 +121,11 @@ def test_graph_consumers_reject_forged_malformed_payloads(
 
 
 def test_explicit_graph_construction_canonicalizes_and_feeds_graph_capabilities(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
+    services, installation = graph_core
 
-    constructed = attached_complete_runtime.core.capabilities.invoke(
+    constructed = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.construct.explicit",
             input={
@@ -133,19 +142,13 @@ def test_explicit_graph_construction_canonicalizes_and_feeds_graph_capabilities(
         "edges": [["a", "b"], ["b", "c"]],
     }
     graph_uri = constructed.output["graph_uri"]
-    stored = attached_complete_runtime.core.store.get(graph_uri)
+    stored = services.core.store.get(graph_uri)
     assert stored.payload == constructed.output["graph"]
-    assert (
-        stored.manifest.schema_uri
-        == attached_complete_runtime.portfolio.graph.graph_schema_uri
-    )
-    assert (
-        stored.manifest.semantics_uri
-        == attached_complete_runtime.portfolio.graph.semantics_uri
-    )
+    assert stored.manifest.schema_uri == installation.graph_schema_uri
+    assert stored.manifest.semantics_uri == installation.semantics_uri
     assert stored.manifest.object_digest == constructed.output["graph_object_digest"]
 
-    properties = attached_complete_runtime.core.capabilities.invoke(
+    properties = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={"graph_uri": graph_uri, "properties": ["order", "tree"]},
@@ -166,11 +169,12 @@ def test_explicit_graph_construction_canonicalizes_and_feeds_graph_capabilities(
     ],
 )
 def test_explicit_graph_construction_fails_before_artifact_writes(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
     input_payload: dict[str, object],
 ) -> None:
+    services, _installation = graph_core
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.construct.explicit",
             input=input_payload,
@@ -184,10 +188,11 @@ def test_explicit_graph_construction_fails_before_artifact_writes(
 
 
 def test_graph_atlas_search_is_bounded_complete_and_replayable(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
+    services, _installation = graph_core
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
             input={
@@ -215,7 +220,7 @@ def test_graph_atlas_search_is_bounded_complete_and_replayable(
 
     for candidate in result.output["candidates"]:
         graph_uri = candidate["graph_uri"]
-        graph = attached_complete_runtime.core.store.get(graph_uri)
+        graph = services.core.store.get(graph_uri)
         assert candidate["graph"] == graph.payload
         assert graph.payload["graph_schema_version"] == "1"
         assert len(graph.payload["vertices"]) == 5
@@ -223,17 +228,18 @@ def test_graph_atlas_search_is_bounded_complete_and_replayable(
         assert candidate["properties"]["triangle_count"] == 0
         assert candidate["properties"]["independence_number"] == 3
 
-    scope = attached_complete_runtime.core.store.get(result.scope.artifact_uri)
+    scope = services.core.store.get(result.scope.artifact_uri)
     assert scope.payload["source"] == "networkx.graph_atlas_g"
     assert scope.payload["order"] == 5
     assert scope.payload["enumerated_count"] > 0
 
 
 def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
+    services, _installation = graph_core
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
             input={
@@ -255,10 +261,11 @@ def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
 
 
 def test_graph_capabilities_return_actionable_parameter_and_artifact_errors(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
+    services, _installation = graph_core
 
-    invalid_range = attached_complete_runtime.core.capabilities.invoke(
+    invalid_range = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
             input={
@@ -274,7 +281,7 @@ def test_graph_capabilities_return_actionable_parameter_and_artifact_errors(
     assert invalid_range.diagnostics[0].code == "INVALID_CONSTRAINT_RANGE"
     assert invalid_range.diagnostics[0].path == "constraints/minimum_edges"
 
-    missing_graph = attached_complete_runtime.core.capabilities.invoke(
+    missing_graph = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={
@@ -288,9 +295,10 @@ def test_graph_capabilities_return_actionable_parameter_and_artifact_errors(
 
 
 def test_graph_property_batch_materializes_exact_computed_artifact(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
-    searched = attached_complete_runtime.core.capabilities.invoke(
+    services, _installation = graph_core
+    searched = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
             input={
@@ -302,7 +310,7 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
     )
     graph_uri = searched.output["candidates"][0]["graph_uri"]
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={
@@ -370,9 +378,7 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
     assert set(relationship.target_artifact_uris[1:]) == {
         binding["artifact_uri"] for binding in result.output["results"]
     }
-    property_artifact = attached_complete_runtime.core.store.get(
-        result.output["property_artifact_uri"]
-    )
+    property_artifact = services.core.store.get(result.output["property_artifact_uri"])
     assert set(property_artifact.manifest.parents) == {
         graph_uri,
         *(binding["artifact_uri"] for binding in result.output["results"]),
@@ -388,9 +394,7 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
         "triangle_count",
     ]
     for binding in result.output["results"]:
-        invariant_artifact = attached_complete_runtime.core.store.get(
-            binding["artifact_uri"]
-        )
+        invariant_artifact = services.core.store.get(binding["artifact_uri"])
         assert invariant_artifact.manifest.parents == (graph_uri,)
         assert invariant_artifact.payload["result"] == binding["result"]
 
@@ -400,13 +404,12 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
     [(24, "COMPUTED"), (25, "NOT_COMPUTED")],
 )
 def test_exact_independence_number_stops_at_the_order_boundary(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
     order: int,
     expected_status: str,
 ) -> None:
-    runtime = attached_complete_runtime
-    installation = runtime.portfolio.graph
-    graph = runtime.core.artifacts.put(
+    services, installation = graph_core
+    graph = services.core.artifacts.put(
         schema_uri=installation.graph_schema_uri,
         semantics_uri=installation.semantics_uri,
         payload={
@@ -416,7 +419,7 @@ def test_exact_independence_number_stops_at_the_order_boundary(
         },
     )
 
-    result = runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={
@@ -438,9 +441,10 @@ def test_exact_independence_number_stops_at_the_order_boundary(
 
 
 def test_graph_counterexample_invariant_batch_reproduces_path_five(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
-    searched = attached_complete_runtime.core.capabilities.invoke(
+    services, _installation = graph_core
+    searched = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
             input={
@@ -452,7 +456,7 @@ def test_graph_counterexample_invariant_batch_reproduces_path_five(
     )
     graph_uri = searched.output["candidates"][0]["graph_uri"]
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={
@@ -491,9 +495,10 @@ def test_graph_counterexample_invariant_batch_reproduces_path_five(
 
 
 def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
-    searched = attached_complete_runtime.core.capabilities.invoke(
+    services, _installation = graph_core
+    searched = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
             input={
@@ -504,7 +509,7 @@ def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
         )
     )
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
             input={
@@ -565,11 +570,12 @@ def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
 
 
 def test_graph_invariant_registry_is_fixed_and_discoverable(
-    attached_complete_runtime,
+    graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
+    services, _installation = graph_core
     descriptor = next(
         item
-        for item in attached_complete_runtime.core.capabilities.catalog().capabilities
+        for item in services.core.capabilities.catalog().capabilities
         if item.capability_id == "graph.compute.properties"
     )
 

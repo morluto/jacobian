@@ -5,6 +5,7 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
+    CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
@@ -58,3 +59,27 @@ def test_binomial_is_discoverable_from_number_theory_language(
     assert result.output["result"]["value"] == (
         "1431712059377249479518540967853195958045"
     )
+
+
+def test_combinatorics_resource_atomics_are_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
+        (
+            "combinatorics.compute.fibonacci_pair",
+            {"n": 10},
+            {"n": 10, "f_n": "55", "f_n_plus_one": "89"},
+        ),
+        (
+            "combinatorics.compute.multinomial",
+            {"values": ["2", "1", "1"]},
+            {"value": "12"},
+        ),
+    )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        assert result.output["result"] == expected

@@ -42,7 +42,9 @@ _OPERATIONS = {
 }
 
 
-def _minimum_weight_triangulation(claim: object) -> dict[str, object]:  # noqa: C901
+def _triangulation_source(
+    claim: object,
+) -> tuple[list[tuple[Fraction, Fraction]], object]:
     if not isinstance(claim, dict) or set(claim) != {
         "polygon",
         "diagonal_weights",
@@ -64,7 +66,13 @@ def _minimum_weight_triangulation(claim: object) -> dict[str, object]:  # noqa: 
     ]
     if any(turn <= 0 for turn in turns):
         raise ValueError("triangulation polygon is not strict CCW convex")
-    raw_weights = claim["diagonal_weights"]
+    return points, claim["diagonal_weights"]
+
+
+def _triangulation_weights(
+    raw_weights: object,
+    count: int,
+) -> dict[tuple[int, int], Fraction]:
     if not isinstance(raw_weights, list):
         raise ValueError("triangulation weights are malformed")
     weights: dict[tuple[int, int], Fraction] = {}
@@ -93,6 +101,15 @@ def _minimum_weight_triangulation(claim: object) -> dict[str, object]:  # noqa: 
     }
     if set(weights) != expected_pairs or list(weights) != sorted(weights):
         raise ValueError("triangulation weights are incomplete or noncanonical")
+    return weights
+
+
+def _triangulation_dynamic_program(
+    count: int,
+    weights: dict[tuple[int, int], Fraction],
+) -> tuple[
+    dict[tuple[int, int], Fraction], dict[tuple[int, int], int], list[dict[str, object]]
+]:
 
     def edge_weight(first: int, second: int) -> Fraction:
         pair = (first, second) if first < second else (second, first)
@@ -123,6 +140,13 @@ def _minimum_weight_triangulation(claim: object) -> dict[str, object]:  # noqa: 
             ledger.append(
                 {"start": start, "end": end, "split": pivot, "optimum": value}
             )
+    return optimum, splits, ledger
+
+
+def _triangulation_reconstruct(
+    count: int,
+    splits: dict[tuple[int, int], int],
+) -> tuple[list[tuple[int, int, int]], set[tuple[int, int]]]:
     triangles: list[tuple[int, int, int]] = []
     diagonals: set[tuple[int, int]] = set()
 
@@ -139,6 +163,15 @@ def _minimum_weight_triangulation(claim: object) -> dict[str, object]:  # noqa: 
         reconstruct(pivot, end)
 
     reconstruct(0, count - 1)
+    return triangles, diagonals
+
+
+def _minimum_weight_triangulation(claim: object) -> dict[str, object]:
+    points, raw_weights = _triangulation_source(claim)
+    count = len(points)
+    weights = _triangulation_weights(raw_weights, count)
+    optimum, _splits, ledger = _triangulation_dynamic_program(count, weights)
+    triangles, diagonals = _triangulation_reconstruct(count, _splits)
     return {
         "vertex_count": count,
         "diagonals": [
@@ -567,7 +600,33 @@ def _point_classification(
     }
 
 
-def _expected(operation: str, claim: object) -> dict[str, object]:  # noqa: C901
+def _polygon_classification_expected(claim: object) -> dict[str, object]:
+    if not isinstance(claim, dict) or set(claim) != {"polygon", "point"}:
+        raise ValueError("polygon classification source has an invalid shape")
+    return _point_classification(
+        _points(claim["polygon"]),
+        _point(claim["point"]),
+    )
+
+
+def _triangle_expected(operation: str, claim: object) -> dict[str, object]:
+    first, second, third = _triple(claim)
+    if operation == "geometry.triangle.compute.orientation":
+        determinant = (second[0] - first[0]) * (third[1] - first[1]) - (
+            second[1] - first[1]
+        ) * (third[0] - first[0])
+        return {"orientation": (determinant > 0) - (determinant < 0)}
+    if operation == "geometry.triangle.compute.centroid":
+        return {
+            "point": (
+                (first[0] + second[0] + third[0]) / 3,
+                (first[1] + second[1] + third[1]) / 3,
+            )
+        }
+    raise ValueError("unsupported exact geometry operation")
+
+
+def _expected(operation: str, claim: object) -> dict[str, object]:
     if operation == "geometry.polygon.triangulation.minimum_weight.compute":
         return _minimum_weight_triangulation(claim)
     if operation == "geometry.points.compute.squared_distance":
@@ -589,26 +648,8 @@ def _expected(operation: str, claim: object) -> dict[str, object]:  # noqa: C901
     if operation == "geometry.polygon.simple.decide":
         return _polygon_decision(_points(claim))
     if operation == "geometry.polygon.point.classify":
-        if not isinstance(claim, dict) or set(claim) != {"polygon", "point"}:
-            raise ValueError("polygon classification source has an invalid shape")
-        return _point_classification(
-            _points(claim["polygon"]),
-            _point(claim["point"]),
-        )
-    first, second, third = _triple(claim)
-    if operation == "geometry.triangle.compute.orientation":
-        determinant = (second[0] - first[0]) * (third[1] - first[1]) - (
-            second[1] - first[1]
-        ) * (third[0] - first[0])
-        return {"orientation": (determinant > 0) - (determinant < 0)}
-    if operation == "geometry.triangle.compute.centroid":
-        return {
-            "point": (
-                (first[0] + second[0] + third[0]) / 3,
-                (first[1] + second[1] + third[1]) / 3,
-            )
-        }
-    raise ValueError("unsupported exact geometry operation")
+        return _polygon_classification_expected(claim)
+    return _triangle_expected(operation, claim)
 
 
 def _squared_distance_candidate(payload: dict[str, object]) -> dict[str, object]:

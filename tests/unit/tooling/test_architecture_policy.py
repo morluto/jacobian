@@ -150,9 +150,11 @@ def test_topology_manifest_requires_exactly_one_lane(tmp_path: Path) -> None:
     _test_file(tmp_path, "tests/misc/test_unowned.py", "def test_unowned(): pass\n")
     (tmp_path / "tests" / "topology.toml").write_text(
         """
-[lanes.unit]
+[[lanes]]
+name = "unit"
 owned_paths = ["tests/unit/**"]
-[lanes.component]
+[[lanes]]
+name = "component"
 paths = ["tests/unit/**", "tests/component/**"]
 """,
         encoding="utf-8",

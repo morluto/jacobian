@@ -298,6 +298,36 @@ def _node_location(path: str, node: ast.AST) -> tuple[str, int, int]:
     return path, getattr(node, "lineno", 1), getattr(node, "col_offset", 0)
 
 
+def _complete_runtime_fixture_import_violations(
+    module: str,
+    relative: str,
+    node: ast.Import | ast.ImportFrom,
+) -> tuple[Violation, ...]:
+    """Complete-runtime fixture bindings stay out of lower-tier modules."""
+
+    if module != "tests.support.complete_runtime_fixtures":
+        return ()
+    owners = (
+        "tests/composition/conftest.py",
+        "tests/e2e/conftest.py",
+        "tests/boundary/storage/conftest.py",
+        "tests/boundary/providers/conftest.py",
+        "tests/boundary/mcp/conftest.py",
+        "tests/support/complete_runtime_fixtures.py",
+    )
+    if relative in owners:
+        return ()
+    return (
+        Violation(
+            relative,
+            "complete-runtime-fixture-import",
+            "import complete-runtime fixtures only from owning-tier conftest.py",
+            node.lineno,
+            node.col_offset,
+        ),
+    )
+
+
 def _imported_module(node: ast.Import | ast.ImportFrom) -> str:
     if isinstance(node, ast.Import):
         return node.names[0].name if node.names else ""
@@ -413,6 +443,9 @@ def _import_violations(
     runtime_import_violation = False
     module = _imported_module(node)
     violations.extend(_conftest_import_violations(module, relative, node))
+    violations.extend(
+        _complete_runtime_fixture_import_violations(module, relative, node)
+    )
     for alias in node.names:
         imported = (
             alias.name.split(".", 1)[0]
@@ -591,15 +624,12 @@ def _exact_domain_install_name(node: ast.AST) -> str | None:
     return None
 
 
-def _exact_domain_install_violations(
-    tree: ast.AST, relative: str
-) -> list[Violation]:
-    """Ordinary domain confests must use open_exact_domain_services."""
+def _exact_domain_install_violations(tree: ast.AST, relative: str) -> list[Violation]:
+    """Ordinary tests must use open_exact_domain_services, not the low-level recipe."""
 
-    path = PurePosixPath(relative)
     if relative in _EXACT_DOMAIN_INSTALL_ALLOWLIST:
         return []
-    if not (relative.startswith("tests/domain/") and path.name == "conftest.py"):
+    if not relative.startswith("tests/"):
         return []
     message = (
         "use tests.support.exact_domain.open_exact_domain_services "

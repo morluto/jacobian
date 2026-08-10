@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
@@ -19,40 +20,16 @@ from jacobian.domains.polynomial.bundle import build_polynomial_bundle
 from jacobian.domains.projective_geometry.bundle import (
     build_projective_geometry_bundle,
 )
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
 def frontier_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    bundles = (
+    with open_exact_domain_services(
+        tmp_path / "state",
         build_projective_geometry_bundle(),
         build_graph_optimization_bundle(),
         build_polynomial_bundle(),
-    )
-    with open_domain_services(
-        tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=bundles)
-        )
-        verifier_adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={
-                bundle.domain_id: (bundle, installed.installed[bundle.domain_id])
-                for bundle in bundles
-            },
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in verifier_adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 

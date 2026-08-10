@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -17,45 +18,17 @@ from jacobian.domains.graph_optimization import (
     build_graph_invariant_bundle,
     build_graph_optimization_bundle,
 )
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
 def graph_verification_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install the two graph bundles covered by this verification contract."""
 
-    optimization = build_graph_optimization_bundle()
-    invariants = build_graph_invariant_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_graph_optimization_bundle(),
+        build_graph_invariant_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(optimization, invariants))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={
-                "graph_optimization": (
-                    optimization,
-                    installed.installed["graph_optimization"],
-                ),
-                "graph_invariants": (
-                    invariants,
-                    installed.installed["graph_invariants"],
-                ),
-            },
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 

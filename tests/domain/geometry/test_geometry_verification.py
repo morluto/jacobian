@@ -4,7 +4,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
@@ -13,9 +14,6 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import build_geometry_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode
 
 ZERO = {"num": "0", "den": "1"}
@@ -31,50 +29,30 @@ PXY = {"x": TWO, "y": TWO}
 def geometry_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install geometry and its exact checkers without the full portfolio."""
 
-    bundle = build_geometry_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_geometry_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"geometry": (bundle, installed.installed["geometry"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
 def test_geometry_checker_availability_does_not_grant_authority(
     tmp_path: Path,
 ) -> None:
-    bundle = build_geometry_bundle()
-    with open_domain_services(tmp_path / "state") as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
+    with open_exact_domain_services(
+        tmp_path / "state",
+        build_geometry_bundle(),
+        checker_authority=CheckerAuthorityMode.NONE,
+    ) as services:
+        catalog_ids = {
+            item.capability_id
+            for item in services.core.capabilities.catalog().capabilities
+        }
+        assert any(
+            item.endswith(".compute") or ".decide" in item for item in catalog_ids
         )
-        adapters, installation = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"geometry": (bundle, installed.installed["geometry"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-
-        assert adapters == ()
-        assert all(
-            checker_id is None for checker_id in installation.checker_ids.values()
-        )
+        assert not any(item.endswith(".verify") for item in catalog_ids)
+        assert not services.installation.authorizes_bundled_checkers
 
 
 def _weighted_square() -> dict[str, object]:

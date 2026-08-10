@@ -4,8 +4,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -14,10 +15,6 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def _poly(*coefficients_ascending: int) -> dict[str, object]:
@@ -54,25 +51,10 @@ def _poly_xy(*terms: tuple[tuple[int, int], int]) -> dict[str, object]:
 def polynomial_verification_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install polynomial operations and their exact checkers without a portfolio."""
 
-    bundle = build_polynomial_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_polynomial_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"polynomial": (bundle, installed.installed["polynomial"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 

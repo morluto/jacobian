@@ -62,6 +62,22 @@ the module (for example `CapabilityAssuranceLevel.VERIFIED`,
 justify it. Inventory unjustified uses with `make test-runtime-inventory`; the
 inventory fails closed when any remain.
 
+### Composition admission
+
+The composition lane proves wiring and trust properties that one bundle cannot:
+
+- complete-portfolio installation and catalog invariants
+- checker presence, absence, authorization, revocation, and hydration
+- cross-bundle or cross-service artifact handoff
+- producer → independent checker / verification-record workflows
+- bootstrap, attach, recovery, and shutdown lifecycle
+- global policy/dispatch and tamper / fail-closed trust boundaries
+
+Ordinary request/output/error matrices for one capability belong in domain or
+component lanes (prefer `open_domain_services` /
+`open_exact_domain_services`). Complete-runtime fixtures are visible only under
+owning composition, e2e, and named boundary confests.
+
 A test's directory answers what kind of behavior it owns. A marker is retained
 only when it changes execution. The CI impact manifest maps changed paths to
 every explicitly owned lane, with additive multi-owner rules and a fail-closed

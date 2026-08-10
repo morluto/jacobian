@@ -61,6 +61,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         "polynomial.compute.resultant",
         "polynomial.compute.discriminant",
         "polynomial.compute.square_free_decomposition",
+        "polynomial.factor.compute",
         "polynomial.groebner_basis.compute",
     } <= installed_ids
 

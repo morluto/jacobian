@@ -9,6 +9,7 @@ __all__ = [
     "polynomial_discriminant",
     "polynomial_division",
     "polynomial_evaluate",
+    "polynomial_factorization",
     "polynomial_gcdex",
     "polynomial_groebner_basis",
     "polynomial_integral",
@@ -50,6 +51,25 @@ def polynomial_square_free_decomposition(
         reconstructed *= factor**multiplicity
     if reconstructed != source:
         raise RuntimeError("SymPy square-free decomposition did not reconstruct input")
+    return coefficient, factors, reconstructed
+
+
+def polynomial_factorization(
+    source: Any,
+) -> tuple[Any, tuple[tuple[Any, int], ...], Any]:
+    """Return content, monic irreducibles, and the exact reconstruction."""
+
+    from sympy import Poly
+
+    coefficient, raw_factors = source.factor_list()
+    factors = tuple(
+        (factor.monic(), int(multiplicity)) for factor, multiplicity in raw_factors
+    )
+    reconstructed = Poly(coefficient, *source.gens, domain=source.domain)
+    for factor, multiplicity in factors:
+        reconstructed *= factor**multiplicity
+    if reconstructed != source:
+        raise RuntimeError("SymPy factorization did not reconstruct input")
     return coefficient, factors, reconstructed
 
 

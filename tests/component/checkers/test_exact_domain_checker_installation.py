@@ -30,6 +30,7 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
+    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialResultantRequest,
     PolynomialSquareFreeRequest,
@@ -120,6 +121,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
         "polynomial.compute.resultant",
         "polynomial.compute.discriminant",
         "polynomial.compute.square_free_decomposition",
+        "polynomial.factor.compute",
     )
     matrix_ids = (
         "matrix.multiply.compute",
@@ -153,6 +155,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
                 PolynomialResultantRequest,
                 PolynomialDiscriminantRequest,
                 PolynomialSquareFreeRequest,
+                PolynomialFactorRequest,
             ),
             polynomial_ids,
             character="e",
@@ -246,6 +249,7 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
                 PolynomialResultantRequest,
                 PolynomialDiscriminantRequest,
                 PolynomialSquareFreeRequest,
+                PolynomialFactorRequest,
             ),
             (
                 "polynomial.jacobian_syzygy.minimum_degree.compute",
@@ -253,6 +257,7 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
                 "polynomial.compute.resultant",
                 "polynomial.compute.discriminant",
                 "polynomial.compute.square_free_decomposition",
+                "polynomial.factor.compute",
             ),
             character="e",
         ),
@@ -288,6 +293,7 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
             PolynomialResultantRequest,
             PolynomialDiscriminantRequest,
             PolynomialSquareFreeRequest,
+            PolynomialFactorRequest,
         ),
         (
             "polynomial.jacobian_syzygy.minimum_degree.compute",
@@ -295,6 +301,7 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
             "polynomial.compute.resultant",
             "polynomial.compute.discriminant",
             "polynomial.compute.square_free_decomposition",
+            "polynomial.factor.compute",
         ),
         character="e",
     )

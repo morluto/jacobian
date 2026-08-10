@@ -61,6 +61,7 @@ def build_experiment_adapters(
             ),
             output_schema=model_schema(StructureCanonicalizationResult),
             invoke=lambda p: application.structures.canonicalize(**p),
+            artifact_references=lambda v: _structure_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="plugin canonicalization is not independently verified",
             tags=("structure", "canonicalization"),
@@ -154,3 +155,10 @@ def build_experiment_adapters(
             tags=("experiment", "control"),
         ),
     )
+
+
+def _structure_references(value: Any) -> tuple[str, ...]:
+    refs: list[str] = [value.structure_uri]
+    if value.canonical_uri is not None:
+        refs.append(value.canonical_uri)
+    return tuple(refs)

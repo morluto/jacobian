@@ -79,6 +79,7 @@ class AtomicServiceAdapter:
         output_schema: dict[str, Any],
         invoke: Callable[[dict[str, Any]], Any],
         store: ArtifactRepository,
+        artifact_references: Callable[[Any], tuple[str, ...]] | None = None,
         unverified_assurance_level: CapabilityAssuranceLevel = (
             CapabilityAssuranceLevel.COMPUTED
         ),
@@ -103,6 +104,7 @@ class AtomicServiceAdapter:
         )
         self._invoke = invoke
         self._store = store
+        self._artifact_references = artifact_references
         self._unverified_assurance_level = unverified_assurance_level
         self._unverified_basis = unverified_basis
 
@@ -115,7 +117,11 @@ class AtomicServiceAdapter:
         output = _dump(value)
         execution = _execution(value)
         record_uri = _verified_record_uri(value)
-        artifact_uris = _artifact_uris(output)
+        artifact_uris = (
+            self._artifact_references(value)
+            if self._artifact_references is not None
+            else ()
+        )
         verification_artifacts: tuple[str, ...] | None = None
         if record_uri is not None:
             verification_artifacts = _verification_bindings(
@@ -202,6 +208,7 @@ def install_atomic_capabilities(
                 parents=tuple(p.get("parents", ())),
                 summary=p.get("summary", ""),
             ),
+            artifact_references=lambda v: (v.artifact_uri,),
             discovery_visible=False,
             tags=("artifact", "storage"),
         ),
@@ -215,6 +222,7 @@ def install_atomic_capabilities(
             ),
             output_schema=model_schema(ClaimValidationResult),
             invoke=lambda p: application.claims.validate(**p),
+            artifact_references=lambda v: (v.claim_uri, v.plugin_id),
             read_only=True,
             tags=("claim", "validation"),
         ),
@@ -257,6 +265,11 @@ def install_atomic_capabilities(
                     "profile": EvaluationProfile(p["profile"]),
                 }
             ),
+            artifact_references=lambda v: (
+                v.claim_uri,
+                v.plugin_id,
+                *(item.candidate_uri for item in v.items),
+            ),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="untrusted plugin evaluation is not independently verified",
             tags=("evaluation",),
@@ -296,6 +309,7 @@ def install_atomic_capabilities(
             invoke=lambda p: application.witnesses.find(
                 **{**p, "witness_role": WitnessRole(p["witness_role"])}
             ),
+            artifact_references=lambda v: _witness_find_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="witness search output is evidence pending explicit replay",
             tags=("witness", "search"),
@@ -315,6 +329,7 @@ def install_atomic_capabilities(
             ),
             output_schema=model_schema(ResultEnvelope),
             invoke=lambda p: application.verification.verify_witness(**p),
+            artifact_references=lambda v: _envelope_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="the checker did not accept the supplied witness",
             tags=("witness", "verification"),
@@ -329,6 +344,7 @@ def install_atomic_capabilities(
             ),
             output_schema=model_schema(ResultEnvelope),
             invoke=lambda p: application.verification.verify_certificate(**p),
+            artifact_references=lambda v: _envelope_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="the checker did not accept the supplied certificate",
             tags=("certificate", "verification"),
@@ -380,6 +396,7 @@ def install_atomic_capabilities(
                     "objectives": tuple(p["objectives"]),
                 }
             ),
+            artifact_references=lambda v: _shrink_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="plugin-proposed reductions are not a verified minimality claim",
             tags=("shrink",),
@@ -572,21 +589,36 @@ def _is_verified(value: Any) -> bool:
     return _has_verified_parameter_region_evidence(value)
 
 
-def _artifact_uris(value: Any) -> tuple[str, ...]:
-    found: set[str] = set()
+def _witness_find_references(value: Any) -> tuple[str, ...]:
+    refs: list[str] = [value.claim_uri, value.candidate_uri, value.plugin_id]
+    if value.witness_uri is not None:
+        refs.append(value.witness_uri)
+    if value.certificate_uri is not None:
+        refs.append(value.certificate_uri)
+    return tuple(refs)
 
-    def visit(item: Any) -> None:
-        if isinstance(item, dict):
-            for child in item.values():
-                visit(child)
-        elif isinstance(item, list):
-            for child in item:
-                visit(child)
-        elif isinstance(item, str) and item.startswith("artifact://sha256/"):
-            found.add(item)
 
-    visit(value)
-    return tuple(sorted(found))
+def _envelope_references(value: Any) -> tuple[str, ...]:
+    envelope = _result_envelope(value)
+    if envelope is None:
+        return ()
+    refs: list[str] = list(envelope.evidence_uris)
+    if envelope.verification_record_uri is not None:
+        refs.append(envelope.verification_record_uri)
+    if envelope.assurance.scope_uri is not None:
+        refs.append(envelope.assurance.scope_uri)
+    return tuple(refs)
+
+
+def _shrink_references(value: Any) -> tuple[str, ...]:
+    refs: list[str] = [value.initial_target_uri, value.final_target_uri]
+    for step in value.steps:
+        refs.append(step.from_uri)
+        if step.proposed_uri is not None:
+            refs.append(step.proposed_uri)
+        if step.verification_record_uri is not None:
+            refs.append(step.verification_record_uri)
+    return tuple(refs)
 
 
 def _verification_bindings(

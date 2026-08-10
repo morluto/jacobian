@@ -179,8 +179,7 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert polynomial in skill
     extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
     assert extension_payload in skill
-    assert '"payload":<JSON>' in skill
-    assert "(not `COMPUTE`/`input`)" in skill
+    assert '"input":<JSON>' in skill
     assert "No discovery for stable producers" in skill
     assert "never with `capability_id`" in skill
     assert '"candidate":<producer output.result>' in skill
@@ -207,8 +206,8 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
     assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
-    assert 'never send `mode: "CONTRACT"` to `math.run`' in skill_flat
-    assert "`matrix.determinant.verify` in `VERIFY` mode" in skill_flat
+    assert "never put `CONTRACT` in a query" in skill_flat
+    assert "`matrix.determinant.verify` for an independent check" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
     assert "a writable path or schema alone is not authorization" in skill_flat

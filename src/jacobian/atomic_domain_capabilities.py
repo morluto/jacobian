@@ -77,6 +77,7 @@ def build_domain_adapters(
                     ),
                 }
             ),
+            artifact_references=lambda v: _transformation_apply_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis=(
                 "plugin transformation output remains an open verification obligation"
@@ -96,6 +97,7 @@ def build_domain_adapters(
             ),
             output_schema=model_schema(ResultEnvelope),
             invoke=lambda p: application.verification.verify_transformation(**p),
+            artifact_references=lambda v: _envelope_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis=("the checker did not accept the transformation relation"),
             tags=("transform", "verification"),
@@ -129,6 +131,7 @@ def build_domain_adapters(
             invoke=lambda p: application.polytope.separate(
                 PolytopeSeparateRequest(**p)
             ),
+            artifact_references=lambda v: _polytope_separate_references(v),
             tags=("polytope", "exact"),
             provider="jacobian.z3",
         ),
@@ -148,7 +151,55 @@ def build_domain_adapters(
             ),
             output_schema=model_schema(ParameterRegion),
             invoke=lambda p: application.conjectures.promote_parameter_region(**p),
+            artifact_references=lambda v: _parameter_region_references(v),
             read_only=True,
             tags=("parameter", "verification"),
         ),
     )
+
+
+def _transformation_apply_references(value: Any) -> tuple[str, ...]:
+    refs: list[str] = [value.source_uri]
+    if value.target_uri is not None:
+        refs.append(value.target_uri)
+    if value.claim_uri is not None:
+        refs.append(value.claim_uri)
+    if value.transformation_uri is not None:
+        refs.append(value.transformation_uri)
+    return tuple(refs)
+
+
+def _envelope_references(value: Any) -> tuple[str, ...]:
+    envelope = getattr(value, "result", None)
+    if not isinstance(envelope, ResultEnvelope):
+        return ()
+    refs: list[str] = list(envelope.evidence_uris)
+    if envelope.verification_record_uri is not None:
+        refs.append(envelope.verification_record_uri)
+    if envelope.assurance.scope_uri is not None:
+        refs.append(envelope.assurance.scope_uri)
+    return tuple(refs)
+
+
+def _polytope_separate_references(value: Any) -> tuple[str, ...]:
+    refs: list[str] = [value.point_uri, value.generator_set_uri]
+    if value.effective_point_uri is not None:
+        refs.append(value.effective_point_uri)
+    if value.effective_generator_set_uri is not None:
+        refs.append(value.effective_generator_set_uri)
+    if value.claim_uri is not None:
+        refs.append(value.claim_uri)
+    if value.witness_uri is not None:
+        refs.append(value.witness_uri)
+    if value.certificate_uri is not None:
+        refs.append(value.certificate_uri)
+    return tuple(refs)
+
+
+def _parameter_region_references(value: Any) -> tuple[str, ...]:
+    refs: list[str] = list(value.sample_uris)
+    if value.subject_uri is not None:
+        refs.append(value.subject_uri)
+    if value.verification_record_uri is not None:
+        refs.append(value.verification_record_uri)
+    return tuple(refs)

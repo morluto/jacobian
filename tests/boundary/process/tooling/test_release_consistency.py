@@ -35,12 +35,10 @@ def test_release_consistency_detects_npm_lockfile_drift(tmp_path: Path) -> None:
                 "packages": {"": {"name": "jacobian", "version": "0.10.0"}},
             }
         ),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
-    result = run_ci_script(
-        "check-release-consistency", "--root", tmp_path, check=False
-    )
+    result = run_ci_script("check-release-consistency", "--root", tmp_path, check=False)
     assert result.returncode == 1
     assert "npm/package-lock.json (top-level)" in result.stderr
     assert "0.10.0 (expected 0.11.0)" in result.stderr
@@ -63,22 +61,20 @@ def test_release_consistency_detects_pyproject_drift(tmp_path: Path) -> None:
                 "packages": {"": {"name": "jacobian", "version": "0.11.0"}},
             }
         ),
-        encoding="utf-8"
+        encoding="utf-8",
     )
     (tmp_path / "pyproject.toml").write_text(
         textwrap.dedent(
-            '''
+            """
             [project]
             name = "jacobian"
             version = "0.10.0"
-            '''
+            """
         ).strip(),
         encoding="utf-8",
     )
 
-    result = run_ci_script(
-        "check-release-consistency", "--root", tmp_path, check=False
-    )
+    result = run_ci_script("check-release-consistency", "--root", tmp_path, check=False)
     assert result.returncode == 1
     assert "pyproject.toml" in result.stderr
 
@@ -100,11 +96,15 @@ def test_release_consistency_accepts_explicit_expected(tmp_path: Path) -> None:
                 "packages": {"": {"name": "jacobian", "version": "0.10.0"}},
             }
         ),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     result = run_ci_script(
-        "check-release-consistency", "--root", tmp_path, "--expected", "0.10.0",
+        "check-release-consistency",
+        "--root",
+        tmp_path,
+        "--expected",
+        "0.10.0",
         check=True,
     )
     assert "All present release surfaces agree." in result.stdout

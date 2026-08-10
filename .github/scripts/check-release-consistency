@@ -93,7 +93,7 @@ def _uv_lock_version(root: Path) -> str | None:
     name_match = re.search(r'name\s*=\s*"jacobian"', text)
     if not name_match:
         return None
-    version_match = re.search(r'version\s*=\s*"([^"]+)"', text[name_match.end():])
+    version_match = re.search(r'version\s*=\s*"([^"]+)"', text[name_match.end() :])
     return version_match.group(1) if version_match else None
 
 
@@ -144,8 +144,10 @@ def collect_versions(root: Path) -> dict[str, str | None]:
 
 def _format_table(versions: dict[str, str | None], expected: str | None) -> str:
     width = max(len(name) for name in versions)
-    lines = [f"  {name:<{width}}  {value!s:<20}  {'OK' if value == expected else 'DRIFT'}"
-             for name, value in versions.items()]
+    lines = [
+        f"  {name:<{width}}  {value!s:<20}  {'OK' if value == expected else 'DRIFT'}"
+        for name, value in versions.items()
+    ]
     return "\n".join(lines)
 
 
@@ -168,7 +170,10 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     expected: str | None = args.expected or versions["npm/package.json"]
     if expected is None:
-        print("error: could not derive expected version from npm/package.json", file=sys.stderr)
+        print(
+            "error: could not derive expected version from npm/package.json",
+            file=sys.stderr,
+        )
         return 2
 
     # Missing surfaces (None) are reported separately from drift: a surface

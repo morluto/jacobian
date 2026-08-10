@@ -41,20 +41,11 @@ descriptor.
 3. Execution status as above.
 
 There are **no dual-mode tools** in the product model: one ID is not both
-“compute X” and “independently verify X.” Use two IDs (e.g.
+"compute X" and "independently verify X." Use two IDs (e.g.
 `polynomial.compute.gcd` and `polynomial.gcd.verify`).
 
 Failed or incomplete runs are not mathematical conclusions. A successful
 ordinary run is a value, not a self-certified theorem.
-
-### Legacy wire (migration)
-
-Until [#1143](https://github.com/morluto/jacobian/issues/1143):
-
-- `mode` (`EXPLORE` | `VERIFY`) may still appear on `math.run` / find filters.
-- Envelope fields such as `assurance` may still be present.
-- Do not design new tools or agent guidance around them.
-- Split any remaining dual-mode descriptors into two tools.
 
 Domain adapters validate the full Pydantic request before work. JSON Schema is
 for discovery; Pydantic owns cross-field rules.

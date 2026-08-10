@@ -98,10 +98,8 @@ share an ID with the producer.
 
 Rules:
 
-- **No dual-mode tools.** One ID is not both “compute X” and “verify X.”
-- **No explore/verify research modes** as product design. Legacy wire `mode`
-  fields are scheduled for removal
-  ([#1143](https://github.com/morluto/jacobian/issues/1143)).
+- **No dual-mode tools.** One ID is not both "compute X" and "verify X."
+- **No explore/verify research modes** as product design.
 - **Failed or incomplete runs are not mathematical conclusions.**
 - **Producers do not self-certify** as independently verified theorems.
 
@@ -187,9 +185,6 @@ Illustrative catalog entries (not a closed ontology):
 
 Example composition: put or compute values → search → optionally run
 `witness.verify` on a found witness. Two tools, not one dual-mode tool.
-
-Dual-mode leftovers (one ID advertising both compute and verify) are tech debt
-to split; do not add more.
 
 ## Local and remote hosts
 

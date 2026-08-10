@@ -9,7 +9,7 @@ read the explanations for design rationale.
 Jacobian is a **toolbox of atomic math tools** for AI agents: find them with
 `math.find`, run them with `math.run`, get **mathematical results**, and
 compose those values across turns. Checker tools are optional **additional**
-catalog IDs—not dual-mode producers. Catalog entries are often still called
+catalog IDs—separate from producers. Catalog entries are often still called
 *capabilities* in the API. The [product model](explanation/product-blueprint.md)
 and [Search and execute](explanation/architecture.md#search-and-execute) define
 the contract.

@@ -667,7 +667,7 @@ async def capability_invoke(
     *,
     ctx: Context[AppState, Any],
 ) -> CapabilityRunToolResult:
-    """Run one math tool. Role comes from the tool ID, not a mode switch."""
+    """Run one math tool. Role comes from the tool ID."""
     with _runtime(ctx) as active_runtime:
         result = await _invoke_capability_attempt(
             active_runtime,

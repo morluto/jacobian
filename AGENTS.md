@@ -30,9 +30,8 @@ HEURISTIC/COMPUTED/VERIFIED slogans. Optional envelope fields may exist on the
 wire during migration; do not design new behavior around them as the product.
 
 **Checker tools are additional tools.** Independent check is a **separate
-catalog ID** (e.g. `….verify`, `lean.check`), not a mode on the producer. **No
-dual-mode tools.** Legacy `mode` / dual-mode descriptors:
-[#1143](https://github.com/morluto/jacobian/issues/1143).
+catalog ID** (e.g. `….verify`, `lean.check`), not a role on the producer. **No
+dual-mode tools.**
 
 - Server: typed contracts, resource bounds, catalog install, checker
   authorization.

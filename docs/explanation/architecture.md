@@ -19,10 +19,8 @@ agent
 
 Ordinary tools return **calculations** (values) plus execution status. Checker
 tools are **additional catalog IDs** that return a check **verdict**; they are
-never a second mode on the same tool. Independent checkers are
-operator-authorized packages, not self-certified producer success. Legacy
-`mode` / dual-mode descriptors are tech debt
-([#1143](https://github.com/morluto/jacobian/issues/1143)).
+never a second role on the same tool. Independent checkers are
+operator-authorized packages, not self-certified producer success.
 
 Models, search algorithms, and domain solvers may be heuristic or incomplete.
 That does not change the product rule: return the math; use a separate tool
@@ -111,8 +109,7 @@ math.run
 - Checker tools: **separate IDs**; verdict from operator-authorized independent
   replay only.
 - Timeout, cancel, error, invalid input: non-conclusions.
-- No new dual-mode tools; split leftovers
-  ([#1143](https://github.com/morluto/jacobian/issues/1143)).
+- No dual-mode tools; checkers are separate catalog IDs.
 
 One `math.run` may call several backends only when they implement **one**
 agent-visible outcome.

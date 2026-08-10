@@ -129,7 +129,7 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     enclose, verify = adapters
     assert verify is not None
 
-    # First compute the enclosure via EXPLORE, then verify the claimed values.
+    # First compute the enclosure, then verify the claimed values.
     enclose_result = enclose.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.enclose",

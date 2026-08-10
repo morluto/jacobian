@@ -35,10 +35,10 @@ def _request(
 
 
 def test_finite_partition_explore_keeps_coverage_obligation_open(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         _request(CapabilityMode.EXPLORE)
     )
 
@@ -159,12 +159,12 @@ def test_verification_rejects_checker_obligation_outside_request(
 
 
 def test_finite_partition_duplicate_case_ids_cannot_report_complete(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     request = _request(CapabilityMode.EXPLORE)
     request.input["cases"][1]["case_id"] = "even"
 
-    result = fresh_complete_runtime.core.capabilities.invoke(request)
+    result = attached_complete_runtime.core.capabilities.invoke(request)
 
     assert result.output["duplicate_case_ids"] == ["even"]
     assert result.completeness.status.value == "PARTIAL"

@@ -6,9 +6,9 @@ from jacobian.contracts.capabilities import CapabilityDiscoveryRequest
 
 
 def test_homology_intent_discovers_the_domain_owned_operation(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    discovered = fresh_complete_runtime.core.capabilities.discover(
+    discovered = attached_complete_runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="homology of a finite simplicial complex over F_2",
             limit=5,

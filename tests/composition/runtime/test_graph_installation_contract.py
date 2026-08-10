@@ -34,14 +34,14 @@ def test_graph_installation_preserves_public_identity_and_adapter_order(
 
 
 def test_graph_installation_omits_unauthorized_checker_ids(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    installation = fresh_complete_runtime.portfolio.graph
+    installation = attached_complete_runtime.portfolio.graph
     assert isinstance(installation, GraphInstallation)
     assert installation.degree_sequence_checker_id is None
     assert installation.neighborhood_checker_id is None
 
-    descriptors = fresh_complete_runtime.core.capabilities.catalog().capabilities
+    descriptors = attached_complete_runtime.core.capabilities.catalog().capabilities
     for capability_id in (
         "graph.realize.degree_sequence",
         "graph.compute.neighborhood_independence",

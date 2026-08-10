@@ -146,10 +146,10 @@ def test_finite_coverage_rejects_nfc_collisions_in_scope(
 
 
 def test_finite_coverage_is_unavailable_without_authorized_checker(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         _request(["alpha"], [["alpha"]])
     )
 

@@ -121,6 +121,4 @@ def open_universal_algebra_services(
         )
         for adapter in adapters:
             services.installation.register_capability(adapter)
-        yield UniversalAlgebraTestServices(
-            services=services, installation=installation
-        )
+        yield UniversalAlgebraTestServices(services=services, installation=installation)

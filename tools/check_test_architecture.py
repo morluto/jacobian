@@ -583,6 +583,14 @@ def _non_root_pytest_plugins_violations(
     return violations
 
 
+def _exact_domain_install_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
 def _exact_domain_install_violations(
     tree: ast.AST, relative: str
 ) -> list[Violation]:
@@ -593,40 +601,43 @@ def _exact_domain_install_violations(
         return []
     if not (relative.startswith("tests/domain/") and path.name == "conftest.py"):
         return []
+    message = (
+        "use tests.support.exact_domain.open_exact_domain_services "
+        "instead of copying install_exact_domain_verification"
+    )
     violations: list[Violation] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == (
-            "jacobian.exact_domain_checkers"
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "jacobian.exact_domain_checkers"
+            and any(
+                alias.name == "install_exact_domain_verification"
+                for alias in node.names
+            )
         ):
-            for alias in node.names:
-                if alias.name == "install_exact_domain_verification":
-                    violations.append(
-                        Violation(
-                            relative,
-                            "exact-domain-install-recipe",
-                            "use tests.support.exact_domain.open_exact_domain_services "
-                            "instead of copying install_exact_domain_verification",
-                            node.lineno,
-                            node.col_offset,
-                        )
-                    )
-        if isinstance(node, ast.Call):
-            name = None
-            if isinstance(node.func, ast.Name):
-                name = node.func.id
-            elif isinstance(node.func, ast.Attribute):
-                name = node.func.attr
-            if name == "install_exact_domain_verification":
-                violations.append(
-                    Violation(
-                        relative,
-                        "exact-domain-install-recipe",
-                        "use tests.support.exact_domain.open_exact_domain_services "
-                        "instead of copying install_exact_domain_verification",
-                        node.lineno,
-                        node.col_offset,
-                    )
+            violations.append(
+                Violation(
+                    relative,
+                    "exact-domain-install-recipe",
+                    message,
+                    node.lineno,
+                    node.col_offset,
                 )
+            )
+        elif (
+            isinstance(node, ast.Call)
+            and _exact_domain_install_name(node.func)
+            == "install_exact_domain_verification"
+        ):
+            violations.append(
+                Violation(
+                    relative,
+                    "exact-domain-install-recipe",
+                    message,
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
     return violations
 
 

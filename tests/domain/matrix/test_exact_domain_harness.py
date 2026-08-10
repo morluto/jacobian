@@ -48,6 +48,8 @@ def test_open_exact_domain_services_respects_absent_authority(
 def test_open_exact_domain_services_rejects_empty_selection(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="at least one verified domain"):
-        with open_exact_domain_services(tmp_path / "state"):
-            pass
+    with (
+        pytest.raises(ValueError, match="at least one verified domain"),
+        open_exact_domain_services(tmp_path / "state"),
+    ):
+        pass

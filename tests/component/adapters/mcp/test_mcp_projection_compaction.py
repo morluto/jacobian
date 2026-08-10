@@ -23,6 +23,7 @@ def _as_runtime(services: DomainTestServices) -> JacobianRuntime:
 
     return cast(JacobianRuntime, services)
 
+
 def test_math_find_compacts_related_capabilities_deterministically(
     projection_catalog: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
@@ -36,14 +37,12 @@ def test_math_find_compacts_related_capabilities_deterministically(
         for descriptor in projection_catalog.core.capabilities.catalog().capabilities
         if descriptor.capability_id != target_id
     )
-    # Synthetic related IDs stretch the byte budget without a complete portfolio.
-    related_ids = catalog_ids + tuple(f"synthetic.related.{index:04d}" for index in range(40))
     monkeypatch.setitem(
         projections._RELATED_CAPABILITIES,
         target_id,
         tuple(
             (capability_id, f"compatible exact outcome {index:04d} " + "x" * 80)
-            for index, capability_id in enumerate(related_ids)
+            for index, capability_id in enumerate(catalog_ids)
         ),
     )
     byte_limit = 8 * 1024
@@ -73,7 +72,7 @@ def test_math_find_compacts_related_capabilities_deterministically(
     assert first["related_capabilities_truncated"] is True
     assert first["truncation_reason"] == "BYTE_LIMIT"
     related = first["matches"][0]["related_capabilities"]
-    assert [item["capability_id"] for item in related] == sorted(related_ids)[
+    assert [item["capability_id"] for item in related] == sorted(catalog_ids)[
         : len(related)
     ]
 
@@ -108,14 +107,13 @@ def test_math_find_compacts_relationships_before_ranked_discovery_data(
         descriptor.capability_id
         for descriptor in projection_catalog.core.capabilities.catalog().capabilities
     )
-    related_ids = catalog_ids + tuple(f"synthetic.related.{index:04d}" for index in range(40))
     for target_id in baseline_match_ids:
         monkeypatch.setitem(
             projections._RELATED_CAPABILITIES,
             target_id,
             tuple(
                 (capability_id, "compatible exact outcome " + "x" * 80)
-                for capability_id in related_ids
+                for capability_id in catalog_ids
                 if capability_id != target_id
             ),
         )

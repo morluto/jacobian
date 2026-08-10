@@ -93,9 +93,7 @@ def authorized_complete_runtime(
 ) -> Iterator[JacobianRuntime]:
     """Attach a runtime to a private, already-authorized portfolio snapshot."""
 
-    yield from iter_authorized_complete_runtime(
-        tmp_path, authorized_portfolio_template
-    )
+    yield from iter_authorized_complete_runtime(tmp_path, authorized_portfolio_template)
 
 
 COMPLETE_RUNTIME_FIXTURE_NAMES = (

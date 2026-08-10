@@ -121,7 +121,7 @@ def _finite_joint_table(
     source: dict[str, Any],
 ) -> tuple[list[object], list[object], list[list[Fraction]], int]:
     if set(source) != {"row_labels", "column_labels", "probabilities", "log_base"}:
-        return False
+        raise ValueError("finite joint-table source has an invalid shape")
     rows = source["row_labels"]
     columns = source["column_labels"]
     table_wire = source["probabilities"]

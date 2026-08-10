@@ -43,15 +43,6 @@ def _allowed_complete_runtime(relative: str) -> bool:
     return any(relative.startswith(prefix) for prefix in _COMPLETE_RUNTIME_OWNERS)
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "markers",
-        "jacobian_authorized_runtime: allow authorized_complete_runtime without "
-        "inline verify/authority source signals",
-    )
-
-
-@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(
     session: pytest.Session,
     config: pytest.Config,
@@ -83,15 +74,11 @@ def pytest_collection_modifyitems(
                 f"under {relative}; use open_domain_services or move the test"
             )
         if ResourceKind.AUTHORIZED_CHECKERS in resources:
-            marker = item.get_closest_marker("jacobian_authorized_runtime")
             source = _module_source(item)
-            if marker is None and not any(
-                signal in source for signal in VERIFY_AUTHORITY_SIGNALS
-            ):
+            if not any(signal in source for signal in VERIFY_AUTHORITY_SIGNALS):
                 errors.append(
                     f"{item.nodeid}: authorized_complete_runtime requires a "
-                    "verify/authority assertion or "
-                    "@pytest.mark.jacobian_authorized_runtime"
+                    "verify/authority assertion in the module source"
                 )
     if errors:
         raise pytest.UsageError(

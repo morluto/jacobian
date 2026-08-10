@@ -15,5 +15,4 @@ VERIFY_AUTHORITY_SIGNALS: tuple[str, ...] = (
     "verification_record",
     "authority",
     "checker_id",
-    "jacobian_authorized_runtime",
 )

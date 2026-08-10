@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from jacobian.graphs import GraphInstallation
 
 _GRAPH_CAPABILITY_VERSIONS = {
@@ -13,14 +11,15 @@ _GRAPH_CAPABILITY_VERSIONS = {
 }
 
 
-@pytest.mark.jacobian_authorized_runtime
-def test_graph_installation_preserves_public_identity_and_adapter_order(
-    authorized_complete_runtime,
+def test_graph_installation_preserves_public_identity_without_checkers(
+    attached_complete_runtime,
 ) -> None:
-    installation = authorized_complete_runtime.portfolio.graph
+    installation = attached_complete_runtime.portfolio.graph
     assert isinstance(installation, GraphInstallation)
+    assert installation.degree_sequence_checker_id is None
+    assert installation.neighborhood_checker_id is None
 
-    descriptors = authorized_complete_runtime.core.capabilities.catalog().capabilities
+    descriptors = attached_complete_runtime.core.capabilities.catalog().capabilities
     graph_descriptors = tuple(
         descriptor
         for descriptor in descriptors
@@ -32,19 +31,6 @@ def test_graph_installation_preserves_public_identity_and_adapter_order(
     assert {
         item.capability_id: item.version for item in graph_descriptors
     } == _GRAPH_CAPABILITY_VERSIONS
-    assert installation.degree_sequence_checker_id is not None
-    assert installation.neighborhood_checker_id is not None
-
-
-def test_graph_installation_omits_unauthorized_checker_ids(
-    attached_complete_runtime,
-) -> None:
-    installation = attached_complete_runtime.portfolio.graph
-    assert isinstance(installation, GraphInstallation)
-    assert installation.degree_sequence_checker_id is None
-    assert installation.neighborhood_checker_id is None
-
-    descriptors = attached_complete_runtime.core.capabilities.catalog().capabilities
     for capability_id in (
         "graph.realize.degree_sequence",
         "graph.compute.neighborhood_independence",

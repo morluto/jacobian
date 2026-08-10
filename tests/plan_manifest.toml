@@ -1,0 +1,247 @@
+version = 1
+
+# Authoritative test/CI plan manifest.
+# Compile with: make compile-test-plan
+# Projections: tests/topology.toml (generated), suppressions consumed by classify.
+
+[[lanes]]
+name = "unit"
+kind = "pytest"
+tier = "unit"
+paths = ["tests/unit"]
+command = "make test-unit"
+workers = 0
+distribution = "none"
+timeout_seconds = 10
+required_environment = []
+required_provider = ""
+timing_sharding = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "component"
+kind = "pytest"
+tier = "component"
+paths = ["tests/component"]
+command = "make test-component"
+workers = 4
+distribution = "worksteal"
+timeout_seconds = 30
+required_environment = []
+required_provider = ""
+timing_sharding = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+matrix = true
+
+[[lanes]]
+name = "domain"
+kind = "pytest"
+tier = "domain"
+paths = ["tests/domain"]
+command = "make test-domain"
+workers = 4
+distribution = "worksteal"
+timeout_seconds = 120
+required_environment = []
+required_provider = ""
+timing_sharding = true
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "composition"
+kind = "pytest"
+tier = "composition"
+paths = ["tests/composition"]
+command = "make test-composition"
+workers = 2
+distribution = "worksteal"
+timeout_seconds = 120
+required_environment = []
+required_provider = ""
+timing_sharding = true
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "storage"
+kind = "pytest"
+tier = "boundary"
+paths = ["tests/boundary/storage"]
+command = "make test-storage"
+workers = 0
+distribution = "none"
+timeout_seconds = 120
+required_environment = ["sqlite"]
+required_provider = ""
+timing_sharding = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+matrix = true
+
+[[lanes]]
+name = "process"
+kind = "pytest"
+tier = "boundary"
+paths = ["tests/boundary/process"]
+command = "make test-process"
+workers = 2
+distribution = "worksteal"
+timeout_seconds = 120
+required_environment = ["process-group"]
+required_provider = ""
+timing_sharding = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "mcp"
+kind = "pytest"
+tier = "boundary"
+paths = ["tests/boundary/mcp"]
+command = "make test-mcp"
+workers = 2
+distribution = "worksteal"
+timeout_seconds = 120
+required_environment = ["mcp"]
+required_provider = ""
+timing_sharding = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+matrix = true
+
+[[lanes]]
+name = "provider"
+kind = "pytest"
+tier = "boundary"
+paths = ["tests/boundary/providers/cvc5", "tests/boundary/providers/external_sat", "tests/boundary/providers/flint", "tests/boundary/providers/graph", "tests/boundary/providers/sympy"]
+command = "make test-provider"
+workers = 1
+distribution = "load"
+timeout_seconds = 180
+required_environment = ["provider-readiness"]
+required_provider = "optional"
+timing_sharding = false
+ci = { pull_request = false, merge_queue = true, main = true, scheduled = true }
+matrix = true
+providers = ["cvc5", "external_sat", "flint", "graph", "sympy"]
+
+[[lanes]]
+name = "lean"
+kind = "pytest"
+tier = "boundary"
+paths = ["tests/boundary/providers/lean"]
+command = "make test-lean"
+workers = 0
+distribution = "none"
+timeout_seconds = 300
+required_environment = ["lean-4.31.0", "mathlib"]
+required_provider = "lean"
+timing_sharding = false
+ci = { pull_request = false, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "e2e"
+kind = "pytest"
+tier = "e2e"
+paths = ["tests/e2e"]
+command = "make test-e2e"
+workers = 0
+distribution = "none"
+timeout_seconds = 180
+required_environment = []
+required_provider = ""
+timing_sharding = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+matrix = true
+
+[[lanes]]
+name = "npm"
+kind = "gate"
+command = "make npm-test"
+topology_lane = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "static"
+kind = "gate"
+command = "make check-static"
+topology_lane = false
+local_subsumes = ["build"]
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "build"
+kind = "gate"
+command = "make build"
+topology_lane = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "security"
+kind = "gate"
+command = "make security-audit"
+topology_lane = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "duplicate"
+kind = "gate"
+command = "make duplicate-code"
+topology_lane = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "docs"
+kind = "gate"
+command = "make docs-linkcheck"
+topology_lane = false
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[lanes]]
+name = "deploy"
+kind = "deploy"
+command = "make deploy-check"
+topology_lane = false
+local_only = true
+ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
+
+[[impact_rules]]
+name = "domain-mathematical-sources"
+patterns = ["src/jacobian/domains/**"]
+suites = ["unit", "component", "domain", "static", "build"]
+suppresses = ["python-source"]
+
+[[impact_rules]]
+name = "npm-facing-adapter"
+patterns = ["src/jacobian/adapters/mcp/**"]
+suites = ["unit", "component", "mcp", "e2e", "npm", "static", "build"]
+suppresses = ["python-source"]
+
+[[impact_rules]]
+name = "ci-planning-tools"
+patterns = [".github/local-test-ownership.json", ".github/scripts/_ci_paths.py", ".github/scripts/classify-ci-paths", ".github/scripts/emit-plan-receipt", ".github/scripts/normalize-ci-paths", ".github/scripts/plan-local-tests", ".github/scripts/validate-ci-plan"]
+suites = ["unit", "process", "static", "build"]
+suppresses = ["ci-scripts"]
+
+[[impact_rules]]
+name = "benchmark-ci-automation"
+patterns = [".github/scripts/_ci_paths.py", ".github/scripts/plan-benchmarks", ".github/scripts/validate-benchmark-plan", ".github/workflows/benchmarks.yml"]
+suites = ["unit", "process", "static", "build"]
+suppresses = ["ci-scripts", "ci-automation"]
+
+[[impact_rules]]
+name = "topology-runner-tool"
+patterns = ["tools/test_topology.py"]
+suites = ["unit", "process", "static", "build"]
+suppresses = ["test-topology-runners"]
+
+[[impact_rules]]
+name = "documentation-command-tool"
+patterns = ["tools/check_doc_commands.py"]
+suites = ["unit", "static", "build", "docs"]
+suppresses = ["test-topology-runners"]
+
+[[impact_rules]]
+name = "benchmark-static-tool"
+patterns = ["tools/check_benchmark_static.py"]
+suites = ["static", "build"]
+suppresses = ["test-topology-runners"]
+
+[fallback]
+suites = ["unit", "component", "domain", "composition", "storage", "process", "mcp", "provider", "e2e", "lean", "npm", "static", "build", "security", "duplicate", "docs"]

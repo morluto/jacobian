@@ -22,15 +22,42 @@ matrix when the change also affects shared infrastructure.
 
 ## Ownership model
 
-The suite separates semantic ownership from execution policy:
+The suite is migrating to a **dimensional** control plane. One reviewed
+manifest ([`tests/plan_manifest.toml`](../../tests/plan_manifest.toml)) is the
+authoritative source for pytest lane execution; `make compile-test-plan`
+projects it to [`tests/topology.toml`](../../tests/topology.toml). Path-impact
+rules still live in [`.github/ci-impact.json`](../../.github/ci-impact.json)
+during the cutover, with rule-local `suppresses` replacing the old hardcoded
+classifier map.
 
-| Concern | Authority |
-| --- | --- |
-| Semantic ownership | Test directories |
-| Execution-affecting traits | Pytest markers |
-| Change impact | `.github/ci-impact.json` |
-| Canonical execution | Make targets |
-| Shard scheduling | Ephemeral per-lane timing artifacts |
+| Dimension | Answers | Authority (target) |
+| --- | --- | --- |
+| Semantic owner | What assertion layer? | Test directories (`unit` / `component` / `domain` / `composition` / `e2e` + boundary seams) |
+| Resources | What isolation hardware? | Typed fixture contracts (`sqlite`, `process-group`, `mcp`, `complete-runtime`, …) |
+| Runtime profile | Minimum install/authority/mutability | `RuntimeTestProfile` in `tests/support/runtime_profiles.py` |
+| CI policy | When does it run? | Manifest `ci` / `runs_on` + impact rules |
+| Execution profile | Workers/timeout/scheduler | Compiled from the dimensions above |
+
+**Transitional dual sources:** lane identity still appears in Make targets and
+workflow jobs. Prefer editing `tests/plan_manifest.toml` and regenerating
+topology rather than hand-editing `tests/topology.toml`.
+
+### Hydration ladder
+
+Use the narrowest complete-runtime profile that proves the claim:
+
+1. `open_domain_services(bundle)` — one named domain bundle
+2. `attached_complete_runtime` — complete portfolio, **no** checker authority
+   (reference schemas/plugins are available without authorization)
+3. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
+4. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+
+`authorized_complete_runtime` requires asserting authority, `VERIFY` /
+`VERIFIED`, or authorized-catalog presence. Inventory unjustified uses with
+`make test-runtime-inventory`.
+
+Spine issues: #888 (plan compiler), #1032 (profiles), #1161 (fixture closure),
+#1164 (semantic x resource). Leaf migrations: #995-#1000, #1165-#1170.
 
 A test's directory answers what kind of behavior it owns. A marker is retained
 only when it changes execution. The CI impact manifest maps changed paths to

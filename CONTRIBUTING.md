@@ -239,6 +239,15 @@ matching `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`, `performance`,
 `property`, and `destructive_process`. They do not replace directory ownership.
 
+Lane execution is authored in
+[`tests/plan_manifest.toml`](tests/plan_manifest.toml) and compiled to
+[`tests/topology.toml`](tests/topology.toml) via `make compile-test-plan`. Do
+not hand-edit the generated topology. Prefer the hydration ladder in the
+[testing strategy](docs/reference/testing-strategy.md): domain services before
+`attached_complete_runtime` before `authorized_complete_runtime` before
+`fresh_complete_runtime`. Inventory complete-runtime usage with
+`make test-runtime-inventory`.
+
 Tests may reuse concept-specific helpers under `tests/support`, but must not
 import helpers from a sibling semantic lane. Keep fixtures in the narrowest
 directory or module that needs them, and keep support modules to ordinary data

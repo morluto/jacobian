@@ -19,30 +19,80 @@
     "docs"
   ],
   "catalog": {
-    "unit": {"command": "make test-unit", "topology_lane": "unit"},
-    "component": {"command": "make test-component", "topology_lane": "component"},
-    "domain": {"command": "make test-domain", "topology_lane": "domain"},
-    "composition": {"command": "make test-composition", "topology_lane": "composition"},
-    "storage": {"command": "make test-storage", "topology_lane": "storage"},
-    "process": {"command": "make test-process", "topology_lane": "process"},
-    "mcp": {"command": "make test-mcp", "topology_lane": "mcp"},
+    "unit": {
+      "command": "make test-unit",
+      "topology_lane": "unit"
+    },
+    "component": {
+      "command": "make test-component",
+      "topology_lane": "component"
+    },
+    "domain": {
+      "command": "make test-domain",
+      "topology_lane": "domain"
+    },
+    "composition": {
+      "command": "make test-composition",
+      "topology_lane": "composition"
+    },
+    "storage": {
+      "command": "make test-storage",
+      "topology_lane": "storage"
+    },
+    "process": {
+      "command": "make test-process",
+      "topology_lane": "process"
+    },
+    "mcp": {
+      "command": "make test-mcp",
+      "topology_lane": "mcp"
+    },
     "provider": {
       "command": "make test-provider",
       "topology_lane": "provider",
-      "providers": ["cvc5", "external_sat", "flint", "graph", "sympy"]
+      "providers": [
+        "cvc5",
+        "external_sat",
+        "flint",
+        "graph",
+        "sympy"
+      ]
     },
-    "e2e": {"command": "make test-e2e", "topology_lane": "e2e"},
-    "lean": {"command": "make test-lean", "topology_lane": "lean"},
-    "npm": {"command": "make npm-test", "topology_lane": null},
+    "e2e": {
+      "command": "make test-e2e",
+      "topology_lane": "e2e"
+    },
+    "lean": {
+      "command": "make test-lean",
+      "topology_lane": "lean"
+    },
+    "npm": {
+      "command": "make npm-test",
+      "topology_lane": null
+    },
     "static": {
       "command": "make check-static",
       "topology_lane": null,
-      "local_subsumes": ["build"]
+      "local_subsumes": [
+        "build"
+      ]
     },
-    "build": {"command": "make build", "topology_lane": null},
-    "security": {"command": "make security-audit", "topology_lane": null},
-    "duplicate": {"command": "make duplicate-code", "topology_lane": null},
-    "docs": {"command": "make docs-linkcheck", "topology_lane": null},
+    "build": {
+      "command": "make build",
+      "topology_lane": null
+    },
+    "security": {
+      "command": "make security-audit",
+      "topology_lane": null
+    },
+    "duplicate": {
+      "command": "make duplicate-code",
+      "topology_lane": null
+    },
+    "docs": {
+      "command": "make docs-linkcheck",
+      "topology_lane": null
+    },
     "deploy": {
       "command": "make deploy-check",
       "topology_lane": null,
@@ -129,43 +179,83 @@
     },
     {
       "name": "unit-tests",
-      "patterns": ["tests/unit/**"],
-      "suites": ["unit", "static"]
+      "patterns": [
+        "tests/unit/**"
+      ],
+      "suites": [
+        "unit",
+        "static"
+      ]
     },
     {
       "name": "component-tests",
-      "patterns": ["tests/component/**"],
-      "suites": ["component", "static"]
+      "patterns": [
+        "tests/component/**"
+      ],
+      "suites": [
+        "component",
+        "static"
+      ]
     },
     {
       "name": "domain-tests",
-      "patterns": ["tests/domain/**"],
-      "suites": ["domain", "static"]
+      "patterns": [
+        "tests/domain/**"
+      ],
+      "suites": [
+        "domain",
+        "static"
+      ]
     },
     {
       "name": "composition-tests",
-      "patterns": ["tests/composition/**"],
-      "suites": ["composition", "static"]
+      "patterns": [
+        "tests/composition/**"
+      ],
+      "suites": [
+        "composition",
+        "static"
+      ]
     },
     {
       "name": "storage-tests",
-      "patterns": ["tests/boundary/storage/**"],
-      "suites": ["storage", "static"]
+      "patterns": [
+        "tests/boundary/storage/**"
+      ],
+      "suites": [
+        "storage",
+        "static"
+      ]
     },
     {
       "name": "process-tests",
-      "patterns": ["tests/boundary/process/**"],
-      "suites": ["process", "static"]
+      "patterns": [
+        "tests/boundary/process/**"
+      ],
+      "suites": [
+        "process",
+        "static"
+      ]
     },
     {
       "name": "mcp-tests",
-      "patterns": ["tests/boundary/mcp/**"],
-      "suites": ["mcp", "static"]
+      "patterns": [
+        "tests/boundary/mcp/**"
+      ],
+      "suites": [
+        "mcp",
+        "static"
+      ]
     },
     {
       "name": "end-to-end-tests",
-      "patterns": ["tests/e2e/**"],
-      "suites": ["e2e", "static"]
+      "patterns": [
+        "tests/e2e/**"
+      ],
+      "suites": [
+        "e2e",
+        "static"
+      ]
     },
     {
       "name": "verification-boundary",
@@ -246,6 +336,9 @@
         "npm",
         "static",
         "build"
+      ],
+      "suppresses": [
+        "python-source"
       ]
     },
     {
@@ -259,6 +352,9 @@
         "domain",
         "static",
         "build"
+      ],
+      "suppresses": [
+        "python-source"
       ]
     },
     {
@@ -310,7 +406,15 @@
         ".github/scripts/plan-local-tests",
         ".github/scripts/validate-ci-plan"
       ],
-      "suites": ["unit", "process", "static", "build"]
+      "suites": [
+        "unit",
+        "process",
+        "static",
+        "build"
+      ],
+      "suppresses": [
+        "ci-scripts"
+      ]
     },
     {
       "name": "benchmark-ci-automation",
@@ -320,7 +424,16 @@
         ".github/scripts/validate-benchmark-plan",
         ".github/workflows/benchmarks.yml"
       ],
-      "suites": ["unit", "process", "static", "build"]
+      "suites": [
+        "unit",
+        "process",
+        "static",
+        "build"
+      ],
+      "suppresses": [
+        "ci-scripts",
+        "ci-automation"
+      ]
     },
     {
       "name": "ci-scripts",
@@ -369,6 +482,9 @@
         "process",
         "static",
         "build"
+      ],
+      "suppresses": [
+        "test-topology-runners"
       ]
     },
     {
@@ -381,6 +497,9 @@
         "static",
         "build",
         "docs"
+      ],
+      "suppresses": [
+        "test-topology-runners"
       ]
     },
     {
@@ -391,6 +510,9 @@
       "suites": [
         "static",
         "build"
+      ],
+      "suppresses": [
+        "test-topology-runners"
       ]
     },
     {
@@ -574,5 +696,9 @@
       "duplicate",
       "docs"
     ]
+  },
+  "meta": {
+    "plan_manifest": "tests/plan_manifest.toml",
+    "suppressions_source": "rules[].suppresses"
   }
 }

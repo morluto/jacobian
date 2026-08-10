@@ -23,8 +23,9 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 from _ci_paths import normalize_paths, path_values  # noqa: E402
 
-# More-specific ownership rules suppress the general python-source catch-all
-# when both match the same path (fnmatch '*' crosses '/').
+# More-specific ownership rules suppress general catch-alls when both match.
+# Prefer rule-local ``suppresses`` from ci-impact.json; keep the hardcoded map
+# only as a fail-closed fallback while the manifest migration completes.
 _SUPPRESSED_WHEN_PRESENT = {
     "domain-mathematical-sources": frozenset({"python-source"}),
     "npm-facing-adapter": frozenset({"python-source"}),
@@ -34,6 +35,16 @@ _SUPPRESSED_WHEN_PRESENT = {
     "documentation-command-tool": frozenset({"test-topology-runners"}),
     "benchmark-static-tool": frozenset({"test-topology-runners"}),
 }
+
+
+def _suppression_map(manifest: dict[str, Any]) -> dict[str, frozenset[str]]:
+    mapping: dict[str, frozenset[str]] = dict(_SUPPRESSED_WHEN_PRESENT)
+    for rule in manifest.get("rules", ()):
+        name = str(rule.get("name", ""))
+        suppresses = rule.get("suppresses", ())
+        if name and isinstance(suppresses, list) and suppresses:
+            mapping[name] = frozenset(str(item) for item in suppresses)
+    return mapping
 
 
 def load_manifest() -> dict[str, Any]:
@@ -71,7 +82,7 @@ def suites_for_path(path: str, manifest: dict[str, Any]) -> set[str]:
     if matching_rules:
         matched_names = {str(rule["name"]) for rule in matching_rules}
         suppressed: set[str] = set()
-        for specific, generals in _SUPPRESSED_WHEN_PRESENT.items():
+        for specific, generals in _suppression_map(manifest).items():
             if specific in matched_names:
                 suppressed.update(generals)
         return {

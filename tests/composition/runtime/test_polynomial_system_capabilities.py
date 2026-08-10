@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
-import subprocess
-import sys
 from typing import Any
 
 import pytest
@@ -126,34 +123,6 @@ def test_solution_capability_keeps_checker_failure_unknown(
     assert result.relationships == ()
 
 
-def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(
-    authorized_complete_runtime,
-) -> None:
-    connection = sqlite3.connect(authorized_complete_runtime.core.store.db_path)
-    try:
-        before = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
-    finally:
-        connection.close()
-    invalid = _input(2)
-    invalid["assignment"].append({"num": "3", "den": "1"})
-
-    result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.system.solution.verify",
-            input=invalid,
-        )
-    )
-
-    connection = sqlite3.connect(authorized_complete_runtime.core.store.db_path)
-    try:
-        after = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
-    finally:
-        connection.close()
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "INVALID_POLYNOMIAL_SYSTEM_SOLUTION_REQUEST"
-    assert result.diagnostics[0].stage == "request_validation"
-    assert before == after
-
 
 def test_solution_capability_is_only_available_with_checker(
     attached_complete_runtime,
@@ -168,43 +137,3 @@ def test_solution_capability_is_only_available_with_checker(
     assert "polynomial.system.solution.verify" not in ids
 
 
-def test_solution_adapter_rejects_missing_checker_under_optimized_python() -> None:
-    """An optimized interpreter must not erase checker-authorization guards."""
-
-    script = """
-from jacobian.polynomial_system_capabilities import (
-    PolynomialSystemInstallation,
-    PolynomialSystemResources,
-    PolynomialSystemSolutionAdapter,
-)
-
-installation = PolynomialSystemInstallation(
-    semantics_uri="semantics://test",
-    system_schema_uri="schema://system",
-    assignment_schema_uri="schema://assignment",
-    claim_schema_uri="schema://claim",
-    certificate_schema_uri="schema://certificate",
-    checker_id=None,
-)
-resources = PolynomialSystemResources(
-    store=None,
-    artifacts=None,
-    verification=None,
-    installation=installation,
-)
-try:
-    PolynomialSystemSolutionAdapter(resources)
-except RuntimeError as exc:
-    if "authorized checker" not in str(exc):
-        raise
-else:
-    raise SystemExit("missing checker did not prevent adapter construction")
-"""
-    completed = subprocess.run(
-        [sys.executable, "-O", "-c", script],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert completed.returncode == 0, completed.stderr

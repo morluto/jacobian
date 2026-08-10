@@ -1,4 +1,4 @@
-"""Storage and recovery boundary test configuration."""
+"""MCP transport boundary test configuration."""
 
 from __future__ import annotations
 

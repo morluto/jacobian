@@ -291,11 +291,11 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
 
 
 def test_groebner_result_preserves_advertised_input_variable_bound(
-    attached_complete_runtime,
+    polynomial_services,
 ) -> None:
     variables = ["a", "b", "c", "d", "e"]
     result = _invoke(
-        attached_complete_runtime,
+        polynomial_services,
         "polynomial.groebner_basis.compute",
         {
             "generators": [

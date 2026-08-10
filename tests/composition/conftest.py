@@ -9,6 +9,11 @@ import pytest
 
 from tests.support.services import DomainTestServices, open_domain_services
 
+pytest_plugins = (
+    "tests.support.runtime_templates",
+    "tests.support.runtime_instances",
+)
+
 
 @pytest.fixture
 def capability_core_services(tmp_path: Path) -> Iterator[DomainTestServices]:

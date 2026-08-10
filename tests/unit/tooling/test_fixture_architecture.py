@@ -100,23 +100,27 @@ def test_root_conftest_has_no_high_cost_imports_or_runtime_construction() -> Non
 
 
 def test_complete_runtime_plugin_is_registered_only_by_owning_tiers() -> None:
-    """Complete-runtime fixtures are registered once at the pytest root."""
+    """Complete-runtime fixtures register under owning tiers, not the root."""
 
     plugin_names = (
         "tests.support.runtime_templates",
         "tests.support.runtime_instances",
     )
-    namespace = runpy.run_path(str(ROOT / "conftest.py"))
-    assert namespace["pytest_plugins"] == plugin_names
+    root = runpy.run_path(str(ROOT / "conftest.py"))
+    assert root.get("pytest_plugins") == ("tests.support.resource_closure_plugin",)
 
-    for tier in (
-        "component",
-        "domain",
-        "composition",
-        "e2e",
-        "boundary" / Path("storage"),
-        "boundary" / Path("providers"),
-    ):
+    owners = (
+        ROOT / "composition" / "conftest.py",
+        ROOT / "e2e" / "conftest.py",
+        ROOT / "boundary" / "storage" / "conftest.py",
+        ROOT / "boundary" / "providers" / "conftest.py",
+        ROOT / "boundary" / "mcp" / "conftest.py",
+    )
+    for path in owners:
+        namespace = runpy.run_path(str(path))
+        assert namespace["pytest_plugins"] == plugin_names
+
+    for tier in ("component", "domain"):
         imports = _imports(ROOT / tier / "conftest.py")
         assert not any(name in imports for name in plugin_names)
         assert not any(module.startswith("jacobian.portfolio") for module in imports)

@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory compile-test-plan compile-test-plan-check architecture docs-command-check docs-linkcheck
 
 PROFILE ?= core
 
@@ -61,6 +61,15 @@ typecheck: ## Run strict static type checking.
 
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
 	$(UV_RUN) python tools/check_test_architecture.py .
+
+test-runtime-inventory: ## Report complete-runtime fixture usage and resource escapes.
+	$(UV_RUN) python tools/inventory_test_runtime.py
+
+compile-test-plan: ## Regenerate tests/topology.toml from tests/plan_manifest.toml.
+	$(UV_RUN) python tools/test_plan/compile.py --write
+
+compile-test-plan-check: ## Fail when topology.toml is stale relative to the manifest.
+	$(UV_RUN) python tools/test_plan/compile.py --check
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py

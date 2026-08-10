@@ -2,10 +2,10 @@ from __future__ import annotations
 
 
 def test_isomorphic_graphs_share_one_canonical_object(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    reference = authorized_complete_runtime.portfolio.references["graph_paths"]
-    first = authorized_complete_runtime.core.artifacts.put(
+    reference = attached_complete_runtime.portfolio.references["graph_paths"]
+    first = attached_complete_runtime.core.artifacts.put(
         schema_uri=reference.candidate_schema_uri,
         semantics_uri=reference.semantics_uri,
         payload={
@@ -13,7 +13,7 @@ def test_isomorphic_graphs_share_one_canonical_object(
             "arcs": [["a", "b"], ["b", "c"]],
         },
     )
-    relabeled = authorized_complete_runtime.core.artifacts.put(
+    relabeled = attached_complete_runtime.core.artifacts.put(
         schema_uri=reference.candidate_schema_uri,
         semantics_uri=reference.semantics_uri,
         payload={
@@ -22,12 +22,12 @@ def test_isomorphic_graphs_share_one_canonical_object(
         },
     )
 
-    first_result = authorized_complete_runtime.services.structures.canonicalize(
+    first_result = attached_complete_runtime.services.structures.canonicalize(
         structure_uri=first.artifact_uri,
         plugin_id=reference.plugin_id,
         wall_seconds=30,
     )
-    second_result = authorized_complete_runtime.services.structures.canonicalize(
+    second_result = attached_complete_runtime.services.structures.canonicalize(
         structure_uri=relabeled.artifact_uri,
         plugin_id=reference.plugin_id,
         wall_seconds=30,
@@ -39,10 +39,10 @@ def test_isomorphic_graphs_share_one_canonical_object(
 
 
 def test_nonisomorphic_graphs_have_distinct_canonical_keys(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    reference = authorized_complete_runtime.portfolio.references["graph_paths"]
-    path = authorized_complete_runtime.core.artifacts.put(
+    reference = attached_complete_runtime.portfolio.references["graph_paths"]
+    path = attached_complete_runtime.core.artifacts.put(
         schema_uri=reference.candidate_schema_uri,
         semantics_uri=reference.semantics_uri,
         payload={
@@ -50,7 +50,7 @@ def test_nonisomorphic_graphs_have_distinct_canonical_keys(
             "arcs": [["a", "b"], ["b", "c"]],
         },
     )
-    cycle = authorized_complete_runtime.core.artifacts.put(
+    cycle = attached_complete_runtime.core.artifacts.put(
         schema_uri=reference.candidate_schema_uri,
         semantics_uri=reference.semantics_uri,
         payload={
@@ -59,12 +59,12 @@ def test_nonisomorphic_graphs_have_distinct_canonical_keys(
         },
     )
 
-    path_result = authorized_complete_runtime.services.structures.canonicalize(
+    path_result = attached_complete_runtime.services.structures.canonicalize(
         structure_uri=path.artifact_uri,
         plugin_id=reference.plugin_id,
         wall_seconds=30,
     )
-    cycle_result = authorized_complete_runtime.services.structures.canonicalize(
+    cycle_result = attached_complete_runtime.services.structures.canonicalize(
         structure_uri=cycle.artifact_uri,
         plugin_id=reference.plugin_id,
         wall_seconds=30,

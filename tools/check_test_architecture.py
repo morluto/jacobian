@@ -292,6 +292,7 @@ def _runtime_allowed(path: PurePosixPath, tier_override: str | None = None) -> b
     if path in {
         PurePosixPath("tests/support/runtime_templates.py"),
         PurePosixPath("tests/support/runtime_instances.py"),
+        PurePosixPath("tests/support/runtime_profiles.py"),
     }:
         return True
     tier = tier_override or _tier(path)

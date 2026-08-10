@@ -4,10 +4,9 @@ version = 1
 # Compile with: make compile-test-plan
 # Projections: tests/topology.toml and .github/ci-impact.json (generated).
 #
-# [local_planning] feeds `.github/scripts/plan-local-tests` so infrastructure and
-# high-impact path policy is not hard-coded beside the compiled catalog.
-# `.github/local-test-ownership.json` remains a thin exact-selector override map
-# for non-test paths; it is not lane authority.
+# [local_planning] feeds `.github/scripts/plan-local-tests`: infrastructure
+# prefixes, high-impact paths, and exact pytest selector overrides for non-test
+# paths. Lane/gate/impact authority remains the compiled catalog projections.
 
 [local_planning]
 infrastructure_prefixes = [
@@ -28,6 +27,151 @@ high_impact_paths = [
   "pyproject.toml",
   "uv.lock",
 ]
+
+[[local_planning.exact_overrides]]
+path = ".github/ci-impact.json"
+selectors = [
+  "tests/boundary/process/tooling/test_ci_classification.py",
+  "tests/unit/tooling/test_ci_execution_policy.py",
+]
+
+[[local_planning.exact_overrides]]
+path = ".github/scripts/classify-ci-paths"
+selectors = [
+  "tests/boundary/process/tooling/test_ci_classification.py",
+  "tests/unit/tooling/test_ci_execution_policy.py",
+]
+
+[[local_planning.exact_overrides]]
+path = ".github/scripts/emit-plan-receipt"
+selectors = [
+  "tests/boundary/process/tooling/test_plan_receipt.py",
+]
+
+[[local_planning.exact_overrides]]
+path = ".github/scripts/plan-benchmarks"
+selectors = [
+  "tests/boundary/process/tooling/test_benchmark_classification.py",
+  "tests/unit/tooling/test_ci_execution_policy.py",
+]
+
+[[local_planning.exact_overrides]]
+path = ".github/scripts/plan-local-tests"
+selectors = [
+  "tests/unit/tooling/test_plan_local_tests.py",
+  "tests/boundary/process/tooling/test_topology_runner.py",
+  "tests/boundary/process/tooling/test_cli_import_surface.py",
+  "tests/unit/tooling/test_ci_planner_catalog.py",
+]
+
+[[local_planning.exact_overrides]]
+path = ".github/scripts/validate-ci-plan"
+selectors = [
+  "tests/boundary/process/tooling/test_ci_plan_validation.py",
+  "tests/unit/tooling/test_ci_planner_catalog.py",
+]
+
+[[local_planning.exact_overrides]]
+path = ".github/scripts/validate-benchmark-plan"
+selectors = [
+  "tests/boundary/process/tooling/test_benchmark_classification.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "Makefile"
+selectors = [
+  "tests/boundary/process/tooling/test_make_help.py",
+  "tests/unit/tooling/test_plan_local_tests.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "make/development.mk"
+selectors = [
+  "tests/boundary/process/tooling/test_make_help.py",
+  "tests/boundary/process/tooling/test_source_agent_bootstrap.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "scripts/setup-agent"
+selectors = [
+  "tests/boundary/process/tooling/test_source_agent_bootstrap.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/check_architecture.py"
+selectors = [
+  "tests/unit/tooling/test_architecture_policy.py",
+  "tests/unit/tooling/test_architecture_process_policies.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/development_profiles.py"
+selectors = [
+  "tests/unit/tooling/test_development_profiles.py",
+  "tests/boundary/process/tooling/test_source_agent_bootstrap.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/source_agent_doctor.py"
+selectors = [
+  "tests/boundary/process/tooling/test_source_agent_bootstrap.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/test_topology.py"
+selectors = [
+  "tests/boundary/process/tooling/test_topology_runner.py",
+  "tests/unit/tooling/test_topology_manifest.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/check_doc_commands.py"
+selectors = [
+  "tests/unit/tooling/test_doc_commands.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tests/support/process_entrypoints.py"
+selectors = [
+  "tests/boundary/process/test_worker_error_protocol.py",
+  "tests/component/plugins/test_plugin_execution.py",
+  "tests/boundary/storage/recovery/test_enumeration_failures.py",
+  "tests/composition/runtime/test_capability_adapter_authority.py",
+  "tests/composition/runtime/test_capability_discovery.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tests/support/search_entrypoints.py"
+selectors = [
+  "tests/component/plugins/test_plugin_execution.py",
+  "tests/component/search/test_evaluation.py",
+  "tests/component/search/test_witness_search.py",
+  "tests/boundary/storage/recovery/test_enumeration_failures.py",
+  "tests/boundary/storage/recovery/test_search_lifecycle.py",
+  "tests/boundary/storage/recovery/test_search_plugin_fail_closed.py",
+  "tests/boundary/storage/recovery/test_search_recovery.py",
+  "tests/composition/runtime/test_conjecture_workflows.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tests/support/conjecture_entrypoints.py"
+selectors = [
+  "tests/composition/runtime/test_conjecture_workflows.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tests/support/shrinking_entrypoints.py"
+selectors = [
+  "tests/boundary/process/search/test_shrinking.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tests/plan_manifest.toml"
+selectors = [
+  "tests/unit/tooling/test_plan_local_tests.py",
+  "tests/unit/tooling/test_ci_planner_catalog.py",
+]
+
 
 [[lanes]]
 name = "unit"
@@ -375,7 +519,6 @@ suites = [
 [[impact_rules]]
 name = "ci-planning-tools"
 patterns = [
-  ".github/local-test-ownership.json",
   ".github/scripts/_ci_paths.py",
   ".github/scripts/classify-ci-paths",
   ".github/scripts/emit-plan-receipt",

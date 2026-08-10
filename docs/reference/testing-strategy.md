@@ -134,10 +134,9 @@ uses the pinned Harbor runtime because task digests are part of the plan
 contract.
 
 Local planning reads `[local_planning]` from `tests/plan_manifest.toml` for
-infrastructure prefixes and high-impact paths. Exact pytest selectors for
-non-test paths remain in `.github/local-test-ownership.json` as a thin override
-map only—not a second lane/impact planner. Prefer folding stable overrides into
-manifest impact rules over growing that JSON.
+infrastructure prefixes, high-impact paths, and exact pytest selector overrides
+(`[[local_planning.exact_overrides]]`) for non-test paths. Prefer folding
+stable overrides into manifest impact rules over growing exact overrides.
 
 `make test-runtime-inventory` reports complete-runtime fixture setup weights and
 the heaviest paths so demotions can target real cost.

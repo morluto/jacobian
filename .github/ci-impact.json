@@ -302,7 +302,6 @@
     {
       "name": "ci-planning-tools",
       "patterns": [
-        ".github/local-test-ownership.json",
         ".github/scripts/_ci_paths.py",
         ".github/scripts/classify-ci-paths",
         ".github/scripts/emit-plan-receipt",

@@ -17,7 +17,6 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 CLASSIFIER = ROOT / ".github" / "scripts" / "classify-ci-paths"
-OWNERSHIP = ROOT / ".github" / "local-test-ownership.json"
 PLAN_MANIFEST = ROOT / "tests" / "plan_manifest.toml"
 TOPOLOGY_MANIFEST = ROOT / "tests" / "topology.toml"
 
@@ -242,40 +241,45 @@ def changed_entries(base: str) -> list[Change]:
 
 
 def ownership_overrides() -> dict[str, list[str]] | None:
+    """Exact pytest selectors for non-test paths from plan_manifest local_planning."""
+
     try:
-        data = json.loads(OWNERSHIP.read_text(encoding="utf-8"))
-        mappings = data["overrides"]
-        if (
-            data.get("version") != 1
-            or not isinstance(mappings, dict)
-            or not all(
-                isinstance(pattern, str)
-                and isinstance(nodes, list)
-                and nodes
-                and all(isinstance(node, str) for node in nodes)
-                for pattern, nodes in mappings.items()
-            )
-        ):
+        section = _local_planning()
+        raw = section.get("exact_overrides", [])
+        if not isinstance(raw, list):
             return None
+        mappings: dict[str, list[str]] = {}
+        for entry in raw:
+            if not isinstance(entry, dict):
+                return None
+            path = entry.get("path")
+            selectors = entry.get("selectors")
+            if (
+                not isinstance(path, str)
+                or not isinstance(selectors, list)
+                or not selectors
+                or not all(isinstance(node, str) for node in selectors)
+            ):
+                return None
+            mappings[path] = [str(node) for node in selectors]
         return mappings
-    except FileNotFoundError:
-        return {}
-    except (KeyError, OSError, TypeError, ValueError):
+    except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
         return None
 
 
 def exact_tests(entries: list[Change]) -> tuple[list[str], str | None]:
     """Return focused pytest selectors, or a reason selection is ambiguous.
 
-    Exact ownership is limited to documentation skips, ownership overrides, and
-    changed ``tests/**/test_*.py`` paths. Source modules and other paths fall
-    back to the selected topology lanes without reverse-import scanning.
+    Exact ownership is limited to documentation skips, plan_manifest exact
+    overrides, and changed ``tests/**/test_*.py`` paths. Source modules and
+    other paths fall back to the selected topology lanes without reverse-import
+    scanning.
     """
     if not entries:
         return [], None
     overrides = ownership_overrides()
     if overrides is None:
-        return [], ".github/local-test-ownership.json: invalid manifest"
+        return [], "tests/plan_manifest.toml: invalid local_planning.exact_overrides"
     selected: set[str] = set()
 
     for entry in entries:

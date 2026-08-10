@@ -192,17 +192,41 @@ def test_plan_preserves_both_sides_of_rename(monkeypatch) -> None:
     ]
 
 
+_PLAN_MANIFEST_STUB = """\
+version = 1
+
+[local_planning]
+infrastructure_prefixes = [".github/", "Makefile", "make/", "pyproject.toml", "uv.lock", "tools/", ".pre-commit-config.yaml", ".jscpd.json", "tests/topology.toml", "tests/plan_manifest.toml"]
+high_impact_paths = ["src/jacobian/__init__.py", "tests/conftest.py", "pyproject.toml", "uv.lock"]
+"""
+
+
 def _planner_tree(tmp_path: Path, monkeypatch) -> ModuleType:
     planner = _load_script_module(
         f"plan_local_tests_{tmp_path.name}", "plan-local-tests"
     )
     monkeypatch.setattr(planner, "ROOT", tmp_path)
-    monkeypatch.setattr(
-        planner,
-        "OWNERSHIP",
-        tmp_path / ".github" / "local-test-ownership.json",
-    )
+    manifest = tmp_path / "tests" / "plan_manifest.toml"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(_PLAN_MANIFEST_STUB, encoding="utf-8")
+    monkeypatch.setattr(planner, "PLAN_MANIFEST", manifest)
     return planner
+
+
+def _append_exact_override(
+    manifest: Path, path: str, selectors: list[str]
+) -> None:
+    lines = [
+        "",
+        "[[local_planning.exact_overrides]]",
+        f'path = "{path}"',
+        "selectors = [",
+        *(f'  "{selector}",' for selector in selectors),
+        "]",
+        "",
+    ]
+    with manifest.open("a", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
 
 
 def test_plan_falls_back_for_changed_source_without_exact_ownership(
@@ -239,13 +263,10 @@ def test_plan_rejects_non_exact_ownership_override(
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    manifest = tmp_path / ".github/local-test-ownership.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text(
-        '{"version": 1, "overrides": {'
-        '"generated/schema.json": ["tests/unit/contracts/test_schema.py"]'
-        "}}",
-        encoding="utf-8",
+    _append_exact_override(
+        planner.PLAN_MANIFEST,
+        "generated/schema.json",
+        ["tests/unit/contracts/test_schema.py"],
     )
     test = tmp_path / "tests/unit/contracts/test_schema.py"
     test.parent.mkdir(parents=True)
@@ -281,13 +302,10 @@ def test_plan_uses_explicit_ownership_override_for_exact_nodes(
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    manifest = tmp_path / ".github/local-test-ownership.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text(
-        '{"version": 1, "overrides": {'
-        '"generated/schema.json": ["tests/unit/contracts/test_schema.py::test_public_schema"]'
-        "}}",
-        encoding="utf-8",
+    _append_exact_override(
+        planner.PLAN_MANIFEST,
+        "generated/schema.json",
+        ["tests/unit/contracts/test_schema.py::test_public_schema"],
     )
     test = tmp_path / "tests/unit/contracts/test_schema.py"
     test.parent.mkdir(parents=True)
@@ -402,10 +420,6 @@ def test_plan_falls_back_for_high_impact_and_infrastructure_paths(
     conftest = tmp_path / "tests/unit/conftest.py"
     conftest.parent.mkdir(parents=True)
     conftest.write_text("import pytest\n", encoding="utf-8")
-    (tmp_path / "tests/plan_manifest.toml").parent.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "tests/plan_manifest.toml").write_text(
-        "version = 1\n", encoding="utf-8"
-    )
 
     for path in (
         "tests/conftest.py",
@@ -423,14 +437,17 @@ def test_plan_fails_closed_for_unknown_path_and_invalid_manifest(
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    manifest = tmp_path / ".github/local-test-ownership.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text("{broken", encoding="utf-8")
+    planner.PLAN_MANIFEST.write_text(
+        _PLAN_MANIFEST_STUB + '\nexact_overrides = "broken"\n',
+        encoding="utf-8",
+    )
 
     tests, fallback = planner.exact_tests([planner.Change("M", "mystery.asset")])
 
     assert tests == []
-    assert fallback == ".github/local-test-ownership.json: invalid manifest"
+    assert fallback == (
+        "tests/plan_manifest.toml: invalid local_planning.exact_overrides"
+    )
 
 
 def test_plan_falls_back_for_paths_without_exact_ownership(

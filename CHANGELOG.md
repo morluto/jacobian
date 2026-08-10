@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.11.0](https://github.com/morluto/jacobian/compare/jacobian-v0.10.0...jacobian-v0.11.0) (2026-08-10)
+
+
+### Features
+
+* verify polynomial-coefficient recurrences ([#902](https://github.com/morluto/jacobian/issues/902)) ([b9b01b3](https://github.com/morluto/jacobian/commit/b9b01b358dfa4743b673ded9d9694f069e9f8058))
+
+
+### Bug Fixes
+
+* **benchmarks:** harden Jacobian evaluation evidence ([#946](https://github.com/morluto/jacobian/issues/946)) ([0052a5b](https://github.com/morluto/jacobian/commit/0052a5bf78f63f5539be13da6493abb395c5026d))
+* **ci:** validate release branch updates ([1a5048c](https://github.com/morluto/jacobian/commit/1a5048c3d13cffbd8a9debe947807aa1c1815b08))
+* **cli:** repair onboarding setup flow ([11b4b28](https://github.com/morluto/jacobian/commit/11b4b28365f47afe19f38f43f30721a6497fc246))
+* honor selected npm gates and core setup profile ([ee8ef12](https://github.com/morluto/jacobian/commit/ee8ef12103bb811a18ee6af20d3289e9b13aaa3b))
+* **mcp:** publish object-rooted math.find schema ([#898](https://github.com/morluto/jacobian/issues/898)) ([332a5e4](https://github.com/morluto/jacobian/commit/332a5e4af884fb9df953d538c90890ee17e6834b))
+
+
+### Dependencies
+
+* **deps-dev:** bump hypothesis from 6.164.0 to 6.165.2 ([#1005](https://github.com/morluto/jacobian/issues/1005)) ([8818f9e](https://github.com/morluto/jacobian/commit/8818f9e98bb94fe6714f884d47e1420bf72de7e7))
+* **deps:** bump actions/cache/restore from 4.3.0 to 6.1.0 ([#1004](https://github.com/morluto/jacobian/issues/1004)) ([50d663f](https://github.com/morluto/jacobian/commit/50d663f65b45266fecadd2fe5421b662874fd25b))
+* **deps:** bump pypa/gh-action-pypi-publish from 1.14.1 to 1.14.2 ([#1006](https://github.com/morluto/jacobian/issues/1006)) ([d3ed473](https://github.com/morluto/jacobian/commit/d3ed47327153a1b1bad069c8d1c301ae0d11ac89))
+
+
+### Documentation
+
+* lead quickstart with one-time npx setup ([344b7b6](https://github.com/morluto/jacobian/commit/344b7b62e08a13510fdb4b13f88a789521146802))
+* reframe product as search/execute math toolbox ([#1147](https://github.com/morluto/jacobian/issues/1147)) ([e443138](https://github.com/morluto/jacobian/commit/e443138da8ba56910719b7ea94414d32e4dfd733))
+* reserve VERIFIED assurance in control evaluations ([#906](https://github.com/morluto/jacobian/issues/906)) ([d600db0](https://github.com/morluto/jacobian/commit/d600db076d2d87ad2697b81d9d6b2363cd1db82f))
+* **skill:** tighten Harbor evaluation boundaries ([3b37422](https://github.com/morluto/jacobian/commit/3b374229ed27ace3f0e857bec5cf540b936a041e))
+
 ## [0.10.0](https://github.com/morluto/jacobian/compare/jacobian-v0.9.0...jacobian-v0.10.0) (2026-08-08)
 
 

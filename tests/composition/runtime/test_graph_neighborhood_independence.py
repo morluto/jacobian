@@ -3,7 +3,6 @@ from __future__ import annotations
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import Conclusion
@@ -76,7 +75,6 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": result.output["certificate_uri"],
                 "checker_id": result.output["checker_id"],

@@ -9,7 +9,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -74,7 +73,6 @@ def test_prime_factorization_result_uses_independent_python_flint_replay(
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
@@ -114,7 +112,6 @@ def test_prime_factorization_verifier_rejects_incomplete_factor_list(
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.prime_factorization.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": forged_candidate},
         )
     )
@@ -143,7 +140,6 @@ def test_powerful_number_result_uses_independent_python_flint_replay(
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
@@ -182,7 +178,6 @@ def test_powerful_number_verifier_rejects_schema_valid_wrong_factor_product(
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.powerful.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": forged_candidate},
         )
     )
@@ -209,7 +204,6 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": producer_payload,
                 "candidate": computed.output["result"],
@@ -248,7 +242,6 @@ def test_modular_residue_verifier_replays_its_materialized_lineage(
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": _modular_residue_payload(coefficient="3"),
                 "candidate": computed.output["result"],

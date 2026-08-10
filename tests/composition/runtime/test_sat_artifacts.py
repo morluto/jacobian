@@ -7,7 +7,6 @@ import pytest
 from jacobian.artifacts import ArtifactValidationError
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -67,7 +66,6 @@ def test_sat_cnf_materialization_capability_exposes_reusable_identity(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.cnf.materialize",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "variable_names": ["b", "a"],
                 "clauses": [[1, -2, 1], [2], [1, -1]],
@@ -102,7 +100,6 @@ def test_sat_materialization_makes_lexicographic_name_order_explicit(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.cnf.materialize",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "variable_names": ["n1", "n2", "n10"],
                 "clauses": [[1], [-2], [3]],
@@ -136,7 +133,6 @@ def test_sat_cnf_materialization_validates_before_artifact_write(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.cnf.materialize",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "variable_names": ["a", "a"],
                 "clauses": [[1]],

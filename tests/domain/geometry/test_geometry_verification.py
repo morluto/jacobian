@@ -9,7 +9,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -112,7 +111,6 @@ def test_minimum_weight_triangulation_charges_one_diagonal_once(
     verified = geometry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.polygon.triangulation.minimum_weight.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -137,7 +135,6 @@ def test_triangulation_checker_rejects_double_counted_cost(
     rejected = geometry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.polygon.triangulation.minimum_weight.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged},
         )
     )
@@ -197,7 +194,6 @@ def test_selected_geometry_results_verify_through_public_dispatch(
         verified = geometry_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=derive_verification_capability_id(operation_id),
-                mode=CapabilityMode.VERIFY,
                 input={"input": payload, "candidate": computed.output["result"]},
             )
         )
@@ -222,7 +218,6 @@ def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
     rejected = geometry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.points.squared_distance.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"first": P0, "second": PXY},
                 "candidate": {"value": {"num": "7", "den": "1"}},
@@ -249,7 +244,6 @@ def test_schema_valid_false_simple_polygon_decision_is_rejected(
     rejected = geometry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.polygon.simple.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"points": [P0, PXY, PY, PX]},
                 "candidate": {

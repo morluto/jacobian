@@ -8,7 +8,6 @@ import pytest
 import jacobian.polynomials._support as polynomial_support
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.polynomials import SparseRationalPolynomial
@@ -50,7 +49,6 @@ def _triangular_maps() -> tuple[dict[str, Any], dict[str, Any]]:
 def _request(forward: dict[str, Any], inverse: dict[str, Any]) -> CapabilityRequest:
     return CapabilityRequest(
         capability_id="polynomial.map.inverse.verify",
-        mode=CapabilityMode.VERIFY,
         input={
             "forward_map": forward,
             "inverse_map": inverse,
@@ -228,7 +226,6 @@ def test_evaluation_cross_field_error_precedes_duplicate_term_accumulation(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.evaluate",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "map": polynomial_map,
                 "point": [{"num": "0", "den": "1"}],
@@ -305,7 +302,6 @@ def test_cancelled_high_degree_terms_do_not_apply_operation_budget(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "forward_map": forward,
                 "inverse_map": inverse,
@@ -344,7 +340,6 @@ def test_overlapping_variable_names_use_simultaneous_composition(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "forward_map": forward,
                 "inverse_map": inverse,
@@ -370,7 +365,6 @@ def test_unrepresentable_composition_is_rejected_before_artifacts(
     }
     request = CapabilityRequest(
         capability_id="polynomial.map.inverse.verify",
-        mode=CapabilityMode.VERIFY,
         input={
             "forward_map": high_degree,
             "inverse_map": deepcopy(high_degree),

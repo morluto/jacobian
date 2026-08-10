@@ -9,7 +9,6 @@ from typing import Any, Literal, cast
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityInvocationExample,
-    CapabilityMode,
 )
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.jacobian_syzygy import (
@@ -350,7 +349,6 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
                 "Supply h=x^2+y^2+z^2 with unique nonzero terms in descending "
                 "lexicographic exponent order."
             ),
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": {
                     "variables": ["x", "y", "z"],
@@ -379,7 +377,6 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
             description=(
                 "Bind h=x*y*z directly to three labelled rational linear factors."
             ),
-            mode=CapabilityMode.EXPLORE,
             input={
                 "linear_factors": [
                     {

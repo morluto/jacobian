@@ -7,7 +7,6 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -54,7 +53,6 @@ def test_certified_smith_result_is_independently_verified(
     verified = certified_snf_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.normal_form.smith.certified.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": computed.output["result_uri"]},
         )
     )
@@ -82,7 +80,6 @@ def test_certified_smith_checker_rejects_a_forged_relation(
     rejected = certified_snf_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.normal_form.smith.certified.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "result_uri": _forged_result_uri(
                     certified_snf_services, computed, forged_candidate

@@ -9,7 +9,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
@@ -111,7 +110,6 @@ def test_public_seam_verifies_exact_producer_result(
     verified = polynomial_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.gcd.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": _gcd_input(),
                 "candidate": computed.output["result"],
@@ -151,7 +149,6 @@ def test_public_seam_rejects_validly_shaped_false_result(
     rejected = polynomial_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.gcd.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": _gcd_input(),
                 "candidate": false_candidate,
@@ -184,7 +181,6 @@ def test_public_seam_reports_valid_multivariate_result_as_unsupported(
     checked = polynomial_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.resultant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": resultant_input,
                 "candidate": computed.output["result"],

@@ -8,7 +8,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -73,7 +72,6 @@ def test_additive_decisions_are_independently_verified(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -101,7 +99,6 @@ def test_fixed_order_negative_result_is_verified_inline(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -127,7 +124,6 @@ def test_fixed_order_positive_witness_is_independently_verified(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.cyclic_difference_set.extension.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -151,7 +147,6 @@ def test_inline_checker_rejects_a_contract_valid_false_sidon_result(
     rejected = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.integer_set.sidon.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": different.output["result"]},
         )
     )

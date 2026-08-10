@@ -8,7 +8,6 @@ from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.linear import (
@@ -132,7 +131,6 @@ def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> Non
         verified = services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="linear.rational_inconsistency.verify",
-                mode=CapabilityMode.VERIFY,
                 input={"input": _system(), "candidate": computed.output["result"]},
             )
         )

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from jacobian.atomic_capability_builders import AdapterFactory, SchemaBuilder
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
 )
 from jacobian.contracts.conjectures import ParameterRegion
 from jacobian.contracts.polytope import PolytopeSeparateRequest, PolytopeSeparateResult
@@ -40,7 +39,6 @@ def build_domain_adapters(
                 "Materialize a plugin-proposed transformation and its verification "
                 "obligation."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "source_uri": artifact_uri,
@@ -92,7 +90,6 @@ def build_domain_adapters(
                 "Replay one transformation relation with its compatible authorized "
                 "checker."
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=schema(
                 {"transformation_uri": artifact_uri},
                 required=("transformation_uri",),
@@ -109,7 +106,6 @@ def build_domain_adapters(
             description=(
                 "Compute exact membership evidence or a separator; replay is separate."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "point_uri": artifact_uri,
@@ -143,7 +139,6 @@ def build_domain_adapters(
                 "Replay a record bound to an immutable region before marking it "
                 "verified."
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=schema(
                 {
                     "subject_uri": artifact_uri,

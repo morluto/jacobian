@@ -12,7 +12,6 @@ from tests.boundary.providers.sympy.runtime.polynomial_capabilities_support impo
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -26,7 +25,6 @@ def test_rational_function_identity_cross_multiplies_exactly(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.rational_function.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=_rational_function_identity_input(),
         )
     )
@@ -56,7 +54,6 @@ def test_rational_function_identity_reports_exact_difference(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.rational_function.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=_rational_function_identity_input(equal=False),
         )
     )
@@ -75,7 +72,6 @@ def test_rational_function_identity_rejects_zero_denominator(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.rational_function.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=request,
         )
     )
@@ -94,7 +90,6 @@ def test_rational_function_identity_preserves_checker_rejection_as_unknown(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.rational_function.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=_rational_function_identity_input(),
         )
     )
@@ -120,7 +115,6 @@ def test_polynomial_identity_descriptor_example_is_directly_invocable(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=descriptor.capability_id,
-            mode=example.mode,
             input=example.input,
         )
     )
@@ -135,7 +129,6 @@ def test_polynomial_identity_verifies_equal_coefficients(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=_identity_input(),
         )
     )
@@ -185,7 +178,6 @@ def test_polynomial_identity_verifies_a_difference(authorized_complete_runtime) 
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=_identity_input(right_coefficient=3),
         )
     )
@@ -207,7 +199,6 @@ def test_polynomial_identity_canonicalizes_duplicate_terms(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "variables": ["x"],
                 "left": {
@@ -241,7 +232,6 @@ def test_polynomial_identity_preserves_checker_rejection_as_unknown(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.identity.verify",
-            mode=CapabilityMode.VERIFY,
             input=_identity_input(),
         )
     )

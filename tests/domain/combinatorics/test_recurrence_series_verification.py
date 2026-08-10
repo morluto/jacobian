@@ -11,7 +11,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -100,7 +99,6 @@ def test_recurrence_and_series_results_are_independently_verified(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(capability_id),
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": payload,
                 "candidate": computed.output["result"],
@@ -137,7 +135,6 @@ def test_checker_rejects_contract_valid_false_results(
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(capability_id),
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -187,7 +184,6 @@ def test_checker_replays_a_result_above_python_default_integer_digit_limit(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.recurrence.linear.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": recurrence_input,
                 "candidate": computed.output["result"],

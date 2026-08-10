@@ -6,7 +6,6 @@ from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -61,7 +60,6 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
         verified = graph_symmetry_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="graph.symmetry.generator_orbits.verify",
-                mode=CapabilityMode.VERIFY,
                 input={"input": case["request"], "candidate": result},
             )
         )

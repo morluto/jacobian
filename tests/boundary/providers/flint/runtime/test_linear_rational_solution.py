@@ -7,7 +7,6 @@ from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.domains.rational_linear import build_rational_linear_bundle
@@ -66,7 +65,6 @@ def test_solution_candidate_is_inline_and_replayable(tmp_path: Path) -> None:
         verified = services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="linear.rational_solution.verify",
-                mode=CapabilityMode.VERIFY,
                 input={"input": _system(), "candidate": computed.output["result"]},
             )
         )

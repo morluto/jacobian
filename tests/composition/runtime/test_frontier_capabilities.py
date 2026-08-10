@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization.bundle import (
     build_graph_optimization_bundle,
@@ -136,7 +136,6 @@ def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("geometry.projective_line_arrangement.flats.verify"),
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": result.output["result_uri"]},
         )
     )
@@ -194,7 +193,6 @@ def test_arrangement_checker_rejects_schema_valid_forged_normalization(
     checked = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("geometry.projective_line_arrangement.flats.verify"),
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": forged_uri},
         )
     )
@@ -239,7 +237,6 @@ def test_hamiltonian_path_decision_has_independent_replay(
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.hamiltonian_path.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": {"graph": graph}, "candidate": computed.output["result"]},
         )
     )
@@ -296,7 +293,6 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {
                     "polynomial": _polynomial([(1, (1, 1, 1))]),
@@ -350,7 +346,6 @@ def test_graded_jacobian_syzygy_handles_a_zero_partial_derivative(
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.jacobian_syzygy.minimum_degree.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": input_payload, "candidate": result},
         )
     )
@@ -394,7 +389,6 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
     checked = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
-            mode=CapabilityMode.VERIFY,
             input={"input": input_payload, "candidate": forged},
         )
     )
@@ -430,7 +424,6 @@ def test_hamiltonian_checker_rejects_a_forged_negative_decision(
     checked = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.hamiltonian_path.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": input_payload, "candidate": forged},
         )
     )
@@ -522,7 +515,6 @@ def test_nine_line_challenge_mdr_values_are_end_to_end_verified(
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {
                     "linear_factors": [

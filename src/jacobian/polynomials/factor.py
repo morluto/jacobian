@@ -7,7 +7,6 @@ from typing import Any, cast
 
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -51,7 +50,6 @@ class PolynomialFactorAdapter:
                 "jacobian.sympy",
                 features=("univariate-polynomial-factorization",),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialFactorRequest),
             output_schema=model_schema(PolynomialFactorOutput),
             tags=("polynomial", "factorization", "exact-computation"),

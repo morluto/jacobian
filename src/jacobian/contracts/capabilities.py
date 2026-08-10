@@ -22,13 +22,6 @@ CapabilityId = Annotated[
 ]
 
 
-class CapabilityMode(StrEnum):
-    """The low-friction exploration and explicit verification lanes."""
-
-    EXPLORE = "EXPLORE"
-    VERIFY = "VERIFY"
-
-
 class CapabilityInputKind(StrEnum):
     """Coarse input boundary used to prevent incompatible discovery routes."""
 
@@ -56,7 +49,7 @@ def _validate_descriptor_input_contract(
 
 
 class CapabilityInvocationExample(ContractModel):
-    """One operator-authored, schema-valid example for an advertised mode."""
+    """One operator-authored, schema-valid example."""
 
     name: str = Field(
         pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
@@ -64,7 +57,6 @@ class CapabilityInvocationExample(ContractModel):
         max_length=64,
     )
     description: str = Field(min_length=1, max_length=256)
-    mode: CapabilityMode
     input: dict[str, Any]
 
     @model_validator(mode="after")
@@ -168,7 +160,6 @@ class CapabilityDiscoveryMatch(ContractModel):
     capability_id: CapabilityId
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=512)
-    modes: tuple[CapabilityMode, ...]
     tags: tuple[str, ...] = ()
     matched_on: tuple[str, ...] = ()
     matched_terms: tuple[str, ...] = ()
@@ -465,7 +456,6 @@ class CapabilityDescriptor(ContractModel):
     description: str = Field(min_length=1, max_length=512)
     provider: str = Field(min_length=1, max_length=128)
     provider_runtime: CapabilityProviderRuntime | None = None
-    modes: tuple[CapabilityMode, ...]
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
     read_only: bool = False
@@ -480,18 +470,7 @@ class CapabilityDescriptor(ContractModel):
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
 
     @model_validator(mode="after")
-    def require_modes_and_canonical_schemas(self) -> Self:
-        if not self.modes:
-            raise ValueError("a capability must support at least one mode")
-        if len(set(self.modes)) != len(self.modes):
-            raise ValueError("capability modes must be unique")
-        # Product rule: one tool ID, one role. Dual-mode (EXPLORE+VERIFY) tools
-        # are forbidden; checkers are separate catalog IDs.
-        if len(self.modes) > 1:
-            raise ValueError(
-                "a capability must advertise exactly one mode; "
-                "use a separate checker tool ID instead of dual-mode tools"
-            )
+    def require_canonical_schemas(self) -> Self:
         _validate_descriptor_input_contract(
             self.accepted_input_kinds,
             self.accepted_artifact_types,
@@ -507,16 +486,6 @@ class CapabilityDescriptor(ContractModel):
             self.invocation_examples
         ):
             raise ValueError("capability invocation example names must be unique")
-        unsupported_examples = [
-            example.name
-            for example in self.invocation_examples
-            if example.mode not in self.modes
-        ]
-        if unsupported_examples:
-            raise ValueError(
-                "capability invocation examples must use advertised modes: "
-                + ", ".join(unsupported_examples)
-            )
         canonicalize_json(self.input_schema)
         canonicalize_json(self.output_schema)
         if (
@@ -530,8 +499,6 @@ class CapabilityDescriptor(ContractModel):
 class CapabilityRequest(ContractModel):
     request_version: Literal["1"] = "1"
     capability_id: CapabilityId
-    # None means "use the tool's sole advertised mode" (resolved at dispatch).
-    mode: CapabilityMode | None = None
     input: dict[str, Any]
 
 
@@ -671,17 +638,11 @@ def _validate_capability_execution_lane(
     execution_status: str,
     diagnostics: tuple[CapabilityDiagnostic, ...],
     assurance_level: CapabilityAssuranceLevel,
-    mode: CapabilityMode,
     completeness_status: CapabilityCompletenessStatus,
     scope: CapabilityScope | None,
 ) -> None:
     if execution_status == "COMPLETED" and diagnostics:
         raise ValueError("completed capability execution cannot carry diagnostics")
-    if (
-        assurance_level is CapabilityAssuranceLevel.VERIFIED
-        and mode is not CapabilityMode.VERIFY
-    ):
-        raise ValueError("the exploration lane cannot return verified assurance")
     if (
         execution_status != "COMPLETED"
         and assurance_level is CapabilityAssuranceLevel.VERIFIED
@@ -750,7 +711,6 @@ class CapabilityResult(ContractModel):
     response_version: Literal["2"] = "2"
     capability_id: CapabilityId
     capability_version: str = Field(min_length=1, max_length=64)
-    mode: CapabilityMode
     execution: Execution
     output: dict[str, Any] = Field(default_factory=dict)
     scope: CapabilityScope | None = None
@@ -774,7 +734,6 @@ class CapabilityResult(ContractModel):
             self.execution.status.value,
             self.diagnostics,
             self.assurance.level,
-            self.mode,
             self.completeness.status,
             self.scope,
         )

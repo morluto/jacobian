@@ -79,7 +79,6 @@ class CapabilityDiscoveryMixin:
                 capability_id=descriptor.capability_id,
                 title=descriptor.title,
                 description=descriptor.description,
-                modes=descriptor.modes,
                 tags=descriptor.tags,
                 matched_on=matched_on,
                 matched_terms=matched_terms,

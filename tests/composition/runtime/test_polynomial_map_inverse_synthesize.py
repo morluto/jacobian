@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomials import _support as polynomial_support
 
@@ -306,7 +306,6 @@ def test_corrupted_found_candidate_does_not_verify(
     checked = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "forward_map": _triangular_forward(),
                 "inverse_map": corrupted,

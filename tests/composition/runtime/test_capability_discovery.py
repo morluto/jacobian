@@ -15,7 +15,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRequest,
     CapabilityInputKind,
     CapabilityInvocationExample,
-    CapabilityMode,
 )
 from jacobian.runtime.model import JacobianRuntime
 
@@ -39,7 +38,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
                 description="Find a finite algebra that falsifies a target law.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.EXPLORE,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("counterexample", "bounded-search"),
@@ -47,7 +45,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
                     CapabilityInvocationExample(
                         name="small",
                         description="Use a small integer fixture.",
-                        mode=CapabilityMode.EXPLORE,
                         input={"value": 2},
                     ),
                 ),
@@ -63,7 +60,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
                 description="Independently check a proposed graph coloring.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.VERIFY,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("graph", "checker"),
@@ -74,7 +70,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
     request = CapabilityDiscoveryRequest(
         query="find a counterexample to associativity",
         domain="fixture-algebra",
-        mode=CapabilityMode.EXPLORE,
         limit=10,
     )
     first = core.capabilities.discover(request)
@@ -109,7 +104,6 @@ def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
                 description="Compute one exact finite event probability.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.EXPLORE,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("probability", "exact"),
@@ -280,7 +274,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
                 description="Replay one structured formal proof certificate.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.VERIFY,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("proof", "verify"),
@@ -325,7 +318,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
     explicitly_structured = capability_core_services.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="formal UNSAT proof",
-            mode=CapabilityMode.VERIFY,
             input_kind=CapabilityInputKind.STRUCTURED_REQUEST,
             limit=20,
         )
@@ -338,7 +330,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
     formal_intent = capability_core_services.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="formal UNSAT proof",
-            mode=CapabilityMode.VERIFY,
         )
     )
     assert formal_intent.resolved_input_kind is None
@@ -349,7 +340,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
     formal_trace = capability_core_services.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="verify an LRAT proof trace",
-            mode=CapabilityMode.VERIFY,
         )
     )
     assert formal_trace.resolved_input_kind is None
@@ -375,7 +365,6 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
                 description="Accept formal proposition syntax.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.EXPLORE,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("formal", "proposition"),
@@ -392,7 +381,6 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
                 description="Accept one exact bound proof artifact.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.VERIFY,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("proof", "artifact"),
@@ -417,7 +405,6 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     typed = service.discover(
         CapabilityDiscoveryRequest(
             query="proof artifact",
-            mode=CapabilityMode.VERIFY,
             input_kind=CapabilityInputKind.TYPED_ARTIFACT,
             artifact_type=proof_schema_uri,
         )
@@ -490,7 +477,6 @@ def test_descriptor_artifact_contract_requires_typed_artifact_input() -> None:
             description="Invalid routing metadata fixture.",
             provider="tests",
             provider_runtime=TEST_RUNTIME,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={"type": "object"},
             output_schema={"type": "object"},
             accepted_artifact_types=(proof_schema_uri,),
@@ -507,7 +493,6 @@ def test_descriptor_artifact_contract_requires_typed_artifact_input() -> None:
             description="Typed artifact routing requires an exact stored schema.",
             provider="tests",
             provider_runtime=TEST_RUNTIME,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={"type": "object"},
             output_schema={"type": "object"},
             accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
@@ -525,7 +510,6 @@ def test_capability_registration_rejects_an_invalid_invocation_example(
             description="Advertises an example that violates its input schema.",
             provider="tests",
             provider_runtime=TEST_RUNTIME,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={
                 "type": "object",
                 "properties": {"value": {"type": "integer"}},
@@ -537,7 +521,6 @@ def test_capability_registration_rejects_an_invalid_invocation_example(
                 CapabilityInvocationExample(
                     name="invalid",
                     description="This value has the wrong type.",
-                    mode=CapabilityMode.EXPLORE,
                     input={"value": "not-an-integer"},
                 ),
             ),

@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
     CapabilityResult,
@@ -76,7 +75,6 @@ class AtomicServiceAdapter:
         capability_id: str,
         title: str,
         description: str,
-        modes: tuple[CapabilityMode, ...],
         input_schema: dict[str, Any],
         output_schema: dict[str, Any],
         invoke: Callable[[dict[str, Any]], Any],
@@ -97,7 +95,6 @@ class AtomicServiceAdapter:
             description=description,
             provider=provider,
             provider_runtime=known_provider_runtime(provider, features=tags),
-            modes=modes,
             input_schema=input_schema,
             output_schema=output_schema,
             read_only=read_only,
@@ -148,7 +145,6 @@ class AtomicServiceAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=execution,
             output=output,
             scope=scope,
@@ -184,7 +180,6 @@ def install_atomic_capabilities(
             capability_id="artifact.put",
             title="Store a schema-validated artifact",
             description="Materialize one immutable artifact with explicit lineage.",
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=_schema(
                 {
                     "schema_uri": _ARTIFACT_URI,
@@ -214,7 +209,6 @@ def install_atomic_capabilities(
             capability_id="claim.validate",
             title="Validate a claim against one plugin",
             description="Check claim schema, semantics, and declared plugin capabilities.",
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=_schema(
                 {"claim_uri": _ARTIFACT_URI, "plugin_id": _ARTIFACT_URI},
                 required=("claim_uri", "plugin_id"),
@@ -228,7 +222,6 @@ def install_atomic_capabilities(
             capability_id="evaluate.batch",
             title="Evaluate candidates",
             description="Run a plugin evaluator over a bounded batch without verification.",
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=_schema(
                 {
                     "claim_uri": _ARTIFACT_URI,
@@ -272,7 +265,6 @@ def install_atomic_capabilities(
             capability_id="witness.find",
             title="Find one witness",
             description="Search for a witness or a bounded no-witness certificate proposal.",
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=_schema(
                 {
                     "claim_uri": _ARTIFACT_URI,
@@ -312,7 +304,6 @@ def install_atomic_capabilities(
             capability_id="witness.verify",
             title="Verify one witness",
             description="Replay one witness with an explicitly selected authorized checker.",
-            modes=(CapabilityMode.VERIFY,),
             input_schema=_verification_schema(
                 {
                     "claim_uri": _ARTIFACT_URI,
@@ -332,7 +323,6 @@ def install_atomic_capabilities(
             capability_id="certificate.verify",
             title="Verify one certificate",
             description="Replay one certificate with a compatible authorized checker.",
-            modes=(CapabilityMode.VERIFY,),
             input_schema=_verification_schema(
                 {"certificate_uri": _ARTIFACT_URI, "checker_id": _CHECKER_URI},
                 required=("certificate_uri",),
@@ -347,7 +337,6 @@ def install_atomic_capabilities(
             capability_id="shrink.run",
             title="Shrink a candidate or witness",
             description="Apply bounded reductions and replay each accepted preservation claim.",
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=_schema(
                 {
                     "target_kind": {"enum": ["candidate", "witness"]},

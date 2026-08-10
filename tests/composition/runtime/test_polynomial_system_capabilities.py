@@ -10,7 +10,6 @@ from tests.support.polynomials import univariate_term as _term
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -38,7 +37,6 @@ def test_solution_capability_verifies_valid_assignment(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(2),
         )
     )
@@ -83,7 +81,6 @@ def test_solution_capability_verifies_invalid_assignment(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(1),
         )
     )
@@ -116,7 +113,6 @@ def test_solution_capability_keeps_checker_failure_unknown(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(1),
         )
     )
@@ -144,7 +140,6 @@ def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=invalid,
         )
     )

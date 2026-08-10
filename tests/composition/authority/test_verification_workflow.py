@@ -5,7 +5,6 @@ from tests.support.capabilities import invoke_capability as _invoke
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
 )
 from jacobian.contracts.evidence import WitnessRole
 from jacobian.contracts.results import Conclusion, Verification
@@ -140,7 +139,6 @@ def test_atomic_capabilities_preserve_stage_assurance_and_checker_boundary(
             "witness_uri": witness_uri,
             "checker_id": reference.witness_checker_ids["graph.2coloring"],
         },
-        mode=CapabilityMode.VERIFY,
     )
 
     assert validation.output["valid"] is True

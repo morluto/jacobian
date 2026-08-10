@@ -37,7 +37,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -179,7 +178,6 @@ class GraphComposeAdapter:
                     "simple-undirected-graphs",
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=GraphCompositionRequest.model_json_schema(),
             output_schema={
                 "type": "object",
@@ -284,7 +282,6 @@ class GraphComposeAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
@@ -361,7 +358,6 @@ class GraphEnumerateNonisomorphicAdapter:
                     "simple-undirected-graphs",
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=GraphEnumerationRequest.model_json_schema(),
             output_schema={
                 "type": "object",
@@ -500,7 +496,6 @@ class GraphEnumerateNonisomorphicAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

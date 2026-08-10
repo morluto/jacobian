@@ -27,7 +27,6 @@ from jacobian.atomic_capabilities import AtomicServiceAdapter
 from jacobian.capability_service import CapabilityError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.conjectures import ParameterRegion
@@ -98,23 +97,21 @@ def test_unknown_capability_returns_an_actionable_result(
     assert result.output["available_capability_ids"]
 
 
-def test_client_mode_is_ignored_tool_id_owns_role(
+def test_tool_id_owns_role(
     capability_core_services: DomainTestServices,
 ) -> None:
-    """Client-supplied mode is stamped over by the tool's sole descriptor mode."""
+    """Tool identity determines role; no client mode switch."""
     core = capability_core_services.core
     capability_core_services.installation.register_capability(ComputedAdapter())
 
     result = core.capabilities.invoke(
         CapabilityRequest(
             capability_id="example.double",
-            mode=CapabilityMode.VERIFY,  # ignored
             input={"value": 21},
         )
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.mode is CapabilityMode.EXPLORE
     assert result.output["value"] == 42
 
 
@@ -204,7 +201,6 @@ def test_atomic_adapter_with_invalid_evidence_returns_a_typed_failure(
         capability_id="example.invalid-evidence",
         title="Return invalid evidence",
         description="Exercise malformed atomic service evidence.",
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object", "additionalProperties": False},
         output_schema=model_schema(ParameterRegion),
         invoke=lambda _payload: InvalidEvidenceValue(evidence=[]),
@@ -281,7 +277,6 @@ def test_adapter_cannot_promote_without_a_local_verification_record(
         core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="example.forged",
-                mode=CapabilityMode.VERIFY,
                 input={},
             )
         )
@@ -337,7 +332,6 @@ def test_verified_relationship_must_match_checker_selected_endpoints(
         runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=forged.descriptor.capability_id,
-                mode=CapabilityMode.VERIFY,
                 input={},
             )
         )
@@ -374,7 +368,6 @@ def test_verified_relationship_must_match_checker_selected_obligation(
         runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=forged.descriptor.capability_id,
-                mode=CapabilityMode.VERIFY,
                 input={},
             )
         )

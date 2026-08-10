@@ -3,7 +3,6 @@ from __future__ import annotations
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityObligationStatus,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -19,7 +18,6 @@ def _request(
 ) -> CapabilityRequest:
     return CapabilityRequest(
         capability_id="finite.coverage.verify",
-        mode=CapabilityMode.VERIFY,
         input={
             "canonicalizer_id": canonicalizer_id,
             "scope_items": scope,

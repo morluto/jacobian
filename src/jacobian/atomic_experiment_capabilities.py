@@ -10,7 +10,6 @@ from pydantic import TypeAdapter
 from jacobian.atomic_capability_builders import AdapterFactory, SchemaBuilder
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
 )
 from jacobian.contracts.discovery import (
     ExperimentCancelResult,
@@ -48,7 +47,6 @@ def build_experiment_adapters(
                 "Compute a plugin-defined canonical representative without "
                 "self-certification."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "structure_uri": artifact_uri,
@@ -74,7 +72,6 @@ def build_experiment_adapters(
                 "Start one durable candidate-enumeration experiment; it cannot "
                 "self-certify."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "claim_uri": artifact_uri,
@@ -102,7 +99,6 @@ def build_experiment_adapters(
                 "Read the durable state and accounting of one enumeration or "
                 "search experiment."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {"experiment_uri": experiment_uri},
                 required=("experiment_uri",),
@@ -120,7 +116,6 @@ def build_experiment_adapters(
             description=(
                 "Wait for a bounded interval and return the latest experiment snapshot."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "experiment_uri": experiment_uri,
@@ -148,7 +143,6 @@ def build_experiment_adapters(
             description=(
                 "Request cancellation of one running enumeration or search experiment."
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {"experiment_uri": experiment_uri},
                 required=("experiment_uri",),

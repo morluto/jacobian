@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-import pytest
-from pydantic import ValidationError
-
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityDescriptor,
-    CapabilityMode,
     CapabilityObligationStatus,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -79,15 +74,8 @@ def test_finite_partition_contract_and_result_preserve_semantic_boundary(
         for item in runtime.core.capabilities.catalog().capabilities
         if item.capability_id == "case.partition.finite"
     )
-    checker = next(
-        item
-        for item in runtime.core.capabilities.catalog().capabilities
-        if item.capability_id == "case.partition.finite.verify"
-    )
     result = runtime.core.capabilities.invoke(_request(verify=True))
 
-    assert producer.modes == (CapabilityMode.EXPLORE,)
-    assert checker.modes == (CapabilityMode.VERIFY,)
     assert "opaque caller-supplied strings" in producer.description
     assert "external-domain completeness" in result.scope.description
     assert "member/case semantics were not checked" in result.assurance.basis
@@ -118,9 +106,7 @@ def test_finite_partition_verify_fails_closed_on_incomplete_cases(
 ) -> None:
 
     runtime = authorized_complete_runtime
-    result = runtime.core.capabilities.invoke(
-        _request(verify=True, missing_last=True)
-    )
+    result = runtime.core.capabilities.invoke(_request(verify=True, missing_last=True))
 
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["missing"] == ["5"]
@@ -179,17 +165,3 @@ def test_finite_partition_duplicate_case_ids_cannot_report_complete(
 
     assert result.output["duplicate_case_ids"] == ["even"]
     assert result.completeness.status.value == "PARTIAL"
-
-
-def test_dual_mode_descriptor_is_rejected() -> None:
-    with pytest.raises(ValidationError, match="exactly one mode"):
-        CapabilityDescriptor(
-            capability_id="bad.dual",
-            version="1",
-            title="Dual",
-            description="must fail",
-            provider="test",
-            modes=(CapabilityMode.EXPLORE, CapabilityMode.VERIFY),
-            input_schema={"type": "object"},
-            output_schema={"type": "object"},
-        )

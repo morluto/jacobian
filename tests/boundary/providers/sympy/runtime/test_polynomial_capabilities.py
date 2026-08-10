@@ -18,7 +18,6 @@ from tests.boundary.providers.sympy.runtime.polynomial_capabilities_support impo
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import Conclusion, Verification
@@ -92,7 +91,6 @@ def test_jacobian_represents_derived_exponents_above_the_source_limit(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": result.output["certificate_uri"],
                 "checker_id": result.output["checker_id"],
@@ -137,7 +135,6 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     verified_jacobian = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": jacobian.output["certificate_uri"],
                 "checker_id": jacobian.output["checker_id"],
@@ -207,7 +204,6 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="witness.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "claim_uri": collision.output["claim_uri"],
                 "candidate_uri": collision.output["candidate_uri"],

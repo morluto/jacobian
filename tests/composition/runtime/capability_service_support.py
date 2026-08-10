@@ -13,7 +13,6 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityDescriptor,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -80,7 +79,6 @@ class ComputedAdapter:
         description="Small adapter used to prove no MCP or runtime edit is required.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={
             "type": "object",
             "properties": {"value": {"type": "integer"}},
@@ -100,7 +98,6 @@ class ComputedAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output={"value": int(request.input["value"]) * 2},
             assurance=CapabilityAssurance(
@@ -124,7 +121,6 @@ class InvalidOutputAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output={"value": "not-an-integer"},
             assurance=CapabilityAssurance(
@@ -143,7 +139,6 @@ class NotReadyProviderAdapter:
         description="Fixture for the first-use provider readiness boundary.",
         provider="tests-python",
         provider_runtime=NOT_READY_RUNTIME,
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -160,7 +155,6 @@ class DiscoveryAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output={"value": request.input["value"]},
             assurance=CapabilityAssurance(
@@ -179,7 +173,6 @@ class CrashingAdapter:
         description="Fixture for testing public adapter-failure diagnostics.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -197,7 +190,6 @@ class ForgedProviderAdapter:
         description="Adversarial adapter that claims another provider identity.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -206,7 +198,6 @@ class ForgedProviderAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             assurance=CapabilityAssurance(
                 level=CapabilityAssuranceLevel.COMPUTED,
@@ -226,7 +217,6 @@ class ForgedVerifiedAdapter:
         description="Adversarial adapter used to test the assurance boundary.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.VERIFY,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -236,7 +226,6 @@ class ForgedVerifiedAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             assurance=CapabilityAssurance(
                 level=CapabilityAssuranceLevel.VERIFIED,
@@ -256,7 +245,6 @@ class OmittedRelationshipArtifactAdapter:
         description="Adversarial adapter that omits a relationship endpoint.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -265,7 +253,6 @@ class OmittedRelationshipArtifactAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             relationships=(
                 CapabilityRelationship(
@@ -296,7 +283,6 @@ class ForgedRelationshipVerificationAdapter:
         description="Adversarial adapter that reuses an unrelated valid record.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        modes=(CapabilityMode.VERIFY,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -305,7 +291,6 @@ class ForgedRelationshipVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             relationships=(
                 CapabilityRelationship(

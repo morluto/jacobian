@@ -84,7 +84,6 @@ class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
     output_schema_summary: _SchemaSummary
     input_schema_summary: _SchemaSummary | None = None
     scope: Literal["EXACT_SUPPLIED_INPUT_OR_CLAIM"]
-    assurance_ceiling: Literal["COMPUTED", "VERIFIED"]
     provider_availability: CapabilityProviderAvailability | Literal["UNKNOWN"]
     related_capabilities: tuple[_RelatedCapability, ...]
     invocation_example: _DiscoveryInvocationExample | None = None
@@ -315,14 +314,12 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
                         "capability_id",
                         "title",
                         "description",
-                        "modes",
                         "accepted_input_kinds",
                         "accepted_artifact_types",
                         "produced_artifact_types",
                         "input_schema_summary",
                         "output_schema_summary",
                         "scope",
-                        "assurance_ceiling",
                         "provider_availability",
                         "related_capabilities",
                         "invocation_example",
@@ -354,7 +351,6 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             "capability_id",
             "title",
             "description",
-            "modes",
             "accepted_input_kinds",
             "accepted_artifact_types",
             "produced_artifact_types",
@@ -677,7 +673,6 @@ async def capability_invoke(
             active_runtime,
             capability_id=capability_id,
             payload=payload,
-            mode=None,
             ctx=ctx,
         )
         result = _bounded_run_result(active_runtime, result)

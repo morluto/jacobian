@@ -21,7 +21,6 @@ from tests.boundary.providers.sympy.runtime.polynomial_capabilities_support impo
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope, WitnessRole
@@ -86,7 +85,6 @@ def test_collision_checker_rejects_a_forged_image(authorized_complete_runtime) -
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="witness.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "claim_uri": claim_uri,
                 "candidate_uri": candidate_uri,
@@ -151,7 +149,6 @@ def test_collision_comparison_does_not_promote_forged_evaluations(
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="witness.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "claim_uri": candidate.output["claim_uri"],
                 "candidate_uri": candidate.output["candidate_uri"],

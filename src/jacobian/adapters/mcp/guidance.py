@@ -38,12 +38,12 @@ checker tool—even if shell code could also calculate the answer.
 
 Forms:
 - `query`: plain-language mathematical outcome (compact tool cards).
-- Optional `domain` filter; `limit` 1–20 (default 5).
+- Optional `domain` filter; `limit` 1-20 (default 5).
 - Omit arguments to browse; follow `next_cursor` with the same filters to continue.
 - Ranking is deterministic lexical retrieval; matches are not recommendations.
 - `capability_id`: exact inspect (SUMMARY / CONTRACT / FULL views).
 
-Checker tools are separate IDs (often `*.verify`), not a mode switch on producers.
+Checker tools are separate IDs (often `*.verify`), not a switch on producers.
 
 Examples:
 - `{"query":"compute an exact matrix determinant","domain":"matrix","limit":3}`
@@ -58,7 +58,7 @@ use math.find with view CONTRACT.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify` or `case.partition.finite.verify`),
-not a mode on the producer. Failed or incomplete runs are not mathematical conclusions.
+not a switch on the producer. Failed or incomplete runs are not mathematical conclusions.
 
 Examples:
 - `{"capability_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`

@@ -6,7 +6,6 @@ from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -53,7 +52,6 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
         verified = certified_snf_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="matrix.normal_form.smith.certified.verify",
-                mode=CapabilityMode.VERIFY,
                 input={"result_uri": computed.output["result_uri"]},
             )
         )

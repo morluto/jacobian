@@ -19,7 +19,6 @@ from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -114,7 +113,6 @@ def test_pilot_provides_matrix_determinant_verify_without_legacy(
     verified = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": _matrix([[1, 2], [3, 4]])},
                 "candidate": computed.output["result"],
@@ -139,7 +137,6 @@ def test_pilot_provides_matrix_rank_verify_without_legacy(
     verified = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": _matrix([[1, 2, 3], [2, 4, 6], [0, 1, 1]])},
                 "candidate": computed.output["result"],

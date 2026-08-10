@@ -15,7 +15,6 @@ from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
@@ -168,7 +167,6 @@ def test_matrix_determinant_verify_independently_recomputes_exact_value(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -197,7 +195,6 @@ def test_matrix_determinant_verify_rejects_wrong_bound_value(
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": {
@@ -238,7 +235,6 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
     timed_out = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -291,7 +287,6 @@ def test_matrix_rank_verify_independently_recomputes_inline_candidate(
     verified = matrix_checker_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],

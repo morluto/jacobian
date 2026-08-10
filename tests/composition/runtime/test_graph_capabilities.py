@@ -6,7 +6,6 @@ from jacobian.artifacts import ArtifactValidationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -303,7 +302,6 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
     result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.compute.properties",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "graph_uri": graph_uri,
                 "properties": [

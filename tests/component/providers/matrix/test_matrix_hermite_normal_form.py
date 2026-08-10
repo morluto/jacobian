@@ -9,7 +9,6 @@ from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.matrices import IntegerMatrix
@@ -124,7 +123,6 @@ def test_hnf_checker_replays_the_retained_certificate(hnf_services) -> None:
     verified = hnf_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.normal_form.hermite.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": computed.output["result_uri"]},
         )
     )

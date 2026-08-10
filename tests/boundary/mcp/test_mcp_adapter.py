@@ -107,7 +107,6 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
                 "accepted_input_kinds",
                 "output_schema_summary",
                 "scope",
-                "assurance_ceiling",
                 "related_capabilities",
                 "invocation_example",
             ):
@@ -580,7 +579,6 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert operation_card["accepted_input_kinds"]
             assert "output_schema_summary" in operation_card
             assert operation_card["scope"] == "EXACT_SUPPLIED_INPUT_OR_CLAIM"
-            assert operation_card["assurance_ceiling"] in {"COMPUTED", "VERIFIED"}
             assert operation_card["provider_availability"] == "AVAILABLE"
             assert isinstance(operation_card["related_capabilities"], list)
 

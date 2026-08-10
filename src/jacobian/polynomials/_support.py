@@ -746,7 +746,6 @@ def _computed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=ExecutionStatus.COMPLETED,
             runtime_ms=max(0, round((time.monotonic() - started) * 1000)),

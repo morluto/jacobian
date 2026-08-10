@@ -3,7 +3,6 @@ from pathlib import Path
 from jacobian.atomic_capabilities import AtomicServiceAdapter
 from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import (
@@ -43,7 +42,6 @@ def test_failed_exhaustive_result_cannot_claim_complete_coverage(
         capability_id="test.verify.exhaustive",
         title="Test exhaustive verifier",
         description="Project one failed exhaustive verifier result.",
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object", "additionalProperties": False},
         output_schema=ResultEnvelope.model_json_schema(),
         invoke=lambda _payload: failed,
@@ -82,7 +80,6 @@ def test_exhaustive_result_without_scope_cannot_claim_complete_coverage(
         capability_id="test.explore.exhaustive",
         title="Test exhaustive exploration",
         description="Project one exhaustive result without a declared scope.",
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object", "additionalProperties": False},
         output_schema=ResultEnvelope.model_json_schema(),
         invoke=lambda _payload: exhaustive,

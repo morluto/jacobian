@@ -10,7 +10,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -90,7 +89,6 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": result_uri},
         )
     )
@@ -127,7 +125,6 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": false_result.artifact_uri},
         )
     )
@@ -160,7 +157,6 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -202,7 +198,6 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": false_candidate},
         )
     )
@@ -235,7 +230,6 @@ def test_maximum_matching_verifier_replays_a_64_vertex_certificate(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -284,7 +278,6 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -309,7 +302,6 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": false_candidate},
         )
     )
@@ -344,7 +336,6 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -399,7 +390,6 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": false_candidate},
         )
     )

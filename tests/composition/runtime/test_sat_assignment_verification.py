@@ -10,7 +10,6 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityInputKind,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -58,7 +57,6 @@ def _verify(runtime: JacobianRuntime, assignment_uri: str):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.model.verify",
-            mode=CapabilityMode.VERIFY,
             input={"assignment_uri": assignment_uri},
         )
     )

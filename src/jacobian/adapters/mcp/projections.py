@@ -25,7 +25,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRemoveUnknownDomainRecoveryPath,
     CapabilityDiscoveryRequest,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -216,9 +215,6 @@ def _discovery_operation_card(
         "produced_artifact_types": list(descriptor.produced_artifact_types),
         "output_schema_summary": _output_schema_summary(descriptor.output_schema),
         "scope": "EXACT_SUPPLIED_INPUT_OR_CLAIM",
-        "assurance_ceiling": (
-            "VERIFIED" if CapabilityMode.VERIFY in descriptor.modes else "COMPUTED"
-        ),
         "provider_availability": (
             runtime.availability.value if runtime is not None else "UNKNOWN"
         ),

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -54,7 +53,6 @@ def test_graph_coloring_encoding_replays_through_generic_certificate_verifier(
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": encoded.output["certificate_uri"],
                 "checker_id": encoded.output["checker_id"],

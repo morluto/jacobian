@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -16,7 +15,6 @@ def _rational(value: int) -> dict[str, str]:
 def _request(image: int) -> CapabilityRequest:
     return CapabilityRequest(
         capability_id="polynomial.map.collision.verify",
-        mode=CapabilityMode.VERIFY,
         input={
             "map": {
                 "variables": ["x"],

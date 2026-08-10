@@ -10,7 +10,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -91,7 +90,6 @@ def test_weighted_minimum_spanning_tree_is_independently_verified(
     verified = graph_optimization_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -161,7 +159,6 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
     rejected = graph_optimization_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -191,7 +188,6 @@ def test_disconnected_no_spanning_tree_result_is_completely_replayed(
     verified = graph_optimization_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )

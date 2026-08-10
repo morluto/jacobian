@@ -6,7 +6,6 @@ from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -69,7 +68,6 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
         verified = topology_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="topology.simplicial_homology.integral.verify",
-                mode=CapabilityMode.VERIFY,
                 input={
                     "input": integral_input,
                     "candidate": _inline_result_payload(computed),

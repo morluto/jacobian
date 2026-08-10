@@ -17,7 +17,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
-    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
     CapabilityRelationship,
@@ -270,7 +269,6 @@ class FinitePartitionAdapter:
                 features=("finite-partition",),
                 checker_ids=(),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=_INPUT_SCHEMA,
             output_schema=_OUTPUT_SCHEMA,
             tags=("cases", "finite", "coverage"),
@@ -296,7 +294,6 @@ class FinitePartitionAdapter:
         return _partition_result(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=CapabilityMode.EXPLORE,
             started=started,
             material=material,
             verification_result=None,
@@ -335,7 +332,6 @@ class FinitePartitionVerifyAdapter:
                 features=("finite-partition",),
                 checker_ids=(installation.checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=_INPUT_SCHEMA,
             output_schema=_OUTPUT_SCHEMA,
             tags=("cases", "finite", "coverage", "verification"),
@@ -347,7 +343,6 @@ class FinitePartitionVerifyAdapter:
                         "universe": ["a"],
                         "cases": [{"case_id": "all", "members": ["a"]}],
                     },
-                    mode=CapabilityMode.VERIFY,
                 ),
             ),
         )
@@ -371,7 +366,6 @@ class FinitePartitionVerifyAdapter:
         return _partition_result(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=CapabilityMode.VERIFY,
             started=started,
             material=material,
             verification_result=verification_result,
@@ -501,7 +495,6 @@ def _partition_result(
     *,
     capability_id: str,
     capability_version: str,
-    mode: CapabilityMode,
     started: float,
     material: _MaterializedPartition,
     verification_result: ResultEnvelope | None,
@@ -564,7 +557,6 @@ def _partition_result(
     return CapabilityResult(
         capability_id=capability_id,
         capability_version=capability_version,
-        mode=mode,
         execution=Execution(
             status=execution_status,
             runtime_ms=int((time.monotonic() - started) * 1000),

@@ -7,7 +7,6 @@ import pytest
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import Conclusion
@@ -86,7 +85,6 @@ def test_countermodel_descriptor_publishes_a_model_valid_invocation_example(
 
     assert len(descriptor.invocation_examples) == 1
     example = descriptor.invocation_examples[0]
-    assert example.mode is CapabilityMode.EXPLORE
     validated = UniversalAlgebraCountermodelSearchRequest.model_validate(example.input)
     assert validated.order == 2
     assert validated.target_law.law_id == "associative"
@@ -114,7 +112,6 @@ def test_evaluate_laws_descriptor_example_encodes_idempotence(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=descriptor.capability_id,
-            mode=example.mode,
             input=example.input,
         )
     )
@@ -182,7 +179,6 @@ def test_evaluate_laws_returns_exact_truth_and_counterexample(
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=handoff["capability_id"],
-            mode=CapabilityMode(handoff["mode"]),
             input=handoff["payload"],
         )
     )
@@ -257,7 +253,6 @@ def test_countermodel_search_composes_with_independent_law_replay(
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": evaluation.output["certificate_uri"],
                 "checker_id": evaluation.output["checker_id"],

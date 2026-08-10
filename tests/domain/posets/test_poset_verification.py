@@ -11,7 +11,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -113,7 +112,6 @@ def test_poset_results_are_independently_verified(
     verified = poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
-            mode=CapabilityMode.VERIFY,
             input=(
                 {"input": producer_input, "candidate": computed.output["result"]}
                 if producer_id
@@ -145,7 +143,6 @@ def test_poset_checker_rejects_forged_width_certificate(
     rejected = poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": forged_candidate},
         )
     )

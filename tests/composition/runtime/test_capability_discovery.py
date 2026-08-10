@@ -139,9 +139,9 @@ def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
 
 
 def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
-    attached_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    discovered = attached_complete_runtime.core.capabilities.discover(
+    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
         CapabilityDiscoveryRequest(domain="artifact")
     )
 
@@ -153,9 +153,9 @@ def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
 
 
 def test_storage_primitive_is_catalogued_but_not_discovered(
-    attached_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    capabilities = attached_complete_runtime.core.capabilities
+    capabilities = attached_complete_runtime_read_only.core.capabilities
     catalog_ids = {
         descriptor.capability_id for descriptor in capabilities.catalog().capabilities
     }
@@ -169,12 +169,12 @@ def test_storage_primitive_is_catalogued_but_not_discovered(
 
 
 def test_bounded_search_producers_advertise_produced_artifact_types(
-    attached_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
         descriptor.capability_id: descriptor
         for descriptor in (
-            attached_complete_runtime.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
         )
     }
     induced_tree = descriptors["graph.induced_tree.maximum.compute"]
@@ -184,12 +184,12 @@ def test_bounded_search_producers_advertise_produced_artifact_types(
 
 
 def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
-    attached_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
         descriptor.capability_id: descriptor
         for descriptor in (
-            attached_complete_runtime.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
         )
     }
     assert descriptors["poset.finite.compute"].produced_artifact_types == ()
@@ -197,9 +197,9 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
 
 
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
-    attached_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    runtime = attached_complete_runtime
+    runtime = attached_complete_runtime_read_only
 
     strong = runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(

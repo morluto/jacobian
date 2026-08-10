@@ -205,7 +205,7 @@ def test_noncollision_is_computed_evidence_without_witness_or_conclusion(
 
 
 def test_collision_rejects_evaluations_from_different_maps(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     x = symbols("x")
     identity_map = {
@@ -220,20 +220,20 @@ def test_collision_rejects_evaluations_from_different_maps(
         "variables": ["x"],
         "coordinates": [_poly_payload(Poly(x**2, x, domain="QQ"))],
     }
-    first_evaluation = fresh_complete_runtime.core.capabilities.invoke(
+    first_evaluation = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(1)},
         )
     )
-    second_evaluation = fresh_complete_runtime.core.capabilities.invoke(
+    second_evaluation = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.evaluate",
             input={"map": square_map, "point": _point(1)},
         )
     )
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.collision_witness",
             input={
@@ -248,7 +248,7 @@ def test_collision_rejects_evaluations_from_different_maps(
 
 
 def test_collision_validates_evaluation_dimensions_before_artifact_writes(
-    fresh_complete_runtime,
+    attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     x = symbols("x")
@@ -258,16 +258,16 @@ def test_collision_validates_evaluation_dimensions_before_artifact_writes(
         "variables": ["x"],
         "coordinates": [_poly_payload(Poly(x, x, domain="QQ"))],
     }
-    first_evaluation = fresh_complete_runtime.core.capabilities.invoke(
+    first_evaluation = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(1)},
         )
     )
     map_uri = first_evaluation.output["map_uri"]
-    incompatible_evaluation = fresh_complete_runtime.core.artifacts.put(
-        schema_uri=fresh_complete_runtime.portfolio.polynomial.evaluation_schema_uri,
-        semantics_uri=fresh_complete_runtime.portfolio.polynomial.semantics_uri,
+    incompatible_evaluation = attached_complete_runtime.core.artifacts.put(
+        schema_uri=attached_complete_runtime.portfolio.polynomial.evaluation_schema_uri,
+        semantics_uri=attached_complete_runtime.portfolio.polynomial.semantics_uri,
         payload={
             "evaluation_schema_version": "1",
             "map_uri": map_uri,
@@ -279,16 +279,16 @@ def test_collision_validates_evaluation_dimensions_before_artifact_writes(
         parents=(map_uri,),
     )
     artifact_put_calls = 0
-    original_put = fresh_complete_runtime.core.artifacts.put
+    original_put = attached_complete_runtime.core.artifacts.put
 
     def recording_put(*args: Any, **kwargs: Any) -> Any:
         nonlocal artifact_put_calls
         artifact_put_calls += 1
         return original_put(*args, **kwargs)
 
-    monkeypatch.setattr(fresh_complete_runtime.core.artifacts, "put", recording_put)
+    monkeypatch.setattr(attached_complete_runtime.core.artifacts, "put", recording_put)
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.collision_witness",
             input={

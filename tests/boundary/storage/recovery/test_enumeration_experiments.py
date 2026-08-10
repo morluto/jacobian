@@ -16,7 +16,7 @@ from jacobian.storage.models import StorageLimits
 
 
 def test_unknown_experiment_error_explains_recovery(
-    fresh_complete_runtime,
+    attached_complete_runtime,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     missing_uri = "experiment://missing"
@@ -25,7 +25,7 @@ def test_unknown_experiment_error_explains_recovery(
         ExperimentNotFoundError,
         match=r"Check the URI returned by search\.run or search\.enumerate",
     ) as raised:
-        fresh_complete_runtime.services.experiments.inspect(missing_uri)
+        attached_complete_runtime.services.experiments.inspect(missing_uri)
 
     assert missing_uri not in str(raised.value)
     assert missing_uri in caplog.text

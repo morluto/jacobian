@@ -13,13 +13,13 @@ COMPOSITION_ADMISSION = "DISCOVERY"
 
 
 def test_poset_width_intents_discover_the_domain_owned_operation(
-    attached_complete_runtime,
+    attached_complete_runtime_read_only,
 ) -> None:
     for query in (
         "maximum antichain and minimum chain decomposition of a finite poset",
         "compute the width of a finite partially ordered set",
     ):
-        discovered = attached_complete_runtime.core.capabilities.discover(
+        discovered = attached_complete_runtime_read_only.core.capabilities.discover(
             CapabilityDiscoveryRequest(query=query, limit=5)
         )
 

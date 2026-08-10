@@ -41,10 +41,20 @@ ATTACHED_COMPUTE = RuntimeTestProfile(
     checker_authority=CheckerAuthorityMode.NONE,
     state_access="PRIVATE_MUTABLE",
 )
+ATTACHED_COMPUTE_READ_ONLY = RuntimeTestProfile(
+    installation="ATTACH_TEMPLATE",
+    checker_authority=CheckerAuthorityMode.NONE,
+    state_access="READ_ONLY",
+)
 AUTHORIZED_VERIFY = RuntimeTestProfile(
     installation="ATTACH_TEMPLATE",
     checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     state_access="PRIVATE_MUTABLE",
+)
+AUTHORIZED_VERIFY_READ_ONLY = RuntimeTestProfile(
+    installation="ATTACH_TEMPLATE",
+    checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+    state_access="READ_ONLY",
 )
 FRESH_LIFECYCLE = RuntimeTestProfile(
     installation="FRESH",
@@ -60,7 +70,13 @@ def open_runtime_for(
     complete_portfolio_template: Path | None = None,
     authorized_portfolio_template: Path | None = None,
 ) -> Iterator[JacobianRuntime]:
-    """Materialize a private runtime matching ``profile``."""
+    """Materialize a runtime matching ``profile``.
+
+    ``ATTACH_TEMPLATE`` always copies into ``tmp_path``: opening a store mutates
+    SQLite/layout, so the session template must stay immutable. ``READ_ONLY`` is
+    a sharing contract for module-scoped fixtures—one private copy, tests must
+    not write artifacts or durable store state through that runtime.
+    """
 
     if profile.installation == "FRESH":
         if profile.state_access != "LIFECYCLE_OWNER":

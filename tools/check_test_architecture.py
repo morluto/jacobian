@@ -91,7 +91,9 @@ _COMPLETE_RUNTIME_FIXTURE_NAMES = frozenset(
     {
         "fresh_complete_runtime",
         "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
         "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
         "complete_portfolio_template",
         "authorized_portfolio_template",
     }
@@ -404,7 +406,9 @@ def _fixture_is_high_cost(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         "complete_portfolio_template",
         "fresh_complete_runtime",
         "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
         "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
     }
 
 

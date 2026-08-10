@@ -27,7 +27,9 @@ _COMPLETE_RUNTIME_FIXTURES = frozenset(
     {
         "fresh_complete_runtime",
         "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
         "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
         "complete_portfolio_template",
         "authorized_portfolio_template",
     }
@@ -49,7 +51,9 @@ class ModuleInventory:
 _FIXTURE_SETUP_WEIGHT = {
     "fresh_complete_runtime": 100,
     "authorized_complete_runtime": 80,
+    "authorized_complete_runtime_read_only": 55,
     "attached_complete_runtime": 40,
+    "attached_complete_runtime_read_only": 25,
     "authorized_portfolio_template": 20,
     "complete_portfolio_template": 10,
 }
@@ -117,7 +121,13 @@ def inventory_modules(root: Path) -> tuple[ModuleInventory, ...]:
         tree = ast.parse(source, filename=relative)
         fixtures, has_verify, resources = _source_signals(tree, source)
         ordered = tuple(sorted(fixtures))
-        unjustified = "authorized_complete_runtime" in fixtures and not has_verify
+        unjustified = (
+            (
+                "authorized_complete_runtime" in fixtures
+                or "authorized_complete_runtime_read_only" in fixtures
+            )
+            and not has_verify
+        )
         setup_weight = sum(_FIXTURE_SETUP_WEIGHT.get(name, 0) for name in ordered)
         rows.append(
             ModuleInventory(

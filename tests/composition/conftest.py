@@ -9,7 +9,9 @@ import pytest
 
 from tests.support.complete_runtime_fixtures import (
     attached_complete_runtime,
+    attached_complete_runtime_read_only,
     authorized_complete_runtime,
+    authorized_complete_runtime_read_only,
     authorized_portfolio_template,
     complete_portfolio_template,
     fresh_complete_runtime,
@@ -19,7 +21,9 @@ from tests.support.services import DomainTestServices, open_domain_services
 # Directory-scoped fixture registration (not pytest_plugins).
 __all__ = (
     "attached_complete_runtime",
+    "attached_complete_runtime_read_only",
     "authorized_complete_runtime",
+    "authorized_complete_runtime_read_only",
     "authorized_portfolio_template",
     "capability_core_services",
     "complete_portfolio_template",

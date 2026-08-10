@@ -52,8 +52,18 @@ Use the narrowest complete-runtime profile that proves the claim:
    exact verification adapters (typed verified-domain seam)
 3. `attached_complete_runtime` — complete portfolio, **no** checker authority
    (reference schemas/plugins are available without authorization)
-4. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
-5. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+4. `attached_complete_runtime_read_only` — module-shared attached copy for
+   non-mutating catalog/discovery inspection (one private template copy per
+   module; tests must not write artifacts or durable store state)
+5. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
+6. `authorized_complete_runtime_read_only` — module-shared authorized copy for
+   non-mutating authorized catalog inspection
+7. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+
+Prefer `attached_*` over `fresh_*` whenever a private template copy isolates the
+mutation; reserve `fresh_*` for empty-root install and lifecycle ownership.
+Prefer `*_read_only` over function-scoped attached/authorized when a module only
+discovers or catalogs and never mutates shared state.
 
 `authorized_complete_runtime` requires a real verify/authority assertion in
 the module (for example `CapabilityAssuranceLevel.VERIFIED`,
@@ -250,8 +260,10 @@ Immutable fixture templates are published by constructing in a temporary
 sibling and atomically renaming the completed directory. Each test receives a
 copied state directory; mutable stores, registries, and runtime
 objects are never shared. Composition fixtures make their cost visible through
-names such as `fresh_complete_runtime`, `attached_complete_runtime`, and
-`authorized_complete_runtime`.
+names such as `fresh_complete_runtime`, `attached_complete_runtime`,
+`attached_complete_runtime_read_only`, `authorized_complete_runtime`, and
+`authorized_complete_runtime_read_only`. Named fixtures remain thin wrappers
+over `RuntimeTestProfile` / `open_runtime_for`.
 
 Pull-request CI runs independently selected unit, component, domain,
 composition, storage, process, MCP, and e2e jobs. Provider and Lean lanes follow

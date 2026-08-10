@@ -220,11 +220,11 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
 
 
 def test_polynomial_map_evaluation_is_exact_and_materialized(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     polynomial_map = _jacobian_counterexample_map()
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.evaluate",
             input={
@@ -322,23 +322,23 @@ def test_polynomial_map_evaluation_is_exact_and_materialized(
     ],
 )
 def test_complete_request_validation_precedes_artifact_writes(
-    fresh_complete_runtime,
+    attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
     capability_id: str,
     payload: dict[str, Any],
     diagnostic_code: str,
 ) -> None:
     artifact_put_calls = 0
-    original_put = fresh_complete_runtime.core.artifacts.put
+    original_put = attached_complete_runtime.core.artifacts.put
 
     def recording_put(*args: Any, **kwargs: Any) -> Any:
         nonlocal artifact_put_calls
         artifact_put_calls += 1
         return original_put(*args, **kwargs)
 
-    monkeypatch.setattr(fresh_complete_runtime.core.artifacts, "put", recording_put)
+    monkeypatch.setattr(attached_complete_runtime.core.artifacts, "put", recording_put)
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(capability_id=capability_id, input=payload)
     )
 

@@ -12,7 +12,9 @@ from pathlib import Path
 from jacobian.runtime.model import JacobianRuntime
 from tests.support.runtime_profiles import (
     ATTACHED_COMPUTE,
+    ATTACHED_COMPUTE_READ_ONLY,
     AUTHORIZED_VERIFY,
+    AUTHORIZED_VERIFY_READ_ONLY,
     FRESH_LIFECYCLE,
     open_runtime_for,
 )
@@ -37,6 +39,19 @@ def iter_attached_complete_runtime(
     )
 
 
+def iter_attached_complete_runtime_read_only(
+    tmp_path: Path,
+    complete_portfolio_template: Path,
+) -> Iterator[JacobianRuntime]:
+    """Attach once for module-shared non-mutating complete-runtime inspection."""
+
+    yield from open_runtime_for(
+        ATTACHED_COMPUTE_READ_ONLY,
+        tmp_path=tmp_path,
+        complete_portfolio_template=complete_portfolio_template,
+    )
+
+
 def iter_authorized_complete_runtime(
     tmp_path: Path,
     authorized_portfolio_template: Path,
@@ -45,6 +60,19 @@ def iter_authorized_complete_runtime(
 
     yield from open_runtime_for(
         AUTHORIZED_VERIFY,
+        tmp_path=tmp_path,
+        authorized_portfolio_template=authorized_portfolio_template,
+    )
+
+
+def iter_authorized_complete_runtime_read_only(
+    tmp_path: Path,
+    authorized_portfolio_template: Path,
+) -> Iterator[JacobianRuntime]:
+    """Attach once for module-shared non-mutating authorized inspection."""
+
+    yield from open_runtime_for(
+        AUTHORIZED_VERIFY_READ_ONLY,
         tmp_path=tmp_path,
         authorized_portfolio_template=authorized_portfolio_template,
     )

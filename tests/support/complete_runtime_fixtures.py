@@ -20,7 +20,9 @@ from tests.support.resource_contracts import (
 )
 from tests.support.runtime_instances import (
     iter_attached_complete_runtime,
+    iter_attached_complete_runtime_read_only,
     iter_authorized_complete_runtime,
+    iter_authorized_complete_runtime_read_only,
     iter_fresh_complete_runtime,
 )
 from tests.support.runtime_templates import (
@@ -78,6 +80,25 @@ def attached_complete_runtime(
     yield from iter_attached_complete_runtime(tmp_path, complete_portfolio_template)
 
 
+@pytest.fixture(scope="module")
+@resource_fixture(
+    resources={ResourceKind.COMPLETE_RUNTIME},
+    isolation=IsolationClass.READ_ONLY,
+    share_scope="module",
+    profile_key="attached-complete-readonly-v1",
+)
+def attached_complete_runtime_read_only(
+    tmp_path_factory: pytest.TempPathFactory,
+    complete_portfolio_template: Path,
+) -> Iterator[JacobianRuntime]:
+    """Module-shared attach: one private template copy for non-mutating tests."""
+
+    yield from iter_attached_complete_runtime_read_only(
+        tmp_path_factory.mktemp("attached-readonly"),
+        complete_portfolio_template,
+    )
+
+
 @pytest.fixture
 @resource_fixture(
     resources={
@@ -96,10 +117,34 @@ def authorized_complete_runtime(
     yield from iter_authorized_complete_runtime(tmp_path, authorized_portfolio_template)
 
 
+@pytest.fixture(scope="module")
+@resource_fixture(
+    resources={
+        ResourceKind.COMPLETE_RUNTIME,
+        ResourceKind.AUTHORIZED_CHECKERS,
+    },
+    isolation=IsolationClass.READ_ONLY,
+    share_scope="module",
+    profile_key="authorized-complete-readonly-v1",
+)
+def authorized_complete_runtime_read_only(
+    tmp_path_factory: pytest.TempPathFactory,
+    authorized_portfolio_template: Path,
+) -> Iterator[JacobianRuntime]:
+    """Module-shared authorized attach for non-mutating inspection tests."""
+
+    yield from iter_authorized_complete_runtime_read_only(
+        tmp_path_factory.mktemp("authorized-readonly"),
+        authorized_portfolio_template,
+    )
+
+
 COMPLETE_RUNTIME_FIXTURE_NAMES = (
     "complete_portfolio_template",
     "authorized_portfolio_template",
     "fresh_complete_runtime",
     "attached_complete_runtime",
+    "attached_complete_runtime_read_only",
     "authorized_complete_runtime",
+    "authorized_complete_runtime_read_only",
 )

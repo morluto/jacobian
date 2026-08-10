@@ -9,9 +9,9 @@ COMPOSITION_ADMISSION = "DISCOVERY"
 
 
 def test_homology_intent_discovers_the_domain_owned_operation(
-    attached_complete_runtime,
+    attached_complete_runtime_read_only,
 ) -> None:
-    discovered = attached_complete_runtime.core.capabilities.discover(
+    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="homology of a finite simplicial complex over F_2",
             limit=5,

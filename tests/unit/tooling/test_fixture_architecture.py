@@ -102,12 +102,14 @@ def test_root_conftest_has_no_high_cost_imports_or_runtime_construction() -> Non
 def test_complete_runtime_fixtures_are_registered_only_by_owning_tiers() -> None:
     """Complete-runtime fixtures register under owning tiers, not the root."""
 
-    fixture_names = (
+    full_fixture_names = (
         "complete_portfolio_template",
         "authorized_portfolio_template",
         "fresh_complete_runtime",
         "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
         "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
     )
     root = runpy.run_path(str(ROOT / "conftest.py"))
     assert root.get("pytest_plugins") == ("tests.support.resource_closure_plugin",)
@@ -115,18 +117,24 @@ def test_complete_runtime_fixtures_are_registered_only_by_owning_tiers() -> None
         root.get("pytest_plugins")
     )
 
-    owners = (
+    full_owners = (
         ROOT / "composition" / "conftest.py",
         ROOT / "e2e" / "conftest.py",
         ROOT / "boundary" / "storage" / "conftest.py",
         ROOT / "boundary" / "providers" / "conftest.py",
-        ROOT / "boundary" / "mcp" / "conftest.py",
     )
-    for path in owners:
+    for path in full_owners:
         namespace = runpy.run_path(str(path))
         assert "pytest_plugins" not in namespace
-        for name in fixture_names:
+        for name in full_fixture_names:
             assert name in namespace, f"{path} missing {name}"
+
+    mcp = runpy.run_path(str(ROOT / "boundary" / "mcp" / "conftest.py"))
+    assert "pytest_plugins" not in mcp
+    assert "attached_complete_runtime" in mcp
+    assert "complete_portfolio_template" in mcp
+    assert "fresh_complete_runtime" not in mcp
+    assert "authorized_complete_runtime" not in mcp
 
     for tier in ("component", "domain", "unit"):
         confest = ROOT / tier / "conftest.py"

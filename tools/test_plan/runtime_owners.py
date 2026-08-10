@@ -19,7 +19,6 @@ COMPLETE_RUNTIME_FIXTURE_OWNERS: tuple[str, ...] = (
 _SUPPORT_CREATE_RUNTIME_MODULES = frozenset(
     {
         "tests/support/runtime_templates.py",
-        "tests/support/runtime_instances.py",
         "tests/support/runtime_profiles.py",
     }
 )

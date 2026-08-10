@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-pytest_plugins = (
-    "tests.support.runtime_templates",
-    "tests.support.runtime_instances",
+from tests.support.complete_runtime_fixtures import (
+    attached_complete_runtime,
+    authorized_complete_runtime,
+    authorized_portfolio_template,
+    complete_portfolio_template,
+    fresh_complete_runtime,
+)
+
+__all__ = (
+    "attached_complete_runtime",
+    "authorized_complete_runtime",
+    "authorized_portfolio_template",
+    "complete_portfolio_template",
+    "fresh_complete_runtime",
 )

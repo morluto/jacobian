@@ -155,6 +155,7 @@ name = "npm"
 kind = "gate"
 command = "make npm-test"
 topology_lane = false
+local_gate = true
 ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
 
 [[lanes]]
@@ -162,6 +163,7 @@ name = "static"
 kind = "gate"
 command = "make check-static"
 topology_lane = false
+local_gate = true
 local_subsumes = ["build"]
 ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
 
@@ -191,6 +193,7 @@ name = "docs"
 kind = "gate"
 command = "make docs-linkcheck"
 topology_lane = false
+local_gate = true
 ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
 
 [[lanes]]
@@ -483,9 +486,12 @@ patterns = [
   "tests/support/runtime_templates.py",
   "tests/support/runtime_instances.py",
   "tests/support/runtime_profiles.py",
+  "tests/support/complete_runtime_fixtures.py",
   "tests/support/resource_contracts.py",
   "tests/support/resource_closure_plugin.py",
   "tests/support/exact_domain.py",
+  "tests/support/core_capability_harnesses.py",
+  "tests/support/mcp_projection_catalog.py",
   "tests/support/process_entrypoints.py",
   "tests/support/search_entrypoints.py",
   "tests/support/conjecture_entrypoints.py",

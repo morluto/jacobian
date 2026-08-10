@@ -28,8 +28,13 @@ if _SCRIPTS_DIR not in sys.path:
 from _ci_paths import normalize_paths, path_values  # noqa: E402
 
 
-def _catalog() -> dict[str, dict[str, object]]:
+def _impact_catalog() -> tuple[tuple[str, ...], dict[str, dict[str, object]]]:
     data = json.loads((ROOT / ".github" / "ci-impact.json").read_text(encoding="utf-8"))
+    suites_raw = data.get("suites", ())
+    if not isinstance(suites_raw, list) or not all(
+        isinstance(item, str) and item for item in suites_raw
+    ):
+        raise ValueError("CI impact suites must be a list of names")
     catalog = data["catalog"]
     if not isinstance(catalog, dict):
         raise ValueError("CI catalog must be an object")
@@ -60,7 +65,7 @@ def _catalog() -> dict[str, dict[str, object]]:
 
     for name in catalog:
         visit(name)
-    return catalog
+    return tuple(str(item) for item in suites_raw), catalog
 
 
 def _topology_lanes() -> tuple[str, ...]:
@@ -80,7 +85,7 @@ def _topology_lanes() -> tuple[str, ...]:
     return tuple(names)
 
 
-_CATALOG = _catalog()
+_SUITE_ORDER, _CATALOG = _impact_catalog()
 COMMANDS = {
     name: (str(entry["command"]),)
     for name, entry in _CATALOG.items()
@@ -90,9 +95,16 @@ DEPLOY_COMMAND = str(_CATALOG["deploy"]["command"])
 
 TOPOLOGY_LANES = _topology_lanes()
 
-# Independent local gates. Security, duplicate-code, compatibility, coverage,
-# and platform matrices remain hosted-CI evidence.
-GATE_LANES = ("static", "npm", "docs")
+# Independent local gates. Derived from catalog entries marked local_gate,
+# ordered by the compiled suites list. Security, duplicate-code, and similar
+# hosted-only gates remain outside this tuple.
+GATE_LANES = tuple(
+    name
+    for name in _SUITE_ORDER
+    if _CATALOG.get(name, {}).get("local_gate") is True
+)
+if not GATE_LANES:
+    raise ValueError("CI catalog must declare at least one local_gate suite")
 
 LINT_TYPECHECK_COMMAND = "make lint typecheck"
 

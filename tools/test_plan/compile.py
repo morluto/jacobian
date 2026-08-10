@@ -39,6 +39,7 @@ class LaneSpec:
     providers: tuple[str, ...]
     local_subsumes: tuple[str, ...]
     local_only: bool
+    local_gate: bool
     topology_lane: bool
 
 
@@ -107,6 +108,7 @@ def load_manifest(path: Path) -> TestPlanManifest:
                     str(item) for item in raw.get("local_subsumes", ())
                 ),
                 local_only=bool(raw.get("local_only", False)),
+                local_gate=bool(raw.get("local_gate", False)),
                 topology_lane=bool(
                     raw.get("topology_lane", raw.get("kind", "pytest") == "pytest")
                 ),
@@ -209,6 +211,8 @@ def _catalog_entry(lane: LaneSpec) -> dict[str, Any]:
         entry["local_subsumes"] = list(lane.local_subsumes)
     if lane.local_only:
         entry["local_only"] = True
+    if lane.local_gate:
+        entry["local_gate"] = True
     return entry
 
 

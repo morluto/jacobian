@@ -73,14 +73,16 @@
     },
     "npm": {
       "command": "make npm-test",
-      "topology_lane": null
+      "topology_lane": null,
+      "local_gate": true
     },
     "static": {
       "command": "make check-static",
       "topology_lane": null,
       "local_subsumes": [
         "build"
-      ]
+      ],
+      "local_gate": true
     },
     "build": {
       "command": "make build",
@@ -96,7 +98,8 @@
     },
     "docs": {
       "command": "make docs-linkcheck",
-      "topology_lane": null
+      "topology_lane": null,
+      "local_gate": true
     },
     "deploy": {
       "command": "make deploy-check",
@@ -497,9 +500,12 @@
         "tests/support/runtime_templates.py",
         "tests/support/runtime_instances.py",
         "tests/support/runtime_profiles.py",
+        "tests/support/complete_runtime_fixtures.py",
         "tests/support/resource_contracts.py",
         "tests/support/resource_closure_plugin.py",
         "tests/support/exact_domain.py",
+        "tests/support/core_capability_harnesses.py",
+        "tests/support/mcp_projection_catalog.py",
         "tests/support/process_entrypoints.py",
         "tests/support/search_entrypoints.py",
         "tests/support/conjecture_entrypoints.py",

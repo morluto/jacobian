@@ -47,11 +47,13 @@ Lane identity also appears in Make targets and workflow jobs. Edit
 
 Use the narrowest complete-runtime profile that proves the claim:
 
-1. `open_domain_services(bundle)` — one named domain bundle
-2. `attached_complete_runtime` — complete portfolio, **no** checker authority
+1. `open_domain_services(bundle)` — one named domain bundle (producers only)
+2. `open_exact_domain_services(bundle)` — one named domain bundle **with** its
+   exact verification adapters (typed verified-domain seam)
+3. `attached_complete_runtime` — complete portfolio, **no** checker authority
    (reference schemas/plugins are available without authorization)
-3. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
-4. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+4. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
+5. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
 
 `authorized_complete_runtime` requires a real verify/authority assertion in
 the module (for example `CapabilityAssuranceLevel.VERIFIED`,

@@ -66,6 +66,17 @@ _COMPOSITION_PREFIX = PurePosixPath("tests/composition")
 _BOUNDARY_PREFIX = PurePosixPath("tests/boundary")
 _E2E_PREFIXES = (PurePosixPath("tests/e2e"),)
 
+# Ordinary domain fixtures must use the typed verified-domain seam rather than
+# reassembling install_exact_domain_verification by hand.
+_EXACT_DOMAIN_INSTALL_ALLOWLIST = frozenset(
+    {
+        "src/jacobian/portfolio/core_installation.py",
+        "src/jacobian/exact_domain_checkers.py",
+        "tests/support/exact_domain.py",
+        "tests/component/checkers/test_exact_domain_checker_installation.py",
+    }
+)
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -546,6 +557,79 @@ def _conftest_fixture_violations(tree: ast.AST, relative: str) -> list[Violation
     return violations
 
 
+def _non_root_pytest_plugins_violations(
+    tree: ast.AST, relative: str
+) -> list[Violation]:
+    """Reject non-root ``pytest_plugins`` (deprecated and session-global)."""
+
+    if relative == "tests/conftest.py" or not relative.endswith("/conftest.py"):
+        return []
+    violations: list[Violation] = []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "pytest_plugins":
+                violations.append(
+                    Violation(
+                        relative,
+                        "non-root-pytest-plugins",
+                        "declare complete-runtime fixtures in the owning conftest "
+                        "instead of non-root pytest_plugins",
+                        node.lineno,
+                        node.col_offset,
+                    )
+                )
+    return violations
+
+
+def _exact_domain_install_violations(
+    tree: ast.AST, relative: str
+) -> list[Violation]:
+    """Ordinary domain confests must use open_exact_domain_services."""
+
+    path = PurePosixPath(relative)
+    if relative in _EXACT_DOMAIN_INSTALL_ALLOWLIST:
+        return []
+    if not (relative.startswith("tests/domain/") and path.name == "conftest.py"):
+        return []
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == (
+            "jacobian.exact_domain_checkers"
+        ):
+            for alias in node.names:
+                if alias.name == "install_exact_domain_verification":
+                    violations.append(
+                        Violation(
+                            relative,
+                            "exact-domain-install-recipe",
+                            "use tests.support.exact_domain.open_exact_domain_services "
+                            "instead of copying install_exact_domain_verification",
+                            node.lineno,
+                            node.col_offset,
+                        )
+                    )
+        if isinstance(node, ast.Call):
+            name = None
+            if isinstance(node.func, ast.Name):
+                name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                name = node.func.attr
+            if name == "install_exact_domain_verification":
+                violations.append(
+                    Violation(
+                        relative,
+                        "exact-domain-install-recipe",
+                        "use tests.support.exact_domain.open_exact_domain_services "
+                        "instead of copying install_exact_domain_verification",
+                        node.lineno,
+                        node.col_offset,
+                    )
+                )
+    return violations
+
+
 def _file_violations(
     file_path: Path,
     project_root: Path,
@@ -592,6 +676,8 @@ def _file_violations(
             )
     if relative == "tests/conftest.py":
         violations.extend(_conftest_fixture_violations(tree, relative))
+    violations.extend(_non_root_pytest_plugins_violations(tree, relative))
+    violations.extend(_exact_domain_install_violations(tree, relative))
     return violations
 
 

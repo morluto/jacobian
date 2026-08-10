@@ -1,18 +1,15 @@
-"""Function-scoped complete-runtime fixtures for owning test tiers."""
+"""Undecorated complete-runtime instance factories.
+
+Owning-tier conftests wrap these helpers as local ``@pytest.fixture`` definitions.
+Do not register this module through ``pytest_plugins``.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-
 from jacobian.runtime.model import JacobianRuntime
-from tests.support.resource_contracts import (
-    IsolationClass,
-    ResourceKind,
-    resource_fixture,
-)
 from tests.support.runtime_profiles import (
     ATTACHED_COMPUTE,
     AUTHORIZED_VERIFY,
@@ -21,27 +18,13 @@ from tests.support.runtime_profiles import (
 )
 
 
-@pytest.fixture
-@resource_fixture(
-    resources={ResourceKind.COMPLETE_RUNTIME},
-    isolation=IsolationClass.LIFECYCLE_OWNER,
-    profile_key="fresh-complete-v1",
-)
-def fresh_complete_runtime(
-    tmp_path: Path,
-) -> Iterator[JacobianRuntime]:
+def iter_fresh_complete_runtime(tmp_path: Path) -> Iterator[JacobianRuntime]:
     """Materialize a complete runtime from an empty test-owned state root."""
 
     yield from open_runtime_for(FRESH_LIFECYCLE, tmp_path=tmp_path)
 
 
-@pytest.fixture
-@resource_fixture(
-    resources={ResourceKind.COMPLETE_RUNTIME},
-    isolation=IsolationClass.PRIVATE_MUTABLE,
-    profile_key="attached-complete-v1",
-)
-def attached_complete_runtime(
+def iter_attached_complete_runtime(
     tmp_path: Path,
     complete_portfolio_template: Path,
 ) -> Iterator[JacobianRuntime]:
@@ -54,16 +37,7 @@ def attached_complete_runtime(
     )
 
 
-@pytest.fixture
-@resource_fixture(
-    resources={
-        ResourceKind.COMPLETE_RUNTIME,
-        ResourceKind.AUTHORIZED_CHECKERS,
-    },
-    isolation=IsolationClass.PRIVATE_MUTABLE,
-    profile_key="authorized-complete-v1",
-)
-def authorized_complete_runtime(
+def iter_authorized_complete_runtime(
     tmp_path: Path,
     authorized_portfolio_template: Path,
 ) -> Iterator[JacobianRuntime]:

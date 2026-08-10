@@ -114,10 +114,10 @@ def test_sibling_conftest_imports_are_rejected(tmp_path: Path) -> None:
     assert [item.code for item in report.violations] == ["conftest-import"]
 
 
-def test_runtime_fixture_plugins_are_explicit_construction_owners(
+def test_runtime_fixture_builders_are_explicit_construction_owners(
     tmp_path: Path,
 ) -> None:
-    for name in ("runtime_templates.py", "runtime_instances.py"):
+    for name in ("runtime_templates.py", "runtime_profiles.py"):
         _test_file(
             tmp_path,
             f"tests/support/{name}",

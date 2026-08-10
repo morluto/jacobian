@@ -99,15 +99,21 @@ def test_root_conftest_has_no_high_cost_imports_or_runtime_construction() -> Non
     )
 
 
-def test_complete_runtime_plugin_is_registered_only_by_owning_tiers() -> None:
+def test_complete_runtime_fixtures_are_registered_only_by_owning_tiers() -> None:
     """Complete-runtime fixtures register under owning tiers, not the root."""
 
-    plugin_names = (
-        "tests.support.runtime_templates",
-        "tests.support.runtime_instances",
+    fixture_names = (
+        "complete_portfolio_template",
+        "authorized_portfolio_template",
+        "fresh_complete_runtime",
+        "attached_complete_runtime",
+        "authorized_complete_runtime",
     )
     root = runpy.run_path(str(ROOT / "conftest.py"))
     assert root.get("pytest_plugins") == ("tests.support.resource_closure_plugin",)
+    assert "pytest_plugins" not in root or "runtime" not in str(
+        root.get("pytest_plugins")
+    )
 
     owners = (
         ROOT / "composition" / "conftest.py",
@@ -118,11 +124,18 @@ def test_complete_runtime_plugin_is_registered_only_by_owning_tiers() -> None:
     )
     for path in owners:
         namespace = runpy.run_path(str(path))
-        assert namespace["pytest_plugins"] == plugin_names
+        assert "pytest_plugins" not in namespace
+        for name in fixture_names:
+            assert name in namespace, f"{path} missing {name}"
 
-    for tier in ("component", "domain"):
-        imports = _imports(ROOT / tier / "conftest.py")
-        assert not any(name in imports for name in plugin_names)
+    for tier in ("component", "domain", "unit"):
+        confest = ROOT / tier / "conftest.py"
+        if not confest.exists():
+            continue
+        imports = _imports(confest)
+        assert "tests.support.complete_runtime_fixtures" not in imports
+        assert "tests.support.runtime_templates" not in imports
+        assert "tests.support.runtime_instances" not in imports
         assert not any(module.startswith("jacobian.portfolio") for module in imports)
 
 

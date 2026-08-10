@@ -1,7 +1,10 @@
 """Independent checker declarations owned by the graph-optimization domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
+from jacobian.contracts.graph_invariant_operations import (
+    Graph6DecodeRequest,
+    GraphInvariantRequest,
+)
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphMinimumSpanningTreeRequest,
@@ -180,6 +183,31 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "graph",
             "matching",
             "tutte-berge",
+        ),
+    ),
+    ExactReplayCheckerDeclaration(
+        "graph.encoding.graph6.decode.compute",
+        Graph6DecodeRequest,
+        "check_graph6_decode",
+        "graph.graph6-decode.standard-library-v1",
+        entrypoint_module=_GRAPH_ENTRYPOINT,
+        replay_method="standard-library graph6 bitstream replay",
+        reason=(
+            "operator-authorized standard-library checker independently decodes "
+            "the graph6 bitstream without importing the producer"
+        ),
+        verification_capability_id="graph.encoding.graph6.decode.verify",
+        verification_title="Verify a canonical graph6 decode",
+        verification_description=(
+            "Independently replay the small-order graph6 header, upper-triangle "
+            "bits, padding, sorted edges, degrees, and canonical graph digest."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "graph",
+            "encoding",
+            "graph6",
         ),
     ),
 )

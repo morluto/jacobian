@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections import deque
 from collections.abc import Callable
@@ -11,6 +13,60 @@ from itertools import combinations, pairwise
 from typing import Any, cast
 
 from jacobian_checkers.bound_artifacts import bound_request
+
+
+def _graph6_decode(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(source) != {"graph6"} or not isinstance(source["graph6"], str):
+        return False
+    value = source["graph6"]
+    if value.startswith(">>graph6<<"):
+        value = value[10:]
+    if not value or value[0] in {":", "&"}:
+        raise ValueError("unsupported graph encoding")
+    codes = [ord(character) - 63 for character in value]
+    if any(code < 0 or code > 63 for code in codes) or codes[0] == 63:
+        raise ValueError("malformed or extended graph6 encoding")
+    order = codes[0]
+    bit_count = order * (order - 1) // 2
+    if len(codes) != 1 + (bit_count + 5) // 6:
+        raise ValueError("graph6 length does not match order")
+    bits = [(code >> shift) & 1 for code in codes[1:] for shift in range(5, -1, -1)]
+    if any(bits[bit_count:]):
+        raise ValueError("graph6 padding bits are nonzero")
+    pairs = [(first, second) for second in range(1, order) for first in range(second)]
+    edges = sorted(pair for pair, bit in zip(pairs, bits, strict=False) if bit)
+    degrees = [0] * order
+    for first, second in edges:
+        degrees[first] += 1
+        degrees[second] += 1
+    digest_payload = json.dumps(
+        {"edges": [list(edge) for edge in edges], "order": order},
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return result == {
+        "graph6": value,
+        "order": order,
+        "edges": [{"first": first, "second": second} for first, second in edges],
+        "degrees": degrees,
+        "graph_digest": "sha256:" + hashlib.sha256(digest_payload).hexdigest(),
+        "format": "GRAPH6_SMALL_ORDER",
+        "bit_order": "COLUMN_MAJOR_UPPER_TRIANGLE",
+        "exactness": "EXACT_BINARY_DECODE",
+        "verification": "UNVERIFIED",
+    }
+
+
+def check_graph6_decode(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="graph.encoding.graph6.decode.compute",
+        witness_format="graph.graph6-decode.standard-library-v1",
+        replay=_graph6_decode,
+        replay_method="graph6 bitstream replay",
+    )
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -1299,6 +1355,7 @@ def check_graph_maximum_matching(request: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "check_graph6_decode",
     "check_graph_diameter",
     "check_graph_distance_matrix",
     "check_graph_hamiltonian_path",

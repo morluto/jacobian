@@ -25,11 +25,12 @@ def build_graph_invariant_bundle() -> DomainBundle:
         schema_namespace="jacobian.graph-invariants",
         semantics=DomainSemantics(
             name="jacobian.finite-simple-graph-invariants",
-            version="1",
+            version="2",
             definition={
                 "graph_class": "finite simple undirected",
                 "maximum_order": 32,
                 "maximum_edges": 496,
+                "graph6_decode_maximum_order": 62,
                 "exact_computations": [
                     "girth",
                     "diameter",
@@ -38,6 +39,7 @@ def build_graph_invariant_bundle() -> DomainBundle:
                     "is_eulerian",
                     "spanning_tree_count",
                     "maximum_matching",
+                    "small-order graph6 decoding",
                 ],
                 "spanning_tree_arithmetic": "exact SymPy integer determinant",
                 "assurance": "computed; no producer result is independently verified",

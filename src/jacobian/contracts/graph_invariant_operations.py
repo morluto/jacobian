@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, StrictStr, model_validator
 
+from jacobian.contracts.common import Sha256Digest
 from jacobian.contracts.graph_coloring import ChromaticGraph, GraphVertex
 from jacobian.contracts.graph_optimization import (
     OptimizationSearchStep,
@@ -17,6 +18,50 @@ from jacobian.contracts.results import ContractModel
 
 class GraphInvariantRequest(ContractModel):
     graph: ChromaticGraph
+
+
+class Graph6DecodeRequest(ContractModel):
+    graph6: StrictStr = Field(min_length=1, max_length=352)
+
+
+class Graph6Edge(ContractModel):
+    first: StrictInt = Field(ge=0, le=62)
+    second: StrictInt = Field(ge=0, le=62)
+
+    @model_validator(mode="after")
+    def require_canonical_endpoints(self) -> Self:
+        if self.first >= self.second:
+            raise ValueError("graph6 edge endpoints must be strictly increasing")
+        return self
+
+
+class Graph6DecodeResult(ContractModel):
+    graph6: StrictStr = Field(min_length=1, max_length=352)
+    order: StrictInt = Field(ge=0, le=62)
+    edges: tuple[Graph6Edge, ...] = Field(max_length=1891)
+    degrees: tuple[StrictInt, ...] = Field(max_length=62)
+    graph_digest: Sha256Digest
+    format: Literal["GRAPH6_SMALL_ORDER"] = "GRAPH6_SMALL_ORDER"
+    bit_order: Literal["COLUMN_MAJOR_UPPER_TRIANGLE"] = "COLUMN_MAJOR_UPPER_TRIANGLE"
+    exactness: Literal["EXACT_BINARY_DECODE"] = "EXACT_BINARY_DECODE"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+    @model_validator(mode="after")
+    def bind_dimensions(self) -> Self:
+        if len(self.degrees) != self.order:
+            raise ValueError("graph6 degree sequence must match graph order")
+        pairs = tuple((edge.first, edge.second) for edge in self.edges)
+        if pairs != tuple(sorted(pairs)) or len(pairs) != len(set(pairs)):
+            raise ValueError("graph6 edges must be unique and sorted")
+        if any(edge.second >= self.order for edge in self.edges):
+            raise ValueError("graph6 edge endpoint exceeds graph order")
+        expected = [0] * self.order
+        for edge in self.edges:
+            expected[edge.first] += 1
+            expected[edge.second] += 1
+        if tuple(expected) != self.degrees:
+            raise ValueError("graph6 degree sequence does not match edges")
+        return self
 
 
 GraphDistance = Annotated[StrictInt, Field(ge=0, le=31)] | None

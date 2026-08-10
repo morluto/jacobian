@@ -60,6 +60,64 @@ def graph_verification_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
+def test_graph6_h24_decode_is_exact_and_independently_replayed(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    payload = {"graph6": "W{CGW_@?Y??@?@?@_@??@??K_????G??C??B??@????_??B"}
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.encoding.graph6.decode.compute",
+            input=payload,
+        )
+    )
+    decoded = computed.output["result"]
+    assert decoded["order"] == 24
+    assert len(decoded["edges"]) == 30
+    assert max(decoded["degrees"]) == 3
+    assert decoded["edges"][:4] == [
+        {"first": 0, "second": 1},
+        {"first": 0, "second": 2},
+        {"first": 0, "second": 3},
+        {"first": 1, "second": 2},
+    ]
+
+    verified = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.encoding.graph6.decode.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": decoded},
+        )
+    )
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+
+
+def test_graph6_checker_rejects_wrong_bit_order_result(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    payload = {"graph6": "Bw"}
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.encoding.graph6.decode.compute",
+            input=payload,
+        )
+    )
+    forged = deepcopy(computed.output["result"])
+    forged["edges"] = forged["edges"][:-1]
+    forged["degrees"] = [2, 1, 1]
+
+    rejected = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.encoding.graph6.decode.verify",
+            mode=CapabilityMode.VERIFY,
+            input={"input": payload, "candidate": forged},
+        )
+    )
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+
+
 def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     graph_verification_services: DomainTestServices,
 ) -> None:

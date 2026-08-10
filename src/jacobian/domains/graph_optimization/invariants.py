@@ -5,13 +5,18 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Any, cast
 
+from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInvocationExample,
 )
 from jacobian.contracts.graph_invariant_operations import (
+    Graph6DecodeRequest,
+    Graph6DecodeResult,
+    Graph6Edge,
     GraphCardinalityMaximumObligation,
     GraphCliqueNumberResult,
     GraphCoreRequest,
@@ -56,6 +61,74 @@ _INVALID_REQUEST = CapabilityDiagnostic(
     message="Input does not satisfy the bounded finite simple-graph contract.",
     hint="Supply a canonical simple graph with at most 32 vertices.",
 )
+
+
+def _decode_graph6(request: Graph6DecodeRequest) -> ComputedOutcome[Graph6DecodeResult]:
+    value = request.graph6
+    if value.startswith(">>graph6<<"):
+        value = value[10:]
+    if not value or value[0] in {":", "&"}:
+        return ComputedNotApplicable(
+            CapabilityDiagnostic(
+                code="GRAPH6_FORMAT_UNSUPPORTED",
+                stage="graph6_decoding",
+                message="Only graph6 is supported; sparse6 and digraph6 are rejected.",
+            )
+        )
+    codes = [ord(character) - 63 for character in value]
+    if any(code < 0 or code > 63 for code in codes) or codes[0] == 63:
+        return ComputedNotApplicable(
+            CapabilityDiagnostic(
+                code="GRAPH6_ENCODING_INVALID",
+                stage="graph6_decoding",
+                message="The graph6 payload is malformed or uses an extended header.",
+            )
+        )
+    order = codes[0]
+    bit_count = order * (order - 1) // 2
+    expected_characters = (bit_count + 5) // 6
+    if len(codes) != 1 + expected_characters:
+        return ComputedNotApplicable(
+            CapabilityDiagnostic(
+                code="GRAPH6_LENGTH_INVALID",
+                stage="graph6_decoding",
+                message="The graph6 payload length does not match its order header.",
+            )
+        )
+    bits = [(code >> shift) & 1 for code in codes[1:] for shift in range(5, -1, -1)]
+    if any(bits[bit_count:]):
+        return ComputedNotApplicable(
+            CapabilityDiagnostic(
+                code="GRAPH6_PADDING_INVALID",
+                stage="graph6_decoding",
+                message="Unused graph6 padding bits must be zero.",
+            )
+        )
+    pairs = [(first, second) for second in range(1, order) for first in range(second)]
+    edges = tuple(
+        Graph6Edge(first=first, second=second)
+        for first, second in sorted(
+            pair for pair, bit in zip(pairs, bits, strict=False) if bit
+        )
+    )
+    degrees = [0] * order
+    for edge in edges:
+        degrees[edge.first] += 1
+        degrees[edge.second] += 1
+    canonical_graph = {
+        "order": order,
+        "edges": [[edge.first, edge.second] for edge in edges],
+    }
+    return ComputedSuccess(
+        Graph6DecodeResult(
+            graph6=value,
+            order=order,
+            edges=edges,
+            degrees=tuple(degrees),
+            graph_digest="sha256:"
+            + sha256(canonicalize_json(canonical_graph)).hexdigest(),
+        )
+    )
 
 
 def _computed[
@@ -521,6 +594,27 @@ BOUNDED_GRAPH_INVARIANT_CAPABILITIES = (
 )
 
 EXACT_GRAPH_INVARIANT_CAPABILITIES = (
+    ComputedOperation(
+        capability_id="graph.encoding.graph6.decode.compute",
+        title="Decode canonical small-order graph6",
+        description=(
+            "Decode a headerless or standard-header graph6 string of order at "
+            "most 62 using the column-major upper-triangle bit convention, "
+            "returning sorted edges, degrees, and a canonical graph digest."
+        ),
+        request_model=Graph6DecodeRequest,
+        result_model=Graph6DecodeResult,
+        implementation=_decode_graph6,
+        relation_id="graph.encoding.graph6.relation",
+        tags=("graph", "encoding", "graph6", "deterministic", "exact"),
+        invocation_examples=(
+            example(
+                "triangle_graph6",
+                "Decode the graph6 representation of the triangle graph.",
+                {"graph6": "Bw"},
+            ),
+        ),
+    ),
     _computed(
         "graph.distance_matrix.compute",
         "All-pairs distance matrix",

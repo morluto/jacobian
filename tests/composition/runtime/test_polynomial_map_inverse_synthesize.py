@@ -275,9 +275,7 @@ def test_full_support_and_coefficient_order_are_deterministic(
     "mutation",
     ["variable_order", "coefficient_domain"],
 )
-def test_ring_mismatches_fail_closed(
-    attached_complete_runtime, mutation: str
-) -> None:
+def test_ring_mismatches_fail_closed(attached_complete_runtime, mutation: str) -> None:
     payload = deepcopy(_request(degree=2).input)
     if mutation == "variable_order":
         payload["source_variables"] = ["y", "x"]

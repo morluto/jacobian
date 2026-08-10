@@ -305,7 +305,9 @@
         ".github/scripts/emit-plan-receipt",
         ".github/scripts/normalize-ci-paths",
         ".github/scripts/plan-local-tests",
-        ".github/scripts/validate-ci-plan"
+        ".github/scripts/validate-ci-plan",
+        "tools/test_plan/**",
+        "tools/inventory_test_runtime.py"
       ],
       "suites": [
         "unit",
@@ -495,7 +497,6 @@
         "tests/support/runtime_templates.py",
         "tests/support/runtime_instances.py",
         "tests/support/runtime_profiles.py",
-        "tests/support/execution_profiles.py",
         "tests/support/resource_contracts.py",
         "tests/support/resource_closure_plugin.py",
         "tests/support/fail_closed.py",

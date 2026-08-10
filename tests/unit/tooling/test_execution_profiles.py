@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from tests.support.execution_profiles import compile_execution_profile
-from tests.support.resource_contracts import IsolationClass, ResourceKind
 from tools.test_plan.execution_profiles import (
+    compile_execution_profile,
     profile_for_lane,
     validate_lane_against_profile,
 )
@@ -13,8 +12,8 @@ from tools.test_plan.execution_profiles import (
 def test_process_resource_dominates_semantic_defaults() -> None:
     profile = compile_execution_profile(
         semantic_owner="composition",
-        resources={ResourceKind.COMPLETE_RUNTIME, ResourceKind.PROCESS_GROUP},
-        isolation=IsolationClass.PRIVATE_MUTABLE,
+        resources={"complete-runtime", "process-group"},
+        default_workers=4,
     )
     assert profile.name == "process-isolated"
     assert profile.process_supervision is True

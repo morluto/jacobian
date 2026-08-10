@@ -14,8 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.makefile_catalog import MakefileCatalogError, discover_makefiles
-from tools.test_plan.ci_outputs import (
+from tools.makefile_catalog import (  # noqa: E402
+    MakefileCatalogError,
+    discover_makefiles,
+)
+from tools.test_plan.ci_outputs import (  # noqa: E402
     boolean_run_keys,
     matrix_lane_names,
     python_run_keys,

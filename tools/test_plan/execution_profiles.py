@@ -1,4 +1,4 @@
-"""Compile semantic owner × resources into an execution profile.
+"""Compile semantic owner x resources into an execution profile.
 
 Resource dominance wins over directory convenience: sqlite serializes, process
 and lean lanes keep process-group-safe supervision, and setup affinity keys

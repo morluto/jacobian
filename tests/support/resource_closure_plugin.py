@@ -9,9 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tools.test_plan.authority_signals import VERIFY_AUTHORITY_SIGNALS
 
 from tests.support.resource_contracts import ResourceKind, resource_contract
-from tools.test_plan.authority_signals import VERIFY_AUTHORITY_SIGNALS
 
 _COMPLETE_RUNTIME_OWNERS = (
     "tests/composition/",

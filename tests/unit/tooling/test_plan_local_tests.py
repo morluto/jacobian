@@ -217,9 +217,7 @@ def test_plan_falls_back_for_changed_source_without_exact_ownership(
     tests, fallback = planner.exact_tests([planner.Change("M", "src/jacobian/leaf.py")])
 
     assert tests == []
-    assert fallback == (
-        "src/jacobian/leaf.py: no exact ownership; use lane fallback"
-    )
+    assert fallback == ("src/jacobian/leaf.py: no exact ownership; use lane fallback")
 
 
 def test_plan_falls_back_for_delete_rename_and_untracked_changes(

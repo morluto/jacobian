@@ -123,7 +123,6 @@ def test_solution_capability_keeps_checker_failure_unknown(
     assert result.relationships == ()
 
 
-
 def test_solution_capability_is_only_available_with_checker(
     attached_complete_runtime,
 ) -> None:
@@ -135,5 +134,3 @@ def test_solution_capability_is_only_available_with_checker(
     }
 
     assert "polynomial.system.solution.verify" not in ids
-
-

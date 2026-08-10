@@ -227,6 +227,22 @@ def _validate_workers_distribution(name: str, workers: Any, distribution: Any) -
         raise TopologyError(f"lane {name}: workers>0 requires an xdist distribution")
 
 
+def _validate_execution_profile_fields(
+    name: str,
+    *,
+    execution_profile: Any,
+    process_supervision: Any,
+    setup_affinity: Any,
+) -> tuple[str, bool, str]:
+    if not isinstance(execution_profile, str):
+        raise TopologyError(f"lane {name}.execution_profile must be a string")
+    if not isinstance(process_supervision, bool):
+        raise TopologyError(f"lane {name}.process_supervision must be boolean")
+    if not isinstance(setup_affinity, str):
+        raise TopologyError(f"lane {name}.setup_affinity must be a string")
+    return execution_profile, process_supervision, setup_affinity
+
+
 def _validate_lane_constraints(
     fields: dict[str, Any], index: int, names: set[str]
 ) -> Lane:
@@ -253,15 +269,14 @@ def _validate_lane_constraints(
         raise TopologyError(f"lane {name}.timing_sharding must be boolean")
     if not _ci_ok(ci):
         raise TopologyError(f"lane {name}.ci must define {_CI_TARGETS} as booleans")
-    execution_profile = fields["execution_profile"]
-    process_supervision = fields["process_supervision"]
-    setup_affinity = fields["setup_affinity"]
-    if not isinstance(execution_profile, str):
-        raise TopologyError(f"lane {name}.execution_profile must be a string")
-    if not isinstance(process_supervision, bool):
-        raise TopologyError(f"lane {name}.process_supervision must be boolean")
-    if not isinstance(setup_affinity, str):
-        raise TopologyError(f"lane {name}.setup_affinity must be a string")
+    execution_profile, process_supervision, setup_affinity = (
+        _validate_execution_profile_fields(
+            name,
+            execution_profile=fields["execution_profile"],
+            process_supervision=fields["process_supervision"],
+            setup_affinity=fields["setup_affinity"],
+        )
+    )
     names.add(name)
     return Lane(
         name,

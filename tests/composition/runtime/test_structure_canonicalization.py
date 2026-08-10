@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "REFERENCE"
+
 
 def test_isomorphic_graphs_share_one_canonical_object(
     attached_complete_runtime,

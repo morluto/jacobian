@@ -4,6 +4,9 @@ import pytest
 
 from jacobian.artifacts import ArtifactValidationError
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "REFERENCE"
+
 pytestmark = pytest.mark.xdist_group("reference-claim-schemas")
 
 

@@ -21,6 +21,9 @@ from jacobian.contracts.verification import VerificationRecord
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _producer() -> CapabilityProviderRuntime:
     return CapabilityProviderRuntime(

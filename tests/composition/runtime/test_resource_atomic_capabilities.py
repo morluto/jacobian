@@ -5,6 +5,9 @@ from __future__ import annotations
 from jacobian.contracts.capabilities import CapabilityAssuranceLevel, CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "MIXED"
+
 
 def test_consolidated_domain_results_are_exact_computed_evidence(
     attached_complete_runtime,

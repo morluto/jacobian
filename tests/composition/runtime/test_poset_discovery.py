@@ -8,6 +8,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "DISCOVERY"
+
 
 def test_poset_width_intents_discover_the_domain_owned_operation(
     attached_complete_runtime,

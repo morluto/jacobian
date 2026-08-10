@@ -1,3 +1,9 @@
+"""Complete-runtime MCP edge: live inspection compaction against an attached catalog.
+
+This is the MCP lane's only intentional ``attached_complete_runtime`` consumer.
+Ordinary projection compaction lives under ``tests/component/adapters/mcp/``.
+"""
+
 from __future__ import annotations
 
 import asyncio

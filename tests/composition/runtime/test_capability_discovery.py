@@ -18,6 +18,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.runtime.model import JacobianRuntime
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "DISCOVERY"
+
 
 def test_installed_capability_discovery_is_compact_deterministic_and_transparent(
     capability_core_services: DomainTestServices,

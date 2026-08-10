@@ -8,6 +8,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import Conclusion
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _variable(name: str) -> dict[str, object]:
     return {"kind": "VARIABLE", "variable": name, "left": None, "right": None}

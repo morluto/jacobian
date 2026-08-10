@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "role": "Exact pytest selector overrides for non-test paths only. Lane/gate/impact authority lives in tests/plan_manifest.toml (compiled to topology + ci-impact). Do not treat this file as a second planner.",
   "overrides": {
     ".github/ci-impact.json": [
       "tests/boundary/process/tooling/test_ci_classification.py",

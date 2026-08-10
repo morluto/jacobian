@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from jacobian.graphs import GraphInstallation
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "WIRING"
+
 _GRAPH_CAPABILITY_VERSIONS = {
     "graph.construct.explicit": "1",
     "graph.search.atlas": "1",

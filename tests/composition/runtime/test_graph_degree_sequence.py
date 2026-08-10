@@ -6,6 +6,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import Conclusion
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def test_degree_sequence_realization_materializes_replayable_graph(
     authorized_complete_runtime,

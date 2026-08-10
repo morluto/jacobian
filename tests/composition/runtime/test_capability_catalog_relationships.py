@@ -23,6 +23,9 @@ from jacobian.contracts.capabilities import (
 from jacobian.domains.builtins import build_builtin_domain_bundles
 from jacobian.storage.repository import ArtifactRepository
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _relationship(target: str) -> CapabilityCatalogRelationship:
     return CapabilityCatalogRelationship(

@@ -1,3 +1,9 @@
+"""Owned MCP smoke journey: live SDK find → run without complete-runtime fixtures.
+
+``create_server(tmp_path)`` installs a fresh server-owned runtime. Keep this
+module small; do not grow ordinary projection or capability matrices here.
+"""
+
 from __future__ import annotations
 
 import asyncio

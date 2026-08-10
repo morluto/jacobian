@@ -3,6 +3,31 @@ version = 1
 # Authoritative test/CI plan manifest.
 # Compile with: make compile-test-plan
 # Projections: tests/topology.toml and .github/ci-impact.json (generated).
+#
+# [local_planning] feeds `.github/scripts/plan-local-tests` so infrastructure and
+# high-impact path policy is not hard-coded beside the compiled catalog.
+# `.github/local-test-ownership.json` remains a thin exact-selector override map
+# for non-test paths; it is not lane authority.
+
+[local_planning]
+infrastructure_prefixes = [
+  ".github/",
+  "Makefile",
+  "make/",
+  "pyproject.toml",
+  "uv.lock",
+  "tools/",
+  ".pre-commit-config.yaml",
+  ".jscpd.json",
+  "tests/topology.toml",
+  "tests/plan_manifest.toml",
+]
+high_impact_paths = [
+  "src/jacobian/__init__.py",
+  "tests/conftest.py",
+  "pyproject.toml",
+  "uv.lock",
+]
 
 [[lanes]]
 name = "unit"

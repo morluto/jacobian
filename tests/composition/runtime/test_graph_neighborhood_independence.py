@@ -7,6 +7,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import Conclusion
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 _LEFT = tuple(range(6))
 _RIGHT = tuple(range(6, 14))
 _MISSING = {

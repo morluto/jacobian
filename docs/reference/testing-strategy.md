@@ -78,6 +78,26 @@ component lanes (prefer `open_domain_services` /
 `open_exact_domain_services`). Complete-runtime fixtures are visible only under
 owning composition, e2e, and named boundary confests.
 
+Every composition `test_*.py` that uses a complete-runtime fixture must declare
+a module-level admission category:
+
+```python
+COMPOSITION_ADMISSION = "AUTHORITY"  # or WIRING, LIFECYCLE, DISCOVERY, REFERENCE, MIXED
+```
+
+| Category | Meaning |
+| --- | --- |
+| `AUTHORITY` | Checker presence/absence, hydration, verify handoff, fail-closed trust |
+| `WIRING` | Portfolio install, catalog contracts, cross-service artifact identity |
+| `LIFECYCLE` | Bootstrap, attach, close, recovery, worker quiesce |
+| `DISCOVERY` | Whole-portfolio discovery ranking / intent routing |
+| `REFERENCE` | Portfolio reference-set / structure-canonicalization contracts |
+| `MIXED` | Temporary: ordinary capability matrices still pending domain demotion |
+
+`tools/check_test_architecture.py` fails closed when a complete-runtime
+composition module omits the declaration or uses an unknown category. Prefer
+shrinking `MIXED` over expanding it.
+
 A test's directory answers what kind of behavior it owns. A marker is retained
 only when it changes execution. The CI impact manifest maps changed paths to
 every explicitly owned lane, with additive multi-owner rules and a fail-closed
@@ -112,6 +132,15 @@ receipt bound to the event, base/head revisions, changed-path digest, planner
 digest, configuration digests, and canonical plan digest. `make harbor-plan`
 uses the pinned Harbor runtime because task digests are part of the plan
 contract.
+
+Local planning reads `[local_planning]` from `tests/plan_manifest.toml` for
+infrastructure prefixes and high-impact paths. Exact pytest selectors for
+non-test paths remain in `.github/local-test-ownership.json` as a thin override
+map only—not a second lane/impact planner. Prefer folding stable overrides into
+manifest impact rules over growing that JSON.
+
+`make test-runtime-inventory` reports complete-runtime fixture setup weights and
+the heaviest paths so demotions can target real cost.
 
 ### Local development and CI ownership
 

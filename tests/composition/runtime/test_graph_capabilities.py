@@ -11,6 +11,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "MIXED"
+
 
 def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
     attached_complete_runtime,

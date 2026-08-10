@@ -13,6 +13,9 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.verification import CheckerExecutionError
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _input(value: int) -> dict[str, Any]:
     return {

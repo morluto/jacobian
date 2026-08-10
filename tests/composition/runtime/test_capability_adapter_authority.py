@@ -35,6 +35,9 @@ from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.schema_registry import model_schema
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def test_external_adapter_invocation_is_recorded_and_retrievable(
     capability_core_services: DomainTestServices,

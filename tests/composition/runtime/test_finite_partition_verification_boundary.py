@@ -10,6 +10,9 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _request(*, verify: bool = True) -> CapabilityRequest:
     return CapabilityRequest(

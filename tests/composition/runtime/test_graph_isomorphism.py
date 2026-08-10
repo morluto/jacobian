@@ -8,6 +8,9 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime.model import JacobianRuntime
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _graph_uri(
     runtime: JacobianRuntime,

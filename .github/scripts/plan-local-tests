@@ -18,6 +18,7 @@ from typing import NamedTuple
 ROOT = Path(__file__).resolve().parents[2]
 CLASSIFIER = ROOT / ".github" / "scripts" / "classify-ci-paths"
 OWNERSHIP = ROOT / ".github" / "local-test-ownership.json"
+PLAN_MANIFEST = ROOT / "tests" / "plan_manifest.toml"
 TOPOLOGY_MANIFEST = ROOT / "tests" / "topology.toml"
 
 # The planner scripts live without a package context; make the sibling helper
@@ -108,22 +109,28 @@ if not GATE_LANES:
 
 LINT_TYPECHECK_COMMAND = "make lint typecheck"
 
+
+def _local_planning() -> dict[str, object]:
+    raw = tomllib.loads(PLAN_MANIFEST.read_text(encoding="utf-8"))
+    section = raw.get("local_planning", {})
+    if not isinstance(section, dict):
+        raise ValueError("tests/plan_manifest.toml local_planning must be a table")
+    return section
+
+
+_LOCAL_PLANNING = _local_planning()
+
 # Repository paths whose impact is structural rather than ordinary Python
 # behavior.  Such changes route to ``make check-static`` (which already includes
 # lint-full, typecheck, architecture, and a package build) instead of the
 # lighter ``make lint typecheck`` handoff.
-INFRASTRUCTURE_PREFIXES = (
-    ".github/",
-    "Makefile",
-    "make/",
-    "pyproject.toml",
-    "uv.lock",
-    "tools/",
-    ".pre-commit-config.yaml",
-    ".jscpd.json",
-    "tests/topology.toml",
-    "tests/plan_manifest.toml",
+INFRASTRUCTURE_PREFIXES = tuple(
+    str(item) for item in _LOCAL_PLANNING.get("infrastructure_prefixes", ())
 )
+if not INFRASTRUCTURE_PREFIXES:
+    raise ValueError(
+        "tests/plan_manifest.toml local_planning.infrastructure_prefixes required"
+    )
 
 
 def is_infrastructure_path(path: str) -> bool:
@@ -165,11 +172,12 @@ def local_command_lanes(lanes: list[str]) -> list[str]:
 
 
 HIGH_IMPACT_PATHS = {
-    "src/jacobian/__init__.py",
-    "tests/conftest.py",
-    "pyproject.toml",
-    "uv.lock",
+    str(item) for item in _LOCAL_PLANNING.get("high_impact_paths", ())
 }
+if not HIGH_IMPACT_PATHS:
+    raise ValueError(
+        "tests/plan_manifest.toml local_planning.high_impact_paths required"
+    )
 
 
 class Change(NamedTuple):

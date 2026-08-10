@@ -13,6 +13,9 @@ from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomials import _support as polynomial_support
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _term(coefficient: int, exponents: list[int]) -> dict[str, Any]:
     return {

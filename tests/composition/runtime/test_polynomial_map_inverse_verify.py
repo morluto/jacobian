@@ -15,6 +15,9 @@ from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.runtime.model import JacobianRuntime
 from jacobian_checkers.polynomial_maps import check_map_inverse
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _term(coefficient: int, exponents: list[int]) -> dict[str, Any]:
     return {

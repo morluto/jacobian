@@ -14,6 +14,9 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.runtime.model import JacobianRuntime
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 @pytest.mark.skipif(
     not pinned_mathlib_runtime_available(),

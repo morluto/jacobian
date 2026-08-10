@@ -22,6 +22,9 @@ from jacobian.contracts.sat import (
 from jacobian.runtime import create_runtime
 from jacobian.sat_smt.sat import SatArtifactError
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "MIXED"
+
 
 def _producer() -> CapabilityProviderRuntime:
     return CapabilityProviderRuntime(

@@ -53,9 +53,12 @@ Use the narrowest complete-runtime profile that proves the claim:
 3. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
 4. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
 
-`authorized_complete_runtime` requires asserting authority, `VERIFY` /
-`VERIFIED`, or authorized-catalog presence. Inventory unjustified uses with
-`make test-runtime-inventory`; the inventory fails closed when any remain.
+`authorized_complete_runtime` requires a real verify/authority assertion in
+the module (for example `CapabilityAssuranceLevel.VERIFIED`,
+`services.verification`, `capability_id="….verify"`, or
+`checker_id is not None`). Catalog ID strings and `UNVERIFIED` alone do not
+justify it. Inventory unjustified uses with `make test-runtime-inventory`; the
+inventory fails closed when any remain.
 
 A test's directory answers what kind of behavior it owns. A marker is retained
 only when it changes execution. The CI impact manifest maps changed paths to

@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from tools.test_plan.runtime_owners import allows_create_runtime
+
 _TEST_FILE = "test_*.py"
 _TOPOLOGY_CANDIDATES = (Path("tests/topology.toml"), Path("topology.toml"))
 
@@ -269,20 +271,7 @@ def _tier(path: PurePosixPath) -> str | None:
 
 
 def _runtime_allowed(path: PurePosixPath, tier_override: str | None = None) -> bool:
-    if path in {
-        PurePosixPath("tests/support/runtime_templates.py"),
-        PurePosixPath("tests/support/runtime_instances.py"),
-        PurePosixPath("tests/support/runtime_profiles.py"),
-    }:
-        return True
-    tier = tier_override or _tier(path)
-    if tier in {"composition", "e2e"}:
-        return True
-    if tier == "boundary":
-        # Boundary tests are allowed to own complete construction only when
-        # their path names the lifecycle/startup/recovery boundary explicitly.
-        return any(part in {"runtime", "startup", "recovery"} for part in path.parts)
-    return False
+    return allows_create_runtime(path.as_posix(), tier=tier_override)
 
 
 def _provider_allowed(path: PurePosixPath, tier_override: str | None = None) -> bool:

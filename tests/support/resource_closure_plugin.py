@@ -9,18 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tools.test_plan.authority_signals import VERIFY_AUTHORITY_SIGNALS
+from tools.test_plan.authority_signals import has_verify_authority_signal
+from tools.test_plan.runtime_owners import allows_complete_runtime_fixture
 
 from tests.support.resource_contracts import ResourceKind, resource_contract
-
-_COMPLETE_RUNTIME_OWNERS = (
-    "tests/composition/",
-    "tests/e2e/",
-    "tests/boundary/storage/",
-    "tests/boundary/providers/",
-    "tests/boundary/mcp/",
-    "tests/support/",
-)
 
 
 def _relative_path(item: pytest.Item) -> str:
@@ -37,10 +29,6 @@ def _module_source(item: pytest.Item) -> str:
         return path.read_text(encoding="utf-8")
     except OSError:
         return ""
-
-
-def _allowed_complete_runtime(relative: str) -> bool:
-    return any(relative.startswith(prefix) for prefix in _COMPLETE_RUNTIME_OWNERS)
 
 
 def pytest_collection_modifyitems(
@@ -66,8 +54,9 @@ def pytest_collection_modifyitems(
         item.user_properties.append(
             ("jacobian_resources", sorted(resource.value for resource in resources))
         )
-        if ResourceKind.COMPLETE_RUNTIME in resources and not _allowed_complete_runtime(
-            relative
+        if (
+            ResourceKind.COMPLETE_RUNTIME in resources
+            and not allows_complete_runtime_fixture(relative)
         ):
             errors.append(
                 f"{item.nodeid}: complete-runtime fixtures are not permitted "
@@ -75,7 +64,7 @@ def pytest_collection_modifyitems(
             )
         if ResourceKind.AUTHORIZED_CHECKERS in resources:
             source = _module_source(item)
-            if not any(signal in source for signal in VERIFY_AUTHORITY_SIGNALS):
+            if not has_verify_authority_signal(source):
                 errors.append(
                     f"{item.nodeid}: authorized_complete_runtime requires a "
                     "verify/authority assertion in the module source"

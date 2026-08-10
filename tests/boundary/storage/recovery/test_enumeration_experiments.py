@@ -32,16 +32,16 @@ def test_unknown_experiment_error_explains_recovery(
 
 
 def test_graph_enumeration_deduplicates_isomorphic_candidates(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="graph_paths",
         predicate="is_bipartite",
         parameters={},
     )
 
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -54,7 +54,7 @@ def test_graph_enumeration_deduplicates_isomorphic_candidates(
             ),
         )
     )
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=90,
     )
@@ -73,17 +73,17 @@ def test_graph_enumeration_deduplicates_isomorphic_candidates(
     assert snapshot.accounting.evaluated_candidates == 6
     assert snapshot.scope_uri is not None
     assert snapshot.archive_uri is not None
-    scope = authorized_complete_runtime.core.store.get(snapshot.scope_uri)
+    scope = attached_complete_runtime.core.store.get(snapshot.scope_uri)
     assert scope.payload["enumerator_scope"]["arc_rule"] == (
         "v_i_to_v_j_only_when_i_less_than_j"
     )
-    archive = authorized_complete_runtime.core.store.get(snapshot.archive_uri)
+    archive = attached_complete_runtime.core.store.get(snapshot.archive_uri)
     assert set(archive.manifest.parents) == {
         snapshot.scope_uri,
         *snapshot.archive_page_uris,
     }
     for page_uri in snapshot.archive_page_uris:
-        page = authorized_complete_runtime.core.store.get(page_uri)
+        page = attached_complete_runtime.core.store.get(page_uri)
         assert set(page.manifest.parents) == {
             *page.payload["candidate_uris"],
             *page.payload["evaluation_uris"],
@@ -91,19 +91,19 @@ def test_graph_enumeration_deduplicates_isomorphic_candidates(
 
 
 def test_experiment_metadata_uses_registered_schema_validation(
-    authorized_complete_runtime,
+    attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
     validated_schema_uris: list[str] = []
     validated_semantics_uris: list[str] = []
-    original_validate = authorized_complete_runtime.core.schemas.validate
-    original_get_descriptor = authorized_complete_runtime.core.store.get_descriptor
+    original_validate = attached_complete_runtime.core.schemas.validate
+    original_get_descriptor = attached_complete_runtime.core.store.get_descriptor
 
     def record_validation(schema_uri: str, payload: object) -> object:
         validated_schema_uris.append(schema_uri)
@@ -122,14 +122,14 @@ def test_experiment_metadata_uses_registered_schema_validation(
         )
 
     monkeypatch.setattr(
-        authorized_complete_runtime.core.schemas, "validate", record_validation
+        attached_complete_runtime.core.schemas, "validate", record_validation
     )
     monkeypatch.setattr(
-        authorized_complete_runtime.core.store,
+        attached_complete_runtime.core.store,
         "get_descriptor",
         record_descriptor_validation,
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -141,43 +141,43 @@ def test_experiment_metadata_uses_registered_schema_validation(
             ),
         )
     )
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
     assert snapshot.state == ExperimentState.COMPLETED
     assert (
-        authorized_complete_runtime.services.experiments.scope_schema_uri
+        attached_complete_runtime.services.experiments.scope_schema_uri
         in validated_schema_uris
     )
     assert (
-        authorized_complete_runtime.services.experiments.evaluation_schema_uri
+        attached_complete_runtime.services.experiments.evaluation_schema_uri
         in validated_schema_uris
     )
     assert (
-        authorized_complete_runtime.services.experiments.archive_page_schema_uri
+        attached_complete_runtime.services.experiments.archive_page_schema_uri
         in validated_schema_uris
     )
     assert (
-        authorized_complete_runtime.services.experiments.archive_manifest_schema_uri
+        attached_complete_runtime.services.experiments.archive_manifest_schema_uri
         in validated_schema_uris
     )
     assert (
-        authorized_complete_runtime.portfolio.references["matrices"].semantics_uri
+        attached_complete_runtime.portfolio.references["matrices"].semantics_uri
         in validated_semantics_uris
     )
 
 
 def test_matrix_enumeration_uses_the_same_experiment_contract(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -190,7 +190,7 @@ def test_matrix_enumeration_uses_the_same_experiment_contract(
         )
     )
 
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=45,
     )
@@ -204,16 +204,16 @@ def test_matrix_enumeration_uses_the_same_experiment_contract(
 
 
 def test_enumeration_pages_respect_evaluator_batch_limit(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    authorized_complete_runtime.services.evaluation.max_batch_size = 2
+    attached_complete_runtime.services.evaluation.max_batch_size = 2
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -226,7 +226,7 @@ def test_enumeration_pages_respect_evaluator_batch_limit(
         )
     )
 
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -237,28 +237,28 @@ def test_enumeration_pages_respect_evaluator_batch_limit(
     assert snapshot.accounting.pages == 2
     assert snapshot.scope_uri is not None
     assert snapshot.archive_uri is not None
-    archive = authorized_complete_runtime.core.store.get(snapshot.archive_uri)
+    archive = attached_complete_runtime.core.store.get(snapshot.archive_uri)
     assert set(archive.manifest.parents) == {
         snapshot.scope_uri,
         snapshot.archive_page_uris[-1],
     }
-    second_page = authorized_complete_runtime.core.store.get(
+    second_page = attached_complete_runtime.core.store.get(
         snapshot.archive_page_uris[-1]
     )
     assert snapshot.archive_page_uris[0] in second_page.manifest.parents
 
 
 def test_enumeration_uses_available_parent_capacity_per_page(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    authorized_complete_runtime.core.store.limits = StorageLimits(max_parents=4)
+    attached_complete_runtime.core.store.limits = StorageLimits(max_parents=4)
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -271,14 +271,14 @@ def test_enumeration_uses_available_parent_capacity_per_page(
         )
     )
 
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
     assert snapshot.state is ExperimentState.COMPLETED
     assert snapshot.stop_reason is EnumerationStopReason.COMPLETE
     first_page_uri = snapshot.archive_page_uris[0]
-    first_page = authorized_complete_runtime.core.store.get(first_page_uri)
+    first_page = attached_complete_runtime.core.store.get(first_page_uri)
     assert len(first_page.payload["candidate_uris"]) == 3
     assert set(first_page.manifest.parents) == {
         first_page.payload["evaluation_uris"][0],
@@ -286,7 +286,7 @@ def test_enumeration_uses_available_parent_capacity_per_page(
     }
     assert len(snapshot.archive_page_uris) == 3
     for index, page_uri in enumerate(snapshot.archive_page_uris[1:], start=1):
-        page = authorized_complete_runtime.core.store.get(page_uri)
+        page = attached_complete_runtime.core.store.get(page_uri)
         assert len(page.payload["candidate_uris"]) == 3 - index
         assert set(page.manifest.parents) == {
             page.payload["evaluation_uris"][0],
@@ -296,15 +296,15 @@ def test_enumeration_uses_available_parent_capacity_per_page(
 
 
 def test_cancellation_never_becomes_an_exhaustive_conclusion(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -317,10 +317,10 @@ def test_cancellation_never_becomes_an_exhaustive_conclusion(
         )
     )
 
-    cancelled = authorized_complete_runtime.services.experiments.cancel(
+    cancelled = attached_complete_runtime.services.experiments.cancel(
         handle.experiment_uri
     )
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=30,
     )
@@ -334,15 +334,15 @@ def test_cancellation_never_becomes_an_exhaustive_conclusion(
 
 
 def test_candidate_limit_never_becomes_exhaustive_coverage(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -355,7 +355,7 @@ def test_candidate_limit_never_becomes_exhaustive_coverage(
         )
     )
 
-    snapshot = authorized_complete_runtime.services.experiments.wait(
+    snapshot = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=45,
     )
@@ -369,17 +369,17 @@ def test_candidate_limit_never_becomes_exhaustive_coverage(
 
 
 def test_quotient_search_requires_a_domain_canonicalizer(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
 
     with pytest.raises(ExperimentError, match="Canonicalizer"):
-        authorized_complete_runtime.services.experiments.start_enumeration(
+        attached_complete_runtime.services.experiments.start_enumeration(
             SearchEnumerateRequest(
                 claim_uri=claim_uri,
                 plugin_id=plugin_id,
@@ -395,15 +395,15 @@ def test_quotient_search_requires_a_domain_canonicalizer(
 
 
 def test_cancelling_a_terminal_experiment_does_not_change_it(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        authorized_complete_runtime,
+        attached_complete_runtime,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    handle = authorized_complete_runtime.services.experiments.start_enumeration(
+    handle = attached_complete_runtime.services.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -415,15 +415,15 @@ def test_cancelling_a_terminal_experiment_does_not_change_it(
             ),
         )
     )
-    completed = authorized_complete_runtime.services.experiments.wait(
+    completed = attached_complete_runtime.services.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=45,
     )
 
-    cancelled = authorized_complete_runtime.services.experiments.cancel(
+    cancelled = attached_complete_runtime.services.experiments.cancel(
         handle.experiment_uri
     )
-    after = authorized_complete_runtime.services.experiments.inspect(
+    after = attached_complete_runtime.services.experiments.inspect(
         handle.experiment_uri
     )
 

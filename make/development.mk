@@ -60,7 +60,7 @@ typecheck: ## Run strict static type checking.
 	$(UV_RUN) mypy
 
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
-	$(UV_RUN) python tools/check_test_architecture.py .
+	$(UV_RUN) python -m tools.check_test_architecture .
 
 test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
 	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified

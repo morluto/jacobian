@@ -499,7 +499,6 @@
         "tests/support/runtime_profiles.py",
         "tests/support/resource_contracts.py",
         "tests/support/resource_closure_plugin.py",
-        "tests/support/fail_closed.py",
         "tests/support/exact_domain.py",
         "tests/support/process_entrypoints.py",
         "tests/support/search_entrypoints.py",

@@ -21,7 +21,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from tools.test_plan.authority_signals import VERIFY_AUTHORITY_SIGNALS
+from tools.test_plan.authority_signals import has_verify_authority_signal
 
 _COMPLETE_RUNTIME_FIXTURES = frozenset(
     {
@@ -93,7 +93,7 @@ def _source_signals(tree: ast.AST, source: str) -> tuple[set[str], bool, set[str
     for node in ast.walk(tree):
         _collect_resource_imports(node, resources)
         _collect_runtime_fixtures(node, fixtures)
-    has_verify = any(signal in source for signal in VERIFY_AUTHORITY_SIGNALS)
+    has_verify = has_verify_authority_signal(source)
     return fixtures, has_verify, resources
 
 

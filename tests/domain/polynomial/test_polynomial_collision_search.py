@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.contracts.capabilities import (
@@ -17,6 +16,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from jacobian.polynomials import install_polynomial_capabilities
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture

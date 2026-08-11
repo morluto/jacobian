@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tests.support.capabilities import invoke_capability as _invoke
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -12,6 +10,8 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from jacobian.process_policy import ProcessResult, ProcessTermination
+from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture

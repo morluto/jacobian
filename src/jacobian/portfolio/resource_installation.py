@@ -72,6 +72,11 @@ class ResourceCapabilityInstaller:
         for positivity_adapter in positivity_adapters:
             if positivity_adapter is not None:
                 ctx.register_capability(positivity_adapter)
+        for relationship in result.polynomial_positivity.catalog_relationships:
+            ctx.register_checker_relationship(
+                relationship.source_capability_id,
+                relationship.related_capability,
+            )
 
         lean_runtime = self.provider_resolver.resolve_lean_frontend()
         result.lean_statement_runtime = lean_runtime

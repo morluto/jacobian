@@ -131,9 +131,7 @@ def test_modular_polynomial_identity_result_rejects_out_of_scope_exponents(
                 "semantics_version": "modular-polynomial-identity.v1",
                 "modulus": 5,
                 "variable_order": ["x"],
-                "normalized_left": [
-                    {"coefficient": 1, "exponents": [exponent]}
-                ],
+                "normalized_left": [{"coefficient": 1, "exponents": [exponent]}],
                 "normalized_right": [],
                 "residual": [],
                 "identical": False,

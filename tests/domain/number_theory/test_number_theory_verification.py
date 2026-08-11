@@ -113,12 +113,8 @@ def test_modular_polynomial_identity_replays_both_declared_term_budgets(
     payload = {
         "modulus": 101,
         "variables": ["x"],
-        "left": [
-            {"coefficient": "1", "exponents": [index]} for index in range(33)
-        ],
-        "right": [
-            {"coefficient": "1", "exponents": [index]} for index in range(32)
-        ],
+        "left": [{"coefficient": "1", "exponents": [index]} for index in range(33)],
+        "right": [{"coefficient": "1", "exponents": [index]} for index in range(32)],
     }
     computed = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(

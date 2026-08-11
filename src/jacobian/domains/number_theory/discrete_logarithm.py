@@ -168,7 +168,7 @@ DISCRETE_LOGARITHM_CAPABILITY = BoundedSearchOperation(
                 "base": 2,
                 "target": 1,
                 "modulus": 3,
-                "resource_budget": {"wall_seconds": 1},
+                "resource_budget": {"wall_seconds": 5},
             },
         ),
     ),

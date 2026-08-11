@@ -52,14 +52,14 @@ def test_explicit_paths_route_deployment_without_all_suite_fallback() -> None:
 
 
 def test_provider_selection_is_additive_but_default_provider_stays_deferred() -> None:
-    path = "tests/boundary/providers/sympy/test_sympy.py"
+    path = "tests/boundary/providers/external_sat/test_cadical_external_backend.py"
     default = _ci_plan("--paths", path)
-    opted_in = _ci_plan("--paths", path, "--provider", "sympy")
+    opted_in = _ci_plan("--paths", path, "--provider", "external_sat")
 
     assert default["run-provider"] == "false"
     assert json.loads(default["provider-selection"]) == []
     assert opted_in["run-provider"] == "true"
-    assert json.loads(opted_in["provider-selection"]) == ["sympy"]
+    assert json.loads(opted_in["provider-selection"]) == ["external_sat"]
 
 
 def test_paths_environment_supports_local_planning_without_a_git_base(
@@ -184,10 +184,14 @@ def _run_validator(plan: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> int
         # provider-selection is authorization: an unknown name or a selection
         # without the provider lane must be rejected.
         (
-            ("tests/boundary/providers/sympy/test_sympy.py", "--provider", "sympy"),
+            (
+                "tests/boundary/providers/external_sat/test_cadical_external_backend.py",
+                "--provider",
+                "external_sat",
+            ),
             {"provider-selection": '["bogus"]'},
         ),
-        (("README.md",), {"provider-selection": '["sympy"]'}),
+        (("README.md",), {"provider-selection": '["external_sat"]'}),
     ],
 )
 def test_ci_validator_rejects_new_deploy_and_provider_incoherence(

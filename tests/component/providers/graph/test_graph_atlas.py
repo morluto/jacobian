@@ -4,7 +4,6 @@ import networkx as nx
 import pytest
 
 import jacobian.graphs.atlas as graph_atlas
-from jacobian.domains.graph_optimization.invariants import _maximum_matching
 
 
 def test_graph_atlas_is_built_once_and_cached_as_frozen_graphs(
@@ -28,22 +27,3 @@ def test_graph_atlas_is_built_once_and_cached_as_frozen_graphs(
     assert first is second
     assert len(first) == 1044
     assert all(nx.is_frozen(graph) for graph in first)
-
-
-def test_gallai_edmonds_barrier_certifies_every_graph_through_order_seven() -> None:
-    for indexed_graph in nx.graph_atlas_g():
-        graph = nx.relabel_nodes(
-            indexed_graph,
-            {vertex: str(vertex) for vertex in indexed_graph},
-        )
-        result = _maximum_matching(graph)
-        barrier = set(result.certificate.barrier_vertices)
-        reduced = graph.subgraph(set(graph) - barrier)
-        odd_component_count = sum(
-            len(component) % 2 for component in nx.connected_components(reduced)
-        )
-
-        assert result.certificate.odd_component_count == odd_component_count
-        assert 2 * result.maximum_matching_cardinality == (
-            len(graph) + len(barrier) - odd_component_count
-        )

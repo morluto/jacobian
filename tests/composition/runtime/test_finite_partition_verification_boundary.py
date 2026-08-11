@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
+import pytest
+from tests.support.core_capability_harnesses import (
+    FinitePartitionTestServices,
+    open_finite_partition_services,
+)
+
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityObligationStatus,
@@ -12,6 +20,12 @@ from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
 # Composition-lane admission category for architecture ratchets.
 COMPOSITION_ADMISSION = "AUTHORITY"
+
+
+@pytest.fixture
+def finite_partition_services(tmp_path) -> Iterator[FinitePartitionTestServices]:
+    with open_finite_partition_services(tmp_path / "state") as services:
+        yield services
 
 
 def _request(*, verify: bool = True) -> CapabilityRequest:
@@ -31,10 +45,10 @@ def _request(*, verify: bool = True) -> CapabilityRequest:
 
 
 def test_verification_rejects_checker_obligation_outside_request(
-    authorized_complete_runtime,
-    monkeypatch,
+    finite_partition_services: FinitePartitionTestServices,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = authorized_complete_runtime
+    runtime = finite_partition_services.services
 
     def accept_with_unbound_obligation(
         *,
@@ -58,7 +72,7 @@ def test_verification_rejects_checker_obligation_outside_request(
         )
 
     monkeypatch.setattr(
-        runtime.services.verification,
+        runtime.application.verification,
         "_run_checker",
         accept_with_unbound_obligation,
     )

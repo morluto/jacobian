@@ -61,9 +61,11 @@ The installer validates the complete request model before computation. On
 success it validates the returned result again and returns it inline as
 `COMPLETE · COMPUTED`, without generic input or result artifacts and without an
 episode. Neither exact arithmetic nor deterministic execution grants
-`VERIFIED`. A reusable mathematical object or evidence-bearing result belongs
-in an explicitly artifact-producing capability, not behind a persistence flag
-on an ordinary computation.
+`VERIFIED`. A bounded reusable mathematical value remains inline. Materialize
+it only when durable identity, independent retrieval, replay, resumability,
+evidence binding, or size-separated transport is part of the outcome; this is
+an explicit capability contract, not a persistence flag on an ordinary
+computation.
 
 ### Static type contract
 
@@ -98,14 +100,27 @@ SymPy, or NetworkX values as documented and call typed mathematical kernels
 directly. They do not construct the capability runtime or route through
 `math.run`.
 
-When a native function corresponds to a capability, both paths share the same
-domain-owned mathematical kernel. Explicit adapters translate between native
-values and the existing Pydantic request and result contracts. This keeps one
-mathematical implementation while preserving capability schemas, completeness,
-provenance, verification behavior, and artifact lineage when artifacts are
-part of the outcome. Generic
-reflection, automatic model generation, and universal value conversion are
-outside this library's contract.
+Shared Pydantic contracts own provider-independent mathematical value identity
+at capability, composition, wire, and persistence boundaries. Backend-native
+objects are in-process computational representations. Domain-owned adapters
+translate explicitly between the two, and typed kernels sit below both the
+native facade and capability operations:
+
+```text
+shared Pydantic value
+    ↕ explicit domain-owned conversion
+backend-native value
+    ↕ typed mathematical kernel
+maintained mathematical backend
+```
+
+When a native function corresponds to a capability, both paths share that
+kernel; neither invokes the other. This keeps one mathematical implementation
+while preserving capability schemas, completeness, provenance, verification
+behavior, and artifact lineage where those are part of the operation outcome.
+Generic reflection, automatic model generation, universal backend wrappers,
+automatic coercion, and a generic conversion framework are outside this
+library's contract.
 
 ## Bounded searches
 

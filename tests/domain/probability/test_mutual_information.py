@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
 from tests.support.rationals import rational_payload as _q
 
 from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.domains.probability.operations import (
+    _require_bounded_mutual_information_product,
+)
 
 _PX = {
     "row_labels": ["0", "1", "2"],
@@ -83,6 +87,28 @@ def test_zero_cells_are_omitted_without_division(
     assert len(result["positive_support"]) == 1
     assert result["log_product_certificate"]["product"] == _q(1)
     assert result["sign"] == "ZERO"
+
+
+def test_certificate_cost_is_rejected_before_exponentiation() -> None:
+    class _Rational:
+        def __init__(self, numerator: int, denominator: int) -> None:
+            self._numerator = numerator
+            self._denominator = denominator
+
+        def numer(self) -> int:
+            return self._numerator
+
+        def denom(self) -> int:
+            return self._denominator
+
+    probability = _Rational(1, 1)
+    ratio = _Rational(2, 1)
+
+    with pytest.raises(ValueError, match="scale exceeds the replay bound"):
+        _require_bounded_mutual_information_product(1 << 1_024, [(probability, ratio)])
+
+    with pytest.raises(ValueError, match="product exceeds the output-cost bound"):
+        _require_bounded_mutual_information_product(32_768, [(probability, ratio)])
 
 
 def test_independent_checker_rejects_tampered_ratio(

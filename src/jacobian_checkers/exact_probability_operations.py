@@ -34,6 +34,8 @@ _GAUSSIAN_META = {
 # Independent bound mirror: the checker must not import producer contracts.
 # This must match MAX_GAUSSIAN_EXPANSION_PATHS in jacobian.contracts.probability.
 _GAUSSIAN_EXPANSION_PATHS_BOUND = 65536
+_MUTUAL_INFORMATION_SCALE_BITS_BOUND = 1_024
+_MUTUAL_INFORMATION_POWER_COST_BITS_BOUND = 32_768
 _GRAPH_RELIABILITY_META = {
     "event": "TERMINALS_CONNECTED",
     "edge_independence": "INDEPENDENT_BERNOULLI",
@@ -222,6 +224,20 @@ def _replay_finite_joint_mutual_information(
         table
     )
     scale = lcm(*(probability.denominator for probability, _ in weighted_ratios))
+    if scale.bit_length() > _MUTUAL_INFORMATION_SCALE_BITS_BOUND:
+        raise ValueError(
+            "mutual-information certificate scale exceeds the replay bound"
+        )
+    power_cost = 0
+    for probability, ratio in weighted_ratios:
+        exponent = scale * probability.numerator // probability.denominator
+        power_cost += exponent * (
+            ratio.numerator.bit_length() + ratio.denominator.bit_length()
+        )
+        if power_cost > _MUTUAL_INFORMATION_POWER_COST_BITS_BOUND:
+            raise ValueError(
+                "mutual-information certificate product exceeds the output-cost bound"
+            )
     product = Fraction(1)
     for probability, ratio in weighted_ratios:
         product *= ratio ** (scale * probability.numerator // probability.denominator)

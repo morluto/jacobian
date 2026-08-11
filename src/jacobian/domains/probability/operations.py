@@ -47,6 +47,9 @@ from jacobian.operations import (
     ComputedSuccess,
 )
 
+_MAX_MUTUAL_INFORMATION_SCALE_BITS = 1_024
+_MAX_MUTUAL_INFORMATION_POWER_COST_BITS = 32_768
+
 
 def _wire(value: Any) -> CanonicalRational:
     return CanonicalRational(
@@ -138,6 +141,26 @@ def _power_exponent(value: int, base: int) -> int | None:
     return exponent if value == 1 else None
 
 
+def _require_bounded_mutual_information_product(
+    scale: int,
+    weighted_ratios: list[tuple[Any, Any]],
+) -> None:
+    if scale.bit_length() > _MAX_MUTUAL_INFORMATION_SCALE_BITS:
+        raise ValueError(
+            "mutual-information certificate scale exceeds the replay bound"
+        )
+    power_cost = 0
+    for probability, ratio in weighted_ratios:
+        exponent = scale * int(probability.numer()) // int(probability.denom())
+        power_cost += exponent * (
+            int(ratio.numer()).bit_length() + int(ratio.denom()).bit_length()
+        )
+        if power_cost > _MAX_MUTUAL_INFORMATION_POWER_COST_BITS:
+            raise ValueError(
+                "mutual-information certificate product exceeds the output-cost bound"
+            )
+
+
 def _mutual_information(
     request: FiniteJointTableMutualInformationRequest,
 ) -> ComputedOutcome[FiniteJointTableMutualInformationResult]:
@@ -173,6 +196,7 @@ def _mutual_information(
                 )
             )
     scale = lcm(*denominators)
+    _require_bounded_mutual_information_product(scale, ratios)
     product = fmpq(1)
     for probability, ratio in ratios:
         exponent = scale * int(probability.numer()) // int(probability.denom())

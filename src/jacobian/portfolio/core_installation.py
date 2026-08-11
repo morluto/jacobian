@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
+from jacobian.contracts.capabilities import CapabilityCatalogRelationshipRegistration
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.finite_partition import install_finite_partition
@@ -35,6 +36,16 @@ class CoreApplicationInstaller:
     """Install core application adapters and domain-dependent checkers."""
 
     context: InstallationContext
+
+    def _register_catalog_relationships(
+        self,
+        relationships: tuple[CapabilityCatalogRelationshipRegistration, ...],
+    ) -> None:
+        for relationship in relationships:
+            self.context.register_checker_relationship(
+                relationship.source_capability_id,
+                relationship.related_capability,
+            )
 
     def _install_graph_capabilities(
         self,
@@ -156,6 +167,7 @@ class CoreApplicationInstaller:
         )
         for polynomial_adapter in polynomial_adapters:
             self.context.register_capability(polynomial_adapter)
+        self._register_catalog_relationships(result.polynomial.catalog_relationships)
 
         polynomial_system_adapter, result.polynomial_system = (
             install_polynomial_system_capabilities(

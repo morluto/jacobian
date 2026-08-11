@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
+from jacobian.contracts.capabilities import CapabilityCatalogRelationshipRegistration
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification import VerificationService
 
@@ -40,6 +41,7 @@ class PolynomialInstallation:
     rational_function_identity_checker_id: str | None
     inverse_checker_id: str | None
     inverse_collision_checker_id: str | None
+    catalog_relationships: tuple[CapabilityCatalogRelationshipRegistration, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

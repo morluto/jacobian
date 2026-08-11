@@ -5,6 +5,11 @@ from __future__ import annotations
 from jacobian.artifacts import ArtifactService
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
+from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
+    CapabilityCatalogRelationshipRegistration,
+)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, WitnessEnvelope
 from jacobian.contracts.polynomials import (
@@ -371,6 +376,47 @@ def install_polynomial_capabilities(
         )
         .checker_id
     )
+    catalog_relationships: list[CapabilityCatalogRelationshipRegistration] = []
+    for producer_id, verifier_id in (
+        (
+            "polynomial.map.collision.search",
+            "polynomial.map.collision.verify"
+            if collision_checker_id is not None
+            else None,
+        ),
+        (
+            "polynomial.map.inverse.candidate_synthesize",
+            (
+                "polynomial.map.inverse.verify"
+                if inverse_checker_id is not None and identity_checker_id is not None
+                else None
+            ),
+        ),
+    ):
+        if verifier_id is None:
+            continue
+        catalog_relationships.extend(
+            (
+                CapabilityCatalogRelationshipRegistration(
+                    source_capability_id=producer_id,
+                    related_capability=CapabilityCatalogRelationship(
+                        capability_id=verifier_id,
+                        kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+                        relationship="independently verify this exact producer result",
+                    ),
+                ),
+                CapabilityCatalogRelationshipRegistration(
+                    source_capability_id=verifier_id,
+                    related_capability=CapabilityCatalogRelationship(
+                        capability_id=producer_id,
+                        kind=(
+                            CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER
+                        ),
+                        relationship="produce the exact result accepted by this verifier",
+                    ),
+                ),
+            )
+        )
     installation = PolynomialInstallation(
         semantics_uri=semantics_uri,
         identity_semantics_uri=identity_semantics_uri,
@@ -405,6 +451,7 @@ def install_polynomial_capabilities(
         rational_function_identity_checker_id=rational_function_identity_checker_id,
         inverse_checker_id=inverse_checker_id,
         inverse_collision_checker_id=inverse_collision_checker_id,
+        catalog_relationships=tuple(catalog_relationships),
     )
     resources = PolynomialResources(
         store=store,

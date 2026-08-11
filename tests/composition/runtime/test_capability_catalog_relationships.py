@@ -81,6 +81,43 @@ def test_all_authorized_exact_checker_pairs_are_reciprocal(
     }
 
 
+@pytest.mark.parametrize(
+    ("producer_id", "verifier_id"),
+    [
+        (
+            "polynomial.map.collision.search",
+            "polynomial.map.collision.verify",
+        ),
+        (
+            "polynomial.map.inverse.candidate_synthesize",
+            "polynomial.map.inverse.verify",
+        ),
+    ],
+)
+def test_polynomial_map_checker_pairs_are_reciprocal(
+    authorized_complete_runtime,
+    producer_id: str,
+    verifier_id: str,
+) -> None:
+    catalog = {
+        descriptor.capability_id: descriptor
+        for descriptor in authorized_complete_runtime.core.capabilities.catalog().capabilities
+    }
+
+    producer_links = {
+        item.capability_id: item for item in catalog[producer_id].related_capabilities
+    }
+    verifier_links = {
+        item.capability_id: item for item in catalog[verifier_id].related_capabilities
+    }
+    assert producer_links[verifier_id].kind is (
+        CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER
+    )
+    assert verifier_links[producer_id].kind is (
+        CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER
+    )
+
+
 def test_catalog_relationship_hides_missing_and_policy_hidden_endpoints(
     tmp_path: Path,
 ) -> None:

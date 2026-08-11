@@ -38,4 +38,7 @@ This API shares typed mathematical kernels with the corresponding capability
 implementations, but it is not a facade over `math.run`. Capability
 requests, result contracts, artifacts, provenance, completeness, and
 verification remain available through the capability runtime and retain their
-existing wire semantics.
+existing wire semantics. Shared Pydantic contracts, rather than Python,
+SymPy, or NetworkX objects, own provider-independent value identity for
+capability composition and persistence. Explicit domain-owned conversions
+connect those contracts to the backend-native values accepted by this API.

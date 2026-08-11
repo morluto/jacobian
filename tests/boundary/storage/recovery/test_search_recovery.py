@@ -13,7 +13,11 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from search_orchestration_support import _install_search_plugin, _request
+from search_orchestration_support import (
+    _install_search_plugin,
+    _request,
+    open_search_services,
+)
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.discovery import ExperimentState
@@ -22,14 +26,13 @@ from jacobian.contracts.search import (
     SearchExperimentSnapshot,
     SearchStopReason,
 )
-from jacobian.runtime import create_runtime
 
 
 def test_resume_rejects_archive_page_rebound_to_another_plugin(
-    attached_complete_runtime,
+    search_services,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(attached_complete_runtime)
-    handle = attached_complete_runtime.services.search.start(
+    claim_uri, plugin_id = _install_search_plugin(search_services)
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -37,17 +40,15 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
             batch_size=4,
         )
     )
-    completed = attached_complete_runtime.services.search.wait(
+    completed = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
-    original_page = attached_complete_runtime.core.store.get(
-        completed.archive_page_uris[0]
-    )
+    original_page = search_services.core.store.get(completed.archive_page_uris[0])
     rebound_page = SearchArchivePage.model_validate(original_page.payload).model_copy(
         update={"plugin_id": claim_uri}
     )
-    stored_rebound_page = attached_complete_runtime.services.search._put_internal_artifact(
-        schema_uri=attached_complete_runtime.services.search.archive_page_schema_uri,
+    stored_rebound_page = search_services.application.search._put_internal_artifact(
+        schema_uri=search_services.application.search.archive_page_schema_uri,
         payload=rebound_page.model_dump(mode="json"),
         parents=original_page.manifest.parents,
         summary="search archive page",
@@ -61,7 +62,7 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
             "archive_page_uris": (stored_rebound_page.artifact_uri,),
         }
     )
-    with sqlite3.connect(attached_complete_runtime.core.store.db_path) as connection:
+    with sqlite3.connect(search_services.core.store.db_path) as connection:
         connection.execute(
             """
             UPDATE search_experiments
@@ -75,9 +76,9 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
             ),
         )
 
-    resumed = attached_complete_runtime.services.search.resume(handle.experiment_uri)
+    resumed = search_services.application.search.resume(handle.experiment_uri)
     assert resumed.accepted is True
-    recovered = attached_complete_runtime.services.search.wait(
+    recovered = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -86,11 +87,11 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
 
 
 def test_checkpoint_persistence_is_included_in_wall_accounting(
-    attached_complete_runtime,
+    search_services,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(attached_complete_runtime)
-    original_put = attached_complete_runtime.services.search._put_internal_artifact
+    claim_uri, plugin_id = _install_search_plugin(search_services)
+    original_put = search_services.application.search._put_internal_artifact
     current_time = 0.0
 
     def clock() -> float:
@@ -100,16 +101,16 @@ def test_checkpoint_persistence_is_included_in_wall_accounting(
         nonlocal current_time
         if (
             kwargs.get("schema_uri")
-            == attached_complete_runtime.services.search.checkpoint_schema_uri
+            == search_services.application.search.checkpoint_schema_uri
         ):
             current_time += 1
         return original_put(**kwargs)
 
-    monkeypatch.setattr(attached_complete_runtime.services.search, "_clock", clock)
+    monkeypatch.setattr(search_services.application.search, "_clock", clock)
     monkeypatch.setattr(
-        attached_complete_runtime.services.search, "_put_internal_artifact", delayed_put
+        search_services.application.search, "_put_internal_artifact", delayed_put
     )
-    handle = attached_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -117,7 +118,7 @@ def test_checkpoint_persistence_is_included_in_wall_accounting(
             batch_size=4,
         )
     )
-    snapshot = attached_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -126,11 +127,11 @@ def test_checkpoint_persistence_is_included_in_wall_accounting(
 
 
 def test_checkpoint_persistence_cannot_complete_past_wall_budget(
-    attached_complete_runtime,
+    search_services,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(attached_complete_runtime)
-    original_put = attached_complete_runtime.services.search._put_internal_artifact
+    claim_uri, plugin_id = _install_search_plugin(search_services)
+    original_put = search_services.application.search._put_internal_artifact
     current_time = 0.0
 
     def clock() -> float:
@@ -140,16 +141,16 @@ def test_checkpoint_persistence_cannot_complete_past_wall_budget(
         nonlocal current_time
         if (
             kwargs.get("schema_uri")
-            == attached_complete_runtime.services.search.checkpoint_schema_uri
+            == search_services.application.search.checkpoint_schema_uri
         ):
             current_time += 5.1
         return original_put(**kwargs)
 
-    monkeypatch.setattr(attached_complete_runtime.services.search, "_clock", clock)
+    monkeypatch.setattr(search_services.application.search, "_clock", clock)
     monkeypatch.setattr(
-        attached_complete_runtime.services.search, "_put_internal_artifact", delayed_put
+        search_services.application.search, "_put_internal_artifact", delayed_put
     )
-    handle = attached_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -158,7 +159,7 @@ def test_checkpoint_persistence_cannot_complete_past_wall_budget(
             wall_seconds=5,
         )
     )
-    snapshot = attached_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -171,221 +172,226 @@ def test_checkpoint_persistence_cannot_complete_past_wall_budget(
 def test_interrupted_search_recovers_from_checkpoint_without_chat_state(
     tmp_path: Path,
 ) -> None:
-    runtime = create_runtime(tmp_path)
-    claim_uri, plugin_id = _install_search_plugin(
-        runtime,
-        proposer_entrypoint=(
-            "tests.support.search_entrypoints:propose_fixture_values_slowly"
-        ),
-    )
-    handle = runtime.services.search.start(
-        _request(
-            claim_uri,
-            plugin_id,
-            idempotency_key="search-recovery-001",
-        )
-    )
-    runtime.services.search.pause(handle.experiment_uri)
-    paused = runtime.services.search.wait(handle.experiment_uri, timeout_seconds=30)
-    thread = runtime.services.search._threads.get(handle.experiment_uri)
-    if thread is not None:
-        thread.join(timeout=5)
-
-    simulated_running = SearchExperimentSnapshot.model_validate(
-        {
-            **paused.model_dump(mode="json"),
-            "state": "RUNNING",
-            "detail": "simulated process loss",
-        }
-    )
-    with sqlite3.connect(runtime.core.store.db_path) as connection:
-        connection.execute(
-            """
-            UPDATE search_experiments
-            SET state = ?, snapshot_json = ?
-            WHERE experiment_uri = ?
-            """,
-            (
-                ExperimentState.RUNNING.value,
-                canonicalize_json(simulated_running.model_dump(mode="json")),
-                handle.experiment_uri,
+    with open_search_services(tmp_path) as runtime:
+        claim_uri, plugin_id = _install_search_plugin(
+            runtime,
+            proposer_entrypoint=(
+                "tests.support.search_entrypoints:propose_fixture_values_slowly"
             ),
         )
+        handle = runtime.application.search.start(
+            _request(
+                claim_uri,
+                plugin_id,
+                idempotency_key="search-recovery-001",
+            )
+        )
+        runtime.application.search.pause(handle.experiment_uri)
+        paused = runtime.application.search.wait(
+            handle.experiment_uri, timeout_seconds=30
+        )
+        thread = runtime.application.search._threads.get(handle.experiment_uri)
+        if thread is not None:
+            thread.join(timeout=5)
 
-    recovered_runtime = create_runtime(tmp_path)
-    recovered = recovered_runtime.services.search.inspect(handle.experiment_uri)
-    assert recovered.state is ExperimentState.PAUSED
-    assert recovered.checkpoint_uri == paused.checkpoint_uri
-    recovered_runtime.services.search.resume(handle.experiment_uri)
-    completed = recovered_runtime.services.search.wait(
-        handle.experiment_uri,
-        timeout_seconds=30,
-    )
+        simulated_running = SearchExperimentSnapshot.model_validate(
+            {
+                **paused.model_dump(mode="json"),
+                "state": "RUNNING",
+                "detail": "simulated process loss",
+            }
+        )
+        with sqlite3.connect(runtime.core.store.db_path) as connection:
+            connection.execute(
+                """
+                UPDATE search_experiments
+                SET state = ?, snapshot_json = ?
+                WHERE experiment_uri = ?
+                """,
+                (
+                    ExperimentState.RUNNING.value,
+                    canonicalize_json(simulated_running.model_dump(mode="json")),
+                    handle.experiment_uri,
+                ),
+            )
 
-    assert completed.state is ExperimentState.COMPLETED
-    assert completed.accounting.unique_candidates == 4
-    assert len(set(completed.archive_page_uris)) == 4
+    with open_search_services(tmp_path) as recovered_runtime:
+        recovered = recovered_runtime.application.search.inspect(handle.experiment_uri)
+        assert recovered.state is ExperimentState.PAUSED
+        assert recovered.checkpoint_uri == paused.checkpoint_uri
+        recovered_runtime.application.search.resume(handle.experiment_uri)
+        completed = recovered_runtime.application.search.wait(
+            handle.experiment_uri,
+            timeout_seconds=30,
+        )
+
+        assert completed.state is ExperimentState.COMPLETED
+        assert completed.accounting.unique_candidates == 4
+        assert len(set(completed.archive_page_uris)) == 4
 
 
 def test_interrupted_cancellation_remains_cancelled_after_recovery(
     tmp_path: Path,
 ) -> None:
-    runtime = create_runtime(tmp_path)
-    claim_uri, plugin_id = _install_search_plugin(
-        runtime,
-        proposer_entrypoint=(
-            "tests.support.search_entrypoints:propose_fixture_values_slowly"
-        ),
-    )
-    handle = runtime.services.search.start(
-        _request(
-            claim_uri,
-            plugin_id,
-            idempotency_key="search-recovery-cancel-001",
-        )
-    )
-    runtime.services.search.pause(handle.experiment_uri)
-    paused = runtime.services.search.wait(handle.experiment_uri, timeout_seconds=30)
-    thread = runtime.services.search._threads.get(handle.experiment_uri)
-    if thread is not None:
-        thread.join(timeout=5)
-
-    interrupted = SearchExperimentSnapshot.model_validate(
-        {
-            **paused.model_dump(mode="json"),
-            "state": "CANCEL_REQUESTED",
-            "detail": "simulated process loss after cancellation",
-        }
-    )
-    with sqlite3.connect(runtime.core.store.db_path) as connection:
-        connection.execute(
-            """
-            UPDATE search_experiments
-            SET state = ?, snapshot_json = ?
-            WHERE experiment_uri = ?
-            """,
-            (
-                ExperimentState.CANCEL_REQUESTED.value,
-                canonicalize_json(interrupted.model_dump(mode="json")),
-                handle.experiment_uri,
+    with open_search_services(tmp_path) as runtime:
+        claim_uri, plugin_id = _install_search_plugin(
+            runtime,
+            proposer_entrypoint=(
+                "tests.support.search_entrypoints:propose_fixture_values_slowly"
             ),
         )
+        handle = runtime.application.search.start(
+            _request(
+                claim_uri,
+                plugin_id,
+                idempotency_key="search-recovery-cancel-001",
+            )
+        )
+        runtime.application.search.pause(handle.experiment_uri)
+        paused = runtime.application.search.wait(
+            handle.experiment_uri, timeout_seconds=30
+        )
+        thread = runtime.application.search._threads.get(handle.experiment_uri)
+        if thread is not None:
+            thread.join(timeout=5)
 
-    recovered_runtime = create_runtime(tmp_path)
-    recovered = recovered_runtime.services.search.inspect(handle.experiment_uri)
+        interrupted = SearchExperimentSnapshot.model_validate(
+            {
+                **paused.model_dump(mode="json"),
+                "state": "CANCEL_REQUESTED",
+                "detail": "simulated process loss after cancellation",
+            }
+        )
+        with sqlite3.connect(runtime.core.store.db_path) as connection:
+            connection.execute(
+                """
+                UPDATE search_experiments
+                SET state = ?, snapshot_json = ?
+                WHERE experiment_uri = ?
+                """,
+                (
+                    ExperimentState.CANCEL_REQUESTED.value,
+                    canonicalize_json(interrupted.model_dump(mode="json")),
+                    handle.experiment_uri,
+                ),
+            )
 
-    assert recovered.state is ExperimentState.CANCELLED
-    assert recovered.stop_reason is SearchStopReason.CANCELLED
-    assert recovered.checkpoint_uri == paused.checkpoint_uri
-    assert recovered.archive_uri is not None
-    event_types = [
-        event.event_type
-        for event in recovered_runtime.services.search.events(handle.experiment_uri)
-    ]
-    assert event_types[-2:] == [
-        "RECOVERED_CANCELLED",
-        "RECOVERY_ARCHIVE_COMMITTED",
-    ]
+    with open_search_services(tmp_path) as recovered_runtime:
+        recovered = recovered_runtime.application.search.inspect(handle.experiment_uri)
+
+        assert recovered.state is ExperimentState.CANCELLED
+        assert recovered.stop_reason is SearchStopReason.CANCELLED
+        assert recovered.checkpoint_uri == paused.checkpoint_uri
+        assert recovered.archive_uri is not None
+        event_types = [
+            event.event_type
+            for event in recovered_runtime.application.search.events(
+                handle.experiment_uri
+            )
+        ]
+        assert event_types[-2:] == [
+            "RECOVERED_CANCELLED",
+            "RECOVERY_ARCHIVE_COMMITTED",
+        ]
 
 
 def test_corrupt_snapshot_is_quarantined_without_blocking_recovery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_runtime(tmp_path)
-    claim_uri, plugin_id = _install_search_plugin(runtime)
-    monkeypatch.setattr(
-        runtime.services.search, "_launch", lambda *_args, **_kwargs: None
-    )
-    valid = runtime.services.search.start(
-        _request(
-            claim_uri,
-            plugin_id,
-            idempotency_key="search-recovery-valid-001",
+    with open_search_services(tmp_path) as runtime:
+        claim_uri, plugin_id = _install_search_plugin(runtime)
+        monkeypatch.setattr(
+            runtime.application.search, "_launch", lambda *_args, **_kwargs: None
         )
-    )
-    valid_snapshot = runtime.services.search.inspect(valid.experiment_uri)
-    corrupt_uri = "experiment://ffffffffffffffffffffffffffffffff"
-    mismatched_uri = "experiment://eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    invalid_state_uri = "experiment://dddddddddddddddddddddddddddddddd"
-    with sqlite3.connect(runtime.core.store.db_path) as connection:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute(
-            """
-            INSERT INTO search_experiments (
-                experiment_uri, state, snapshot_json
-            ) VALUES (?, 'RUNNING', ?)
-            """,
-            (corrupt_uri, b"{"),
+        valid = runtime.application.search.start(
+            _request(
+                claim_uri,
+                plugin_id,
+                idempotency_key="search-recovery-valid-001",
+            )
         )
-        connection.execute(
-            """
-            INSERT INTO search_experiments (
-                experiment_uri, state, snapshot_json
-            ) VALUES (?, 'PENDING', ?)
-            """,
-            (
-                mismatched_uri,
-                canonicalize_json(valid_snapshot.model_dump(mode="json")),
-            ),
-        )
-        invalid_state_snapshot = valid_snapshot.model_copy(
-            update={"experiment_uri": invalid_state_uri}
-        )
-        connection.execute(
-            """
-            INSERT INTO search_experiments (
-                experiment_uri, state, snapshot_json
-            ) VALUES (?, 'BROKEN', ?)
-            """,
-            (
-                invalid_state_uri,
-                canonicalize_json(invalid_state_snapshot.model_dump(mode="json")),
-            ),
-        )
+        valid_snapshot = runtime.application.search.inspect(valid.experiment_uri)
+        corrupt_uri = "experiment://ffffffffffffffffffffffffffffffff"
+        mismatched_uri = "experiment://eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        invalid_state_uri = "experiment://dddddddddddddddddddddddddddddddd"
+        with sqlite3.connect(runtime.core.store.db_path) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute(
+                """
+                INSERT INTO search_experiments (
+                    experiment_uri, state, snapshot_json
+                ) VALUES (?, 'RUNNING', ?)
+                """,
+                (corrupt_uri, b"{"),
+            )
+            connection.execute(
+                """
+                INSERT INTO search_experiments (
+                    experiment_uri, state, snapshot_json
+                ) VALUES (?, 'PENDING', ?)
+                """,
+                (
+                    mismatched_uri,
+                    canonicalize_json(valid_snapshot.model_dump(mode="json")),
+                ),
+            )
+            invalid_state_snapshot = valid_snapshot.model_copy(
+                update={"experiment_uri": invalid_state_uri}
+            )
+            connection.execute(
+                """
+                INSERT INTO search_experiments (
+                    experiment_uri, state, snapshot_json
+                ) VALUES (?, 'BROKEN', ?)
+                """,
+                (
+                    invalid_state_uri,
+                    canonicalize_json(invalid_state_snapshot.model_dump(mode="json")),
+                ),
+            )
 
-    recovered = create_runtime(tmp_path)
-
-    assert (
-        recovered.services.search.inspect(valid.experiment_uri).state
-        is ExperimentState.PAUSED
-    )
-    with sqlite3.connect(recovered.core.store.db_path) as connection:
-        states = connection.execute(
-            """
-            SELECT experiment_uri, state
-            FROM search_experiments
-            WHERE experiment_uri IN (?, ?, ?)
-            ORDER BY experiment_uri
-            """,
-            (corrupt_uri, mismatched_uri, invalid_state_uri),
-        ).fetchall()
-        failures = connection.execute(
-            """
-            SELECT experiment_uri, snapshot_digest, detail
-            FROM search_recovery_failures
-            WHERE experiment_uri IN (?, ?, ?)
-            ORDER BY experiment_uri
-            """,
-            (corrupt_uri, mismatched_uri, invalid_state_uri),
-        ).fetchall()
-    assert states == [
-        (invalid_state_uri, "ERROR"),
-        (mismatched_uri, "ERROR"),
-        (corrupt_uri, "ERROR"),
-    ]
-    assert len(failures) == 3
-    assert all(str(failure[1]).startswith("sha256:") for failure in failures)
-    assert all("invalid" in str(failure[2]) for failure in failures)
-    assert (
-        recovered.services.search.events(corrupt_uri)[-1].event_type
-        == "RECOVERY_REJECTED"
-    )
-    assert (
-        recovered.services.search.events(mismatched_uri)[-1].event_type
-        == "RECOVERY_REJECTED"
-    )
-    assert (
-        recovered.services.search.events(invalid_state_uri)[-1].event_type
-        == "RECOVERY_REJECTED"
-    )
+    with open_search_services(tmp_path) as recovered:
+        assert (
+            recovered.application.search.inspect(valid.experiment_uri).state
+            is ExperimentState.PAUSED
+        )
+        with sqlite3.connect(recovered.core.store.db_path) as connection:
+            states = connection.execute(
+                """
+                SELECT experiment_uri, state
+                FROM search_experiments
+                WHERE experiment_uri IN (?, ?, ?)
+                ORDER BY experiment_uri
+                """,
+                (corrupt_uri, mismatched_uri, invalid_state_uri),
+            ).fetchall()
+            failures = connection.execute(
+                """
+                SELECT experiment_uri, snapshot_digest, detail
+                FROM search_recovery_failures
+                WHERE experiment_uri IN (?, ?, ?)
+                ORDER BY experiment_uri
+                """,
+                (corrupt_uri, mismatched_uri, invalid_state_uri),
+            ).fetchall()
+        assert states == [
+            (invalid_state_uri, "ERROR"),
+            (mismatched_uri, "ERROR"),
+            (corrupt_uri, "ERROR"),
+        ]
+        assert len(failures) == 3
+        assert all(str(failure[1]).startswith("sha256:") for failure in failures)
+        assert all("invalid" in str(failure[2]) for failure in failures)
+        assert (
+            recovered.application.search.events(corrupt_uri)[-1].event_type
+            == "RECOVERY_REJECTED"
+        )
+        assert (
+            recovered.application.search.events(mismatched_uri)[-1].event_type
+            == "RECOVERY_REJECTED"
+        )
+        assert (
+            recovered.application.search.events(invalid_state_uri)[-1].event_type
+            == "RECOVERY_REJECTED"
+        )

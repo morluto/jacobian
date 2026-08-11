@@ -136,8 +136,8 @@ selectors = [
   "tests/boundary/process/test_worker_error_protocol.py",
   "tests/component/plugins/test_plugin_execution.py",
   "tests/boundary/storage/recovery/test_enumeration_failures.py",
-  "tests/composition/runtime/test_capability_adapter_authority.py",
-  "tests/composition/runtime/test_capability_discovery.py",
+  "tests/component/capabilities/test_capability_adapter_authority.py",
+  "tests/component/capabilities/test_capability_discovery.py",
 ]
 
 [[local_planning.exact_overrides]]
@@ -150,13 +150,13 @@ selectors = [
   "tests/boundary/storage/recovery/test_search_lifecycle.py",
   "tests/boundary/storage/recovery/test_search_plugin_fail_closed.py",
   "tests/boundary/storage/recovery/test_search_recovery.py",
-  "tests/composition/runtime/test_conjecture_workflows.py",
+  "tests/component/conjectures/test_conjecture_workflows.py",
 ]
 
 [[local_planning.exact_overrides]]
 path = "tests/support/conjecture_entrypoints.py"
 selectors = [
-  "tests/composition/runtime/test_conjecture_workflows.py",
+  "tests/component/conjectures/test_conjecture_workflows.py",
 ]
 
 [[local_planning.exact_overrides]]
@@ -278,7 +278,7 @@ matrix = true
 name = "provider"
 kind = "pytest"
 tier = "boundary"
-paths = ["tests/boundary/providers/cvc5", "tests/boundary/providers/external_sat", "tests/boundary/providers/flint", "tests/boundary/providers/graph", "tests/boundary/providers/sympy"]
+paths = ["tests/boundary/providers/cvc5", "tests/boundary/providers/external_sat", "tests/boundary/providers/flint"]
 command = "make test-provider"
 workers = 1
 distribution = "load"
@@ -288,7 +288,7 @@ required_provider = "optional"
 timing_sharding = false
 ci = { pull_request = false, merge_queue = true, main = true, scheduled = true }
 matrix = true
-providers = ["cvc5", "external_sat", "flint", "graph", "sympy"]
+providers = ["cvc5", "external_sat", "flint"]
 
 [[lanes]]
 name = "lean"

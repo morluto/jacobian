@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
+import pytest
+from tests.support.core_capability_harnesses import (
+    UniversalAlgebraTestServices,
+    open_universal_algebra_services,
+)
+from tests.support.services import atomic_installation
+
+from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityRequest,
@@ -10,6 +20,21 @@ from jacobian.contracts.results import Conclusion
 
 # Composition-lane admission category for architecture ratchets.
 COMPOSITION_ADMISSION = "AUTHORITY"
+
+
+@pytest.fixture
+def verified_universal_algebra_services(
+    tmp_path,
+) -> Iterator[UniversalAlgebraTestServices]:
+    with open_universal_algebra_services(tmp_path / "state") as services:
+        runtime = services.services
+        with atomic_installation(runtime.core):
+            for adapter in install_atomic_capabilities(
+                runtime.installation,
+                runtime.application,
+            ):
+                runtime.installation.register_capability(adapter)
+        yield services
 
 
 def _variable(name: str) -> dict[str, object]:
@@ -53,16 +78,17 @@ def _left_projection_problem() -> dict[str, object]:
 
 
 def test_evaluate_laws_handoff_composes_with_certificate_verify(
-    authorized_complete_runtime,
+    verified_universal_algebra_services: UniversalAlgebraTestServices,
 ) -> None:
-    result = authorized_complete_runtime.core.capabilities.invoke(
+    runtime = verified_universal_algebra_services.services
+    result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="universal_algebra.evaluate_laws",
             input={"problem": _left_projection_problem()},
         )
     )
     handoff = result.output["verification_handoff"]
-    verified = authorized_complete_runtime.core.capabilities.invoke(
+    verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=handoff["capability_id"],
             input=handoff["payload"],
@@ -75,11 +101,12 @@ def test_evaluate_laws_handoff_composes_with_certificate_verify(
 
 
 def test_countermodel_search_composes_with_independent_law_replay(
-    authorized_complete_runtime,
+    verified_universal_algebra_services: UniversalAlgebraTestServices,
 ) -> None:
+    runtime = verified_universal_algebra_services.services
     laws = _left_projection_problem()["laws"]
 
-    search = authorized_complete_runtime.core.capabilities.invoke(
+    search = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="universal_algebra.search.countermodel",
             input={
@@ -96,7 +123,7 @@ def test_countermodel_search_composes_with_independent_law_replay(
     assert search.output["target_record"]["holds"] is False
     assert all(record["holds"] for record in search.output["source_records"])
 
-    evaluation = authorized_complete_runtime.core.capabilities.invoke(
+    evaluation = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="universal_algebra.evaluate_laws",
             input={
@@ -108,7 +135,7 @@ def test_countermodel_search_composes_with_independent_law_replay(
             },
         )
     )
-    verified = authorized_complete_runtime.core.capabilities.invoke(
+    verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
             input={

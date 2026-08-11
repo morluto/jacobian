@@ -69,62 +69,59 @@ _CASES = (
 )
 
 
-@pytest.mark.parametrize(("capability_id", "payload"), _CASES)
-def test_recurrence_and_series_results_are_independently_verified(
+def test_recurrence_and_series_results_are_verified_and_forgery_rejected(
     combinatorics_services,
-    capability_id: str,
-    payload: dict[str, object],
-) -> None:
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
-    )
-    verified = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=derive_verification_capability_id(capability_id),
-            input={
-                "input": payload,
-                "candidate": computed.output["result"],
-            },
-        )
-    )
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == capability_id
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-
-
-@pytest.mark.parametrize(("capability_id", "payload"), _CASES)
-def test_checker_rejects_contract_valid_false_results(
-    combinatorics_services,
-    capability_id: str,
-    payload: dict[str, object],
 ) -> None:
     runtime = combinatorics_services
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
-    )
-    forged_candidate = deepcopy(computed.output["result"])
-    if capability_id == "combinatorics.recurrence.linear.evaluate":
-        forged_candidate["replay_prefix"][7] = _q(14)
-        forged_candidate["values"][7]["value"] = _q(14)
-    elif capability_id == "combinatorics.recurrence.p_recursive.evaluate":
-        forged_candidate["replay_prefix"][7] = _q(5039)
-        forged_candidate["values"][7]["value"] = _q(5039)
-    else:
-        forged_candidate["coefficients"][7] = _q(22)
-    rejected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=derive_verification_capability_id(capability_id),
-            input={"input": payload, "candidate": forged_candidate},
+    for capability_id, payload in _CASES:
+        computed = runtime.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
         )
-    )
-    assert rejected.execution.status is ExecutionStatus.COMPLETED
-    assert rejected.output["status"] == "REJECTED"
-    assert rejected.output["conclusion"] == "UNKNOWN"
-    assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        verifier_id = derive_verification_capability_id(capability_id)
+        verified = runtime.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={
+                    "input": payload,
+                    "candidate": computed.output["result"],
+                },
+            )
+        )
+        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED, (
+            capability_id
+        )
+        assert verified.execution.status is ExecutionStatus.COMPLETED, capability_id
+        assert verified.output["status"] == "VERIFIED", capability_id
+        assert verified.output["operation_id"] == capability_id, capability_id
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            capability_id
+        )
+        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED, (
+            capability_id
+        )
+
+        forged_candidate = deepcopy(computed.output["result"])
+        if capability_id == "combinatorics.recurrence.linear.evaluate":
+            forged_candidate["replay_prefix"][7] = _q(14)
+            forged_candidate["values"][7]["value"] = _q(14)
+        elif capability_id == "combinatorics.recurrence.p_recursive.evaluate":
+            forged_candidate["replay_prefix"][7] = _q(5039)
+            forged_candidate["values"][7]["value"] = _q(5039)
+        else:
+            forged_candidate["coefficients"][7] = _q(22)
+        rejected = runtime.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={"input": payload, "candidate": forged_candidate},
+            )
+        )
+        assert rejected.execution.status is ExecutionStatus.COMPLETED, capability_id
+        assert rejected.output["status"] == "REJECTED", capability_id
+        assert rejected.output["conclusion"] == "UNKNOWN", capability_id
+        assert rejected.output["verification_record_uri"] is None, capability_id
+        assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED, (
+            capability_id
+        )
 
 
 def test_checker_runtime_binds_only_independent_source(

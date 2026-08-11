@@ -162,30 +162,31 @@ def test_reconstruction_rejects_tampered_ordered_child(
         reconstruct(tampered)
 
 
-@pytest.mark.parametrize(
-    ("capability_id", "connective"),
-    [
+def test_unsupported_top_level_connective_is_explicitly_rejected(
+    claim_services,
+) -> None:
+    cases = (
         ("claim.conjunction.split", LogicalConnective.ATOM),
         ("claim.conjunction.split", LogicalConnective.IMPLICATION),
         ("claim.implication.obligations", LogicalConnective.ATOM),
         ("claim.implication.obligations", LogicalConnective.CONJUNCTION),
-    ],
-)
-def test_unsupported_top_level_connective_is_explicitly_rejected(
-    claim_services,
-    capability_id: str,
-    connective: LogicalConnective,
-) -> None:
-    children = (
-        () if connective is LogicalConnective.ATOM else (_atom("left"), _atom("right"))
     )
-    root = LogicalClaimNode(
-        node_id="root",
-        connective=connective,
-        atom={"symbol": "A"} if connective is LogicalConnective.ATOM else None,
-        children=children,
-    )
-    source_uri = _store_claim(claim_services, root)
-    result = _invoke(claim_services, capability_id, source_uri)
-    assert result.execution.status.value == "ERROR"
-    assert result.diagnostics[0].code == "UNSUPPORTED_TOP_LEVEL_CONNECTIVE"
+    for index, (capability_id, connective) in enumerate(cases):
+        children = (
+            ()
+            if connective is LogicalConnective.ATOM
+            else (_atom(f"left-{index}"), _atom(f"right-{index}"))
+        )
+        root = LogicalClaimNode(
+            node_id=f"root-{index}",
+            connective=connective,
+            atom={"symbol": f"A{index}"}
+            if connective is LogicalConnective.ATOM
+            else None,
+            children=children,
+        )
+        source_uri = _store_claim(claim_services, root)
+        result = _invoke(claim_services, capability_id, source_uri)
+        case = (capability_id, connective)
+        assert result.execution.status.value == "ERROR", case
+        assert result.diagnostics[0].code == "UNSUPPORTED_TOP_LEVEL_CONNECTIVE", case

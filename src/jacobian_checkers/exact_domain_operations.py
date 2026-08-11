@@ -75,6 +75,17 @@ def _accept_exhaustive_integer(detail: str) -> dict[str, Any]:
     }
 
 
+def _accept_checked_integer(detail: str) -> dict[str, Any]:
+    return {
+        "accepted": True,
+        "conclusion": "TRUE",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "CHECKED_CERTIFICATE",
+        "coverage": "NOT_APPLICABLE",
+        "detail": detail,
+    }
+
+
 def _integer(value: object) -> Any:
     if not isinstance(value, str) or _INTEGER.fullmatch(value) is None:
         raise ValueError("integer is not canonical")
@@ -813,8 +824,9 @@ def check_modular_polynomial_identity(request: dict[str, Any]) -> dict[str, Any]
                 "declared result does not match independent Python-FLINT "
                 "coefficientwise modular-polynomial replay"
             )
-        return _accept_exhaustive_integer(
-            f"independent Python-FLINT coefficient replay accepted {operation_id}"
+        return _accept_checked_integer(
+            "independent Python-FLINT formal coefficientwise comparison "
+            f"accepted {operation_id}"
         )
     except (KeyError, TypeError, ValueError, OverflowError):
         return _reject_exact_integer(

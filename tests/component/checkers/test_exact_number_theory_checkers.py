@@ -15,6 +15,7 @@ from tests.support.artifacts import canonical_digest as _digest
 from jacobian_checkers.exact_domain_operations import (
     check_integer_powerful_number,
     check_integer_prime_factorization,
+    check_modular_polynomial_identity,
     check_modular_polynomial_residue_image,
 )
 
@@ -36,6 +37,24 @@ def test_modular_residue_checker_reports_exhaustive_integer_replay() -> None:
     assert decision["arithmetic"] == "EXACT_INTEGER"
     assert decision["method"] == "EXHAUSTIVE_FINITE"
     assert decision["coverage"] == "EXHAUSTIVE"
+
+
+def test_modular_identity_checker_reports_formal_coefficient_replay() -> None:
+    checker_request = copy.deepcopy(
+        next(
+            request
+            for checker, request in _NUMBER_THEORY_CASES
+            if checker is check_modular_polynomial_identity
+        )
+    )
+
+    decision = check_modular_polynomial_identity(checker_request)
+
+    assert decision["accepted"] is True
+    assert decision["arithmetic"] == "EXACT_INTEGER"
+    assert decision["method"] == "CHECKED_CERTIFICATE"
+    assert decision["coverage"] == "NOT_APPLICABLE"
+    assert "formal coefficientwise comparison" in decision["detail"]
 
 
 def test_modular_residue_checker_accepts_exact_assignment_bound() -> None:

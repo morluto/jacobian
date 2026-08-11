@@ -75,7 +75,7 @@ def _installed(
             model: _uri(str(index + 1)) for index, model in enumerate(request_models)
         },
         result_schema_uris={
-            capability_id: _uri(chr(ord("a") + index))
+            capability_id: "artifact://sha256/" + f"{index + 10:064x}"
             for index, capability_id in enumerate(capability_ids)
         },
         obligation_schema_uris={},

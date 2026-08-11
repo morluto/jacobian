@@ -1023,7 +1023,7 @@ def _syzygy_checker_supports(payload: dict[str, Any]) -> bool:
         term_count = len(terms)
     elif isinstance(factors, list):
         homogeneous_degree = len(factors)
-        support = {(0, 0, 0)}
+        support: set[tuple[int, ...]] = {(0, 0, 0)}
         for factor in factors:
             coefficients = (
                 factor.get("coefficients") if isinstance(factor, dict) else None

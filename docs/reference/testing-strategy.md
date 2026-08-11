@@ -45,20 +45,29 @@ Lane identity also appears in Make targets and workflow jobs. Edit
 
 ### Hydration ladder
 
-Use the narrowest complete-runtime profile that proves the claim:
+Use the narrowest production service graph that proves the claim:
 
-1. `open_domain_services(bundle)` — one named domain bundle (producers only)
+1. `open_domain_services(...)` — foundational core/application services,
+   optionally with explicitly selected domain bundles (producers only)
 2. `open_exact_domain_services(bundle)` — one named domain bundle **with** its
    exact verification adapters (typed verified-domain seam)
-3. `attached_complete_runtime` — complete portfolio, **no** checker authority
+3. `open_reference_services(root, *names)` — only the explicitly selected
+   production reference installations
+4. `attached_complete_runtime` — complete portfolio, **no** checker authority
    (reference schemas/plugins are available without authorization)
-4. `attached_complete_runtime_read_only` — module-shared attached copy for
+5. `attached_complete_runtime_read_only` — module-shared attached copy for
    non-mutating catalog/discovery inspection (one private template copy per
    module; tests must not write artifacts or durable store state)
-5. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
-6. `authorized_complete_runtime_read_only` — module-shared authorized copy for
+6. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
+7. `authorized_complete_runtime_read_only` — module-shared authorized copy for
    non-mutating authorized catalog inspection
-7. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+8. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+
+When a focused capability is installed by a production installer rather than a
+`DomainBundle`, open `open_domain_services(...)` and run that installer plus its
+adapter registrations inside one `atomic_installation(...)` block. Preserve the
+production checker-authority decision in that graph. Do not reproduce portfolio
+installation policy in a test helper merely to avoid the complete runtime.
 
 Prefer `attached_*` over `fresh_*` whenever a private template copy isolates the
 mutation; reserve `fresh_*` for empty-root install and lifecycle ownership.

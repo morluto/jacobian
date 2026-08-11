@@ -97,8 +97,7 @@ def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
                 == verifier["input_schema_summary"]
             )
             assert (
-                verifier_text["invocation_protocol"]
-                == verifier["invocation_protocol"]
+                verifier_text["invocation_protocol"] == verifier["invocation_protocol"]
             )
 
             verifier_contract_result = await client.call_tool(

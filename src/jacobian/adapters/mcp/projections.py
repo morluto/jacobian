@@ -135,10 +135,10 @@ def _inline_verifier_invocation_protocol(
         is CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER
         for relationship in descriptor.related_capabilities
     )
-    if (
-        not has_producer_relationship
-        or set(schema.get("required", [])) != {"input", "candidate"}
-    ):
+    if not has_producer_relationship or set(schema.get("required", [])) != {
+        "input",
+        "candidate",
+    }:
         return None
     return {
         "tool": "math.run",

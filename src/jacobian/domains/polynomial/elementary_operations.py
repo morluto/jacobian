@@ -35,7 +35,7 @@ from jacobian.domains.polynomial.conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
-from jacobian.domains.polynomial.kernels import (
+from jacobian.math.polynomials._sympy import (
     polynomial_derivative,
     polynomial_division,
     polynomial_evaluate,

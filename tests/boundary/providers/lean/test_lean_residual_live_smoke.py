@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityRequest,
@@ -20,7 +21,6 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
 from jacobian.providers.lean_runtime import lean_provider_runtime
-from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 

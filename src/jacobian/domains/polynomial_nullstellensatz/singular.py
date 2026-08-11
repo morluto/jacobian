@@ -335,7 +335,7 @@ class SingularNullstellensatzCertificateAdapter:
         self.system_schema_uri = dependency.result_schema_uris[
             MATERIALIZE_CAPABILITY_ID
         ]
-        self.bundle_schema_uri = dependency.obligation_schema_uris[
+        self.bundle_schema_uri = dependency.named_schema_uris[
             "nullstellensatz_certificate_bundle"
         ]
         self._descriptor = CapabilityDescriptor(
@@ -559,7 +559,7 @@ def install_singular_producer(
             NullstellensatzCertificateRequest: adapter.system_schema_uri
         },
         result_schema_uris={PRODUCE_CAPABILITY_ID: adapter.bundle_schema_uri},
-        obligation_schema_uris={},
+        named_schema_uris={},
     )
 
 

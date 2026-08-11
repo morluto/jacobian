@@ -87,14 +87,15 @@ def test_subprocess_in_test_topology_is_flagged(tmp_path: Path) -> None:
     assert sub[0].path == "tools/test_topology.py"
 
 
-def test_subprocess_in_explicit_e2e_fixture_is_allowed(tmp_path: Path) -> None:
+def test_subprocess_in_deleted_e2e_fixture_is_rejected(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/e2e/verified_results/test_reference_runtime.py",
         "import subprocess\n\nsubprocess.run(['echo'])\n",
     )
     report = check_architecture(tmp_path)
-    assert all(v.code != "subprocess-confined" for v in report.violations)
+    sub = [v for v in report.violations if v.code == "subprocess-confined"]
+    assert len(sub) == 1
 
 
 def test_subprocess_in_explicit_boundary_fixture_is_allowed(tmp_path: Path) -> None:

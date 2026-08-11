@@ -26,18 +26,14 @@ and persistence form without per-operation matrix schemas.
 
 ## Conversion and kernel layer
 
-Contract-to-backend conversions and typed mathematical kernels live in
-[`jacobian.domains.matrix_lattice`](../../../../src/jacobian/domains/matrix_lattice):
-`conversions.py` translates between `RationalMatrix` / `IntegerMatrix` and
-SymPy matrices using the canonical integer API, and `kernels.py` exposes typed
-SymPy kernels (`rref`, `inverse`, `trace`, `characteristic_polynomial`,
-`smith_normal_form`, `matrix_product`, `rational_linear_solve`, `adjugate`).
-These modules sit below both the capability declarations in `capabilities.py`
-and the native [`jacobian.math.matrices`](../../../../src/jacobian/math/matrices.py)
-API. When a native function corresponds to a capability—`jacobian.math.matrices.rref`,
-`.inverse`, `.trace`—both paths call the same kernel. The native API accepts
-SymPy `MatrixBase` values directly and does not route through `math.run` or
-construct a capability runtime.
+The supported determinant, rank, RREF, inverse, and trace kernels live in
+[`jacobian.math.matrices`](../../../../src/jacobian/math/matrices/__init__.py).
+Its private `_sympy.py` backend owns SymPy calls, while
+`jacobian.domains.matrix_lattice.conversions` translates wire contracts at the
+operation boundary. Capability declarations and native callers therefore use
+one mathematical implementation. The native API accepts SymPy `MatrixBase`
+values directly, imports its backend lazily, and does not route through
+`math.run` or construct a capability runtime.
 
 ## Artifact-backed capabilities
 

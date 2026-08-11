@@ -86,7 +86,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                     descriptor["capability_id"] for descriptor in page["matches"]
                 )
                 cursor = page["next_cursor"]
-            assert "artifact.put" in all_ids
+            assert "artifact.put" not in all_ids
             assert "artifact.put" not in discoverable_ids
             assert indexed_ids == discoverable_ids
 

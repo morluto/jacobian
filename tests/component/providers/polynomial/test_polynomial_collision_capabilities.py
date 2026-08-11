@@ -86,12 +86,11 @@ def test_collision_checker_rejects_a_forged_image(
 
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="witness.verify",
+            capability_id="polynomial.map.collision_evidence.verify",
             input={
                 "claim_uri": claim_uri,
                 "candidate_uri": candidate_uri,
                 "witness_uri": forged_artifact.artifact_uri,
-                "checker_id": runtime.polynomial.collision_checker_id,
             },
         )
     )
@@ -150,12 +149,11 @@ def test_collision_comparison_does_not_promote_forged_evaluations(
 
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="witness.verify",
+            capability_id="polynomial.map.collision_evidence.verify",
             input={
                 "claim_uri": candidate.output["claim_uri"],
                 "candidate_uri": candidate.output["candidate_uri"],
                 "witness_uri": candidate.output["witness_uri"],
-                "checker_id": candidate.output["checker_id"],
             },
         )
     )

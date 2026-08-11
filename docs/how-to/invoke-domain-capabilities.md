@@ -6,7 +6,7 @@ Use this guide when you know the mathematical outcome you need but not the
 installed tool ID or payload. The product surface is
 [search and execute](../explanation/architecture.md#search-and-execute):
 
-1. **Search** with `math.find` (browse, query, or inspect an ID);
+1. **Search or inspect** with `math.find`;
 2. **Execute** the ordinary tool with `math.run` and read the **mathematical
    value** in `output`;
 3. use execution status (and optional artifacts) for failures and handoffs; and
@@ -40,8 +40,7 @@ installed version.
 
 This complete local MCP example runs two **different** math tools: a GCD
 producer, then an independent GCD checker. The important split is the tool ID
-(and assurance on the result), not an explore/verify research phase. The
-`mode` field remains on the wire for dispatch compatibility.
+and the checker verdict, not a mode on the producer.
 
 It uses the bundled references so the checker tool is operator-authorized and
 present.
@@ -93,9 +92,7 @@ async def main() -> None:
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     )
     async with Client(server, raise_exceptions=True) as client:
-        # Producer tool (compute). Legacy mode=EXPLORE still accepted on the wire
-        # until https://github.com/morluto/jacobian/issues/1143 — identity is what
-        # matters, not a research phase.
+        # Ordinary producer tool.
         described = await tool(
             client,
             "math.find",
@@ -108,7 +105,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "polynomial.compute.gcd",
-                "mode": "EXPLORE",  # legacy; defaults to EXPLORE if omitted
                 "payload": {
                     "left": polynomial(-1, 0, 1),
                     "right": polynomial(0, 1, 1),
@@ -118,7 +114,7 @@ async def main() -> None:
         assert computed["execution"]["status"] == "COMPLETED"
         assert computed["assurance"]["level"] == "COMPUTED"
 
-        # Separate checker tool — not "VERIFY mode" on the producer.
+        # Separate checker tool.
         verification_descriptor = await tool(
             client,
             "math.find",
@@ -134,7 +130,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "polynomial.gcd.verify",
-                "mode": "VERIFY",  # legacy; must match this tool until #1143
                 "payload": {
                     "input": {
                         "left": polynomial(-1, 0, 1),
@@ -158,9 +153,8 @@ uv run python domain_capability.py
 ```
 
 The producer's exact arithmetic and successful completion yield `COMPUTED`,
-not `VERIFIED`. The second capability resolves the stored input/result lineage
-and independently replays the relation. Supplying copied inline output instead
-of the exact `result_uri` would lose that binding.
+not `VERIFIED`. The second operation independently replays the exact typed
+input/candidate pair and binds their canonical digests.
 
 ## Interpret bounded-search results
 

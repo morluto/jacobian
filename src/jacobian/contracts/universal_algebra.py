@@ -266,17 +266,6 @@ class FiniteMagmaLawReplayPayload(ContractModel):
     evaluation_uri: ArtifactUri
 
 
-class UniversalAlgebraCertificateVerificationPayload(ContractModel):
-    certificate_uri: ArtifactUri
-    checker_id: CheckerUri
-    timeout_seconds: int = Field(default=150, ge=1, le=150)
-
-
-class UniversalAlgebraVerificationHandoff(ContractModel):
-    capability_id: Literal["certificate.verify"] = "certificate.verify"
-    payload: UniversalAlgebraCertificateVerificationPayload
-
-
 class UniversalAlgebraEvaluationOutput(ContractModel):
     problem_uri: ArtifactUri
     evaluation_uri: ArtifactUri
@@ -289,24 +278,6 @@ class UniversalAlgebraEvaluationOutput(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     verification: Literal["UNVERIFIED"] = "UNVERIFIED"
     certificate_available: Literal[True] = True
-    verification_handoff: UniversalAlgebraVerificationHandoff | None = None
-
-    @model_validator(mode="after")
-    def bind_verification_handoff(self) -> Self:
-        if self.checker_id is None:
-            if self.verification_handoff is not None:
-                raise ValueError(
-                    "verification handoff requires an installed checker identity"
-                )
-        elif (
-            self.verification_handoff is None
-            or self.verification_handoff.payload.certificate_uri != self.certificate_uri
-            or self.verification_handoff.payload.checker_id != self.checker_id
-        ):
-            raise ValueError(
-                "installed checker output requires an exact certificate handoff"
-            )
-        return self
 
 
 class CountermodelSearchStatus(StrEnum):

@@ -10,6 +10,7 @@ from collections import OrderedDict
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.lean import (
     LeanCandidate,
@@ -24,7 +25,6 @@ from jacobian.contracts.results import (
     Verification,
 )
 from jacobian.contracts.verification import VerificationRecord
-from jacobian.references import LeanCheckerInstallation
 from jacobian.registry import CheckerRegistryError
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository

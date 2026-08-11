@@ -20,7 +20,7 @@ canonical task IDs to provenance, assurance, environment, and verifier
 contracts. Content-addressed snapshot locks freeze intentional evaluation sets;
 publication manifests are generated from locks outside dataset roots.
 
-Dataset identity is a claim boundary: workflow observations, public
+Dataset identity is a claim boundary: model observations, public
 reproductions, answer-visible research diagnostics, runtime measurements,
 provider feasibility, and examples must not share an interpretation merely
 because they use one task format.

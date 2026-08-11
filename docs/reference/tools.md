@@ -1,325 +1,162 @@
-# Math tool surface (search and execute)
+# Math tool surface
 
 [Documentation home](../index.md)
 
-- Status: Current pre-stable MCP surface
-- Installed membership remains runtime-defined
-- Product model: [Product model](../explanation/product-blueprint.md)
+- Status: Target pre-stable MCP contract
+- Installed membership is runtime-defined
 
-Jacobian is a **toolbox**: many atomic math tools behind a fixed surface.
+Jacobian exposes exactly two MCP tools.
 
-| MCP tool | Purpose |
+| Tool | Meaning |
 | --- | --- |
-| `math.find` | Search or inspect installed tools (ID, schema, examples). |
-| `math.run` | Run **one** tool by ID; primary return is the **mathematical result**. |
+| `math.find` | Search installed operations or inspect one exact ID |
+| `math.run` | Execute one selected operation and return a mathematical value or checker verdict |
 
-Read `capability://catalog` for the full inventory. Membership means installed
-and invocable—not recommended, release-supported, or formally verified.
+The complete installed inventory is available from `capability://catalog`.
+Catalog membership establishes availability, not recommendation,
+compatibility, or verification authority.
 
-Adding a math tool does **not** add an MCP tool. Superseded `capability.*` MCP
-names are not aliases.
+## `math.find`
 
-See [Search and execute](../explanation/architecture.md#search-and-execute).
-
-Because `math.run` dispatches the whole portfolio, its MCP annotation is
-conservatively `destructiveHint: true`. Per-tool `read_only` lives on the
-descriptor.
-
-## What `math.run` returns (product intent)
-
-**Ordinary tools** (compute, search, transform, materialize, …):
-
-1. **Value** — the calculation (`output` / domain result model).
-2. **Execution status** — completed, invalid input, timeout, error, cancelled.
-3. Optional diagnostics, artifact URIs when durable identity or size requires
-   them, provider provenance for operators.
-
-**Checker tools** (separate catalog IDs only):
-
-1. **Verdict** — accepted, rejected, or non-conclusion for a claim/candidate.
-2. Bindings to what was checked; optional verification record URI when accepted.
-3. Execution status as above.
-
-There are **no dual-mode tools** in the product model: one ID is not both
-"compute X" and "independently verify X." Use two IDs (e.g.
-`polynomial.compute.gcd` and `polynomial.gcd.verify`).
-
-Failed or incomplete runs are not mathematical conclusions. A successful
-ordinary run is a value, not a self-certified theorem.
-
-Domain adapters validate the full Pydantic request before work. JSON Schema is
-for discovery; Pydantic owns cross-field rules.
-
-## Installed capability discovery
-
-The installed catalog is the canonical capability inventory. Its membership
-depends on the available provider runtimes, operator-authorized checkers,
-enabled bundled references, configured exclusions, and operator-installed
-adapters. A static list in this document would therefore describe only one
-installation snapshot.
-
-`math.find` supports search, browse, and exact inspection. Search or
-browse retrieves compact installed outcomes without loading every schema:
+Search uses a bounded lexical query:
 
 ```json
-{
-  "query": "find a counterexample to associativity",
-  "domain": "universal_algebra",
-  "limit": 3
-}
+{"op": "search", "query": "exact matrix determinant", "limit": 5}
 ```
 
-`query` searches published capability IDs, titles, descriptions, and tags.
-`domain` filters the domain-owned capability namespace, with exact tag matches
-also accepted. `limit` is optional; it defaults to 5 and is
-bounded from 1 through 20. (A legacy optional `mode` filter may still be
-accepted until [#1143](https://github.com/morluto/jacobian/issues/1143).) Omit `query` to browse the installed inventory in
-stable ID order. Each response includes stable catalog and operator-policy
-digests and is bounded to 16 KiB; when `next_cursor` is present, pass it back
-with the same filters and limit to continue. Results report `matched_on` and
-`matched_terms`; their deterministic ranking is retrieval, not a recommendation
-or mathematical strategy. Query results also report a deterministic
-`relevance_score`, `query_coverage_milli`, and per-match `lexical_fit`. The
-result-level `portfolio_fit` distinguishes strong candidates, only weak lexical
-matches, and no lexical matches. These are transparent descriptor-retrieval
-signals, not a proof that an operation is mathematically suitable or absent.
-In particular, top-N ordering among `WEAK_LEXICAL_MATCH` entries must not be
-treated as capability fit.
-
-`domain_filter_status` distinguishes an omitted filter (`UNFILTERED`), a filter
-matching at least one installed capability namespace or exact tag (`MATCHED`),
-and an unrecognized filter (`UNKNOWN`). Recognition uses the complete installed
-catalog, including non-discoverable storage primitives, while returned matches
-still omit `discovery_visible=False` entries. For `UNKNOWN`, lexical fit outside
-the filter is not assessed. The response does not guess or silently substitute
-another domain; `available_domains` remains a bounded vocabulary aid drawn from
-discoverable capabilities.
-
-Each match is an operation card: accepted input and artifact kinds, output
-schema summary, provider availability, factual relationships to compatible
-tools, and one size-bounded invocation example when present (otherwise
-required/available top-level input fields). Cards support the agent's choice
-of tool; examples do not recommend a research strategy.
-
-Discovery can also be constrained by `input_kind`. Installed descriptors
-declare whether they accept a structured request, formal proposition, or typed
-artifact. A typed artifact search also supplies the exact `schema_uri` from its
-stored artifact manifest as `artifact_type`.
-General natural-language proof prose is not a formal artifact: declaring
-`NATURAL_LANGUAGE_PROOF`, or using an unambiguous phrase such as “informal
-proof” or “proof prose,” returns typed `NO_ROUTE` unless an installed provider
-explicitly accepts that input. The response's `routing_status` and
-`routing_basis` are separate from lexical `portfolio_fit`. Weak, empty, or
-incompatible results expose unranked recovery paths (`recovery_paths_are_unranked`
-is always true): reformulate the query when one was supplied, remove an
-unrecognized domain filter or other applicable filters, browse without
-arguments, or inspect `capability://catalog`. Array position is not a preferred
-next step. These paths do not imply that the requested operation is
-mathematically impossible or absent in principle.
-
-Passing one `capability_id` returns the default `SUMMARY` exact projection. It
-contains the one-line outcome, tags, provider availability, input/output field
-summaries, and whether descriptor-owned invocation examples are available
-(legacy mode lists may still appear on the wire until
-[#1143](https://github.com/morluto/jacobian/issues/1143)):
+Exact inspection uses an operation ID:
 
 ```json
-{"capability_id": "universal_algebra.search.countermodel"}
+{"op": "inspect", "capability_id": "matrix.determinant.compute"}
 ```
 
-The `CONTRACT` view adds the complete validation-equivalent input schema
-(annotation/default and discriminator routing metadata are omitted), concise
-output/runtime summaries, related operations, and descriptor-owned validated
-invocation examples. It is available whenever an agent does not already have
-the exact contract needed to construct a call:
+The public SDK shape may nest this discriminated request under `request` if the
+pinned MCP SDK cannot publish and enforce the flat union without handwritten
+schema or dispatch code. The semantic operations remain `search` and
+`inspect` either way.
 
-```json
-{
-  "capability_id": "universal_algebra.search.countermodel",
-  "view": "CONTRACT"
-}
-```
-
-The `FULL` view adds complete output schema, provider configuration, licensing,
-and other audit metadata:
-
-```json
-{
-  "capability_id": "universal_algebra.search.countermodel",
-  "view": "FULL"
-}
-```
-
-An unknown exact ID does not copy the complete installed portfolio into the
-tool result. `math.find` and `math.run` return at most five lexical matches plus
-an explicit `math.find` retry and `capability://catalog` as the complete
-inventory path. These are bounded recovery choices, not ranked mathematical
-recommendations.
-
-`math.run` returns a Pydantic result envelope in `structured_content`. **Read
-the mathematical value first** (`output` / domain fields). Execution status,
-optional diagnostics, and artifact URIs support composition and failure
-handling. Legacy envelope fields (for example `assurance`, `mode`) may still be
-present during migration; they are not the product focus.
-
-Text `content` is a compact projection of that same result, not a second full
-serialization. `math.find` uses the same pattern; a `CONTRACT` text projection
-retains the complete input schema so text-oriented clients can construct a
-valid request. Small, bounded mathematical outputs remain inline. An empty
-`artifact_uris` means the value was not retained as a durable artifact.
-
-An agent that already has an exact tool contract may invoke it directly;
-search, browse, and inspection are composable access paths, not a required
-sequence.
-
-Exact replay of an inline value is a deliberate exception to the empty-artifact
-case: it does not retain a copy of the input or candidate, but an accepted
-replay retains its verification record and the semantics artifact that the
-record binds. Both references appear in `artifact_uris`. A record without its
-bound semantics artifact is incomplete evidence; a rejected or non-completing
-replay has no record and does not establish an opposite conclusion.
-
-Capabilities return resource URIs only when their mathematical outcome needs
-durable identity, independent retrieval, replay, resumability, evidence
-binding, or size-separated transport. An adapter uses an explicit
-`CallToolResult` only when it must add an MCP content block such as
-`ResourceLink`, custom metadata, or a deliberate text projection.
-
-Published invocation examples are validated against the descriptor schema when
-the capability is installed. Domain-owned examples may additionally be
-constructed through the complete Pydantic request model. They illustrate valid
-calls; they do not prescribe a research workflow.
-
-Every exact projection includes a scope rule. An invocation covers only its
-exact supplied input or claim. Additional finite or bounded invocations remain
-finite evidence and do not establish an all-orders, all-parameters, or
-otherwise unbounded conclusion. A supplied claim may itself be universal—for
-example, a formally checked theorem—but bounded examples do not silently widen
-their own scope.
-
-Read `capability://catalog` when a client or operator needs the complete
-machine-readable inventory in one response. Do not infer current installation
-membership or payload fields from static documentation.
-
-The [domain operation library](domain-operation-library.md) defines the shared
-contract for built-in mathematical operations. Capability-specific artifact,
-provider, and verification references live with their owning domain. They are
-intentionally not registered here: installing or documenting a capability
-does not change the generic MCP tool contract.
-
-## Mathematical operation portfolio
-
-The portfolio may include capabilities for operations such as:
-
-- artifact materialization;
-- claim validation;
-- candidate evaluation;
-- witness search and independent witness checking;
-- certificate replay;
-- bounded enumeration and canonicalization;
-- exact invariant computation;
-- representation and claim transformation;
-- finite-family materialization;
-- premise and research-record retrieval;
-- proof-assistant checking;
-- exact separation, constraint solving, or construction.
-
-These are capability families, not a required taxonomy. Use domain-specific
-IDs and contracts where mathematical semantics differ. For example,
-`graph.enumerate.nonisomorphic` and
-`polynomial.compute.groebner_basis` should not be forced through a universal
-object or solver schema.
-
-`graph.construct.explicit` validates a complete bounded vertex/edge request
-before writing anything, canonicalizes labels and undirected edges, and returns
-the domain-owned simple-graph artifact accepted by graph consumers. Generic
-`artifact.put` still does not authorize graph semantics.
-`graph.induced_tree.maximum.verify` independently exhausts all vertex subsets
-for stored exact producer results of order at most 14. It binds the complete
-graph-optimization input and result lineage and does not reuse the producer's
-Z3 search. Larger inputs return an unsupported non-conclusion.
-
-Useful low-level operations may retain descriptive IDs such as
-`claim.validate`, `witness.find`, `witness.verify`, or
-`certificate.verify`. Those names identify capabilities invoked through
-`math.run`; they are not separate MCP tools.
-
-`claim.conjunction.split` and `claim.implication.obligations` operate on the
-registered v1 `PROPOSITIONAL_STRUCTURE` artifact. They return only immediate,
-ordered subtrees plus source-bound reconstruction data, preserve nested
-grouping, and report `COMPUTED` rather than proof verification. Raw natural
-language and printed Lean expressions are outside this contract; exact Lean
-decomposition requires a future typed elaborated-expression artifact.
-
-Opaque multi-stage commands are not part of the public surface. Agents should
-compose generation, evaluation, ranking, falsification,
-refinement, and verification from separately invocable capabilities. An
-optional workflow capability is appropriate only when it has one coherent
-mathematical outcome and preserves visible intermediate values, artifacts, and
-assurance boundaries.
-
-## Adapters and trust boundaries
-
-Capability adapters connect maintained proof assistants, CAS systems, solvers,
-mathematical databases, and domain libraries to the common contract. Domain
-plugins own mathematical schemas, transformations, invariant meanings, and
-required checker roles. The runtime owns artifact identity, budgets, execution
-status, provenance, assurance, and checker authorization.
-
-SAT, SMT, LP, MIP, SyGuS, interval arithmetic, and proof assistants should use
-typed domain adapters with explicit certificate formats. Jacobian does not
-expose a generic `solver.solve` or `sandbox.run` truth primitive.
-
-An adapter or plugin cannot authorize its own checker. Checker administration
-is operator-controlled and outside the model-facing MCP surface.
-
-Operators may additionally constrain visible and invocable capabilities by
-exact ID, domain, tag, or mode. The
-`COMPUTE_VERIFY_NO_RETRIEVAL` profile denies retrieval-tagged capabilities; it
-is intended for evaluation isolation where only computation and independent
-verification should be available. Catalog and
-discovery responses bind the active policy profile and digest. A direct call to
-a hidden capability fails with `CAPABILITY_POLICY_DENIED`. Capability policy
-changes availability only: it cannot install a checker, authorize one, or
-change verification authority.
-
-## Operating guidance and prompts
-
-The initialization response describes when the mathematical toolbox may help
-and points to the two-tool discovery interface. It does not choose task
-decomposition, proof strategy, capability composition, iteration, or stopping
-criteria.
-
-Read `jacobian://instructions` to recover the complete operating model without
-reconnecting. The resource explains discovery, exact contract inspection,
-composition, result dimensions, verification boundaries, and artifacts.
-
-Two optional MCP prompts provide protocol scaffolding:
-
-- `jacobian-discover` turns a mathematical task into discovery and exact-contract
-  steps while leaving strategy with the agent.
-- `jacobian-check-evidence` explains how to look for a compatible independent
-  checker without treating search or computed evidence as verified.
-
-Clients that do not support resources or prompts can use the same tools from
-their published descriptions and schemas.
-
-## Resources
-
-Read-only discovery and large-object access use MCP resources:
+Search proceeds in this order:
 
 ```text
-jacobian://instructions
-artifact://sha256/<digest>
-capability://catalog
-reference://catalog
-experiment://<id>
-experiment://<id>/accounting
-experiment://<id>/scope
-experiment://<id>/archive
+lexical retrieval
+  → exact typed compatibility
+  → optional full-request preflight
 ```
 
-Only resource templates implemented by the installed runtime are advertised.
-Schemas, semantics, plugin manifests, witnesses, certificates, and
-verification records are ordinary artifacts. Resource access does not alter
-their assurance.
+It returns lexical relevance plus factual execution metadata where known:
+
+- applicability status and stable mismatch code;
+- provider availability;
+- checker availability and checker scope;
+- effect; and
+- aggregate-cost admission status.
+
+Applicability uses stable outcomes: `APPLICABLE`, `INCOMPATIBLE`,
+`NEEDS_MORE_TYPED_REQUIREMENTS`, `PROVIDER_UNAVAILABLE`,
+`CHECKER_UNAVAILABLE`, and `PORTFOLIO_GAP`. A checker that requires two inputs
+is never reported as invocable from one.
+
+The retrieval order is not a workflow recommendation. Search does not browse,
+serve inventory for an empty query, expose projection levels, publish
+`next_views`, reconstruct schemas as prose, or prescribe a next operation.
+
+Exact inspection returns the authoritative typed request and result schemas,
+effect, provider requirements, preflight information, declared value ports, and
+bounded validated examples. Current availability remains sourced from the live
+catalog rather than static documentation.
+
+## `math.run`
+
+Run one known operation with a payload:
+
+```json
+{
+  "capability_id": "integer.compute.gcd",
+  "payload": {"left": "84", "right": "30"}
+}
+```
+
+After typed ports are available, callers may bind declared inputs by opaque
+request-local reference:
+
+```json
+{
+  "capability_id": "matrix.rank.compute",
+  "payload": {},
+  "inputs": {"matrix": {"value_ref": "value://opaque-id"}}
+}
+```
+
+The runtime resolves declared inputs, assembles one request, parses it once,
+runs preflight, executes one semantic operation, checks the request/result
+postcondition, and then publishes the result. Unknown top-level arguments and
+unknown selected-payload fields fail closed.
+
+Ordinary operations return a bounded mathematical value and execution status.
+Checker operations return an accepted, rejected, or non-conclusion verdict
+with exact bindings. There are no dual-mode operations.
+
+```text
+Completed[T] | NonConclusion | Failed
+```
+
+Timeout, cancellation, provider failure, resource refusal, and checker
+interruption do not establish a mathematical conclusion. A completed bounded
+operation may still carry `UNKNOWN` or `INCOMPLETE` in its typed result. Exact
+computation alone does not grant independent verification.
+
+## Values and resources
+
+Small values stay inline. A response uses a request-local `value://` reference
+or durable `artifact://` resource only when identity, independent retrieval,
+replay, resumability, evidence binding, or size-separated transport requires
+it. Carrier changes do not alter semantic identity or assurance.
+
+The generic public resources are:
+
+```text
+capability://catalog
+artifact://...
+```
+
+Operation-specific resources may exist when an installed declaration publishes
+them. Generic workflow catalogs and experiment resources are not part of the
+mathematical product.
+
+## SDK projection
+
+During the migration the server pins `mcp==2.0.0` and `mcp-types==2.0.0`. It
+uses MCP SDK-derived schemas, Pydantic output validation,
+`structured_output=True`, context injection, cancellation, progress, transport,
+and middleware. It returns Pydantic results directly unless a real
+`ResourceLink`, custom metadata, or deliberate text projection requires an
+explicit MCP result.
+
+Until python-sdk issue #3067 is resolved, a narrow boundary shim rejects
+unknown call arguments. It is deleted only when the pinned SDK publishes
+`additionalProperties: false` and rejects unknown arguments in conformance
+tests.
+
+`math.find` is read-only and idempotent. `math.run` is non-destructive at the
+fixed MCP surface but is not globally read-only or idempotent; the selected
+operation's exact effect is catalog metadata.
+
+The fixed generic executor does not expose each selected payload as a separate
+host-level tool schema. That limitation is accepted while issue #1031 remains
+deferred; Jacobian does not add prepared handles or direct-operation aliases as
+a workaround.
+
+## CLI parity
+
+The mathematical CLI uses the same installed declarations, preflight,
+execution, and publication semantics:
+
+```text
+jacobian catalog
+jacobian inspect <operation-id>
+jacobian run <operation-id> --json ...
+jacobian run <operation-id> --file ...
+```
+
+Handwritten CLI commands are reserved for operator administration rather than
+duplicating mathematical operations.

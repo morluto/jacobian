@@ -53,15 +53,6 @@ def build_projective_geometry_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="the complete supplied finite labelled line arrangement",
-        completeness_basis=(
-            "every unordered line pair was exactly intersected and every coincident "
-            "point was grouped with all incident supplied lines"
-        ),
-        assurance_basis=(
-            "exact rational-to-primitive-integer incidence materialization; no "
-            "independent checker invoked"
-        ),
         checker_declarations=PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
     )
 

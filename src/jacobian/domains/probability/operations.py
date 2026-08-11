@@ -35,11 +35,10 @@ from jacobian.contracts.validated_analysis import (
     FiniteRawMomentResult,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_bindings import inline_operation
 from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedOperation,
-    ComputedOutcome,
-    ComputedSuccess,
+    OperationRefusalError,
+    OperationSpec,
 )
 
 
@@ -97,7 +96,7 @@ def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
 
 def _raw_moment(
     request: FiniteRawMomentRequest,
-) -> ComputedOutcome[FiniteRawMomentResult]:
+) -> FiniteRawMomentResult:
     from flint import fmpq
 
     contributions: list[FiniteRawMomentContribution] = []
@@ -116,18 +115,16 @@ def _raw_moment(
                 contribution=_wire(contribution),
             )
         )
-    return ComputedSuccess(
-        FiniteRawMomentResult(
-            order=request.order,
-            moment=_wire(total),
-            contributions=tuple(contributions),
-        )
+    return FiniteRawMomentResult(
+        order=request.order,
+        moment=_wire(total),
+        contributions=tuple(contributions),
     )
 
 
 def _event_probability(
     request: FiniteEventRequest,
-) -> ComputedOutcome[FiniteEventProbabilityResult]:
+) -> FiniteEventProbabilityResult:
     from flint import fmpq
 
     selected_values = {value.as_fraction() for value in request.event_values}
@@ -139,17 +136,15 @@ def _event_probability(
     total = fmpq(0)
     for atom in selected:
         total += _fmpq(atom.probability)
-    return ComputedSuccess(
-        FiniteEventProbabilityResult(
-            event_probability=_wire(total),
-            selected_atoms=selected,
-        )
+    return FiniteEventProbabilityResult(
+        event_probability=_wire(total),
+        selected_atoms=selected,
     )
 
 
 def _condition(
     request: FiniteEventRequest,
-) -> ComputedOutcome[FiniteConditionResult]:
+) -> FiniteConditionResult:
     from flint import fmpq
 
     selected_values = {value.as_fraction() for value in request.event_values}
@@ -162,7 +157,7 @@ def _condition(
     for atom in selected:
         event_probability += _fmpq(atom.probability)
     if event_probability == 0:
-        return ComputedNotApplicable(
+        raise OperationRefusalError(
             CapabilityDiagnostic(
                 code="FINITE_CONDITIONING_ZERO_MASS",
                 stage="finite_probability_conditioning",
@@ -178,26 +173,24 @@ def _condition(
         )
         for atom in selected
     )
-    return ComputedSuccess(
-        FiniteConditionResult(
-            event_probability=_wire(event_probability),
-            distribution=FiniteRationalDistribution(
-                atoms=tuple(
-                    FiniteDistributionAtom(
-                        value=item.value,
-                        probability=item.conditioned_probability,
-                    )
-                    for item in contributions
+    return FiniteConditionResult(
+        event_probability=_wire(event_probability),
+        distribution=FiniteRationalDistribution(
+            atoms=tuple(
+                FiniteDistributionAtom(
+                    value=item.value,
+                    probability=item.conditioned_probability,
                 )
-            ),
-            contributions=contributions,
-        )
+                for item in contributions
+            )
+        ),
+        contributions=contributions,
     )
 
 
 def _pushforward(
     request: FinitePushforwardRequest,
-) -> ComputedOutcome[FinitePushforwardResult]:
+) -> FinitePushforwardResult:
     from flint import fmpq
 
     aggregated: dict[Fraction, Any] = {}
@@ -217,17 +210,15 @@ def _pushforward(
                 probability=atom.probability,
             )
         )
-    return ComputedSuccess(
-        FinitePushforwardResult(
-            distribution=_distribution(aggregated),
-            contributions=tuple(contributions),
-        )
+    return FinitePushforwardResult(
+        distribution=_distribution(aggregated),
+        contributions=tuple(contributions),
     )
 
 
 def _convolution(
     request: FiniteConvolutionRequest,
-) -> ComputedOutcome[FiniteConvolutionResult]:
+) -> FiniteConvolutionResult:
     from flint import fmpq
 
     aggregated: dict[Fraction, Any] = {}
@@ -248,17 +239,15 @@ def _convolution(
                     probability=_wire(probability),
                 )
             )
-    return ComputedSuccess(
-        FiniteConvolutionResult(
-            distribution=_distribution(aggregated),
-            contributions=tuple(contributions),
-        )
+    return FiniteConvolutionResult(
+        distribution=_distribution(aggregated),
+        contributions=tuple(contributions),
     )
 
 
 def _gaussian_polynomial_moment(
     request: GaussianPolynomialMomentRequest,
-) -> ComputedOutcome[GaussianPolynomialMomentResult]:
+) -> GaussianPolynomialMomentResult:
     from flint import fmpq, fmpq_mpoly_ctx
 
     zero = fmpq(0)
@@ -360,14 +349,12 @@ def _gaussian_polynomial_moment(
             )
         )
 
-    return ComputedSuccess(
-        GaussianPolynomialMomentResult(
-            order=request.order,
-            moment=_complex_wire(total),
-            expansion_path_count=len(base) ** request.order,
-            expanded_monomial_count=len(contractions),
-            contractions=tuple(contractions),
-        )
+    return GaussianPolynomialMomentResult(
+        order=request.order,
+        moment=_complex_wire(total),
+        expansion_path_count=len(base) ** request.order,
+        expanded_monomial_count=len(contractions),
+        contractions=tuple(contractions),
     )
 
 
@@ -394,7 +381,7 @@ def _terminals_connected(
 
 def _graph_connection_probability(
     request: GraphConnectionProbabilityRequest,
-) -> ComputedOutcome[GraphConnectionProbabilityResult]:
+) -> GraphConnectionProbabilityResult:
     from flint import fmpq
 
     probabilities = tuple(
@@ -428,14 +415,12 @@ def _graph_connection_probability(
                 state_probability=_wire(state_probability),
             )
         )
-    return ComputedSuccess(
-        GraphConnectionProbabilityResult(
-            terminals=request.terminals,
-            connection_probability=_wire(connection_probability),
-            edge_count=len(request.graph.edges),
-            visited_states=len(states),
-            states=tuple(states),
-        )
+    return GraphConnectionProbabilityResult(
+        terminals=request.terminals,
+        connection_probability=_wire(connection_probability),
+        edge_count=len(request.graph.edges),
+        visited_states=len(states),
+        states=tuple(states),
     )
 
 
@@ -454,237 +439,251 @@ _FAIR_BIT = {
 
 
 FINITE_PROBABILITY_CAPABILITIES = (
-    ComputedOperation(
-        capability_id="probability.finite_distribution.raw_moment.compute",
-        title="Exact finite-distribution raw moment",
-        description=(
-            "Compute one bounded raw moment of a normalized finite exact "
-            "rational distribution, preserving every atom contribution."
-        ),
-        request_model=FiniteRawMomentRequest,
-        result_model=FiniteRawMomentResult,
-        implementation=_raw_moment,
-        relation_id="probability.finite_distribution.raw_moment.relation",
-        tags=("probability", "moment", "finite", "exact", "python-flint"),
-        invocation_examples=(
-            example(
-                "fair_bit_second_moment",
-                "Compute the second raw moment of a fair distribution on 0 and 1.",
-                {
-                    "atoms": _FAIR_BIT["atoms"],
-                    "order": 2,
-                },
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.finite_distribution.raw_moment.compute",
+            version="2",
+            title="Exact finite-distribution raw moment",
+            description=(
+                "Compute one bounded raw moment of a normalized finite exact "
+                "rational distribution, preserving every atom contribution."
             ),
-        ),
-    ),
-    ComputedOperation(
-        capability_id="probability.finite_distribution.event_probability.compute",
-        title="Exact finite-event probability",
-        description=(
-            "Sum the exact mass of one explicit subset of a canonical finite "
-            "rational distribution and preserve every selected atom."
-        ),
-        request_model=FiniteEventRequest,
-        result_model=FiniteEventProbabilityResult,
-        implementation=_event_probability,
-        relation_id="probability.finite_distribution.event_probability.relation",
-        tags=("probability", "event", "finite", "exact", "python-flint"),
-        invocation_examples=(
-            example(
-                "fair_bit_is_one",
-                "Compute the exact probability that a fair bit equals one.",
-                {
-                    "distribution": _FAIR_BIT,
-                    "event_values": [{"num": "1", "den": "1"}],
-                },
+            request_type=FiniteRawMomentRequest,
+            result_type=FiniteRawMomentResult,
+            execute=_raw_moment,
+            tags=("probability", "moment", "finite", "exact", "python-flint"),
+            invocation_examples=(
+                example(
+                    "fair_bit_second_moment",
+                    "Compute the second raw moment of a fair distribution on 0 and 1.",
+                    {
+                        "atoms": _FAIR_BIT["atoms"],
+                        "order": 2,
+                    },
+                ),
             ),
-        ),
+        )
     ),
-    ComputedOperation(
-        capability_id="probability.finite_distribution.condition.compute",
-        title="Condition an exact finite distribution",
-        description=(
-            "Normalize one explicit positive-mass event of a canonical finite "
-            "rational distribution, preserving each source contribution."
-        ),
-        request_model=FiniteEventRequest,
-        result_model=FiniteConditionResult,
-        implementation=_condition,
-        relation_id="probability.finite_distribution.condition.relation",
-        tags=("probability", "conditioning", "finite", "exact", "python-flint"),
-        invocation_examples=(
-            example(
-                "fair_bit_given_one",
-                "Condition a fair bit on the positive-mass event that it equals one.",
-                {
-                    "distribution": _FAIR_BIT,
-                    "event_values": [{"num": "1", "den": "1"}],
-                },
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.finite_distribution.event_probability.compute",
+            version="2",
+            title="Exact finite-event probability",
+            description=(
+                "Sum the exact mass of one explicit subset of a canonical finite "
+                "rational distribution and preserve every selected atom."
             ),
-        ),
-    ),
-    ComputedOperation(
-        capability_id="probability.finite_distribution.pushforward.compute",
-        title="Push forward an exact finite distribution",
-        description=(
-            "Apply one explicit total rational lookup map and exactly aggregate "
-            "all source masses with the same target."
-        ),
-        request_model=FinitePushforwardRequest,
-        result_model=FinitePushforwardResult,
-        implementation=_pushforward,
-        relation_id="probability.finite_distribution.pushforward.relation",
-        tags=("probability", "pushforward", "finite", "exact", "python-flint"),
-        invocation_examples=(
-            example(
-                "collapse_fair_bit",
-                "Map both atoms of a fair bit to one exact target.",
-                {
-                    "distribution": _FAIR_BIT,
-                    "mapping": [
-                        {
-                            "source": {"num": "0", "den": "1"},
-                            "target": {"num": "0", "den": "1"},
-                        },
-                        {
-                            "source": {"num": "1", "den": "1"},
-                            "target": {"num": "0", "den": "1"},
-                        },
-                    ],
-                },
+            request_type=FiniteEventRequest,
+            result_type=FiniteEventProbabilityResult,
+            execute=_event_probability,
+            tags=("probability", "event", "finite", "exact", "python-flint"),
+            invocation_examples=(
+                example(
+                    "fair_bit_is_one",
+                    "Compute the exact probability that a fair bit equals one.",
+                    {
+                        "distribution": _FAIR_BIT,
+                        "event_values": [{"num": "1", "den": "1"}],
+                    },
+                ),
             ),
-        ),
+        )
     ),
-    ComputedOperation(
-        capability_id="probability.finite_distribution.convolution.compute",
-        title="Convolve two exact finite distributions",
-        description=(
-            "Compute the bounded product-measure distribution of the sum of "
-            "two independent finite rational random variables."
-        ),
-        request_model=FiniteConvolutionRequest,
-        result_model=FiniteConvolutionResult,
-        implementation=_convolution,
-        relation_id="probability.finite_distribution.convolution.relation",
-        tags=(
-            "probability",
-            "convolution",
-            "independence",
-            "finite",
-            "exact",
-            "python-flint",
-        ),
-        invocation_examples=(
-            example(
-                "two_fair_bits",
-                "Compute the exact distribution of the sum of two fair bits.",
-                {"left": _FAIR_BIT, "right": _FAIR_BIT},
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.finite_distribution.condition.compute",
+            version="2",
+            title="Condition an exact finite distribution",
+            description=(
+                "Normalize one explicit positive-mass event of a canonical finite "
+                "rational distribution, preserving each source contribution."
             ),
-        ),
+            request_type=FiniteEventRequest,
+            result_type=FiniteConditionResult,
+            execute=_condition,
+            tags=("probability", "conditioning", "finite", "exact", "python-flint"),
+            invocation_examples=(
+                example(
+                    "fair_bit_given_one",
+                    "Condition a fair bit on the positive-mass event that it equals one.",
+                    {
+                        "distribution": _FAIR_BIT,
+                        "event_values": [{"num": "1", "den": "1"}],
+                    },
+                ),
+            ),
+        )
     ),
-    ComputedOperation(
-        capability_id="probability.gaussian_polynomial.moment.compute",
-        title="Exact bounded Gaussian polynomial moment",
-        description=(
-            "Compute one fixed-order exact moment of a bounded sparse complex-"
-            "rational polynomial in independent standard real Gaussian variables, "
-            "preserving the complete coefficient-contraction ledger. This does not "
-            "establish an identity for every order."
-        ),
-        request_model=GaussianPolynomialMomentRequest,
-        result_model=GaussianPolynomialMomentResult,
-        implementation=_gaussian_polynomial_moment,
-        relation_id="probability.gaussian_polynomial.moment.relation",
-        tags=(
-            "probability",
-            "Gaussian",
-            "polynomial",
-            "moment",
-            "Wick",
-            "Isserlis",
-            "exact",
-            "bounded",
-            "python-flint",
-        ),
-        invocation_examples=(
-            example(
-                "sum_of_two_gaussians_second_moment",
-                "Compute E[(X_1 + X_2)^2] for independent standard real Gaussians.",
-                {
-                    "polynomial": {
-                        "variable_count": 2,
-                        "terms": [
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.finite_distribution.pushforward.compute",
+            version="2",
+            title="Push forward an exact finite distribution",
+            description=(
+                "Apply one explicit total rational lookup map and exactly aggregate "
+                "all source masses with the same target."
+            ),
+            request_type=FinitePushforwardRequest,
+            result_type=FinitePushforwardResult,
+            execute=_pushforward,
+            tags=("probability", "pushforward", "finite", "exact", "python-flint"),
+            invocation_examples=(
+                example(
+                    "collapse_fair_bit",
+                    "Map both atoms of a fair bit to one exact target.",
+                    {
+                        "distribution": _FAIR_BIT,
+                        "mapping": [
                             {
-                                "coefficient": {
-                                    "real": {"num": "1", "den": "1"},
-                                    "imaginary": {"num": "0", "den": "1"},
-                                },
-                                "exponents": [0, 1],
+                                "source": {"num": "0", "den": "1"},
+                                "target": {"num": "0", "den": "1"},
                             },
                             {
-                                "coefficient": {
-                                    "real": {"num": "1", "den": "1"},
-                                    "imaginary": {"num": "0", "den": "1"},
-                                },
-                                "exponents": [1, 0],
+                                "source": {"num": "1", "den": "1"},
+                                "target": {"num": "0", "den": "1"},
                             },
                         ],
                     },
-                    "order": 2,
-                },
+                ),
             ),
-        ),
+        )
     ),
-    ComputedOperation(
-        capability_id="probability.graph_reliability.connection_probability.compute",
-        title="Exact small-graph terminal connection probability",
-        description=(
-            "Compute the exact probability that two explicit terminals are "
-            "connected in one bounded undirected graph with independent rational "
-            "edge-open probabilities, preserving the complete edge-subset ledger."
-        ),
-        request_model=GraphConnectionProbabilityRequest,
-        result_model=GraphConnectionProbabilityResult,
-        implementation=_graph_connection_probability,
-        relation_id="probability.graph_reliability.connection_probability.relation",
-        tags=(
-            "probability",
-            "graph",
-            "reliability",
-            "percolation",
-            "connection",
-            "terminals",
-            "exact",
-            "bounded",
-            "python-flint",
-        ),
-        invocation_examples=(
-            example(
-                "triangle_terminal_reliability",
-                "Compute the exact terminal connection probability in a fair-edge triangle.",
-                {
-                    "graph": {
-                        "vertices": ["a", "b", "c"],
-                        "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
-                    },
-                    "edge_probabilities": [
-                        {
-                            "edge": ["a", "b"],
-                            "open_probability": {"num": "1", "den": "2"},
-                        },
-                        {
-                            "edge": ["a", "c"],
-                            "open_probability": {"num": "1", "den": "2"},
-                        },
-                        {
-                            "edge": ["b", "c"],
-                            "open_probability": {"num": "1", "den": "2"},
-                        },
-                    ],
-                    "terminals": ["a", "c"],
-                },
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.finite_distribution.convolution.compute",
+            version="2",
+            title="Convolve two exact finite distributions",
+            description=(
+                "Compute the bounded product-measure distribution of the sum of "
+                "two independent finite rational random variables."
             ),
-        ),
+            request_type=FiniteConvolutionRequest,
+            result_type=FiniteConvolutionResult,
+            execute=_convolution,
+            tags=(
+                "probability",
+                "convolution",
+                "independence",
+                "finite",
+                "exact",
+                "python-flint",
+            ),
+            invocation_examples=(
+                example(
+                    "two_fair_bits",
+                    "Compute the exact distribution of the sum of two fair bits.",
+                    {"left": _FAIR_BIT, "right": _FAIR_BIT},
+                ),
+            ),
+        )
+    ),
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.gaussian_polynomial.moment.compute",
+            version="2",
+            title="Exact bounded Gaussian polynomial moment",
+            description=(
+                "Compute one fixed-order exact moment of a bounded sparse complex-"
+                "rational polynomial in independent standard real Gaussian variables, "
+                "preserving the complete coefficient-contraction ledger. This does not "
+                "establish an identity for every order."
+            ),
+            request_type=GaussianPolynomialMomentRequest,
+            result_type=GaussianPolynomialMomentResult,
+            execute=_gaussian_polynomial_moment,
+            tags=(
+                "probability",
+                "Gaussian",
+                "polynomial",
+                "moment",
+                "Wick",
+                "Isserlis",
+                "exact",
+                "bounded",
+                "python-flint",
+            ),
+            invocation_examples=(
+                example(
+                    "sum_of_two_gaussians_second_moment",
+                    "Compute E[(X_1 + X_2)^2] for independent standard real Gaussians.",
+                    {
+                        "polynomial": {
+                            "variable_count": 2,
+                            "terms": [
+                                {
+                                    "coefficient": {
+                                        "real": {"num": "1", "den": "1"},
+                                        "imaginary": {"num": "0", "den": "1"},
+                                    },
+                                    "exponents": [0, 1],
+                                },
+                                {
+                                    "coefficient": {
+                                        "real": {"num": "1", "den": "1"},
+                                        "imaginary": {"num": "0", "den": "1"},
+                                    },
+                                    "exponents": [1, 0],
+                                },
+                            ],
+                        },
+                        "order": 2,
+                    },
+                ),
+            ),
+        )
+    ),
+    inline_operation(
+        OperationSpec(
+            operation_id="probability.graph_reliability.connection_probability.compute",
+            version="2",
+            title="Exact small-graph terminal connection probability",
+            description=(
+                "Compute the exact probability that two explicit terminals are "
+                "connected in one bounded undirected graph with independent rational "
+                "edge-open probabilities, preserving the complete edge-subset ledger."
+            ),
+            request_type=GraphConnectionProbabilityRequest,
+            result_type=GraphConnectionProbabilityResult,
+            execute=_graph_connection_probability,
+            tags=(
+                "probability",
+                "graph",
+                "reliability",
+                "percolation",
+                "connection",
+                "terminals",
+                "exact",
+                "bounded",
+                "python-flint",
+            ),
+            invocation_examples=(
+                example(
+                    "triangle_terminal_reliability",
+                    "Compute the exact terminal connection probability in a fair-edge triangle.",
+                    {
+                        "graph": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        },
+                        "edge_probabilities": [
+                            {
+                                "edge": ["a", "b"],
+                                "open_probability": {"num": "1", "den": "2"},
+                            },
+                            {
+                                "edge": ["a", "c"],
+                                "open_probability": {"num": "1", "den": "2"},
+                            },
+                            {
+                                "edge": ["b", "c"],
+                                "open_probability": {"num": "1", "den": "2"},
+                            },
+                        ],
+                        "terminals": ["a", "c"],
+                    },
+                ),
+            ),
+        )
     ),
 )
 

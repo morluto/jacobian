@@ -78,7 +78,7 @@ def _installed(
             capability_id: _uri(chr(ord("a") + index))
             for index, capability_id in enumerate(capability_ids)
         },
-        obligation_schema_uris={},
+        named_schema_uris={},
     )
 
 

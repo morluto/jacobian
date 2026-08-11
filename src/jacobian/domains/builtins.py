@@ -11,7 +11,6 @@ from jacobian.domains.analysis import build_real_analysis_bundle
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 from jacobian.domains.certified_snf import build_certified_snf_bundle
 from jacobian.domains.combinatorics import build_combinatorics_bundle
-from jacobian.domains.conjecture_ingestion import build_conjecture_ingestion_bundle
 from jacobian.domains.finite_sets import build_finite_set_bundle
 from jacobian.domains.formal_datasets import build_formal_dataset_bundle
 from jacobian.domains.geometry import build_geometry_bundle
@@ -40,7 +39,6 @@ type DomainBundleFactory = Callable[[], DomainBundle]
 
 BUILTIN_DOMAIN_BUNDLE_FACTORIES: tuple[DomainBundleFactory, ...] = (
     build_arithmetic_bundle,
-    build_conjecture_ingestion_bundle,
     build_number_theory_bundle,
     build_combinatorics_bundle,
     build_finite_set_bundle,

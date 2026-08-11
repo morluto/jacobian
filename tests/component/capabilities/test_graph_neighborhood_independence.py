@@ -88,10 +88,9 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
 
     verified = authorized_graph_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="certificate.verify",
+            capability_id="graph.neighborhood_independence.verify",
             input={
                 "certificate_uri": result.output["certificate_uri"],
-                "checker_id": result.output["checker_id"],
             },
         )
     )

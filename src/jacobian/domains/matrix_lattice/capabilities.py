@@ -44,12 +44,11 @@ from jacobian.domains.matrix_lattice.operations import (
     compute_smith_normal_form,
     compute_trace,
 )
+from jacobian.operation_bindings import InstalledOperation, inline_operation
 from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedOperation,
-    ComputedOutcome,
-    ComputedSuccess,
-    OperationExecutionFailure,
+    OperationAbortError,
+    OperationRefusalError,
+    OperationSpec,
 )
 
 
@@ -63,18 +62,17 @@ def matrix_operation[
     request_model: type[RequestT],
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
-    relation_id: str,
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
     version: str = "1",
-) -> ComputedOperation[RequestT, ResultT]:
-    def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
+) -> InstalledOperation[RequestT, ResultT]:
+    def implementation(request: RequestT) -> ResultT:
         try:
-            return ComputedSuccess(operation(request))
+            return operation(request)
         except ValidationError as exc:
-            return OperationExecutionFailure(
-                status=ExecutionStatus.ERROR,
-                diagnostic=CapabilityDiagnostic(
+            raise OperationAbortError(
+                ExecutionStatus.ERROR,
+                CapabilityDiagnostic(
                     code="MATRIX_OUTPUT_LIMIT_EXCEEDED",
                     stage="matrix_result_validation",
                     message=(
@@ -86,28 +84,29 @@ def matrix_operation[
                         "artifact was retained."
                     ),
                 ),
-            )
+            ) from exc
         except (ArithmeticError, TypeError, ValueError) as exc:
-            return ComputedNotApplicable(
+            raise OperationRefusalError(
                 CapabilityDiagnostic(
                     code="MATRIX_OPERATION_NOT_APPLICABLE",
                     stage="matrix_computation",
                     message=str(exc),
                     hint="Check the operation's matrix-domain and shape preconditions.",
                 )
-            )
+            ) from exc
 
-    return ComputedOperation(
-        capability_id=capability_id,
-        version=version,
-        title=title,
-        description=description,
-        request_model=request_model,
-        result_model=result_model,
-        implementation=implementation,
-        relation_id=relation_id,
-        tags=tags,
-        invocation_examples=invocation_examples,
+    return inline_operation(
+        OperationSpec(
+            operation_id=capability_id,
+            version=version,
+            title=title,
+            description=description,
+            request_type=request_model,
+            result_type=result_model,
+            execute=implementation,
+            tags=tags,
+            invocation_examples=invocation_examples,
+        )
     )
 
 
@@ -119,7 +118,6 @@ MATRIX_CAPABILITIES = (
         MatrixDeterminantRequest,
         MatrixDeterminantResult,
         compute_determinant,
-        "matrix.relation.determinant-of",
         "matrix",
         "determinant",
         "exact-rational",
@@ -152,7 +150,6 @@ MATRIX_CAPABILITIES = (
         MatrixRankRequest,
         MatrixRankResult,
         compute_rank,
-        "matrix.relation.rank-of",
         "matrix",
         "rank",
         "exact-rational",
@@ -195,7 +192,6 @@ MATRIX_CAPABILITIES = (
         RationalLinearSolveRequest,
         RationalLinearSolveResult,
         compute_rational_linear_solve,
-        "matrix.relation.solution-of",
         "matrix",
         "linear-system",
         "exact-rational",
@@ -222,7 +218,6 @@ MATRIX_CAPABILITIES = (
         SquareIntegerMatrixRequest,
         MatrixAdjugateResult,
         compute_adjugate,
-        "matrix.relation.adjugate-of",
         "matrix",
         "adjugate",
         "exact-integer",
@@ -241,7 +236,6 @@ MATRIX_CAPABILITIES = (
         SquareIntegerMatrixRequest,
         MatrixInverseResult,
         compute_inverse,
-        "matrix.relation.inverse-of",
         "matrix",
         "inverse",
         "exact-rational",
@@ -260,7 +254,6 @@ MATRIX_CAPABILITIES = (
         SquareIntegerMatrixRequest,
         MatrixTraceResult,
         compute_trace,
-        "matrix.relation.trace-of",
         "matrix",
         "trace",
         "exact-integer",
@@ -283,7 +276,6 @@ MATRIX_CAPABILITIES = (
         RationalMatrixProductRequest,
         MatrixProductResult,
         compute_product,
-        "matrix.relation.product-of",
         "matrix",
         "matrix-multiplication",
         "product",
@@ -338,7 +330,6 @@ MATRIX_CAPABILITIES = (
         RationalMatrixRequest,
         RrefResult,
         compute_rref,
-        "matrix.relation.rref-of",
         "matrix",
         "rref",
         "exact-rational",
@@ -368,7 +359,6 @@ MATRIX_CAPABILITIES = (
         RationalMatrixRequest,
         NullspaceResult,
         compute_nullspace,
-        "matrix.relation.nullspace-of",
         "matrix",
         "nullspace",
         "kernel",
@@ -406,7 +396,6 @@ MATRIX_CAPABILITIES = (
         SquareRationalMatrixRequest,
         CharacteristicPolynomialResult,
         compute_characteristic_polynomial,
-        "matrix.relation.characteristic-polynomial-of",
         "matrix",
         "characteristic-polynomial",
         "exact-rational",
@@ -435,7 +424,6 @@ MATRIX_CAPABILITIES = (
         IntegerMatrixRequest,
         SmithNormalFormResult,
         compute_smith_normal_form,
-        "matrix.relation.smith-normal-form-of",
         "matrix",
         "smith-normal-form",
         "exact-integer",

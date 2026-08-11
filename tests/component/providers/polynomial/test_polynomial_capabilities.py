@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityRequest,
 )
-from jacobian.contracts.results import Conclusion, Verification
 
 
 def test_jacobian_canonically_omits_zero_partial_derivatives(
@@ -88,16 +87,6 @@ def test_jacobian_represents_derived_exponents_above_the_source_limit(
             }
         ]
     }
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="certificate.verify",
-            input={
-                "certificate_uri": result.output["certificate_uri"],
-                "checker_id": result.output["checker_id"],
-            },
-        )
-    )
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
 def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
@@ -128,20 +117,6 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     assert jacobian.output["certificate_uri"] in jacobian.artifact_uris
     assert jacobian.output["checker_id"] == runtime.polynomial.jacobian_checker_id
     assert "conclusion" not in jacobian.output
-
-    verified_jacobian = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="certificate.verify",
-            input={
-                "certificate_uri": jacobian.output["certificate_uri"],
-                "checker_id": jacobian.output["checker_id"],
-            },
-        )
-    )
-
-    assert verified_jacobian.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified_jacobian.output["conclusion"] == Conclusion.TRUE.value
-    assert verified_jacobian.output["verification_record_uri"]
 
     first_evaluation = runtime.core.capabilities.invoke(
         CapabilityRequest(
@@ -194,23 +169,6 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     assert collision.output["witness_uri"] in collision.artifact_uris
     assert collision.output["checker_id"] == runtime.polynomial.collision_checker_id
     assert "conclusion" not in collision.output
-
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="witness.verify",
-            input={
-                "claim_uri": collision.output["claim_uri"],
-                "candidate_uri": collision.output["candidate_uri"],
-                "witness_uri": collision.output["witness_uri"],
-                "checker_id": collision.output["checker_id"],
-            },
-        )
-    )
-
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.output["conclusion"] == Conclusion.FALSE.value
-    assert verified.output["assurance"]["verification"] == Verification.VERIFIED.value
-    assert verified.output["verification_record_uri"]
 
 
 def test_polynomial_map_evaluation_is_exact_and_materialized(

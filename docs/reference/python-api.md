@@ -10,21 +10,36 @@ from fractions import Fraction
 import networkx as nx
 import sympy
 
-from jacobian.math import arithmetic, graphs, matrices, polynomials
+from jacobian.math import (
+    arithmetic,
+    graphs,
+    matrices,
+    polynomials,
+    prime_field_linear_algebra,
+)
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 half = arithmetic.sum_rationals(Fraction(1, 3), Fraction(1, 6))
-inverse = matrices.inverse(sympy.Matrix([[1, 2], [3, 4]]))
+matrix = sympy.Matrix([[1, 2], [3, 4]])
+determinant = matrices.determinant(matrix)
+inverse = matrices.inverse(matrix)
 triangles = graphs.triangle_count(nx.cycle_graph(3))
 derivative = polynomials.derivative(sympy.Poly(sympy.Symbol("x") ** 2, sympy.Symbol("x")))
+binary_rank = prime_field_linear_algebra.rank(
+    PrimeFieldMatrix(prime=2, entries=((1, 0), (1, 1)), columns=2)
+)
 ```
 
 The supported modules and symbols are:
 
 - `jacobian.math.arithmetic`: `absolute_value`, `sign`, `reciprocal`,
   `sum_rationals`, and `quotient`;
-- `jacobian.math.matrices`: `rref`, `inverse`, and `trace`; and
-- `jacobian.math.graphs`: `triangle_count`, `diameter`, and `is_eulerian`; and
-- `jacobian.math.polynomials`: `derivative`, `gcdex`, and `resultant`.
+- `jacobian.math.matrices`: `determinant`, `rank`, `rref`, `inverse`, and
+  `trace`;
+- `jacobian.math.graphs`: `triangle_count`, `diameter`, and `is_eulerian`;
+- `jacobian.math.polynomials`: `derivative`, `gcdex`, and `resultant`; and
+- `jacobian.math.prime_field_linear_algebra`: `PrimeFieldMatrix`, `rank`,
+  `rref`, `nullspace`, `column_basis`, and `quotient_basis`.
 
 Arithmetic functions return Python `int` or `fractions.Fraction` values. Matrix
 functions accept and return SymPy matrices and exact SymPy scalar values. Graph
@@ -34,11 +49,14 @@ results. Each module's
 `__all__` is the authoritative public symbol manifest; other implementation
 modules remain internal.
 
-This API shares typed mathematical kernels with the corresponding capability
-implementations, but it is not a facade over `math.run`. Capability
-requests, result contracts, artifacts, provenance, completeness, and
-verification remain available through the capability runtime and retain their
-existing wire semantics. Shared Pydantic contracts, rather than Python,
-SymPy, or NetworkX objects, own provider-independent value identity for
-capability composition and persistence. Explicit domain-owned conversions
-connect those contracts to the backend-native values accepted by this API.
+This API is the authoritative mathematical implementation rather than a facade
+over `math.run`. Installed operations parse their typed request once, convert
+once to the documented semantic input, call the same public function, and
+serialize once. Runtime, catalog, storage, publication, provider installation,
+MCP, and checker-authority objects are not part of this namespace.
+
+Each public function has one canonical semantic input type. A maintained
+backend type is public only when it already carries complete semantics;
+otherwise the owning `jacobian.math.<domain>` package provides an immutable
+value and explicit interoperability constructor. Provider-specific transient
+objects never become wire, artifact, or cross-provider composition identity.

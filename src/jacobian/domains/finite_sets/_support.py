@@ -1,8 +1,9 @@
 """Finite-set operation declarations."""
 
-from jacobian.operations import ComputedOperationFactory, OperationFailure
+from jacobian.operation_bindings import InlineOperationFactory
+from jacobian.operations import OperationFailure
 
-finite_set_operation = ComputedOperationFactory(
+finite_set_operation = InlineOperationFactory(
     OperationFailure(
         code="FINITE_SET_OPERATION_NOT_APPLICABLE",
         stage="finite_set_computation",

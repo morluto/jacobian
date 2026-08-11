@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 from jacobian.implementation import cached_package_digests
 from jacobian.installation.context import (
@@ -16,13 +15,12 @@ from jacobian.installation.context import (
 from jacobian.operations import DomainBundle
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
-from jacobian.references import ReferenceInstallation
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import (
-    ApplicationServices,
     CoreServices,
-    build_application_services,
+    RuntimeServices,
+    build_runtime_services,
 )
 
 
@@ -31,15 +29,8 @@ class DomainTestServices:
     """A domain test's explicit foundational and application service graphs."""
 
     core: CoreServices
-    application: ApplicationServices
+    application: RuntimeServices
     installation: InstallationContext
-
-
-@dataclass(frozen=True, slots=True)
-class ReferenceTestServices(DomainTestServices):
-    """Application services plus explicitly selected production references."""
-
-    references: dict[str, ReferenceInstallation]
 
 
 @contextmanager
@@ -74,7 +65,7 @@ def open_domain_services(
     )
     core = bootstrap_services(root, resolved_options)
     try:
-        application = build_application_services(core)
+        application = build_runtime_services(core)
         try:
             installation = create_installation_context(
                 core,
@@ -95,41 +86,3 @@ def open_domain_services(
             application.close()
     finally:
         core.close()
-
-
-@contextmanager
-def open_reference_services(
-    root: str | Path,
-    *reference_names: Literal["erdos_straus", "graph_paths", "matrices"],
-    authorize_checkers: bool = False,
-) -> Iterator[ReferenceTestServices]:
-    """Open only the named production reference-domain installations."""
-
-    authority = (
-        CheckerAuthorityMode.INSTALL_BUNDLED
-        if authorize_checkers
-        else CheckerAuthorityMode.NONE
-    )
-    with open_domain_services(root, checker_authority=authority) as services:
-        references: dict[str, ReferenceInstallation] = {}
-        with atomic_installation(services.core):
-            for name in reference_names:
-                if name == "graph_paths":
-                    reference = services.application.reference_installer.install_graph_paths(
-                        authorize_checker=services.installation.authorizes_bundled_checkers
-                    )
-                elif name == "matrices":
-                    reference = services.application.reference_installer.install_matrices(
-                        authorize_checker=services.installation.authorizes_bundled_checkers
-                    )
-                else:
-                    reference = services.application.reference_installer.install_erdos_straus(
-                        authorize_checker=services.installation.authorizes_bundled_checkers
-                    )
-                references[name] = reference
-        yield ReferenceTestServices(
-            core=services.core,
-            application=services.application,
-            installation=services.installation,
-            references=references,
-        )

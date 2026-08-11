@@ -69,7 +69,8 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
 
 def test_geometry_capabilities_have_distinct_ids() -> None:
     ids = [
-        operation.capability_id for operation in build_geometry_bundle().capabilities
+        operation.spec.operation_id
+        for operation in build_geometry_bundle().capabilities
     ]
 
     assert ids, "expected geometry capabilities"

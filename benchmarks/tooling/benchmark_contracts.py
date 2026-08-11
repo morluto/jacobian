@@ -213,23 +213,6 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
     return failures
 
 
-def _remove_jacobian_skill(agents: Any) -> None:
-    if not isinstance(agents, list):
-        return
-    for agent in agents:
-        if not isinstance(agent, dict) or not isinstance(agent.get("skills"), list):
-            continue
-        remaining = [
-            skill
-            for skill in agent["skills"]
-            if skill != ".agents/skills/jacobian-math"
-        ]
-        if remaining:
-            agent["skills"] = remaining
-        else:
-            agent.pop("skills", None)
-
-
 def _observation_pair_failures() -> list[str]:
     treatment_path = (
         BENCHMARKS
@@ -263,13 +246,12 @@ def _observation_pair_failures() -> list[str]:
                     for item in compose
                     if "jacobian-observation.compose.yaml" not in item
                 ]
-        _remove_jacobian_skill(copy.get("agents"))
         return copy
 
     if normalized(treatment) != normalized(control):
         return [
             "agent workflow control/treatment jobs differ outside the allowed "
-            "jobs_dir, Jacobian skill, sidecar composition, and sidecar telemetry "
+            "jobs_dir, Jacobian sidecar composition, and sidecar telemetry "
             "artifact"
         ]
     return []

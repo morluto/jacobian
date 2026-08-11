@@ -7,7 +7,13 @@ import pytest
 import jacobian
 
 PUBLIC_API = {
-    "jacobian.math": ("arithmetic", "graphs", "matrices", "polynomials"),
+    "jacobian.math": (
+        "arithmetic",
+        "graphs",
+        "matrices",
+        "polynomials",
+        "prime_field_linear_algebra",
+    ),
     "jacobian.math.arithmetic": (
         "absolute_value",
         "integerize_rational_vector",
@@ -18,8 +24,16 @@ PUBLIC_API = {
         "sum_rationals",
     ),
     "jacobian.math.graphs": ("diameter", "is_eulerian", "triangle_count"),
-    "jacobian.math.matrices": ("inverse", "rref", "trace"),
+    "jacobian.math.matrices": ("determinant", "inverse", "rank", "rref", "trace"),
     "jacobian.math.polynomials": ("derivative", "gcdex", "resultant"),
+    "jacobian.math.prime_field_linear_algebra": (
+        "PrimeFieldMatrix",
+        "column_basis",
+        "nullspace",
+        "quotient_basis",
+        "rank",
+        "rref",
+    ),
 }
 
 

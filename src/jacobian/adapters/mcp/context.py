@@ -162,7 +162,6 @@ def _classify_public_tool_error(
         AuthenticationError,
         TenantRuntimeLimitError,
     )
-    from jacobian.experiments import ExperimentNotFoundError
     from jacobian.registry import CheckerNotFoundError
     from jacobian.storage.errors import ArtifactNotFoundError
 
@@ -201,16 +200,12 @@ def _classify_public_tool_error(
         (
             ArtifactNotFoundError,
             CheckerNotFoundError,
-            ExperimentNotFoundError,
         ),
     ):
         return (
             "RESOURCE_NOT_FOUND",
             "A required Jacobian resource was not found.",
-            (
-                "Check the artifact or experiment URI returned by the earlier tool "
-                "call, then retry."
-            ),
+            ("Check the artifact URI returned by the earlier tool call, then retry."),
         )
     if isinstance(tool_error, ValueError):
         return (

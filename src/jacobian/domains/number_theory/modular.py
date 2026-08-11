@@ -119,7 +119,6 @@ MODULAR_CAPABILITIES = (
         "residue",
         "enumeration",
         "obstruction",
-        relation_id="modular.polynomial_residue_image.relation",
         invocation_examples=(
             example(
                 "cubic_residue_image_mod_7",
@@ -153,7 +152,6 @@ MODULAR_CAPABILITIES = (
         "residue",
         "ledger",
         "evidence",
-        relation_id="modular.polynomial_residue_image.assignments.relation",
         resource_reason=(
             "the complete assignment-to-residue ledger is retained as explicit "
             "bulk evidence for independent replay"

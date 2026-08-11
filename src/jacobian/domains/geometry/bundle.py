@@ -57,11 +57,5 @@ def build_geometry_bundle() -> DomainBundle:
                 hint="Use canonical rationals and inspect the operation's point/line schema.",
             )
         ),
-        scope_description="the complete supplied exact rational geometry input",
-        completeness_basis=(
-            "exact symbolic computation covered the supplied finite input; "
-            "not independently verified"
-        ),
-        assurance_basis="exact SymPy rational geometry; no independent checker invoked",
         checker_declarations=GEOMETRY_EXACT_REPLAY_CHECKERS,
     )

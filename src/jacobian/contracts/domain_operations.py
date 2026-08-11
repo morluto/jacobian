@@ -10,15 +10,15 @@ from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.results import ContractModel
 
 
-class ComputedOperationOutput[ResultT: ContractModel](ContractModel):
-    """Inline typed computed result with backend provenance, no artifacts."""
+class InlineOperationOutput[ResultT: ContractModel](ContractModel):
+    """Inline typed mathematical value with backend provenance."""
 
     result: ResultT
     backend_version: str
 
 
-class MaterializedOperationOutput[PreviewT: ContractModel](ContractModel):
-    """Artifact-linked output with an optional typed preview of the result."""
+class DurableOperationOutput[PreviewT: ContractModel](ContractModel):
+    """Durable artifact carriers with an optional typed preview."""
 
     input_uri: ArtifactUri
     result_uri: ArtifactUri

@@ -7,6 +7,7 @@ import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateRequest, LeanTypedGoal
@@ -23,7 +24,6 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplValidatedExecution,
 )
 from jacobian.provider_runtime import jacobian_provider_runtime
-from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 

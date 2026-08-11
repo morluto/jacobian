@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend.repl_protocol import (
     LeanReplCommandRequest,
@@ -34,7 +35,6 @@ from jacobian.process_policy import (
     InteractiveProcessError,
     InteractiveProcessRequest,
 )
-from jacobian.references import LeanCheckerInstallation
 from jacobian.worker_environment import worker_environment
 
 _RESOURCE_POLL_SECONDS = 0.1

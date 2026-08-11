@@ -131,7 +131,6 @@ class TenantRuntimeRouter:
         checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
         allow_anonymous: bool = False,
         anonymous_tenant_id: str = "anonymous",
-        capability_adapter_entrypoints: tuple[str, ...] = (),
         capability_policy: CapabilityPolicy | None = None,
         max_tenant_runtimes: int = DEFAULT_MAX_TENANT_RUNTIMES,
         idle_timeout_seconds: float = DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
@@ -151,7 +150,6 @@ class TenantRuntimeRouter:
         self.checker_authority = checker_authority
         self.allow_anonymous = allow_anonymous
         self.anonymous_tenant_id = anonymous_tenant_id
-        self.capability_adapter_entrypoints = capability_adapter_entrypoints
         self.capability_policy = capability_policy
         self.max_tenant_runtimes = max_tenant_runtimes
         self.idle_timeout_seconds = idle_timeout_seconds
@@ -200,7 +198,6 @@ class TenantRuntimeRouter:
             runtime = self._runtime_factory(
                 self.root / "tenants" / tenant_key,
                 checker_authority=self.checker_authority,
-                capability_adapter_entrypoints=self.capability_adapter_entrypoints,
                 capability_policy=self.capability_policy,
             )
         except BaseException:

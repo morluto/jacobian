@@ -16,7 +16,6 @@ from tests.component.capabilities.capability_service_support import (
     ForgedProviderAdapter,
     ForgedRelationshipVerificationAdapter,
     ForgedVerifiedAdapter,
-    InvalidEvidenceValue,
     InvalidOutputAdapter,
     NotReadyProviderAdapter,
     OmittedRelationshipArtifactAdapter,
@@ -27,15 +26,12 @@ from tests.support.core_capability_harnesses import (
 )
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.atomic_capabilities import AtomicServiceAdapter
 from jacobian.capability_service import CapabilityError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityRequest,
 )
-from jacobian.contracts.conjectures import ParameterRegion
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.schema_registry import model_schema
 
 
 @pytest.fixture
@@ -205,35 +201,6 @@ def test_schema_invalid_adapter_output_returns_a_typed_failure(
     assert result.diagnostics[0].path == "value"
     assert result.diagnostics[0].actual_type == "string"
     assert result.diagnostics[0].expected == "JSON type integer"
-
-
-def test_atomic_adapter_with_invalid_evidence_returns_a_typed_failure(
-    capability_core_services: DomainTestServices,
-) -> None:
-    core = capability_core_services.core
-    adapter = AtomicServiceAdapter(
-        capability_id="example.invalid-evidence",
-        title="Return invalid evidence",
-        description="Exercise malformed atomic service evidence.",
-        input_schema={"type": "object", "additionalProperties": False},
-        output_schema=model_schema(ParameterRegion),
-        invoke=lambda _payload: InvalidEvidenceValue(evidence=[]),
-        store=core.store,
-    )
-    capability_core_services.installation.register_capability(adapter)
-
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.invalid-evidence",
-            input={},
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
-    assert result.diagnostics[0].stage == "adapter_execution"
-    assert result.diagnostics[0].path == "evidence"
-    assert result.diagnostics[0].actual_type == "array"
 
 
 def test_adapter_cannot_forge_provider_provenance(

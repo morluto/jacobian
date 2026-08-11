@@ -72,20 +72,12 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
     )
     monkeypatch.setattr(
         assembler,
-        "ReferenceLeanInstaller",
-        lambda _context, _resolver: _installer(
-            events,
-            "reference",
-            install_event="reference:install:('fixture:adapter',)",
-        ),
+        "CheckerPortfolioInstaller",
+        lambda _context, _resolver: _installer(events, "checker"),
     )
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
-    result = assembler.install_portfolio(
-        context,
-        application,
-        capability_adapter_entrypoints=("fixture:adapter",),
-    )
+    result = assembler.install_portfolio(context, application)
 
     assert isinstance(result, PortfolioInstallation)
     assert events == [
@@ -99,8 +91,8 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
         "core:install",
         "resource:init",
         "resource:install",
-        "reference:init",
-        "reference:install:('fixture:adapter',)",
+        "checker:init",
+        "checker:install",
         "exit:store",
         "exit:policy",
     ]

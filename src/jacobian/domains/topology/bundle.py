@@ -62,16 +62,6 @@ def build_topology_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="the complete supplied bounded finite simplicial complex",
-        completeness_basis=(
-            "the finite facet closure, every oriented boundary entry, and every "
-            "requested finite-field or bounded integral chain dimension were "
-            "computed exactly"
-        ),
-        assurance_basis=(
-            "exact deterministic finite computation; independent verification is "
-            "available through the corresponding per-producer topology verifier"
-        ),
         checker_declarations=TOPOLOGY_EXACT_REPLAY_CHECKERS,
     )
 

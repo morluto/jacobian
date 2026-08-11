@@ -14,6 +14,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
+from jacobian.operation_bindings import DurablePublication
 
 
 def _matrix(entries: list[list[int]]) -> dict[str, object]:
@@ -40,10 +41,11 @@ def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
     operation = next(
         operation
         for operation in bundle.capabilities
-        if operation.capability_id == "matrix.normal_form.hermite.materialize"
+        if operation.spec.operation_id == "matrix.normal_form.hermite.materialize"
     )
-    assert operation.resource_reason
-    assert operation.provider_runtime is not None
+    assert isinstance(operation.publication, DurablePublication)
+    assert operation.publication.resource_reason
+    assert operation.provider_binding.runtime is not None
 
 
 def test_python_flint_hnf_produces_a_durable_certificate(hnf_services) -> None:

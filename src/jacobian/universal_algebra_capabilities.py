@@ -51,18 +51,18 @@ from jacobian.contracts.universal_algebra import (
     MagmaLawCoverage,
     MagmaLawEvaluationRecord,
     MagmaTerm,
-    UniversalAlgebraCertificateVerificationPayload,
     UniversalAlgebraCountermodelSearchOutput,
     UniversalAlgebraCountermodelSearchRequest,
     UniversalAlgebraEvaluationOutput,
     UniversalAlgebraEvaluationRequest,
-    UniversalAlgebraVerificationHandoff,
 )
 from jacobian.domains._examples import example
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.verification import VerificationService
+from jacobian.verification_capabilities import certificate_verification_adapter
 
 _COUNTERMODEL_TIMEOUT_MS = 10_000
 
@@ -91,6 +91,7 @@ def install_universal_algebra_capabilities(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
+    verification: VerificationService,
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
@@ -197,6 +198,19 @@ def install_universal_algebra_capabilities(
             UniversalAlgebraSearchCountermodelAdapter(resources, search_runtime),
         )
     adapters += (FiniteMagmaTableEnumerateAdapter(resources),)
+    verify = certificate_verification_adapter(
+        capability_id="universal_algebra.law_evaluation.verify",
+        title="Verify a finite-magma law evaluation",
+        description=(
+            "Independently replay one exhaustive finite-magma law evaluation "
+            "certificate."
+        ),
+        checker_id=evaluation_checker_id,
+        tags=("universal-algebra", "finite-magma", "law-evaluation"),
+        verification=verification,
+    )
+    if verify is not None:
+        adapters += (verify,)
     return adapters, installation
 
 
@@ -341,16 +355,6 @@ class UniversalAlgebraEvaluateLawsAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             checker_id=self.resources.installation.evaluation_checker_id,
             records=records,
-            verification_handoff=(
-                UniversalAlgebraVerificationHandoff(
-                    payload=UniversalAlgebraCertificateVerificationPayload(
-                        certificate_uri=certificate_artifact.artifact_uri,
-                        checker_id=self.resources.installation.evaluation_checker_id,
-                    )
-                )
-                if self.resources.installation.evaluation_checker_id is not None
-                else None
-            ),
         )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,

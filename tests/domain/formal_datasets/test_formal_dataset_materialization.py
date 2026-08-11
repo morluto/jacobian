@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityRequest,
 )
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.formal_datasets import build_formal_dataset_bundle
 from jacobian.operation_installation import OperationInstaller
 from jacobian.schema_registry import SchemaRegistry
@@ -247,15 +247,16 @@ def test_expected_row_digest_rejects_changed_content(tmp_path: Path) -> None:
     payload = _minif2f_request()
     payload["expected_row_digest"] = "sha256:" + "0" * 64
 
-    with pytest.raises(CapabilityInvocationError) as exc_info:
-        adapter.invoke(
-            CapabilityRequest(
-                capability_id="dataset.formal.materialize",
-                input=payload,
-            )
+    result = adapter.invoke(
+        CapabilityRequest(
+            capability_id="dataset.formal.materialize",
+            input=payload,
         )
+    )
 
-    assert exc_info.value.diagnostic.code == "FORMAL_DATASET_ROW_DIGEST_MISMATCH"
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "FORMAL_DATASET_ROW_DIGEST_MISMATCH"
+    assert result.artifact_uris == ()
 
 
 def test_artifact_tampering_is_detected_by_store(tmp_path: Path) -> None:

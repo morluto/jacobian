@@ -54,7 +54,7 @@ def test_builtin_portfolio_installs_cleanly(
             if outcome.domain_id != SINGULAR_DOMAIN_ID
         )
     expected_capability_ids = {
-        operation.capability_id
+        operation.spec.operation_id
         for bundle in build_builtin_portfolio().domain_bundles
         if singular_available or bundle.domain_id != SINGULAR_DOMAIN_ID
         for operation in bundle.capabilities

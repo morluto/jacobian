@@ -47,11 +47,8 @@ bootstrap discovery. The `lean` profile likewise records a nondefault
 `ELAN_HOME` and any `JACOBIAN_LEAN_RUNTIME` override, so a GUI restart uses the
 toolchain home and mathlib checkout that doctor audited.
 
-For Codex, setup also installs the `jacobian-math` visibility skill under
-`~/.codex/skills`. MCP server instructions are not guaranteed to be present in
-Codex's always-visible prompt, so this thin skill lets mathematical requests
-surface `math.find` even when the user does not name Jacobian. Setup refuses to
-replace a same-named unmanaged skill; removal preserves a user-modified copy.
+The bootstrap configures the selected client's MCP entry only. Jacobian does
+not install prompts, skills, or client-specific mathematical workflows.
 
 ## Profiles
 

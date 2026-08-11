@@ -10,11 +10,10 @@ from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathResult,
 )
 from jacobian.domains.graph_optimization.operations import build_simple_graph
+from jacobian.operation_bindings import InstalledOperation, inline_operation
 from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedOperation,
-    ComputedOutcome,
-    ComputedSuccess,
+    OperationRefusalError,
+    OperationSpec,
 )
 
 if TYPE_CHECKING:
@@ -80,11 +79,11 @@ def decide_hamiltonian_path(
 
 def _execute(
     request: GraphHamiltonianPathRequest,
-) -> ComputedOutcome[GraphHamiltonianPathResult]:
+) -> GraphHamiltonianPathResult:
     import networkx as nx
 
     try:
-        return ComputedSuccess(decide_hamiltonian_path(request))
+        return decide_hamiltonian_path(request)
     except (
         ArithmeticError,
         nx.NetworkXError,
@@ -92,7 +91,7 @@ def _execute(
         TypeError,
         ValueError,
     ) as exc:
-        return ComputedNotApplicable(
+        raise OperationRefusalError(
             CapabilityDiagnostic(
                 code="GRAPH_HAMILTONIAN_PATH_NOT_APPLICABLE",
                 stage="graph_hamiltonian_path_computation",
@@ -102,33 +101,34 @@ def _execute(
                     "graphs are outside this complete decision scope."
                 ),
             )
-        )
+        ) from exc
 
 
-HAMILTONIAN_PATH_CAPABILITY: ComputedOperation[
+HAMILTONIAN_PATH_CAPABILITY: InstalledOperation[
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
-] = ComputedOperation(
-    capability_id="graph.hamiltonian_path.decide",
-    title="Decide bounded Hamiltonian-path existence",
-    description=(
-        "Completely decide whether a supplied simple graph of order at most 18 "
-        "has a spanning simple path. EXISTS returns the ordered path witness; "
-        "DOES_NOT_EXIST follows only after exhaustive finite dynamic programming."
-    ),
-    request_model=GraphHamiltonianPathRequest,
-    result_model=GraphHamiltonianPathResult,
-    implementation=_execute,
-    relation_id="graph.hamiltonian_path.relation",
-    tags=(
-        "graph",
-        "hamiltonian-path",
-        "spanning-path",
-        "decision",
-        "exact",
-        "bounded",
-    ),
-    version="4",
+] = inline_operation(
+    OperationSpec(
+        operation_id="graph.hamiltonian_path.decide",
+        version="4",
+        title="Decide bounded Hamiltonian-path existence",
+        description=(
+            "Completely decide whether a supplied simple graph of order at most 18 "
+            "has a spanning simple path. EXISTS returns the ordered path witness; "
+            "DOES_NOT_EXIST follows only after exhaustive finite dynamic programming."
+        ),
+        request_type=GraphHamiltonianPathRequest,
+        result_type=GraphHamiltonianPathResult,
+        execute=_execute,
+        tags=(
+            "graph",
+            "hamiltonian-path",
+            "spanning-path",
+            "decision",
+            "exact",
+            "bounded",
+        ),
+    )
 )
 
 

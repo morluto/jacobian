@@ -53,12 +53,4 @@ def build_sequence_bundle() -> DomainBundle:
                 hint="Use canonical integer strings and inspect the operation's sequence schema.",
             )
         ),
-        scope_description="the complete supplied finite integer sequence input",
-        completeness_basis=(
-            "exact standard-library computation covered the supplied finite input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "exact Python standard-library sequence operations; no independent checker invoked"
-        ),
     )

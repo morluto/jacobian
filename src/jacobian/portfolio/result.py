@@ -19,7 +19,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
-from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
+from jacobian.checker_authorization import (
+    LeanCheckerInstallation,
+    PolytopeCheckerInstallation,
+)
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.exact_domain_checkers import ExactDomainCheckerInstallation
@@ -29,7 +32,6 @@ from jacobian.graphs.coloring import GraphColoringInstallation
 from jacobian.graphs.composition import GraphCompositionInstallation
 from jacobian.graphs.installation import GraphInstallation
 from jacobian.graphs.isomorphism import GraphIsomorphismInstallation
-from jacobian.graphs.shrinking import GraphShrinkingInstallation
 from jacobian.lean_frontend.declarations import LeanDeclarationService
 from jacobian.lean_frontend.exploration import LeanExplorationInstallation
 from jacobian.lean_frontend.proof_axioms import LeanProofAxiomsInstallation
@@ -46,11 +48,6 @@ from jacobian.polynomial_positivity_capabilities import (
 )
 from jacobian.polynomial_system_capabilities import PolynomialSystemInstallation
 from jacobian.polynomials import PolynomialInstallation
-from jacobian.references import (
-    LeanCheckerInstallation,
-    PolytopeCheckerInstallation,
-    ReferenceInstallation,
-)
 from jacobian.sat_smt.sat_capabilities import (
     SatAssignmentCheckerInstallation,
     SatUnsatProofCheckerInstallation,
@@ -218,7 +215,6 @@ class PortfolioInstallation:
 
     # --- Graph ---
     graph: GraphInstallation | None = None
-    graph_shrinking: GraphShrinkingInstallation | None = None
     graph_coloring: GraphColoringInstallation | None = None
     graph_isomorphism: GraphIsomorphismInstallation | None = None
     graph_composition: GraphCompositionInstallation | None = None
@@ -226,9 +222,6 @@ class PortfolioInstallation:
     # --- Finite ---
     finite_partition: FinitePartitionInstallation | None = None
     finite_coverage: FiniteCoverageInstallation | None = None
-
-    # --- Datasets ---
-    conjecture_ingestion: ConjectureIngestionInstallation | None = None
 
     # --- Domain bundles ---
     domain_bundles: dict[str, InstalledDomainBundle] = field(default_factory=dict)
@@ -250,8 +243,7 @@ class PortfolioInstallation:
     lean_proof_edit: LeanProofEditInstallation | None = None
     lean_proof_axioms: LeanProofAxiomsInstallation | None = None
 
-    # --- References ---
-    references: dict[str, ReferenceInstallation] = field(default_factory=dict)
+    # --- Independently authorized checkers ---
     polytope_checkers: PolytopeCheckerInstallation | None = None
     lean_checkers: dict[LeanEnvironment, LeanCheckerInstallation] = field(
         default_factory=dict

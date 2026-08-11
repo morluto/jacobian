@@ -237,13 +237,6 @@ def test_checker_registry_rejects_identity_metadata_corruption(
         (EvidenceKind.WITNESS, (), (CLAIM_SCHEMA_A,), (CLAIM_SCHEMA_A,), ()),
         (EvidenceKind.WITNESS, (CLAIM_SCHEMA_A,), (), (CLAIM_SCHEMA_A,), ()),
         (EvidenceKind.WITNESS, (CLAIM_SCHEMA_A,), (CLAIM_SCHEMA_A,), (), ()),
-        (
-            EvidenceKind.TRANSFORMATION,
-            (CLAIM_SCHEMA_A,),
-            (CLAIM_SCHEMA_A,),
-            (CLAIM_SCHEMA_A,),
-            (),
-        ),
     ],
 )
 def test_checker_authorization_requires_explicit_compatibility_scope(

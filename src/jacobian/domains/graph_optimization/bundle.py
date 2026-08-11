@@ -138,13 +138,5 @@ def build_graph_optimization_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="one bounded simple undirected graph",
-        completeness_basis=(
-            "Z3 settled every stronger threshold needed to bind the reported optimum"
-        ),
-        assurance_basis=(
-            "bounded Z3 computation with NetworkX witness predicates; an "
-            "independent checker is still required for VERIFIED assurance"
-        ),
         checker_declarations=GRAPH_SEARCH_EXACT_REPLAY_CHECKERS,
     )

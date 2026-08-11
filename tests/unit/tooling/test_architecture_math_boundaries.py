@@ -63,14 +63,16 @@ def test_native_math_cannot_load_runtime_or_capability_layers(tmp_path: Path) ->
     assert "native-math-boundary" in _codes(tmp_path)
 
 
-def test_native_math_can_import_domain_kernels(tmp_path: Path) -> None:
+def test_migrated_matrix_math_cannot_import_legacy_domain_kernels(
+    tmp_path: Path,
+) -> None:
     _write(
         tmp_path,
-        "src/jacobian/math/matrices.py",
+        "src/jacobian/math/matrices/operations.py",
         "from jacobian.domains.matrix_lattice import kernels\n",
     )
 
-    assert "native-math-boundary" not in _codes(tmp_path)
+    assert "native-math-boundary" in _codes(tmp_path)
 
 
 def test_native_math_cannot_bypass_isolation_with_relative_runtime_import(

@@ -5,8 +5,7 @@
 This tutorial **finds and runs ordinary Lean tools** (search/inspect
 declarations), then runs the separate **checker tool** `lean.check`. Search and
 inspect return declaration **values**; only the checker accepts or rejects a
-proof. Runnable snippets may still pass a legacy `mode` field until
-[#1143](https://github.com/morluto/jacobian/issues/1143).
+proof.
 
 ## Prerequisites
 
@@ -48,7 +47,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.declaration.search",
-                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "name_contains": "irrational_sqrt_two",
@@ -66,7 +64,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.declaration.inspect",
-                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "declaration_name": declaration_name,
@@ -85,7 +82,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.check",
-                "mode": "VERIFY",  # legacy wire until #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "statement": "Irrational (Real.sqrt 2)",

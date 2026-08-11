@@ -9,7 +9,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 from jacobian.contracts import number_theory as number_theory_contracts
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
     CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
@@ -143,7 +142,6 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     assert result.obligations == ()
     stored_result = _stored_modular_residue_result(domain_services, result)
     assert stored_result == {
@@ -179,11 +177,6 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
     stored_artifact = domain_services.core.store.get(result_uri)
     assert stored_artifact.payload == stored_result
     assert stored_artifact.manifest.parents == (input_uri,)
-    assert result.relationships[0].relation_id == (
-        "modular.polynomial_residue_image.assignments.relation"
-    )
-    assert result.relationships[0].source_artifact_uris == (input_uri,)
-    assert result.relationships[0].target_artifact_uris == (result_uri,)
 
 
 def test_modular_polynomial_residue_image_handles_multivariate_domains(

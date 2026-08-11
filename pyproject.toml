@@ -17,7 +17,6 @@ dependencies = [
     "mcp-types==2.0.0",
     "networkx>=3.4,<4",
     "pydantic>=2.12,<3",
-    "pydantic-core>=2.41,<3",
     "rfc8785==0.1.4",
     "sympy==1.14.0",
     "typer>=0.20,<1",
@@ -40,6 +39,7 @@ jacobian-mcp = "jacobian.adapters.mcp.cli:main"
 dev-core = [
     "deptry>=0.21,<1",
     "hypothesis>=6.130,<7",
+    "import-linter>=2,<3",
     "mypy>=1.15,<3",
     "pip-audit>=2.9,<3",
     "pre-commit>=4.4,<5",
@@ -132,6 +132,29 @@ known_first_party = ["jacobian", "jacobian_checkers"]
 # The Harbor manifest writer is repository tooling and uses the direct dev-only
 # tomli-w dependency; it is intentionally absent from the runtime wheel.
 per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["cvc5", "mcp-types", "python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["tomli_w"] }
+
+[tool.importlinter]
+root_package = "jacobian"
+
+[[tool.importlinter.contracts]]
+name = "Migrated math packages do not depend on runtime or installation"
+type = "forbidden"
+source_modules = [
+    "jacobian.math.graphs",
+    "jacobian.math.matrices",
+    "jacobian.math.polynomials",
+]
+forbidden_modules = [
+    "jacobian.adapters.mcp",
+    "jacobian.capability_service",
+    "jacobian.operation_bindings",
+    "jacobian.operation_installation",
+    "jacobian.operation_publication",
+    "jacobian.operation_runtime",
+    "jacobian.operations",
+    "jacobian.runtime",
+    "jacobian.storage",
+]
 
 [tool.coverage.run]
 branch = true

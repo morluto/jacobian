@@ -194,7 +194,10 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         },
     )
     assert groebner_result.execution.status is ExecutionStatus.COMPLETED
-    assert groebner_result.output == {
+    groebner_payload = runtime.core.store.get(
+        groebner_result.output["result_uri"]
+    ).payload
+    assert groebner_payload == {
         "variables": ["x", "y"],
         "monomial_order": "lex",
         "basis": [
@@ -210,17 +213,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         "completion": "COMPLETE",
         "normalization": "REDUCED_MONIC",
     }
-    assert len(groebner_result.artifact_uris) == 3
-    obligation = runtime.core.store.get(groebner_result.artifact_uris[2])
-    assert obligation.payload["verification_status"] == "UNVERIFIED"
-    assert obligation.manifest.parents == tuple(
-        sorted(
-            (
-                groebner_result.artifact_uris[0],
-                groebner_result.artifact_uris[1],
-            )
-        )
-    )
+    assert len(groebner_result.artifact_uris) == 2
 
     for result in (
         gcd_result,
@@ -312,7 +305,8 @@ def test_groebner_result_preserves_advertised_input_variable_bound(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output == {
+    payload = polynomial_services.core.store.get(result.output["result_uri"]).payload
+    assert payload == {
         "variables": variables,
         "monomial_order": "lex",
         "basis": [_polynomial(variables, [((0, 0, 0, 0, 0), 1, 1)])],

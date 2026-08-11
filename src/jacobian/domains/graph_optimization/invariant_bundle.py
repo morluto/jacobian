@@ -75,10 +75,5 @@ def build_graph_invariant_bundle() -> DomainBundle:
                 hint="Supply a canonical simple graph with at most 32 vertices.",
             )
         ),
-        scope_description="the complete supplied bounded finite simple graph",
-        completeness_basis=(
-            "maintained exact algorithms covered the complete finite graph"
-        ),
-        assurance_basis=("NetworkX/SymPy computation; no independent checker invoked"),
         checker_declarations=GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
     )

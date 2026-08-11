@@ -62,6 +62,9 @@ typecheck: ## Run strict static type checking.
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
 	$(UV_RUN) python -m tools.check_test_architecture .
 
+import-contracts: ## Enforce declared package dependency direction.
+	$(UV_RUN) lint-imports
+
 test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
 	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
 

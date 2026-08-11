@@ -127,7 +127,7 @@ def test_width_rejects_artifact_uri_input_at_the_contract_boundary(
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
     assert result.artifact_uris == ()
 
 

@@ -36,11 +36,6 @@ def build_real_analysis_bundle() -> DomainBundle:
                 hint="Use a supported function, bounded rational, and declared precision.",
             )
         ),
-        scope_description="one bounded real-function point-enclosure request",
-        completeness_basis="Arb produced the complete declared enclosure",
-        assurance_basis=(
-            "pinned maintained-backend computation; independent replay remains open"
-        ),
     )
 
 

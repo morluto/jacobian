@@ -39,7 +39,6 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
     assert job["agents"] == [
         {
             "name": "codex",
-            "skills": [".agents/skills/jacobian-math"],
             "kwargs": {"web_search": "disabled"},
         }
     ]

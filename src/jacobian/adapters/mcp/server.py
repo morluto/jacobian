@@ -12,7 +12,7 @@ from typing import Any
 from mcp.server import MCPServer
 from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.server.mcpserver.resources import FunctionResource, TextResource
+from mcp.server.mcpserver.resources import FunctionResource
 from mcp.shared.exceptions import MCPError
 from mcp_types import INVALID_PARAMS, CallToolResult, InputRequiredResult
 from mcp_types import Tool as MCPTool
@@ -29,7 +29,6 @@ from jacobian.adapters.mcp.context import (
 from jacobian.adapters.mcp.guidance import (
     MATH_FIND_DESCRIPTION,
     MATH_RUN_DESCRIPTION,
-    OPERATING_GUIDE,
     SERVER_DESCRIPTION,
     SERVER_INSTRUCTIONS,
 )
@@ -38,7 +37,7 @@ from jacobian.adapters.mcp.remote import (
     DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
     TenantRuntimeRouter,
 )
-from jacobian.adapters.mcp.resources import _register_resources_and_prompts
+from jacobian.adapters.mcp.resources import _register_resources
 from jacobian.adapters.mcp.tooling import (
     AgentRecoveryError,
     MCPBlockingWorkerRegistry,
@@ -55,7 +54,6 @@ from jacobian.adapters.mcp.tools import (
 )
 from jacobian.capability_service import CapabilityPolicy
 from jacobian.contracts.capabilities import CapabilityCatalog
-from jacobian.references import reference_catalog
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
@@ -147,9 +145,10 @@ class JacobianCoreExtension(Extension):
                     "name": "math.run",
                     "title": "Run a mathematical operation",
                     "description": MATH_RUN_DESCRIPTION,
-                    # math.run dispatches the installed portfolio, including
-                    # state-changing operations such as experiment.cancel.
-                    "annotations": _tool_annotations(destructive=True),
+                    # The selected operation may publish artifacts, so math.run is
+                    # not globally read-only or idempotent. Retained operations are
+                    # nevertheless non-destructive.
+                    "annotations": _tool_annotations(),
                     "structured_output": True,
                 },
             ),
@@ -157,19 +156,6 @@ class JacobianCoreExtension(Extension):
 
     def resources(self) -> tuple[ResourceBinding, ...]:
         return (
-            ResourceBinding(
-                TextResource(
-                    uri="jacobian://instructions",
-                    name="jacobian-instructions",
-                    title="Jacobian operating guide",
-                    description=(
-                        "Complete guidance for discovering, invoking, and independently "
-                        "checking Jacobian mathematical capabilities."
-                    ),
-                    mime_type="text/markdown",
-                    text=OPERATING_GUIDE,
-                )
-            ),
             ResourceBinding(
                 FunctionResource.from_function(
                     self._capability_catalog,
@@ -182,17 +168,6 @@ class JacobianCoreExtension(Extension):
                     mime_type="application/json",
                 )
             ),
-            ResourceBinding(
-                FunctionResource.from_function(
-                    self._reference_catalog,
-                    uri="reference://catalog",
-                    name="reference-catalog",
-                    description=(
-                        "Read installed domain schema, semantics, plugin, and checker IDs."
-                    ),
-                    mime_type="application/json",
-                )
-            ),
         )
 
     async def _capability_catalog(self) -> CapabilityCatalog:
@@ -200,20 +175,6 @@ class JacobianCoreExtension(Extension):
             self._runtime, self._tenant_router
         ) as active_runtime:
             return active_runtime.core.capabilities.catalog()
-
-    async def _reference_catalog(self) -> dict[str, Any]:
-        with _static_resource_runtime(
-            self._runtime, self._tenant_router
-        ) as active_runtime:
-            return reference_catalog(
-                active_runtime.portfolio.references,
-                graph=active_runtime.portfolio.graph,
-                polytope=active_runtime.services.polytope,
-                polytope_checkers=active_runtime.portfolio.polytope_checkers,
-                polynomial=active_runtime.portfolio.polynomial,
-                universal_algebra=active_runtime.portfolio.universal_algebra,
-                lean=active_runtime.portfolio.lean_checkers,
-            )
 
     async def intercept_tool_call(
         self,
@@ -373,7 +334,6 @@ def create_server(
     anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
     auth: Any | None = None,
-    capability_adapter_entrypoints: tuple[str, ...] = (),
     capability_exclusions: frozenset[str] = frozenset(),
     capability_policy: CapabilityPolicy | None = None,
     max_tenant_runtimes: int | None = None,
@@ -392,7 +352,6 @@ def create_server(
         else create_runtime(
             configured_root,
             checker_authority=selected_authority,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
             capability_exclusions=capability_exclusions,
             capability_policy=capability_policy,
         )
@@ -403,7 +362,6 @@ def create_server(
             checker_authority=selected_authority,
             allow_anonymous=allow_anonymous,
             anonymous_tenant_id=anonymous_tenant_id,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
             capability_policy=capability_policy,
             max_tenant_runtimes=(
                 DEFAULT_MAX_TENANT_RUNTIMES
@@ -448,7 +406,7 @@ def create_server(
         ],
     )
 
-    _register_resources_and_prompts(server)
+    _register_resources(server)
     return server
 
 

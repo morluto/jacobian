@@ -47,11 +47,10 @@ from jacobian.contracts.results import (
     ExecutionStatus,
     Verification,
 )
+from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operations import (
-    BoundedSearchOperation,
     DomainBundle,
-    MaterializedOperation,
 )
 from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers.flint_runtime import (
@@ -373,15 +372,15 @@ def install_exact_domain_verification(
     adapters: list[CapabilityAdapter] = []
     catalog_relationships: list[CapabilityCatalogRelationshipRegistration] = []
     result_models = {
-        operation.capability_id: operation.result_model
+        operation.spec.operation_id: operation.spec.result_type
         for bundle, _installed_bundle in bundles.values()
         for operation in bundle.capabilities
     }
     stored_producers = {
-        operation.capability_id
+        operation.spec.operation_id
         for bundle, _installed_bundle in bundles.values()
         for operation in bundle.capabilities
-        if isinstance(operation, (MaterializedOperation, BoundedSearchOperation))
+        if isinstance(operation.publication, DurablePublication)
     }
     for installed_bundle, declaration in _available_declaration_bundles(bundles):
         if declaration.capability_id not in installed_bundle.result_schema_uris:
@@ -452,7 +451,7 @@ def _available_declaration_bundles(
     owners: dict[str, str] = {}
     for domain_id, (bundle, installed) in bundles.items():
         producer_capability_ids = {
-            operation.capability_id for operation in bundle.capabilities
+            operation.spec.operation_id for operation in bundle.capabilities
         }
         for declaration in bundle.checker_declarations:
             if declaration.capability_id not in producer_capability_ids:

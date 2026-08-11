@@ -125,6 +125,7 @@ def open_universal_algebra_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
+                services.application.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
@@ -145,6 +146,7 @@ def open_graph_core_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
+                services.application.verification,
                 services.core.checkers,
                 authorize_checker=False,
             )

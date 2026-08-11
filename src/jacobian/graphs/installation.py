@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
+from jacobian.capability_service import CapabilityAdapter
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
@@ -44,6 +45,8 @@ from jacobian.graphs.neighborhood_independence import (
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.verification import VerificationService
+from jacobian.verification_capabilities import certificate_verification_adapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,19 +69,11 @@ def install_graph_capabilities(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
+    verification: VerificationService,
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[
-    tuple[
-        GraphExplicitConstructionAdapter,
-        GraphAtlasSearchAdapter,
-        GraphPropertyAdapter,
-        GraphDegreeSequenceAdapter,
-        GraphNeighborhoodIndependenceAdapter,
-    ],
-    GraphInstallation,
-]:
+) -> tuple[tuple[CapabilityAdapter, ...], GraphInstallation]:
     """Register graph artifact contracts and return the bundled adapters."""
 
     semantics_uri = store.register_descriptor(
@@ -243,13 +238,36 @@ def install_graph_capabilities(
         certificate_schema_uri=certificate_schema_uri,
         neighborhood_checker_id=neighborhood_checker_id,
     )
-    return (
-        (
-            GraphExplicitConstructionAdapter(construction_resources),
-            GraphAtlasSearchAdapter(atlas_resources),
-            GraphPropertyAdapter(invariant_resources),
-            GraphDegreeSequenceAdapter(degree_sequence_resources),
-            GraphNeighborhoodIndependenceAdapter(neighborhood_resources),
-        ),
-        installation,
+    adapters: tuple[CapabilityAdapter, ...] = (
+        GraphExplicitConstructionAdapter(construction_resources),
+        GraphAtlasSearchAdapter(atlas_resources),
+        GraphPropertyAdapter(invariant_resources),
+        GraphDegreeSequenceAdapter(degree_sequence_resources),
+        GraphNeighborhoodIndependenceAdapter(neighborhood_resources),
     )
+    for adapter in (
+        certificate_verification_adapter(
+            capability_id="graph.degree_sequence.verify",
+            title="Verify a graph degree-sequence realization",
+            description=(
+                "Independently replay one exact realization or Erdos-Gallai "
+                "obstruction with the installed graph checker."
+            ),
+            checker_id=degree_sequence_checker_id,
+            tags=("graph", "degree-sequence"),
+            verification=verification,
+        ),
+        certificate_verification_adapter(
+            capability_id="graph.neighborhood_independence.verify",
+            title="Verify graph neighborhood independence values",
+            description=(
+                "Independently replay one exact neighborhood-independence ledger."
+            ),
+            checker_id=neighborhood_checker_id,
+            tags=("graph", "neighborhood-independence"),
+            verification=verification,
+        ),
+    ):
+        if adapter is not None:
+            adapters += (adapter,)
+    return adapters, installation

@@ -74,12 +74,8 @@ reports contain only redacted public plan fields. Run the tailored `doctor`
 command printed after setup to validate those client entries and execute the
 configured launcher.
 
-Codex setup also installs a small `jacobian-math` skill under
-`~/.codex/skills`. Codex does not guarantee that MCP server instructions are
-always visible before tool selection; the skill makes relevant mathematical
-requests surface Jacobian without prescribing a mathematical workflow. Setup
-refuses to overwrite a same-named unmanaged or modified skill, and removal
-deletes only the exact managed content.
+Setup writes only the selected client's MCP configuration. It does not install
+prompts, skills, or a client-specific mathematical workflow.
 
 `--source` writes a launcher bound to an absolute Jacobian checkout and uses
 `uv run --project <checkout> --locked --no-sync jacobian-mcp`. Run the

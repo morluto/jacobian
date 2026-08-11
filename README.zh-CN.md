@@ -113,15 +113,14 @@ Jacobian 将寻找证据与判断证据能证明什么分开。假设智能体�
 
 > **没有见证不等于证明。** 搜索失败、超时、取消或错误都会使命题保持为 `UNKNOWN`。
 
-在入门教程中，同一个边界表现为：
+入门教程用两个独立的目录操作展示同一个边界：
 
 ```text
-evaluate.batch   →  FALSE  · HEURISTIC
-witness.find     →  精确的见证 artifact
-witness.verify   →  FALSE  · VERIFIED
+matrix.determinant.compute  →  精确的行列式值 · COMPUTED
+matrix.determinant.verify   →  独立检查结果 · VERIFIED
 ```
 
-`FALSE · HEURISTIC` 是一次评估；`FALSE · VERIFIED` 是由独立检查过的证据支持的结论。请参阅[查找并验证反例](docs/tutorials/first-verified-result.md)中的可运行示例。
+计算操作不会自行授权验证结论。请参阅[计算并独立检查行列式](docs/tutorials/first-verified-result.md)中的可运行示例。
 
 <a id="capabilities"></a>
 

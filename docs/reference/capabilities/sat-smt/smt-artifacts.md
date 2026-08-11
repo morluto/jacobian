@@ -36,9 +36,9 @@ URIs registered by the current runtime:
 | Schema | `jacobian.smt-alethe-proof@1` | Raw cvc5 Alethe bytes bound to one exact input |
 
 The schemas are model backed. Their closed structural and cross-field
-invariants also apply when a payload is submitted through `artifact.put`.
-Runtime construction registers the artifact boundary even when cvc5 is absent;
-only the producer capability is conditional.
+invariants apply before the SMT producer publishes a typed artifact. Runtime
+construction registers the artifact boundary even when cvc5 is absent; only
+the producer operation is conditional.
 
 ## Pinned SMT-LIB profile
 
@@ -131,7 +131,7 @@ anything from failure to find a proof.
 
 ## Strict Carcara verification
 
-`smt.unsat_proof.verify` accepts one `proof_uri` in `VERIFY` mode. It resolves
+`smt.unsat_proof.verify` accepts one `proof_uri`. It resolves
 the exact proof and parent problem, re-derives the problem binding, and creates
 an `smt.unsat-proof@1` `CertificateEnvelope`. The certificate binds the
 problem claim, proof candidate, SMT semantics, exact artifact URIs, payload

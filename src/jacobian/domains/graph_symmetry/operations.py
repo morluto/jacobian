@@ -13,7 +13,8 @@ from jacobian.contracts.graph_symmetry import (
 )
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import nx
-from jacobian.operations import ComputedOperation, ComputedSuccess
+from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operations import OperationSpec
 
 
 def _canonical_edge(left: str, right: str) -> tuple[str, str]:
@@ -63,7 +64,7 @@ def _edge_orbits(
 
 def _generator_orbits(
     request: GraphSymmetryOrbitRequest,
-) -> ComputedSuccess[GraphSymmetryOrbitResult]:
+) -> GraphSymmetryOrbitResult:
     vertices = tuple(sorted(request.graph.vertices))
     edges = tuple(sorted(request.graph.edges))
     vertex_actions = tuple(generator.mapping for generator in request.generators)
@@ -89,76 +90,75 @@ def _generator_orbits(
         )
         for index, members in enumerate(edge_orbit_members)
     )
-    return ComputedSuccess(
-        GraphSymmetryOrbitResult(
-            vertices=vertices,
-            edges=edges,
-            generator_ids=tuple(
-                sorted(generator.generator_id for generator in request.generators)
-            ),
-            generator_count=len(request.generators),
-            vertex_orbits=vertex_orbits,
-            edge_orbits=edge_orbits,
-            vertex_orbit_count=len(vertex_orbits),
-            edge_orbit_count=len(edge_orbits),
-            vertex_color_mode=("DECLARED" if request.vertex_colors else "UNCOLORED"),
-            edge_color_mode="DECLARED" if request.edge_colors else "UNCOLORED",
-            backend_version=nx().__version__,
-        )
+    return GraphSymmetryOrbitResult(
+        vertices=vertices,
+        edges=edges,
+        generator_ids=tuple(
+            sorted(generator.generator_id for generator in request.generators)
+        ),
+        generator_count=len(request.generators),
+        vertex_orbits=vertex_orbits,
+        edge_orbits=edge_orbits,
+        vertex_orbit_count=len(vertex_orbits),
+        edge_orbit_count=len(edge_orbits),
+        vertex_color_mode=("DECLARED" if request.vertex_colors else "UNCOLORED"),
+        edge_color_mode="DECLARED" if request.edge_colors else "UNCOLORED",
+        backend_version=nx().__version__,
     )
 
 
-GRAPH_SYMMETRY_CAPABILITIES: tuple[ComputedOperation[Any, Any], ...] = (
-    ComputedOperation(
-        capability_id="graph.symmetry.generator_orbits.compute",
-        title="Exact declared graph-symmetry orbit partitions",
-        description=(
-            "Validate explicit color-preserving graph automorphism generators and "
-            "compute the complete vertex and edge orbits of their generated subgroup."
-        ),
-        request_model=GraphSymmetryOrbitRequest,
-        result_model=GraphSymmetryOrbitResult,
-        implementation=_generator_orbits,
-        relation_id="graph.symmetry.generator_orbits.relation",
-        tags=(
-            "graph",
-            "symmetry",
-            "automorphism",
-            "group-action",
-            "orbit",
-            "compression",
-            "exact",
-            "bounded",
-        ),
-        invocation_examples=(
-            example(
-                "cycle_rotation_orbits",
-                "Compute vertex and edge orbits of one declared quarter-turn of C4.",
-                {
-                    "graph": {
-                        "vertices": ["a", "b", "c", "d"],
-                        "edges": [
-                            ["a", "b"],
-                            ["a", "d"],
-                            ["b", "c"],
-                            ["c", "d"],
+GRAPH_SYMMETRY_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
+    inline_operation(
+        OperationSpec(
+            operation_id="graph.symmetry.generator_orbits.compute",
+            version="5",
+            title="Exact declared graph-symmetry orbit partitions",
+            description=(
+                "Validate explicit color-preserving graph automorphism generators and "
+                "compute the complete vertex and edge orbits of their generated subgroup."
+            ),
+            request_type=GraphSymmetryOrbitRequest,
+            result_type=GraphSymmetryOrbitResult,
+            execute=_generator_orbits,
+            tags=(
+                "graph",
+                "symmetry",
+                "automorphism",
+                "group-action",
+                "orbit",
+                "compression",
+                "exact",
+                "bounded",
+            ),
+            invocation_examples=(
+                example(
+                    "cycle_rotation_orbits",
+                    "Compute vertex and edge orbits of one declared quarter-turn of C4.",
+                    {
+                        "graph": {
+                            "vertices": ["a", "b", "c", "d"],
+                            "edges": [
+                                ["a", "b"],
+                                ["a", "d"],
+                                ["b", "c"],
+                                ["c", "d"],
+                            ],
+                        },
+                        "generators": [
+                            {
+                                "generator_id": "quarter_turn",
+                                "mapping": {
+                                    "a": "b",
+                                    "b": "c",
+                                    "c": "d",
+                                    "d": "a",
+                                },
+                            }
                         ],
                     },
-                    "generators": [
-                        {
-                            "generator_id": "quarter_turn",
-                            "mapping": {
-                                "a": "b",
-                                "b": "c",
-                                "c": "d",
-                                "d": "a",
-                            },
-                        }
-                    ],
-                },
+                ),
             ),
-        ),
-        version="5",
+        )
     ),
 )
 

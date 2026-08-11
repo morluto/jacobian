@@ -53,18 +53,6 @@ def build_certified_snf_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="the complete supplied bounded integer matrix",
-        completeness_basis=(
-            "SymPy's smith_normal_decomp over ZZ produced both full unimodular "
-            "basis changes and the complete canonical Smith diagonal; the producer "
-            "fail-closed checks verified D = U A V, both unimodular determinants, "
-            "and the positive divisibility chain"
-        ),
-        assurance_basis=(
-            "exact SymPy smith_normal_decomp capped at COMPUTED; independent "
-            "certificate replay is available through "
-            "matrix.normal_form.smith.certified.verify"
-        ),
         checker_declarations=CERTIFIED_SNF_EXACT_REPLAY_CHECKERS,
     )
 

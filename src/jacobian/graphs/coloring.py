@@ -43,6 +43,8 @@ from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.verification import VerificationService
+from jacobian.verification_capabilities import certificate_verification_adapter
 
 _SEMANTICS_NAME = "jacobian.simple-undirected-graph-coloring"
 _ENCODING_VERSION = "exactly-one-and-edge-separation/v1"
@@ -63,6 +65,7 @@ def install_graph_coloring_capabilities(
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
     sat: SatArtifactService,
+    verification: VerificationService,
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
@@ -128,17 +131,27 @@ def install_graph_coloring_capabilities(
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,
     )
-    return (
-        (
-            GraphColoringEncodingAdapter(
-                store=store,
-                artifacts=artifacts,
-                sat=sat,
-                installation=installation,
-            ),
+    adapters: tuple[CapabilityAdapter, ...] = (
+        GraphColoringEncodingAdapter(
+            store=store,
+            artifacts=artifacts,
+            sat=sat,
+            installation=installation,
         ),
-        installation,
     )
+    verify = certificate_verification_adapter(
+        capability_id="graph.coloring.encoding.verify",
+        title="Verify a graph-coloring CNF encoding",
+        description=(
+            "Independently replay one exact graph-to-CNF encoding certificate."
+        ),
+        checker_id=checker_id,
+        tags=("graph", "coloring", "cnf"),
+        verification=verification,
+    )
+    if verify is not None:
+        adapters += (verify,)
+    return adapters, installation
 
 
 class GraphColoringEncodingAdapter:

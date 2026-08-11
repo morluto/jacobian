@@ -55,12 +55,6 @@ def build_finite_poset_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="one bounded exact finite-poset operation",
-        completeness_basis=(
-            "the declared finite carrier and every relation, ideal state, chain, "
-            "antichain, or requested interval required by the operation"
-        ),
-        assurance_basis="pinned NetworkX production capped at COMPUTED",
         checker_declarations=FINITE_POSET_EXACT_REPLAY_CHECKERS,
     )
 

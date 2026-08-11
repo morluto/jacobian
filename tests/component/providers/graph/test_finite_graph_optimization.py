@@ -11,7 +11,6 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -129,8 +128,9 @@ def test_graph_optimizer_matches_independent_small_brute_force_oracle(
             result = _invoke(graph_optimization_services, capability_id, relabeled)
 
             assert result.execution.status is ExecutionStatus.COMPLETED, case
-            assert result.output["status"] == "EXACT", case
-            assert result.output["optimum_value"] == _brute_force_optimum(
+            output = result.output["result"]
+            assert output["status"] == "EXACT", case
+            assert output["optimum_value"] == _brute_force_optimum(
                 capability_id, relabeled
             ), case
 
@@ -141,75 +141,61 @@ _WITNESS_CASES = (
         nx.cycle_graph(5, create_using=nx.Graph),
         2,
         "witness_vertices",
-        "GRAPH_DOMINATION_MINIMUM_OPTIMALITY",
     ),
     (
         "graph.matching.maximal.minimum.compute",
         nx.cycle_graph(6, create_using=nx.Graph),
         2,
         "witness_edges",
-        "GRAPH_MINIMUM_MAXIMAL_MATCHING_OPTIMALITY",
     ),
     (
         "graph.induced_forest.maximum.compute",
         nx.complete_graph(4, create_using=nx.Graph),
         2,
         "witness_vertices",
-        "GRAPH_INDUCED_FOREST_MAXIMUM_OPTIMALITY",
     ),
     (
         "graph.induced_tree.maximum.compute",
         nx.cycle_graph(4, create_using=nx.Graph),
         3,
         "witness_vertices",
-        "GRAPH_INDUCED_TREE_MAXIMUM_OPTIMALITY",
     ),
     (
         "graph.induced_bipartite.maximum.compute",
         nx.complete_graph(5, create_using=nx.Graph),
         2,
         "witness_vertices",
-        "GRAPH_INDUCED_BIPARTITE_MAXIMUM_OPTIMALITY",
     ),
 )
 
 
-def test_graph_optimizer_returns_exact_witness_and_open_obligation(
+def test_graph_optimizer_returns_exact_typed_witness(
     graph_optimization_services: DomainTestServices,
 ) -> None:
     runtime = graph_optimization_services
 
-    for capability_id, graph, optimum, witness_field, predicate in _WITNESS_CASES:
+    for capability_id, graph, optimum, witness_field in _WITNESS_CASES:
         case = capability_id
         relabeled = nx.relabel_nodes(graph, lambda vertex: f"v{vertex}")
         result = _invoke(runtime, capability_id, relabeled)
 
-        assert result.output["status"] == "EXACT", case
-        assert result.output["optimum_value"] == optimum, case
-        assert result.output["lower_bound"] == optimum, case
-        assert result.output["upper_bound"] == optimum, case
-        assert len(result.output[witness_field]) == optimum, case
-        assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE, case
+        output = result.output["result"]
+        assert output["status"] == "EXACT", case
+        assert output["optimum_value"] == optimum, case
+        assert output["lower_bound"] == optimum, case
+        assert output["upper_bound"] == optimum, case
+        assert len(output[witness_field]) == optimum, case
         assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED, case
-        assert len(result.artifact_uris) == 3, case
-        input_uri, result_uri, obligation_uri = result.artifact_uris
-        assert runtime.core.store.get(result_uri).manifest.parents == (input_uri,), case
-        obligation = runtime.core.store.get(obligation_uri)
-        assert frozenset(obligation.manifest.parents) == frozenset(
-            (input_uri, result_uri)
-        ), case
-        assert obligation.payload["predicate"] == predicate, case
-        assert result.obligations[0].obligation_uri == obligation_uri, case
+        assert result.artifact_uris == (), case
+        assert result.obligations == (), case
         if capability_id == "graph.domination.minimum.compute":
-            assert nx.is_dominating_set(relabeled, result.output["witness_vertices"]), (
-                case
-            )
+            assert nx.is_dominating_set(relabeled, output["witness_vertices"]), case
         elif capability_id == "graph.matching.maximal.minimum.compute":
-            matching = {tuple(edge) for edge in result.output["witness_edges"]}
+            matching = {tuple(edge) for edge in output["witness_edges"]}
             assert nx.is_matching(relabeled, matching), case
             assert nx.is_maximal_matching(relabeled, matching), case
         else:
-            induced = relabeled.subgraph(result.output["witness_vertices"])
+            induced = relabeled.subgraph(output["witness_vertices"])
             if capability_id == "graph.induced_forest.maximum.compute":
                 assert nx.is_forest(induced), case
             elif capability_id == "graph.induced_tree.maximum.compute":
@@ -231,18 +217,17 @@ def test_solver_call_budget_preserves_incumbent_without_claiming_optimum(
         max_solver_calls=1,
     )
 
-    assert result.output["status"] == "UNKNOWN"
-    assert result.output["optimum_value"] is None
-    assert result.output["termination_reason"] == "SOLVER_CALL_LIMIT"
-    assert result.output["lower_bound"] == 1
-    assert result.output["upper_bound"] == 4
-    assert len(result.output["witness_vertices"]) == 1
-    assert result.completeness.status is CapabilityCompletenessStatus.UNKNOWN
-    obligation = runtime.core.store.get(result.artifact_uris[2])
-    assert obligation.payload["claimed_value"] is None
+    output = result.output["result"]
+    assert output["status"] == "UNKNOWN"
+    assert output["optimum_value"] is None
+    assert output["termination_reason"] == "SOLVER_CALL_LIMIT"
+    assert output["lower_bound"] == 1
+    assert output["upper_bound"] == 4
+    assert len(output["witness_vertices"]) == 1
+    assert result.artifact_uris == ()
 
 
-def test_solver_timeout_preserves_partial_witness_as_non_conclusion(
+def test_solver_timeout_is_artifact_free_non_conclusion(
     graph_optimization_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -253,11 +238,10 @@ def test_solver_timeout_preserves_partial_witness_as_non_conclusion(
     result = _invoke(runtime, "graph.domination.minimum.compute", graph)
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.output["status"] == "UNKNOWN"
-    assert result.completeness.status is CapabilityCompletenessStatus.UNKNOWN
+    assert result.output["error"]["code"] == "GRAPH_OPTIMIZATION_TIMEOUT"
     assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.diagnostics[0].code == "GRAPH_OPTIMIZATION_TIMEOUT"
-    assert len(result.artifact_uris) == 3
+    assert result.artifact_uris == ()
 
 
 _INVALID_WITNESS_CASES = (
@@ -325,10 +309,11 @@ def test_empty_graph_boundary_is_exact_zero(
     for capability_id in _ORACLE_CAPABILITIES:
         result = _invoke(runtime, capability_id, nx.Graph())
 
-        assert result.output["status"] == "EXACT", capability_id
-        assert result.output["optimum_value"] == 0, capability_id
-        assert result.output["incumbent_value"] == 0, capability_id
-        assert result.output["termination_reason"] == "SPECIAL_CASE", capability_id
+        output = result.output["result"]
+        assert output["status"] == "EXACT", capability_id
+        assert output["optimum_value"] == 0, capability_id
+        assert output["incumbent_value"] == 0, capability_id
+        assert output["termination_reason"] == "SPECIAL_CASE", capability_id
 
 
 def test_order_budget_fails_before_artifact_writes(

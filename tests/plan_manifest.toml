@@ -133,36 +133,8 @@ selectors = [
 [[local_planning.exact_overrides]]
 path = "tests/support/process_entrypoints.py"
 selectors = [
-  "tests/boundary/process/test_worker_error_protocol.py",
-  "tests/component/plugins/test_plugin_execution.py",
-  "tests/boundary/storage/recovery/test_enumeration_failures.py",
   "tests/component/capabilities/test_capability_adapter_authority.py",
   "tests/component/capabilities/test_capability_discovery.py",
-]
-
-[[local_planning.exact_overrides]]
-path = "tests/support/search_entrypoints.py"
-selectors = [
-  "tests/component/plugins/test_plugin_execution.py",
-  "tests/component/search/test_evaluation.py",
-  "tests/component/search/test_witness_search.py",
-  "tests/boundary/storage/recovery/test_enumeration_failures.py",
-  "tests/boundary/storage/recovery/test_search_lifecycle.py",
-  "tests/boundary/storage/recovery/test_search_plugin_fail_closed.py",
-  "tests/boundary/storage/recovery/test_search_recovery.py",
-  "tests/component/conjectures/test_conjecture_workflows.py",
-]
-
-[[local_planning.exact_overrides]]
-path = "tests/support/conjecture_entrypoints.py"
-selectors = [
-  "tests/component/conjectures/test_conjecture_workflows.py",
-]
-
-[[local_planning.exact_overrides]]
-path = "tests/support/shrinking_entrypoints.py"
-selectors = [
-  "tests/boundary/process/search/test_shrinking.py",
 ]
 
 [[local_planning.exact_overrides]]
@@ -661,10 +633,6 @@ patterns = [
   "tests/support/core_capability_harnesses.py",
   "tests/support/mcp_projection_catalog.py",
   "tests/support/process_entrypoints.py",
-  "tests/support/search_entrypoints.py",
-  "tests/support/conjecture_entrypoints.py",
-  "tests/support/shrinking_entrypoints.py",
-  "tests/support/plugin_noisy_module.py",
   "tests/support/services.py",
   "tests/support/state.py",
   "tests/support/artifacts.py",

@@ -58,14 +58,5 @@ def build_combinatorics_bundle() -> DomainBundle:
                 hint="Provide bounded non-negative integers within each operation's limits.",
             )
         ),
-        scope_description="the complete supplied bounded combinatorics input",
-        completeness_basis=(
-            "exact SymPy and stdlib computation covered the supplied bounded input; "
-            "producer completion is not independent verification"
-        ),
-        assurance_basis=(
-            "exact SymPy and stdlib combinatorics; independent verification requires "
-            "an explicit domain-owned verifier invocation"
-        ),
         checker_declarations=COMBINATORICS_EXACT_REPLAY_CHECKERS,
     )

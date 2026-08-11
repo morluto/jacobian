@@ -13,7 +13,6 @@ from jacobian.canonical import (
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.validated_analysis import (
-    RationalLinearProgramObligation,
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
 )
@@ -23,13 +22,8 @@ from jacobian.domains.optimization.protocol import (
     RationalOptimizationWorkerRequest,
     parse_optimization_worker_response,
 )
-from jacobian.operations import (
-    BoundedSearchIncomplete,
-    BoundedSearchInterrupted,
-    BoundedSearchOperation,
-    BoundedSearchOutcome,
-    BoundedSearchWitness,
-)
+from jacobian.operation_bindings import inline_operation
+from jacobian.operations import OperationAbortError, OperationSpec
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessTermination,
@@ -74,7 +68,7 @@ def _run_worker(request: RationalLinearProgramRequest) -> RationalLinearProgramR
 
 def _linear_program(
     request: RationalLinearProgramRequest,
-) -> BoundedSearchOutcome[RationalLinearProgramResult]:
+) -> RationalLinearProgramResult:
     try:
         result = _run_worker(request)
     except TimeoutError:
@@ -82,103 +76,66 @@ def _linear_program(
             "The exact rational LP worker exceeded the declared wall-clock "
             "budget; no feasibility or optimality conclusion is available."
         )
-        return BoundedSearchInterrupted(
-            value=RationalLinearProgramResult(status="TIMEOUT", detail=detail),
-            status=ExecutionStatus.TIMEOUT,
-            diagnostic=CapabilityDiagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.TIMEOUT,
+            CapabilityDiagnostic(
                 code="RATIONAL_LINEAR_PROGRAM_TIMEOUT",
                 stage="rational_optimization_backend",
                 message=detail,
             ),
-        )
+        ) from None
     except (OSError, RuntimeError, ValueError):
         detail = (
             "The exact rational LP worker failed or returned malformed "
             "output; no feasibility or optimality conclusion is available."
         )
-        return BoundedSearchInterrupted(
-            value=RationalLinearProgramResult(
-                status="BACKEND_ERROR",
-                detail=detail,
-            ),
-            status=ExecutionStatus.ERROR,
-            diagnostic=CapabilityDiagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            CapabilityDiagnostic(
                 code="RATIONAL_LINEAR_PROGRAM_BACKEND_ERROR",
                 stage="rational_optimization_backend",
                 message=detail,
             ),
-        )
-    if result.status == "CERTIFICATE_PRODUCED":
-        return BoundedSearchWitness(result)
-    return BoundedSearchIncomplete(result)
-
-
-def _scope(
-    request: RationalLinearProgramRequest,
-    _result: RationalLinearProgramResult,
-) -> dict[str, object]:
-    return {
-        "variables": len(request.program.variables),
-        "constraints": len(request.program.coefficients),
-        "wall_seconds": request.wall_seconds,
-        "standard_form": "MIN_CX; AX_EQUALS_B; X_NONNEGATIVE",
-    }
-
-
-def _obligation(
-    request: RationalLinearProgramRequest,
-    result: RationalLinearProgramResult,
-) -> RationalLinearProgramObligation:
-    return RationalLinearProgramObligation(
-        program=request.program,
-        status=result.status,
-        primal_candidate=result.primal_candidate,
-        dual_candidate=result.dual_candidate,
-    )
+        ) from None
+    return result
 
 
 RATIONAL_LINEAR_CAPABILITIES = (
-    BoundedSearchOperation(
-        capability_id="optimization.linear.rational_optimum.compute",
-        title="Produce a rational linear-program optimum certificate",
-        description=(
-            "Use bounded exact SymPy simplex calls to produce primal and dual "
-            "candidates for a standard-form rational linear program."
-        ),
-        request_model=RationalLinearProgramRequest,
-        result_model=RationalLinearProgramResult,
-        implementation=_linear_program,
-        relation_id="optimization.linear.rational_optimum.relation",
-        scope_parameters=_scope,
-        is_complete=lambda result: result.status == "CERTIFICATE_PRODUCED",
-        obligation_model=RationalLinearProgramObligation,
-        obligation=_obligation,
-        incomplete_basis=(
-            "bounded exact optimization did not produce primal and dual "
-            "candidates with equal exact objective values"
-        ),
-        tags=(
-            "optimization",
-            "linear-program",
-            "rational",
-            "certificate",
-            "bounded",
-        ),
-        invocation_examples=(
-            example(
-                "one_variable_unit_lp",
-                "Optimize x subject to x=1 and x>=0.",
-                {
-                    "program": {
-                        "variables": ["x"],
-                        "objective": [{"num": "1", "den": "1"}],
-                        "coefficients": [[{"num": "1", "den": "1"}]],
-                        "rhs": [{"num": "1", "den": "1"}],
-                    },
-                    "wall_seconds": 5,
-                },
+    inline_operation(
+        OperationSpec(
+            operation_id="optimization.linear.rational_optimum.compute",
+            version="1",
+            title="Produce a rational linear-program optimum certificate",
+            description=(
+                "Use bounded exact SymPy simplex calls to produce primal and dual "
+                "candidates for a standard-form rational linear program."
             ),
-        ),
+            request_type=RationalLinearProgramRequest,
+            result_type=RationalLinearProgramResult,
+            execute=_linear_program,
+            tags=(
+                "optimization",
+                "linear-program",
+                "rational",
+                "certificate",
+                "bounded",
+            ),
+            invocation_examples=(
+                example(
+                    "one_variable_unit_lp",
+                    "Optimize x subject to x=1 and x>=0.",
+                    {
+                        "program": {
+                            "variables": ["x"],
+                            "objective": [{"num": "1", "den": "1"}],
+                            "coefficients": [[{"num": "1", "den": "1"}]],
+                            "rhs": [{"num": "1", "den": "1"}],
+                        },
+                        "wall_seconds": 5,
+                    },
+                ),
+            ),
+        )
     ),
 )
 

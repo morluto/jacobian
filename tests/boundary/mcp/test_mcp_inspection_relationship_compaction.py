@@ -20,10 +20,10 @@ def test_math_find_compacts_exact_inspection_relationships(
 
     target_id = "polynomial.integer.compute.gcd"
     catalog_ids = tuple(
-        operation.capability_id
+        operation.spec.operation_id
         for bundle in build_builtin_domain_bundles()
         for operation in bundle.capabilities
-        if operation.capability_id != target_id
+        if operation.spec.operation_id != target_id
     )
     monkeypatch.setitem(
         projections._RELATED_CAPABILITIES,

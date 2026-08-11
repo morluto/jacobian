@@ -16,7 +16,6 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.polynomials import install_polynomial_capabilities
 from jacobian.polynomials.resources import PolynomialInstallation
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -42,11 +41,6 @@ def open_polynomial_services(
         checker_authority=checker_authority,
     ) as services:
         with atomic_installation(services.core):
-            for adapter in install_atomic_capabilities(
-                services.installation,
-                services.application,
-            ):
-                services.installation.register_capability(adapter)
             adapters, polynomial = install_polynomial_capabilities(
                 services.core.store,
                 services.core.schemas,

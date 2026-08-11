@@ -9,8 +9,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
-    CapabilityObligationStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -25,7 +23,7 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
-def test_arb_point_enclosure_materializes_exact_dyadics_and_obligation(
+def test_arb_point_enclosure_returns_exact_dyadics(
     domain_services: DomainTestServices,
 ) -> None:
     runtime = domain_services
@@ -43,20 +41,15 @@ def test_arb_point_enclosure_materializes_exact_dyadics_and_obligation(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "ENCLOSED"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["lower"]["mantissa"]
-    assert result.output["upper"]["mantissa"]
-    assert result.output["relative_accuracy_bits"] >= 120
+    output = result.output["result"]
+    assert output["status"] == "ENCLOSED"
+    assert output["conclusion"] == "UNKNOWN"
+    assert output["lower"]["mantissa"]
+    assert output["upper"]["mantissa"]
+    assert output["relative_accuracy_bits"] >= 120
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert len(result.artifact_uris) == 3
-    assert result.obligations[0].status is CapabilityObligationStatus.OPEN
-    obligation = runtime.core.store.get(result.obligations[0].obligation_uri)
-    assert obligation.payload["required_checker"] == (
-        "AUTHORIZED_INDEPENDENT_BALL_ARITHMETIC"
-    )
-    assert set(obligation.manifest.parents) == set(result.artifact_uris[:2])
+    assert result.artifact_uris == ()
+    assert result.obligations == ()
 
 
 def test_arb_nonfinite_and_timeout_are_non_conclusions(
@@ -75,12 +68,11 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
         )
     )
 
-    assert nonfinite.output["status"] == "NONFINITE"
-    assert nonfinite.output["lower"] is None
-    assert nonfinite.output["upper"] is None
-    assert nonfinite.output["conclusion"] == "UNKNOWN"
-    assert nonfinite.completeness.status is CapabilityCompletenessStatus.UNKNOWN
-    assert nonfinite.obligations[0].status is CapabilityObligationStatus.OPEN
+    output = nonfinite.output["result"]
+    assert output["status"] == "NONFINITE"
+    assert output["lower"] is None
+    assert output["upper"] is None
+    assert output["conclusion"] == "UNKNOWN"
 
     from jacobian.domains.analysis import operations
 
@@ -100,9 +92,7 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
     )
 
     assert timed_out.execution.status is ExecutionStatus.TIMEOUT
-    assert timed_out.output["status"] == "TIMEOUT"
-    assert timed_out.output["conclusion"] == "UNKNOWN"
+    assert timed_out.output["error"]["code"] == "ARB_POINT_ENCLOSURE_TIMEOUT"
     assert timed_out.diagnostics[0].code == "ARB_POINT_ENCLOSURE_TIMEOUT"
     assert timed_out.assurance.level is CapabilityAssuranceLevel.HEURISTIC
-    assert timed_out.completeness.status is CapabilityCompletenessStatus.UNKNOWN
-    assert timed_out.obligations[0].status is CapabilityObligationStatus.OPEN
+    assert timed_out.obligations == ()

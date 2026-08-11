@@ -7,7 +7,7 @@ from pathlib import Path
 from jacobian.installation.context import create_installation_context
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import RuntimeOptions
-from jacobian.runtime.services import build_application_services
+from jacobian.runtime.services import build_runtime_services
 
 
 class RuntimeClosedError(RuntimeError):
@@ -24,7 +24,7 @@ class JacobianRuntime:
         try:
             from jacobian.portfolio import install_portfolio
 
-            self.services = services = build_application_services(self.core)
+            self.services = services = build_runtime_services(self.core)
             installation = create_installation_context(
                 self.core,
                 self.services,
@@ -33,7 +33,6 @@ class JacobianRuntime:
             self.portfolio = install_portfolio(
                 installation,
                 self.services,
-                capability_adapter_entrypoints=options.capability_adapter_entrypoints,
             )
         except BaseException as exc:
             cleanup_failures: list[BaseException] = []

@@ -15,10 +15,7 @@ from jacobian.contracts.formal_datasets import (
     formal_dataset_diagnostics,
     formal_dataset_preprocessing,
 )
-from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedSuccess,
-)
+from jacobian.operations import OperationRefusalError
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
 
 
@@ -81,13 +78,13 @@ def _materialize_payload(
 
 def _materialize_operation(
     validated: FormalDatasetMaterializeRequest,
-) -> ComputedSuccess[FormalDatasetArtifact] | ComputedNotApplicable:
+) -> FormalDatasetArtifact:
     payload = _materialize_payload(validated)
     if (
         validated.expected_row_digest is not None
         and validated.expected_row_digest != payload.row_digest
     ):
-        return ComputedNotApplicable(
+        raise OperationRefusalError(
             CapabilityDiagnostic(
                 code="FORMAL_DATASET_ROW_DIGEST_MISMATCH",
                 stage="source_binding",
@@ -95,4 +92,4 @@ def _materialize_operation(
                 hint="Re-fetch the pinned row or update the digest explicitly.",
             )
         )
-    return ComputedSuccess(payload)
+    return payload

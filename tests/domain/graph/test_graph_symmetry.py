@@ -253,5 +253,5 @@ def test_multibyte_payload_over_artifact_budget_is_a_scored_input_error(
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].code == "REQUEST_RESOURCE_LIMIT_EXCEEDED"
     assert result.artifact_uris == ()

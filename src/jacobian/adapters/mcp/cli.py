@@ -59,12 +59,6 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--capability-adapter",
-        action="append",
-        default=[],
-        help="operator-approved package.module:factory entrypoint; repeatable",
-    )
-    parser.add_argument(
         "--capability-policy-profile",
         choices=("DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"),
         default="DEFAULT",
@@ -148,7 +142,6 @@ def main() -> None:
             parser.error("remote authentication options cannot be used with stdio")
         create_server(
             state_dir=args.state_dir,
-            capability_adapter_entrypoints=tuple(args.capability_adapter),
             capability_policy=capability_policy,
         ).run("stdio")
         return
@@ -186,7 +179,6 @@ def main() -> None:
         anonymous_tenant_id=args.anonymous_tenant_id,
         token_verifier=token_verifier,
         auth=auth,
-        capability_adapter_entrypoints=tuple(args.capability_adapter),
         capability_policy=capability_policy,
         max_tenant_runtimes=args.max_tenant_runtimes,
         tenant_idle_timeout_seconds=args.tenant_idle_timeout_seconds,

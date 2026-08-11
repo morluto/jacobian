@@ -50,9 +50,9 @@ when its checker is operator authorized. The proof verification capability
 also requires an available authorized DRAT-trim runtime.
 
 The SAT schemas are model backed. JSON Schema checks their closed structural
-shape, and the same registry validation path also applies the domain
-cross-field invariants before `artifact.put` commits a payload. Runtime
-construction re-registers those model contracts after restart.
+shape, and the SAT producer applies the domain cross-field invariants before
+publishing a typed artifact. Runtime construction re-registers those model
+contracts after restart.
 
 ## Canonical CNF
 
@@ -206,7 +206,7 @@ failures. None creates solver evidence or an opposite conclusion.
 
 ## Assignment verification
 
-`sat.model.verify` accepts one `assignment_uri` in `VERIFY` mode. Before
+`sat.model.verify` accepts one `assignment_uri`. Before
 starting a checker process, its adapter:
 
 1. validates the stored assignment with the model-backed schema;
@@ -251,7 +251,7 @@ limit, and this contract bounds the base64 field to 8,000,000 characters.
 
 ## UNSAT proof verification
 
-`sat.unsat_proof.verify` accepts one `proof_uri` in `VERIFY` mode. Its adapter
+`sat.unsat_proof.verify` accepts one `proof_uri`. Its adapter
 resolves the raw proof and exact parent CNF, re-derives every CNF binding field,
 requires the source lineage, and materializes a `sat.unsat-proof@1`
 `CertificateEnvelope`. The certificate binds the CNF claim, proof candidate,

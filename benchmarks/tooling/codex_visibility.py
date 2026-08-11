@@ -303,27 +303,6 @@ async def inspect_surface(url: str, timeout_seconds: float) -> dict[str, Any]:
     return {**snapshot, "surface_digest": _json_digest(snapshot)}
 
 
-def _copy_skill(skill: Path, workspace: Path) -> str | None:
-    if not skill.exists():
-        raise ValueError(f"skill directory does not exist: {skill}")
-    entries = sorted(skill.rglob("*"))
-    if any(path.is_symlink() for path in entries):
-        raise ValueError(f"skill directory contains a symbolic link: {skill}")
-    files = [path for path in entries if path.is_file()]
-    if not files or not (skill / "SKILL.md").is_file():
-        raise ValueError(f"skill directory has no SKILL.md: {skill}")
-    target = workspace / ".agents/skills" / skill.name
-    records: list[dict[str, str]] = []
-    for source in files:
-        relative = source.relative_to(skill)
-        destination = target / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        content = source.read_bytes()
-        destination.write_bytes(content)
-        records.append({"path": relative.as_posix(), "sha256": _sha256_bytes(content)})
-    return _json_digest(records)
-
-
 def _codex_arguments(
     *,
     workspace: Path,
@@ -474,11 +453,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout-seconds", type=float, default=300)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
-        "--skill",
-        type=Path,
-        help="optional Codex skill copied into the isolated evaluation workspace",
-    )
-    parser.add_argument(
         "--execute",
         action="store_true",
         help="confirm that paid/external Codex model calls may run",
@@ -583,11 +557,6 @@ def main() -> None:
     output.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="jacobian-codex-visibility-") as raw:
         workspace = Path(raw)
-        skill_digest = (
-            _copy_skill(args.skill.resolve(strict=True), workspace)
-            if args.skill is not None
-            else None
-        )
         codex_version = _command_version(workspace)
         runs = [
             _run_case(
@@ -617,7 +586,6 @@ def main() -> None:
         "condition": {
             "mcp_url": args.mcp_url,
             "surface": surface,
-            "skill_digest": skill_digest,
             "evaluator": {
                 "runner_sha256": _sha256_bytes(Path(__file__).read_bytes()),
                 "telemetry_parser_sha256": _sha256_bytes(

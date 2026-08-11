@@ -56,18 +56,6 @@ def build_graph_symmetry_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description=(
-            "the complete vertex and edge actions of every declared graph automorphism "
-            "generator"
-        ),
-        completeness_basis=(
-            "finite orbit closure under every declared generator and its inverse "
-            "via NetworkX UnionFind"
-        ),
-        assurance_basis=(
-            "exact NetworkX UnionFind computation capped at COMPUTED; independent "
-            "replay is available through graph.symmetry.generator_orbits.verify"
-        ),
         checker_declarations=GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
     )
 

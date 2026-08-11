@@ -17,6 +17,7 @@ from tests.support.services import (
 )
 
 from jacobian.canonical import canonicalize_json
+from jacobian.checker_authorization import install_polytope_checkers
 from jacobian.contracts.polytope import PolytopeSeparateRequest
 from jacobian.runtime.config import CheckerAuthorityMode
 
@@ -35,12 +36,11 @@ def polytope_services(tmp_path: Path) -> Iterator[PolytopeTestServices]:
     ) as services:
         polytope = services.application.polytope
         with atomic_installation(services.core):
-            checkers = (
-                services.application.reference_installer.install_polytope_checkers(
-                    claim_schema_uri=polytope.claim_schema_uri,
-                    semantics_uri=polytope.semantics_uri,
-                    point_schema_uri=polytope.point_schema_uri,
-                )
+            checkers = install_polytope_checkers(
+                services.core.checkers,
+                claim_schema_uri=polytope.claim_schema_uri,
+                semantics_uri=polytope.semantics_uri,
+                point_schema_uri=polytope.point_schema_uri,
             )
         assert checkers.witness_checker_id is not None
         assert checkers.certificate_checker_id is not None

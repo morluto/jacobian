@@ -63,13 +63,4 @@ def build_arithmetic_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="the complete supplied bounded exact arithmetic input",
-        completeness_basis=(
-            "deterministic exact computation covered the supplied input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "deterministic exact arithmetic from the pinned stdlib/SymPy runtime; "
-            "no independent checker invoked"
-        ),
     )

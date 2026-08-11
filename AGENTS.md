@@ -69,18 +69,21 @@ artifact, provider-loading, or installation objects.
 
 ### Mathematical interoperability
 
-Capabilities interoperate through shared, typed domain values and artifacts—not
-backend-specific objects, JSON round-trips, or wire encodings. Reuse existing
-contract models and typed kernels; add explicit domain-owned conversions when
-representations differ. Cover producer-to-consumer compatibility and canonical
-or backend-native round trips in tests. Architecture checks must reject internal
-JSON round-trips and unsafe canonical conversions.
+Operations interoperate through shared, typed domain values and artifacts—not
+backend-specific objects, JSON round-trips, or wire encodings. Domain values
+live beside their public functions under `jacobian.math.<domain>.values`;
+`jacobian.contracts` is limited to genuinely cross-domain passive primitives.
+Add explicit domain-owned conversions when representations differ. Cover
+producer-to-consumer compatibility and canonical or backend-native round trips
+in tests. Architecture checks must reject internal JSON round-trips and unsafe
+canonical conversions.
 
-Shared Pydantic mathematical contracts own provider-independent value identity.
-Domain-owned conversions connect them to backend-native computational values,
-and typed kernels sit below both capability operations and `jacobian.math`. Do
-not add a universal backend wrapper, automatic coercion framework, generic
-conversion language, or second semantic type system above maintained libraries.
+Domain values own provider-independent identity. Private backend conversions
+connect them to computational values. Every public mathematical function has
+one canonical semantic input type; use a maintained backend type only when it
+already carries complete semantics. Do not add a universal backend wrapper,
+automatic coercion framework, generic conversion language, or second semantic
+type system above maintained libraries.
 
 Canonical decimal strings are wire and persistence values, not computational
 values. Use the canonical conversion API before calling backends or constructing
@@ -90,12 +93,21 @@ thin adapters, and test above 4,300 digits whenever the contract permits it.
 
 Keep Pydantic models authoritative at capability, persistence, artifact, and
 wire boundaries. Domain implementations and operation factories must preserve
-their concrete request, result, and obligation types: do not accept
-`Callable[[ContractModel], ContractModel]`, cast a validated request back to a
-domain model, or erase bounded-search obligation types. When a native API and a
-capability expose the same outcome, share one typed mathematical kernel and use
-explicit domain-owned conversions rather than duplicating the mathematics or
-introducing a generic conversion framework.
+their concrete request and result types: do not accept
+`Callable[[ContractModel], ContractModel]` or cast a validated request back to a
+domain model. A bounded operation records exact, incomplete, or unknown status
+in its domain result instead of adding generic completeness or obligation
+wrappers. When a native API and a capability expose the same outcome, share one
+typed mathematical kernel and use explicit domain-owned conversions rather
+than duplicating the mathematics or introducing a generic conversion framework.
+
+Shared abstractions require two surviving production paths and must delete the
+older duplication in the same change. An ordinary operation should need at most
+one public domain function, one request model when necessary, one rich result
+model when necessary, one semantic operation declaration, and one external
+publication binding only when inline transport is insufficient. Publication
+owns transport only; it does not own mathematical validation, applicability,
+provider selection, effects, parsing, or checker authority.
 
 At the MCP boundary, prefer MCP Python SDK 2.0 high-level typed returns. Return
 Pydantic result models directly and let the SDK derive the output schema,
@@ -150,8 +162,8 @@ checker authorization out of plugins and search code.
 - Validate the complete Pydantic request model before computation or artifact
   writes. JSON Schema supports discovery; it does not replace cross-field
   validation.
-- `COMPLETED` bounded execution may still have `UNKNOWN` completeness and open
-  obligations. Execution completion does not establish optimality or a
+- A `COMPLETED` bounded operation may return a domain result marked `UNKNOWN` or
+  `INCOMPLETE`. Execution completion alone does not establish optimality or a
   mathematical conclusion.
 - Include every first-class artifact reference, including verification records,
   in the result's `artifact_uris`.

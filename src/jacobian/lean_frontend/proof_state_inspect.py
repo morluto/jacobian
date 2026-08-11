@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
     CapabilityAssuranceLevel,
@@ -42,7 +43,6 @@ from jacobian.lean_frontend._state_validation import (
     _StoredProofStateResources,
 )
 from jacobian.lean_frontend.artifacts import _environment_digest
-from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 

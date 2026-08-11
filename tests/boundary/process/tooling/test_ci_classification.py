@@ -76,7 +76,7 @@ def _expected_plan(classification: str, *enabled: str) -> dict[str, str]:
             ),
         ),
         (
-            ("tests/composition/runtime/test_runtime_lifecycle.py",),
+            ("tests/composition/runtime/test_portfolio_installation.py",),
             _expected_plan(
                 "python",
                 "run-python",
@@ -100,7 +100,7 @@ def _expected_plan(classification: str, *enabled: str) -> dict[str, str]:
         (
             (
                 "tests/unit/test_runtime.py",
-                "tests/composition/runtime/test_runtime_lifecycle.py",
+                "tests/composition/runtime/test_portfolio_installation.py",
             ),
             _expected_plan(
                 "python",

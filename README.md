@@ -82,42 +82,19 @@ JavaScript dependency tree.
 To run the exact code in a clone, follow
 [Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
 
-## A simple counterexample
+## Compute, then check when needed
 
-Here is a small counterexample an agent can reason about directly:
+An ordinary operation returns mathematics first. For example,
+`matrix.determinant.compute` accepts one exact rational matrix and returns its
+determinant inline. If independent replay matters, the agent may separately run
+`matrix.determinant.verify` with that exact input and candidate result.
 
-```text
-Claim: every prime is odd
-Agent checks: 2 is prime and even
-Counterexample: 2
-Conclusion: the claim is false
-```
+The producer and checker are distinct catalog IDs with independent
+implementations. Computation does not certify itself, and a timeout,
+cancellation, error, or incomplete bounded search remains a non-conclusion.
 
-Here `2` is a witness: the actual example that disproves the claim. For a much
-larger search, Jacobian can preserve the candidate and the exact checks used to
-establish it.
-
-## A checked counterexample
-
-Suppose an agent is testing the claim **“`F` is injective.”**
-
-A search returns two points, `p` and `q`, with the same image. That is a
-candidate counterexample, not yet a trusted conclusion.
-
-```text
-p ≠ q
-F(p) - F(q) = 0
-```
-
-An independent checker confirms those relations exactly. The checked collision
-can then be bound to the original claim and checker identity, producing
-`FALSE · VERIFIED`.
-
-If the search finds nothing, times out, is cancelled, or fails, the claim
-remains `UNKNOWN`. Absence of a witness is not proof.
-
-The [introductory tutorial](docs/tutorials/first-verified-result.md) shows the
-same boundary in a runnable graph example.
+The [introductory tutorial](docs/tutorials/first-verified-result.md) runs this
+determinant pair through the public MCP surface.
 
 ## Available mathematics
 
@@ -144,32 +121,27 @@ requirements.
 
 ## Verification model
 
-Jacobian separates finding evidence from deciding what that evidence proves.
-Search, generation, evaluation, and computation cannot certify their own
-conclusions.
+Jacobian separates mathematical production from independent checking. A
+producer cannot certify its own output.
 
 ```text
-Claim → Candidate → Independent check → Record
+Subject + Candidate → Independent checker → Bound record
 ```
 
 Only an operator-authorized checker may emit a verified record, bound to the
-exact claim, candidate, scope, semantics, certificate format, and checker
-identity. Plugins and search code cannot authorize a checker or change
-verification policy.
+exact subject, candidate, evidence, protocol, scope, semantics, certificate
+format, and checker identity. Availability and provider provenance do not grant
+that authority.
 
 > **No witness is not proof.** A failed search, timeout, cancellation, error,
 > or completed bounded search without a witness leaves the claim `UNKNOWN`.
-
-A formal claim may still be a poor translation of the informal conjecture.
-Jacobian records that correspondence and its review status; schema validation
-does not establish it automatically.
 
 The [architecture document](docs/explanation/architecture.md) describes the
 complete trust boundary.
 
 ## Status
 
-Jacobian 0.6.0 is a pre-stable release. Its published package, capability, and
+Jacobian 0.11.0 is a pre-stable release. Its published package, capability, and
 artifact contracts describe the current supported surface; ongoing capability
 research may change experimental contracts between releases.
 

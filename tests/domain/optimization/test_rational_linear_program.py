@@ -10,7 +10,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityObligationStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -47,23 +46,18 @@ def test_rational_lp_produces_inspectable_primal_dual_certificate(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "CERTIFICATE_PRODUCED"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["primal_candidate"] == [_rational(1), _rational(0)]
-    assert result.output["dual_candidate"] == [_rational(1)]
-    assert result.output["primal_objective"] == _rational(1)
-    assert result.output["dual_objective"] == _rational(1)
-    assert result.output["primal_residuals"] == [_rational(0)]
-    assert result.output["dual_slacks"] == [_rational(0), _rational(1)]
-    assert result.output["verification"] == "UNVERIFIED"
+    output = result.output["result"]
+    assert output["status"] == "CERTIFICATE_PRODUCED"
+    assert output["conclusion"] == "UNKNOWN"
+    assert output["primal_candidate"] == [_rational(1), _rational(0)]
+    assert output["dual_candidate"] == [_rational(1)]
+    assert output["primal_objective"] == _rational(1)
+    assert output["dual_objective"] == _rational(1)
+    assert output["primal_residuals"] == [_rational(0)]
+    assert output["dual_slacks"] == [_rational(0), _rational(1)]
+    assert output["verification"] == "UNVERIFIED"
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.obligations[0].status is CapabilityObligationStatus.OPEN
-    obligation = runtime.core.store.get(result.obligations[0].obligation_uri)
-    assert obligation.payload["required_checks"] == [
-        "PRIMAL_FEASIBILITY",
-        "DUAL_FEASIBILITY",
-        "OBJECTIVE_EQUALITY",
-    ]
+    assert result.obligations == ()
 
 
 def test_rational_lp_dual_variables_are_unrestricted_and_dimension_bound(
@@ -88,17 +82,13 @@ def test_rational_lp_dual_variables_are_unrestricted_and_dimension_bound(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "CERTIFICATE_PRODUCED"
-    assert result.output["primal_candidate"] == [_rational(1), _rational(2)]
-    assert result.output["dual_candidate"] == [_rational(-1), _rational(3)]
-    assert result.output["primal_objective"] == _rational(5)
-    assert result.output["dual_objective"] == _rational(5)
-    assert result.output["dual_slacks"] == [_rational(0), _rational(0)]
-
-    obligation = domain_services.core.store.get(result.obligations[0].obligation_uri)
-    assert len(obligation.payload["dual_candidate"]) == len(
-        obligation.payload["program"]["coefficients"]
-    )
+    output = result.output["result"]
+    assert output["status"] == "CERTIFICATE_PRODUCED"
+    assert output["primal_candidate"] == [_rational(1), _rational(2)]
+    assert output["dual_candidate"] == [_rational(-1), _rational(3)]
+    assert output["primal_objective"] == _rational(5)
+    assert output["dual_objective"] == _rational(5)
+    assert output["dual_slacks"] == [_rational(0), _rational(0)]
 
 
 def test_rational_lp_obligation_rejects_wrong_candidate_dimensions() -> None:

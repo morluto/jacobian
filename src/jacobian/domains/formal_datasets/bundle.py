@@ -11,11 +11,12 @@ from jacobian.contracts.formal_datasets import (
 )
 from jacobian.domains._examples import example
 from jacobian.formal_datasets import _materialize_operation
+from jacobian.operation_bindings import durable_operation
 from jacobian.operations import (
     DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
-    MaterializedOperation,
+    OperationSpec,
 )
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
@@ -46,54 +47,55 @@ def build_formal_dataset_bundle() -> DomainBundle:
             f"mathlib-{MATHLIB_COMMIT}"
         ),
         capabilities=(
-            MaterializedOperation(
-                capability_id="dataset.formal.materialize",
-                title="Materialize one pinned formal-dataset row",
-                description=(
-                    "Normalize one MiniF2F or ProofNet row and bind its dataset, "
-                    "source, Lean-project, preprocessing, and execution provenance."
+            durable_operation(
+                OperationSpec(
+                    operation_id="dataset.formal.materialize",
+                    version="3",
+                    title="Materialize one pinned formal-dataset row",
+                    description=(
+                        "Normalize one MiniF2F or ProofNet row and bind its dataset, "
+                        "source, Lean-project, preprocessing, and execution provenance."
+                    ),
+                    request_type=FormalDatasetMaterializeRequest,
+                    result_type=FormalDatasetArtifact,
+                    execute=_materialize_operation,
+                    tags=("dataset", "formal-mathematics", "lean", "provenance"),
+                    invocation_examples=(
+                        example(
+                            "minif2f_core_true",
+                            "Materialize a pinned MiniF2F-style CORE fixture.",
+                            {
+                                "dataset_revision": "fixture-revision-1",
+                                "sample_id": "core_true",
+                                "source_url": "https://example.invalid/minif2f/core_true",
+                                "row": {
+                                    "dataset_id": "MINIF2F",
+                                    "name": "core_true",
+                                    "split": "test",
+                                    "formal_statement": (
+                                        "theorem core_true : True := by trivial"
+                                    ),
+                                    "goal": "True",
+                                    "informal_statement": "True holds.",
+                                    "header": "",
+                                },
+                                "environment": {
+                                    "lean_version": LEAN_VERSION,
+                                    "project_source_url": (
+                                        "https://example.invalid/formal-project"
+                                    ),
+                                    "project_revision": "fixture-project-1",
+                                    "imports": [],
+                                    "project_files": [],
+                                },
+                            },
+                        ),
+                    ),
                 ),
-                request_model=FormalDatasetMaterializeRequest,
-                result_model=FormalDatasetArtifact,
-                implementation=_materialize_operation,
-                relation_id="dataset.formal.materialization",
-                tags=("dataset", "formal-mathematics", "lean", "provenance"),
                 resource_reason=(
                     "durable identity is required to bind the normalized row to "
                     "pinned dataset and formal-provider provenance"
                 ),
-                invocation_examples=(
-                    example(
-                        "minif2f_core_true",
-                        "Materialize a pinned MiniF2F-style CORE fixture.",
-                        {
-                            "dataset_revision": "fixture-revision-1",
-                            "sample_id": "core_true",
-                            "source_url": "https://example.invalid/minif2f/core_true",
-                            "row": {
-                                "dataset_id": "MINIF2F",
-                                "name": "core_true",
-                                "split": "test",
-                                "formal_statement": (
-                                    "theorem core_true : True := by trivial"
-                                ),
-                                "goal": "True",
-                                "informal_statement": "True holds.",
-                                "header": "",
-                            },
-                            "environment": {
-                                "lean_version": LEAN_VERSION,
-                                "project_source_url": (
-                                    "https://example.invalid/formal-project"
-                                ),
-                                "project_revision": "fixture-project-1",
-                                "imports": [],
-                                "project_files": [],
-                            },
-                        },
-                    ),
-                ),
-                version="3",
             ),
         ),
         diagnostics=DomainDiagnostics(
@@ -103,13 +105,5 @@ def build_formal_dataset_bundle() -> DomainBundle:
                 message="The formal-dataset materialization request is invalid.",
                 hint="Provide a supported row with pinned dataset and environment data.",
             )
-        ),
-        scope_description="one complete pinned formal-dataset row",
-        completeness_basis=(
-            "the complete declared row was normalized and provenance-bound"
-        ),
-        assurance_basis=(
-            "deterministic materialization only; no theorem truth, proof validity, "
-            "or informal-formal correspondence was assessed"
         ),
     )

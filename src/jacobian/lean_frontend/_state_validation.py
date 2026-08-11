@@ -8,6 +8,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateArtifact
@@ -16,7 +17,6 @@ from jacobian.lean_frontend.artifacts import (
     _source_digest,
     _state_digest_payload,
 )
-from jacobian.references import LeanCheckerInstallation
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
 

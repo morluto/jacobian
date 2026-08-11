@@ -25,6 +25,7 @@ from jacobian.contracts.matrix_operations import (
     MAX_INPUT_SCALAR_DIGITS,
     IntegerMatrixRequest,
     LatticeReductionRequest,
+    LatticeReductionResult,
     MatrixProductResult,
     MatrixTraceResult,
     NullspaceResult,
@@ -38,7 +39,7 @@ from jacobian.domains.matrix_lattice.capabilities import matrix_operation
 from jacobian.domains.matrix_lattice.lattice import reduce_lattice_basis
 from jacobian.domains.matrix_lattice.lattice_bundle import build_lattice_bundle
 from jacobian.domains.matrix_lattice.operations import compute_smith_normal_form
-from jacobian.operations import ComputedSuccess, OperationExecutionFailure
+from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
@@ -446,14 +447,13 @@ def test_matrix_output_contract_failure_is_operational_error() -> None:
         SquareIntegerMatrixRequest,
         MatrixTraceResult,
         lambda _request: MatrixTraceResult(trace="9" * (MAX_MATRIX_SCALAR_DIGITS + 1)),
-        "matrix.relation.test-of",
     )
 
-    outcome = operation.implementation(request)
+    with raises(OperationAbortError) as exc_info:
+        operation.spec.execute(request)
 
-    assert isinstance(outcome, OperationExecutionFailure)
-    assert outcome.status is ExecutionStatus.ERROR
-    assert outcome.diagnostic.code == "MATRIX_OUTPUT_LIMIT_EXCEEDED"
+    assert exc_info.value.status is ExecutionStatus.ERROR
+    assert exc_info.value.diagnostic.code == "MATRIX_OUTPUT_LIMIT_EXCEEDED"
 
 
 def test_smith_normal_form_preserves_rectangular_shape_and_zero_tail() -> None:
@@ -494,10 +494,10 @@ def test_lll_worker_allows_result_growth_beyond_input_digit_limit() -> None:
             )
         )
     )
-    assert isinstance(outcome, ComputedSuccess)
+    assert isinstance(outcome, LatticeReductionResult)
     largest_output = max(
         len(value.lstrip("-"))
-        for matrix in (outcome.value.reduced_basis, outcome.value.transformation)
+        for matrix in (outcome.reduced_basis, outcome.transformation)
         for row in matrix.entries
         for value in row
     )

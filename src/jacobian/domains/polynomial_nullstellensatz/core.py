@@ -502,7 +502,7 @@ def install_nullstellensatz_core(
             NullstellensatzVerificationRequest: envelope_schema_uri,
         },
         result_schema_uris={MATERIALIZE_CAPABILITY_ID: system_schema_uri},
-        obligation_schema_uris={
+        named_schema_uris={
             "nullstellensatz_certificate_bundle": bundle_schema_uri,
             "certificate_envelope": envelope_schema_uri,
         },

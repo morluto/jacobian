@@ -22,7 +22,6 @@ from jacobian.contracts.checkers import CheckerDecision, EvidenceKind
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
-    PreservationEnvelope,
     WitnessEnvelope,
 )
 from jacobian.contracts.exact_domain_verification import (
@@ -41,11 +40,6 @@ from jacobian.contracts.results import (
     Method,
     ResultEnvelope,
     Verification,
-)
-from jacobian.contracts.transformations import (
-    TransformationClaim,
-    TransformationEnvelope,
-    TransformationVerificationRecord,
 )
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.process_policy import (
@@ -158,18 +152,6 @@ class VerificationService:
                     "input and candidate values"
                 )
             },
-        )
-        self.preservation_schema_uri = store.register_descriptor(
-            kind="schema",
-            name="jacobian.preservation-envelope",
-            version="1",
-            definition=model_schema(PreservationEnvelope),
-        )
-        self.transformation_record_schema_uri = store.register_descriptor(
-            kind="schema",
-            name="jacobian.transformation-verification-record",
-            version="1",
-            definition=model_schema(TransformationVerificationRecord),
         )
 
     def _semantics_digest(self, artifact: StoredArtifact) -> str:
@@ -636,229 +618,6 @@ class VerificationService:
         except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
 
-    def verify_transformation(
-        self,
-        *,
-        transformation_uri: str,
-        timeout_seconds: float | None = None,
-    ) -> ResultEnvelope:
-        """Replay a representation relation with an authorized checker."""
-
-        started = time.monotonic()
-        try:
-            transformation_artifact = self.store.get(transformation_uri)
-            self._validate_artifact(transformation_artifact)
-            transformation = TransformationEnvelope.model_validate(
-                transformation_artifact.payload
-            )
-            claim, source, target = self._load_transformation_inputs(transformation)
-            self._validate_artifacts((claim, source, target))
-            parsed_claim = TransformationClaim.model_validate(claim.payload)
-            if (
-                parsed_claim.transform_format,
-                parsed_claim.format_version,
-                parsed_claim.relation,
-                parsed_claim.bindings,
-            ) != (
-                transformation.transform_format,
-                transformation.format_version,
-                transformation.relation,
-                transformation.bindings,
-            ):
-                raise ValueError(
-                    "The transformation record does not match its claim. Recreate the "
-                    "transformation from the supplied source and target, then retry."
-                )
-            expected_bindings = self._transformation_expected_bindings(source, target)
-            if transformation.bindings.model_dump(mode="json") != expected_bindings:
-                raise ValueError(
-                    "The transformation does not match the supplied source and target. "
-                    "Recreate it from those exact artifacts, then retry."
-                )
-            required_parents = {
-                claim.artifact_uri,
-                source.artifact_uri,
-                target.artifact_uri,
-            }
-            if not required_parents.issubset(transformation_artifact.manifest.parents):
-                raise ValueError(
-                    "The transformation is missing required source or target lineage. "
-                    "Recreate it from the supplied artifacts, then retry."
-                )
-            checker = self.checker_registry.select_compatible(
-                evidence_kind=EvidenceKind.TRANSFORMATION,
-                format_id=transformation.transform_format,
-                format_version=transformation.format_version,
-                claim_schema_uri=claim.manifest.schema_uri,
-                semantics_uri=source.manifest.semantics_uri,
-                candidate_schema_uri=source.manifest.schema_uri,
-                target_schema_uri=target.manifest.schema_uri,
-                target_semantics_uri=target.manifest.semantics_uri,
-            )
-            request = self._build_transformation_request(
-                claim,
-                source,
-                target,
-                transformation_artifact,
-                transformation,
-                expected_bindings,
-            )
-            request_digest = _digest_bytes(canonicalize_json(request))
-            decision = self._run_checker(
-                entrypoint=checker.entrypoint,
-                expected_digest=checker.executable_digest,
-                request=request,
-                provider_runtime=checker.provider_runtime,
-                timeout_seconds=timeout_seconds,
-            )
-            runtime_ms = int((time.monotonic() - started) * 1000)
-            if not decision.accepted:
-                return self._rejected_decision_result(
-                    decision,
-                    runtime_ms,
-                    claim_digest=claim.manifest.object_digest,
-                    candidate_digest=source.manifest.object_digest,
-                    evidence_uri=transformation_uri,
-                )
-            record = TransformationVerificationRecord(
-                checker_id=checker.checker_id,
-                checker_digest=checker.executable_digest,
-                transformation_uri=transformation_uri,
-                claim_uri=claim.artifact_uri,
-                bindings=transformation.bindings,
-                relation=transformation.relation,
-                conclusion=decision.conclusion,
-                arithmetic=decision.arithmetic,
-                method=decision.method,
-                coverage=decision.coverage,
-                request_digest=request_digest,
-                environment_digest=_environment_digest(
-                    checker.executable_digest,
-                    checker.provider_runtime,
-                ),
-            )
-            return self._finalize_verification(
-                decision=decision,
-                checker=checker,
-                runtime_ms=runtime_ms,
-                claim_digest=claim.manifest.object_digest,
-                semantics_digest=self._semantics_digest(claim),
-                candidate_digest=source.manifest.object_digest,
-                evidence_uri=transformation_uri,
-                scope_uri=transformation_uri,
-                record=record,
-                schema_uri=self.transformation_record_schema_uri,
-                parents=(
-                    claim.artifact_uri,
-                    source.artifact_uri,
-                    target.artifact_uri,
-                    transformation_uri,
-                ),
-                summary="authorized transformation verification",
-            )
-        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
-            return self._verification_failure_result(exc, started)
-
-    def verify_preservation(
-        self,
-        *,
-        claim_uri: str,
-        original_uri: str,
-        reduced_uri: str,
-        checker_id: str,
-        preservation_format: str,
-        reducer: str,
-    ) -> ResultEnvelope:
-        """Verify that a proposed reduction preserves the checked predicate."""
-
-        started = time.monotonic()
-        try:
-            claim = self.store.get(claim_uri)
-            original = self.store.get(original_uri)
-            reduced = self.store.get(reduced_uri)
-            self._validate_artifacts((claim, original, reduced))
-            self._ensure_preservation_semantics(claim, original, reduced)
-            if original.manifest.schema_uri != reduced.manifest.schema_uri:
-                raise ValueError(
-                    "The original and reduced objects use different schemas. "
-                    "Run a reducer that preserves the object schema, then retry."
-                )
-            semantics_digest = self._semantics_digest(reduced)
-            bindings = EvidenceBindings(
-                claim_digest=claim.manifest.object_digest,
-                semantics_digest=semantics_digest,
-                candidate_digest=reduced.manifest.object_digest,
-                encoding_digest=original.manifest.object_digest,
-            )
-            evidence = PreservationEnvelope(
-                preservation_format=preservation_format,
-                format_version="1",
-                bindings=bindings,
-                reducer=reducer,
-            )
-            parent_uris = tuple(sorted({claim_uri, original_uri, reduced_uri}))
-            evidence_result = self.store.put(
-                schema_uri=self.preservation_schema_uri,
-                semantics_uri=reduced.manifest.semantics_uri,
-                payload=evidence.model_dump(mode="json"),
-                parents=parent_uris,
-                summary="proposed reduction preservation evidence",
-            )
-            evidence_artifact = self.store.get(evidence_result.artifact_uri)
-            checker = self.checker_registry.require_compatible(
-                checker_id,
-                evidence_kind=EvidenceKind.PRESERVATION,
-                format_id=preservation_format,
-                format_version="1",
-                claim_schema_uri=claim.manifest.schema_uri,
-                semantics_uri=reduced.manifest.semantics_uri,
-                candidate_schema_uri=reduced.manifest.schema_uri,
-            )
-            request = self._build_preservation_request(
-                claim, original, reduced, evidence_artifact, evidence, bindings
-            )
-            request_digest = _digest_bytes(canonicalize_json(request))
-            decision = self._run_checker(
-                entrypoint=checker.entrypoint,
-                expected_digest=checker.executable_digest,
-                request=request,
-                provider_runtime=checker.provider_runtime,
-            )
-            runtime_ms = int((time.monotonic() - started) * 1000)
-            if not decision.accepted:
-                return self._rejected_decision_result(
-                    decision,
-                    runtime_ms,
-                    claim_digest=claim.manifest.object_digest,
-                    semantics_digest=semantics_digest,
-                    candidate_digest=reduced.manifest.object_digest,
-                    evidence_uri=evidence_artifact.artifact_uri,
-                )
-            record = self._build_verification_record(
-                decision,
-                checker=checker,
-                evidence_kind=EvidenceKind.PRESERVATION,
-                evidence_uri=evidence_artifact.artifact_uri,
-                bindings=bindings,
-                request_digest=request_digest,
-            )
-            return self._finalize_verification(
-                decision=decision,
-                checker=checker,
-                runtime_ms=runtime_ms,
-                claim_digest=claim.manifest.object_digest,
-                semantics_digest=semantics_digest,
-                candidate_digest=reduced.manifest.object_digest,
-                evidence_uri=evidence_artifact.artifact_uri,
-                scope_uri=None,
-                record=record,
-                schema_uri=self.record_schema_uri,
-                parents=(*parent_uris, evidence_artifact.artifact_uri),
-                summary="authorized reduction preservation verification",
-            )
-        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
-            return self._verification_failure_result(exc, started)
-
     def _validate_artifacts(self, artifacts: tuple[StoredArtifact, ...]) -> None:
         for artifact in artifacts:
             self._validate_artifact(artifact)
@@ -1108,86 +867,6 @@ class VerificationService:
             ]
         return request
 
-    def _load_transformation_inputs(
-        self, transformation: TransformationEnvelope
-    ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
-        return (
-            self.store.get(transformation.claim_uri),
-            self.store.get(transformation.source_uri),
-            self.store.get(transformation.target_uri),
-        )
-
-    def _transformation_expected_bindings(
-        self,
-        source: StoredArtifact,
-        target: StoredArtifact,
-    ) -> dict[str, Any]:
-        return {
-            "source_digest": source.manifest.object_digest,
-            "source_schema_uri": source.manifest.schema_uri,
-            "source_semantics_digest": self._semantics_digest(source),
-            "target_digest": target.manifest.object_digest,
-            "target_schema_uri": target.manifest.schema_uri,
-            "target_semantics_digest": self._semantics_digest(target),
-        }
-
-    def _build_transformation_request(
-        self,
-        claim: StoredArtifact,
-        source: StoredArtifact,
-        target: StoredArtifact,
-        transformation_artifact: StoredArtifact,
-        transformation: TransformationEnvelope,
-        expected_bindings: dict[str, Any],
-    ) -> dict[str, Any]:
-        return {
-            "request_version": "1",
-            "claim": self._checker_artifact(claim),
-            "source": self._checker_artifact(source),
-            "target": self._checker_artifact(target),
-            "transformation": {
-                **self._checker_artifact(transformation_artifact),
-                "payload": transformation.model_dump(mode="json"),
-            },
-            "expected_bindings": expected_bindings,
-        }
-
-    def _ensure_preservation_semantics(
-        self,
-        claim: StoredArtifact,
-        original: StoredArtifact,
-        reduced: StoredArtifact,
-    ) -> None:
-        if (
-            claim.manifest.semantics_uri != original.manifest.semantics_uri
-            or original.manifest.semantics_uri != reduced.manifest.semantics_uri
-        ):
-            raise ValueError(
-                "The claim, original object, and reduced object use different "
-                "semantics. Use artifacts from one reference contract, then retry."
-            )
-
-    def _build_preservation_request(
-        self,
-        claim: StoredArtifact,
-        original: StoredArtifact,
-        reduced: StoredArtifact,
-        evidence_artifact: StoredArtifact,
-        evidence: PreservationEnvelope,
-        bindings: EvidenceBindings,
-    ) -> dict[str, Any]:
-        return {
-            "request_version": "1",
-            "claim": self._checker_artifact(claim),
-            "original": self._checker_artifact(original),
-            "reduced": self._checker_artifact(reduced),
-            "preservation": {
-                **self._checker_artifact(evidence_artifact),
-                "payload": evidence.model_dump(mode="json"),
-            },
-            "expected_bindings": bindings.model_dump(mode="json"),
-        }
-
     def _rejected_decision_result(
         self,
         decision: CheckerDecision,
@@ -1264,7 +943,7 @@ class VerificationService:
         claim_digest: str,
         candidate_digest: str,
         evidence_uri: str,
-        record: VerificationRecord | TransformationVerificationRecord,
+        record: VerificationRecord,
         schema_uri: str,
         parents: tuple[str, ...],
         summary: str,

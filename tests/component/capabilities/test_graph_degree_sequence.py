@@ -37,10 +37,9 @@ def test_degree_sequence_realization_materializes_replayable_graph(
     assert result.output["certificate_uri"] in result.artifact_uris
     verified = authorized_graph_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="certificate.verify",
+            capability_id="graph.degree_sequence.verify",
             input={
                 "certificate_uri": result.output["certificate_uri"],
-                "checker_id": result.output["checker_id"],
             },
         )
     )
@@ -68,10 +67,9 @@ def test_degree_sequence_non_graphical_result_has_replayable_obstruction(
     }
     verified = authorized_graph_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="certificate.verify",
+            capability_id="graph.degree_sequence.verify",
             input={
                 "certificate_uri": result.output["certificate_uri"],
-                "checker_id": result.output["checker_id"],
             },
         )
     )

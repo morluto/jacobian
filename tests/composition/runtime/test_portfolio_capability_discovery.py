@@ -17,13 +17,13 @@ def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
     )
 
     assert discovered.domain == "artifact"
-    assert discovered.domain_filter_status == "MATCHED"
-    assert "matches at least one installed capability" in discovered.domain_filter_basis
+    assert discovered.domain_filter_status == "UNKNOWN"
+    assert "matches no installed capability" in discovered.domain_filter_basis
     assert discovered.matches == ()
     assert "artifact" not in discovered.available_domains
 
 
-def test_bounded_search_producers_advertise_produced_artifact_types(
+def test_small_bounded_operation_is_published_inline(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
@@ -33,9 +33,7 @@ def test_bounded_search_producers_advertise_produced_artifact_types(
         )
     }
     induced_tree = descriptors["graph.induced_tree.maximum.compute"]
-    assert induced_tree.produced_artifact_types, (
-        "bounded-search producers must advertise their materialized result schema"
-    )
+    assert induced_tree.produced_artifact_types == ()
 
 
 def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(

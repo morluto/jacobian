@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
-from inspect import Parameter, signature
 from pathlib import Path
 
 import pytest
@@ -21,11 +19,6 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
-from jacobian.adapters.mcp.tools import capability_invoke
-from jacobian.contracts.combinatorics import CyclicDifferenceSetExtensionRequest
-from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
-from jacobian.contracts.number_theory import IntegerPairRequest
-from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
 from jacobian.eval.telemetry import parse_agent_transcript
 
 _ROOT = Path(__file__).resolve().parents[3]
@@ -130,13 +123,6 @@ def test_committed_visibility_v2_suite_covers_domains_and_abstention() -> None:
     )
 
 
-def test_packaged_codex_skill_matches_repository_skill() -> None:
-    repository_skill = _ROOT / ".agents/skills/jacobian-math/SKILL.md"
-    packaged_skill = _ROOT / "npm/skills/jacobian-math/SKILL.md"
-
-    assert packaged_skill.read_bytes() == repository_skill.read_bytes()
-
-
 def test_unified_exec_mode_is_opt_in(tmp_path: Path) -> None:
     common = {
         "workspace": tmp_path,
@@ -151,89 +137,6 @@ def test_unified_exec_mode_is_opt_in(tmp_path: Path) -> None:
 
     assert "unified_exec" not in direct
     assert unified[-3:-1] == ("--enable", "unified_exec")
-
-
-def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
-    skill = (_ROOT / ".agents/skills/jacobian-math/SKILL.md").read_text(
-        encoding="utf-8"
-    )
-
-    for capability_id in (
-        "integer.compute.gcd",
-        "matrix.determinant.compute",
-        "matrix.rank.compute",
-        "polynomial.compute.gcd",
-        "polynomial.expression.normalize",
-        "matrix.determinant.verify",
-        "combinatorics.cyclic_difference_set.extension.decide",
-        "combinatorics.cyclic_difference_set.extension.verify",
-    ):
-        assert f"`{capability_id}`" in skill
-    integer_payload = '{"left":"84","right":"30"}'
-    matrix_payload = '{"matrix":{"domain":"QQ","entries":[[{"num":"1","den":"1"}]]}}'
-    polynomial = (
-        '{"polynomial_schema_version":"1","domain":"QQ","variables":["x"],'
-        '"polynomial":{"terms":[{"coefficient":{"num":"1","den":"1"},'
-        '"exponents":[2]}]}}'
-    )
-    assert integer_payload in skill
-    assert matrix_payload in skill
-    assert polynomial in skill
-    extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
-    assert extension_payload in skill
-    run_parameters = signature(capability_invoke).parameters
-    assert tuple(run_parameters) == ("capability_id", "payload", "ctx")
-    assert run_parameters["ctx"].kind is Parameter.KEYWORD_ONLY
-    direct_envelope = f'{{"capability_id":"<id>","{tuple(run_parameters)[1]}":<JSON>}}'
-    assert direct_envelope in skill
-    assert '{"capability_id":"<id>","input":<JSON>}' not in skill
-    assert "No discovery for stable producers" in skill
-    assert "never with `capability_id`" in skill
-    assert '"candidate":<producer output.result>' in skill
-    IntegerPairRequest.model_validate_json(integer_payload)
-    MatrixDeterminantRequest.model_validate_json(matrix_payload)
-    polynomial_value = json.loads(polynomial)
-    PolynomialGcdRequest.model_validate(
-        {"left": polynomial_value, "right": polynomial_value}
-    )
-    CyclicDifferenceSetExtensionRequest.model_validate_json(extension_payload)
-    assert len(skill.encode("utf-8")) <= 4 * 1024
-
-
-def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
-    skill = (_ROOT / ".agents/skills/jacobian-math/SKILL.md").read_text(
-        encoding="utf-8"
-    )
-
-    assert "tools.mcp__jacobian__math_find" in skill
-    assert "tools.mcp__jacobian__math_run" in skill
-    # Check for key phrases that may span multiple lines in the SKILL.md.
-    # Normalize whitespace to avoid brittleness from line rewrapping.
-    skill_flat = re.sub(r"\s+", " ", skill)
-    assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
-    assert "text(r.structuredContent ?? r)" in skill
-    assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
-    assert "never put `CONTRACT` in a query" in skill_flat
-    assert "`matrix.determinant.verify` for an independent check" in skill_flat
-    assert "never reconstruct or paraphrase such a record" in skill_flat
-    assert "required task authorization and bindings are preserved" in skill_flat
-    assert "a writable path or schema alone is not authorization" in skill_flat
-    assert "claim the highest lower permitted assurance" in skill_flat
-    assert "even if Jacobian returned `VERIFIED`" in skill_flat
-    for guidance in (
-        "Keep decomposition and routing decisions agent-owned",
-        "composing already-known supporting operations remains allowed",
-        "Follow exposed recovery paths",
-        "retry within the task resource bounds",
-        "continue with other installed routes",
-        "completeness, and open obligations",
-        "check payload fields against the intended object",
-        "compare it with the submitted input",
-        "does not replace server validation or evidence binding",
-        "Account for each requested outcome in the final comparison",
-        "does not verify another result or their comparison",
-    ):
-        assert guidance in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

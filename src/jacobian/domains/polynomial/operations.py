@@ -25,13 +25,14 @@ from jacobian.contracts.polynomial_operations import (
     PolynomialValue,
 )
 from jacobian.contracts.polynomials import RationalPolynomial
-from jacobian.domains.polynomial import kernels
 from jacobian.domains.polynomial.conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math import polynomials
+from jacobian.math.polynomials import _sympy
 
 _MAX_OUTPUT_TERMS = 1024
 
@@ -72,7 +73,7 @@ def _invariant_value(
 def polynomial_gcd(request: PolynomialGcdRequest) -> PolynomialGcdResult:
     left = rational_polynomial_to_sympy(request.left)
     right = rational_polynomial_to_sympy(request.right)
-    left_multiplier, right_multiplier, gcd = kernels.polynomial_gcdex(left, right)
+    left_multiplier, right_multiplier, gcd = polynomials.gcdex(left, right)
     variables = request.left.variables
     return PolynomialGcdResult(
         gcd=_result_polynomial(gcd, variables),
@@ -89,7 +90,7 @@ def polynomial_resultant(
     variables = request.left.variables
     elimination_index = variables.index(request.elimination_variable)
     generator = symbols_for_variables(variables)[elimination_index]
-    value = kernels.polynomial_resultant(
+    value = polynomials.resultant(
         rational_polynomial_to_sympy(request.left),
         rational_polynomial_to_sympy(request.right),
         generator,
@@ -109,7 +110,7 @@ def polynomial_discriminant(
     variables = request.polynomial.variables
     variable_index = variables.index(request.variable)
     generator = symbols_for_variables(variables)[variable_index]
-    value = kernels.polynomial_discriminant(
+    value = _sympy.polynomial_discriminant(
         rational_polynomial_to_sympy(request.polynomial), generator
     )
     remaining_variables = tuple(
@@ -126,7 +127,7 @@ def polynomial_square_free_decomposition(
 ) -> PolynomialSquareFreeDecompositionResult:
     source = rational_polynomial_to_sympy(request.polynomial)
     coefficient, canonical_factors, reconstructed = (
-        kernels.polynomial_square_free_decomposition(source)
+        _sympy.polynomial_square_free_decomposition(source)
     )
     factors = tuple(
         PolynomialSquareFreeFactor(
@@ -162,7 +163,7 @@ def polynomial_factorization(
     request: PolynomialFactorRequest,
 ) -> PolynomialFactorizationResult:
     source = rational_polynomial_to_sympy(request.polynomial)
-    coefficient, canonical_factors, reconstructed = kernels.polynomial_factorization(
+    coefficient, canonical_factors, reconstructed = _sympy.polynomial_factorization(
         source
     )
     factors = tuple(
@@ -192,7 +193,7 @@ def polynomial_groebner_basis(
     variables = request.generators[0].variables
     wire_basis = tuple(
         _result_polynomial(polynomial, variables)
-        for polynomial in kernels.polynomial_groebner_basis(
+        for polynomial in _sympy.polynomial_groebner_basis(
             tuple(
                 rational_polynomial_to_sympy(generator)
                 for generator in request.generators

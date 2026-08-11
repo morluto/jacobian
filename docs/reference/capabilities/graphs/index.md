@@ -2,7 +2,6 @@
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
-- [Graph counterexample shrinking](graph-counterexample-shrinking.md)
 - [Graph distance matrix](graph-distance-matrix.md)
 - [Fixed-registry graph invariant batches](graph-invariant-batch.md)
 - [Maximum-matching certificate and verification](graph-maximum-matching.md)

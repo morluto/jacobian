@@ -13,7 +13,6 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
@@ -36,15 +35,12 @@ def _open_graph_coloring_services(
     )
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
-            for adapter in install_atomic_capabilities(
-                services.installation, services.application
-            ):
-                services.installation.register_capability(adapter)
             adapters, _installation = install_graph_coloring_capabilities(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
                 services.core.sat,
+                services.application.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
@@ -105,7 +101,7 @@ def test_graph_coloring_encoding_is_canonical_and_inspectable(
     assert len(result.artifact_uris) == 5
 
 
-def test_graph_coloring_encoding_replays_through_generic_certificate_verifier(
+def test_graph_coloring_encoding_replays_through_domain_checker(
     graph_coloring_services,
 ) -> None:
     encoded = _encode(graph_coloring_services)
@@ -113,10 +109,9 @@ def test_graph_coloring_encoding_replays_through_generic_certificate_verifier(
     assert encoded.output["checker_id"] is not None
     verified = graph_coloring_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="certificate.verify",
+            capability_id="graph.coloring.encoding.verify",
             input={
                 "certificate_uri": encoded.output["certificate_uri"],
-                "checker_id": encoded.output["checker_id"],
             },
         )
     )

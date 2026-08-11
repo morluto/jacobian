@@ -3,7 +3,7 @@
 After the authoritative ``RationalMatrix``/``IntegerMatrix`` refactor, the
 artifact-backed legacy producers (``jacobian.matrices.capabilities``,
 ``jacobian.matrices.determinant``, ``jacobian.matrices.rank``) were removed
-because they duplicated the inline ``ComputedOperation`` capabilities owned by
+because they duplicated the installed ``OperationSpec`` bindings owned by
 ``jacobian.domains.matrix_lattice``.  These tests verify that the pilot bundle
 alone is sufficient: ``matrix.determinant.compute``, ``matrix.rank.compute``,
 and their ExactReplay verifiers all work without any legacy installation.
@@ -47,7 +47,7 @@ def pilot_matrix_runtime(tmp_path: Path):
 def test_pilot_provides_matrix_determinant_compute_without_legacy(
     pilot_matrix_runtime,
 ) -> None:
-    """matrix.determinant.compute is an inline ComputedOperation from the pilot bundle."""
+    """matrix.determinant.compute is an inline OperationSpec binding."""
     result = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.compute",
@@ -64,7 +64,7 @@ def test_pilot_provides_matrix_determinant_compute_without_legacy(
 def test_pilot_provides_matrix_rank_compute_without_legacy(
     pilot_matrix_runtime,
 ) -> None:
-    """matrix.rank.compute is an inline ComputedOperation from the pilot bundle."""
+    """matrix.rank.compute is an inline OperationSpec binding."""
     result = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.compute",

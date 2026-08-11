@@ -23,6 +23,5 @@ class RuntimeOptions:
     """Immutable inputs that determine runtime composition."""
 
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE
-    capability_adapter_entrypoints: tuple[str, ...] = ()
     capability_exclusions: frozenset[str] = frozenset()
     capability_policy: CapabilityPolicy | None = None

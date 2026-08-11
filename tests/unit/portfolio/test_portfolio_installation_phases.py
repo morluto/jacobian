@@ -14,6 +14,7 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.installation.context import InstallationContext
+from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
 from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.foundation_installation import FoundationInstaller
 from jacobian.portfolio.model import PortfolioPlan
@@ -21,11 +22,10 @@ from jacobian.portfolio.provider_resolution import (
     ProviderAvailabilityResolver,
     ProviderRuntimePlan,
 )
-from jacobian.portfolio.reference_installation import ReferenceLeanInstaller
 from jacobian.portfolio.resource_installation import ResourceCapabilityInstaller
 from jacobian.portfolio.result import PortfolioInstallation
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.runtime.services import ApplicationServices, CoreServices
+from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
 def _unavailable_runtime(provider: str) -> CapabilityProviderRuntime:
@@ -104,31 +104,22 @@ class _UnauthorizedContext:
         self.registered.append(adapter)
 
 
-def test_reference_phase_derives_authority_from_its_context() -> None:
-    installed: dict[str, object] = {}
-
-    class _ReferenceInstaller:
-        def install_all(self, *, authorize_checker: bool = True) -> dict[str, object]:
-            installed["authorize_checker"] = authorize_checker
-            return {"graph_paths": object()}
-
+def test_checker_phase_derives_authority_from_its_context() -> None:
     context = _UnauthorizedContext()
     application = cast(
-        ApplicationServices,
+        RuntimeServices,
         SimpleNamespace(
-            core=SimpleNamespace(plugins=object()),
-            reference_installer=_ReferenceInstaller(),
+            core=SimpleNamespace(),
         ),
     )
     result = PortfolioInstallation()
 
-    ReferenceLeanInstaller(
+    CheckerPortfolioInstaller(
         cast(InstallationContext, context),
         cast(ProviderAvailabilityResolver, object()),
     ).install(application, result)
 
-    assert installed["authorize_checker"] is False
-    assert set(result.references) == {"graph_paths"}
+    assert result.polytope_checkers is None
     assert result.lean_checkers == {}
     assert context.registered == []
 

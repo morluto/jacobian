@@ -47,7 +47,7 @@ class ArtifactService:
         if self.schemas.is_producer_only(schema_uri) and not producer_write:
             raise ArtifactValidationError(
                 "This artifact schema is producer-only. Invoke its owning "
-                "capability instead of artifact.put."
+                "operation instead of writing the artifact directly."
             )
         try:
             normalized = self.schemas.validate(schema_uri, payload)

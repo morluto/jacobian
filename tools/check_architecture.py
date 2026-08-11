@@ -90,14 +90,11 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
             "benchmarks/datasets/provider-feasibility-v1/lean-repl/tests/replay.py"
         ),
         # --- Explicit test fixtures where subprocess is the test mechanism ---
-        # E2e workflow scenarios spawn CLI processes.
-        PurePosixPath("tests/e2e/verified_results/test_reference_runtime.py"),
         # Process boundary tests directly exercise subprocess seams.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
         PurePosixPath("tests/boundary/process/test_cvc5_worker_command_profile.py"),
         PurePosixPath("tests/boundary/process/test_process_policy.py"),
         PurePosixPath("tests/boundary/process/test_rational_lp_worker_protocol.py"),
-        PurePosixPath("tests/boundary/process/test_worker_error_protocol.py"),
         PurePosixPath(
             "tests/boundary/process/polynomial/test_polynomial_system_adapter_guards.py"
         ),
@@ -130,7 +127,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
             "tests/boundary/providers/lean/test_lean_statement_capabilities.py"
         ),
         # Storage recovery/transaction boundary tests crash and recover processes.
-        PurePosixPath("tests/boundary/storage/recovery/test_enumeration_recovery.py"),
         PurePosixPath(
             "tests/boundary/storage/transactions/test_process_crash_recovery.py"
         ),
@@ -920,6 +916,23 @@ def _native_math_boundary_violations(
                         "native-math-boundary",
                         "jacobian.math must call domain kernels directly without "
                         "loading runtime, MCP, artifact, provider, or capability layers",
+                        node.lineno,
+                    )
+                )
+            elif reference.startswith("jacobian.domains.") and any(
+                _is_under(relative, PurePosixPath(prefix))
+                for prefix in (
+                    "src/jacobian/math/graphs",
+                    "src/jacobian/math/matrices",
+                    "src/jacobian/math/polynomials",
+                )
+            ):
+                violations.append(
+                    Violation(
+                        str(relative),
+                        "native-math-boundary",
+                        "this migrated jacobian.math package owns its implementation "
+                        "and may not import the legacy domain package",
                         node.lineno,
                     )
                 )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Never
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
@@ -24,11 +24,10 @@ from jacobian.domains.matrix_lattice.hnf_protocol import (
     HermiteNormalFormWorkerRequest,
     parse_hnf_worker_response,
 )
+from jacobian.operation_bindings import InstalledOperation, durable_operation
 from jacobian.operations import (
-    ComputedOutcome,
-    ComputedSuccess,
-    MaterializedOperation,
-    OperationExecutionFailure,
+    OperationAbortError,
+    OperationSpec,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
@@ -39,12 +38,10 @@ HNF_STDOUT_LIMIT = 80_000_000
 HNF_STDERR_LIMIT = 64_000
 
 
-def _failure(
-    status: ExecutionStatus, code: str, message: str
-) -> OperationExecutionFailure:
-    return OperationExecutionFailure(
-        status=status,
-        diagnostic=CapabilityDiagnostic(
+def _failure(status: ExecutionStatus, code: str, message: str) -> Never:
+    raise OperationAbortError(
+        status,
+        CapabilityDiagnostic(
             code=code,
             stage="matrix_hnf_provider",
             message=message,
@@ -65,7 +62,7 @@ def _parse_hnf_worker_result(
 
 def compute_hermite_normal_form(
     request: HermiteNormalFormRequest,
-) -> ComputedOutcome[HermiteNormalFormResult]:
+) -> HermiteNormalFormResult:
     runtime = python_flint_hnf_provider_runtime(refresh=True)
     if (
         HNF_RUNTIME.availability is not CapabilityProviderAvailability.AVAILABLE
@@ -136,39 +133,44 @@ def compute_hermite_normal_form(
             "FLINT_HNF_PROTOCOL_INVALID",
             "The HNF worker returned an invalid exact result.",
         )
-    return ComputedSuccess(result)
+    return result
 
 
-HERMITE_NORMAL_FORM_CAPABILITY: MaterializedOperation[
+HERMITE_NORMAL_FORM_CAPABILITY: InstalledOperation[
     HermiteNormalFormRequest,
     HermiteNormalFormResult,
-    HermiteNormalFormResult,
-    Any,
-] = MaterializedOperation(
-    capability_id="matrix.normal_form.hermite.materialize",
-    title="Materialize an exact row Hermite normal form",
-    description=(
-        "Use pinned Python-FLINT to retain H and U for one bounded integer matrix, "
-        "with the proposed relation H = U A."
+] = durable_operation(
+    OperationSpec(
+        operation_id="matrix.normal_form.hermite.materialize",
+        version="1",
+        title="Materialize an exact row Hermite normal form",
+        description=(
+            "Use pinned Python-FLINT to retain H and U for one bounded integer matrix, "
+            "with the proposed relation H = U A."
+        ),
+        request_type=HermiteNormalFormRequest,
+        result_type=HermiteNormalFormResult,
+        execute=compute_hermite_normal_form,
+        tags=(
+            "matrix",
+            "integer",
+            "hermite-normal-form",
+            "certificate",
+            "python-flint",
+        ),
+        invocation_examples=(
+            example(
+                "unit_matrix",
+                "Materialize the row HNF of the one-by-one unit matrix.",
+                {"matrix": {"entries": [["1"]]}},
+            ),
+        ),
     ),
-    request_model=HermiteNormalFormRequest,
-    result_model=HermiteNormalFormResult,
-    implementation=compute_hermite_normal_form,
-    relation_id="matrix.normal_form.hermite.relation",
-    tags=("matrix", "integer", "hermite-normal-form", "certificate", "python-flint"),
     resource_reason=(
         "the complete H and U basis-transformation certificate exceeds reliable "
         "inline transport and is retained for independent replay"
     ),
     provider_runtime=HNF_RUNTIME,
-    invocation_examples=(
-        example(
-            "unit_matrix",
-            "Materialize the row HNF of the one-by-one unit matrix.",
-            {"matrix": {"entries": [["1"]]}},
-        ),
-    ),
-    version="1",
 )
 
 __all__ = ["HERMITE_NORMAL_FORM_CAPABILITY", "compute_hermite_normal_form"]

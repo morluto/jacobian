@@ -4,27 +4,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.atomic_capabilities import install_atomic_capabilities
-from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.finite_partition import install_finite_partition
 from jacobian.graphs.coloring import install_graph_coloring_capabilities
 from jacobian.graphs.installation import install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
-from jacobian.graphs.shrinking import install_graph_shrinking
 from jacobian.installation.context import InstallationContext
-from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
 from jacobian.polynomials import install_polynomial_capabilities
+from jacobian.polytope_capabilities import PolytopeSeparationAdapter
 from jacobian.portfolio.builtin import build_builtin_portfolio
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.portfolio.result import PortfolioInstallation
-from jacobian.runtime.services import ApplicationServices, CoreServices
+from jacobian.runtime.services import RuntimeServices
 from jacobian.universal_algebra_capabilities import (
     install_universal_algebra_capabilities,
 )
@@ -39,39 +36,27 @@ class CoreApplicationInstaller:
     def _install_graph_capabilities(
         self,
         ctx: InstallationContext,
-        core: CoreServices,
-        application: ApplicationServices,
+        services: RuntimeServices,
         result: PortfolioInstallation,
     ) -> None:
-        """Install graph search, shrinking, and coloring capabilities."""
+        """Install retained graph and coloring capabilities."""
 
         graph_adapters, result.graph = install_graph_capabilities(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
+            ctx.verification,
             ctx.checkers,
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         for graph_adapter in graph_adapters:
             self.context.register_capability(graph_adapter)
-        graph_shrinking_adapter, result.graph_shrinking = install_graph_shrinking(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            core.plugins,
-            ctx.checkers,
-            application.shrinking,
-            result.graph,
-            application.reference_installer,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        self.context.register_capability(graph_shrinking_adapter)
-
         coloring_adapters, result.graph_coloring = install_graph_coloring_capabilities(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
-            core.sat,
+            services.core.sat,
+            ctx.verification,
             ctx.checkers,
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
@@ -80,19 +65,14 @@ class CoreApplicationInstaller:
 
     def install(
         self,
-        application: ApplicationServices,
+        services: RuntimeServices,
         result: PortfolioInstallation,
     ) -> None:
         """Install the core portfolio in its explicit dependency order."""
 
         ctx = self.context
-        core = application.core
 
-        for atomic_adapter in install_atomic_capabilities(ctx, application):
-            self.context.register_capability(atomic_adapter)
-        for claim_adapter in application.claim_decomposition_adapters:
-            self.context.register_capability(claim_adapter)
-
+        self.context.register_capability(PolytopeSeparationAdapter(services.polytope))
         (
             finite_partition_adapter,
             finite_partition_verify,
@@ -119,16 +99,13 @@ class CoreApplicationInstaller:
         if finite_coverage_adapter is not None:
             self.context.register_capability(finite_coverage_adapter)
 
-        self._install_graph_capabilities(ctx, core, application, result)
+        self._install_graph_capabilities(ctx, services, result)
 
         portfolio = build_builtin_portfolio()
         bundle_result = DomainBundleInstaller(ctx).install(portfolio)
         result.domain_bundles = dict(bundle_result.installed)
         result.portfolio_diagnostics = bundle_result.diagnostics
         result.portfolio_outcomes = bundle_result.outcomes
-        result.conjecture_ingestion = _conjecture_ingestion_installation(
-            result.domain_bundles
-        )
         self.install_domain_verification(result, portfolio)
 
         if result.graph is not None:
@@ -181,6 +158,7 @@ class CoreApplicationInstaller:
                 ctx.store,
                 ctx.schemas,
                 ctx.artifacts,
+                ctx.verification,
                 ctx.checkers,
                 authorize_checker=ctx.authorizes_bundled_checkers,
             )
@@ -217,15 +195,3 @@ class CoreApplicationInstaller:
                 relationship.source_capability_id,
                 relationship.related_capability,
             )
-
-
-def _conjecture_ingestion_installation(
-    domain_bundles: dict[str, InstalledDomainBundle],
-) -> ConjectureIngestionInstallation | None:
-    installed = domain_bundles.get("conjecture_ingestion")
-    if installed is None:
-        return None
-    return ConjectureIngestionInstallation(
-        semantics_uri=installed.semantics_uri,
-        artifact_schema_uri=installed.result_schema_uris["dataset.conjecture.ingest"],
-    )

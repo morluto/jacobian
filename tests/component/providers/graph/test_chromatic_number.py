@@ -8,7 +8,6 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -41,26 +40,20 @@ def test_chromatic_number_returns_first_satisfying_k_with_witness(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert result.output["status"] == "EXACT"
-    assert result.output["chromatic_number"] == 3
-    assert result.output["lower_bound"] == 3
-    assert result.output["upper_bound"] == 3
-    assert [step["status"] for step in result.output["tested"]] == [
+    output = result.output["result"]
+    assert output["status"] == "EXACT"
+    assert output["chromatic_number"] == 3
+    assert output["lower_bound"] == 3
+    assert output["upper_bound"] == 3
+    assert [step["status"] for step in output["tested"]] == [
         "UNSATISFIABLE",
         "SATISFIABLE",
     ]
-    assert len(result.artifact_uris) == 3
-    input_uri, output_uri, obligation_uri = result.artifact_uris
-    assert runtime.core.store.get(output_uri).manifest.parents == (input_uri,)
-    assert runtime.core.store.get(output_uri).payload == result.output
-    assert frozenset(
-        runtime.core.store.get(obligation_uri).manifest.parents
-    ) == frozenset((input_uri, output_uri))
-    assert result.obligations[0].obligation_uri == obligation_uri
-    assert result.relationships[0].obligation_uris == (obligation_uri,)
+    assert result.artifact_uris == ()
+    assert result.obligations == ()
+    assert result.relationships == ()
 
-    coloring = result.output["coloring"]
+    coloring = output["coloring"]
     assert set(coloring) == {"a", "b", "c"}
     assert all(
         coloring[left] != coloring[right]
@@ -72,7 +65,7 @@ def test_chromatic_number_returns_first_satisfying_k_with_witness(
     )
 
 
-def test_chromatic_number_timeout_is_unknown_and_preserves_bounds(
+def test_chromatic_number_timeout_returns_unknown_result_without_artifacts(
     graph_optimization_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -93,21 +86,13 @@ def test_chromatic_number_timeout_is_unknown_and_preserves_bounds(
         },
     )
 
-    assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
-    assert result.diagnostics[0].code == "CHROMATIC_NUMBER_TIMEOUT"
-    assert result.completeness.status is CapabilityCompletenessStatus.UNKNOWN
-    assert result.output["status"] == "UNKNOWN"
-    assert result.output["chromatic_number"] is None
-    assert result.output["lower_bound"] <= result.output["upper_bound"]
-    assert result.output["tested"][-1]["status"] == "UNKNOWN"
-    assert len(result.artifact_uris) == 3
-    assert (
-        runtime.core.store.get(result.artifact_uris[1]).payload["status"] == "UNKNOWN"
-    )
-    obligation = runtime.core.store.get(result.artifact_uris[2])
-    assert obligation.payload["claimed_value"] is None
-    assert obligation.payload["status"] == "UNKNOWN"
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    output = result.output["result"]
+    assert output["status"] == "UNKNOWN"
+    assert output["solver_status"] == "UNKNOWN"
+    assert output["tested"] == [{"colors": 2, "status": "UNKNOWN"}]
+    assert result.artifact_uris == ()
 
 
 def test_chromatic_number_rejects_repeated_undirected_edges(

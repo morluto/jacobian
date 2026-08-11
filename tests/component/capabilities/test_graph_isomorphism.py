@@ -49,6 +49,7 @@ def _open_graph_isomorphism_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
+                services.application.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )

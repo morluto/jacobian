@@ -16,7 +16,6 @@ def create_runtime(
     root: str | Path,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
-    capability_adapter_entrypoints: tuple[str, ...] = (),
     capability_exclusions: frozenset[str] = frozenset(),
     capability_policy: CapabilityPolicy | None = None,
 ) -> JacobianRuntime:
@@ -28,7 +27,6 @@ def create_runtime(
         root,
         RuntimeOptions(
             checker_authority=checker_authority,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
             capability_exclusions=capability_exclusions,
             capability_policy=capability_policy,
         ),

@@ -34,6 +34,13 @@ def test_native_namespace_does_not_import_runtime_or_transport() -> None:
     _assert_not_imported(_imported_modules("jacobian.math"), forbidden)
 
 
+def test_native_namespace_does_not_eagerly_import_optional_backends() -> None:
+    _assert_not_imported(
+        _imported_modules("jacobian.math"),
+        ("networkx", "sympy", "flint"),
+    )
+
+
 def test_native_matrices_does_not_import_capabilities_or_provider_loading() -> None:
     _assert_not_imported(
         _imported_modules("jacobian.math.matrices"),

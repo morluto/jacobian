@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Any, Protocol
 
+from jacobian.capability_adapters import TypedInputAdapter
 from jacobian.capability_errors import (
     CapabilityError,
     CapabilityInvocationError,
@@ -53,12 +54,11 @@ class CapabilityDispatchMixin:
             log_invocation(resolution, started)
             return resolution
         try:
-            normalized_input = validate_payload(descriptor.input_schema, request.input)
+            normalized_request = _normalize_request(adapter, descriptor, request)
         except CapabilityError as exc:
             result = _input_validation_failure(descriptor, request, exc)
             log_invocation(result, started)
             return result
-        normalized_request = request.model_copy(update={"input": normalized_input})
         try:
             result = invoke_ready_adapter(
                 adapter=adapter,
@@ -110,6 +110,19 @@ class CapabilityDispatchMixin:
         self._validate_verified_result(result)
         log_invocation(result, started)
         return result
+
+
+def _normalize_request(
+    adapter: AdapterLike,
+    descriptor: Any,
+    request: CapabilityRequest,
+) -> CapabilityRequest:
+    """Use the adapter's typed parser or the external schema-only boundary."""
+
+    if isinstance(adapter, TypedInputAdapter):
+        return request
+    normalized_input = validate_payload(descriptor.input_schema, request.input)
+    return request.model_copy(update={"input": normalized_input})
 
 
 def _unknown_capability_failure(

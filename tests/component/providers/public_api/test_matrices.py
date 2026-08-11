@@ -8,6 +8,8 @@ from jacobian.math import matrices
 
 def test_exact_matrix_operations() -> None:
     source = sympy.Matrix([[1, 2], [3, 4]])
+    assert matrices.determinant(source) == -2
+    assert matrices.rank(source) == (2, (0, 1))
     assert matrices.inverse(source) == sympy.Matrix(
         [[-2, 1], [sympy.Rational(3, 2), sympy.Rational(-1, 2)]]
     )

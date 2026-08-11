@@ -106,7 +106,7 @@ _PRESENTATION = FinitePosetRequest(
     ),
     interpretation="COVER_EDGES",
 )
-_MATERIALIZED = _materialize(_PRESENTATION).value
+_MATERIALIZED = _materialize(_PRESENTATION)
 _POSET = _MATERIALIZED.poset
 _WIDTH = PosetRequest(poset=_POSET)
 _LINEAR = LinearExtensionRequest(poset=_POSET)
@@ -130,7 +130,7 @@ _CASES: tuple[
             "poset.width.compute",
             "poset.width.dilworth-dual-replay",
             _WIDTH.model_dump(mode="json"),
-            _width(_WIDTH).value.model_dump(mode="json"),
+            _width(_WIDTH).model_dump(mode="json"),
         ),
     ),
     (
@@ -139,7 +139,7 @@ _CASES: tuple[
             "poset.linear_extensions.count",
             "poset.linear-extensions.complete-ideal-dp-replay",
             _LINEAR.model_dump(mode="json"),
-            _linear_extensions(_LINEAR).value.model_dump(mode="json"),
+            _linear_extensions(_LINEAR).model_dump(mode="json"),
         ),
     ),
     (
@@ -148,7 +148,7 @@ _CASES: tuple[
             "poset.mobius_function.compute",
             "poset.mobius.interval-convolution-replay",
             _MOBIUS.model_dump(mode="json"),
-            _mobius(_MOBIUS).value.model_dump(mode="json"),
+            _mobius(_MOBIUS).model_dump(mode="json"),
         ),
     ),
 )

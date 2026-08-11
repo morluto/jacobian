@@ -114,7 +114,7 @@ def test_authorized_portfolio_template_is_quiescent_and_copyable(
         connection.close()
 
     descriptor_uri = _polynomial_expression_schema_uri(authorized_portfolio_template)
-    destination = tmp_path / "clone-with-references"
+    destination = tmp_path / "authorized-clone"
     _copy_and_check_store(
         authorized_portfolio_template,
         destination,
@@ -124,5 +124,6 @@ def test_authorized_portfolio_template_is_quiescent_and_copyable(
         destination,
         checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     ) as runtime:
-        assert "graph_paths" in runtime.portfolio.references
-        assert "erdos_straus" in runtime.portfolio.references
+        assert runtime.portfolio.polytope_checkers is not None
+        assert runtime.portfolio.polytope_checkers.witness_checker_id is not None
+        assert runtime.portfolio.polytope_checkers.certificate_checker_id is not None

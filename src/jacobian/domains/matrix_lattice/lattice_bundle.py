@@ -51,12 +51,4 @@ def build_lattice_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="the complete supplied bounded integer row basis",
-        completeness_basis=(
-            "Python-FLINT completed exact-gram LLL and returned the full reduced "
-            "basis and transformation"
-        ),
-        assurance_basis=(
-            "bounded pinned Python-FLINT LLL computation; no independent checker invoked"
-        ),
     )

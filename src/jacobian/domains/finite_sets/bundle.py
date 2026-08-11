@@ -49,12 +49,4 @@ def build_finite_set_bundle() -> DomainBundle:
                 hint="Use canonical integer strings and inspect the operation's set schema.",
             )
         ),
-        scope_description="the complete supplied finite integer set input",
-        completeness_basis=(
-            "exact standard-library set computation covered the supplied finite input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "exact Python standard-library set operations; no independent checker invoked"
-        ),
     )

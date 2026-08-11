@@ -31,11 +31,12 @@ from jacobian.contracts.posets import (
     linear_extension_memo_digest,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import (
-    ComputedOperation,
-    ComputedSuccess,
-    MaterializedOperation,
+from jacobian.operation_bindings import (
+    InstalledOperation,
+    durable_operation,
+    inline_operation,
 )
+from jacobian.operations import OperationSpec
 
 
 def _presentation_graph(request: FinitePosetRequest) -> nx.DiGraph[str]:
@@ -105,13 +106,11 @@ def _materialized_poset(request: FinitePosetRequest) -> FinitePoset:
 
 def _materialize(
     request: FinitePosetRequest,
-) -> ComputedSuccess[FinitePosetMaterializationResult]:
-    return ComputedSuccess(
-        FinitePosetMaterializationResult(poset=_materialized_poset(request))
-    )
+) -> FinitePosetMaterializationResult:
+    return FinitePosetMaterializationResult(poset=_materialized_poset(request))
 
 
-def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
+def _width(request: PosetRequest) -> PosetWidthResult:
     poset = request.poset
     elements = poset.elements
     left_nodes = tuple(("L", element) for element in elements)
@@ -161,21 +160,19 @@ def _width(request: PosetRequest) -> ComputedSuccess[PosetWidthResult]:
         for element in elements
         if ("L", element) in reachable_left and ("R", element) not in reachable_right
     )
-    return ComputedSuccess(
-        PosetWidthResult(
-            poset_digest=poset.poset_digest,
-            width=len(chains),
-            maximum_antichain=antichain,
-            minimum_chain_cover=tuple(chains),
-            matching=matching,
-            matching_size=len(matching),
-        )
+    return PosetWidthResult(
+        poset_digest=poset.poset_digest,
+        width=len(chains),
+        maximum_antichain=antichain,
+        minimum_chain_cover=tuple(chains),
+        matching=matching,
+        matching_size=len(matching),
     )
 
 
 def _linear_extensions(
     request: LinearExtensionRequest,
-) -> ComputedSuccess[LinearExtensionCountResult]:
+) -> LinearExtensionCountResult:
     poset = request.poset
     elements = poset.elements
     index = {element: position for position, element in enumerate(elements)}
@@ -220,28 +217,26 @@ def _linear_extensions(
             )
         )
     state_tuple = tuple(states)
-    return ComputedSuccess(
-        LinearExtensionCountResult(
-            poset_digest=poset.poset_digest,
-            element_order=elements,
-            count=counts[subset_count - 1],
-            states=state_tuple,
-            state_count=len(state_tuple),
-            explored_subset_count=subset_count,
-            memo_digest=linear_extension_memo_digest(state_tuple),
-        )
+    return LinearExtensionCountResult(
+        poset_digest=poset.poset_digest,
+        element_order=elements,
+        count=counts[subset_count - 1],
+        states=state_tuple,
+        state_count=len(state_tuple),
+        explored_subset_count=subset_count,
+        memo_digest=linear_extension_memo_digest(state_tuple),
     )
 
 
 def _mobius(
     request: MobiusFunctionRequest,
-) -> ComputedSuccess[MobiusFunctionResult]:
+) -> MobiusFunctionResult:
     return _compute_mobius(request, include_recurrence=False)
 
 
 def _materialize_mobius_recurrence(
     request: MobiusFunctionRequest,
-) -> ComputedSuccess[MobiusFunctionResult]:
+) -> MobiusFunctionResult:
     return _compute_mobius(request, include_recurrence=True)
 
 
@@ -249,7 +244,7 @@ def _compute_mobius(
     request: MobiusFunctionRequest,
     *,
     include_recurrence: bool,
-) -> ComputedSuccess[MobiusFunctionResult]:
+) -> MobiusFunctionResult:
     poset = request.poset
     graph: nx.DiGraph[str] = nx.DiGraph()
     graph.add_nodes_from(poset.elements)
@@ -308,19 +303,17 @@ def _compute_mobius(
         )
         for lower, upper in requested
     )
-    return ComputedSuccess(
-        MobiusFunctionResult(
-            poset_digest=poset.poset_digest,
-            element_order=poset.elements,
-            scope=request.scope,
-            intervals=intervals,
-            values=values,
-            completeness=(
-                "COMPLETE_MATRIX"
-                if request.scope is MobiusScope.COMPLETE_MATRIX
-                else "SELECTED_INTERVALS"
-            ),
-        )
+    return MobiusFunctionResult(
+        poset_digest=poset.poset_digest,
+        element_order=poset.elements,
+        scope=request.scope,
+        intervals=intervals,
+        values=values,
+        completeness=(
+            "COMPLETE_MATRIX"
+            if request.scope is MobiusScope.COMPLETE_MATRIX
+            else "SELECTED_INTERVALS"
+        ),
     )
 
 
@@ -336,128 +329,131 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_CAPABILITIES: tuple[
-    ComputedOperation[Any, Any] | MaterializedOperation[Any, Any, Any, Any], ...
-] = (
-    ComputedOperation(
-        capability_id="poset.finite.compute",
-        title="Compute a canonical finite poset",
-        description=(
-            "Validate exact cover edges or a complete comparable relation and "
-            "return canonical closure, Hasse reduction, incomparability, extrema, "
-            "and ranks exactly when the poset is graded."
-        ),
-        request_model=FinitePosetRequest,
-        result_model=FinitePosetMaterializationResult,
-        implementation=_materialize,
-        relation_id="poset.finite.relation",
-        tags=(
-            "poset",
-            "partial-order",
-            "partially-ordered-set",
-            "hasse-diagram",
-            "transitive-closure",
-            "exact",
-        ),
-        invocation_examples=(
-            example(
-                "diamond",
-                "Materialize the four-element diamond from its cover relation.",
-                _DIAMOND,
+FINITE_POSET_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
+    inline_operation(
+        OperationSpec(
+            operation_id="poset.finite.compute",
+            version="4",
+            title="Compute a canonical finite poset",
+            description=(
+                "Validate exact cover edges or a complete comparable relation and "
+                "return canonical closure, Hasse reduction, incomparability, extrema, "
+                "and ranks exactly when the poset is graded."
             ),
-        ),
-        version="4",
+            request_type=FinitePosetRequest,
+            result_type=FinitePosetMaterializationResult,
+            execute=_materialize,
+            tags=(
+                "poset",
+                "partial-order",
+                "partially-ordered-set",
+                "hasse-diagram",
+                "transitive-closure",
+                "exact",
+            ),
+            invocation_examples=(
+                example(
+                    "diamond",
+                    "Materialize the four-element diamond from its cover relation.",
+                    _DIAMOND,
+                ),
+            ),
+        )
     ),
-    ComputedOperation(
-        capability_id="poset.width.compute",
-        title="Compute finite-poset width with dual witnesses",
-        description=(
-            "Return an exact maximum antichain and a same-size minimum chain "
-            "partition, with the bipartite matching intermediate."
-        ),
-        request_model=PosetRequest,
-        result_model=PosetWidthResult,
-        implementation=_width,
-        relation_id="poset.width.dilworth.relation",
-        tags=(
-            "poset",
-            "partial-order",
-            "partially-ordered-set",
-            "width",
-            "maximum-antichain",
-            "minimum-chain-cover",
-            "dilworth",
-            "exact",
-        ),
-        version="4",
+    inline_operation(
+        OperationSpec(
+            operation_id="poset.width.compute",
+            version="4",
+            title="Compute finite-poset width with dual witnesses",
+            description=(
+                "Return an exact maximum antichain and a same-size minimum chain "
+                "partition, with the bipartite matching intermediate."
+            ),
+            request_type=PosetRequest,
+            result_type=PosetWidthResult,
+            execute=_width,
+            tags=(
+                "poset",
+                "partial-order",
+                "partially-ordered-set",
+                "width",
+                "maximum-antichain",
+                "minimum-chain-cover",
+                "dilworth",
+                "exact",
+            ),
+        )
     ),
-    MaterializedOperation(
-        capability_id="poset.linear_extensions.count",
-        title="Count linear extensions of a bounded finite poset",
-        description=(
-            "Count every linear extension exactly and expose the complete "
-            "order-ideal subset recurrence table and its canonical digest."
-        ),
-        request_model=LinearExtensionRequest,
-        result_model=LinearExtensionCountResult,
-        implementation=_linear_extensions,
-        relation_id="poset.linear_extensions.ideal_dp.relation",
-        tags=(
-            "poset",
-            "linear-extension",
-            "exact-count",
-            "order-ideal",
-            "dynamic-programming",
+    durable_operation(
+        OperationSpec(
+            operation_id="poset.linear_extensions.count",
+            version="3",
+            title="Count linear extensions of a bounded finite poset",
+            description=(
+                "Count every linear extension exactly and expose the complete "
+                "order-ideal subset recurrence table and its canonical digest."
+            ),
+            request_type=LinearExtensionRequest,
+            result_type=LinearExtensionCountResult,
+            execute=_linear_extensions,
+            tags=(
+                "poset",
+                "linear-extension",
+                "exact-count",
+                "order-ideal",
+                "dynamic-programming",
+            ),
         ),
         resource_reason=(
             "the full order-ideal recurrence table is retained for independent "
             "replay and exact count provenance"
         ),
-        version="3",
     ),
-    ComputedOperation(
-        capability_id="poset.mobius_function.compute",
-        title="Compute finite-poset Möbius values",
-        description=(
-            "Return exact incidence-algebra Möbius values for either every "
-            "interval or an explicit selected interval scope, with recurrence terms."
-        ),
-        request_model=MobiusFunctionRequest,
-        result_model=MobiusFunctionResult,
-        implementation=_mobius,
-        relation_id="poset.mobius_function.recurrence.relation",
-        tags=(
-            "poset",
-            "mobius-function",
-            "incidence-algebra",
-            "interval",
-            "exact",
-        ),
-        version="3",
+    inline_operation(
+        OperationSpec(
+            operation_id="poset.mobius_function.compute",
+            version="3",
+            title="Compute finite-poset Möbius values",
+            description=(
+                "Return exact incidence-algebra Möbius values for either every "
+                "interval or an explicit selected interval scope, with recurrence terms."
+            ),
+            request_type=MobiusFunctionRequest,
+            result_type=MobiusFunctionResult,
+            execute=_mobius,
+            tags=(
+                "poset",
+                "mobius-function",
+                "incidence-algebra",
+                "interval",
+                "exact",
+            ),
+        )
     ),
-    MaterializedOperation(
-        capability_id="poset.mobius_function.recurrence.materialize",
-        title="Materialize the finite-poset Möbius recurrence table",
-        description=(
-            "Retain every interval-convolution recurrence contribution used by "
-            "the bounded Möbius summary."
-        ),
-        request_model=MobiusFunctionRequest,
-        result_model=MobiusFunctionResult,
-        implementation=_materialize_mobius_recurrence,
-        relation_id="poset.mobius_function.recurrence.relation",
-        tags=(
-            "poset",
-            "mobius-function",
-            "recurrence",
-            "ledger",
-            "evidence",
+    durable_operation(
+        OperationSpec(
+            operation_id="poset.mobius_function.recurrence.materialize",
+            version="3",
+            title="Materialize the finite-poset Möbius recurrence table",
+            description=(
+                "Retain every interval-convolution recurrence contribution used by "
+                "the bounded Möbius summary."
+            ),
+            request_type=MobiusFunctionRequest,
+            result_type=MobiusFunctionResult,
+            execute=_materialize_mobius_recurrence,
+            tags=(
+                "poset",
+                "mobius-function",
+                "recurrence",
+                "ledger",
+                "evidence",
+            ),
         ),
         resource_reason=(
             "the full interval-convolution recurrence table is retained as "
             "explicit bulk evidence for independent replay"
         ),
-        version="3",
     ),
 )
 

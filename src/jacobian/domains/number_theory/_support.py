@@ -1,10 +1,7 @@
 """Number-theory operation declarations."""
 
-from jacobian.operations import (
-    ComputedOperationFactory,
-    MaterializedOperationFactory,
-    OperationFailure,
-)
+from jacobian.operation_bindings import DurableOperationFactory, InlineOperationFactory
+from jacobian.operations import OperationFailure
 
 _NUMBER_THEORY_FAILURE = OperationFailure(
     code="NUMBER_THEORY_OPERATION_NOT_APPLICABLE",
@@ -12,7 +9,5 @@ _NUMBER_THEORY_FAILURE = OperationFailure(
     hint="Check divisibility, positivity, primality, and modular preconditions.",
 )
 
-number_theory_operation = ComputedOperationFactory(_NUMBER_THEORY_FAILURE)
-materialized_number_theory_operation = MaterializedOperationFactory(
-    _NUMBER_THEORY_FAILURE
-)
+number_theory_operation = InlineOperationFactory(_NUMBER_THEORY_FAILURE)
+materialized_number_theory_operation = DurableOperationFactory(_NUMBER_THEORY_FAILURE)

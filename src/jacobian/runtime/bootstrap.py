@@ -7,7 +7,6 @@ from pathlib import Path
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
 from jacobian.operation_installation import OperationInstaller
-from jacobian.plugins.registry import PluginRegistry
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
@@ -34,7 +33,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
                 schemas,
                 artifacts,
             )
-        plugins = PluginRegistry(store, schemas)
         checkers = CheckerRegistry(store)
         checkers.bind_existing_when_omitted = (
             options.checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
@@ -51,7 +49,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
             sat=sat,
             smt=smt,
             polynomial_expressions=polynomial_expressions,
-            plugins=plugins,
             checkers=checkers,
             capabilities=capabilities,
         )

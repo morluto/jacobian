@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from mcp.shared.exceptions import MCPError
 
-from jacobian.adapters.mcp.guidance import OPERATING_GUIDE
 from jacobian.adapters.mcp.server import create_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
@@ -42,7 +41,9 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert tools["math.find"].annotations is not None
             assert tools["math.find"].annotations.read_only_hint is True
             assert tools["math.run"].annotations is not None
-            assert tools["math.run"].annotations.destructive_hint is True
+            assert tools["math.run"].annotations.destructive_hint is False
+            assert tools["math.run"].annotations.read_only_hint is False
+            assert tools["math.run"].annotations.idempotent_hint is False
             assert (
                 "ranking is deterministic lexical retrieval"
                 in (tools["math.find"].description or "").lower()
@@ -79,18 +80,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             }
             assert resource_inventory == {
                 (
-                    "jacobian-instructions",
-                    "jacobian://instructions",
-                    "text/markdown",
-                ),
-                (
                     "capability-catalog",
                     "capability://catalog",
-                    "application/json",
-                ),
-                (
-                    "reference-catalog",
-                    "reference://catalog",
                     "application/json",
                 ),
             }
@@ -106,44 +97,9 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                     "artifact://sha256/{digest}",
                     "application/json",
                 ),
-                (
-                    "experiment",
-                    "experiment://{experiment_id}",
-                    "application/json",
-                ),
-                (
-                    "experiment-accounting",
-                    "experiment://{experiment_id}/accounting",
-                    "application/json",
-                ),
-                (
-                    "experiment-scope",
-                    "experiment://{experiment_id}/scope",
-                    "application/json",
-                ),
-                (
-                    "experiment-archive",
-                    "experiment://{experiment_id}/archive",
-                    "application/json",
-                ),
             }
-            instructions = await client.read_resource("jacobian://instructions")
-            assert instructions.contents[0].text == OPERATING_GUIDE
-
             prompts = await client.list_prompts()
-            prompt_names = {prompt.name for prompt in prompts.prompts}
-            assert prompt_names == {
-                "jacobian-check-evidence",
-                "jacobian-discover",
-            }
-            discovery_prompt = await client.get_prompt(
-                "jacobian-discover",
-                {"task": "Explore structures related to a conjecture."},
-            )
-            rendered_prompt = discovery_prompt.messages[0].content.text
-            assert "research strategy" in rendered_prompt
-            assert "desired local mathematical outcome" in rendered_prompt
-            assert "Available affordances" in rendered_prompt
+            assert prompts.prompts == []
 
             discovery_result = await client.call_tool(
                 "math.find",
@@ -249,11 +205,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             )
             assert isinstance(hidden_domain_result.structured_content, dict)
             hidden_domain = hidden_domain_result.structured_content
-            assert hidden_domain["domain_filter_status"] == "MATCHED"
+            assert hidden_domain["domain_filter_status"] == "UNKNOWN"
             assert hidden_domain["matches"] == []
-            assert "artifact.put" not in {
-                match["capability_id"] for match in hidden_domain["matches"]
-            }
 
             catalog_result = await client.read_resource("capability://catalog")
             catalog = json.loads(catalog_result.contents[0].text)
@@ -281,9 +234,5 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                     == "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
                 )
                 assert "runtime" not in lean_contract
-
-            reference_result = await client.read_resource("reference://catalog")
-            references = json.loads(reference_result.contents[0].text)
-            assert references["matrices"]["plugin_id"].startswith("artifact://sha256/")
 
     asyncio.run(scenario())

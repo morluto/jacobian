@@ -7,83 +7,75 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from jacobian.cli import CliState, JacobianGroup, _public_error, app
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.storage.errors import StorageLimitError, UnsupportedStateVersionError
+from jacobian.cli import CliState, JacobianGroup, app
+from jacobian.runtime import CheckerAuthorityMode
 
 
-def test_cli_init_reports_reference_domains_and_polytope_formats(
-    tmp_path: Path,
-) -> None:
-    result = CliRunner().invoke(
-        app,
-        ["--state-dir", str(tmp_path), "init", "--json"],
-    )
-
-    assert result.exit_code == 0
-    catalog = json.loads(result.stdout)
-    # Required reference surfaces; do not freeze the full key set (merge magnet).
-    required = {
-        "erdos_straus",
-        "graph_paths",
-        "matrices",
-        "finite_polytopes",
-        "finite_magmas",
-        "lean4",
-        "rational_polynomial_maps",
-        "simple_undirected_graphs",
-    }
-    assert required <= set(catalog)
-    assert catalog["erdos_straus"]["witness_checker_ids"][
-        "erdos_straus.decomposition_table"
-    ].startswith("checker://sha256/")
-    assert catalog["finite_polytopes"]["certificate_checker_id"].startswith(
-        "checker://sha256/"
-    )
-    assert catalog["lean4"]["lean_version"] == "4.31.0"
-    assert catalog["lean4"]["profiles"]["MATHLIB"]["mathlib_commit"] == (
-        "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
-    )
-    assert catalog["lean4"]["profiles"]["MATHLIB"]["checker_timeout_seconds"] == 225
-
-
-def test_cli_init_has_a_human_readable_default_summary(tmp_path: Path) -> None:
-    result = CliRunner().invoke(app, ["--state-dir", str(tmp_path), "init"])
-
-    assert result.exit_code == 0
-    assert len(result.stdout) < 1_000
-    assert f"Initialized Jacobian state in {tmp_path.resolve()}" in result.stdout
-    assert "reference domains" in result.stdout
-    assert "capabilities" in result.stdout
-    assert "graph_paths" in result.stdout
-
-
-def test_cli_help_exposes_v02_operations() -> None:
+def test_cli_help_exposes_only_math_and_operator_commands() -> None:
     result = CliRunner().invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    for command in (
-        "structure-canonicalize",
-        "search-enumerate",
-        "search-run",
-        "experiment-inspect",
-        "experiment-cancel",
-        "experiment-pause",
-        "experiment-resume",
-        "conjecture-repair",
-        "conjecture-generate",
-        "parameter-generalize",
-        "transform-apply",
-        "transform-verify",
-        "polytope-separate",
-        "provider-measure",
-    ):
+    for command in ("init", "catalog", "inspect", "run", "provider-measure"):
         assert command in result.stdout
+    for deleted in ("search-enumerate", "experiment-inspect", "artifact-put"):
+        assert deleted not in result.stdout
 
 
-def test_cli_measures_exact_provider_without_implicit_cold_install(
+def test_cli_init_reports_installed_operation_count(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        app,
+        ["--state-dir", str(tmp_path), "init"],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    assert f"Initialized Jacobian state in {tmp_path.resolve()}" in result.stdout
+    assert "Installed " in result.stdout
+    assert " mathematical operations." in result.stdout
+
+
+def test_cli_catalog_and_inspect_share_installed_declaration(tmp_path: Path) -> None:
+    runner = CliRunner()
+    common = [
+        "--state-dir",
+        str(tmp_path),
+        "--checker-authority",
+        "NONE",
+    ]
+
+    catalog_call = runner.invoke(app, [*common, "catalog"])
+    inspect_call = runner.invoke(
+        app,
+        [*common, "inspect", "matrix.determinant.compute"],
+    )
+
+    assert catalog_call.exit_code == 0, catalog_call.stderr
+    assert inspect_call.exit_code == 0, inspect_call.stderr
+    catalog = json.loads(catalog_call.stdout)
+    descriptor = json.loads(inspect_call.stdout)
+    assert descriptor["capability_id"] == "matrix.determinant.compute"
+    assert descriptor in catalog["capabilities"]
+
+
+def test_cli_run_executes_one_installed_operation_from_inline_json(
     tmp_path: Path,
 ) -> None:
+    payload = {
+        "matrix": {
+            "matrix_schema_version": "1",
+            "domain": "QQ",
+            "entries": [
+                [
+                    {"num": "1", "den": "1"},
+                    {"num": "2", "den": "1"},
+                ],
+                [
+                    {"num": "3", "den": "1"},
+                    {"num": "4", "den": "1"},
+                ],
+            ],
+        }
+    }
+
     result = CliRunner().invoke(
         app,
         [
@@ -91,127 +83,64 @@ def test_cli_measures_exact_provider_without_implicit_cold_install(
             str(tmp_path),
             "--checker-authority",
             "NONE",
-            "provider-measure",
-            "graph.compute.properties",
+            "run",
+            "matrix.determinant.compute",
+            "--json",
+            json.dumps(payload),
         ],
     )
 
-    assert result.exit_code == 0, result.stdout
-    measurement = json.loads(result.stdout)
-    assert measurement["provider_runtime"]["provider"] == "jacobian.networkx"
-    assert measurement["measurement_version"] == "2"
-    assert measurement["installed_size"]["status"] == "COMPLETED"
-    assert measurement["installed_size"]["bytes"] > 0
-    assert measurement["cold_install"]["status"] == "SKIPPED"
-    assert measurement["cold_start"]["status"] == "COMPLETED"
-    assert measurement["cold_start"]["peak_rss_bytes"] > 0
-    assert measurement["reproduction_case"]["status"] == "COMPLETED"
+    assert result.exit_code == 0, result.stderr
+    response = json.loads(result.stdout)
+    assert response["execution"]["status"] == "COMPLETED"
+    assert response["output"]["result"]["determinant"] == {
+        "num": "-2",
+        "den": "1",
+    }
 
 
-def test_cli_missing_input_file_returns_an_actionable_json_error(
-    tmp_path: Path,
-) -> None:
-    missing = tmp_path / "missing.json"
-    state_dir = tmp_path / "state"
+def test_cli_run_reads_strict_json_file(tmp_path: Path) -> None:
+    payload = tmp_path / "payload.json"
+    payload.write_text('{"left":"12","right":"18"}', encoding="utf-8")
 
     result = CliRunner().invoke(
         app,
         [
             "--state-dir",
-            str(state_dir),
-            "artifact-put",
-            "schema://missing",
-            "semantics://missing",
-            str(missing),
+            str(tmp_path / "state"),
+            "--checker-authority",
+            "NONE",
+            "run",
+            "integer.compute.gcd",
+            "--file",
+            str(payload),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    response = json.loads(result.stdout)
+    assert response["execution"]["status"] == "COMPLETED"
+
+
+@pytest.mark.parametrize("arguments", [(), ("--json", "{}", "--file", "input.json")])
+def test_cli_run_requires_exactly_one_payload_source(
+    tmp_path: Path,
+    arguments: tuple[str, ...],
+) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "--state-dir",
+            str(tmp_path),
+            "run",
+            "integer.compute.gcd",
+            *arguments,
         ],
     )
 
     assert result.exit_code == 1
-    assert result.stdout == ""
-    assert json.loads(result.stderr) == {
-        "error": {
-            "code": "INPUT_FILE_UNAVAILABLE",
-            "message": "Jacobian could not read the input file.",
-            "hint": "Check that the path exists and is readable, then retry.",
-        }
-    }
-    assert "Traceback" not in result.stderr
-    assert str(missing) not in result.stderr
-    assert not state_dir.exists()
-
-
-def test_cli_invalid_json_returns_an_actionable_json_error(tmp_path: Path) -> None:
-    payload = tmp_path / "payload.json"
-    payload.write_text('{"value": NaN}', encoding="utf-8")
-
-    result = CliRunner().invoke(
-        app,
-        [
-            "--state-dir",
-            str(tmp_path / "state"),
-            "artifact-put",
-            "schema://missing",
-            "semantics://missing",
-            str(payload),
-        ],
-    )
-
-    assert result.exit_code == 2
-    assert result.stdout == ""
-    assert json.loads(result.stderr) == {
-        "error": {
-            "code": "INVALID_INPUT",
-            "message": "Jacobian could not use the supplied input.",
-            "hint": (
-                "Check the command arguments and JSON payload against the "
-                "documented schema, then retry."
-            ),
-        }
-    }
-    assert "NaN" not in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_cli_cleanup_failure_does_not_replace_translated_command_error(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    payload = tmp_path / "payload.json"
-    payload.write_text('{"value": NaN}', encoding="utf-8")
-
-    def failing_close(_state: CliState) -> None:
-        raise RuntimeError("state close failure")
-
-    monkeypatch.setattr(CliState, "close", failing_close)
-
-    result = CliRunner().invoke(
-        app,
-        [
-            "--state-dir",
-            str(tmp_path / "state"),
-            "artifact-put",
-            "schema://missing",
-            "semantics://missing",
-            str(payload),
-        ],
-    )
-
-    assert result.exit_code == 2
-    assert result.stdout == ""
-    assert json.loads(result.stderr) == {
-        "error": {
-            "code": "INVALID_INPUT",
-            "message": "Jacobian could not use the supplied input.",
-            "hint": (
-                "Check the command arguments and JSON payload against the "
-                "documented schema, then retry."
-            ),
-        }
-    }
-    assert result.exception is not None
-    translated_exit = result.exception.__context__
-    assert translated_exit is not None
-    assert translated_exit.__notes__ == ["CLI cleanup also failed: state close failure"]
+    error = json.loads(result.stderr)["error"]
+    assert error["message"] == "pass exactly one of --json or --file"
 
 
 def test_cli_cleanup_failure_propagates_after_successful_command(
@@ -232,136 +161,14 @@ def test_cli_cleanup_failure_propagates_after_successful_command(
         typer.echo("command completed")
 
     cleanup_error = RuntimeError("state close failure")
-    original_close = CliState.close
 
-    def close_then_fail(state: CliState) -> None:
-        original_close(state)
+    def fail_close(_state: CliState) -> None:
         raise cleanup_error
 
-    monkeypatch.setattr(CliState, "close", close_then_fail)
+    monkeypatch.setattr(CliState, "close", fail_close)
 
-    result = CliRunner().invoke(
-        test_app,
-        ["succeed"],
-    )
+    result = CliRunner().invoke(test_app, ["succeed"])
 
     assert result.exit_code == 1
     assert result.exception is cleanup_error
     assert result.stdout == "command completed\n"
-    assert result.stderr == ""
-
-
-@pytest.mark.parametrize(
-    ("as_directory", "expected_code"),
-    [
-        (False, "INVALID_INPUT"),
-        (True, "INPUT_FILE_UNAVAILABLE"),
-    ],
-)
-def test_cli_json_shape_and_read_errors_use_the_json_envelope(
-    tmp_path: Path,
-    *,
-    as_directory: bool,
-    expected_code: str,
-) -> None:
-    payload = tmp_path / "payload.json"
-    if as_directory:
-        payload.mkdir()
-    else:
-        payload.write_text("[]", encoding="utf-8")
-
-    result = CliRunner().invoke(
-        app,
-        [
-            "--state-dir",
-            str(tmp_path / "state"),
-            "artifact-put",
-            "schema://missing",
-            "semantics://missing",
-            str(payload),
-        ],
-    )
-
-    assert result.exit_code in {1, 2}
-    assert json.loads(result.stderr)["error"]["code"] == expected_code
-    assert "Traceback" not in result.stderr
-    assert "Usage:" not in result.stderr
-
-
-def test_cli_storage_limit_has_a_capacity_recovery_action() -> None:
-    error, exit_code = _public_error(StorageLimitError("fixture internal limit"))
-
-    assert exit_code == 1
-    assert error == {
-        "code": "STORAGE_LIMIT_REACHED",
-        "message": "The input or stored data exceeds a configured size limit.",
-        "hint": (
-            "Reduce the payload size or free space in the state directory, then retry."
-        ),
-    }
-    assert "fixture" not in str(error)
-
-
-def test_cli_unsupported_state_version_is_typed_and_preserves_state() -> None:
-    error, exit_code = _public_error(
-        UnsupportedStateVersionError(2, minimum_revision=3)
-    )
-
-    assert exit_code == 1
-    assert error["code"] == "UNSUPPORTED_STATE_VERSION"
-    assert "revision 2" in error["message"]
-    assert "floor 3" in error["message"]
-    assert "fresh state directory" in error["hint"]
-
-
-def test_cli_enumeration_completes_before_the_local_process_exits(
-    tmp_path: Path,
-) -> None:
-    runtime = create_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    reference = runtime.portfolio.references["matrices"]
-    claim = runtime.core.artifacts.put(
-        schema_uri=reference.claim_schema_uri,
-        semantics_uri=reference.semantics_uri,
-        payload={
-            "claim_schema_version": "1",
-            "domain_id": "jacobian.integer-matrices",
-            "domain_version": "1",
-            "semantics_uri": reference.semantics_uri,
-            "quantifiers": [],
-            "predicate": {"name": "is_nonsingular", "parameters": {}},
-            "bounds": {},
-            "required_capabilities": ["CandidateEnumerator", "Evaluator"],
-            "correspondence_status": "HUMAN_REVIEWED",
-        },
-    )
-    bounds = tmp_path / "bounds.json"
-    bounds.write_text(
-        json.dumps({"rows": 1, "cols": 1, "entries": [0]}),
-        encoding="utf-8",
-    )
-
-    result = CliRunner().invoke(
-        app,
-        [
-            "--state-dir",
-            str(tmp_path),
-            "search-enumerate",
-            claim.artifact_uri,
-            reference.plugin_id,
-            str(bounds),
-            "--candidates-max",
-            "1",
-            "--wall-seconds",
-            "30",
-            "--page-size",
-            "1",
-        ],
-    )
-
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert payload["state"] == "COMPLETED"
-    assert payload["stop_reason"] == "COMPLETE"
-    assert payload["verification"] == "UNVERIFIED"

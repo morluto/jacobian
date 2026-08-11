@@ -153,7 +153,7 @@ def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
         )
     )
     assert too_large.execution.status is ExecutionStatus.ERROR
-    assert too_large.diagnostics[0].code == "INVALID_REQUEST"
+    assert too_large.diagnostics[0].code == "INVALID_GRAPH_MAXIMUM_MATCHING_REQUEST"
 
     unrelated_invariant = domain_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -162,7 +162,7 @@ def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
         )
     )
     assert unrelated_invariant.execution.status is ExecutionStatus.ERROR
-    assert unrelated_invariant.diagnostics[0].code == "INVALID_REQUEST"
+    assert unrelated_invariant.diagnostics[0].code == "INVALID_GRAPH_INVARIANT_REQUEST"
 
 
 def test_disconnected_and_acyclic_graph_conventions(domain_services) -> None:
@@ -278,7 +278,7 @@ def test_graph_backends_with_inconsistent_independence_results_fail_closed(
     assert caught.value.diagnostic.code == "INCONSISTENT_INDEPENDENCE_RESULT"
 
 
-def test_np_hard_invariants_are_budgeted_and_carry_obligations(
+def test_np_hard_invariants_return_exact_typed_results(
     domain_services,
 ) -> None:
     cases = [
@@ -300,14 +300,11 @@ def test_np_hard_invariants_are_budgeted_and_carry_obligations(
             )
         )
         assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert result.output["status"] == "EXACT", capability_id
-        assert result.output["optimum_value"] == optimum, capability_id
-        assert len(result.output["witness_vertices"]) == optimum, capability_id
-        assert len(result.artifact_uris) == 3, capability_id
-        obligation = domain_services.core.store.get(
-            result.obligations[0].obligation_uri
-        )
-        assert obligation.payload["claimed_value"] == optimum, capability_id
+        output = result.output["result"]
+        assert output["status"] == "EXACT", capability_id
+        assert output["optimum_value"] == optimum, capability_id
+        assert len(output["witness_vertices"]) == optimum, capability_id
+        assert result.artifact_uris == (), capability_id
 
 
 def test_graph_invariant_resource_atomics_are_exact_computed(

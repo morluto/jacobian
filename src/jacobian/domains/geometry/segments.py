@@ -49,7 +49,6 @@ SEGMENT_CAPABILITIES = (
         segment_intersection,
         "geometry",
         "intersection",
-        relation_id="geometry.segments.intersection.relation",
         invocation_examples=(
             example(
                 "crossing_segments",

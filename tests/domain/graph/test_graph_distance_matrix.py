@@ -105,7 +105,7 @@ def test_distance_matrix_rejects_graph_above_existing_order_bound(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.artifact_uris == ()
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].code == "INVALID_GRAPH_INVARIANT_REQUEST"
 
 
 @pytest.mark.parametrize(

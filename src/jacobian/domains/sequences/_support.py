@@ -1,8 +1,9 @@
 """Sequence operation declarations."""
 
-from jacobian.operations import ComputedOperationFactory, OperationFailure
+from jacobian.operation_bindings import InlineOperationFactory
+from jacobian.operations import OperationFailure
 
-sequence_operation = ComputedOperationFactory(
+sequence_operation = InlineOperationFactory(
     OperationFailure(
         code="SEQUENCE_OPERATION_NOT_APPLICABLE",
         stage="sequence_computation",

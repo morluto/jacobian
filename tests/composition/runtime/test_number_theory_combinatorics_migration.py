@@ -143,7 +143,7 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
         ChineseRemainderRequest.model_validate(payload)
 
 
-def test_discrete_logarithm_materializes_bound_result_and_obligation(
+def test_discrete_logarithm_returns_typed_result(
     tmp_path: Path,
 ) -> None:
     service = _service(tmp_path)
@@ -160,19 +160,16 @@ def test_discrete_logarithm_materializes_bound_result_and_obligation(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output == {
+    assert result.output["result"] == {
         "status": "SOLVED",
         "base": 7,
         "target": 15,
         "modulus": 41,
         "discrete_log": 3,
     }
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 3
-    assert len(result.obligations) == 1
-    obligation = service.store.get(result.obligations[0].obligation_uri)
-    assert obligation.payload["required_checks"] == ["DISCRETE_LOG_WITNESS_REPLAY"]
+    assert result.artifact_uris == ()
+    assert result.obligations == ()
 
 
 def test_discrete_logarithm_reports_unsolvable_without_false_witness(
@@ -191,9 +188,8 @@ def test_discrete_logarithm_reports_unsolvable_without_false_witness(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "UNSOLVABLE"
-    assert result.output["discrete_log"] is None
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
+    assert result.output["result"]["status"] == "UNSOLVABLE"
+    assert result.output["result"]["discrete_log"] is None
 
 
 def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
@@ -267,7 +263,6 @@ def test_factorization_is_complete_in_an_isolated_bounded_worker(
             {"prime": "5", "power": 1},
         ]
     }
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
@@ -319,7 +314,6 @@ def test_powerful_number_decision_preserves_a_complete_factor_witness(
         "factors": factors,
         "violating_primes": violating_primes,
     }
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
     assert result.relationships == ()
@@ -396,7 +390,6 @@ def test_factorization_derived_operations_complete_in_the_worker(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == expected
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
 
 
 def test_factorization_timeout_is_an_artifact_free_non_conclusion(
@@ -511,4 +504,3 @@ def test_integer_partition_enumeration_is_complete_and_canonical(
         "max_parts": 2,
         "partitions": [[5], [4, 1], [3, 2]],
     }
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE

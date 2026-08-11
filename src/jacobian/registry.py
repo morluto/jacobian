@@ -581,13 +581,6 @@ def _compatibility_scope_error(
             "Checker authorization requires claim schema, semantics, and candidate "
             "schema allowlists. Supply all three, then retry."
         )
-    if evidence_kind is EvidenceKind.TRANSFORMATION and (
-        not target_schema_uris or not target_semantics_uris
-    ):
-        return (
-            "Transformation checker authorization requires target schema and target "
-            "semantics allowlists. Supply both, then retry."
-        )
     if bool(target_schema_uris) != bool(target_semantics_uris):
         return (
             "Target schema and target semantics allowlists must be supplied together. "

@@ -25,21 +25,6 @@ def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> Non
             assert tools["math.run"].title == "Run a mathematical operation"
             assert "math.find" in (tools["math.run"].description or "")
 
-            discovery = await client.get_prompt(
-                "jacobian-discover",
-                {"task": "Find a finite counterexample."},
-            )
-            discovery_text = discovery.messages[0].content.text
-            assert "math.find" in discovery_text
-            assert "math.run" in discovery_text
-
-            evidence = await client.get_prompt(
-                "jacobian-check-evidence",
-                {"claim": "The candidate satisfies the defining identity."},
-            )
-            evidence_text = evidence.messages[0].content.text
-            assert "math.find" in evidence_text
-
             described = await client.call_tool(
                 "math.find",
                 {"capability_id": "integer.compute.gcd", "view": "CONTRACT"},

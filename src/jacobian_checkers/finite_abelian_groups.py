@@ -150,6 +150,22 @@ def _duplicate_witness(
     }
 
 
+def _strict_json_equal(candidate: object, expected: object) -> bool:
+    """Compare JSON-shaped values without Python's bool/int coercions."""
+    if type(candidate) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return set(candidate) == set(expected) and all(
+            _strict_json_equal(candidate[key], value) for key, value in expected.items()
+        )
+    if isinstance(expected, list):
+        return len(candidate) == len(expected) and all(
+            _strict_json_equal(candidate_item, expected_item)
+            for candidate_item, expected_item in zip(candidate, expected, strict=True)
+        )
+    return candidate == expected
+
+
 def check_finite_abelian_group_exact_factorization(
     request: dict[str, Any],
 ) -> dict[str, Any]:
@@ -161,7 +177,7 @@ def check_finite_abelian_group_exact_factorization(
             witness_format="finite-abelian-group.exact-factorization.stdlib-replay",
         )
         moduli, left, right = _source(source)
-        if result != _expected(moduli, left, right):
+        if not _strict_json_equal(result, _expected(moduli, left, right)):
             return _reject("result does not match exhaustive finite-group replay")
         return _accept(f"independent exhaustive integer replay accepted {operation_id}")
     except (KeyError, TypeError, ValueError, OverflowError):

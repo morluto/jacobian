@@ -26,18 +26,18 @@ from jacobian.storage.errors import StorageError
 
 
 def test_enumerator_candidate_is_validated_before_archival(
-    attached_complete_runtime,
+    matrix_reference_services,
 ) -> None:
     plugin_id = _install_matrix_enumerator_plugin(
-        attached_complete_runtime,
+        matrix_reference_services,
         entrypoint="tests.support.search_entrypoints:enumerate_invalid_candidate",
     )
     claim_uri = _matrix_claim_for_plugin(
-        attached_complete_runtime,
+        matrix_reference_services,
         plugin_id=plugin_id,
     )
 
-    handle = attached_complete_runtime.services.experiments.start_enumeration(
+    handle = matrix_reference_services.application.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -49,7 +49,7 @@ def test_enumerator_candidate_is_validated_before_archival(
             ),
         )
     )
-    snapshot = attached_complete_runtime.services.experiments.wait(
+    snapshot = matrix_reference_services.application.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=45,
     )
@@ -63,17 +63,17 @@ def test_enumerator_candidate_is_validated_before_archival(
 
 
 def test_enumerator_timeout_remains_a_bounded_nonconclusion(
-    attached_complete_runtime,
+    matrix_reference_services,
 ) -> None:
     plugin_id = _install_matrix_enumerator_plugin(
-        attached_complete_runtime,
+        matrix_reference_services,
         entrypoint="tests.support.process_entrypoints:wait_forever",
     )
     claim_uri = _matrix_claim_for_plugin(
-        attached_complete_runtime,
+        matrix_reference_services,
         plugin_id=plugin_id,
     )
-    handle = attached_complete_runtime.services.experiments.start_enumeration(
+    handle = matrix_reference_services.application.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -90,11 +90,11 @@ def test_enumerator_timeout_remains_a_bounded_nonconclusion(
         TimeoutError,
         match="Inspect it or wait again with a larger timeout",
     ):
-        attached_complete_runtime.services.experiments.wait(
+        matrix_reference_services.application.experiments.wait(
             handle.experiment_uri, timeout_seconds=0
         )
 
-    snapshot = attached_complete_runtime.services.experiments.wait(
+    snapshot = matrix_reference_services.application.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=15,
     )
@@ -107,18 +107,18 @@ def test_enumerator_timeout_remains_a_bounded_nonconclusion(
 
 
 def test_evaluator_timeout_prevents_complete_enumeration_result(
-    attached_complete_runtime,
+    matrix_reference_services,
 ) -> None:
     plugin_id = _install_matrix_enumerator_plugin(
-        attached_complete_runtime,
+        matrix_reference_services,
         entrypoint="jacobian.plugins.matrices:enumerate_candidates_capability",
         evaluator_entrypoint="tests.support.process_entrypoints:wait_forever",
     )
     claim_uri = _matrix_claim_for_plugin(
-        attached_complete_runtime,
+        matrix_reference_services,
         plugin_id=plugin_id,
     )
-    handle = attached_complete_runtime.services.experiments.start_enumeration(
+    handle = matrix_reference_services.application.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -131,7 +131,7 @@ def test_evaluator_timeout_prevents_complete_enumeration_result(
         )
     )
 
-    snapshot = attached_complete_runtime.services.experiments.wait(
+    snapshot = matrix_reference_services.application.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=15,
     )
@@ -144,11 +144,11 @@ def test_evaluator_timeout_prevents_complete_enumeration_result(
 
 
 def test_rejected_evaluation_batch_fails_enumeration(
-    attached_complete_runtime,
+    matrix_reference_services,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        attached_complete_runtime,
+        matrix_reference_services,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
@@ -168,9 +168,9 @@ def test_rejected_evaluation_batch_fails_enumeration(
         )
 
     monkeypatch.setattr(
-        attached_complete_runtime.services.evaluation, "evaluate_batch", reject_batch
+        matrix_reference_services.application.evaluation, "evaluate_batch", reject_batch
     )
-    handle = attached_complete_runtime.services.experiments.start_enumeration(
+    handle = matrix_reference_services.application.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -183,7 +183,7 @@ def test_rejected_evaluation_batch_fails_enumeration(
         )
     )
 
-    snapshot = attached_complete_runtime.services.experiments.wait(
+    snapshot = matrix_reference_services.application.experiments.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -197,17 +197,19 @@ def test_rejected_evaluation_batch_fails_enumeration(
 
 
 def test_terminal_archive_failure_marks_enumeration_error(
-    attached_complete_runtime,
+    matrix_reference_services,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     claim_uri, plugin_id = _claim(
-        attached_complete_runtime,
+        matrix_reference_services,
         reference_name="matrices",
         predicate="is_nonsingular",
         parameters={},
     )
-    original_put = attached_complete_runtime.services.experiments._put_internal_artifact
+    original_put = (
+        matrix_reference_services.application.experiments._put_internal_artifact
+    )
 
     def fail_terminal_archive(**kwargs: object) -> object:
         if kwargs.get("summary") == "enumeration archive manifest":
@@ -215,11 +217,11 @@ def test_terminal_archive_failure_marks_enumeration_error(
         return original_put(**kwargs)
 
     monkeypatch.setattr(
-        attached_complete_runtime.services.experiments,
+        matrix_reference_services.application.experiments,
         "_put_internal_artifact",
         fail_terminal_archive,
     )
-    handle = attached_complete_runtime.services.experiments.start_enumeration(
+    handle = matrix_reference_services.application.experiments.start_enumeration(
         SearchEnumerateRequest(
             claim_uri=claim_uri,
             plugin_id=plugin_id,
@@ -232,7 +234,7 @@ def test_terminal_archive_failure_marks_enumeration_error(
         )
     )
 
-    snapshot = attached_complete_runtime.services.experiments.wait(
+    snapshot = matrix_reference_services.application.experiments.wait(
         handle.experiment_uri,
         timeout_seconds=15,
     )

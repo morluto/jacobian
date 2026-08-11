@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+
+from tests.support.services import DomainTestServices, open_domain_services
+
 from jacobian.contracts.claims import ClaimSpec
 from jacobian.contracts.evidence import WitnessRole
 from jacobian.contracts.plugins import PluginManifest
 from jacobian.contracts.search import SearchBudget, SearchRunRequest
-from jacobian.runtime.model import JacobianRuntime
+
+
+@contextmanager
+def open_search_services(root: Path) -> Iterator[DomainTestServices]:
+    """Open the production search service graph without a portfolio install."""
+
+    with open_domain_services(root) as services:
+        yield services
 
 
 def _install_search_plugin(
-    runtime: JacobianRuntime,
+    runtime: DomainTestServices,
     *,
     proposer_entrypoint: str = (
         "tests.support.search_entrypoints:propose_fixture_values"
@@ -60,8 +73,8 @@ def _install_search_plugin(
             "version": "1",
         }
     manifest = runtime.core.artifacts.put(
-        schema_uri=runtime.services.reference_installer.manifest_schema_uri,
-        semantics_uri=runtime.services.reference_installer.manifest_semantics_uri,
+        schema_uri=runtime.application.reference_installer.manifest_schema_uri,
+        semantics_uri=runtime.application.reference_installer.manifest_semantics_uri,
         payload=PluginManifest(
             domain_id="fixture.search-domain",
             domain_version="1",

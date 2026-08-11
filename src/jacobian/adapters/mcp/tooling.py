@@ -20,11 +20,9 @@ from jacobian.adapters.mcp.projections import (
 )
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.reasoning_log import ReasoningProtocolError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -363,7 +361,6 @@ def _response_size(value: Any) -> int:
 def _log_capability_attempt(
     *,
     capability_id: str,
-    mode: CapabilityMode,
     started: float,
     argument_digest: str,
     request_digest: str,
@@ -388,7 +385,7 @@ def _log_capability_attempt(
     codes = ",".join(diagnostic_codes[:8]) or "none"
     _LOGGER.info(
         "MCP capability attempt request_digest=%s trace_digest=%s trace_source=%s "
-        "capability_id=%s capability_version=%s mode=%s "
+        "capability_id=%s capability_version=%s "
         "execution_status=%s assurance=%s diagnostic_codes=%s "
         "attempt_duration_ms=%.3f operation_runtime_ms=%s "
         "response_bytes=%d argument_digest=%s",
@@ -397,7 +394,6 @@ def _log_capability_attempt(
         trace_source,
         capability_id,
         capability_version,
-        mode.value,
         execution_status or "ERROR",
         assurance,
         codes,
@@ -408,144 +404,40 @@ def _log_capability_attempt(
     )
 
 
-def _claim_reasoning_call(
-    runtime: Any,
-    *,
-    run_id: str | None,
-    call_id: str | None,
-    capability_id: str,
-    mode: CapabilityMode,
-    argument_digest: str,
-    required: bool,
-    audit: bool,
-) -> bool:
-    if run_id is None or call_id is None:
-        if required:
-            raise ReasoningProtocolError(
-                "REASONING_LOG_REQUIRED",
-                "math.run requires the run_id and call_id from BEFORE_TOOL.",
-                "Call reasoning.write with PLAN, then BEFORE_TOOL, and retry with its IDs.",
-            )
-        if audit:
-            _LOGGER.warning(
-                "MCP capability reasoning protocol violation; unbound invocation "
-                "allowed in audit mode"
-            )
-        return False
-    try:
-        runtime.core.reasoning_log.claim_call(
-            run_id,
-            call_id,
-            capability_id,
-            mode,
-            argument_digest,
-        )
-    except ReasoningProtocolError:
-        if required:
-            raise
-        _LOGGER.warning(
-            "MCP capability reasoning protocol violation; invoking in audit mode",
-            exc_info=True,
-        )
-        return False
-    return True
-
-
-def _finish_failed_reasoning_call(
-    runtime: Any,
-    *,
-    bound: bool,
-    run_id: str | None,
-    call_id: str | None,
-    capability_id: str,
-    mode: CapabilityMode,
-    argument_digest: str,
-    execution_status: str,
-    diagnostic_code: str,
-) -> None:
-    if not bound:
-        return
-    if run_id is None:
-        raise RuntimeError("run_id is unexpectedly None")
-    if call_id is None:
-        raise RuntimeError("call_id is unexpectedly None")
-    runtime.core.reasoning_log.finish_call(
-        run_id,
-        call_id,
-        capability_id,
-        mode,
-        argument_digest,
-        execution_status=execution_status,
-        diagnostic_codes=(diagnostic_code,),
-    )
-
-
 async def _invoke_capability_attempt(
     runtime: Any,
     *,
     capability_id: str,
     payload: dict[str, Any],
-    mode: CapabilityMode,
     ctx: Any | None,
-    reasoning_run_id: str | None = None,
-    reasoning_call_id: str | None = None,
-    reasoning_required: bool = False,
-    reasoning_audit: bool = False,
 ) -> CapabilityResult:
     started = time.monotonic()
     argument_digest = _argument_digest(
         {
             "capability_id": capability_id,
-            "mode": mode.value,
             "payload": payload,
         }
     )
     trace_digest, trace_source = _request_trace_digest(ctx)
     request_digest = _request_id_digest(ctx)
     cancellation_event = threading.Event()
-    bound = _claim_reasoning_call(
-        runtime,
-        run_id=reasoning_run_id,
-        call_id=reasoning_call_id,
+    request = CapabilityRequest(
         capability_id=capability_id,
-        mode=mode,
-        argument_digest=argument_digest,
-        required=reasoning_required,
-        audit=reasoning_audit,
+        input=payload,
     )
     try:
         result = await _run_blocking(
             _invoke_capability_with_cancellation,
             runtime,
-            CapabilityRequest(
-                capability_id=capability_id,
-                mode=mode,
-                input=payload,
-            ),
+            request,
             cancellation_event,
             on_cancel=cancellation_event.set,
         )
     except asyncio.CancelledError as exc:
         drained = getattr(exc, "drained_result", None)
         if isinstance(drained, CapabilityResult):
-            if bound:
-                if reasoning_run_id is None:
-                    raise RuntimeError("reasoning_run_id is unexpectedly None") from exc
-                if reasoning_call_id is None:
-                    raise RuntimeError(
-                        "reasoning_call_id is unexpectedly None"
-                    ) from exc
-                runtime.core.reasoning_log.finish_call(
-                    reasoning_run_id,
-                    reasoning_call_id,
-                    capability_id,
-                    mode,
-                    argument_digest,
-                    result=drained,
-                )
             _log_capability_attempt(
                 capability_id=capability_id,
-                mode=mode,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -554,20 +446,8 @@ async def _invoke_capability_attempt(
                 result=drained,
             )
         else:
-            _finish_failed_reasoning_call(
-                runtime,
-                bound=bound,
-                run_id=reasoning_run_id,
-                call_id=reasoning_call_id,
-                capability_id=capability_id,
-                mode=mode,
-                argument_digest=argument_digest,
-                execution_status="CANCELLED",
-                diagnostic_code="CLIENT_CANCELLED",
-            )
             _log_capability_attempt(
                 capability_id=capability_id,
-                mode=mode,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -578,20 +458,8 @@ async def _invoke_capability_attempt(
             )
         raise
     except Exception:
-        _finish_failed_reasoning_call(
-            runtime,
-            bound=bound,
-            run_id=reasoning_run_id,
-            call_id=reasoning_call_id,
-            capability_id=capability_id,
-            mode=mode,
-            argument_digest=argument_digest,
-            execution_status="ERROR",
-            diagnostic_code="INVOCATION_EXCEPTION",
-        )
         _log_capability_attempt(
             capability_id=capability_id,
-            mode=mode,
             started=started,
             argument_digest=argument_digest,
             request_digest=request_digest,
@@ -601,22 +469,8 @@ async def _invoke_capability_attempt(
             diagnostic_codes=("INVOCATION_EXCEPTION",),
         )
         raise
-    if bound:
-        if reasoning_run_id is None:
-            raise RuntimeError("reasoning_run_id is unexpectedly None")
-        if reasoning_call_id is None:
-            raise RuntimeError("reasoning_call_id is unexpectedly None")
-        runtime.core.reasoning_log.finish_call(
-            reasoning_run_id,
-            reasoning_call_id,
-            capability_id,
-            mode,
-            argument_digest,
-            result=result,
-        )
     _log_capability_attempt(
         capability_id=capability_id,
-        mode=mode,
         started=started,
         argument_digest=argument_digest,
         request_digest=request_digest,

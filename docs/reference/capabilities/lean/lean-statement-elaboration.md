@@ -1,6 +1,6 @@
 # Lean statement proposal and direct elaboration
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 `lean.statement.propose` has two operations over one canonical statement
 artifact:

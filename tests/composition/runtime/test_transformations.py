@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def test_matrix_representation_change_is_independently_verified(
     authorized_complete_runtime,

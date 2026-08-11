@@ -7,15 +7,6 @@ import re
 from fractions import Fraction
 from typing import Any
 
-__all__ = [
-    "check_kernel_vector",
-    "check_maxdet_enumeration",
-    "check_maximizer_witness",
-    "check_row_major_transformation",
-    "check_singular_preservation",
-]
-
-
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 MAX_ENUMERATED_MATRICES = 65_536
 

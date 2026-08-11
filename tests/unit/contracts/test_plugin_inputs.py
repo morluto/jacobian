@@ -14,6 +14,8 @@ from jacobian.contracts.plugin_matrices import (
     MatrixTransformRequest,
 )
 from jacobian.contracts.plugin_number_theory import ErdosStrausCapabilityRequest
+from jacobian.contracts.shrinking import PluginReductionResponse
+from jacobian.plugins.graph_shrinking import reduce_simple_graph
 
 
 def _matrix_candidate() -> dict[str, object]:
@@ -56,6 +58,39 @@ def test_plugin_contracts_reject_scalar_collections_and_unknown_fields() -> None
                 "unexpected": True,
             }
         )
+
+
+def test_graph_shrinker_returns_schema_valid_typed_graph_proposals() -> None:
+    artifact_uri = "artifact://sha256/" + "a" * 64
+    response = PluginReductionResponse.model_validate(
+        reduce_simple_graph(
+            {
+                "request_version": "1",
+                "target": {
+                    "graph_schema_version": "1",
+                    "vertices": ["a", "b"],
+                    "edges": [["a", "b"]],
+                },
+                "claim": {
+                    "domain_id": "jacobian.graph-shrinking",
+                    "domain_version": "1",
+                    "semantics_uri": artifact_uri,
+                    "predicate": {"name": "graph.property.non_bipartite"},
+                    "required_capabilities": ["Reducer"],
+                    "correspondence_status": "FORMALLY_LINKED",
+                },
+                "reducers": ["delete_vertex", "delete_edge"],
+                "objectives": ["vertices", "edges"],
+            }
+        )
+    )
+
+    assert len(response.reductions) == 3
+    assert response.reductions[0].payload == {
+        "graph_schema_version": "1",
+        "vertices": ["b"],
+        "edges": [],
+    }
 
 
 def test_plugin_contracts_accept_known_worker_metadata_without_opening_the_boundary() -> (

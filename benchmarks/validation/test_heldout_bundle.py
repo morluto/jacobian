@@ -89,7 +89,6 @@ def _manifest() -> dict:
                 "id": "C2",
                 "role": "PRIMARY_TREATMENT",
                 "jacobian_enabled": True,
-                "reasoning_log_mode": "OFF",
                 "image": "registry.invalid/jacobian@sha256:" + "4" * 64,
                 "source_sha": "b" * 40,
                 "platform": "linux/amd64",

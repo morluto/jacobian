@@ -17,6 +17,12 @@ from jacobian.implementation import (
     install_source_only_importer,
     package_source_digest,
 )
+from jacobian.plugin_protocol import (
+    PluginWorkerContractFailure,
+    PluginWorkerFailure,
+    PluginWorkerOperationalFailure,
+    PluginWorkerSuccess,
+)
 
 
 def _resolve(entrypoint: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
@@ -37,67 +43,60 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
-    error_code = "EXECUTION_FAILED"
-    failure_fields: dict[str, str] = {}
+    failure: PluginWorkerFailure = PluginWorkerOperationalFailure(
+        error_code="EXECUTION_FAILED"
+    )
     request_decoded = False
     try:
         request = loads_strict_json(sys.stdin.buffer.read())
         request_decoded = True
         if not isinstance(request, dict):
-            error_code = "INVALID_REQUEST"
-            failure_fields = {
-                "path": "/",
-                "expected": "object",
-                "actual_type": type(request).__name__,
-            }
+            failure = PluginWorkerContractFailure(
+                error_code="INVALID_REQUEST",
+                path="/",
+                expected="object",
+                actual_type=type(request).__name__,
+            )
             raise TypeError("plugin request must be a JSON object")
         measured_before = package_source_digest(sys.argv[1])
         if measured_before != sys.argv[2]:
-            error_code = "SOURCE_CHANGED"
+            failure = PluginWorkerOperationalFailure(error_code="SOURCE_CHANGED")
             raise ValueError("plugin source differs from its resolved digest")
         install_source_only_importer(sys.argv[1])
         with contextlib.redirect_stdout(sys.stderr):
             operation = _resolve(sys.argv[1])
             response = operation(request)
         if not isinstance(response, dict):
-            error_code = "RESPONSE_INVALID"
-            failure_fields = {
-                "path": "/response",
-                "expected": "object",
-                "actual_type": type(response).__name__,
-            }
+            failure = PluginWorkerContractFailure(
+                error_code="RESPONSE_INVALID",
+                path="/response",
+                expected="object",
+                actual_type=type(response).__name__,
+            )
             raise TypeError("plugin response must be a JSON object")
         measured_after = package_source_digest(sys.argv[1])
         if measured_after != measured_before:
-            error_code = "SOURCE_CHANGED"
+            failure = PluginWorkerOperationalFailure(error_code="SOURCE_CHANGED")
             raise ValueError("plugin source changed during execution")
-        sys.stdout.buffer.write(
-            canonicalize_json(
-                {
-                    "response": response,
-                    "measured_implementation_digest": measured_after,
-                }
-            )
+        success = PluginWorkerSuccess(
+            response=response,
+            measured_implementation_digest=measured_after,
         )
+        sys.stdout.buffer.write(canonicalize_json(success.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 0
     except CanonicalizationError:
-        error_code = "RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST"
-        failure_fields = {
-            "path": "/response" if request_decoded else "/",
-            "expected": "canonical JSON object",
-            "actual_type": "response" if request_decoded else "bytes",
-        }
-        error = {"error_code": error_code, **failure_fields}
-        sys.stdout.buffer.write(canonicalize_json(error))
+        failure = PluginWorkerContractFailure(
+            error_code="RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST",
+            path="/response" if request_decoded else "/",
+            expected="canonical JSON object",
+            actual_type="response" if request_decoded else "bytes",
+        )
+        sys.stdout.buffer.write(canonicalize_json(failure.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
     except Exception:  # untrusted failures are operational, never logical
-        error = {
-            "error_code": error_code,
-            **failure_fields,
-        }
-        sys.stdout.buffer.write(canonicalize_json(error))
+        sys.stdout.buffer.write(canonicalize_json(failure.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
 

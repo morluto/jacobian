@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.lean import LeanEnvironment
@@ -45,10 +45,10 @@ class LeanLocalInstanceField(ContractModel):
 class LeanStructuredMetavariable(ContractModel):
     goal_index: StrictInt = Field(ge=0, le=63)
     user_name: str = Field(min_length=0, max_length=512)
-    is_user_name_anonymous: bool
+    is_user_name_anonymous: StrictBool
     kind: LeanMetavarKind
-    is_assigned: bool
-    is_delayed_assigned: bool
+    is_assigned: StrictBool
+    is_delayed_assigned: StrictBool
     depth: StrictInt = Field(ge=0)
     num_scope_args: StrictInt = Field(ge=0)
     target_type: str = Field(min_length=1, max_length=20_000)
@@ -57,15 +57,15 @@ class LeanStructuredMetavariable(ContractModel):
 
 class LeanElaborationContext(ContractModel):
     decl_name: str = Field(min_length=0, max_length=512)
-    may_postpone: bool
-    err_to_sorry: bool
-    auto_bound_implicit: bool
-    implicit_lambda: bool
-    is_noncomputable_section: bool
-    ignore_tc_failures: bool
-    in_pattern: bool
-    save_rec_app_syntax: bool
-    holes_as_synthetic_opaque: bool
+    may_postpone: StrictBool
+    err_to_sorry: StrictBool
+    auto_bound_implicit: StrictBool
+    implicit_lambda: StrictBool
+    is_noncomputable_section: StrictBool
+    ignore_tc_failures: StrictBool
+    in_pattern: StrictBool
+    save_rec_app_syntax: StrictBool
+    holes_as_synthetic_opaque: StrictBool
 
 
 class LeanMetavariableFieldsArtifact(ContractModel):

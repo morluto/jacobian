@@ -6,7 +6,9 @@ from pydantic import ValidationError
 from jacobian.contracts.lean import (
     LeanDeclarationInspectRequest,
     LeanDeclarationKind,
+    LeanDeclarationSearchOutput,
     LeanDeclarationSearchRequest,
+    LeanDeclarationSource,
     LeanDeclarationTypePattern,
     LeanDependencyGraphArtifact,
     LeanDependencyGraphRequest,
@@ -94,4 +96,73 @@ def test_dependency_graph_request_has_hard_traversal_budgets() -> None:
         LeanDependencyGraphRequest(
             root_declaration="Nat.add",
             max_nodes=501,
+        )
+
+
+def test_declaration_source_range_cannot_run_backwards() -> None:
+    with pytest.raises(ValidationError, match="run backwards"):
+        LeanDeclarationSource(
+            module="Init.Prelude",
+            line=10,
+            column=8,
+            end_line=10,
+            end_column=7,
+        )
+
+
+def test_search_stop_reason_and_match_reasons_bind_the_query() -> None:
+    query = LeanDeclarationSearchRequest(name_contains="add", result_limit=2)
+    with pytest.raises(ValidationError, match="match reasons"):
+        LeanDeclarationSearchOutput(
+            environment="CORE",
+            environment_digest="sha256:" + "a" * 64,
+            query=query,
+            declarations=(
+                {
+                    "name": "Nat.add",
+                    "type": "Nat → Nat → Nat",
+                    "kind": "DEFINITION",
+                    "match_reasons": [],
+                },
+            ),
+            scanned_declarations=10,
+            stop_reason="EXHAUSTED",
+        )
+
+    with pytest.raises(ValidationError, match="result-limit"):
+        LeanDeclarationSearchOutput(
+            environment="CORE",
+            environment_digest="sha256:" + "a" * 64,
+            query=query,
+            declarations=(
+                {
+                    "name": "Nat.add",
+                    "type": "Nat → Nat → Nat",
+                    "kind": "DEFINITION",
+                    "match_reasons": ["NAME_SUBSTRING"],
+                },
+            ),
+            scanned_declarations=10,
+            stop_reason="RESULT_LIMIT",
+        )
+
+
+def test_dependency_graph_nodes_cannot_exceed_requested_depth() -> None:
+    with pytest.raises(ValidationError, match="depth budget"):
+        LeanDependencyGraphArtifact(
+            environment="CORE",
+            environment_digest="sha256:" + "a" * 64,
+            query=LeanDependencyGraphRequest(
+                root_declaration="Nat.add",
+                max_depth=0,
+                max_nodes=2,
+            ),
+            nodes=(
+                {"name": "Nat.add", "kind": "DEFINITION", "depth": 0},
+                {"name": "Nat", "kind": "INDUCTIVE", "depth": 1},
+            ),
+            edges=(),
+            frontier=("Nat.add",),
+            node_budget_exhausted=False,
+            closure_complete=False,
         )

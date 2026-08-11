@@ -31,15 +31,6 @@ from jacobian.contracts.plugin_matrices import (
     MatrixTransformRequest,
 )
 
-__all__ = (
-    "enumerate_candidates_capability",
-    "evaluate_capability",
-    "find_witness_capability",
-    "materialize",
-    "reductions_capability",
-    "transform_row_major_capability",
-)
-
 MAX_SEARCHED_MATRICES = 65_536
 
 # ---------------------------------------------------------------------------

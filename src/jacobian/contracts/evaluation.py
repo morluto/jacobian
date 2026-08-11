@@ -15,9 +15,11 @@ from jacobian.contracts.results import (
     ContractModel,
     Coverage,
     Execution,
+    InputStatus,
     InputValidation,
     Method,
     ResultEnvelope,
+    Verification,
 )
 
 
@@ -54,6 +56,14 @@ class EvaluationItem(ContractModel):
     failure_classifications: tuple[str, ...] = ()
     detail: str = ""
 
+    @model_validator(mode="after")
+    def remain_unverified_and_canonical(self) -> Self:
+        if self.result.assurance.verification is not Verification.UNVERIFIED:
+            raise ValueError("evaluator results cannot grant verified assurance")
+        canonicalize_json(self.objectives)
+        canonicalize_json(self.features)
+        return self
+
 
 class EvaluationBatchResult(ContractModel):
     schema_version: Literal["1"] = "1"
@@ -66,3 +76,22 @@ class EvaluationBatchResult(ContractModel):
     evaluator_digest: Sha256Digest | None = None
     environment_digest: Sha256Digest | None = None
     items: tuple[EvaluationItem, ...] = ()
+
+    @model_validator(mode="after")
+    def bind_admission_to_evaluation_evidence(self) -> Self:
+        if self.input.status is InputStatus.ACCEPTED:
+            if not self.items:
+                raise ValueError("an accepted evaluation batch requires result items")
+            if self.evaluator_digest is None or self.environment_digest is None:
+                raise ValueError(
+                    "an accepted evaluation batch requires evaluator and environment digests"
+                )
+        elif (
+            self.items
+            or self.evaluator_digest is not None
+            or self.environment_digest is not None
+        ):
+            raise ValueError(
+                "a rejected evaluation batch cannot carry evaluation evidence"
+            )
+        return self

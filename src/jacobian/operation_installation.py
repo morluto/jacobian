@@ -18,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
     CapabilityProviderAvailability,
@@ -88,7 +87,6 @@ def _execution_failure_result(
     return CapabilityResult(
         capability_id=operation.capability_id,
         capability_version=operation.version,
-        mode=request.mode,
         execution=Execution(
             status=outcome.status,
             runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -261,7 +259,6 @@ class ComputedOperationAdapter:
             description=operation.description,
             provider=_operation_runtime(operation, bundle).provider,
             provider_runtime=_operation_runtime(operation, bundle),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             read_only=True,
@@ -310,7 +307,6 @@ class ComputedOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -357,7 +353,6 @@ class MaterializedOperationAdapter:
             description=operation.description,
             provider=_operation_runtime(operation, bundle).provider,
             provider_runtime=_operation_runtime(operation, bundle),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             tags=operation.tags,
@@ -473,7 +468,6 @@ class MaterializedOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -523,7 +517,6 @@ class BoundedSearchOperationAdapter:
             description=operation.description,
             provider=_operation_runtime(operation, bundle).provider,
             provider_runtime=_operation_runtime(operation, bundle),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(operation.result_model),
             tags=operation.tags,
@@ -610,7 +603,6 @@ class BoundedSearchOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
-            mode=request.mode,
             execution=Execution(
                 status=(
                     interrupted_outcome.status

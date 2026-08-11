@@ -1,10 +1,15 @@
-.PHONY: uv-version-check setup setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory compile-test-plan compile-test-plan-check architecture docs-command-check docs-linkcheck
+
+PROFILE ?= core
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
 
-setup: uv-version-check ## Install the locked development environment.
-	uv sync --locked --dev
+setup: ## Install and diagnose a locked development profile (PROFILE=core).
+	python3 tools/development_profiles.py setup --profile "$(PROFILE)" --repo .
+
+doctor: ## Diagnose a development profile without changing it (PROFILE=core).
+	uv run --locked --no-sync python tools/development_profiles.py doctor --profile "$(PROFILE)" --repo .
 
 setup-agent: ## Configure an agent against this source checkout (ARGS="--client codex --profile full-python").
 	./scripts/setup-agent $(ARGS)
@@ -55,7 +60,16 @@ typecheck: ## Run strict static type checking.
 	$(UV_RUN) mypy
 
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
-	$(UV_RUN) python tools/check_test_architecture.py .
+	$(UV_RUN) python -m tools.check_test_architecture .
+
+test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
+	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
+
+compile-test-plan: ## Regenerate topology.toml and ci-impact.json from plan_manifest.toml.
+	$(UV_RUN) python -m tools.test_plan.compile --write
+
+compile-test-plan-check: ## Fail when topology or impact projections are stale.
+	$(UV_RUN) python -m tools.test_plan.compile --check
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py

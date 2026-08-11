@@ -9,7 +9,6 @@ from tests.support.provider_external_sat import external_sat_toolchain_available
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -74,7 +73,6 @@ def test_sat_public_reproductions_reach_checker_bound_results(
         found = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=find_id,
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "cnf_uri": cnf.artifact_uri,
                     "resource_budget": {"wall_seconds": 5},
@@ -91,7 +89,6 @@ def test_sat_public_reproductions_reach_checker_bound_results(
         verified = authorized_complete_runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=verify_id,
-                mode=CapabilityMode.VERIFY,
                 input={evidence_field: evidence_uri},
             )
         )

@@ -1,31 +1,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from tests.boundary.process.tooling.ci import run_ci_script
-
-BOOLEAN_KEYS = (
-    "run-python",
-    "run-unit",
-    "run-component",
-    "run-domain",
-    "run-composition",
-    "run-storage",
-    "run-process",
-    "run-mcp",
-    "run-provider",
-    "run-e2e",
-    "run-coverage",
-    "run-compatibility",
-    "run-lean",
-    "run-npm",
-    "run-static",
-    "run-build",
-    "run-security",
-    "run-duplicate",
-    "run-docs",
+from tools.test_plan.ci_outputs import (
+    boolean_run_keys,
+    matrix_lane_names,
+    python_run_keys,
 )
+
+_ROOT = Path(__file__).resolve().parents[4]
+_IMPACT = json.loads((_ROOT / ".github" / "ci-impact.json").read_text(encoding="utf-8"))
+BOOLEAN_KEYS = boolean_run_keys(_IMPACT)
 FUNCTIONAL_KEYS = tuple(
     key
     for key in BOOLEAN_KEYS
@@ -34,18 +22,11 @@ FUNCTIONAL_KEYS = tuple(
 PULL_REQUEST_FUNCTIONAL_KEYS = tuple(
     key for key in FUNCTIONAL_KEYS if key not in {"run-provider", "run-lean"}
 )
-MATRIX_LANES = ("component", "storage", "mcp", "provider", "e2e")
-GENERIC_PYTHON_KEYS = (
-    "run-python",
-    "run-unit",
-    "run-component",
-    "run-domain",
-    "run-composition",
-    "run-storage",
-    "run-process",
-    "run-mcp",
-    "run-e2e",
+MATRIX_LANES = matrix_lane_names(_IMPACT)
+GENERIC_PYTHON_KEYS = tuple(
+    key for key in python_run_keys(_IMPACT) if key not in {"run-provider"}
 )
+GENERIC_PYTHON_KEYS = ("run-python", *GENERIC_PYTHON_KEYS)
 
 
 def _expected_plan(classification: str, *enabled: str) -> dict[str, str]:

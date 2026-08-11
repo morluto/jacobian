@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.adapters.mcp.constants import ReasoningLogMode
 from jacobian.adapters.mcp.guidance import (
     MATH_FIND_DESCRIPTION,
     MATH_RUN_DESCRIPTION,
@@ -12,27 +11,13 @@ from jacobian.adapters.mcp.server import JacobianCoreExtension
 
 
 def test_core_extension_exposes_exactly_the_stable_math_tools() -> None:
-    extension = JacobianCoreExtension(None, None, ReasoningLogMode.OFF)
+    extension = JacobianCoreExtension(None, None)
     assert extension.identifier == "io.jacobian/core"
-    assert extension.settings() == {
-        "version": "2",
-        "reasoning_log_mode": "OFF",
-    }
+    assert extension.settings() == {"version": "2"}
     assert tuple(binding.kwargs["name"] for binding in extension.tools()) == (
         "math.find",
         "math.run",
     )
-    assert set(extension._accepted_tool_arguments) == {"math.find", "math.run"}
-    assert "ctx" not in extension._accepted_tool_arguments["math.find"]
-    assert "capability_id" in extension._accepted_tool_arguments["math.find"]
-
-
-def test_core_extension_caches_reasoning_tool_arguments_when_enabled() -> None:
-    extension = JacobianCoreExtension(None, None, ReasoningLogMode.REQUIRED)
-
-    assert "reasoning.write" in extension._accepted_tool_arguments
-    assert "reasoning_run_id" in extension._accepted_tool_arguments["math.run"]
-    assert "reasoning_call_id" in extension._accepted_tool_arguments["math.run"]
 
 
 def test_model_visible_guidance_exposes_affordances_without_research_order() -> None:

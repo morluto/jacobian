@@ -7,6 +7,8 @@ from jacobian.contracts.combinatorics import (
     LinearRecurrenceEvaluationRequest,
     LinearRecurrenceEvaluationResult,
     NonnegativeIntegerRequest,
+    PolynomialCoefficientRecurrenceEvaluationRequest,
+    PolynomialCoefficientRecurrenceEvaluationResult,
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
     RationalResult,
@@ -24,6 +26,7 @@ from jacobian.domains.combinatorics.operations import (
 from jacobian.domains.combinatorics.recurrence_series_operations import (
     compute_rational_generating_function_coefficients,
     evaluate_linear_recurrence,
+    evaluate_polynomial_coefficient_recurrence,
 )
 
 RECURRENCE_CAPABILITIES = (
@@ -122,6 +125,46 @@ RECURRENCE_CAPABILITIES = (
             ),
         ),
         relation_id="combinatorics.recurrence.linear.evaluation.relation",
+    ),
+    combinatorics_operation(
+        "combinatorics.recurrence.p_recursive.evaluate",
+        "Evaluate an exact polynomial-coefficient recurrence",
+        (
+            "Evaluate a bounded rational recurrence sum p_j(n)a_(n-j)=0, "
+            "preserving the complete replay prefix and exact residuals."
+        ),
+        PolynomialCoefficientRecurrenceEvaluationRequest,
+        PolynomialCoefficientRecurrenceEvaluationResult,
+        evaluate_polynomial_coefficient_recurrence,
+        "combinatorics",
+        "recurrence",
+        "p-recursive",
+        "polynomial-coefficients",
+        "exact-rational",
+        invocation_examples=(
+            example(
+                "factorial_prefix",
+                "Evaluate the first seven terms of a_n=n*a_(n-1).",
+                {
+                    "coefficient_polynomials": [
+                        [{"num": "1", "den": "1"}],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "-1", "den": "1"},
+                        ],
+                    ],
+                    "initial_values": [{"num": "1", "den": "1"}],
+                    "coefficient_convention": (
+                        "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+                    ),
+                    "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                    "scope": "PREFIX",
+                    "term_count": 7,
+                    "indices": [],
+                },
+            ),
+        ),
+        relation_id="combinatorics.recurrence.p_recursive.evaluation.relation",
     ),
     combinatorics_operation(
         "combinatorics.generating_function.coefficients.compute",

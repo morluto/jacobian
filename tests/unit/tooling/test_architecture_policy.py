@@ -114,10 +114,10 @@ def test_sibling_conftest_imports_are_rejected(tmp_path: Path) -> None:
     assert [item.code for item in report.violations] == ["conftest-import"]
 
 
-def test_runtime_fixture_plugins_are_explicit_construction_owners(
+def test_runtime_fixture_builders_are_explicit_construction_owners(
     tmp_path: Path,
 ) -> None:
-    for name in ("runtime_templates.py", "runtime_instances.py"):
+    for name in ("runtime_templates.py", "runtime_profiles.py"):
         _test_file(
             tmp_path,
             f"tests/support/{name}",
@@ -150,9 +150,11 @@ def test_topology_manifest_requires_exactly_one_lane(tmp_path: Path) -> None:
     _test_file(tmp_path, "tests/misc/test_unowned.py", "def test_unowned(): pass\n")
     (tmp_path / "tests" / "topology.toml").write_text(
         """
-[lanes.unit]
+[[lanes]]
+name = "unit"
 owned_paths = ["tests/unit/**"]
-[lanes.component]
+[[lanes]]
+name = "component"
 paths = ["tests/unit/**", "tests/component/**"]
 """,
         encoding="utf-8",

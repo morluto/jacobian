@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="docs/explanation/hero-image.md"><img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output."></a>
+  <img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output.">
 </p>
 
 <h1 align="center">Jacobian</h1>
@@ -28,6 +28,12 @@ solver artifacts, and check formal proofs.
 
 ## Quickstart
 
+For a one-time setup:
+
+```sh
+npx jacobian setup
+```
+
 For a guided user-local install:
 
 ```sh
@@ -43,12 +49,6 @@ MB. Add `--defer-runtime` to postpone both until first use:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | \
   sh -s -- --client codex --yes --defer-runtime
-```
-
-For a one-off setup without a persistent launcher:
-
-```sh
-npx jacobian setup
 ```
 
 For repeated use:
@@ -67,16 +67,17 @@ python -m pip install jacobian
 ```
 
 The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
-Node.js 18 or newer plus Python 3.12 or
+Node.js 18 or newer plus Python 3.12/3.13 or
 [`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
 `uv` release after confirmation. Run `jacobian mcp` to start the server
 directly.
 
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
 The npm package is a sub-100 KB thin launcher and MCP client installer for that
-same implementation; it is not a separate JavaScript API. The npm tarball has
-no npm runtime dependencies. The larger download is the local Python
-mathematical runtime, not a JavaScript dependency tree.
+same implementation; it is not a separate JavaScript API. It bundles one TOML
+parser for fail-closed Codex configuration updates and runs no install-time
+scripts. The larger download is the local Python mathematical runtime, not a
+JavaScript dependency tree.
 
 To run the exact code in a clone, follow
 [Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
@@ -188,9 +189,6 @@ research may change experimental contracts between releases.
   Lean setup
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md) — HTTP deployment and
   authentication
-
-The background to the repository artwork is documented in
-[About the hero image](docs/explanation/hero-image.md).
 
 ## Contributing
 

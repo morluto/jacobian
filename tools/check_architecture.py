@@ -98,6 +98,9 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/test_process_policy.py"),
         PurePosixPath("tests/boundary/process/test_rational_lp_worker_protocol.py"),
         PurePosixPath("tests/boundary/process/test_worker_error_protocol.py"),
+        PurePosixPath(
+            "tests/boundary/process/polynomial/test_polynomial_system_adapter_guards.py"
+        ),
         PurePosixPath("tests/boundary/process/public_api/test_import_isolation.py"),
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
@@ -106,7 +109,9 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/tooling/test_topology_runner.py"),
         PurePosixPath("tests/boundary/process/tooling/test_cli_import_surface.py"),
         PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
+        PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),
         # MCP transport boundary tests spawn server processes.
+        PurePosixPath("tests/boundary/mcp/test_mcp_entrypoint.py"),
         PurePosixPath("tests/boundary/mcp/test_mcp_operations.py"),
         PurePosixPath("tests/boundary/mcp/test_remote_mcp_auth.py"),
         # Provider startup boundary tests spawn provider executables.

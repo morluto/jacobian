@@ -6,31 +6,31 @@
 - Related tutorial:
   [Retrieve a Lean theorem and check a proof](../../../tutorials/lean-declaration-discovery.md)
 
-Jacobian exposes proof construction as typed, separately invocable operations.
-Proof states, retrieved premises, dependency graphs, proposed statements, and
-proof edits remain inspectable evidence. Only successful `lean.check` replay,
-or a proof-edit capability bound to that checker, returns `VERIFIED`.
+Jacobian exposes Lean proof construction as typed, separately invocable **math
+tools**. Ordinary tools return values (declarations, proof states, premises).
+Independent acceptance uses **checker tools** (`lean.check`, and proof-edit
+validation bound to that checker)—separate catalog IDs, not a mode switch.
 
 Availability depends on the pinned Lean profile and bundled-reference
 installation. Inspect `capability://catalog` and call `math.find`
 before using any payload below.
 
-## Capability roles
+## Tools
 
-| Capability | Mode | Outcome |
+| Tool | Role | Outcome |
 | --- | --- | --- |
-| `lean.declaration.search` | `EXPLORE` | Bounded search over public declarations |
-| `lean.declaration.inspect` | `EXPLORE` | Exact declaration metadata |
-| `lean.declaration.dependencies` | `EXPLORE` | Bounded type/value dependency subgraph |
-| `lean.statement.propose` | `EXPLORE` | Type-check one proposed formal statement |
-| `lean.statement.compare` | `EXPLORE` | Compare two formal statements without claiming equivalence |
-| `lean.proof_state.apply_tactic` | `EXPLORE` | Replay a proof prefix and apply one tactic |
-| `lean.retrieve.premises` | `EXPLORE` | Bounded Mathlib premise candidates with replay metadata |
-| `lean.proof_edit.validate` | `VERIFY` | Check an exact edited proof and bind acceptance to replay |
-| `lean.check` | `VERIFY` | Replay an exact proposition and proof in a pinned environment |
+| `lean.declaration.search` | ordinary | Bounded search over public declarations |
+| `lean.declaration.inspect` | ordinary | Exact declaration metadata |
+| `lean.declaration.dependencies` | ordinary | Bounded type/value dependency subgraph |
+| `lean.statement.propose` | ordinary | Type-check one proposed formal statement |
+| `lean.statement.compare` | ordinary | Compare two formal statements without claiming equivalence |
+| `lean.proof_state.apply_tactic` | ordinary | Replay a proof prefix and apply one tactic |
+| `lean.retrieve.premises` | ordinary | Bounded Mathlib premise candidates with replay metadata |
+| `lean.proof_edit.validate` | checker | Check an exact edited proof; bind acceptance to replay |
+| `lean.check` | checker | Replay an exact proposition and proof in a pinned environment |
 
-These capabilities form a portfolio, not a required workflow. Agents decide
-which intermediates to compose.
+These tools form a portfolio, not a required workflow. Agents decide which to
+compose.
 
 ## Proof-state transitions
 

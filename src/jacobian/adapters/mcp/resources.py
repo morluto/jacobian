@@ -2,32 +2,99 @@
 
 from __future__ import annotations
 
-import json
-import logging
+from collections.abc import Callable
 from typing import Annotated, Any
 
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.exceptions import ResourceNotFoundError
 from pydantic import Field
 
-from jacobian.adapters.mcp.context import _experiment_scope_content, _resource_runtime
+from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.adapters.mcp.guidance import (
     discovery_prompt,
     evidence_check_prompt,
 )
-from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry, _run_blocking
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.adapters.mcp.tooling import _run_blocking
+from jacobian.contracts.artifacts import ArtifactManifest
+from jacobian.contracts.common import ArtifactUri, ExperimentUri
+from jacobian.contracts.discovery import (
+    EnumerationAccounting,
+    EnumerationStopReason,
+    ExperimentSnapshot,
+    ExperimentState,
+)
+from jacobian.contracts.results import ContractModel, Coverage, Verification
+from jacobian.contracts.search import (
+    SearchAccounting,
+    SearchExperimentSnapshot,
+    SearchStopReason,
+)
+from jacobian.experiments import ExperimentNotFoundError
+from jacobian.storage.errors import ArtifactNotFoundError
 
-_LOGGER = logging.getLogger(__name__)
+
+class _ArtifactResource(ContractModel):
+    artifact_uri: ArtifactUri
+    manifest: ArtifactManifest
+    payload: Any
+
+
+class _ExperimentAccountingResource(ContractModel):
+    experiment_uri: ExperimentUri
+    state: ExperimentState
+    stop_reason: EnumerationStopReason | SearchStopReason | None
+    coverage: Coverage | None
+    verification: Verification
+    accounting: EnumerationAccounting | SearchAccounting
+
+
+class _ExperimentScopeUnavailableResource(ContractModel):
+    experiment_uri: ExperimentUri
+    scope_uri: None = None
+
+
+class _ExperimentScopeResource(ContractModel):
+    experiment_uri: ExperimentUri
+    scope_uri: ArtifactUri
+    manifest: ArtifactManifest
+    payload: Any
+
+
+class _ExperimentArchiveUnavailableResource(ContractModel):
+    experiment_uri: ExperimentUri
+    archive_uri: None = None
+    page_uris: tuple[ArtifactUri, ...]
+
+
+class _ExperimentArchiveResource(ContractModel):
+    experiment_uri: ExperimentUri
+    archive_uri: ArtifactUri
+    manifest: ArtifactManifest
+    payload: Any
+
+
+async def _read_resource_blocking[ResultT](
+    function: Callable[..., ResultT],
+    /,
+    *args: Any,
+) -> ResultT:
+    """Run a store read and preserve the SDK's native not-found semantics."""
+
+    try:
+        return await _run_blocking(function, *args)
+    except (ArtifactNotFoundError, ExperimentNotFoundError) as exc:
+        raise ResourceNotFoundError(
+            "The requested Jacobian resource does not exist."
+        ) from exc
 
 
 def _register_resources_and_prompts(
-    server: Any,
-    runtime: JacobianRuntime | None,
-    tenant_router: Any,
-    worker_registry: MCPBlockingWorkerRegistry,
+    server: MCPServer[AppState],
 ) -> None:
     """Register all MCP resource and prompt handlers on the server."""
 
-    @server.resource(  # type: ignore[untyped-decorator]
+    @server.resource(
         "artifact://sha256/{digest}",
         name="artifact",
         description="Read an immutable artifact manifest and payload.",
@@ -35,25 +102,20 @@ def _register_resources_and_prompts(
     )
     async def artifact_resource(
         digest: str,
-    ) -> str:
-        with _resource_runtime(
-            runtime, tenant_router, worker_registry
-        ) as active_runtime:
-            artifact = await _run_blocking(
+        ctx: Context,
+    ) -> _ArtifactResource:
+        with _runtime(ctx) as active_runtime:
+            artifact = await _read_resource_blocking(
                 active_runtime.core.store.get,
                 f"artifact://sha256/{digest}",
             )
-            return json.dumps(
-                {
-                    "artifact_uri": artifact.artifact_uri,
-                    "manifest": artifact.manifest.model_dump(mode="json"),
-                    "payload": artifact.payload,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
+            return _ArtifactResource(
+                artifact_uri=artifact.artifact_uri,
+                manifest=artifact.manifest,
+                payload=artifact.payload,
             )
 
-    @server.resource(  # type: ignore[untyped-decorator]
+    @server.resource(
         "experiment://{experiment_id}",
         name="experiment",
         description="Read the latest durable experiment snapshot.",
@@ -61,21 +123,15 @@ def _register_resources_and_prompts(
     )
     async def experiment_resource(
         experiment_id: str,
-    ) -> str:
-        with _resource_runtime(
-            runtime, tenant_router, worker_registry
-        ) as active_runtime:
-            snapshot = await _run_blocking(
+        ctx: Context,
+    ) -> ExperimentSnapshot | SearchExperimentSnapshot:
+        with _runtime(ctx) as active_runtime:
+            return await _read_resource_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
             )
-            return json.dumps(
-                snapshot.model_dump(mode="json"),
-                ensure_ascii=False,
-                sort_keys=True,
-            )
 
-    @server.resource(  # type: ignore[untyped-decorator]
+    @server.resource(
         "experiment://{experiment_id}/accounting",
         name="experiment-accounting",
         description="Read durable enumeration accounting and assurance labels.",
@@ -83,33 +139,27 @@ def _register_resources_and_prompts(
     )
     async def experiment_accounting_resource(
         experiment_id: str,
-    ) -> str:
-        with _resource_runtime(
-            runtime, tenant_router, worker_registry
-        ) as active_runtime:
-            snapshot = await _run_blocking(
+        ctx: Context,
+    ) -> _ExperimentAccountingResource:
+        with _runtime(ctx) as active_runtime:
+            snapshot = await _read_resource_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
             )
-            coverage = getattr(snapshot, "coverage", None)
-            return json.dumps(
-                {
-                    "experiment_uri": snapshot.experiment_uri,
-                    "state": snapshot.state.value,
-                    "stop_reason": (
-                        snapshot.stop_reason.value
-                        if snapshot.stop_reason is not None
-                        else None
-                    ),
-                    "coverage": coverage.value if coverage is not None else None,
-                    "verification": snapshot.verification.value,
-                    "accounting": snapshot.accounting.model_dump(mode="json"),
-                },
-                ensure_ascii=False,
-                sort_keys=True,
+            return _ExperimentAccountingResource(
+                experiment_uri=snapshot.experiment_uri,
+                state=snapshot.state,
+                stop_reason=snapshot.stop_reason,
+                coverage=(
+                    snapshot.coverage
+                    if isinstance(snapshot, ExperimentSnapshot)
+                    else None
+                ),
+                verification=snapshot.verification,
+                accounting=snapshot.accounting,
             )
 
-    @server.resource(  # type: ignore[untyped-decorator]
+    @server.resource(
         "experiment://{experiment_id}/scope",
         name="experiment-scope",
         description="Read the current enumeration scope artifact, when available.",
@@ -117,21 +167,32 @@ def _register_resources_and_prompts(
     )
     async def experiment_scope_resource(
         experiment_id: str,
-    ) -> str:
-        with _resource_runtime(
-            runtime, tenant_router, worker_registry
-        ) as active_runtime:
-            snapshot = await _run_blocking(
+        ctx: Context,
+    ) -> _ExperimentScopeUnavailableResource | _ExperimentScopeResource:
+        with _runtime(ctx) as active_runtime:
+            snapshot = await _read_resource_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
             )
-            return await _run_blocking(
-                _experiment_scope_content,
-                active_runtime,
-                snapshot,
+            if (
+                not isinstance(snapshot, ExperimentSnapshot)
+                or snapshot.scope_uri is None
+            ):
+                return _ExperimentScopeUnavailableResource(
+                    experiment_uri=snapshot.experiment_uri,
+                )
+            scope = await _read_resource_blocking(
+                active_runtime.core.store.get,
+                snapshot.scope_uri,
+            )
+            return _ExperimentScopeResource(
+                experiment_uri=snapshot.experiment_uri,
+                scope_uri=scope.artifact_uri,
+                manifest=scope.manifest,
+                payload=scope.payload,
             )
 
-    @server.resource(  # type: ignore[untyped-decorator]
+    @server.resource(
         "experiment://{experiment_id}/archive",
         name="experiment-archive",
         description="Read the immutable archive manifest and page handles.",
@@ -139,39 +200,30 @@ def _register_resources_and_prompts(
     )
     async def experiment_archive_resource(
         experiment_id: str,
-    ) -> str:
-        with _resource_runtime(
-            runtime, tenant_router, worker_registry
-        ) as active_runtime:
-            snapshot = await _run_blocking(
+        ctx: Context,
+    ) -> _ExperimentArchiveUnavailableResource | _ExperimentArchiveResource:
+        with _runtime(ctx) as active_runtime:
+            snapshot = await _read_resource_blocking(
                 active_runtime.services.experiment_router.inspect,
                 f"experiment://{experiment_id}",
             )
             if snapshot.archive_uri is None:
-                return json.dumps(
-                    {
-                        "experiment_uri": snapshot.experiment_uri,
-                        "archive_uri": None,
-                        "page_uris": list(snapshot.archive_page_uris),
-                    },
-                    sort_keys=True,
+                return _ExperimentArchiveUnavailableResource(
+                    experiment_uri=snapshot.experiment_uri,
+                    page_uris=snapshot.archive_page_uris,
                 )
-            archive = await _run_blocking(
+            archive = await _read_resource_blocking(
                 active_runtime.core.store.get,
                 snapshot.archive_uri,
             )
-            return json.dumps(
-                {
-                    "experiment_uri": snapshot.experiment_uri,
-                    "archive_uri": archive.artifact_uri,
-                    "manifest": archive.manifest.model_dump(mode="json"),
-                    "payload": archive.payload,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
+            return _ExperimentArchiveResource(
+                experiment_uri=snapshot.experiment_uri,
+                archive_uri=archive.artifact_uri,
+                manifest=archive.manifest,
+                payload=archive.payload,
             )
 
-    @server.prompt(  # type: ignore[untyped-decorator]
+    @server.prompt(
         name="jacobian-discover",
         title="Discover Jacobian capabilities",
         description=(
@@ -187,7 +239,7 @@ def _register_resources_and_prompts(
     ) -> str:
         return discovery_prompt(task)
 
-    @server.prompt(  # type: ignore[untyped-decorator]
+    @server.prompt(
         name="jacobian-check-evidence",
         title="Check mathematical evidence with Jacobian",
         description=(
@@ -206,27 +258,3 @@ def _register_resources_and_prompts(
         ] = None,
     ) -> str:
         return evidence_check_prompt(claim, artifact_uri)
-
-
-def _register_reasoning_resource(
-    server: Any,
-    runtime: JacobianRuntime | None,
-    tenant_router: Any,
-    worker_registry: MCPBlockingWorkerRegistry,
-) -> None:
-    """Register the optional operational reasoning-log reader."""
-
-    @server.resource(  # type: ignore[untyped-decorator]
-        "reasoning://run/{run_id}",
-        name="reasoning-log",
-        description="Read one tenant-isolated append-only external reasoning log.",
-        mime_type="application/x-ndjson",
-    )
-    async def reasoning_log_resource(run_id: str) -> str:
-        with _resource_runtime(
-            runtime, tenant_router, worker_registry
-        ) as active_runtime:
-            return await _run_blocking(
-                active_runtime.core.reasoning_log.inspect_jsonl,
-                run_id,
-            )

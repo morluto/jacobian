@@ -9,6 +9,8 @@ from jacobian.contracts.combinatorics import (
     IndexedRationalValue,
     LinearRecurrenceEvaluationRequest,
     LinearRecurrenceEvaluationResult,
+    PolynomialCoefficientRecurrenceEvaluationRequest,
+    PolynomialCoefficientRecurrenceEvaluationResult,
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
 )
@@ -67,6 +69,73 @@ def evaluate_linear_recurrence(
     )
 
 
+def evaluate_polynomial_coefficient_recurrence(
+    request: PolynomialCoefficientRecurrenceEvaluationRequest,
+) -> PolynomialCoefficientRecurrenceEvaluationResult:
+    """Evaluate and expose residuals for a bounded P-recursive relation."""
+
+    requested_indices = (
+        tuple(range(request.term_count))
+        if request.scope == "PREFIX" and request.term_count is not None
+        else request.indices
+    )
+    end = requested_indices[-1]
+    polynomials = tuple(
+        tuple(_sympy_rational(item) for item in polynomial)
+        for polynomial in request.coefficient_polynomials
+    )
+    order = len(polynomials) - 1
+
+    def evaluate_polynomial(polynomial: tuple[Any, ...], index: int) -> Any:
+        return sum(
+            (
+                coefficient * index**power
+                for power, coefficient in enumerate(polynomial)
+            ),
+            start=polynomial[0] * 0,
+        )
+
+    replay = [_sympy_rational(item) for item in request.initial_values[: end + 1]]
+    residuals: list[IndexedRationalValue] = []
+    while len(replay) <= end:
+        index = len(replay)
+        coefficients = tuple(
+            evaluate_polynomial(polynomial, index) for polynomial in polynomials
+        )
+        replay.append(
+            -sum(
+                (
+                    coefficients[offset] * replay[index - offset]
+                    for offset in range(1, order + 1)
+                ),
+                start=coefficients[0] * 0,
+            )
+            / coefficients[0]
+        )
+        residual = sum(
+            (
+                coefficients[offset] * replay[index - offset]
+                for offset in range(order + 1)
+            ),
+            start=coefficients[0] * 0,
+        )
+        residuals.append(IndexedRationalValue(index=index, value=_wire(residual)))
+    replay_wire = tuple(_wire(item) for item in replay)
+    return PolynomialCoefficientRecurrenceEvaluationResult(
+        coefficient_convention=request.coefficient_convention,
+        polynomial_convention=request.polynomial_convention,
+        scope=request.scope,
+        recurrence_order=order,
+        values=tuple(
+            IndexedRationalValue(index=index, value=replay_wire[index])
+            for index in requested_indices
+        ),
+        replay_prefix=replay_wire,
+        residuals=tuple(residuals),
+        replay_scope_end=end,
+    )
+
+
 def compute_rational_generating_function_coefficients(
     request: RationalGeneratingFunctionCoefficientsRequest,
 ) -> RationalGeneratingFunctionCoefficientsResult:
@@ -113,4 +182,5 @@ def compute_rational_generating_function_coefficients(
 __all__ = [
     "compute_rational_generating_function_coefficients",
     "evaluate_linear_recurrence",
+    "evaluate_polynomial_coefficient_recurrence",
 ]

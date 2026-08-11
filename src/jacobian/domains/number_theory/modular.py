@@ -22,7 +22,7 @@ from jacobian.domains.number_theory._support import (
 from jacobian.domains.number_theory.discrete_logarithm import (
     DISCRETE_LOGARITHM_CAPABILITY,
 )
-from jacobian.domains.number_theory.operations import (
+from jacobian.domains.number_theory.modular_operations import (
     compute_finite_abelian_group_factorization,
     compute_jacobi_symbol,
     compute_modular_inverse,

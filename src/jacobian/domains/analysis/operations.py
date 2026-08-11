@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
-
-from pydantic import ValidationError
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import (
-    CanonicalizationError,
     canonicalize_json,
     loads_strict_json,
 )
@@ -22,6 +18,14 @@ from jacobian.contracts.validated_analysis import (
     ArbPointEnclosureResult,
 )
 from jacobian.domains._examples import example
+from jacobian.domains.analysis.protocol import (
+    PROTOCOL,
+    ArbEnclosedWorkerResponse,
+    ArbNonfiniteWorkerResponse,
+    ArbPointEnclosureWorkerRequest,
+    ArbPointEnclosureWorkerResponse,
+    parse_arb_worker_response,
+)
 from jacobian.operations import (
     BoundedSearchIncomplete,
     BoundedSearchInterrupted,
@@ -39,19 +43,25 @@ from jacobian.worker_environment import worker_environment
 _WORKER_MODULE = "jacobian.domains.analysis.worker"
 
 
-def _run_worker(payload: dict[str, Any], *, wall_seconds: int) -> dict[str, Any]:
+def _run_worker(
+    request: ArbPointEnclosureRequest,
+) -> ArbPointEnclosureWorkerResponse:
+    worker_request = ArbPointEnclosureWorkerRequest(
+        protocol=PROTOCOL,
+        request=request,
+    )
     completed = execute_process(
         ProcessRequest(
             executable=sys.executable,
             arguments=("-I", "-m", _WORKER_MODULE),
-            stdin_bytes=canonicalize_json(payload),
-            timeout_seconds=float(wall_seconds),
+            stdin_bytes=canonicalize_json(worker_request.model_dump(mode="json")),
+            timeout_seconds=float(request.wall_seconds),
             environment=worker_environment(locale="C"),
             cwd=str(Path.cwd()),
             stdout_limit_bytes=2_000_000,
             stderr_limit_bytes=64_000,
             resource_limits=ProcessResourceLimits(
-                cpu_seconds=wall_seconds + 1,
+                cpu_seconds=request.wall_seconds + 1,
                 address_space_bytes=1024 * 1024 * 1024,
             ),
         )
@@ -64,9 +74,7 @@ def _run_worker(payload: dict[str, Any], *, wall_seconds: int) -> dict[str, Any]
     ):
         raise RuntimeError("Arb point-enclosure worker failed")
     value = loads_strict_json(completed.stdout)
-    if not isinstance(value, dict):
-        raise RuntimeError("Arb point-enclosure worker returned a non-object")
-    return value
+    return parse_arb_worker_response(value)
 
 
 def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
@@ -80,63 +88,67 @@ def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
 def _point_enclosure(
     request: ArbPointEnclosureRequest,
 ) -> BoundedSearchOutcome[ArbPointEnclosureResult]:
-    base = {
-        "function": request.function.value,
-        "argument": request.argument.model_dump(mode="json"),
-        "precision_bits": request.precision_bits,
-    }
     try:
-        payload = _run_worker(
-            request.model_dump(mode="json", exclude={"wall_seconds"}),
-            wall_seconds=request.wall_seconds,
-        )
-        if payload.get("status") == "ENCLOSED":
+        response = _run_worker(request)
+        if isinstance(response, ArbEnclosedWorkerResponse):
             return BoundedSearchWitness(
-                ArbPointEnclosureResult.model_validate(
-                    {
-                        **base,
-                        **payload,
-                        "detail": (
-                            "Pinned Arb ball arithmetic returned an "
-                            "outward-rounded enclosure with exact dyadic endpoints."
-                        ),
-                    }
+                ArbPointEnclosureResult(
+                    status="ENCLOSED",
+                    function=request.function,
+                    argument=request.argument,
+                    precision_bits=request.precision_bits,
+                    lower=response.lower,
+                    upper=response.upper,
+                    relative_accuracy_bits=response.relative_accuracy_bits,
+                    exact=response.exact,
+                    detail=(
+                        "Pinned Arb ball arithmetic returned an outward-rounded "
+                        "enclosure with exact dyadic endpoints."
+                    ),
                 )
             )
-        if payload.get("status") == "NONFINITE":
+        if isinstance(response, ArbNonfiniteWorkerResponse):
             return BoundedSearchIncomplete(
-                ArbPointEnclosureResult.model_validate(
-                    {
-                        **base,
-                        "status": "NONFINITE",
-                        "detail": (
-                            "Arb returned a non-finite ball; no enclosure "
-                            "conclusion is available."
-                        ),
-                    }
+                ArbPointEnclosureResult(
+                    status="NONFINITE",
+                    function=request.function,
+                    argument=request.argument,
+                    precision_bits=request.precision_bits,
+                    detail=(
+                        "Arb returned a non-finite ball; no enclosure conclusion "
+                        "is available."
+                    ),
                 )
             )
-        raise RuntimeError("Arb worker returned an unknown status")
+        raise AssertionError("unreachable Arb worker response")
     except TimeoutError:
         detail = (
             "The Arb worker exceeded the declared wall-clock budget; "
             "no enclosure conclusion is available."
         )
         return BoundedSearchInterrupted(
-            value=ArbPointEnclosureResult.model_validate(
-                {**base, "status": "TIMEOUT", "detail": detail}
+            value=ArbPointEnclosureResult(
+                status="TIMEOUT",
+                function=request.function,
+                argument=request.argument,
+                precision_bits=request.precision_bits,
+                detail=detail,
             ),
             status=ExecutionStatus.TIMEOUT,
             diagnostic=_diagnostic("ARB_POINT_ENCLOSURE_TIMEOUT", detail),
         )
-    except (OSError, RuntimeError, CanonicalizationError, ValidationError):
+    except (OSError, RuntimeError, ValueError):
         detail = (
             "The Arb worker failed or returned malformed output; "
             "no enclosure conclusion is available."
         )
         return BoundedSearchInterrupted(
-            value=ArbPointEnclosureResult.model_validate(
-                {**base, "status": "BACKEND_ERROR", "detail": detail}
+            value=ArbPointEnclosureResult(
+                status="BACKEND_ERROR",
+                function=request.function,
+                argument=request.argument,
+                precision_bits=request.precision_bits,
+                detail=detail,
             ),
             status=ExecutionStatus.ERROR,
             diagnostic=_diagnostic("ARB_POINT_ENCLOSURE_BACKEND_ERROR", detail),

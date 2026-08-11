@@ -1,13 +1,16 @@
 # Lean declaration discovery
 
-Jacobian exposes two read-only `EXPLORE` capabilities over the installed,
-pinned Lean runtime:
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+
+Jacobian exposes two ordinary, read-only math tools over the installed, pinned
+Lean runtime:
 
 - `lean.declaration.search` performs bounded declaration retrieval; and
 - `lean.declaration.inspect` resolves one exact declaration name.
 
-They return computed environment metadata. Finding or inspecting a theorem does
-not verify a new claim. Completed proof source must still pass `lean.check`.
+They return **declaration metadata** (values). Finding or inspecting a theorem
+does not check a new proof. Completed proof source must still be run through the
+separate checker tool `lean.check`.
 
 ## Search contract
 

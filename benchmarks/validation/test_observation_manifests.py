@@ -16,7 +16,6 @@ _artifact_path_failures = observation_artifacts._artifact_path_failures
 _artifact_source_reuse = observation_artifacts.artifact_source_reuse
 _manifest_artifacts_for_dir = observation_artifacts._manifest_artifacts_for_dir
 _trial_artifacts = observation_artifacts.trial_artifacts
-_trial_reasoning_protocol = observation_artifacts.trial_reasoning_protocol
 
 
 def _tool_event(
@@ -182,74 +181,6 @@ def test_equal_manifest_source_across_repetitions_accepted(
         {"trial_name": "attempt-1", "artifacts": artifacts_1},
     ]
     assert _artifact_source_reuse(trials) == []
-
-
-def test_reasoning_protocol_is_extracted_without_summary_text(tmp_path: Path) -> None:
-    run_id = "00000000-0000-4000-8000-000000000000"
-    call_id = "11111111-1111-4111-8111-111111111111"
-    events = [
-        _tool_event(
-            "reasoning.write",
-            {"phase": "PLAN", "summary": "private plan"},
-            {"run_id": run_id},
-        ),
-        _tool_event(
-            "reasoning.write",
-            {"phase": "BEFORE_TOOL", "summary": "private purpose", "run_id": run_id},
-            {"run_id": run_id, "call_id": call_id},
-        ),
-        _tool_event(
-            "math.run",
-            {"reasoning_run_id": run_id, "reasoning_call_id": call_id},
-            {"execution": {"status": "COMPLETED"}},
-        ),
-        _tool_event(
-            "reasoning.write",
-            {
-                "phase": "AFTER_TOOL",
-                "summary": "private interpretation",
-                "run_id": run_id,
-                "call_id": call_id,
-            },
-            {
-                "run_id": run_id,
-                "execution_status_matches": True,
-                "assurance_level_matches": True,
-                "completeness_status_matches": True,
-            },
-        ),
-        _tool_event(
-            "reasoning.write",
-            {"phase": "FINAL", "summary": "private final", "run_id": run_id},
-            {"run_id": run_id, "state": "FINALIZED"},
-        ),
-    ]
-    trial_dir = tmp_path / "job" / "attempt-0"
-    _write_trial_manifest(
-        trial_dir,
-        [
-            {
-                "source": "/logs/agent/trajectory.jsonl",
-                "destination": "artifacts/logs/agent/trajectory.jsonl",
-                "type": "file",
-                "status": "ok",
-                "service": None,
-                "_content": "\n".join(json.dumps(event) for event in events) + "\n",
-            }
-        ],
-    )
-    result_path = trial_dir / "result.json"
-    result_path.write_text("{}", encoding="utf-8")
-    artifacts, *_ = _trial_artifacts(result_path, "attempt-0", "job.json")
-
-    protocol = _trial_reasoning_protocol(result_path, artifacts)
-
-    assert protocol["status"] == "COMPLETE"
-    assert protocol["bound_invoke_count"] == 1
-    assert protocol["summary_characters"] == len(
-        "private planprivate purposeprivate interpretationprivate final"
-    )
-    assert "private" not in json.dumps(protocol)
 
 
 def test_server_runtime_log_accounts_for_nested_jacobian_calls(

@@ -27,15 +27,6 @@ from jacobian.contracts.plugin_graphs import (
     GraphPathReductionRequest,
 )
 
-__all__ = (
-    "canonicalize_capability",
-    "enumerate_candidates_capability",
-    "evaluate_capability",
-    "find_witness_capability",
-    "materialize",
-    "reductions_capability",
-)
-
 
 def _path_coverage(claim: GraphPathClaim, candidate: GraphPathCandidate) -> str:
     return (

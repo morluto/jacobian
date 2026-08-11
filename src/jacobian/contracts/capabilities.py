@@ -22,13 +22,6 @@ CapabilityId = Annotated[
 ]
 
 
-class CapabilityMode(StrEnum):
-    """The low-friction exploration and explicit verification lanes."""
-
-    EXPLORE = "EXPLORE"
-    VERIFY = "VERIFY"
-
-
 class CapabilityInputKind(StrEnum):
     """Coarse input boundary used to prevent incompatible discovery routes."""
 
@@ -56,7 +49,7 @@ def _validate_descriptor_input_contract(
 
 
 class CapabilityInvocationExample(ContractModel):
-    """One operator-authored, schema-valid example for an advertised mode."""
+    """One operator-authored, schema-valid example."""
 
     name: str = Field(
         pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
@@ -64,7 +57,6 @@ class CapabilityInvocationExample(ContractModel):
         max_length=64,
     )
     description: str = Field(min_length=1, max_length=256)
-    mode: CapabilityMode
     input: dict[str, Any]
 
     @model_validator(mode="after")
@@ -81,7 +73,6 @@ class CapabilityDiscoveryRequest(ContractModel):
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
     )
-    mode: CapabilityMode | None = None
     input_kind: CapabilityInputKind | None = None
     artifact_type: ArtifactUri | None = None
     limit: int = Field(default=5, ge=1, le=20, strict=True)
@@ -133,8 +124,8 @@ class CapabilityDiscoveryRemoveFiltersRecoveryPath(ContractModel):
 
     action: Literal["remove_filters"]
     tool: Literal["math.find"] = "math.find"
-    change: Literal["Remove domain, mode, input_kind, or artifact_type filters."] = (
-        "Remove domain, mode, input_kind, or artifact_type filters."
+    change: Literal["Remove domain, input_kind, or artifact_type filters."] = (
+        "Remove domain, input_kind, or artifact_type filters."
     )
 
 
@@ -169,7 +160,6 @@ class CapabilityDiscoveryMatch(ContractModel):
     capability_id: CapabilityId
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=512)
-    modes: tuple[CapabilityMode, ...]
     tags: tuple[str, ...] = ()
     matched_on: tuple[str, ...] = ()
     matched_terms: tuple[str, ...] = ()
@@ -194,7 +184,6 @@ class CapabilityDiscoveryResult(ContractModel):
         min_length=1,
         max_length=512,
     )
-    mode: CapabilityMode | None = None
     resolved_input_kind: CapabilityInputKind | None = None
     artifact_type: ArtifactUri | None = None
     routing_status: Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"] = "UNFILTERED"
@@ -211,6 +200,23 @@ class CapabilityDiscoveryResult(ContractModel):
         "NO_LEXICAL_MATCHES",
     ] = "UNFILTERED"
     portfolio_fit_basis: str = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def bind_page_metadata(self) -> Self:
+        capability_ids = tuple(match.capability_id for match in self.matches)
+        if len(set(capability_ids)) != len(capability_ids):
+            raise ValueError("discovery matches must have unique capability IDs")
+        if self.total_matches < len(self.matches):
+            raise ValueError("total_matches cannot be smaller than the returned page")
+        if self.truncated != (self.next_cursor is not None):
+            raise ValueError("truncated must agree with next_cursor")
+        if self.next_cursor is not None and (
+            not capability_ids or self.next_cursor != capability_ids[-1]
+        ):
+            raise ValueError("next_cursor must identify the final returned match")
+        if tuple(sorted(set(self.available_domains))) != self.available_domains:
+            raise ValueError("available domains must be unique and sorted")
+        return self
 
 
 class CapabilityInstallTier(StrEnum):
@@ -412,6 +418,34 @@ class CapabilityCompletenessStatus(StrEnum):
     COMPLETE = "COMPLETE"
 
 
+class CapabilityCatalogRelationshipKind(StrEnum):
+    """Factual installed-capability relationship exposed by the catalog."""
+
+    INDEPENDENT_VERIFIER = "INDEPENDENT_VERIFIER"
+    VERIFIABLE_RESULT_PRODUCER = "VERIFIABLE_RESULT_PRODUCER"
+
+
+class CapabilityCatalogRelationship(ContractModel):
+    """One typed navigation edge to another installed capability."""
+
+    capability_id: CapabilityId
+    kind: CapabilityCatalogRelationshipKind
+    relationship: str = Field(min_length=1, max_length=256)
+
+
+class CapabilityCatalogRelationshipRegistration(ContractModel):
+    """One authoritative directed relationship before catalog projection."""
+
+    source_capability_id: CapabilityId
+    related_capability: CapabilityCatalogRelationship
+
+    @model_validator(mode="after")
+    def reject_self_relationship(self) -> Self:
+        if self.source_capability_id == self.related_capability.capability_id:
+            raise ValueError("a capability cannot relate to itself")
+        return self
+
+
 class CapabilityDescriptor(ContractModel):
     """One installed operation advertised by an operator-installed adapter."""
 
@@ -422,7 +456,6 @@ class CapabilityDescriptor(ContractModel):
     description: str = Field(min_length=1, max_length=512)
     provider: str = Field(min_length=1, max_length=128)
     provider_runtime: CapabilityProviderRuntime | None = None
-    modes: tuple[CapabilityMode, ...]
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
     read_only: bool = False
@@ -432,35 +465,27 @@ class CapabilityDescriptor(ContractModel):
     )
     accepted_artifact_types: tuple[ArtifactUri, ...] = ()
     produced_artifact_types: tuple[ArtifactUri, ...] = ()
+    related_capabilities: tuple[CapabilityCatalogRelationship, ...] = ()
     discovery_visible: bool = True
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
 
     @model_validator(mode="after")
-    def require_modes_and_canonical_schemas(self) -> Self:
-        if not self.modes:
-            raise ValueError("a capability must support at least one mode")
-        if len(set(self.modes)) != len(self.modes):
-            raise ValueError("capability modes must be unique")
+    def require_canonical_schemas(self) -> Self:
         _validate_descriptor_input_contract(
             self.accepted_input_kinds,
             self.accepted_artifact_types,
         )
         if len(set(self.produced_artifact_types)) != len(self.produced_artifact_types):
             raise ValueError("produced artifact types must be unique")
+        related_ids = [item.capability_id for item in self.related_capabilities]
+        if self.capability_id in related_ids:
+            raise ValueError("a capability cannot relate to itself")
+        if len(set(related_ids)) != len(related_ids):
+            raise ValueError("related capability IDs must be unique")
         if len({example.name for example in self.invocation_examples}) != len(
             self.invocation_examples
         ):
             raise ValueError("capability invocation example names must be unique")
-        unsupported_examples = [
-            example.name
-            for example in self.invocation_examples
-            if example.mode not in self.modes
-        ]
-        if unsupported_examples:
-            raise ValueError(
-                "capability invocation examples must use advertised modes: "
-                + ", ".join(unsupported_examples)
-            )
         canonicalize_json(self.input_schema)
         canonicalize_json(self.output_schema)
         if (
@@ -474,7 +499,6 @@ class CapabilityDescriptor(ContractModel):
 class CapabilityRequest(ContractModel):
     request_version: Literal["1"] = "1"
     capability_id: CapabilityId
-    mode: CapabilityMode = CapabilityMode.EXPLORE
     input: dict[str, Any]
 
 
@@ -614,17 +638,11 @@ def _validate_capability_execution_lane(
     execution_status: str,
     diagnostics: tuple[CapabilityDiagnostic, ...],
     assurance_level: CapabilityAssuranceLevel,
-    mode: CapabilityMode,
     completeness_status: CapabilityCompletenessStatus,
     scope: CapabilityScope | None,
 ) -> None:
     if execution_status == "COMPLETED" and diagnostics:
         raise ValueError("completed capability execution cannot carry diagnostics")
-    if (
-        assurance_level is CapabilityAssuranceLevel.VERIFIED
-        and mode is not CapabilityMode.VERIFY
-    ):
-        raise ValueError("the exploration lane cannot return verified assurance")
     if (
         execution_status != "COMPLETED"
         and assurance_level is CapabilityAssuranceLevel.VERIFIED
@@ -693,7 +711,6 @@ class CapabilityResult(ContractModel):
     response_version: Literal["2"] = "2"
     capability_id: CapabilityId
     capability_version: str = Field(min_length=1, max_length=64)
-    mode: CapabilityMode
     execution: Execution
     output: dict[str, Any] = Field(default_factory=dict)
     scope: CapabilityScope | None = None
@@ -717,7 +734,6 @@ class CapabilityResult(ContractModel):
             self.execution.status.value,
             self.diagnostics,
             self.assurance.level,
-            self.mode,
             self.completeness.status,
             self.scope,
         )
@@ -737,6 +753,10 @@ class CapabilityResult(ContractModel):
             self.assurance.level,
             record_uri,
         )
+        if record_uri is not None and record_uri not in self.artifact_uris:
+            raise ValueError(
+                "the verification record must be included in artifact_uris"
+            )
         return self
 
 
@@ -745,3 +765,12 @@ class CapabilityCatalog(ContractModel):
     policy_profile: str = Field(min_length=1, max_length=64)
     policy_digest: Sha256Digest
     capabilities: tuple[CapabilityDescriptor, ...]
+
+    @model_validator(mode="after")
+    def require_unique_sorted_capabilities(self) -> Self:
+        capability_ids = tuple(
+            descriptor.capability_id for descriptor in self.capabilities
+        )
+        if capability_ids != tuple(sorted(set(capability_ids))):
+            raise ValueError("catalog capability IDs must be unique and sorted")
+        return self

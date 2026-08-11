@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.capability_installations import install_capability_bundle
-from tests.support.polynomials import univariate_term as _term
 
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
@@ -19,6 +17,8 @@ from jacobian.polynomial_interval_capabilities import (
     PolynomialIntervalEnclosureVerifyAdapter,
     install_polynomial_interval_capabilities,
 )
+from tests.support.capability_installations import install_capability_bundle
+from tests.support.polynomials import univariate_term as _term
 
 
 def _polynomial(variable: str, terms: list[dict[str, Any]]) -> dict[str, Any]:

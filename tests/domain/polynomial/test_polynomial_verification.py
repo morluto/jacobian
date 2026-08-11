@@ -4,9 +4,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.exact_domain import open_exact_domain_services
-from tests.support.rationals import rational_payload as _q
-from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -15,6 +12,9 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.rationals import rational_payload as _q
+from tests.support.services import DomainTestServices
 
 
 def _poly(*coefficients_ascending: int) -> dict[str, object]:

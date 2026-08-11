@@ -65,7 +65,6 @@ def test_modular_polynomial_identity_uses_independent_python_flint_replay(
     computed = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(capability_id=producer_id, input=payload)
     )
-
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
@@ -96,7 +95,6 @@ def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
     ] = 2
     forged["identical"] = False
     forged["residual"] = [{"coefficient": 1, "exponents": [0]}]
-
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_identity.verify",
@@ -135,34 +133,38 @@ def test_modular_polynomial_identity_replays_both_declared_term_budgets(
     assert verified.output["status"] == "VERIFIED"
 
 
-@pytest.mark.parametrize("value", ("360", "-360", "1", "-1", "101"))
 def test_prime_factorization_result_uses_independent_python_flint_replay(
     number_theory_services,
-    value: str,
 ) -> None:
     producer_id = "integer.compute.prime_factorization"
     verifier_id = "integer.prime_factorization.verify"
-    producer_payload = {"value": value}
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer_id,
-            input=producer_payload,
+    for value in ("360", "-360", "1", "-1", "101"):
+        producer_payload = {"value": value}
+        computed = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=producer_id,
+                input=producer_payload,
+            )
         )
-    )
 
-    verified = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
-            input={"input": producer_payload, "candidate": computed.output["result"]},
+        verified = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={
+                    "input": producer_payload,
+                    "candidate": computed.output["result"],
+                },
+            )
         )
-    )
 
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == producer_id
-    assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
+        assert verified.execution.status is ExecutionStatus.COMPLETED, value
+        assert verified.output["status"] == "VERIFIED", value
+        assert verified.output["operation_id"] == producer_id, value
+        assert verified.output["verification_record_uri"] is not None, value
+        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED, value
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            value
+        )
     provider_runtime = next(
         descriptor.provider_runtime
         for descriptor in number_theory_services.core.capabilities.catalog().capabilities
@@ -202,34 +204,38 @@ def test_prime_factorization_verifier_rejects_incomplete_factor_list(
     assert rejected.output["verification_record_uri"] is None
 
 
-@pytest.mark.parametrize("value", ("1", "72", "12", "30"))
 def test_powerful_number_result_uses_independent_python_flint_replay(
     number_theory_services,
-    value: str,
 ) -> None:
     producer_id = "integer.decide.powerful"
     verifier_id = "integer.powerful.verify"
-    producer_payload = {"value": value}
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer_id,
-            input=producer_payload,
+    for value in ("1", "72", "12", "30"):
+        producer_payload = {"value": value}
+        computed = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=producer_id,
+                input=producer_payload,
+            )
         )
-    )
 
-    verified = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
-            input={"input": producer_payload, "candidate": computed.output["result"]},
+        verified = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={
+                    "input": producer_payload,
+                    "candidate": computed.output["result"],
+                },
+            )
         )
-    )
 
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == producer_id
-    assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
+        assert verified.execution.status is ExecutionStatus.COMPLETED, value
+        assert verified.output["status"] == "VERIFIED", value
+        assert verified.output["operation_id"] == producer_id, value
+        assert verified.output["verification_record_uri"] is not None, value
+        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED, value
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            value
+        )
 
 
 def test_powerful_number_verifier_rejects_schema_valid_wrong_factor_product(

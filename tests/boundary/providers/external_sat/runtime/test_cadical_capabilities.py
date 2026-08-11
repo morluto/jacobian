@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import sys
 import threading
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
 from tests.support.provider_external_sat import drat_trim_runtime_available
+from tests.support.services import (
+    DomainTestServices,
+    atomic_installation,
+    open_domain_services,
+)
 
 from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.contracts.capabilities import (
@@ -15,10 +22,16 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatAssignmentArtifact, SatProofArtifact
-from jacobian.providers.external_solver_runtime import cadical_provider_runtime
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.providers.external_solver_runtime import (
+    cadical_provider_runtime,
+    drat_trim_provider_runtime,
+)
+from jacobian.runtime import CheckerAuthorityMode
 from jacobian.sat_smt.cadical import install_cadical_capabilities
+from jacobian.sat_smt.sat_capabilities import (
+    install_sat_assignment_checker,
+    install_sat_unsat_proof_checker,
+)
 
 
 def _fake_cadical(tmp_path: Path, body: str) -> Path:
@@ -40,35 +53,79 @@ def _fake_cadical(tmp_path: Path, body: str) -> Path:
     return executable
 
 
-def _runtime_with_fake(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def _install_fake_cadical(
+    services: DomainTestServices,
     executable: Path,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
-) -> JacobianRuntime:
-    unavailable = cadical_provider_runtime(tmp_path / "not-installed")
-    monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.cadical_provider_runtime",
-        lambda *_args, **_kwargs: unavailable,
-    )
-    runtime = create_runtime(
-        tmp_path / "store",
-        checker_authority=checker_authority,
-    )
+) -> None:
     provider = cadical_provider_runtime(executable)
     assert provider.availability is CapabilityProviderAvailability.AVAILABLE
-    for adapter in install_cadical_capabilities(
-        runtime.core.sat,
-        provider,
-        executable=executable,
-    ):
-        runtime.core.capabilities.register(adapter)
-    return runtime
+    with atomic_installation(services.core):
+        for adapter in install_cadical_capabilities(
+            services.core.sat,
+            provider,
+            executable=executable,
+        ):
+            services.installation.register_capability(adapter)
+        if checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED:
+            assignment, _assignment_installation = install_sat_assignment_checker(
+                services.core.store,
+                services.core.schemas,
+                services.core.artifacts,
+                services.core.sat,
+                services.application.verification,
+                services.core.checkers,
+                authorize_checker=True,
+            )
+            assert assignment is not None
+            services.installation.register_capability(assignment)
+            proof, _proof_installation = install_sat_unsat_proof_checker(
+                services.core.store,
+                services.core.schemas,
+                services.core.artifacts,
+                services.core.sat,
+                services.application.verification,
+                services.core.checkers,
+                drat_trim_provider_runtime(),
+                authorize_checker=True,
+            )
+            if proof is not None:
+                services.installation.register_capability(proof)
+
+
+@pytest.fixture
+def fake_cadical_services(
+    tmp_path: Path,
+) -> Iterator[Callable[..., DomainTestServices]]:
+    with ExitStack() as stack:
+        opened = 0
+
+        def factory(
+            executable: Path,
+            *,
+            checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
+        ) -> DomainTestServices:
+            nonlocal opened
+            opened += 1
+            services = stack.enter_context(
+                open_domain_services(
+                    tmp_path / f"store-{opened}",
+                    checker_authority=checker_authority,
+                )
+            )
+            _install_fake_cadical(
+                services,
+                executable,
+                checker_authority=checker_authority,
+            )
+            return services
+
+        yield factory
 
 
 def _invoke(
-    runtime: JacobianRuntime,
+    runtime: DomainTestServices,
     capability_id: str,
     cnf_uri: str,
     *,
@@ -91,7 +148,7 @@ def _invoke(
 
 def test_model_find_materializes_only_an_unverified_bound_assignment(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -102,9 +159,7 @@ def test_model_find_materializes_only_an_unverified_bound_assignment(
         "print('v 1 -2 0')\n"
         "raise SystemExit(10)",
     )
-    runtime = _runtime_with_fake(
-        tmp_path,
-        monkeypatch,
+    runtime = fake_cadical_services(
         executable,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     )
@@ -144,7 +199,7 @@ def test_model_find_materializes_only_an_unverified_bound_assignment(
 
 def test_model_find_returns_named_values_after_lexicographic_remapping(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -154,7 +209,7 @@ def test_model_find_returns_named_values_after_lexicographic_remapping(
         "print('v 1 2 -3 0')\n"
         "raise SystemExit(10)",
     )
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(
         variable_names=("n1", "n2", "n10"),
         clauses=((1,), (-2,), (3,)),
@@ -172,7 +227,7 @@ def test_model_find_returns_named_values_after_lexicographic_remapping(
 
 def test_proof_find_normalizes_deletions_without_self_verification(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -184,7 +239,7 @@ def test_proof_find_normalizes_deletions_without_self_verification(
         "print('s UNSATISFIABLE')\n"
         "raise SystemExit(20)",
     )
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(
         variable_names=("x",),
         clauses=((1,), (-1,)),
@@ -214,7 +269,7 @@ def test_proof_find_normalizes_deletions_without_self_verification(
 )
 def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -223,9 +278,7 @@ def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
         "print('s UNSATISFIABLE')\n"
         "raise SystemExit(20)",
     )
-    runtime = _runtime_with_fake(
-        tmp_path,
-        monkeypatch,
+    runtime = fake_cadical_services(
         executable,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     )
@@ -274,14 +327,14 @@ def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
 )
 def test_opposite_or_unknown_solver_status_never_becomes_a_conclusion(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
     capability_id: str,
     body: str,
     expected_status: str,
     solver_status: str,
 ) -> None:
     executable = _fake_cadical(tmp_path, body)
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
 
     result = _invoke(runtime, capability_id, cnf.artifact_uri)
@@ -296,10 +349,10 @@ def test_opposite_or_unknown_solver_status_never_becomes_a_conclusion(
 
 def test_timeout_is_operational_and_materializes_no_solver_evidence(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(tmp_path, "time.sleep(5)")
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
 
     result = _invoke(
@@ -318,10 +371,10 @@ def test_timeout_is_operational_and_materializes_no_solver_evidence(
 
 def test_client_cancellation_terminates_solver_and_materializes_no_evidence(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(tmp_path, "time.sleep(30)")
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
     cancellation_event = threading.Event()
     cancellation_event.set()
@@ -341,13 +394,13 @@ def test_client_cancellation_terminates_solver_and_materializes_no_evidence(
 
 def test_partial_model_fails_closed_without_an_assignment(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
         "print('s SATISFIABLE')\nprint('v 1 0')\nraise SystemExit(10)",
     )
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(
         variable_names=("x", "y"),
         clauses=((1, 2),),
@@ -376,12 +429,12 @@ def test_partial_model_fails_closed_without_an_assignment(
 )
 def test_inconsistent_protocol_or_nondocumented_exit_fails_closed(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
     body: str,
     expected_code: str,
 ) -> None:
     executable = _fake_cadical(tmp_path, body)
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
 
     result = _invoke(runtime, "sat.model.find", cnf.artifact_uri)
@@ -394,13 +447,14 @@ def test_inconsistent_protocol_or_nondocumented_exit_fails_closed(
 def test_excessive_stdout_fails_closed_without_an_assignment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
         "print('x' * 4096)\nraise SystemExit(10)",
     )
     monkeypatch.setattr("jacobian.sat_smt.cadical.CADICAL_STDOUT_LIMIT", 1024)
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
 
     result = _invoke(runtime, "sat.model.find", cnf.artifact_uri)
@@ -413,6 +467,7 @@ def test_excessive_stdout_fails_closed_without_an_assignment(
 def test_oversized_proof_fails_closed_before_reading_or_materialization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -421,7 +476,7 @@ def test_oversized_proof_fails_closed_before_reading_or_materialization(
         "raise SystemExit(20)",
     )
     monkeypatch.setattr("jacobian.sat_smt.cadical.CADICAL_PROOF_LIMIT", 8)
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(
         variable_names=("x",),
         clauses=((1,), (-1,)),
@@ -436,7 +491,7 @@ def test_oversized_proof_fails_closed_before_reading_or_materialization(
 
 def test_proof_symlink_is_never_followed_or_materialized(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -444,7 +499,7 @@ def test_proof_symlink_is_never_followed_or_materialized(
         "print('s UNSATISFIABLE')\n"
         "raise SystemExit(20)",
     )
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(
         variable_names=("x",),
         clauses=((1,), (-1,)),
@@ -459,13 +514,13 @@ def test_proof_symlink_is_never_followed_or_materialized(
 
 def test_runtime_tampering_after_probe_fails_closed(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
         "print('s SATISFIABLE')\nprint('v 1 0')\nraise SystemExit(10)",
     )
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
     executable.write_text("#!/bin/sh\nexit 10\n", encoding="utf-8")
     executable.chmod(0o755)
@@ -479,7 +534,7 @@ def test_runtime_tampering_after_probe_fails_closed(
 
 def test_invocation_environment_does_not_require_the_callers_locale(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_cadical_services: Callable[..., DomainTestServices],
 ) -> None:
     executable = _fake_cadical(
         tmp_path,
@@ -494,7 +549,7 @@ def test_invocation_environment_does_not_require_the_callers_locale(
     )
     executable.write_text(text, encoding="utf-8")
     executable.chmod(0o755)
-    runtime = _runtime_with_fake(tmp_path, monkeypatch, executable)
+    runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
 
     result = _invoke(runtime, "sat.model.find", cnf.artifact_uri)

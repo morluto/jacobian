@@ -91,6 +91,9 @@ def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
         )
     )
     forged = deepcopy(computed.output["result"])
+    next(term for term in forged["normalized_left"] if term["exponents"] == [0])[
+        "coefficient"
+    ] = 2
     forged["identical"] = False
     forged["residual"] = [{"coefficient": 1, "exponents": [0]}]
 

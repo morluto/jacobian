@@ -324,9 +324,9 @@ def test_integral_homology_exposes_free_and_torsion_generators(
 
 
 def test_stale_complex_digest_reports_the_recoverable_field(
-    fresh_complete_runtime,
+    topology_services,
 ) -> None:
-    circle = _materialize(fresh_complete_runtime, _CIRCLE)
+    circle = _canonicalize(topology_services, _CIRCLE)
     circle["vertices"] = ["x", "y", "z"]
     circle["maximal_simplices"] = [["x", "y"], ["x", "z"], ["y", "z"]]
     circle["faces_by_dimension"] = [
@@ -334,7 +334,7 @@ def test_stale_complex_digest_reports_the_recoverable_field(
         {"dimension": 1, "faces": [["x", "y"], ["x", "z"], ["y", "z"]]},
     ]
 
-    result = fresh_complete_runtime.core.capabilities.invoke(
+    result = topology_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="topology.simplicial_homology.integral.compute",
             input={"complex": circle, "convention": "UNREDUCED"},

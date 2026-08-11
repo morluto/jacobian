@@ -102,6 +102,7 @@ def _validation_diagnostic(
     return CapabilityDiagnostic.model_validate(
         {
             **diagnostic.model_dump(mode="python"),
+            "hint": reason or diagnostic.hint,
             "path": diagnostic.path or path,
             "details": {
                 **diagnostic.details,

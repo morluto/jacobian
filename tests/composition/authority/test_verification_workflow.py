@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from jacobian.contracts.capabilities import CapabilityCatalogRelationshipKind
+
 # Composition-lane admission category for architecture ratchets.
 COMPOSITION_ADMISSION = "AUTHORITY"
 
@@ -39,6 +41,19 @@ def test_atomic_capability_catalog_includes_required_and_excludes_composite_oper
         "parameter.generalize",
     }.isdisjoint(ids)
     assert "witness_uri" in descriptors["witness.find"].output_schema["properties"]
+    assert [
+        (item.capability_id, item.kind)
+        for item in descriptors["witness.find"].related_capabilities
+    ] == [("witness.verify", CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER)]
+    assert [
+        (item.capability_id, item.kind)
+        for item in descriptors["witness.verify"].related_capabilities
+    ] == [
+        (
+            "witness.find",
+            CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
+        )
+    ]
     assert (
         "experiment_uri" in descriptors["search.enumerate"].output_schema["properties"]
     )

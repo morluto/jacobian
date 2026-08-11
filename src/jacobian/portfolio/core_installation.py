@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
+from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
+)
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.finite_partition import install_finite_partition
@@ -90,6 +94,22 @@ class CoreApplicationInstaller:
 
         for atomic_adapter in install_atomic_capabilities(ctx, application):
             self.context.register_capability(atomic_adapter)
+        self.context.register_checker_relationship(
+            "witness.find",
+            CapabilityCatalogRelationship(
+                capability_id="witness.verify",
+                kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+                relationship="independently verify a found witness",
+            ),
+        )
+        self.context.register_checker_relationship(
+            "witness.verify",
+            CapabilityCatalogRelationship(
+                capability_id="witness.find",
+                kind=CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
+                relationship="produce a witness accepted by this verifier",
+            ),
+        )
         for claim_adapter in application.claim_decomposition_adapters:
             self.context.register_capability(claim_adapter)
 

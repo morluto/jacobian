@@ -1021,6 +1021,20 @@ def _syzygy_checker_supports(payload: dict[str, Any]) -> bool:
             default=0,
         )
         term_count = len(terms)
+        if (
+            terms
+            and all(
+                isinstance(term, dict)
+                and isinstance(term.get("exponents"), list)
+                and len(term["exponents"]) == 3
+                for term in terms
+            )
+            and any(
+                all(term["exponents"][variable] == 0 for term in terms)
+                for variable in range(3)
+            )
+        ):
+            maximum_degree = 0
     elif isinstance(factors, list):
         homogeneous_degree = len(factors)
         support: set[tuple[int, ...]] = {(0, 0, 0)}

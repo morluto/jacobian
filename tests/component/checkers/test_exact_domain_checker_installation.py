@@ -123,6 +123,29 @@ def test_syzygy_checker_support_uses_actual_repeated_factor_support() -> None:
     )
 
 
+def test_syzygy_checker_support_accepts_expanded_polynomial_with_absent_variable() -> (
+    None
+):
+    payload = {
+        "polynomial": {
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": "1", "den": "1"},
+                        "exponents": [16 - index, index, 0],
+                    }
+                    for index in range(17)
+                ]
+            }
+        },
+        "max_degree": 8,
+    }
+
+    assert exact_domain_checkers._checker_supports(
+        "polynomial.jacobian_syzygy.coefficients.materialize", payload
+    )
+
+
 def test_syzygy_checker_support_rejects_excessive_linear_factor_replay() -> None:
     payload = {
         "linear_factors": [{"coefficients": ["1", "0", "1"]}] * 64,

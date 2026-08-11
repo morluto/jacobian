@@ -117,26 +117,23 @@ arguments, or inspect `capability://catalog`. Array position is not a preferred
 next step. These paths do not imply that the requested operation is
 mathematically impossible or absent in principle.
 
-Passing one `capability_id` returns the default `SUMMARY` exact projection. It
-contains the one-line outcome, tags, provider availability, input/output field
-summaries, and whether descriptor-owned invocation examples are available
-(legacy mode lists may still appear on the wire until
-[#1143](https://github.com/morluto/jacobian/issues/1143)):
+Passing one `capability_id` returns the default `CONTRACT` exact projection. It
+contains the complete validation-equivalent input schema (annotation/default
+and discriminator routing metadata are omitted), concise output/runtime
+summaries, related operations, and descriptor-owned validated invocation
+examples:
 
 ```json
 {"capability_id": "universal_algebra.search.countermodel"}
 ```
 
-The `CONTRACT` view adds the complete validation-equivalent input schema
-(annotation/default and discriminator routing metadata are omitted), concise
-output/runtime summaries, related operations, and descriptor-owned validated
-invocation examples. It is available whenever an agent does not already have
-the exact contract needed to construct a call:
+The explicit `SUMMARY` view returns compact fit metadata when an agent does not
+need a runnable contract:
 
 ```json
 {
   "capability_id": "universal_algebra.search.countermodel",
-  "view": "CONTRACT"
+  "view": "SUMMARY"
 }
 ```
 

@@ -529,15 +529,15 @@ async def capability_describe(
         ),
     ] = None,
     view: Annotated[
-        CapabilityDescriptionView,
+        CapabilityDescriptionView | None,
         Field(
             description=(
-                "Exact lookup only: SUMMARY judges fit; CONTRACT adds the validated "
-                "input schema and invocation examples; FULL adds audit metadata. "
-                "Omit for discovery."
+                "Optional exact-lookup override: omit for the runnable CONTRACT; "
+                "SUMMARY returns fit metadata only; FULL adds operator audit "
+                "metadata. Omit for discovery."
             )
         ),
-    ] = "SUMMARY",
+    ] = None,
     *,
     ctx: Context[AppState, Any],
 ) -> CapabilityDiscoveryToolResult:
@@ -559,7 +559,7 @@ async def capability_describe(
                 "discovery arguments or one exact capability_id in this call."
             )
         if capability_id is None:
-            if view != "SUMMARY":
+            if view not in {None, "SUMMARY"}:
                 raise ValueError(
                     "view applies only to an exact capability_id inspection; omit it "
                     "for search or browse."
@@ -574,6 +574,7 @@ async def capability_describe(
                 cursor=cursor,
             )
             return _find_result(discovery_response)
+        resolved_view: CapabilityDescriptionView = view or "CONTRACT"
         capability_catalog = active_runtime.core.capabilities.catalog()
         descriptors = {
             item.capability_id: item for item in capability_catalog.capabilities
@@ -597,10 +598,13 @@ async def capability_describe(
             return _find_result(error_response)
         response: dict[str, Any] = {
             "kind": "capability",
-            "view": view,
+            "view": resolved_view,
             "policy_profile": capability_catalog.policy_profile,
             "policy_digest": capability_catalog.policy_digest,
-            "capability": _capability_descriptor_view(descriptor, view=view),
+            "capability": _capability_descriptor_view(
+                descriptor,
+                view=resolved_view,
+            ),
             "scope_rule": _CAPABILITY_SCOPE_RULE,
             "related_capabilities_byte_limit": (
                 CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT
@@ -608,7 +612,7 @@ async def capability_describe(
             "truncation_reason": None,
             "related_capabilities_truncated": False,
         }
-        if view == "SUMMARY":
+        if resolved_view == "SUMMARY":
             response["next_views"] = {
                 "CONTRACT": (
                     "Request before invocation for the validation-equivalent input "
@@ -628,7 +632,7 @@ async def capability_describe(
                         {
                             "description": example.description,
                         }
-                        if view == "FULL"
+                        if resolved_view == "FULL"
                         else {}
                     ),
                     "tool": "math.run",
@@ -643,7 +647,7 @@ async def capability_describe(
                 _capability_inspection_extensions(capability_id, descriptors)
             )
         if (
-            view != "SUMMARY"
+            resolved_view != "SUMMARY"
             and capability_id == "lean.check"
             and active_runtime.portfolio.lean_checkers
         ):

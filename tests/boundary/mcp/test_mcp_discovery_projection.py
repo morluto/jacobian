@@ -168,9 +168,20 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
         from mcp import Client
 
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            summary_result = await client.call_tool(
+            legacy_discovery_result = await client.call_tool(
+                "math.find",
+                {"query": "normalize polynomial", "view": "SUMMARY"},
+            )
+            default_result = await client.call_tool(
                 "math.find",
                 {"capability_id": "polynomial.expression.normalize"},
+            )
+            summary_result = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "polynomial.expression.normalize",
+                    "view": "SUMMARY",
+                },
             )
             contract_result = await client.call_tool(
                 "math.find",
@@ -186,9 +197,13 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
                     "view": "FULL",
                 },
             )
+            assert isinstance(legacy_discovery_result.structured_content, dict)
+            assert legacy_discovery_result.structured_content["kind"] == "discovery"
+            assert isinstance(default_result.structured_content, dict)
             assert isinstance(summary_result.structured_content, dict)
             assert isinstance(contract_result.structured_content, dict)
             assert isinstance(full_result.structured_content, dict)
+            default = default_result.structured_content
             summary = summary_result.structured_content
             contract = contract_result.structured_content
             full = full_result.structured_content
@@ -205,6 +220,9 @@ def test_mcp_exact_description_layers_summary_contract_and_full_views(
             assert "CONTRACT" in summary["next_views"]
             assert "all-orders" in summary["scope_rule"]["bounded_repetition"]
             assert contract["view"] == "CONTRACT"
+            assert default["view"] == "CONTRACT"
+            assert default["capability"] == contract["capability"]
+            assert default["invocations"] == contract["invocations"]
             assert contract["capability"]["input_schema"]["type"] == "object"
             assert contract["capability"]["accepted_input_kinds"] == [
                 "STRUCTURED_REQUEST"

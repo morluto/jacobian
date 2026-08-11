@@ -44,8 +44,8 @@ Payloads:
 For other outcomes, query `math.find` by plain-language outcome; no ID is
 required. Use low `limit` only for query search, never with `capability_id`. For
 a selected operation's schema, call
-`math.find({"capability_id":"<exact-id>","view":"CONTRACT"})`; never put
-`CONTRACT` in a query. A card's
+`math.find({"capability_id":"<exact-id>"})`; exact lookup returns the runnable
+contract by default; never put `CONTRACT` in a query. A card's
 `invocation_example`, or required top-level fields, may be enough.
 
 Add no domain filter unless its installed spelling is known. Follow exposed

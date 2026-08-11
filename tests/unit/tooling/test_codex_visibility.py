@@ -205,7 +205,8 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     skill_flat = re.sub(r"\s+", " ", skill)
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
-    assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
+    assert 'math.find({"capability_id":"<exact-id>"})' in skill
+    assert "exact lookup returns the runnable contract by default" in skill_flat
     assert "never put `CONTRACT` in a query" in skill_flat
     assert "`matrix.determinant.verify` for an independent check" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat

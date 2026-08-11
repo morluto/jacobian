@@ -41,20 +41,22 @@ Forms:
 - Optional `domain` filter; `limit` 1-20 (default 5).
 - Omit arguments to browse; follow `next_cursor` with the same filters to continue.
 - Ranking is deterministic lexical retrieval; matches are not recommendations.
-- `capability_id`: exact inspect (SUMMARY / CONTRACT / FULL views).
+- `capability_id`: exact inspect; omitting `view` returns the runnable contract.
+  Use SUMMARY only for fit metadata or FULL for operator audit metadata.
 
 Checker tools are separate IDs (often `*.verify`), not a switch on producers.
 
 Examples:
 - `{"query":"compute an exact matrix determinant","domain":"matrix","limit":3}`
 - `{"query":"find a counterexample to associativity","domain":"universal_algebra"}`
-- `{"capability_id":"polynomial.compute.gcd","view":"CONTRACT"}`
+- `{"capability_id":"polynomial.compute.gcd"}`
 """
 
 MATH_RUN_DESCRIPTION = """\
 Run one installed math tool by ID with its typed `payload`. Read the mathematical
 value in `output` first, then execution status. If the payload shape is unknown,
-use math.find with view CONTRACT.
+use math.find with the exact capability ID; its default response is the runnable
+contract.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify` or `case.partition.finite.verify`),
@@ -90,11 +92,12 @@ metadata; `matched_on` and `matched_terms` make that retrieval visible. Ranking 
 not a recommendation. Follow `next_cursor` with unchanged filters and limit when a
 discovery result is truncated. Omit all arguments to browse.
 
-The same tool accepts `capability_id` for exact inspection. SUMMARY is the compact
-projection, CONTRACT adds the validation-equivalent input schema and examples, and
-FULL adds complete provider and audit metadata. An agent that already has an exact
-contract may invoke the operation directly. Related operations describe compatibility
-and evidence flow; they do not prescribe what to do next.
+The same tool accepts `capability_id` for exact inspection. The default exact response
+is the runnable CONTRACT with the validation-equivalent input schema and examples.
+SUMMARY is an explicit compact fit-only override; FULL adds complete provider and
+operator audit metadata. An agent that already has an exact contract may invoke the
+operation directly. Related operations describe compatibility and evidence flow; they
+do not prescribe what to do next.
 
 `math.run` returns the canonical complete `CapabilityResult` directly as MCP
 structured content. Calls may be composed in any sequence the mathematical

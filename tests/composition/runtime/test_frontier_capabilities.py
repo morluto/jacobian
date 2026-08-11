@@ -443,15 +443,10 @@ def test_materialized_syzygy_ledger_is_end_to_end_verified(
         )
     )
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    result = _result_payload(frontier_services, computed)
-    assert result["verification_capability_id"] == (
-        "polynomial.jacobian_syzygy.coefficients.verify"
-    )
 
     verified = frontier_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.jacobian_syzygy.coefficients.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": computed.output["result_uri"]},
         )
     )

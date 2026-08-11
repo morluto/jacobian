@@ -89,6 +89,25 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                 }
             ]
 
+            positivity_description = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "polynomial.interval.positivity.decide",
+                    "view": "CONTRACT",
+                },
+            )
+            assert isinstance(positivity_description.structured_content, dict)
+            positivity_contract = positivity_description.structured_content
+            assert positivity_contract["related_capabilities"] == [
+                {
+                    "capability_id": "polynomial.interval.positivity.verify",
+                    "kind": "INDEPENDENT_VERIFIER",
+                    "relationship": (
+                        "independently verify this exact positivity decision"
+                    ),
+                }
+            ]
+
             reliability_verifier_discovery = await client.call_tool(
                 "math.find",
                 {

@@ -209,7 +209,7 @@ POINT_ENCLOSURE_CAPABILITIES = (
                     "function": "SQRT",
                     "argument": {"num": "0", "den": "1"},
                     "precision_bits": 32,
-                    "wall_seconds": 1,
+                    "wall_seconds": 10,
                 },
             ),
         ),

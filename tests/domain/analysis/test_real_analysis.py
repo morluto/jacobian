@@ -25,6 +25,31 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
+def test_advertised_arb_example_preserves_worker_startup_budget(
+    domain_services: DomainTestServices,
+) -> None:
+    operation = next(
+        operation
+        for operation in build_real_analysis_bundle().capabilities
+        if operation.capability_id == "analysis.real_function.point_enclosure.compute"
+    )
+    example = operation.invocation_examples[0]
+    default_input = dict(example.input)
+    default_input.pop("wall_seconds")
+    default_wall_seconds = operation.request_model.model_validate(
+        default_input
+    ).wall_seconds
+
+    assert example.input["wall_seconds"] >= default_wall_seconds
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id=operation.capability_id, input=example.input)
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["status"] == "ENCLOSED"
+
+
 def test_arb_point_enclosure_materializes_exact_dyadics_and_obligation(
     domain_services: DomainTestServices,
 ) -> None:

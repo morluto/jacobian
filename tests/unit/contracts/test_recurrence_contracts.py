@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian.contracts.combinatorics import (
     PolynomialCoefficientRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationResult,
+    PolynomialCoefficientRecurrenceTableRequest,
 )
 
 
@@ -140,3 +141,24 @@ def test_polynomial_recurrence_aborts_when_an_intermediate_exceeds_digit_bound()
 
     with pytest.raises(ValidationError, match="32768-digit bound"):
         PolynomialCoefficientRecurrenceEvaluationRequest.model_validate(request)
+
+
+def test_submitted_table_rejects_a_residual_ledger_over_artifact_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.contracts.combinatorics.MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES",
+        512,
+    )
+    request = {
+        "coefficient_polynomials": [[_q(1)], [_q(-1)]],
+        "values": [_q(index + 1) for index in range(12)],
+        "coefficient_convention": (
+            "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+        ),
+        "polynomial_convention": "ASCENDING_POWERS_OF_N",
+        "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+    }
+
+    with pytest.raises(ValidationError, match="durable artifact limit"):
+        PolynomialCoefficientRecurrenceTableRequest.model_validate(request)

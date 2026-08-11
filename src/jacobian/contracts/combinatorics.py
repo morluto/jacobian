@@ -122,6 +122,70 @@ def _validate_result_artifact_size(payload: dict[str, object]) -> None:
         ) from exc
 
 
+def _validate_submitted_recurrence_table_result_size(
+    coefficient_polynomials: tuple[tuple[CanonicalRational, ...], ...],
+    values: tuple[CanonicalRational, ...],
+) -> None:
+    """Reject inputs whose exact residual ledger cannot be stored canonically."""
+
+    polynomials = tuple(
+        tuple(coefficient.as_fraction() for coefficient in polynomial)
+        for polynomial in coefficient_polynomials
+    )
+    table = tuple(value.as_fraction() for value in values)
+    order = len(polynomials) - 1
+
+    def evaluate(polynomial: tuple[Fraction, ...], index: int) -> Fraction:
+        return sum(
+            (
+                coefficient * index**power
+                for power, coefficient in enumerate(polynomial)
+            ),
+            start=Fraction(),
+        )
+
+    residuals: list[dict[str, object]] = []
+    failures: list[int] = []
+    for index in range(order, len(table)):
+        residual = sum(
+            (
+                evaluate(polynomials[offset], index) * table[index - offset]
+                for offset in range(order + 1)
+            ),
+            start=Fraction(),
+        )
+        _require_bounded_fraction(
+            residual,
+            max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+            label="submitted recurrence residual",
+        )
+        residuals.append({"index": index, "value": _fraction_wire(residual)})
+        if residual:
+            failures.append(index)
+
+    _validate_result_artifact_size(
+        {
+            "backend": "sympy",
+            "backend_version": "1.14.0",
+            "checked_index_end": len(table) - 1,
+            "checked_index_start": order,
+            "coefficient_convention": (
+                "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+            ),
+            "determinism": "DETERMINISTIC",
+            "exactness": "EXACT_RATIONAL",
+            "first_failure_index": failures[0] if failures else None,
+            "polynomial_convention": "ASCENDING_POWERS_OF_N",
+            "recurrence_order": order,
+            "residuals": residuals,
+            "satisfies_recurrence": not failures,
+            "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+            "term_count": len(table),
+            "verification": "UNVERIFIED",
+        }
+    )
+
+
 def _recurrence_replay(
     coefficients: tuple[Fraction, ...],
     initial_values: tuple[Fraction, ...],
@@ -1100,6 +1164,10 @@ class PolynomialCoefficientRecurrenceTableRequest(ContractModel):
                 max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
                 label="submitted recurrence table value",
             )
+        _validate_submitted_recurrence_table_result_size(
+            self.coefficient_polynomials,
+            self.values,
+        )
         return self
 
 

@@ -70,6 +70,15 @@ is absent or has the wrong identity, doctor fails before client configuration.
 The `lean` profile likewise uses the repository's pinned toolchain and manifest
 instead of a floating Lean installation.
 
+These profiles configure an agent client against a source checkout. For
+ordinary contributor work that only needs to run the test suite, the
+`make setup PROFILE=core` quick path installs the same locked base surface
+(NetworkX, SymPy, and Z3) without writing client configuration; see
+[CONTRIBUTING.md](../../CONTRIBUTING.md). `make setup PROFILE=full-python`
+additionally requires every maintained Python extra. Optional backend
+installation is described in
+[Install optional backends](install-optional-backends.md).
+
 Add `--dev` when the clone also needs the locked development group. Use
 `--dry-run` to inspect every sync, init, configuration, and doctor command
 without changing the environment, state directory, or client files. Repeating

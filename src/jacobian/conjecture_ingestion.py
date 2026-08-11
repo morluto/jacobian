@@ -19,7 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -130,7 +129,6 @@ class ExternalConjectureIngestAdapter:
                 "jacobian.conjecture-ingestion",
                 features=("license-policy", "metadata-withholding", "provenance"),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=ExternalConjectureIngestRequest.model_json_schema(),
             output_schema=ExternalConjectureIngestOutput.model_json_schema(),
             tags=("conjecture", "dataset", "ingestion", "license", "provenance"),
@@ -294,7 +292,6 @@ class ExternalConjectureIngestAdapter:
         result = CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

@@ -22,15 +22,100 @@ matrix when the change also affects shared infrastructure.
 
 ## Ownership model
 
-The suite separates semantic ownership from execution policy:
+One reviewed manifest
+([`tests/plan_manifest.toml`](../../tests/plan_manifest.toml)) is the
+authoritative source for pytest lanes, gates, and path-impact rules.
+`make compile-test-plan` projects it to
+[`tests/topology.toml`](../../tests/topology.toml) and
+[`.github/ci-impact.json`](../../.github/ci-impact.json). Rule-local
+`suppresses` fields drive classifier specificity; do not hand-edit the
+generated projections.
 
-| Concern | Authority |
+| Dimension | Answers | Authority |
+| --- | --- | --- |
+| Semantic owner | What assertion layer? | Test directories (`unit` / `component` / `domain` / `composition` / `e2e` + boundary seams) |
+| Resources | What isolation hardware? | Typed fixture contracts (`sqlite`, `process-group`, `mcp`, `complete-runtime`, …) |
+| Runtime profile | Minimum install/authority/mutability | `RuntimeTestProfile` in `tests/support/runtime_profiles.py` |
+| CI policy | When does it run? | Manifest `ci` / `runs_on` + impact rules |
+| Execution profile | Workers/timeout/scheduler | Compiled from the dimensions above |
+
+Lane identity also appears in Make targets and workflow jobs. Edit
+`tests/plan_manifest.toml` and regenerate rather than hand-editing
+`tests/topology.toml` or `.github/ci-impact.json`.
+
+### Hydration ladder
+
+Use the narrowest production service graph that proves the claim:
+
+1. `open_domain_services(...)` — foundational core/application services,
+   optionally with explicitly selected domain bundles (producers only)
+2. `open_exact_domain_services(bundle)` — one named domain bundle **with** its
+   exact verification adapters (typed verified-domain seam)
+3. `open_reference_services(root, *names)` — only the explicitly selected
+   production reference installations
+4. `attached_complete_runtime` — complete portfolio, **no** checker authority
+   (reference schemas/plugins are available without authorization)
+5. `attached_complete_runtime_read_only` — module-shared attached copy for
+   non-mutating catalog/discovery inspection (one private template copy per
+   module; tests must not write artifacts or durable store state)
+6. `authorized_complete_runtime` — complete portfolio **with** authorized checkers
+7. `authorized_complete_runtime_read_only` — module-shared authorized copy for
+   non-mutating authorized catalog inspection
+8. `fresh_complete_runtime` — empty-root install / lifecycle ownership only
+
+When a focused capability is installed by a production installer rather than a
+`DomainBundle`, open `open_domain_services(...)` and run that installer plus its
+adapter registrations inside one `atomic_installation(...)` block. Preserve the
+production checker-authority decision in that graph. Do not reproduce portfolio
+installation policy in a test helper merely to avoid the complete runtime.
+
+Prefer `attached_*` over `fresh_*` whenever a private template copy isolates the
+mutation; reserve `fresh_*` for empty-root install and lifecycle ownership.
+Prefer `*_read_only` over function-scoped attached/authorized when a module only
+discovers or catalogs and never mutates shared state.
+
+`authorized_complete_runtime` requires a real verify/authority assertion in
+the module (for example `CapabilityAssuranceLevel.VERIFIED`,
+`services.verification`, `capability_id="….verify"`, or
+`checker_id is not None`). Catalog ID strings and `UNVERIFIED` alone do not
+justify it. Inventory unjustified uses with `make test-runtime-inventory`; the
+inventory fails closed when any remain.
+
+### Composition admission
+
+The composition lane proves wiring and trust properties that one bundle cannot:
+
+- complete-portfolio installation and catalog invariants
+- checker presence, absence, authorization, revocation, and hydration
+- cross-bundle or cross-service artifact handoff
+- producer → independent checker / verification-record workflows
+- bootstrap, attach, recovery, and shutdown lifecycle
+- global policy/dispatch and tamper / fail-closed trust boundaries
+
+Ordinary request/output/error matrices for one capability belong in domain or
+component lanes (prefer `open_domain_services` /
+`open_exact_domain_services`). Complete-runtime fixtures are visible only under
+owning composition, e2e, and named boundary confests.
+
+Every composition `test_*.py` that uses a complete-runtime fixture must declare
+a module-level admission category:
+
+```python
+COMPOSITION_ADMISSION = "AUTHORITY"  # or WIRING, LIFECYCLE, DISCOVERY, REFERENCE, MIXED
+```
+
+| Category | Meaning |
 | --- | --- |
-| Semantic ownership | Test directories |
-| Execution-affecting traits | Pytest markers |
-| Change impact | `.github/ci-impact.json` |
-| Canonical execution | Make targets |
-| Shard scheduling | Ephemeral per-lane timing artifacts |
+| `AUTHORITY` | Checker presence/absence, hydration, verify handoff, fail-closed trust |
+| `WIRING` | Portfolio install, catalog contracts, cross-service artifact identity |
+| `LIFECYCLE` | Bootstrap, attach, close, recovery, worker quiesce |
+| `DISCOVERY` | Whole-portfolio discovery ranking / intent routing |
+| `REFERENCE` | Portfolio reference-set / structure-canonicalization contracts |
+| `MIXED` | Temporary: ordinary capability matrices still pending domain demotion |
+
+`tools/check_test_architecture.py` fails closed when a complete-runtime
+composition module omits the declaration or uses an unknown category. Prefer
+shrinking `MIXED` over expanding it.
 
 A test's directory answers what kind of behavior it owns. A marker is retained
 only when it changes execution. The CI impact manifest maps changed paths to
@@ -66,6 +151,35 @@ receipt bound to the event, base/head revisions, changed-path digest, planner
 digest, configuration digests, and canonical plan digest. `make harbor-plan`
 uses the pinned Harbor runtime because task digests are part of the plan
 contract.
+
+Local planning reads `[local_planning]` from `tests/plan_manifest.toml` for
+infrastructure prefixes, high-impact paths, and exact pytest selector overrides
+(`[[local_planning.exact_overrides]]`) for non-test paths. Prefer folding
+stable overrides into manifest impact rules over growing exact overrides.
+
+`make test-runtime-inventory` reports complete-runtime fixture setup weights and
+the heaviest paths so demotions can target real cost.
+
+### Local development and CI ownership
+
+The contributor quick path is `make setup PROFILE=core` followed by
+`make check-changed BASE=origin/main` (see
+[CONTRIBUTING.md](../../CONTRIBUTING.md)). It keeps the local loop on the
+changed-path gate. CI owns the exhaustive correctness surface that the local
+loop intentionally skips: the supported Python and OS matrices, the full Lean
+and optional-provider environments, coverage enforcement, the compatibility
+smoke suite, packaging, the security audit, duplicate-code detection, and the
+complete semantic-lane matrix. You do not need to reproduce those locally for a
+routine change.
+
+Specialist lanes (`storage`, `process`, `mcp`, `provider`, `lean`, and `e2e`)
+own their named boundaries, but for routine contributor work they are
+troubleshooting and boundary-crossing work rather than a required local gate.
+Run one when a change crosses that boundary or when reproducing an
+environment-specific failure; CI runs the full matrix. The command inventory
+below is the authoritative reference for lane commands, narrowing, planning
+entry points, and CI classification, and is linked from
+[CONTRIBUTING.md](../../CONTRIBUTING.md) instead of being duplicated there.
 
 ## Purpose
 
@@ -131,6 +245,10 @@ named `DomainBundle` values; composition tests cover complete runtime wiring;
 and boundary/e2e tests own persistence, processes, providers, MCP, Lean, and
 complete user workflows. Directory ownership replaces the old catch-all
 integration category.
+Complete-runtime fixtures belong only to assertions about global catalog,
+cross-bundle, checker-authority, or lifecycle wiring. A behavior that consumes
+one named bundle stays in its domain lane and opens that bundle directly;
+fixture scope must not be broadened to trade away mutable-state isolation.
 `make test-stress` repeats only tests marked `property`, while
 `make test-ordering ORDERING_LANE=<lane>` reproduces the scheduled ordering
 seed for one semantic lane. `ORDERING_LANE` is required; use `domain` or
@@ -151,8 +269,10 @@ Immutable fixture templates are published by constructing in a temporary
 sibling and atomically renaming the completed directory. Each test receives a
 copied state directory; mutable stores, registries, and runtime
 objects are never shared. Composition fixtures make their cost visible through
-names such as `fresh_complete_runtime`, `attached_complete_runtime`, and
-`authorized_complete_runtime`.
+names such as `fresh_complete_runtime`, `attached_complete_runtime`,
+`attached_complete_runtime_read_only`, `authorized_complete_runtime`, and
+`authorized_complete_runtime_read_only`. Named fixtures remain thin wrappers
+over `RuntimeTestProfile` / `open_runtime_for`.
 
 Pull-request CI runs independently selected unit, component, domain,
 composition, storage, process, MCP, and e2e jobs. Provider and Lean lanes follow
@@ -176,8 +296,8 @@ writes raw coverage data and a dependent job combines the files before enforcing
 the repository threshold. The shard count and lane policy are owned by
 [`.github/ci-config.json`](../../.github/ci-config.json).
 
-For pull requests, a tested path planner reads
-[`.github/ci-impact.json`](../../.github/ci-impact.json) and makes
+For pull requests, a tested path planner reads the compiled
+[`.github/ci-impact.json`](../../.github/ci-impact.json) projection and makes
 independent semantic Python, Lean, npm, static, build,
 security, and duplicate-code decisions. Documentation-only changes run only
 the dedicated link checker; npm-only changes stay narrow. Ordinary capability

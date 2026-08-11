@@ -971,6 +971,9 @@ jobs:
           node-version: ${{ needs.plan.outputs.node-version-npm }}
           package-manager-cache: false
       - if: needs.plan.outputs.run-npm == 'true'
+        name: Assert release surfaces agree
+        run: python .github/scripts/check-release-consistency
+      - if: needs.plan.outputs.run-npm == 'true'
         run: npm test
         working-directory: npm
       - if: needs.plan.outputs.run-npm == 'true'

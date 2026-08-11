@@ -25,6 +25,15 @@ and checker runtimes. The
 [source setup profiles](setup-agent-from-source.md#profiles) provide maintained
 installation paths for `full-python`, `lean`, and `external-proof` checkouts.
 
+For ordinary contributor work, `make setup PROFILE=core` installs the locked
+development environment and diagnoses only the core provider surface
+(NetworkX, SymPy, and Z3); that is the contributor quick path described in
+[CONTRIBUTING.md](../../CONTRIBUTING.md). Use
+`make setup PROFILE=full-python` when the change requires every maintained
+Python extra. CI owns the full Lean and optional-provider environments, so you
+do not need to prepare them locally unless you are reproducing a
+boundary-specific failure.
+
 ## Lean certificates
 
 The `lean.check` capability binds an exact proposition and proof body to its

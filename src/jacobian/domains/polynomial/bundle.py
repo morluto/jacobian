@@ -36,6 +36,10 @@ def build_polynomial_bundle() -> DomainBundle:
                     "standard univariate convention: linear is 1; constant and zero are 0"
                 ),
                 "square_free_normalization": "separate coefficient and monic factors",
+                "factorization": (
+                    "univariate content and monic irreducible factors over QQ; "
+                    "irreducibility is computed, not independently certified"
+                ),
                 "integer_polynomials": (
                     "dense canonical descending-degree coefficient strings over ZZ"
                 ),

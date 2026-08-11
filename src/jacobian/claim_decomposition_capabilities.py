@@ -18,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -106,7 +105,6 @@ class ClaimDecompositionAdapter:
             provider_runtime=known_provider_runtime(
                 "jacobian.runtime", features=("claim", "structured-decomposition")
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(ClaimDecompositionRequest),
             output_schema=model_schema(ClaimDecompositionOutput),
             tags=("claim", "decomposition", "deterministic"),
@@ -231,7 +229,6 @@ class ClaimDecompositionAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version="1",
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

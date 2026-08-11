@@ -64,11 +64,17 @@ class ReferenceLeanInstaller:
         capability_adapter_entrypoints: tuple[str, ...] = (),
     ) -> None:
         ctx = self.context
-        core = application.core
-        if ctx.authorizes_bundled_checkers or (
-            ctx.checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
-            and core.plugins.has_any_domain(REFERENCE_INSTALLATION_DOMAINS)
-        ):
+        authorize = ctx.authorizes_bundled_checkers
+        hydrate = ctx.checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
+        may_bind = hydrate and application.core.plugins.has_any_domain(
+            REFERENCE_INSTALLATION_DOMAINS
+        )
+        # Immutable reference schemas/plugins install without checker authority.
+        # Checker IDs stay empty unless INSTALL_BUNDLED or a hydrate bind target.
+        result.references = application.reference_installer.install_all(
+            authorize_checker=authorize or may_bind,
+        )
+        if authorize or may_bind:
             self._install_references(application, result)
         for entrypoint in capability_adapter_entrypoints:
             ctx.register_capability(
@@ -81,7 +87,6 @@ class ReferenceLeanInstaller:
         result: PortfolioInstallation,
     ) -> None:
         ctx = self.context
-        result.references = application.reference_installer.install_all()
         result.polytope_checkers = (
             application.reference_installer.install_polytope_checkers(
                 claim_schema_uri=application.polytope.claim_schema_uri,

@@ -6,21 +6,23 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
-
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityProviderAvailability,
 )
-from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.contracts.matrix_operations import (
     LatticeReductionRequest,
     LatticeReductionResult,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.domains.matrix_lattice.lll_protocol import (
+    PROTOCOL,
+    LllWorkerRequest,
+    parse_lll_worker_response,
+)
 from jacobian.operations import (
     ComputedOutcome,
     ComputedSuccess,
@@ -30,8 +32,6 @@ from jacobian.operations import (
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_lll_provider_runtime
 from jacobian.worker_environment import worker_environment
-
-from .lll_worker import PROTOCOL
 
 STDOUT_LIMIT = 1_000_000
 STDERR_LIMIT = 64_000
@@ -78,10 +78,10 @@ def reduce_lattice_basis(
                 "jacobian.domains.matrix_lattice.lll_worker",
             ),
             stdin_bytes=canonicalize_json(
-                {
-                    "protocol": PROTOCOL,
-                    "basis": request.basis.model_dump(mode="json"),
-                }
+                LllWorkerRequest(
+                    protocol=PROTOCOL,
+                    request=request,
+                ).model_dump(mode="json")
             ),
             timeout_seconds=float(request.resource_budget.wall_seconds),
             environment=worker_environment(locale="C"),
@@ -120,21 +120,8 @@ def reduce_lattice_basis(
         )
     try:
         output = loads_strict_json(completed.stdout)
-        if not isinstance(output, dict) or set(output) != {
-            "protocol",
-            "rank",
-            "reduced_basis",
-            "transformation",
-        }:
-            raise ValueError("LLL worker response has unexpected fields")
-        if output["protocol"] != PROTOCOL:
-            raise ValueError("LLL worker protocol does not match")
-        result = LatticeReductionResult(
-            reduced_basis=IntegerMatrix(entries=output["reduced_basis"]),
-            transformation=IntegerMatrix(entries=output["transformation"]),
-            rank=output["rank"],
-        )
-    except (TypeError, ValueError, ValidationError):
+        result = parse_lll_worker_response(output, request=request).result
+    except (TypeError, ValueError):
         return _failure(
             ExecutionStatus.ERROR,
             "FLINT_LLL_PROTOCOL_INVALID",

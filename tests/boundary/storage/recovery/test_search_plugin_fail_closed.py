@@ -20,12 +20,12 @@ from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StorageLimits
 
 
-def test_proposer_timeout_fails_closed(fresh_complete_runtime) -> None:
+def test_proposer_timeout_fails_closed(search_services) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=("tests.support.search_entrypoints:propose_search_forever"),
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -38,11 +38,11 @@ def test_proposer_timeout_fails_closed(fresh_complete_runtime) -> None:
         TimeoutError,
         match="Inspect the experiment or wait again with a larger timeout",
     ):
-        fresh_complete_runtime.services.search.wait(
+        search_services.application.search.wait(
             handle.experiment_uri, timeout_seconds=0
         )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=10
     )
 
@@ -55,15 +55,15 @@ def test_proposer_timeout_fails_closed(fresh_complete_runtime) -> None:
 
 
 def test_malformed_proposal_fails_without_evidence_promotion(
-    fresh_complete_runtime,
+    search_services,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=(
             "tests.support.search_entrypoints:propose_malformed_search"
         ),
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -71,7 +71,7 @@ def test_malformed_proposal_fails_without_evidence_promotion(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -84,15 +84,15 @@ def test_malformed_proposal_fails_without_evidence_promotion(
 
 
 def test_partial_iteration_accounting_survives_malformed_candidate(
-    fresh_complete_runtime,
+    search_services,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=(
             "tests.support.search_entrypoints:propose_partially_invalid_search"
         ),
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -101,7 +101,7 @@ def test_partial_iteration_accounting_survives_malformed_candidate(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -130,18 +130,18 @@ def test_partial_iteration_accounting_survives_malformed_candidate(
     ],
 )
 def test_search_plugin_failures_remain_operational(
-    fresh_complete_runtime,
+    search_services,
     entrypoint: str,
     detail: str,
     case_id: str,
 ) -> None:
     if entrypoint.endswith("propose_large_search_output"):
-        fresh_complete_runtime.services.plugin_executor.max_output_bytes = 1024
+        search_services.application.plugin_executor.max_output_bytes = 1024
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=entrypoint,
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -149,7 +149,7 @@ def test_search_plugin_failures_remain_operational(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -160,19 +160,19 @@ def test_search_plugin_failures_remain_operational(
 
 
 def test_terminal_archive_failure_marks_search_error(
-    fresh_complete_runtime,
+    search_services,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
+    claim_uri, plugin_id = _install_search_plugin(search_services)
 
     def fail_archive(*_args: object, **_kwargs: object) -> object:
         raise StorageError("fixture archive failure")
 
     monkeypatch.setattr(
-        fresh_complete_runtime.services.search, "_store_archive", fail_archive
+        search_services.application.search, "_store_archive", fail_archive
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -181,7 +181,7 @@ def test_terminal_archive_failure_marks_search_error(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -195,15 +195,15 @@ def test_terminal_archive_failure_marks_search_error(
     assert "fixture archive failure" in caplog.text
 
 
-def test_plugin_cannot_widen_operator_batch_policy(fresh_complete_runtime) -> None:
-    fresh_complete_runtime.services.search.max_batch_size = 1
+def test_plugin_cannot_widen_operator_batch_policy(search_services) -> None:
+    search_services.application.search.max_batch_size = 1
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=(
             "tests.support.search_entrypoints:propose_beyond_authority"
         ),
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -212,7 +212,7 @@ def test_plugin_cannot_widen_operator_batch_policy(fresh_complete_runtime) -> No
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -222,11 +222,11 @@ def test_plugin_cannot_widen_operator_batch_policy(fresh_complete_runtime) -> No
     assert snapshot.accounting.proposed_candidates == 0
 
 
-def test_search_batch_respects_evaluator_limit(fresh_complete_runtime) -> None:
-    fresh_complete_runtime.services.evaluation.max_batch_size = 2
-    fresh_complete_runtime.services.search.max_batch_size = 3
-    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
-    handle = fresh_complete_runtime.services.search.start(
+def test_search_batch_respects_evaluator_limit(search_services) -> None:
+    search_services.application.evaluation.max_batch_size = 2
+    search_services.application.search.max_batch_size = 3
+    claim_uri, plugin_id = _install_search_plugin(search_services)
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -235,7 +235,7 @@ def test_search_batch_respects_evaluator_limit(fresh_complete_runtime) -> None:
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -245,10 +245,10 @@ def test_search_batch_respects_evaluator_limit(fresh_complete_runtime) -> None:
     assert snapshot.accounting.iterations == 2
 
 
-def test_search_batch_respects_archive_parent_limit(fresh_complete_runtime) -> None:
-    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
-    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=6)
-    handle = fresh_complete_runtime.services.search.start(
+def test_search_batch_respects_archive_parent_limit(search_services) -> None:
+    claim_uri, plugin_id = _install_search_plugin(search_services)
+    search_services.core.store.limits = StorageLimits(max_parents=6)
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -257,7 +257,7 @@ def test_search_batch_respects_archive_parent_limit(fresh_complete_runtime) -> N
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -266,27 +266,25 @@ def test_search_batch_respects_archive_parent_limit(fresh_complete_runtime) -> N
     assert snapshot.accounting.unique_candidates == 4
     assert snapshot.accounting.iterations == 2
     for page_uri in snapshot.archive_page_uris:
-        assert (
-            len(fresh_complete_runtime.core.store.get(page_uri).manifest.parents) <= 6
-        )
+        assert len(search_services.core.store.get(page_uri).manifest.parents) <= 6
 
 
 @pytest.mark.parametrize("max_parents", [4, 5])
 def test_witness_search_requires_archive_parent_capacity(
-    fresh_complete_runtime,
+    search_services,
     max_parents: int,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         include_witness_oracle=True,
     )
-    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=max_parents)
+    search_services.core.store.limits = StorageLimits(max_parents=max_parents)
 
     with pytest.raises(
         SearchError,
         match="must be at least 6 for one witness-enabled search archive record",
     ):
-        fresh_complete_runtime.services.search.start(
+        search_services.application.search.start(
             _request(
                 claim_uri,
                 plugin_id,
@@ -298,10 +296,10 @@ def test_witness_search_requires_archive_parent_capacity(
 
 
 def test_refiner_can_fit_previous_nominations_to_archive_parent_limit(
-    fresh_complete_runtime,
+    search_services,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=(
             "tests.support.search_entrypoints:"
             "propose_fixture_values_with_strategy_state"
@@ -311,8 +309,8 @@ def test_refiner_can_fit_previous_nominations_to_archive_parent_limit(
             "refine_with_bounded_previous_batch_nominations"
         ),
     )
-    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=6)
-    handle = fresh_complete_runtime.services.search.start(
+    search_services.core.store.limits = StorageLimits(max_parents=6)
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -321,7 +319,7 @@ def test_refiner_can_fit_previous_nominations_to_archive_parent_limit(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -331,20 +329,18 @@ def test_refiner_can_fit_previous_nominations_to_archive_parent_limit(
     assert snapshot.accounting.nominations == 2
     assert snapshot.checkpoint_uri is not None
     checkpoint = SearchCheckpoint.model_validate(
-        fresh_complete_runtime.core.store.get(snapshot.checkpoint_uri).payload
+        search_services.core.store.get(snapshot.checkpoint_uri).payload
     )
     assert checkpoint.state["observed_lineage_parent_limit"] == 2
     for page_uri in snapshot.archive_page_uris:
-        assert (
-            len(fresh_complete_runtime.core.store.get(page_uri).manifest.parents) <= 6
-        )
+        assert len(search_services.core.store.get(page_uri).manifest.parents) <= 6
 
 
 def test_refiner_cannot_exceed_archive_nomination_parent_limit(
-    fresh_complete_runtime,
+    search_services,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         proposer_entrypoint=(
             "tests.support.search_entrypoints:"
             "propose_fixture_values_with_strategy_state"
@@ -354,8 +350,8 @@ def test_refiner_cannot_exceed_archive_nomination_parent_limit(
             "refine_ignoring_previous_batch_nomination_limit"
         ),
     )
-    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=6)
-    handle = fresh_complete_runtime.services.search.start(
+    search_services.core.store.limits = StorageLimits(max_parents=6)
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -364,7 +360,7 @@ def test_refiner_cannot_exceed_archive_nomination_parent_limit(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -378,14 +374,14 @@ def test_refiner_cannot_exceed_archive_nomination_parent_limit(
     )
 
 
-def test_refiner_cannot_claim_verification(fresh_complete_runtime) -> None:
+def test_refiner_cannot_claim_verification(search_services) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         refiner_entrypoint=(
             "tests.support.search_entrypoints:refine_with_verification_claim"
         ),
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -394,7 +390,7 @@ def test_refiner_cannot_claim_verification(fresh_complete_runtime) -> None:
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=15
     )
 
@@ -406,17 +402,17 @@ def test_refiner_cannot_claim_verification(fresh_complete_runtime) -> None:
 
 
 def test_verified_counterexample_feedback_reaches_refiner(
-    fresh_complete_runtime,
+    search_services,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         refiner_entrypoint=(
             "tests.support.search_entrypoints:refine_from_verified_counterexample"
         ),
         include_witness_oracle=True,
     )
-    manifest = fresh_complete_runtime.core.plugins.get(plugin_id)
-    checker = fresh_complete_runtime.core.checkers.authorize(
+    manifest = search_services.core.plugins.get(plugin_id)
+    checker = search_services.core.checkers.authorize(
         name="fixture-value-v1",
         entrypoint="tests.component.checkers._fixture_checkers:check_fixture_value",
         evidence_kind="WITNESS",
@@ -427,8 +423,8 @@ def test_verified_counterexample_feedback_reaches_refiner(
         candidate_schema_uris=(manifest.candidate_schema_uri,),
         reason="search orchestration conformance fixture",
     )
-    fresh_complete_runtime.core.store.limits = StorageLimits(max_parents=9)
-    handle = fresh_complete_runtime.services.search.start(
+    search_services.core.store.limits = StorageLimits(max_parents=9)
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -439,7 +435,7 @@ def test_verified_counterexample_feedback_reaches_refiner(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -450,7 +446,7 @@ def test_verified_counterexample_feedback_reaches_refiner(
     assert snapshot.accounting.verified_counterexamples == 4
     assert snapshot.checkpoint_uri is not None
     checkpoint = SearchCheckpoint.model_validate(
-        fresh_complete_runtime.core.store.get(snapshot.checkpoint_uri).payload
+        search_services.core.store.get(snapshot.checkpoint_uri).payload
     )
     assert checkpoint.state["saw_verified_counterexample"] is True
     assert all(record.counterexample_verified for record in checkpoint.latest_records)
@@ -461,14 +457,14 @@ def test_verified_counterexample_feedback_reaches_refiner(
 
 
 def test_supporting_checker_decision_is_not_counted_as_counterexample(
-    fresh_complete_runtime,
+    search_services,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        fresh_complete_runtime,
+        search_services,
         include_witness_oracle=True,
     )
-    manifest = fresh_complete_runtime.core.plugins.get(plugin_id)
-    checker = fresh_complete_runtime.core.checkers.authorize(
+    manifest = search_services.core.plugins.get(plugin_id)
+    checker = search_services.core.checkers.authorize(
         name="fixture-value-true-v1",
         entrypoint=(
             "tests.component.checkers._fixture_checkers:check_fixture_value_as_true"
@@ -481,7 +477,7 @@ def test_supporting_checker_decision_is_not_counted_as_counterexample(
         candidate_schema_uris=(manifest.candidate_schema_uri,),
         reason="counterexample conclusion boundary fixture",
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = search_services.application.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -492,7 +488,7 @@ def test_supporting_checker_decision_is_not_counted_as_counterexample(
         )
     )
 
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = search_services.application.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -500,7 +496,7 @@ def test_supporting_checker_decision_is_not_counted_as_counterexample(
     assert snapshot.accounting.verified_counterexamples == 0
     assert snapshot.checkpoint_uri is not None
     checkpoint = SearchCheckpoint.model_validate(
-        fresh_complete_runtime.core.store.get(snapshot.checkpoint_uri).payload
+        search_services.core.store.get(snapshot.checkpoint_uri).payload
     )
     assert all(
         not record.counterexample_verified for record in checkpoint.latest_records

@@ -15,10 +15,10 @@ SQLite ledger is immutable historical evidence. They are not an indication
 that the retired workspace schema or data-upgrade bridge is still supported.
 New stores apply the complete ordered schema and record revision 8.
 
-Revision 7 adds the reasoning-log tables `reasoning_runs` and
-`reasoning_events` for the bounded external reasoning-log protocol. This
-migration is additive: it creates the new tables, their indices, and
-no-update/no-delete triggers without modifying existing records.
+Revision 7 added the now-retired production reasoning-log tables
+`reasoning_runs` and `reasoning_events`. The immutable migration remains so
+existing revision-8 ledgers keep their historical checksums; current runtimes
+do not construct or expose a reasoning-log service.
 
 Revision 8 establishes the memoryless state boundary. Stores from earlier
 pre-stable releases are not upgraded in place.

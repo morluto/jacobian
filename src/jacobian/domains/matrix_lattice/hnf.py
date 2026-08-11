@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
-
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import (
@@ -21,6 +19,11 @@ from jacobian.contracts.matrix_lattice import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.domains.matrix_lattice.hnf_protocol import (
+    PROTOCOL,
+    HermiteNormalFormWorkerRequest,
+    parse_hnf_worker_response,
+)
 from jacobian.operations import (
     ComputedOutcome,
     ComputedSuccess,
@@ -32,7 +35,6 @@ from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
 from jacobian.worker_environment import worker_environment
 
 HNF_RUNTIME = python_flint_hnf_provider_runtime()
-HNF_WORKER_PROTOCOL = "jacobian.matrix-lattice-hnf-worker/v1"
 HNF_STDOUT_LIMIT = 80_000_000
 HNF_STDERR_LIMIT = 64_000
 
@@ -55,42 +57,10 @@ def _parse_hnf_worker_result(
     output: object,
     source: IntegerMatrix,
 ) -> HermiteNormalFormResult:
-    """Validate the complete worker envelope before exposing its certificate."""
+    """Parse and source-bind the complete worker envelope."""
 
-    expected_keys = {
-        "protocol",
-        "status",
-        "backend_version",
-        "flint_library_version",
-        "normal_form",
-        "transformation",
-    }
-    if not isinstance(output, dict) or set(output) != expected_keys:
-        raise ValueError("invalid HNF worker response shape")
-    if (
-        output["protocol"] != HNF_WORKER_PROTOCOL
-        or output["status"] != "NORMAL_FORM_PRODUCED"
-        or output["backend_version"] != "0.9.0"
-        or output["flint_library_version"] != "3.6.0"
-    ):
-        raise ValueError("invalid HNF worker response identity")
-
-    normal_form = IntegerMatrix.model_validate({"entries": output["normal_form"]})
-    transformation = IntegerMatrix.model_validate({"entries": output["transformation"]})
-    source_rows = len(source.entries)
-    source_columns = len(source.entries[0])
-    if len(normal_form.entries) != source_rows or any(
-        len(row) != source_columns for row in normal_form.entries
-    ):
-        raise ValueError("HNF normal form dimensions do not match the source")
-    if len(transformation.entries) != source_rows or any(
-        len(row) != source_rows for row in transformation.entries
-    ):
-        raise ValueError("HNF transformation dimensions do not match the source")
-    return HermiteNormalFormResult(
-        normal_form=normal_form,
-        transformation=transformation,
-    )
+    request = HermiteNormalFormRequest(matrix=source)
+    return parse_hnf_worker_response(output, request=request).result
 
 
 def compute_hermite_normal_form(
@@ -111,10 +81,10 @@ def compute_hermite_normal_form(
             executable=sys.executable,
             arguments=("-I", "-m", "jacobian.domains.matrix_lattice.hnf_worker"),
             stdin_bytes=canonicalize_json(
-                {
-                    "protocol": HNF_WORKER_PROTOCOL,
-                    "matrix": request.matrix.model_dump(mode="json"),
-                }
+                HermiteNormalFormWorkerRequest(
+                    protocol=PROTOCOL,
+                    request=request,
+                ).model_dump(mode="json")
             ),
             timeout_seconds=float(request.resource_budget.wall_seconds),
             environment=worker_environment(locale="C"),
@@ -156,10 +126,11 @@ def compute_hermite_normal_form(
             "The Python-FLINT HNF runtime changed during the bounded computation.",
         )
     try:
-        result = _parse_hnf_worker_result(
-            loads_strict_json(completed.stdout), request.matrix
-        )
-    except (TypeError, ValueError, ValidationError):
+        result = parse_hnf_worker_response(
+            loads_strict_json(completed.stdout),
+            request=request,
+        ).result
+    except (TypeError, ValueError):
         return _failure(
             ExecutionStatus.ERROR,
             "FLINT_HNF_PROTOCOL_INVALID",

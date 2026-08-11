@@ -35,12 +35,17 @@ from jacobian.providers.lean_runtime import (
     LeanRuntimeIdentityError,
     require_lean_semantic_runtime_identity,
 )
+from jacobian.verification.checker_protocol import (
+    CheckerWorkerErrorCode,
+    CheckerWorkerFailure,
+    CheckerWorkerSuccess,
+)
 
 
 class _CheckerWorkerFailureError(ValueError):
     """A bounded failure classification for checker-owned runtime parsing."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: CheckerWorkerErrorCode) -> None:
         self.code = code
         super().__init__(code)
 
@@ -71,7 +76,7 @@ def _measure_runtime(
     except (CanonicalizationError, ValidationError) as exc:
         raise _CheckerWorkerFailureError("MALFORMED_RUNTIME") from exc
     except ProviderRuntimeError as exc:
-        code = (
+        code: CheckerWorkerErrorCode = (
             "MALFORMED_RUNTIME"
             if exc.code is ProviderRuntimeErrorCode.MALFORMED_RUNTIME
             else "EXECUTION_FAILED"
@@ -144,7 +149,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
-    error_code = "EXECUTION_FAILED"
+    error_code: CheckerWorkerErrorCode = "EXECUTION_FAILED"
     request_decoded = False
     try:
         request = loads_strict_json(sys.stdin.buffer.read())
@@ -175,32 +180,32 @@ def main() -> int:
         if runtime_digest_after != runtime_digest_before:
             error_code = "SOURCE_CHANGED"
             raise ValueError("checker runtime changed during execution")
-        sys.stdout.buffer.write(
-            canonicalize_json(
-                {
-                    "decision": response,
-                    "measured_checker_digest": measured_after,
-                    "measured_runtime_digest": runtime_digest_after,
-                }
-            )
+        error_code = "RESPONSE_INVALID"
+        success = CheckerWorkerSuccess.model_validate(
+            {
+                "decision": response,
+                "measured_checker_digest": measured_after,
+                "measured_runtime_digest": runtime_digest_after,
+            }
         )
+        sys.stdout.buffer.write(canonicalize_json(success.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 0
     except _CheckerWorkerFailureError as exc:
-        error = {"error_code": exc.code}
-        sys.stdout.buffer.write(canonicalize_json(error))
+        error = CheckerWorkerFailure(error_code=exc.code)
+        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
     except CanonicalizationError:
-        error = {
-            "error_code": "RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST"
-        }
-        sys.stdout.buffer.write(canonicalize_json(error))
+        error = CheckerWorkerFailure(
+            error_code="RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST"
+        )
+        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
     except Exception:  # checker isolation turns all failures into ERROR
-        error = {"error_code": error_code}
-        sys.stdout.buffer.write(canonicalize_json(error))
+        error = CheckerWorkerFailure(error_code=error_code)
+        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
 

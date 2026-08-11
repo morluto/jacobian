@@ -375,3 +375,58 @@ def test_modular_polynomial_residue_image_is_discoverable_by_intent(
         "modular.polynomial_residue_image.compute"
     )
     assert discovered.matches[0].has_invocation_examples is True
+
+
+def test_number_theory_resource_atomics_are_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
+        (
+            "integer.compute.prime_count",
+            {"n": 100},
+            {"value": "25"},
+        ),
+        (
+            "integer.compute.floor_square_root",
+            {"n": 10},
+            {"root": 3},
+        ),
+        (
+            "integer.compute.floor_square_root",
+            {"n": 1_000_000_000_000},
+            {"root": 1_000_000},
+        ),
+        (
+            "number_theory.compute.legendre_symbol",
+            {"a": 2, "prime": 7},
+            {"a": 2, "prime": 7, "symbol": 1},
+        ),
+        (
+            "number_theory.compute.factorial_valuation",
+            {"n": 10, "base": 12},
+            {"n": 10, "base": 12, "valuation": 4},
+        ),
+    )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        assert result.output["result"] == expected
+
+
+def test_legendre_symbol_rejects_non_prime_before_conclusion(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="number_theory.compute.legendre_symbol",
+            input={"a": 2, "prime": 9},
+        )
+    )
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
+    assert result.artifact_uris == ()
+    assert result.diagnostics[0].code == "NUMBER_THEORY_OPERATION_NOT_APPLICABLE"
+    assert result.assurance.verification_record_uri is None

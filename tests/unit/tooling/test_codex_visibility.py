@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from inspect import Parameter, signature
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,8 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
+from jacobian.adapters.mcp.tools import capability_invoke
+from jacobian.contracts.combinatorics import CyclicDifferenceSetExtensionRequest
 from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
 from jacobian.contracts.number_theory import IntegerPairRequest
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
@@ -162,6 +165,8 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
         "polynomial.compute.gcd",
         "polynomial.expression.normalize",
         "matrix.determinant.verify",
+        "combinatorics.cyclic_difference_set.extension.decide",
+        "combinatorics.cyclic_difference_set.extension.verify",
     ):
         assert f"`{capability_id}`" in skill
     integer_payload = '{"left":"84","right":"30"}'
@@ -174,12 +179,24 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert integer_payload in skill
     assert matrix_payload in skill
     assert polynomial in skill
+    extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
+    assert extension_payload in skill
+    run_parameters = signature(capability_invoke).parameters
+    assert tuple(run_parameters) == ("capability_id", "payload", "ctx")
+    assert run_parameters["ctx"].kind is Parameter.KEYWORD_ONLY
+    direct_envelope = f'{{"capability_id":"<id>","{tuple(run_parameters)[1]}":<JSON>}}'
+    assert direct_envelope in skill
+    assert '{"capability_id":"<id>","input":<JSON>}' not in skill
+    assert "No discovery for stable producers" in skill
+    assert "never with `capability_id`" in skill
+    assert '"candidate":<producer output.result>' in skill
     IntegerPairRequest.model_validate_json(integer_payload)
     MatrixDeterminantRequest.model_validate_json(matrix_payload)
     polynomial_value = json.loads(polynomial)
     PolynomialGcdRequest.model_validate(
         {"left": polynomial_value, "right": polynomial_value}
     )
+    CyclicDifferenceSetExtensionRequest.model_validate_json(extension_payload)
     assert len(skill.encode("utf-8")) <= 4 * 1024
 
 
@@ -196,8 +213,8 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
     assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
-    assert 'never send `mode: "CONTRACT"` to `math.run`' in skill_flat
-    assert "`matrix.determinant.verify` in `VERIFY` mode" in skill_flat
+    assert "never put `CONTRACT` in a query" in skill_flat
+    assert "`matrix.determinant.verify` for an independent check" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
     assert "a writable path or schema alone is not authorization" in skill_flat

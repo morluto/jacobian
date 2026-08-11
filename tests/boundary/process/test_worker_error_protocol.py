@@ -17,7 +17,17 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.implementation import checker_source_digest, package_source_digest
 from jacobian.plugin_execution import _plugin_failure_detail
+from jacobian.plugin_protocol import (
+    PluginWorkerProtocolError,
+    PluginWorkerSuccess,
+    parse_plugin_worker_response,
+)
 from jacobian.verification._helpers import _checker_failure_detail
+from jacobian.verification.checker_protocol import (
+    CheckerWorkerFailure,
+    CheckerWorkerProtocolError,
+    parse_checker_worker_response,
+)
 
 
 @pytest.mark.parametrize(
@@ -60,9 +70,13 @@ def test_source_changes_cross_worker_boundary_as_typed_codes(
     assert completed.returncode == 1
     assert response["error_code"] == "SOURCE_CHANGED"
     if module == "jacobian.plugin_worker":
-        assert _plugin_failure_detail(response) == public_detail
+        parsed = parse_plugin_worker_response(response)
+        assert not isinstance(parsed, PluginWorkerSuccess)
+        assert _plugin_failure_detail(parsed) == public_detail
     else:
-        assert _checker_failure_detail(response) == public_detail
+        parsed = parse_checker_worker_response(response)
+        assert isinstance(parsed, CheckerWorkerFailure)
+        assert _checker_failure_detail(parsed) == public_detail
 
 
 @pytest.mark.parametrize(
@@ -128,6 +142,28 @@ def test_checker_worker_classifies_malformed_provider_runtime() -> None:
     assert response == {"error_code": "MALFORMED_RUNTIME"}
 
 
+def test_checker_worker_protocol_rejects_unknown_failure_codes() -> None:
+    with pytest.raises(CheckerWorkerProtocolError):
+        parse_checker_worker_response({"error_code": "UNKNOWN_FAILURE"})
+
+
+def test_plugin_worker_protocol_rejects_unknown_failure_codes() -> None:
+    with pytest.raises(PluginWorkerProtocolError):
+        parse_plugin_worker_response({"error_code": "UNKNOWN_FAILURE"})
+
+
+def test_checker_worker_protocol_rejects_mixed_success_and_failure() -> None:
+    with pytest.raises(CheckerWorkerProtocolError):
+        parse_checker_worker_response(
+            {
+                "decision": None,
+                "measured_checker_digest": "sha256:" + "0" * 64,
+                "measured_runtime_digest": None,
+                "error_code": "EXECUTION_FAILED",
+            }
+        )
+
+
 def test_rational_linear_worker_classifies_non_string_protocol_as_invalid_input() -> (
     None
 ):
@@ -147,9 +183,8 @@ def test_rational_linear_worker_classifies_non_string_protocol_as_invalid_input(
     assert completed.returncode == 2
     assert completed.stderr == b""
     assert loads_strict_json(completed.stdout) == {
-        "protocol": "jacobian.rational-linear-solution-worker/v1",
         "status": "ERROR",
-        "error": "TypeError",
+        "error_code": "INVALID_REQUEST",
     }
 
 

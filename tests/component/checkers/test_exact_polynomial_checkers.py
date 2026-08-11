@@ -13,6 +13,7 @@ from tests.support.artifacts import canonical_digest as _digest
 from tests.support.rationals import rational_payload as _q
 
 from jacobian_checkers.exact_domain_operations import (
+    check_polynomial_factorization,
     check_polynomial_square_free,
 )
 
@@ -37,6 +38,26 @@ def test_square_free_checker_normalizes_flint_factors_to_monic_contract() -> Non
     )
 
     assert check_polynomial_square_free(checker_request)["accepted"] is True
+
+
+def test_factorization_checker_accepts_content_and_monic_irreducibles() -> None:
+    checker_request = _request(
+        "polynomial.factor.compute",
+        "polynomial.factorization.flint-replay",
+        {"polynomial": _rational_poly((-3, 2), (0, 1), (-3, 2))},
+        {
+            "coefficient": _q(-3, 2),
+            "factors": [
+                {"factor": _poly(1, 0, 1), "multiplicity": 1},
+            ],
+            "reconstructed": _rational_poly((-3, 2), (0, 1), (-3, 2)),
+            "normalization": "CONTENT_AND_MONIC_IRREDUCIBLES",
+            "irreducibility_assurance": "UNVERIFIED",
+            "product_reconstruction": "EXACT",
+        },
+    )
+
+    assert check_polynomial_factorization(checker_request)["accepted"] is True
 
 
 def test_polynomial_checker_rejects_variable_renaming() -> None:

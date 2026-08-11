@@ -207,29 +207,26 @@ def test_checker_reconstructs_exact_inputs_and_uses_only_strict_flags(
     assert decision["method"] == "CHECKED_CERTIFICATE"
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
+def test_only_exact_valid_with_clean_stderr_and_zero_exit_is_accepted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    proof_request_factory: ProofRequestFactory,
+) -> None:
+    bodies = (
         "print('holey')\nraise SystemExit(0)",
         "print('valid')\nraise SystemExit(1)",
         "print('valid')\nprint('valid')\nraise SystemExit(0)",
         "print(' valid ')\nraise SystemExit(0)",
         "print('valid')\nprint('warning', file=sys.stderr)\nraise SystemExit(0)",
-    ],
-)
-def test_only_exact_valid_with_clean_stderr_and_zero_exit_is_accepted(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    body: str,
-    proof_request_factory: ProofRequestFactory,
-) -> None:
-    executable, _marker = _fake_checker(tmp_path, body)
-    _install_runtime_environment(monkeypatch, executable)
+    )
+    for index, body in enumerate(bodies):
+        executable, _marker = _fake_checker(tmp_path / str(index), body)
+        _install_runtime_environment(monkeypatch, executable)
 
-    decision = check_unsat_proof(proof_request_factory())
+        decision = check_unsat_proof(proof_request_factory())
 
-    assert decision["accepted"] is False
-    assert decision["conclusion"] == "UNKNOWN"
+        assert decision["accepted"] is False, body
+        assert decision["conclusion"] == "UNKNOWN", body
 
 
 def test_holes_and_unsupported_logics_are_rejected_before_carcara(

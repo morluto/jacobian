@@ -18,6 +18,9 @@ from jacobian.plugin_execution import PluginExecutionResult
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 @pytest.fixture
 def redundant_odd_cycle_runtime(

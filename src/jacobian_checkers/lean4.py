@@ -541,6 +541,33 @@ def inspect_runtime(*, require_mathlib: bool) -> tuple[Path, Path | None]:
     return executable, mathlib_runtime
 
 
+def _mathlib_process_path(lake_command: tuple[str, ...]) -> str:
+    """Expose only the pinned toolchain and Git needed by Lake.
+
+    Checker workers deliberately omit the ambient ``PATH``. Lake still invokes
+    Git to inspect manifest-owned package checkouts before constructing the Lean
+    environment; if Git cannot be resolved, Lake removes the checkout it could
+    not validate. Bind the same Git installation required by
+    :func:`_mathlib_runtime` without forwarding unrelated host executables.
+    """
+
+    git = shutil.which("git")
+    if git is None:
+        raise _LeanSetupError(
+            "MATHLIB_MANIFEST: git is unavailable for the pinned mathlib runtime"
+        )
+    try:
+        git_directory = Path(git).resolve(strict=True).parent
+    except OSError as exc:
+        raise _LeanSetupError(
+            "MATHLIB_MANIFEST: git is unavailable for the pinned mathlib runtime"
+        ) from exc
+    toolchain_directory = Path(lake_command[0]).resolve(strict=True).parent
+    return os.pathsep.join(
+        dict.fromkeys((str(toolchain_directory), str(git_directory)))
+    )
+
+
 def _run_lean(
     source: str,
     *,
@@ -559,6 +586,7 @@ def _run_lean(
         lake_command = _lean_command("lake")
         command = [*lake_command, "env", "lean"]
         _validate_lean(tuple(command), cwd=runtime)
+        mathlib_path = _mathlib_process_path(lake_command)
         memory_mb = "8192"
         timeout_seconds = _MATHLIB_COMPILE_TIMEOUT_SECONDS
         cwd_context = tempfile.TemporaryDirectory(prefix="jacobian-lean-home-")
@@ -571,7 +599,7 @@ def _run_lean(
         overrides={
             "HOME": runtime_home,
             "PATH": (
-                os.environ.get("PATH", str(Path(command[0]).parent))
+                mathlib_path
                 if environment_name == "MATHLIB"
                 else str(Path(command[0]).parent)
             ),

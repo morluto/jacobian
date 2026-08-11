@@ -122,9 +122,11 @@ def _expected_plan(classification: str, *enabled: str) -> dict[str, str]:
             ),
         ),
         (
-            ("tests/boundary/providers/cvc5/runtime/test_polytope_separation.py",),
+            ("tests/component/providers/polytope/test_polytope_separation.py",),
             _expected_plan(
-                "selective",
+                "python",
+                "run-python",
+                "run-component",
                 "run-static",
             ),
         ),

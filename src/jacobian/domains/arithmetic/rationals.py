@@ -250,9 +250,12 @@ RATIONAL_CAPABILITIES = (
         "predicate",
         invocation_examples=(
             example(
-                "equal_two_fourths_one_half",
-                "Check equality of two equivalent rationals.",
-                {"left": {"num": "2", "den": "4"}, "right": {"num": "1", "den": "2"}},
+                "equal_negative_one_half_negative_one_half",
+                "Check equality of two reduced equivalent rationals.",
+                {
+                    "left": {"num": "-1", "den": "2"},
+                    "right": {"num": "-1", "den": "2"},
+                },
             ),
         ),
     ),

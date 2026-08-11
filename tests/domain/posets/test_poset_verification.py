@@ -83,43 +83,52 @@ def _computed_cases(poset_services) -> list[tuple[str, dict, Any]]:
     ]
 
 
-@pytest.mark.parametrize("result_index", (0, 1, 2, 3))
 def test_poset_results_are_independently_verified(
     poset_services,
-    result_index: int,
 ) -> None:
-    producer_id, producer_input, computed = _computed_cases(poset_services)[
-        result_index
-    ]
-    verified = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=derive_verification_capability_id(producer_id),
-            input=(
-                {"input": producer_input, "candidate": computed.output["result"]}
-                if producer_id
-                in {
-                    "poset.finite.compute",
-                    "poset.width.compute",
-                    "poset.mobius_function.compute",
-                }
-                else {"result_uri": computed.output["result_uri"]}
-            ),
+    for producer_id, producer_input, computed in _computed_cases(poset_services):
+        verified = poset_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=derive_verification_capability_id(producer_id),
+                input=(
+                    {"input": producer_input, "candidate": computed.output["result"]}
+                    if producer_id
+                    in {
+                        "poset.finite.compute",
+                        "poset.width.compute",
+                        "poset.mobius_function.compute",
+                    }
+                    else {"result_uri": computed.output["result_uri"]}
+                ),
+            )
         )
-    )
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert len(verified.artifact_uris) == (
-        4 if producer_id == "poset.linear_extensions.count" else 2
-    )
+        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED, (
+            producer_id
+        )
+        assert verified.execution.status is ExecutionStatus.COMPLETED, producer_id
+        assert verified.output["status"] == "VERIFIED", producer_id
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            producer_id
+        )
+        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED, (
+            producer_id
+        )
+        assert len(verified.artifact_uris) == (
+            4 if producer_id == "poset.linear_extensions.count" else 2
+        ), producer_id
 
 
 def test_poset_checker_rejects_forged_width_certificate(
     poset_services,
 ) -> None:
-    producer_id, producer_input, width = _computed_cases(poset_services)[1]
+    materialized = poset_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id="poset.finite.compute", input=_PRESENTATION)
+    )
+    producer_id = "poset.width.compute"
+    producer_input = {"poset": _result_payload(poset_services, materialized)["poset"]}
+    width = poset_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id=producer_id, input=producer_input)
+    )
     forged_candidate = deepcopy(width.output["result"])
     forged_candidate["maximum_antichain"] = ["0", "1"]
     rejected = poset_services.core.capabilities.invoke(

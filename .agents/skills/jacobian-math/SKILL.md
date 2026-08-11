@@ -22,7 +22,7 @@ Keep decomposition and routing decisions agent-owned; composing already-known
 supporting operations remains allowed when clearer.
 Do not call Jacobian for definitions, formatting, or non-execution tasks.
 
-No discovery for stable producers: `{"capability_id":"<id>","input":<JSON>}`.
+No discovery for stable producers: `{"capability_id":"<id>","payload":<JSON>}`.
 Payloads:
 
 - `integer.compute.gcd`, `integer.compute.lcm`, or `integer.compute.extended_gcd`:

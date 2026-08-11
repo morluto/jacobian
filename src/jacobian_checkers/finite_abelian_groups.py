@@ -155,10 +155,14 @@ def _strict_json_equal(candidate: object, expected: object) -> bool:
     if type(candidate) is not type(expected):
         return False
     if isinstance(expected, dict):
+        if not isinstance(candidate, dict):
+            return False
         return set(candidate) == set(expected) and all(
             _strict_json_equal(candidate[key], value) for key, value in expected.items()
         )
     if isinstance(expected, list):
+        if not isinstance(candidate, list):
+            return False
         return len(candidate) == len(expected) and all(
             _strict_json_equal(candidate_item, expected_item)
             for candidate_item, expected_item in zip(candidate, expected, strict=True)

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts import number_theory as number_theory_contracts
@@ -21,9 +22,6 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.operation_installation import OperationInstaller
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
@@ -323,27 +321,10 @@ def _nivat_transversal_payload() -> dict[str, object]:
 
 
 def test_finite_abelian_transversal_is_exact_and_verified(tmp_path: Path) -> None:
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "finite-group-verified",
         build_number_theory_bundle(),
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
-        bundle = build_number_theory_bundle()
-        installed = OperationInstaller(
-            services.core.store, services.core.schemas, services.core.artifacts
-        ).install(bundle)
-        adapters, _installation = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.installation.verification,
-            services.core.checkers,
-            bundles={"number_theory": (bundle, installed)},
-            authorize=True,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
-
         payload = _nivat_transversal_payload()
         computed = services.core.capabilities.invoke(
             CapabilityRequest(

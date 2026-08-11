@@ -206,7 +206,6 @@ RECURRENCE_CAPABILITIES = (
                 },
             ),
         ),
-        relation_id="combinatorics.recurrence.p_recursive.table-residuals.relation",
     ),
     combinatorics_operation(
         "combinatorics.generating_function.coefficients.compute",

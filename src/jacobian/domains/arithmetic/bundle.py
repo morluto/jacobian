@@ -12,6 +12,7 @@ from __future__ import annotations
 import platform
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domains.arithmetic.checkers import ARITHMETIC_EXACT_REPLAY_CHECKERS
 from jacobian.domains.arithmetic.integers import INTEGER_CAPABILITIES
 from jacobian.domains.arithmetic.rationals import RATIONAL_CAPABILITIES
 from jacobian.operations import (
@@ -39,7 +40,10 @@ def build_arithmetic_bundle() -> DomainBundle:
                 "integer_encoding": "canonical decimal string",
                 "rational_encoding": "canonical reduced num/den with positive denominator",
                 "arithmetic": "exact via stdlib and maintained SymPy APIs",
-                "assurance": "computed; no independent checker",
+                "assurance": (
+                    "producers are computed; core binary rational arithmetic "
+                    "supports operator-authorized independent replay"
+                ),
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -65,11 +69,12 @@ def build_arithmetic_bundle() -> DomainBundle:
         ),
         scope_description="the complete supplied bounded exact arithmetic input",
         completeness_basis=(
-            "deterministic exact computation covered the supplied input; "
-            "not independently verified"
+            "deterministic exact computation covered the supplied input; core "
+            "binary rational arithmetic can additionally be independently replayed"
         ),
         assurance_basis=(
             "deterministic exact arithmetic from the pinned stdlib/SymPy runtime; "
-            "no independent checker invoked"
+            "VERIFIED only after an operator-authorized independent checker accepts"
         ),
+        checker_declarations=ARITHMETIC_EXACT_REPLAY_CHECKERS,
     )

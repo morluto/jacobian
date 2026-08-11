@@ -76,6 +76,7 @@ from jacobian.verification import VerificationService
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
 _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
+    "jacobian_checkers.exact_arithmetic": "python-flint",
     "jacobian_checkers.exact_domain_operations": "python-flint",
     "jacobian_checkers.graph_exact_operations": "finite-graph",
     "jacobian_checkers.exact_probability_operations": "finite-probability",

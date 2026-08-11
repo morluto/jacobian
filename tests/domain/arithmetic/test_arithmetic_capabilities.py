@@ -2,9 +2,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityAssuranceLevel, CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 
@@ -17,6 +18,84 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         tmp_path / "state", build_arithmetic_bundle()
     ) as services:
         yield services
+
+
+@pytest.fixture
+def verified_domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
+    with open_exact_domain_services(
+        tmp_path / "verified-state", build_arithmetic_bundle()
+    ) as services:
+        yield services
+
+
+@pytest.mark.parametrize(
+    ("producer_id", "verifier_id", "expected"),
+    (
+        ("rational.compute.sum", "rational.sum.verify", {"num": "5", "den": "6"}),
+        (
+            "rational.compute.difference",
+            "rational.difference.verify",
+            {"num": "1", "den": "6"},
+        ),
+        (
+            "rational.compute.product",
+            "rational.product.verify",
+            {"num": "1", "den": "6"},
+        ),
+        (
+            "rational.compute.quotient",
+            "rational.quotient.verify",
+            {"num": "3", "den": "2"},
+        ),
+    ),
+)
+def test_core_rational_arithmetic_has_independent_replay(
+    verified_domain_services: DomainTestServices,
+    producer_id: str,
+    verifier_id: str,
+    expected: dict[str, str],
+) -> None:
+    payload = {
+        "left": {"num": "1", "den": "2"},
+        "right": {"num": "1", "den": "3"},
+    }
+    computed = verified_domain_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id=producer_id, input=payload)
+    )
+    verified = verified_domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=verifier_id,
+            input={"input": payload, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert computed.output["result"] == {"value": expected}
+    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.assurance.verification_record_uri is not None
+
+
+def test_rational_sum_verifier_rejects_wrong_schema_valid_fraction(
+    verified_domain_services: DomainTestServices,
+) -> None:
+    rejected = verified_domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="rational.sum.verify",
+            input={
+                "input": {
+                    "left": {"num": "1", "den": "2"},
+                    "right": {"num": "1", "den": "3"},
+                },
+                "candidate": {"value": {"num": "7", "den": "9"}},
+            },
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
 
 
 def test_arithmetic_capabilities_return_exact_results(
@@ -65,6 +144,29 @@ def test_rational_product_formats_results_above_python_digit_limit(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == {"value": {"num": "1" + "0" * 5000, "den": "1"}}
+
+
+def test_rational_product_verifier_replays_result_above_python_digit_limit(
+    verified_domain_services: DomainTestServices,
+) -> None:
+    factor = "1" + "0" * 2500
+    payload = {
+        "left": {"num": factor, "den": "1"},
+        "right": {"num": factor, "den": "1"},
+    }
+    computed = verified_domain_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id="rational.compute.product", input=payload)
+    )
+    verified = verified_domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="rational.product.verify",
+            input={"input": payload, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert computed.output["result"] == {"value": {"num": "1" + "0" * 5000, "den": "1"}}
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
 @pytest.mark.parametrize(

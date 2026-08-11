@@ -102,8 +102,7 @@ def _validation_diagnostic(
     elif isinstance(domain_reason, str):
         recovery_hint = f"{diagnostic.hint} {domain_reason}"
     elif isinstance(context_error, (ValueError, AssertionError)):
-        safe_reason = str(context_error).split("; first offending", maxsplit=1)[0]
-        recovery_hint = f"{diagnostic.hint} {safe_reason[:128]}"
+        recovery_hint = f"{diagnostic.hint} {str(context_error)[:256]}"
     else:
         recovery_hint = diagnostic.hint
     return CapabilityDiagnostic.model_validate(

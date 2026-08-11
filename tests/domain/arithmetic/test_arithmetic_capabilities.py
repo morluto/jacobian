@@ -78,6 +78,7 @@ def test_rational_product_formats_results_above_python_digit_limit(
         ("729000000", 3, {"root": "900", "exact": True}),
         ("729000001", 3, {"root": "900", "exact": False}),
         ("-729000000", 3, {"root": "-900", "exact": True}),
+        ("-9", 3, {"root": "-3", "exact": False}),
     ),
 )
 def test_integer_nth_root_accepts_canonical_integers_above_small_scalar_bound(

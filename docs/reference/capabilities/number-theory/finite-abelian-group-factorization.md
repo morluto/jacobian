@@ -11,10 +11,12 @@ representation witnesses when the decision is false. A complete coset
 transversal is the special case where the right factor contains only zero.
 
 The current contract supports rank at most six, group order at most 4,096,
-factor sizes at most 256, and a factor Cartesian product no larger than the
-maximum supported group order (4,096). Coordinates may be noncanonical integers and are reduced by their
-corresponding cyclic moduli. Each factor must remain a set after normalization;
-congruent duplicate entries are rejected before computation.
+factor sizes at most 256, and a factor Cartesian product of at most 4,096
+pairs. This Cartesian-product limit is the fixed operation bound; it is not
+the order of the particular group supplied by the request. Coordinates may be
+noncanonical integers and are reduced by their corresponding cyclic moduli.
+Each factor must remain a set after normalization; congruent duplicate entries
+are rejected before computation.
 
 The producer returns `COMPUTED` evidence. The operator-authorized companion
 `finite_abelian_group.exact_factorization.verify` independently normalizes the

@@ -317,7 +317,7 @@ class FiniteAbelianGroupFactorizationRequest(ContractModel):
         if math.prod(self.moduli) > _MAX_FINITE_GROUP_ORDER:
             raise ValueError("finite abelian group exceeds the 4,096-element bound")
         if len(self.left) * len(self.right) > _MAX_FINITE_GROUP_ORDER:
-            raise ValueError("factor Cartesian product exceeds the group-order bound")
+            raise ValueError("factor Cartesian product exceeds the 4,096-pair bound")
         if any(
             len(element) != len(self.moduli)
             for factor in (self.left, self.right)

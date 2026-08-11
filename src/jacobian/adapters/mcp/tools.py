@@ -88,7 +88,6 @@ class _InlineVerifierArguments(_MCPOutputModel):
     """Complete ``math.run`` argument envelope for inline verification."""
 
     capability_id: CapabilityId
-    mode: Literal[CapabilityMode.VERIFY]
     payload: _InlineVerifierPayload
 
 

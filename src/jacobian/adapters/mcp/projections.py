@@ -136,8 +136,7 @@ def _inline_verifier_invocation_protocol(
         for relationship in descriptor.related_capabilities
     )
     if (
-        CapabilityMode.VERIFY not in descriptor.modes
-        or not has_producer_relationship
+        not has_producer_relationship
         or set(schema.get("required", [])) != {"input", "candidate"}
     ):
         return None
@@ -145,7 +144,6 @@ def _inline_verifier_invocation_protocol(
         "tool": "math.run",
         "arguments_shape": {
             "capability_id": capability_id,
-            "mode": "VERIFY",
             "payload": {
                 "input": "<exact producer input object>",
                 "candidate": "<producer response.output.result>",

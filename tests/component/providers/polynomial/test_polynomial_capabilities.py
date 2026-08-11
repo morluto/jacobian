@@ -101,7 +101,7 @@ def test_jacobian_represents_derived_exponents_above_the_source_limit(
 
 
 def test_jacobian_over_budget_diagnostic_reports_estimate_and_limit(
-    attached_complete_runtime,
+    authorized_polynomial_services,
 ) -> None:
     dimension = 4
     exponents = [[degree, 1, 1, 1] for degree in range(32, 12, -1)]
@@ -121,7 +121,7 @@ def test_jacobian_over_budget_diagnostic_reports_estimate_and_limit(
         "coordinates": [polynomial] * dimension,
     }
 
-    result = attached_complete_runtime.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.compute_jacobian",
             input={"map": polynomial_map},
